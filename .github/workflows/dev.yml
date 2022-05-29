@@ -1,0 +1,46 @@
+name: dev workflow
+
+on: push
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.18'
+
+      - name: Show environment
+        run: go version
+
+      - name: Lint
+        run: make lint
+
+      - name: Build darwin/amd64
+        run: make build
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+
+      - name: Build linux/amd64
+        run: make build
+        env:
+          GOOS: linux
+          GOARCH: amd64
+
+      - name: Build linux/arm64
+        run: make build
+        env:
+          GOOS: linux
+          GOARCH: arm64
+
+      - name: Build windows/amd64
+        run: make build
+        env:
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Test
+        run: make test
