@@ -15,7 +15,7 @@ lint:
 .PHONY: build
 build:
 	@echo "Building for $(GOOS)_$(GOARCH)..."
-	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build lib.go
+	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build
 
 .PHONY: test
 test: 

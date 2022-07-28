@@ -1,8 +1,9 @@
 package cli_extension_lib_go
 
 import (
-	"encoding/json"
+	"bufio"
 	"fmt"
+	"github.com/snyk/cli-extension-lib-go/extension"
 	"io"
 	"io/ioutil"
 	"log"
@@ -10,29 +11,23 @@ import (
 	"path/filepath"
 )
 
-type ExtensionMetadata struct {
-	Name        string   `json:"name"`
-	Command     string   `json:"command"`
-	Version     string   `json:"version"`
-	Description string   `json:"description"`
-	Options     []Option `json:"options"`
+// Returns the full path to the directory containing the extension binary
+func ExtensionRoot() (string, error) {
+	exPath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	dirPath := filepath.Dir(exPath)
+	return dirPath, nil
 }
 
-type Option struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Shorthand   string `json:"shorthand"`
-	Default     string `json:"default"`
-	Description string `json:"description"`
-}
-
-type ExtensionInput[T any] struct {
-	// Standard stuff do we want to passed to all extensions
-	Debug     bool `json:"debug"`
-	ProxyPort int  `json:"proxyPort"`
-
-	// Extension-specific args
-	Args T `json:"args"`
+func DebugLogger(debug bool, extensionName string) *log.Logger {
+	logPrefix := fmt.Sprintf("[%s] ", extensionName)
+	debugLogger := log.New(os.Stderr, logPrefix, log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
+	if !debug {
+		debugLogger.SetOutput(ioutil.Discard)
+	}
+	return debugLogger
 }
 
 func ReadInput(reader io.RuneReader) (string, error) {
@@ -66,47 +61,33 @@ func ReadInput(reader io.RuneReader) (string, error) {
 	return inputString, nil
 }
 
-func ParseInput[T any](inputString string) (*ExtensionInput[T], error) {
-	rawBytes := []byte(inputString)
-
-	var input ExtensionInput[T]
-	err := json.Unmarshal(rawBytes, &input)
+// This is for an extension to call to init the extension
+func InitExtension() (*extension.Extension, *ExtensionInput, error) {
+	extensionRoot, err := ExtensionRoot()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &input, nil
+	stdinReader := bufio.NewReader(os.Stdin)
+	return InitExtensionWithArgs(extensionRoot, stdinReader)
 }
 
-func GetDebugLogger(debug bool, extensionName string) *log.Logger {
-	logPrefix := fmt.Sprintf("[%s] ", extensionName)
-	debugLogger := log.New(os.Stderr, logPrefix, log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
-	if !debug {
-		debugLogger.SetOutput(ioutil.Discard)
-	}
-	return debugLogger
-}
-
-func GetExtensionRoot() (string, error) {
-	exPath, err := os.Executable()
+// An abstraction on InitExtension for better testability
+func InitExtensionWithArgs(extensionRoot string, reader io.RuneReader) (*extension.Extension, *ExtensionInput, error) {
+	ext, err := extension.TryLoad(extensionRoot)
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
-	dirPath := filepath.Dir(exPath)
-	return dirPath, nil
-}
 
-func DeserExtensionMetadata(extensionMetadataPath string) (*ExtensionMetadata, error) {
-	bytes, err := os.ReadFile(extensionMetadataPath)
+	inputString, err := ReadInput(reader)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var extMeta ExtensionMetadata
-	err = json.Unmarshal(bytes, &extMeta)
+	extensionInput, err := DeserExtensionInput(inputString)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &extMeta, nil
+	return ext, extensionInput, nil
 }

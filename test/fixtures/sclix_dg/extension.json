@@ -1,0 +1,58 @@
+{
+    "name": "sclix_dg",
+    "description": "extension to do dependency graph stuff",
+    "version": "0.1.0",
+    "command": {
+        "name": "depgraph",
+        "description": "do dependency graph stuff",
+        "options": [{
+            "name": "verbose",
+            "shorthand": "v",
+            "type": "bool",
+            "description": "verbose output",
+            "required": false,
+            "default": false
+        }],
+        "subcommands": {
+            "test": {
+                "name": "test",
+                "description": "test a dependency graph",
+                "positionals": {
+                    "name": "paths-to-test",
+                    "cardinality": "one-or-more"
+                },
+                "options": [{
+                    "name": "detailed",
+                    "type": "bool",
+                    "description": "show fully detailed output",
+                    "required": false,
+                    "default": false
+                },
+                {
+                    "name": "output",
+                    "shorthand": "o",
+                    "type": "string",
+                    "description": "output format. can be `json` or `text`. default is `text`",
+                    "required": false,
+                    "default": "text"
+                }]
+            },
+            "monitor": {
+                "name": "monitor",
+                "description": "monitor a dependency graph",
+                "positionals": {
+                    "name": "path-to-monitor",
+                    "cardinality": "one"
+                },
+                "options": [{
+                    "name": "output",
+                    "shorthand": "o",
+                    "type": "string",
+                    "description": "output format. can be `json` or `text`. default is `text`",
+                    "required": false,
+                    "default": "text"
+                }]
+            }
+        }
+    }
+}

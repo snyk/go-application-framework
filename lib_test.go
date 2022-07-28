@@ -3,24 +3,15 @@ package cli_extension_lib_go_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/snyk/cli-extension-lib-go"
-	"github.com/stretchr/testify/assert"
 	"log"
+	"runtime"
 	"testing"
+
+	cli_extension_lib_go "github.com/snyk/cli-extension-lib-go"
+	extension "github.com/snyk/cli-extension-lib-go/extension"
+
+	"github.com/stretchr/testify/assert"
 )
-
-type WoofInput struct {
-	Lang string `json:"lang"`
-}
-
-func Test_ParseInput(t *testing.T) {
-	inputStr := `{"debug":true,"proxyPort":8080,"args":{"lang":"foolang"}}`
-	extensionInput, err := cli_extension_lib_go.ParseInput[WoofInput](inputStr)
-	assert.Nil(t, err)
-	assert.Equal(t, true, extensionInput.Debug)
-	assert.Equal(t, 8080, extensionInput.ProxyPort)
-	assert.Equal(t, "foolang", extensionInput.Args.Lang)
-}
 
 func Test_ReadInput_worksNormally(t *testing.T) {
 	buffer := bytes.NewBuffer([]byte("hello\n\n"))
@@ -56,43 +47,67 @@ func Test_ReadInput_returnsIOError(t *testing.T) {
 
 // Verifies the full flow of reading input and parsing it
 func Test_readAndParseInput(t *testing.T) {
-	buffer := bytes.NewBuffer([]byte("{\"debug\":true,\"proxyPort\":8080,\"args\":{\"lang\":\"foolang\"}}\n\n"))
+	buffer := bytes.NewBuffer([]byte(`{"debug":true,"proxy_port":8080,"command":{"name":"woof","subcommand":null,"options":{"lang":"foolang"},"positionals":[]}}`))
 	inputStr, err := cli_extension_lib_go.ReadInput(buffer)
-	assert.Equal(t, `{"debug":true,"proxyPort":8080,"args":{"lang":"foolang"}}`, inputStr)
+	assert.Equal(t, `{"debug":true,"proxy_port":8080,"command":{"name":"woof","subcommand":null,"options":{"lang":"foolang"},"positionals":[]}}`, inputStr)
 	assert.Nil(t, err)
-	extensionInput, err := cli_extension_lib_go.ParseInput[WoofInput](inputStr)
+
+	extensionInput, err := cli_extension_lib_go.DeserExtensionInput(inputStr)
 	assert.Nil(t, err)
 	assert.Equal(t, true, extensionInput.Debug)
 	assert.Equal(t, 8080, extensionInput.ProxyPort)
-	assert.Equal(t, "foolang", extensionInput.Args.Lang)
+	assert.Equal(t, "woof", extensionInput.Command.Name)
+	assert.Nil(t, extensionInput.Command.Subcommand)
+	assert.Equal(t, "foolang", extensionInput.Command.Options["lang"])
+
+	lang, err := extensionInput.Command.StringOptionValue("lang")
+	assert.Nil(t, err)
+	assert.Equal(t, "foolang", lang)
 }
 
 func Test_canDeserializeExtensionMetadataFile(t *testing.T) {
-	x, err := cli_extension_lib_go.DeserExtensionMetadata("test/fixtures/canDeserializeExtensionMetadataFile/extension.json")
+	ext, err := extension.TryLoad("test/fixtures/sclix_woof")
 	assert.Nil(t, err)
-	assert.Equal(t, "sclix-woof", x.Name)
-	assert.Equal(t, "woof", x.Command)
-	assert.Equal(t, "0.1.0", x.Version)
-	assert.Equal(t, "patch ascii art", x.Description)
-	assert.Equal(t, 1, len(x.Options))
-	assert.Equal(t, "lang", x.Options[0].Name)
-	assert.Equal(t, "l", x.Options[0].Shorthand)
-	assert.Equal(t, "string", x.Options[0].Type)
-	assert.Equal(t, "en", x.Options[0].Default)
-	assert.Equal(t, "the language you want to show", x.Options[0].Description)
+	assert.Equal(t, "test/fixtures/sclix_woof", ext.Root)
+	assert.Equal(t, "test/fixtures/sclix_woof/sclix_woof"+fmt.Sprintf("_%s_%s", runtime.GOOS, runtime.GOARCH), ext.BinPath)
+	assert.Equal(t, "sclix_woof", ext.Metadata.Name)
+	assert.Equal(t, "woof", ext.Metadata.Command.Name)
+	assert.Nil(t, ext.Metadata.Command.Subcommands)
+	assert.Equal(t, "0.1.0", ext.Metadata.Version)
+	assert.Equal(t, "patch ascii art", ext.Metadata.Description)
+
+	assert.Equal(t, 1, len(ext.Metadata.Command.Options))
+	assert.Equal(t, "lang", ext.Metadata.Command.Options[0].Name)
+	assert.Equal(t, "l", ext.Metadata.Command.Options[0].Shorthand)
+	assert.Equal(t, "string", ext.Metadata.Command.Options[0].Type)
+	assert.Equal(t, "default-lang", ext.Metadata.Command.Options[0].Default)
+	assert.Equal(t, "the language you want to woof in", ext.Metadata.Command.Options[0].Description)
 }
 
-func Test_canDeserializeExtensionMetadataFileAndDefaultDefaultsAreCorrect(t *testing.T) {
-	x, err := cli_extension_lib_go.DeserExtensionMetadata("test/fixtures/canDeserializeExtensionMetadataFile/extension.json")
+// A more complex extension.json that has subcommands
+// Also, tests the InitExtensionWithArgs and the convenience methods for getting option values
+func Test_extWithSubcommandsAndUsingInitExtension(t *testing.T) {
+	// this is what the CLI should launch the extension with
+	buffer := bytes.NewBuffer([]byte(`{"debug":true,"proxy_port":8080,"command":{"name":"depgraph","subcommand":{"name": "test", "options":{"output":"json","detailed":false},"positionals":["/path/to/test"]}}}`))
+
+	ext, extInput, err := cli_extension_lib_go.InitExtensionWithArgs("test/fixtures/sclix_dg", buffer)
+	fmt.Println(extInput)
+
+	assert.NotNil(t, ext)
+	assert.NotNil(t, extInput)
 	assert.Nil(t, err)
-	assert.Equal(t, "sclix-woof", x.Name)
-	assert.Equal(t, "woof", x.Command)
-	assert.Equal(t, "0.1.0", x.Version)
-	assert.Equal(t, "patch ascii art", x.Description)
-	assert.Equal(t, 1, len(x.Options))
-	assert.Equal(t, "lang", x.Options[0].Name)
-	assert.Equal(t, "l", x.Options[0].Shorthand)
-	assert.Equal(t, "string", x.Options[0].Type)
-	assert.Equal(t, "en", x.Options[0].Default)
-	assert.Equal(t, "the language you want to show", x.Options[0].Description)
+
+	assert.Equal(t, "depgraph", ext.Metadata.Command.Name)
+	assert.Equal(t, "test/fixtures/sclix_dg/sclix_dg"+fmt.Sprintf("_%s_%s", runtime.GOOS, runtime.GOARCH), ext.BinPath)
+
+	assert.NotNil(t, extInput.Command.Subcommand)
+	assert.Equal(t, "test", extInput.Command.Subcommand.Name)
+
+	output, err := extInput.Command.Subcommand.StringOptionValue("output")
+	assert.Nil(t, err)
+	assert.Equal(t, "json", output)
+
+	detailed, err := extInput.Command.Subcommand.BoolOptionValue("detailed")
+	assert.Nil(t, err)
+	assert.Equal(t, false, detailed)
 }
