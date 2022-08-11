@@ -9,6 +9,7 @@ import (
 type ExtensionInput struct {
 	Debug     bool                   `json:"debug"`
 	ProxyPort int                    `json:"proxy_port"`
+	Token     string                 `json:"token,omitempty"`
 	Command   *ExtensionInputCommand `json:"command"`
 }
 
