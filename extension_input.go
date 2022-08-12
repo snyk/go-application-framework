@@ -1,16 +1,20 @@
 package cli_extension_lib_go
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
 	"reflect"
 )
 
 type ExtensionInput struct {
-	Debug     bool                   `json:"debug"`
-	ProxyPort int                    `json:"proxy_port"`
-	Token     string                 `json:"token,omitempty"`
-	Command   *ExtensionInputCommand `json:"command"`
+	Debug   bool                   `json:"debug"`
+	Token   string                 `json:"token,omitempty"`
+	Command *ExtensionInputCommand `json:"command"`
 }
 
 type ExtensionInputCommand struct {
@@ -55,4 +59,31 @@ func (c *ExtensionInputCommand) StringOptionValue(name string) (string, error) {
 
 func (c *ExtensionInputCommand) BoolOptionValue(name string) (bool, error) {
 	return OptionValue[bool](c, name)
+}
+
+func (i *ExtensionInput) GetHttpTransport() (*http.Transport, error) {
+	certificateLocation, _ := os.LookupEnv("NODE_EXTRA_CA_CERTS")
+
+	certPEMBlock, err := ioutil.ReadFile(certificateLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+
+	if !pool.AppendCertsFromPEM(certPEMBlock) {
+		return nil, fmt.Errorf("Failed to add certificate! %s", certificateLocation)
+	}
+
+	tls := &tls.Config{
+		RootCAs: pool,
+	}
+
+	return &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: tls,
+	}, nil
 }
