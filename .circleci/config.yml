@@ -1,0 +1,35 @@
+version: 2.1
+
+executors:
+  linux:
+    machine:
+      image: ubuntu-2004:2022.07.1
+
+# Define the jobs we want to run for this project
+jobs:
+  unit_test:
+    executor: linux
+    steps:
+      - checkout
+      - run:
+          name: Run unit tests
+          command: make test
+  build:
+    executor: linux
+    steps:
+      - checkout
+      - run:
+          name: Build
+          command: make build
+  
+# Orchestrate our job run sequence
+workflows:
+  version: 2
+  test_and_release:
+    jobs:
+      - unit_test:
+          name: Unit tests
+      - build:
+          name: Build
+          requires:
+            - Unit tests

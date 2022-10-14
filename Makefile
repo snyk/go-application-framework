@@ -15,7 +15,12 @@ lint:
 .PHONY: build
 build:
 	@echo "Building for $(GOOS)_$(GOARCH)..."
-	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build lib.go
+	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build ./...
+
+.PHONY: clean
+clean:
+	@echo "Cleaning up..."
+	@GOOS=$(GOOS) GOARCH=$(GOARCH) go clean
 
 .PHONY: test
 test: 
