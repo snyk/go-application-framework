@@ -5,12 +5,12 @@ GOARCH = $(shell go env GOARCH)
 .PHONY: format
 format:
 	@echo "Formatting..."
-	gofmt -w -l -e .
+	@gofmt -w -l -e .
 
 .PHONY: lint
 lint:
 	@echo "Linting..."
-	./scripts/lint.sh
+	@./scripts/lint.sh
 
 .PHONY: build
 build:
@@ -20,17 +20,17 @@ build:
 .PHONY: clean
 clean:
 	@echo "Cleaning up..."
-	@GOOS=$(GOOS) GOARCH=$(GOARCH) go clean
+	@GOOS=$(GOOS) GOARCH=$(GOARCH) go clean -testcache
 
 .PHONY: test
 test: 
 	@echo "Testing..."
-	go test ./...
+	@go test -cover ./...
 
 .PHONY: testv
 testv: 
 	@echo "Testing versbosely..."
-	go test -v ./...
+	@go test -v ./...
 
 .PHONY: help
 help:

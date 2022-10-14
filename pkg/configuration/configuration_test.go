@@ -95,3 +95,52 @@ func Test_ConfigurationGet_unset(t *testing.T) {
 
 	cleanupConfigstore()
 }
+
+func Test_ConfigurationSet_differentCases(t *testing.T) {
+	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12, "number": 74}`))
+
+	config := NewFromFiles(TEST_FILENAME)
+
+	actualValueString := config.GetString("api")
+	assert.Equal(t, "mytoken", actualValueString)
+
+	actualValueInt := config.GetInt("somethingElse")
+	assert.Equal(t, 12, actualValueInt)
+
+	actualValueFloat := config.GetFloat64("number")
+	assert.Equal(t, 74.0, actualValueFloat)
+
+	config.Set("api", "newToken")
+	config.Set("somethingElse", 798)
+	config.Set("number", "798.36")
+
+	actualValueString = config.GetString("api")
+	assert.Equal(t, "newToken", actualValueString)
+
+	actualValueInt = config.GetInt("somethingElse")
+	assert.Equal(t, 798, actualValueInt)
+
+	actualValueFloat = config.GetFloat64("number")
+	assert.Equal(t, 798.36, actualValueFloat)
+
+	cleanupConfigstore()
+}
+
+func Test_ConfigurationClone(t *testing.T) {
+	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12, "number": 74}`))
+
+	// config := NewFromFiles(TEST_FILENAME)
+
+	// actualValueString := config.GetString("api")
+	// assert.Equal(t, "mytoken", actualValueString)
+
+	// clonedConfig := config.Clone()
+
+	// // manipulate the token
+	// clonedConfig.Set("api", "newToken")
+
+	// actualValueString = config.GetString("api")
+	// assert.Equal(t, "mytoken", actualValueString)
+
+	cleanupConfigstore()
+}
