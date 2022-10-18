@@ -1,3 +1,3 @@
-# cli-extension-lib-go
+# go-application-framework
 
-A library for [Snyk CLI](https://github.com/snyk/cli) extensions written in Go.
+A framework to support building client side application like the [Snyk CLI](https://github.com/snyk/cli) as well as Extensions for these applications.
