@@ -19,7 +19,21 @@ import (
 	"github.com/snyk/go-application-framework/internal/utils"
 )
 
-type Analytics struct {
+type Analytics interface {
+	SetCmdArguments(args []string)
+	SetOrg(org string)
+	SetVersion(version string)
+	SetApiUrl(apiUrl string)
+	SetIntegration(name string, version string)
+	AddError(err error)
+	AddHeader(headerFunc func() http.Header)
+	IsCiEnvironment() bool
+	GetOutputData() *analyticsOutput
+	GetRequest() (*http.Request, error)
+	Send() (*http.Response, error)
+}
+
+type AnalyticsImpl struct {
 	headerFunc func() http.Header
 	apiUrl     string
 
@@ -96,46 +110,46 @@ var (
 
 const (
 	sanitize_replacement_string string = "REDACTED"
-	api_endpoint                       = "/v1/analytics/cli"
+	api_endpoint                       = "/v1/AnalyticsImpl/cli"
 )
 
-func New() *Analytics {
-	a := &Analytics{}
+func New() Analytics {
+	a := &AnalyticsImpl{}
 	a.headerFunc = func() http.Header { return http.Header{} }
 	a.created = time.Now()
 	return a
 }
 
-func (a *Analytics) SetCmdArguments(args []string) {
+func (a *AnalyticsImpl) SetCmdArguments(args []string) {
 	a.args = args
 }
 
-func (a *Analytics) SetOrg(org string) {
+func (a *AnalyticsImpl) SetOrg(org string) {
 	a.org = org
 }
 
-func (a *Analytics) SetVersion(version string) {
+func (a *AnalyticsImpl) SetVersion(version string) {
 	a.version = version
 }
 
-func (a *Analytics) SetApiUrl(apiUrl string) {
+func (a *AnalyticsImpl) SetApiUrl(apiUrl string) {
 	a.apiUrl = apiUrl
 }
 
-func (a *Analytics) SetIntegration(name string, version string) {
+func (a *AnalyticsImpl) SetIntegration(name string, version string) {
 	a.integrationName = name
 	a.integrationVersion = version
 }
 
-func (a *Analytics) AddError(err error) {
+func (a *AnalyticsImpl) AddError(err error) {
 	a.errorList = append(a.errorList, err)
 }
 
-func (a *Analytics) AddHeader(headerFunc func() http.Header) {
+func (a *AnalyticsImpl) AddHeader(headerFunc func() http.Header) {
 	a.headerFunc = headerFunc
 }
 
-func (a *Analytics) IsCiEnvironment() bool {
+func (a *AnalyticsImpl) IsCiEnvironment() bool {
 	result := false
 
 	envMap := utils.ToKeyValueMap(os.Environ(), "=")
@@ -149,7 +163,7 @@ func (a *Analytics) IsCiEnvironment() bool {
 	return result
 }
 
-func (a *Analytics) GetOutputData() *analyticsOutput {
+func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	output := &analyticsOutput{}
 
 	errorCount := len(a.errorList)
@@ -185,7 +199,7 @@ func (a *Analytics) GetOutputData() *analyticsOutput {
 	return output
 }
 
-func (a *Analytics) GetRequest() (*http.Request, error) {
+func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 	output := a.GetOutputData()
 
 	outputJson, err := json.Marshal(dataOutput{Data: *output})
@@ -229,7 +243,7 @@ func (a *Analytics) GetRequest() (*http.Request, error) {
 	return request, err
 }
 
-func (a *Analytics) Send() (*http.Response, error) {
+func (a *AnalyticsImpl) Send() (*http.Response, error) {
 	request, err := a.GetRequest()
 	if err != nil {
 		return nil, err
