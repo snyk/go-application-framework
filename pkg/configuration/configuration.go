@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -21,9 +22,14 @@ const (
 const SNYK_DEFAULT_API_URL = "https://api.snyk.io"
 
 type Configuration interface {
+	Clone() Configuration
+
+	Set(key string, value interface{})
 	Get(key string) interface{}
 	GetString(key string) string
 	GetBool(key string) bool
+	GetInt(key string) int
+	GetFloat64(key string) float64
 }
 
 type extendedViper struct {
@@ -100,6 +106,16 @@ func New() Configuration {
 	return config
 }
 
+func (ev *extendedViper) Clone() Configuration {
+	fmt.Println("extendedViper.Clone() to implement")
+	// not a clone yet
+	return ev
+}
+
+func (ev *extendedViper) Set(key string, value interface{}) {
+	ev.viper.Set(key, value)
+}
+
 func (ev *extendedViper) Get(key string) interface{} {
 
 	// try to lookup given key
@@ -148,4 +164,48 @@ func (ev *extendedViper) GetBool(key string) bool {
 	}
 
 	return false
+}
+
+func (ev *extendedViper) GetInt(key string) int {
+	result := ev.Get(key)
+	if result == nil {
+		return 0
+	}
+
+	switch result.(type) {
+	case string:
+		stringResult := result.(string)
+		temp, _ := strconv.ParseInt(stringResult, 10, 32)
+		return int(temp)
+	case float32:
+		return int(result.(float32))
+	case float64:
+		return int(result.(float64))
+	case int:
+		return int(result.(int))
+	}
+
+	return 0
+}
+
+func (ev *extendedViper) GetFloat64(key string) float64 {
+	result := ev.Get(key)
+	if result == nil {
+		return 0
+	}
+
+	switch result.(type) {
+	case string:
+		stringResult := result.(string)
+		temp, _ := strconv.ParseFloat(stringResult, 64)
+		return float64(temp)
+	case float32:
+		return float64(result.(float32))
+	case float64:
+		return float64(result.(float64))
+	case int:
+		return float64(result.(int))
+	}
+
+	return 0
 }
