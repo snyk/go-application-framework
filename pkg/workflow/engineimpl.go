@@ -2,25 +2,37 @@ package workflow
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/spf13/pflag"
 )
 
 type EngineImpl struct {
-	workflows   map[Identifier]Entry
-	config      configuration.Configuration
-	analytics   *analytics.Analytics
-	initialized bool
+	workflows     map[Identifier]Entry
+	config        configuration.Configuration
+	analytics     analytics.Analytics
+	networkAccess networking.NetworkAccess
+	initialized   bool
 }
 
 func NewWorkflowIdentifier(command string) Identifier {
 	dotSeparatedCommand := strings.ReplaceAll(command, " ", ".")
 	id := url.URL{Scheme: "flw", Host: dotSeparatedCommand}
 	return &id
+}
+
+func GetCommandFromWorkflowIdentifier(id Identifier) string {
+	if id != nil && id.Scheme == "flw" {
+		spaceSeparatedCommand := strings.ReplaceAll(id.Host, ".", " ")
+		return spaceSeparatedCommand
+	} else {
+		return ""
+	}
 }
 
 func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
@@ -32,9 +44,10 @@ func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
 
 func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 	engine := &EngineImpl{
-		workflows:   make(map[Identifier]Entry),
-		config:      configuration,
-		initialized: false,
+		workflows:     make(map[Identifier]Entry),
+		config:        configuration,
+		networkAccess: networking.NewNetworkAccess(configuration),
+		initialized:   false,
 	}
 	return engine
 }
@@ -42,8 +55,18 @@ func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 func (e *EngineImpl) Init() error {
 	var err error
 
+	// later scan here for extension binaries
+
 	if e.analytics == nil {
 		e.analytics = analytics.New()
+		e.analytics.SetIntegration(e.config.GetString(configuration.INTEGRATION_NAME), e.config.GetString(configuration.INTEGRATION_VERSION))
+		e.analytics.SetApiUrl(e.config.GetString(configuration.API_URL))
+		e.analytics.SetOrg(e.config.GetString(configuration.ORGANIZATION))
+		e.analytics.AddHeader(func() http.Header {
+			url := e.config.GetUrl(configuration.API_URL)
+			header := e.networkAccess.GetDefaultHeader(url)
+			return header
+		})
 	}
 
 	if err == nil {
@@ -72,6 +95,11 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 		entryPoint:     entryPoint,
 	}
 	e.workflows[id] = entry
+
+	flagset := FlagsetFromConfigurationOptions(config)
+	if flagset != nil {
+		e.config.AddFlagSet(flagset)
+	}
 
 	return entry, nil
 }
@@ -113,13 +141,11 @@ func (e *EngineImpl) InvokeWithInput(id Identifier, input []Data) ([]Data, error
 				WorkflowID:     id,
 				Configuration:  e.config.Clone(),
 				WorkflowEngine: e,
+				networkAccess:  e.networkAccess,
 			}
 
 			// invoke workflow through its callback
 			output, err = callback(&context, input)
-			if err != nil {
-				err = errors.Wrapf(err, "Callback failed for '%s'", id.String())
-			}
 		}
 	} else {
 		err = fmt.Errorf("Workflow '%v' not found.", id)
@@ -128,6 +154,18 @@ func (e *EngineImpl) InvokeWithInput(id Identifier, input []Data) ([]Data, error
 	return output, err
 }
 
-func (e *EngineImpl) GetAnalytics() *analytics.Analytics {
+func (e *EngineImpl) GetAnalytics() analytics.Analytics {
 	return e.analytics
+}
+
+func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
+	return e.networkAccess
+}
+
+func GetGlobalConfiguration() ConfigurationOptions {
+	globalFLags := pflag.NewFlagSet("global", pflag.ContinueOnError)
+	globalFLags.String(configuration.ORGANIZATION, "", "")
+	globalFLags.BoolP(configuration.DEBUG, "d", false, "")
+	globalFLags.Bool(configuration.INSECURE_HTTPS, false, "")
+	return ConfigurationOptionsFromFlagset(globalFLags)
 }

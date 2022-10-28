@@ -5,6 +5,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking"
 )
 
 // typedefs
@@ -25,7 +26,8 @@ type InvocationContext interface {
 	GetWorkflowIdentifier() Identifier
 	GetConfiguration() configuration.Configuration
 	GetEngine() Engine
-	GetAnalytics() *analytics.Analytics
+	GetAnalytics() analytics.Analytics
+	GetNetworkAccess() networking.NetworkAccess
 	//GetLogger()        // return logger instance
 	//GetUserInterface() // return ui instance
 }
@@ -48,5 +50,6 @@ type Engine interface {
 	Invoke(id Identifier) ([]Data, error)
 	InvokeWithInput(id Identifier, input []Data) ([]Data, error)
 
-	GetAnalytics() *analytics.Analytics
+	GetAnalytics() analytics.Analytics
+	GetNetworkAccess() networking.NetworkAccess
 }

@@ -1,25 +1,16 @@
 package configuration
 
 import (
-	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 
+	"github.com/snyk/go-httpauth/pkg/httpauth"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
-
-const (
-	API_URL                     string = "snyk_api"
-	AUTHENTICATION_TOKEN        string = "token"
-	AUTHENTICATION_BEARER_TOKEN string = "bearer_token"
-	INTEGRATION_NAME            string = "snyk_integration_name"
-	INTEGRATION_VERSION         string = "snyk_integration_version"
-	ANALYTICS_DISABLED          string = "snyk_disable_analytics"
-)
-
-const SNYK_DEFAULT_API_URL = "https://api.snyk.io"
 
 type Configuration interface {
 	Clone() Configuration
@@ -30,6 +21,9 @@ type Configuration interface {
 	GetBool(key string) bool
 	GetInt(key string) int
 	GetFloat64(key string) float64
+	GetUrl(key string) *url.URL
+
+	AddFlagSet(flagset *pflag.FlagSet) error
 }
 
 type extendedViper struct {
@@ -94,6 +88,8 @@ func NewFromFiles(files ...string) Configuration {
 	config.defaultValues = make(map[string]interface{})
 	config.defaultValues[API_URL] = SNYK_DEFAULT_API_URL
 	config.defaultValues[ANALYTICS_DISABLED] = false
+	config.defaultValues[WORKFLOW_USE_STDIO] = false
+	config.defaultValues[PROXY_AUTHENTICATION_MECHANISM] = httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)
 
 	// read config files
 	config.viper.ReadInConfig()
@@ -107,7 +103,6 @@ func New() Configuration {
 }
 
 func (ev *extendedViper) Clone() Configuration {
-	fmt.Println("extendedViper.Clone() to implement")
 	// not a clone yet
 	return ev
 }
@@ -208,4 +203,18 @@ func (ev *extendedViper) GetFloat64(key string) float64 {
 	}
 
 	return 0
+}
+
+func (ev *extendedViper) GetUrl(key string) *url.URL {
+	urlString := ev.GetString(key)
+	url, err := url.Parse(urlString)
+	if err == nil {
+		return url
+	} else {
+		return nil
+	}
+}
+
+func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
+	return ev.viper.BindPFlags(flagset)
 }

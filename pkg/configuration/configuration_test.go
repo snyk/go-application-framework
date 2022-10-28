@@ -126,6 +126,18 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 	cleanupConfigstore()
 }
 
+func Test_ConfigurationGet_Url(t *testing.T) {
+	assert.Nil(t, prepareConfigstore(`{"validUrl": "https://www.snyk.io", "invalidUrl": "something"}`))
+
+	config := NewFromFiles(TEST_FILENAME)
+
+	validUrl := config.GetUrl("validUrl")
+	assert.NotNil(t, validUrl)
+
+	invalidUrl := config.GetUrl("invalidUrl")
+	assert.NotNil(t, invalidUrl)
+}
+
 func Test_ConfigurationClone(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12, "number": 74}`))
 
