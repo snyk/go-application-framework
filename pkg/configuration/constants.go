@@ -9,10 +9,12 @@ const (
 	ANALYTICS_DISABLED             string = "snyk_disable_analytics"
 	ORGANIZATION                   string = "org"
 	DEBUG                          string = "debug"
+	DEBUG_FORMAT                   string = "debug_format"
 	INSECURE_HTTPS                 string = "insecure"
 	PROXY_AUTHENTICATION_MECHANISM string = "proxy_auth"
 	CACHE_PATH                     string = "snyk_cache_path"
 	WORKFLOW_USE_STDIO             string = "wflstdio"
+	RAW_CMD_ARGS                   string = "raw_cmd_args"
 )
 
 const SNYK_DEFAULT_API_URL = "https://api.snyk.io"

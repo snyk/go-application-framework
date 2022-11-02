@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/hashicorp/go-uuid v1.0.3
-	github.com/pkg/errors v0.9.1
 	github.com/snyk/go-httpauth v0.0.0-20220915135832-0edf62cf8cdd
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0

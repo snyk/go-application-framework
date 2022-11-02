@@ -1,12 +1,14 @@
 package configuration
 
 import (
+	"log"
 	"net/url"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -18,12 +20,14 @@ type Configuration interface {
 	Set(key string, value interface{})
 	Get(key string) interface{}
 	GetString(key string) string
+	GetStringSlice(key string) []string
 	GetBool(key string) bool
 	GetInt(key string) int
 	GetFloat64(key string) float64
 	GetUrl(key string) *url.URL
 
 	AddFlagSet(flagset *pflag.FlagSet) error
+	AllKeys() []string
 }
 
 type extendedViper struct {
@@ -90,6 +94,8 @@ func NewFromFiles(files ...string) Configuration {
 	config.defaultValues[ANALYTICS_DISABLED] = false
 	config.defaultValues[WORKFLOW_USE_STDIO] = false
 	config.defaultValues[PROXY_AUTHENTICATION_MECHANISM] = httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)
+	config.defaultValues[DEBUG_FORMAT] = log.Ldate | log.Ltime | log.Lmicroseconds | log.Lmsgprefix
+	config.defaultValues[CACHE_PATH], _ = utils.SnykCacheDir()
 
 	// read config files
 	config.viper.ReadInConfig()
@@ -103,8 +109,15 @@ func New() Configuration {
 }
 
 func (ev *extendedViper) Clone() Configuration {
-	// not a clone yet
-	return ev
+	// manually clone the Configuration instance
+	clone := NewFromFiles(ev.viper.ConfigFileUsed())
+	keys := ev.viper.AllKeys()
+	for i := range keys {
+		value := ev.viper.Get(keys[i])
+		clone.Set(keys[i], value)
+	}
+
+	return clone
 }
 
 func (ev *extendedViper) Set(key string, value interface{}) {
@@ -217,4 +230,30 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
 	return ev.viper.BindPFlags(flagset)
+}
+
+func (ev *extendedViper) GetStringSlice(key string) []string {
+	output := []string{}
+
+	result := ev.Get(key)
+	if result == nil {
+		return output
+	}
+
+	switch result.(type) {
+	case []string:
+		return result.([]string)
+	}
+
+	return output
+}
+
+func (ev *extendedViper) AllKeys() []string {
+	keys := ev.viper.AllKeys()
+
+	for k, _ := range ev.defaultValues {
+		keys = append(keys, k)
+	}
+
+	return keys
 }
