@@ -2,10 +2,14 @@ package networking
 
 import (
 	"crypto/tls"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
 const (
@@ -23,11 +27,14 @@ type NetworkImpl struct {
 	config       configuration.Configuration
 	userAgent    string
 	staticHeader http.Header
+	logger       *log.Logger
+	proxy        func(req *http.Request) (*url.URL, error)
 }
 
 type customRoundtripper struct {
 	encapsulatedRoundtripper *http.Transport
 	networkAccess            NetworkAccess
+	proxyAuthenticator       *httpauth.ProxyAuthenticator
 }
 
 func (crt *customRoundtripper) decorateRequest(request *http.Request) *http.Request {
@@ -51,10 +58,18 @@ func (crt *customRoundtripper) RoundTrip(request *http.Request) (*http.Response,
 }
 
 func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
+	// prepare logger
+	logger := log.New(os.Stderr, "NetworkAccess - ", config.GetInt(configuration.DEBUG_FORMAT))
+	if config.GetBool(configuration.DEBUG) == false {
+		logger.SetOutput(io.Discard)
+	}
+
 	c := NetworkImpl{
 		config:       config,
 		userAgent:    defaultUserAgent,
 		staticHeader: http.Header{},
+		logger:       logger,
+		proxy:        http.ProxyFromEnvironment,
 	}
 	return &c
 }
@@ -91,6 +106,8 @@ func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
 func (n *NetworkImpl) GetRoundtripper() http.RoundTripper {
 	// configure insecure
 	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
+	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
+	var proxyAuthenticator *httpauth.ProxyAuthenticator
 
 	// create transport
 	transport := &http.Transport{
@@ -99,10 +116,21 @@ func (n *NetworkImpl) GetRoundtripper() http.RoundTripper {
 		},
 	}
 
+	// create proxy authenticator if required
+	if httpauth.IsSupportedMechanism(authenticationMechanism) {
+		proxyAuthenticator = httpauth.NewProxyAuthenticator(authenticationMechanism, n.proxy, n.logger)
+		transport.DialContext = proxyAuthenticator.DialContext
+		transport.Proxy = nil
+	} else {
+		transport.DialContext = nil
+		transport.Proxy = n.proxy
+	}
+
 	// encapsulate everything
 	roundtrip := customRoundtripper{
 		encapsulatedRoundtripper: transport,
 		networkAccess:            n,
+		proxyAuthenticator:       proxyAuthenticator,
 	}
 	return &roundtrip
 }

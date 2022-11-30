@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,6 +66,35 @@ func Test_Roundtripper_InsecureHTTPS(t *testing.T) {
 	customRoundtripper := roundtripper.(*customRoundtripper)
 	assert.NotNil(t, customRoundtripper)
 	assert.True(t, customRoundtripper.encapsulatedRoundtripper.TLSClientConfig.InsecureSkipVerify)
+}
+
+func Test_Roundtripper_ProxyAuth(t *testing.T) {
+	config := configuration.New()
+	net := NewNetworkAccess(config)
+
+	// case: enable AnyAuth
+	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth))
+
+	// invoke method under test
+	roundtripper := net.GetRoundtripper()
+
+	// find proxyAuthenticator used for AnyAuth
+	ctRoundTripper := roundtripper.(*customRoundtripper)
+	assert.NotNil(t, ctRoundTripper)
+	assert.NotNil(t, ctRoundTripper.proxyAuthenticator)
+	assert.Nil(t, ctRoundTripper.encapsulatedRoundtripper.Proxy)
+
+	// case: disable Auth
+	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.NoAuth))
+
+	// invoke method under test
+	roundtripper = net.GetRoundtripper()
+
+	// with Auth disabled, no proxyAuthenticator should be available
+	ctRoundTripper = roundtripper.(*customRoundtripper)
+	assert.NotNil(t, ctRoundTripper)
+	assert.Nil(t, ctRoundTripper.proxyAuthenticator)
+	assert.NotNil(t, ctRoundTripper.encapsulatedRoundtripper.Proxy)
 }
 
 func Test_GetHTTPClient(t *testing.T) {

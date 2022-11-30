@@ -50,7 +50,6 @@ func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 	engine := &EngineImpl{
 		workflows:            make(map[string]Entry),
 		config:               configuration,
-		networkAccess:        networking.NewNetworkAccess(configuration),
 		initialized:          false,
 		extensionInitializer: make([]ExtensionInit, 0),
 	}
@@ -59,6 +58,8 @@ func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 
 func (e *EngineImpl) Init() error {
 	var err error
+
+	e.networkAccess = networking.NewNetworkAccess(e.config)
 
 	for i := range e.extensionInitializer {
 		err = e.extensionInitializer[i](e)
@@ -78,6 +79,9 @@ func (e *EngineImpl) Init() error {
 			url := e.config.GetUrl(configuration.API_URL)
 			header := e.networkAccess.GetDefaultHeader(url)
 			return header
+		})
+		e.analytics.SetClient(func() *http.Client {
+			return e.networkAccess.GetHttpClient()
 		})
 	}
 
