@@ -51,7 +51,7 @@ func Test_Basic(t *testing.T) {
 	assert.Equal(t, expectedAuthHeader, actualAuthHeader)
 
 	requestUrl := request.URL.String()
-	assert.True(t, strings.Contains(requestUrl, api))
+	assert.Equal(t, "http://myapi.com/v1/analytics/cli?org=MyOrgAs", requestUrl)
 	assert.True(t, strings.Contains(requestUrl, org))
 
 	body, err := io.ReadAll(request.Body)

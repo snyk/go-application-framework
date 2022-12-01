@@ -110,7 +110,7 @@ var (
 
 const (
 	sanitize_replacement_string string = "REDACTED"
-	api_endpoint                       = "/v1/AnalyticsImpl/cli"
+	api_endpoint                       = "/v1/analytics/cli"
 )
 
 func New() Analytics {
