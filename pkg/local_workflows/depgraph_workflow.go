@@ -2,7 +2,9 @@ package localworkflows
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -12,6 +14,35 @@ import (
 
 var WORKFLOWID_DEPGRAPH_WORKFLOW workflow.Identifier = workflow.NewWorkflowIdentifier("depgraph")
 var DATATYPEID_DEPGRAPH workflow.Identifier = workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+
+type LegacyCliJsonError struct {
+	Ok       bool   `json:"ok"`
+	ErrorMsg string `json:"error"`
+	Path     string `json:"path"`
+}
+
+func (e *LegacyCliJsonError) Error() string {
+	return e.ErrorMsg
+}
+
+func extractLegacyCLIError(input error, data []workflow.Data) (output error) {
+	output = input
+
+	// extract error from legacy cli if possible and wrap it in an error instance
+	_, isExitError := input.(*exec.ExitError)
+	if isExitError && data != nil && len(data) > 0 {
+		bytes := data[0].GetPayload().([]byte)
+
+		var decodedError LegacyCliJsonError
+		err := json.Unmarshal(bytes, &decodedError)
+		if err == nil {
+			output = &decodedError
+		}
+
+	}
+
+	return output
+}
 
 func InitDepGraphWorkflow(engine workflow.Engine) error {
 	depGraphConfig := pflag.NewFlagSet("depgraph", pflag.ExitOnError)
@@ -29,6 +60,8 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 	engine := invocation.GetEngine()
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetLogger()
+
+	debugLogger.Println("depgraph workflow start")
 
 	jsonSeparatorEnd := []byte("DepGraph end")
 	jsonSeparatorData := []byte("DepGraph data:")
@@ -52,6 +85,7 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 	config.Set(configuration.RAW_CMD_ARGS, snykCmdArguments)
 	legacyData, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 	if legacyCLIError != nil {
+		legacyCLIError = extractLegacyCLIError(legacyCLIError, legacyData)
 		return depGraphList, legacyCLIError
 	}
 

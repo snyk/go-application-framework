@@ -32,6 +32,10 @@ testv:
 	@echo "Testing versbosely..."
 	@go test -v ./...
 
+.PHONY: generate
+generate: 
+	@go generate ./...
+
 .PHONY: help
 help:
 	@echo "Main targets:"

@@ -3,6 +3,7 @@ module github.com/snyk/go-application-framework
 go 1.18
 
 require (
+	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-uuid v1.0.3
 	github.com/snyk/go-httpauth v0.0.0-20220915135832-0edf62cf8cdd
 	github.com/spf13/pflag v1.0.5
@@ -14,7 +15,6 @@ require (
 	github.com/alexbrainman/sspi v0.0.0-20210105120005-909beea2cc74 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
-	github.com/golang/mock v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect

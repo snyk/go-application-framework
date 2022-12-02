@@ -20,7 +20,7 @@ func callback1(invocation InvocationContext, input []Data) ([]Data, error) {
 	typeId := NewTypeIdentifier(invocation.GetWorkflowIdentifier(), "wfl1data")
 	d := NewDataFromInput(input[0], typeId, "application/json", nil)
 	expectedDataIdentifier[0] = d.GetIdentifier()
-	fmt.Println(d)
+	invocation.GetLogger().Println("callback1", d)
 	return []Data{d}, nil
 }
 
@@ -29,7 +29,7 @@ func callback2(invocation InvocationContext, input []Data) ([]Data, error) {
 	typeId := NewTypeIdentifier(invocation.GetWorkflowIdentifier(), "wfl2data")
 	d := NewData(typeId, "application/json", nil)
 	expectedDataIdentifier[1] = d.GetIdentifier()
-	fmt.Println(d)
+	invocation.GetLogger().Println("callback2", d)
 	return []Data{d}, nil
 }
 
@@ -38,8 +38,9 @@ func callback3(invocation InvocationContext, input []Data) ([]Data, error) {
 }
 
 func Test_EngineBasics(t *testing.T) {
-	configuration := configuration.New()
-	engine := NewWorkFlowEngine(configuration)
+	config := configuration.New()
+	config.Set(configuration.DEBUG, true)
+	engine := NewWorkFlowEngine(config)
 	expectedWorkflowCount := 0
 	expectedDataIdentifier = make([]Identifier, 2)
 
