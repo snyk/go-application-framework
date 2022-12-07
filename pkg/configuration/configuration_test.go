@@ -1,10 +1,13 @@
 package configuration
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -138,21 +141,64 @@ func Test_ConfigurationGet_Url(t *testing.T) {
 	assert.NotNil(t, invalidUrl)
 }
 
+func Test_ConfigurationGet_StringSlice(t *testing.T) {
+	config := New()
+
+	expectedDefault := []string{}
+
+	actual := config.GetStringSlice(RAW_CMD_ARGS)
+	assert.Equal(t, expectedDefault, actual)
+
+	expectedNew := []string{"1", "2", "go"}
+	config.Set(RAW_CMD_ARGS, expectedNew)
+
+	actualNew := config.GetStringSlice(RAW_CMD_ARGS)
+	assert.Equal(t, expectedNew, actualNew)
+
+	actualEmpty := config.GetStringSlice(API_URL)
+	assert.Empty(t, actualEmpty)
+}
+
 func Test_ConfigurationClone(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12, "number": 74}`))
+	flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flagset.Bool("debug", true, "debugging")
+	flagset.Float64("size", 10, "size")
 
-	// config := NewFromFiles(TEST_FILENAME)
+	config := NewFromFiles(TEST_FILENAME)
+	config.AddFlagSet(flagset)
 
-	// actualValueString := config.GetString("api")
-	// assert.Equal(t, "mytoken", actualValueString)
+	actualValueString := config.GetString("api")
+	assert.Equal(t, "mytoken", actualValueString)
 
-	// clonedConfig := config.Clone()
+	clonedConfig := config.Clone()
 
-	// // manipulate the token
-	// clonedConfig.Set("api", "newToken")
+	// manipulate the token
+	clonedConfig.Set("api", "10987654321")
 
-	// actualValueString = config.GetString("api")
-	// assert.Equal(t, "mytoken", actualValueString)
+	// ensure that the token isn't changed in the original instance
+	actualValueString = config.GetString("api")
+	assert.Equal(t, "mytoken", actualValueString)
+
+	actualValueString = clonedConfig.GetString("api")
+	assert.Equal(t, "10987654321", actualValueString)
+
+	originalKeys := config.AllKeys()
+	clonedKeys := clonedConfig.AllKeys()
+	sort.Strings(originalKeys)
+	sort.Strings(clonedKeys)
+
+	assert.Equal(t, originalKeys, clonedKeys)
+
+	for i := range originalKeys {
+		key := originalKeys[i]
+		fmt.Println("- key:", key)
+		if key != "api" {
+			originalValue := config.Get(key)
+			clonedValue := clonedConfig.Get(key)
+			assert.Equal(t, originalValue, clonedValue)
+		}
+	}
 
 	cleanupConfigstore()
 }

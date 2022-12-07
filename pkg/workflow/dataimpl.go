@@ -17,6 +17,10 @@ const (
 )
 
 func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string, payload interface{}) Data {
+	if len(typeIdentifier.Path) <= 0 {
+		panic("Given identifier is not a type identifier")
+	}
+
 	dataIdentifier := *typeIdentifier
 	dataIdentifier.Scheme = "did"
 	if input != nil {

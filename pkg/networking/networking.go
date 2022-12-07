@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -77,7 +76,7 @@ func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
 
 		// requests to the api automatically get an authentication token attached
 		if url.Host == apiUrl.Host {
-			authHeader := utils.GetAuthHeader(n.config)
+			authHeader := GetAuthHeader(n.config)
 			if len(authHeader) > 0 {
 				h.Add("Authorization", authHeader)
 			}

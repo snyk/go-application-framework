@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"log"
+
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -12,6 +14,7 @@ type InvocationContextImpl struct {
 	Configuration  configuration.Configuration
 	Analytics      analytics.Analytics
 	networkAccess  networking.NetworkAccess
+	logger         *log.Logger
 }
 
 func (ici *InvocationContextImpl) GetWorkflowIdentifier() Identifier {
@@ -32,4 +35,8 @@ func (ici *InvocationContextImpl) GetAnalytics() analytics.Analytics {
 
 func (ici *InvocationContextImpl) GetNetworkAccess() networking.NetworkAccess {
 	return ici.networkAccess
+}
+
+func (ici *InvocationContextImpl) GetLogger() *log.Logger {
+	return ici.logger
 }

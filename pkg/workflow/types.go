@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"log"
 	"net/url"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -11,6 +12,7 @@ import (
 // typedefs
 type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
+type ExtensionInit func(engine Engine) error
 
 // interfaces
 type Data interface {
@@ -28,7 +30,7 @@ type InvocationContext interface {
 	GetEngine() Engine
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
-	//GetLogger()        // return logger instance
+	GetLogger() *log.Logger
 	//GetUserInterface() // return ui instance
 }
 
@@ -44,12 +46,16 @@ type Entry interface {
 
 type Engine interface {
 	Init() error
+	AddExtensionInitializer(initializer ExtensionInit)
 	Register(id Identifier, config ConfigurationOptions, callback Callback) (Entry, error)
 	GetWorkflows() []Identifier
 	GetWorkflow(id Identifier) (Entry, bool)
 	Invoke(id Identifier) ([]Data, error)
 	InvokeWithInput(id Identifier, input []Data) ([]Data, error)
+	InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error)
+	InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error)
 
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
+	GetConfiguration() configuration.Configuration
 }

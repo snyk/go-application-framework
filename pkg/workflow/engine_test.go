@@ -81,7 +81,8 @@ func Test_EngineBasics(t *testing.T) {
 	assert.NotNil(t, engine.GetAnalytics())
 
 	// method under test: Invoke()
-	actualData1, err := engine.Invoke(workflowId2)
+	copyOfId := *workflowId2
+	actualData1, err := engine.Invoke(&copyOfId)
 	assert.Nil(t, err)
 	assert.NotNil(t, actualData1)
 	assert.NotNil(t, actualData1[0])

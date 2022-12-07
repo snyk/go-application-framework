@@ -2,8 +2,11 @@ package workflow
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -13,11 +16,12 @@ import (
 )
 
 type EngineImpl struct {
-	workflows     map[Identifier]Entry
-	config        configuration.Configuration
-	analytics     analytics.Analytics
-	networkAccess networking.NetworkAccess
-	initialized   bool
+	extensionInitializer []ExtensionInit
+	workflows            map[string]Entry
+	config               configuration.Configuration
+	analytics            analytics.Analytics
+	networkAccess        networking.NetworkAccess
+	initialized          bool
 }
 
 func NewWorkflowIdentifier(command string) Identifier {
@@ -44,16 +48,24 @@ func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
 
 func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 	engine := &EngineImpl{
-		workflows:     make(map[Identifier]Entry),
-		config:        configuration,
-		networkAccess: networking.NewNetworkAccess(configuration),
-		initialized:   false,
+		workflows:            make(map[string]Entry),
+		config:               configuration,
+		networkAccess:        networking.NewNetworkAccess(configuration),
+		initialized:          false,
+		extensionInitializer: make([]ExtensionInit, 0),
 	}
 	return engine
 }
 
 func (e *EngineImpl) Init() error {
 	var err error
+
+	for i := range e.extensionInitializer {
+		err = e.extensionInitializer[i](e)
+		if err != nil {
+			return err
+		}
+	}
 
 	// later scan here for extension binaries
 
@@ -94,7 +106,9 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 		expectedConfig: config,
 		entryPoint:     entryPoint,
 	}
-	e.workflows[id] = entry
+
+	tmp := id.String()
+	e.workflows[tmp] = entry
 
 	flagset := FlagsetFromConfigurationOptions(config)
 	if flagset != nil {
@@ -108,23 +122,31 @@ func (e *EngineImpl) GetWorkflows() []Identifier {
 	var result []Identifier
 
 	for k := range e.workflows {
-		result = append(result, k)
+		tmp, _ := url.Parse(k)
+		result = append(result, tmp)
 	}
 
 	return result
 }
 
 func (e *EngineImpl) GetWorkflow(id Identifier) (Entry, bool) {
-	workflow, ok := e.workflows[id]
+	workflow, ok := e.workflows[id.String()]
 	return workflow, ok
 }
 
 func (e *EngineImpl) Invoke(id Identifier) ([]Data, error) {
-	var input []Data
-	return e.InvokeWithInput(id, input)
+	return e.InvokeWithInputAndConfig(id, []Data{}, nil)
 }
 
 func (e *EngineImpl) InvokeWithInput(id Identifier, input []Data) ([]Data, error) {
+	return e.InvokeWithInputAndConfig(id, input, nil)
+}
+
+func (e *EngineImpl) InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error) {
+	return e.InvokeWithInputAndConfig(id, []Data{}, config)
+}
+
+func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error) {
 	var output []Data
 	var err error
 
@@ -136,12 +158,24 @@ func (e *EngineImpl) InvokeWithInput(id Identifier, input []Data) ([]Data, error
 	if ok {
 		callback := workflow.GetEntryPoint()
 		if callback != nil {
+			// prepare logger
+			logger := log.New(os.Stderr, id.Host+" - ", e.config.GetInt(configuration.DEBUG_FORMAT))
+			if e.config.GetBool(configuration.DEBUG) == false {
+				logger.SetOutput(io.Discard)
+			}
+
+			// prepare configuration
+			if config == nil {
+				config = e.config.Clone()
+			}
+
 			// create a context object for the invocation
 			context := InvocationContextImpl{
 				WorkflowID:     id,
-				Configuration:  e.config.Clone(),
+				Configuration:  config,
 				WorkflowEngine: e,
 				networkAccess:  e.networkAccess,
+				logger:         logger,
 			}
 
 			// invoke workflow through its callback
@@ -160,6 +194,14 @@ func (e *EngineImpl) GetAnalytics() analytics.Analytics {
 
 func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
 	return e.networkAccess
+}
+
+func (e *EngineImpl) AddExtensionInitializer(initializer ExtensionInit) {
+	e.extensionInitializer = append(e.extensionInitializer, initializer)
+}
+
+func (e *EngineImpl) GetConfiguration() configuration.Configuration {
+	return e.config
 }
 
 func GetGlobalConfiguration() ConfigurationOptions {
