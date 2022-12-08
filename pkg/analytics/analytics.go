@@ -27,6 +27,7 @@ type Analytics interface {
 	SetIntegration(name string, version string)
 	AddError(err error)
 	AddHeader(headerFunc func() http.Header)
+	SetClient(clientFunc func() *http.Client)
 	IsCiEnvironment() bool
 	GetOutputData() *analyticsOutput
 	GetRequest() (*http.Request, error)
@@ -34,6 +35,7 @@ type Analytics interface {
 }
 
 type AnalyticsImpl struct {
+	clientFunc func() *http.Client
 	headerFunc func() http.Header
 	apiUrl     string
 
@@ -117,6 +119,7 @@ func New() Analytics {
 	a := &AnalyticsImpl{}
 	a.headerFunc = func() http.Header { return http.Header{} }
 	a.created = time.Now()
+	a.clientFunc = func() *http.Client { return &http.Client{} }
 	return a
 }
 
@@ -147,6 +150,10 @@ func (a *AnalyticsImpl) AddError(err error) {
 
 func (a *AnalyticsImpl) AddHeader(headerFunc func() http.Header) {
 	a.headerFunc = headerFunc
+}
+
+func (a *AnalyticsImpl) SetClient(clientFunc func() *http.Client) {
+	a.clientFunc = clientFunc
 }
 
 func (a *AnalyticsImpl) IsCiEnvironment() bool {
@@ -249,7 +256,7 @@ func (a *AnalyticsImpl) Send() (*http.Response, error) {
 		return nil, err
 	}
 
-	client := http.Client{}
+	client := a.clientFunc()
 	response, err := client.Do(request)
 
 	return response, err
