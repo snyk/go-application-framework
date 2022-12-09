@@ -13,7 +13,8 @@ type DataImpl struct {
 }
 
 const (
-	content_type_key string = "Content-Type"
+	Content_type_key     string = "Content-Type"
+	Content_location_key string = "Content-Location"
 )
 
 func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string, payload interface{}) Data {
@@ -23,9 +24,19 @@ func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string,
 
 	dataIdentifier := *typeIdentifier
 	dataIdentifier.Scheme = "did"
+
+	header := http.Header{
+		Content_type_key: {contentType},
+	}
+
 	if input != nil {
 		// derive fragment from input data if available
 		dataIdentifier.Fragment = input.GetIdentifier().Fragment
+
+		// derive content location from input
+		if loc, err := input.GetMetaData(Content_location_key); err == nil {
+			header.Add(Content_location_key, loc)
+		}
 	} else {
 		// generate time based fragment
 		dataIdentifier.Fragment = fmt.Sprintf("%d", time.Now().Nanosecond())
@@ -33,10 +44,8 @@ func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string,
 
 	output := &DataImpl{
 		identifier: &dataIdentifier,
-		header: http.Header{
-			content_type_key: {contentType},
-		},
-		payload: payload,
+		header:     header,
+		payload:    payload,
 	}
 
 	return output
@@ -57,6 +66,7 @@ func (d *DataImpl) GetMetaData(key string) (string, error) {
 	if values, ok := d.header[key]; ok {
 		if len(values) > 0 {
 			value = values[0]
+			err = nil
 		}
 	}
 	return value, err
@@ -75,8 +85,17 @@ func (d *DataImpl) GetIdentifier() Identifier {
 }
 
 func (d *DataImpl) GetContentType() string {
-	result, _ := d.GetMetaData(content_type_key)
+	result, _ := d.GetMetaData(Content_type_key)
 	return result
+}
+
+func (d *DataImpl) GetContentLocation() string {
+	result, _ := d.GetMetaData(Content_location_key)
+	return result
+}
+
+func (d *DataImpl) SetContentLocation(location string) {
+	d.SetMetaData(Content_location_key, location)
 }
 
 func (d *DataImpl) String() string {

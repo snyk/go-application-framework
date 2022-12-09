@@ -16,5 +16,3 @@ const (
 	WORKFLOW_USE_STDIO             string = "wflstdio"
 	RAW_CMD_ARGS                   string = "raw_cmd_args"
 )
-
-const SNYK_DEFAULT_API_URL = "https://api.snyk.io"

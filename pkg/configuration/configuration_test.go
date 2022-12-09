@@ -38,6 +38,8 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
 	config := NewFromFiles("test")
+	config.AddAlternativeKeys(AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
+
 	actualValue := config.GetString(AUTHENTICATION_TOKEN)
 	assert.Equal(t, expectedValue, actualValue)
 
@@ -54,6 +56,7 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
 	config := NewFromFiles(TEST_FILENAME)
+	config.AddAlternativeKeys(AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
 
 	os.Setenv("SNYK_OAUTH_TOKEN", expectedValue)
 	actualValue := config.GetString(AUTHENTICATION_BEARER_TOKEN)
@@ -168,9 +171,22 @@ func Test_ConfigurationClone(t *testing.T) {
 	config := NewFromFiles(TEST_FILENAME)
 	config.AddFlagSet(flagset)
 
+	// test cloning of default values
+	defaultValueKey := "MyDefault"
+	expectedDefaultValue := "-my-default-"
+	config.AddDefaultValue(defaultValueKey, StandardDefaultValueFunction(expectedDefaultValue))
+
+	// test cloning of alternate keys
+	expectedAlternateValue := "bla"
+	notExistingKey := "notExisting"
+	alternateValueKey := "AlternateMyDefault"
+	config.Set(alternateValueKey, expectedAlternateValue)
+	config.AddAlternativeKeys(notExistingKey, []string{alternateValueKey})
+
 	actualValueString := config.GetString("api")
 	assert.Equal(t, "mytoken", actualValueString)
 
+	// create the clone
 	clonedConfig := config.Clone()
 
 	// manipulate the token
@@ -199,6 +215,12 @@ func Test_ConfigurationClone(t *testing.T) {
 			assert.Equal(t, originalValue, clonedValue)
 		}
 	}
+
+	actualDefaultValue := clonedConfig.GetString(defaultValueKey)
+	assert.Equal(t, expectedDefaultValue, actualDefaultValue)
+
+	actualAlternateValue := clonedConfig.GetString(notExistingKey)
+	assert.Equal(t, expectedAlternateValue, actualAlternateValue)
 
 	cleanupConfigstore()
 }

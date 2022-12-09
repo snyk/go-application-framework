@@ -5,13 +5,20 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_GetDefaultHeader_WithAuth(t *testing.T) {
+func getConfig() configuration.Configuration {
 	config := configuration.New()
+	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
+	return config
+}
+
+func Test_GetDefaultHeader_WithAuth(t *testing.T) {
+	config := getConfig()
 	net := NewNetworkAccess(config)
 
 	token := "1265457"
@@ -30,7 +37,7 @@ func Test_GetDefaultHeader_WithAuth(t *testing.T) {
 }
 
 func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
-	config := configuration.New()
+	config := getConfig()
 	net := NewNetworkAccess(config)
 
 	token := "1265457"
@@ -47,7 +54,7 @@ func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
 }
 
 func Test_Roundtripper_SecureHTTPS(t *testing.T) {
-	config := configuration.New()
+	config := getConfig()
 	net := NewNetworkAccess(config)
 
 	roundtripper := net.GetRoundtripper()
@@ -57,7 +64,7 @@ func Test_Roundtripper_SecureHTTPS(t *testing.T) {
 }
 
 func Test_Roundtripper_InsecureHTTPS(t *testing.T) {
-	config := configuration.New()
+	config := getConfig()
 	net := NewNetworkAccess(config)
 
 	config.Set(configuration.INSECURE_HTTPS, true)
@@ -69,7 +76,7 @@ func Test_Roundtripper_InsecureHTTPS(t *testing.T) {
 }
 
 func Test_Roundtripper_ProxyAuth(t *testing.T) {
-	config := configuration.New()
+	config := getConfig()
 	net := NewNetworkAccess(config)
 
 	// case: enable AnyAuth
@@ -98,7 +105,7 @@ func Test_Roundtripper_ProxyAuth(t *testing.T) {
 }
 
 func Test_GetHTTPClient(t *testing.T) {
-	config := configuration.New()
+	config := getConfig()
 	net := NewNetworkAccess(config)
 
 	client := net.GetHttpClient()

@@ -22,6 +22,7 @@ type EngineImpl struct {
 	analytics            analytics.Analytics
 	networkAccess        networking.NetworkAccess
 	initialized          bool
+	invocationCounter    int
 }
 
 func NewWorkflowIdentifier(command string) Identifier {
@@ -52,6 +53,7 @@ func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 		config:               configuration,
 		initialized:          false,
 		extensionInitializer: make([]ExtensionInit, 0),
+		invocationCounter:    0,
 	}
 	return engine
 }
@@ -59,6 +61,7 @@ func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 func (e *EngineImpl) Init() error {
 	var err error
 
+	e.invocationCounter = 0
 	e.networkAccess = networking.NewNetworkAccess(e.config)
 
 	for i := range e.extensionInitializer {
@@ -162,8 +165,11 @@ func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, confi
 	if ok {
 		callback := workflow.GetEntryPoint()
 		if callback != nil {
+			e.invocationCounter++
+
 			// prepare logger
-			logger := log.New(os.Stderr, id.Host+" - ", e.config.GetInt(configuration.DEBUG_FORMAT))
+			prefix := fmt.Sprintf("%s:%d - ", id.Host, e.invocationCounter)
+			logger := log.New(os.Stderr, prefix, e.config.GetInt(configuration.DEBUG_FORMAT))
 			if e.config.GetBool(configuration.DEBUG) == false {
 				logger.SetOutput(io.Discard)
 			}

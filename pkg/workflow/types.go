@@ -9,6 +9,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking"
 )
 
+//go:generate $GOPATH/bin/mockgen -source=types.go -destination ../mocks/workflow.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/workflow/
+
 // typedefs
 type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
@@ -22,6 +24,8 @@ type Data interface {
 	GetPayload() interface{}
 	GetIdentifier() Identifier
 	GetContentType() string
+	GetContentLocation() string
+	SetContentLocation(string)
 }
 
 type InvocationContext interface {

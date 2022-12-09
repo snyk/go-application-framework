@@ -35,18 +35,27 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	for i := range input {
 		mimeType := input[i].GetContentType()
+		contentLocation := input[i].GetContentLocation()
+		if len(contentLocation) == 0 {
+			contentLocation = "unknown"
+		}
 
-		debugLogger.Printf("Processing '%s' of type '%s'\n", input[i].GetIdentifier(), mimeType)
+		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'\n", input[i].GetIdentifier().String(), contentLocation, mimeType)
 
 		if strings.Contains(mimeType, "json") { // handle application/json
 			singleData := input[i].GetPayload().([]byte)
+
+			// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
+			if printJsonToCmd == false && len(writeJsonToFile) == 0 {
+				printJsonToCmd = true
+			}
 
 			if printJsonToCmd {
 				fmt.Println(string(singleData))
 			}
 
 			if len(writeJsonToFile) > 0 {
-				debugLogger.Printf("Writing '%s' JSON of length %d to '%s'\n", input[i].GetIdentifier().Path, len(singleData), writeJsonToFile)
+				debugLogger.Printf("Writing '%s' JSON of length %d to '%s'\n", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
 
 				os.Remove(writeJsonToFile)
 				os.WriteFile(writeJsonToFile, singleData, fs.FileMode(0666))

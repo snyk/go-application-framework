@@ -8,9 +8,12 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
+
+//go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
 const (
 	defaultUserAgent string = "snyk-cli"
@@ -86,7 +89,7 @@ func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
 		apiUrlString := n.config.GetString(configuration.API_URL)
 		apiUrl, err := url.Parse(apiUrlString)
 		if err != nil {
-			apiUrl, _ = url.Parse(configuration.SNYK_DEFAULT_API_URL)
+			apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
 		}
 
 		// requests to the api automatically get an authentication token attached

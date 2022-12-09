@@ -1,18 +1,19 @@
 package configuration
 
 import (
-	"log"
 	"net/url"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 
-	"github.com/snyk/go-application-framework/internal/utils"
-	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
+
+//go:generate $GOPATH/bin/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
+
+type DefaultValueFunction func(existingValue interface{}) interface{}
 
 type Configuration interface {
 	Clone() Configuration
@@ -28,12 +29,24 @@ type Configuration interface {
 
 	AddFlagSet(flagset *pflag.FlagSet) error
 	AllKeys() []string
+	AddDefaultValue(key string, defaultValue DefaultValueFunction)
+	AddAlternativeKeys(key string, altKeys []string)
 }
 
 type extendedViper struct {
 	viper           *viper.Viper
 	alternativeKeys map[string][]string
-	defaultValues   map[string]interface{}
+	defaultValues   map[string]DefaultValueFunction
+}
+
+func StandardDefaultValueFunction(defaultValue interface{}) DefaultValueFunction {
+	return func(existingValue interface{}) interface{} {
+		if existingValue != nil {
+			return existingValue
+		} else {
+			return defaultValue
+		}
+	}
 }
 
 func determineBasePath() string {
@@ -67,7 +80,9 @@ func CreateConfigurationFile(filename string) (string, error) {
 
 func NewFromFiles(files ...string) Configuration {
 	config := &extendedViper{
-		viper: viper.New(),
+		viper:           viper.New(),
+		alternativeKeys: make(map[string][]string),
+		defaultValues:   make(map[string]DefaultValueFunction),
 	}
 
 	// prepare config files
@@ -82,20 +97,6 @@ func NewFromFiles(files ...string) Configuration {
 	// prepare environment variables
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	config.viper.AutomaticEnv()
-
-	// Assign alternative keys to look up of the original is not found
-	config.alternativeKeys = make(map[string][]string)
-	config.alternativeKeys[AUTHENTICATION_TOKEN] = []string{"snyk_token", "snyk_cfg_api", "api"}
-	config.alternativeKeys[AUTHENTICATION_BEARER_TOKEN] = []string{"snyk_oauth_token", "snyk_docker_token"}
-
-	// Assign default values
-	config.defaultValues = make(map[string]interface{})
-	config.defaultValues[API_URL] = SNYK_DEFAULT_API_URL
-	config.defaultValues[ANALYTICS_DISABLED] = false
-	config.defaultValues[WORKFLOW_USE_STDIO] = false
-	config.defaultValues[PROXY_AUTHENTICATION_MECHANISM] = httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)
-	config.defaultValues[DEBUG_FORMAT] = log.Ldate | log.Ltime | log.Lmicroseconds | log.Lmsgprefix
-	config.defaultValues[CACHE_PATH], _ = utils.SnykCacheDir()
 
 	// read config files
 	config.viper.ReadInConfig()
@@ -115,6 +116,14 @@ func (ev *extendedViper) Clone() Configuration {
 	for i := range keys {
 		value := ev.viper.Get(keys[i])
 		clone.Set(keys[i], value)
+	}
+
+	for k, v := range ev.defaultValues {
+		clone.AddDefaultValue(k, v)
+	}
+
+	for k, v := range ev.alternativeKeys {
+		clone.AddAlternativeKeys(k, v)
 	}
 
 	return clone
@@ -139,10 +148,8 @@ func (ev *extendedViper) Get(key string) interface{} {
 		i++
 	}
 
-	if result == nil {
-		if ev.defaultValues[key] != nil {
-			result = ev.defaultValues[key]
-		}
+	if ev.defaultValues[key] != nil {
+		result = ev.defaultValues[key](result)
 	}
 
 	return result
@@ -256,4 +263,12 @@ func (ev *extendedViper) AllKeys() []string {
 	}
 
 	return keys
+}
+
+func (ev *extendedViper) AddDefaultValue(key string, defaultValue DefaultValueFunction) {
+	ev.defaultValues[key] = defaultValue
+}
+
+func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
+	ev.alternativeKeys[key] = altKeys
 }
