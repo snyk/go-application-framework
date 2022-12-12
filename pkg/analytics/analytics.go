@@ -21,7 +21,6 @@ import (
 
 type Analytics interface {
 	SetCmdArguments(args []string)
-	SetOrg(org string)
 	SetVersion(version string)
 	SetApiUrl(apiUrl string)
 	SetIntegration(name string, version string)
@@ -31,6 +30,7 @@ type Analytics interface {
 	IsCiEnvironment() bool
 	GetOutputData() *analyticsOutput
 	GetRequest() (*http.Request, error)
+	GetUrl() *url.URL
 	Send() (*http.Response, error)
 }
 
@@ -39,7 +39,6 @@ type AnalyticsImpl struct {
 	headerFunc func() http.Header
 	apiUrl     string
 
-	org                string
 	version            string
 	created            time.Time
 	args               []string
@@ -127,10 +126,6 @@ func (a *AnalyticsImpl) SetCmdArguments(args []string) {
 	a.args = args
 }
 
-func (a *AnalyticsImpl) SetOrg(org string) {
-	a.org = org
-}
-
 func (a *AnalyticsImpl) SetVersion(version string) {
 	a.version = version
 }
@@ -168,6 +163,11 @@ func (a *AnalyticsImpl) IsCiEnvironment() bool {
 	}
 
 	return result
+}
+
+func (a *AnalyticsImpl) GetUrl() *url.URL {
+	analyticsUrl, _ := url.Parse(a.apiUrl + api_endpoint)
+	return analyticsUrl
 }
 
 func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
@@ -228,12 +228,7 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 		return nil, err
 	}
 
-	analyticsUrl, _ := url.Parse(a.apiUrl + api_endpoint)
-	if len(a.org) > 0 {
-		query := url.Values{}
-		query.Add("org", a.org)
-		analyticsUrl.RawQuery = query.Encode()
-	}
+	analyticsUrl := a.GetUrl()
 
 	body := bytes.NewReader(outputJson)
 	request, err := http.NewRequest(http.MethodPost, analyticsUrl.String(), body)

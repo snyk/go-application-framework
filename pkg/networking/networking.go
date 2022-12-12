@@ -16,7 +16,9 @@ import (
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
 const (
-	defaultUserAgent string = "snyk-cli"
+	defaultUserAgent           string = "snyk-cli"
+	HEADER_FIELD_AUTHORIZATION string = "Authorization"
+	HEADER_FIELD_USER_AGENT    string = "User-Agent"
 )
 
 type NetworkAccess interface {
@@ -24,14 +26,16 @@ type NetworkAccess interface {
 	GetRoundtripper() http.RoundTripper
 	GetHttpClient() *http.Client
 	AddHeaderField(key string, value string)
+	RemoveHeaderFieldForUrl(url *url.URL, key string)
 }
 
 type NetworkImpl struct {
-	config       configuration.Configuration
-	userAgent    string
-	staticHeader http.Header
-	logger       *log.Logger
-	proxy        func(req *http.Request) (*url.URL, error)
+	config                configuration.Configuration
+	userAgent             string
+	staticHeader          http.Header
+	logger                *log.Logger
+	proxy                 func(req *http.Request) (*url.URL, error)
+	ignoreHeaderForUrlMap map[string][]*url.URL
 }
 
 type customRoundtripper struct {
@@ -68,11 +72,12 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	}
 
 	c := NetworkImpl{
-		config:       config,
-		userAgent:    defaultUserAgent,
-		staticHeader: http.Header{},
-		logger:       logger,
-		proxy:        http.ProxyFromEnvironment,
+		config:                config,
+		userAgent:             defaultUserAgent,
+		staticHeader:          http.Header{},
+		logger:                logger,
+		proxy:                 http.ProxyFromEnvironment,
+		ignoreHeaderForUrlMap: make(map[string][]*url.URL),
 	}
 	return &c
 }
@@ -82,7 +87,14 @@ func (n *NetworkImpl) AddHeaderField(key string, value string) {
 }
 
 func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
-	h := n.staticHeader
+	result := http.Header{}
+
+	// add static header
+	for k, v := range n.staticHeader {
+		for i := range v {
+			result.Add(k, v[i])
+		}
+	}
 
 	if url != nil {
 		// determine configured api url
@@ -96,14 +108,25 @@ func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
 		if url.Host == apiUrl.Host {
 			authHeader := GetAuthHeader(n.config)
 			if len(authHeader) > 0 {
-				h.Add("Authorization", authHeader)
+				result.Add(HEADER_FIELD_AUTHORIZATION, authHeader)
 			}
 
 		}
 	}
 
-	h.Add("User-Agent", n.userAgent)
-	return h
+	result.Add(HEADER_FIELD_USER_AGENT, n.userAgent)
+
+	// remove fields from header if they have been added to the ignore list for the current url
+	for headerField, urlList := range n.ignoreHeaderForUrlMap {
+		for i := range urlList {
+			if *urlList[i] == *url {
+				result.Del(headerField)
+				break
+			}
+		}
+	}
+
+	return result
 }
 
 func (n *NetworkImpl) GetRoundtripper() http.RoundTripper {
@@ -142,4 +165,15 @@ func (n *NetworkImpl) GetHttpClient() *http.Client {
 	client := *http.DefaultClient
 	client.Transport = n.GetRoundtripper()
 	return &client
+}
+
+func (n *NetworkImpl) RemoveHeaderFieldForUrl(value *url.URL, key string) {
+	urlList, ok := n.ignoreHeaderForUrlMap[key]
+
+	if !ok {
+		urlList = make([]*url.URL, 0)
+	}
+
+	urlList = append(urlList, value)
+	n.ignoreHeaderForUrlMap[key] = urlList
 }

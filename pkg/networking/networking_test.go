@@ -53,6 +53,39 @@ func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
 	assert.Equal(t, expectedHeader, actualHeader)
 }
 
+func Test_GetDefaultHeader_SkipHeaderForUrl(t *testing.T) {
+	config := getConfig()
+	net := NewNetworkAccess(config)
+
+	token := "1265457"
+	config.Set(configuration.AUTHENTICATION_TOKEN, token)
+	net.AddHeaderField("Newfield", "newValue")
+
+	expectedHeader := http.Header{
+		"Newfield": {"newValue"},
+	}
+
+	expectedHeader2 := http.Header{
+		HEADER_FIELD_AUTHORIZATION: {"token " + token},
+		HEADER_FIELD_USER_AGENT:    {defaultUserAgent},
+	}
+
+	url, _ := url.Parse(config.GetString(configuration.API_URL))
+	url2, _ := url.Parse(config.GetString(configuration.API_URL) + "?query=low")
+	net.RemoveHeaderFieldForUrl(url, HEADER_FIELD_AUTHORIZATION)
+	net.RemoveHeaderFieldForUrl(url, HEADER_FIELD_USER_AGENT)
+	net.RemoveHeaderFieldForUrl(url, "SomethingNotExisting")
+	net.RemoveHeaderFieldForUrl(url2, "Newfield")
+
+	// invoke method under test
+	actualHeader := net.GetDefaultHeader(url)
+	assert.Equal(t, expectedHeader, actualHeader)
+
+	// invoke method under test
+	actualHeader2 := net.GetDefaultHeader(url2)
+	assert.Equal(t, expectedHeader2, actualHeader2)
+}
+
 func Test_Roundtripper_SecureHTTPS(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)

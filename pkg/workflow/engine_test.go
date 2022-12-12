@@ -5,7 +5,9 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
@@ -131,4 +133,22 @@ func Test_EngineRegisterErrorHandling(t *testing.T) {
 	entry, err = engine.Register(&url.URL{}, ConfigurationOptionsFromFlagset(flagset), nil)
 	assert.NotNil(t, err)
 	assert.Nil(t, entry)
+}
+
+// ensure that analytics header don't include the authorization token, as the end-point doesn't handle it
+func Test_EngineAnalyticsInitialization(t *testing.T) {
+	config := configuration.New()
+	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
+	config.Set(configuration.AUTHENTICATION_TOKEN, "1234567890")
+
+	engine := NewWorkFlowEngine(config)
+	engine.Init()
+	analytics := engine.GetAnalytics()
+	networkAccess := engine.GetNetworkAccess()
+
+	url := analytics.GetUrl()
+	actualAnalyticsHeader := networkAccess.GetDefaultHeader(url)
+
+	_, ok := actualAnalyticsHeader[networking.HEADER_FIELD_AUTHORIZATION]
+	assert.False(t, ok)
 }

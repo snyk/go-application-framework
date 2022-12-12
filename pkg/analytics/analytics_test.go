@@ -17,7 +17,6 @@ func Test_Basic(t *testing.T) {
 	os.Setenv("CIRCLECI", "true")
 
 	api := "http://myapi.com"
-	org := "MyOrgAs"
 	h := http.Header{}
 	h.Add("Authorization", "token 4ac534fac6fd6790b7")
 
@@ -31,7 +30,6 @@ func Test_Basic(t *testing.T) {
 	analytics.SetCmdArguments(args)
 	analytics.AddError(fmt.Errorf("Something went terrible wrong."))
 	analytics.SetVersion("1234567")
-	analytics.SetOrg(org)
 	analytics.SetApiUrl(api)
 	analytics.SetIntegration("Jenkins", "1.2.3.4")
 	analytics.AddHeader(func() http.Header {
@@ -51,8 +49,7 @@ func Test_Basic(t *testing.T) {
 	assert.Equal(t, expectedAuthHeader, actualAuthHeader)
 
 	requestUrl := request.URL.String()
-	assert.Equal(t, "http://myapi.com/v1/analytics/cli?org=MyOrgAs", requestUrl)
-	assert.True(t, strings.Contains(requestUrl, org))
+	assert.Equal(t, "http://myapi.com/v1/analytics/cli", requestUrl)
 
 	body, err := io.ReadAll(request.Body)
 	assert.Nil(t, err)
