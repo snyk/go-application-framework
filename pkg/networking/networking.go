@@ -82,7 +82,14 @@ func (n *NetworkImpl) AddHeaderField(key string, value string) {
 }
 
 func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
-	h := n.staticHeader
+	h := http.Header{}
+
+	// add static header
+	for k, v := range n.staticHeader {
+		for i := range v {
+			h.Add(k, v[i])
+		}
+	}
 
 	if url != nil {
 		// determine configured api url
