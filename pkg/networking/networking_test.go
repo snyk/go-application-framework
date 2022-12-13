@@ -30,10 +30,12 @@ func Test_GetDefaultHeader_WithAuth(t *testing.T) {
 		"Authorization": {"token " + token},
 	}
 
-	url, _ := url.Parse(config.GetString(configuration.API_URL))
-	actualHeader := net.GetDefaultHeader(url)
-
-	assert.Equal(t, expectedHeader, actualHeader)
+	// run method under test multiple times to ensure that it behaves the same way each time
+	for i := 0; i < 3; i++ {
+		url, _ := url.Parse(config.GetString(configuration.API_URL))
+		actualHeader := net.GetDefaultHeader(url)
+		assert.Equal(t, expectedHeader, actualHeader)
+	}
 }
 
 func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
@@ -47,10 +49,12 @@ func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
 		"User-Agent": {defaultUserAgent},
 	}
 
-	url, _ := url.Parse("https://www.myexample.com")
-	actualHeader := net.GetDefaultHeader(url)
-
-	assert.Equal(t, expectedHeader, actualHeader)
+	// run method under test multiple times to ensure that it behaves the same way each time
+	for i := 0; i < 3; i++ {
+		url, _ := url.Parse("https://www.myexample.com")
+		actualHeader := net.GetDefaultHeader(url)
+		assert.Equal(t, expectedHeader, actualHeader)
+	}
 }
 
 func Test_Roundtripper_SecureHTTPS(t *testing.T) {
