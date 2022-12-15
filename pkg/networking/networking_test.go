@@ -1,12 +1,18 @@
 package networking
 
 import (
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 )
@@ -116,4 +122,43 @@ func Test_GetHTTPClient(t *testing.T) {
 	response, err := client.Get("https://www.snyk.io")
 	assert.Nil(t, err)
 	assert.Equal(t, 200, response.StatusCode)
+}
+
+func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
+	config := getConfig()
+	net := NewNetworkAccess(config)
+
+	certPem, _keyPem, _ := certs.MakeSelfSignedCert("mycert", []string{"localhost"}, log.Default())
+	certFile, _ := os.CreateTemp("", "")
+	certFile.Write([]byte(certPem))
+
+	keyFile, _ := os.CreateTemp("", "")
+	keyFile.Write([]byte(_keyPem))
+
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		io.WriteString(w, "Hello, TLS!\n")
+		fmt.Println("hello")
+	})
+
+	listen := func() {
+		err := http.ListenAndServeTLS(":8443", certFile.Name(), keyFile.Name(), nil)
+		assert.Nil(t, err)
+	}
+	go listen()
+
+	time.Sleep(1000)
+
+	// test that we can't connect without adding the ca certificates
+	client := net.GetHttpClient()
+	_, err := client.Get("https://localhost:8443/")
+	assert.NotNil(t, err)
+
+	// invoke method under test
+	err = net.AddRootCAs(certFile.Name())
+	assert.Nil(t, err)
+
+	// test connectability after adding ca certificates
+	client = net.GetHttpClient()
+	_, err = client.Get("https://localhost:8443/")
+	assert.Nil(t, err)
 }
