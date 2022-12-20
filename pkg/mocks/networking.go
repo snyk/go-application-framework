@@ -47,6 +47,20 @@ func (mr *MockNetworkAccessMockRecorder) AddHeaderField(key, value interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).AddHeaderField), key, value)
 }
 
+// AddRootCAs mocks base method.
+func (m *MockNetworkAccess) AddRootCAs(pemFileLocation string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddRootCAs", pemFileLocation)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddRootCAs indicates an expected call of AddRootCAs.
+func (mr *MockNetworkAccessMockRecorder) AddRootCAs(pemFileLocation interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRootCAs", reflect.TypeOf((*MockNetworkAccess)(nil).AddRootCAs), pemFileLocation)
+}
+
 // GetDefaultHeader mocks base method.
 func (m *MockNetworkAccess) GetDefaultHeader(url *url.URL) http.Header {
 	m.ctrl.T.Helper()

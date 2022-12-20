@@ -2,6 +2,7 @@ package networking
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
@@ -24,6 +26,7 @@ type NetworkAccess interface {
 	GetRoundtripper() http.RoundTripper
 	GetHttpClient() *http.Client
 	AddHeaderField(key string, value string)
+	AddRootCAs(pemFileLocation string) error
 }
 
 type NetworkImpl struct {
@@ -32,6 +35,7 @@ type NetworkImpl struct {
 	staticHeader http.Header
 	logger       *log.Logger
 	proxy        func(req *http.Request) (*url.URL, error)
+	caPool       *x509.CertPool
 }
 
 type customRoundtripper struct {
@@ -74,6 +78,7 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 		logger:       logger,
 		proxy:        http.ProxyFromEnvironment,
 	}
+
 	return &c
 }
 
@@ -123,6 +128,7 @@ func (n *NetworkImpl) GetRoundtripper() http.RoundTripper {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: insecure,
+			RootCAs:            n.caPool,
 		},
 	}
 
@@ -149,4 +155,20 @@ func (n *NetworkImpl) GetHttpClient() *http.Client {
 	client := *http.DefaultClient
 	client.Transport = n.GetRoundtripper()
 	return &client
+}
+
+func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
+	var err error
+
+	if len(pemFileLocation) > 0 {
+		if n.caPool == nil {
+			n.caPool, err = x509.SystemCertPool()
+		}
+
+		if err == nil {
+			err = certs.AddCertificatesToPool(n.caPool, pemFileLocation)
+		}
+	}
+
+	return err
 }
