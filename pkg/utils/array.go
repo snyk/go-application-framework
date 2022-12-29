@@ -26,6 +26,19 @@ func RemoveSimilar(list []string, element string) []string {
 	return filteredArgs
 }
 
+func Merge(input1 []string, input2 []string) []string {
+	result := make([]string, 0)
+	result = append(result, input1...)
+
+	for _, a := range input2 {
+		if !Contains(result, a) {
+			result = append(result, a)
+		}
+	}
+
+	return result
+}
+
 func ToKeyValueMap(input []string, splitBy string) map[string]string {
 	result := make(map[string]string)
 
@@ -87,4 +100,10 @@ func FindKeyCaseInsensitive(input map[string]string, key string) (string, bool) 
 	}
 
 	return key, found
+}
+
+func FindValueCaseInsensitive(input map[string]string, key string) (string, bool) {
+	key, found := FindKeyCaseInsensitive(input, key)
+	value := input[key]
+	return value, found
 }

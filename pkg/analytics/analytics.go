@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-uuid"
-	"github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 type Analytics interface {
