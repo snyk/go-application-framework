@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -23,7 +25,7 @@ func initConfiguration(config configuration.Configuration) {
 	config.AddDefaultValue(configuration.DEBUG_FORMAT, configuration.StandardDefaultValueFunction(log.Ldate|log.Ltime|log.Lmicroseconds|log.Lmsgprefix|log.LUTC))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
 
-	config.AddDefaultValue(configuration.API_URL, func(existingValue interface{}) interface{} {
+	config.AddDefaultValue(configuration.API_URL, func(existingValue any) any {
 		if existingValue == nil {
 			return constants.SNYK_DEFAULT_API_URL
 		} else {
@@ -38,23 +40,26 @@ func initConfiguration(config configuration.Configuration) {
 		}
 	})
 
-	config.AddDefaultValue(configuration.ORGANIZATION, func(existingValue interface{}) interface{} {
-		useDefaultValue := true
-		orgid := existingValue
-		if existingValue != nil {
-			if len(existingValue.(string)) > 0 {
-				useDefaultValue = false
+	config.AddDefaultValue(configuration.ORGANIZATION, func(existingValue any) any {
+		client := networking.NewNetworkAccess(config).GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient := api.NewApi(url, client)
+		if existingValue != nil && len(existingValue.(string)) > 0 {
+			orgId := existingValue.(string)
+			_, err := uuid.Parse(orgId)
+			isSlugName := err != nil
+			if isSlugName {
+				orgId, err = apiClient.GetOrgIdFromSlug(existingValue.(string))
+				if err == nil {
+					return orgId
+				}
 			}
+			return orgId
 		}
 
-		if useDefaultValue {
-			api := config.GetString(configuration.API_URL)
-			client := networking.NewNetworkAccess(config).GetHttpClient()
-			orgid, _ = utils.GetDefaultOrgID(client, api)
-			config.Set(configuration.ORGANIZATION, orgid)
-		}
+		orgId, _ := apiClient.GetDefaultOrgId()
 
-		return orgid
+		return orgId
 	})
 
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
