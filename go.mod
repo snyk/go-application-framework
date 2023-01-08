@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/golang/mock v1.6.0
+	github.com/google/uuid v1.1.2
 	github.com/hashicorp/go-uuid v1.0.3
 	github.com/snyk/go-httpauth v0.0.0-20220915135832-0edf62cf8cdd
 	github.com/spf13/pflag v1.0.5
