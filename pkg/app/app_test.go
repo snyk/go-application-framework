@@ -34,4 +34,11 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 	actualApiUrl := config.GetString(configuration.API_URL)
 	assert.Equal(t, expectApiUrl, actualApiUrl)
+
+	// defaults set by localworkflows.InitDepGraphWorkflow(engine)
+	allProjects := config.Get("all-projects")
+	assert.Equal(t, allProjects, false)
+
+	inputFile := config.Get("file")
+	assert.Equal(t, inputFile, "")
 }
