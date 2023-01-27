@@ -64,6 +64,7 @@ func initConfiguration(config configuration.Configuration) {
 
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
+	config.AddAlternativeKeys(configuration.API_URL, []string{"endpoint"})
 }
 
 func CreateAppEngine() workflow.Engine {
