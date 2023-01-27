@@ -218,4 +218,19 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		commandArgs := config.Get(configuration.RAW_CMD_ARGS)
 		assert.Contains(t, commandArgs, "--file=path/to/target/file.js")
 	})
+
+	t.Run("should error if no dependency graphs found", func(t *testing.T) {
+		dataIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+		data := workflow.NewData(dataIdentifier, "application/json", []byte{})
+
+		// engine mocks
+		id := workflow.NewWorkflowIdentifier("legacycli")
+		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
+
+		// execute
+		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+
+		// assert
+		assert.Equal(t, "No dependency graphs found", err.Error())
+	})
 }
