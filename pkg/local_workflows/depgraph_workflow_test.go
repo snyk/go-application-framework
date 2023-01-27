@@ -54,50 +54,50 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 
 	// invocation context mocks
-	invocationContextMock.EXPECT().GetEngine().Return(engineMock).Times(1)
-	invocationContextMock.EXPECT().GetConfiguration().Return(config).Times(1)
-	invocationContextMock.EXPECT().GetLogger().Return(logger).Times(1)
+	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+
+	payload := `
+	DepGraph data:
+	{
+		"schemaVersion": "1.2.0",
+		"pkgManager": {
+			"name": "npm"
+		},
+		"pkgs": [
+			{
+				"id": "goof@1.0.1",
+				"info": {
+					"name": "goof",
+					"version": "1.0.1"
+				}
+			}
+		],
+		"graph": {
+			"rootNodeId": "root-node",
+			"nodes": [
+				{
+					"nodeId": "root-node",
+					"pkgId": "goof@1.0.1",
+					"deps": [
+						{
+							"nodeId": "adm-zip@0.4.7"
+						},
+						{
+							"nodeId": "body-parser@1.9.0"
+						}
+					]
+				}
+			]
+		}
+	}
+	DepGraph target:
+	package-lock.json
+	DepGraph end`
 
 	t.Run("should return a depGraphList", func(t *testing.T) {
 		// setup
-		payload := `
-		DepGraph data:
-		{
-			"schemaVersion": "1.2.0",
-			"pkgManager": {
-				"name": "npm"
-			},
-			"pkgs": [
-				{
-					"id": "goof@1.0.1",
-					"info": {
-						"name": "goof",
-						"version": "1.0.1"
-					}
-				}
-			],
-			"graph": {
-				"rootNodeId": "root-node",
-				"nodes": [
-					{
-						"nodeId": "root-node",
-						"pkgId": "goof@1.0.1",
-						"deps": [
-							{
-								"nodeId": "adm-zip@0.4.7"
-							},
-							{
-								"nodeId": "body-parser@1.9.0"
-							}
-						]
-					}
-				]
-			}
-		}
-		DepGraph target:
-		package-lock.json
-		DepGraph end`
-
 		expectedJson := `
 		{
 			"schemaVersion": "1.2.0",
@@ -154,5 +154,68 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("should support 'all-projects' flag", func(t *testing.T) {
+		// setup
+		config.Set("all-projects", true)
+
+		dataIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+		data := workflow.NewData(dataIdentifier, "application/json", []byte(payload))
+
+		// engine mocks
+		id := workflow.NewWorkflowIdentifier("legacycli")
+		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
+
+		// execute
+		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+
+		// assert
+		assert.Nil(t, err)
+
+		commandArgs := config.Get(configuration.RAW_CMD_ARGS)
+		assert.Contains(t, commandArgs, "--all-projects")
+	})
+
+	t.Run("should support custom 'targetDirectory'", func(t *testing.T) {
+		// setup
+		config.Set("targetDirectory", "path/to/target")
+
+		dataIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+		data := workflow.NewData(dataIdentifier, "application/json", []byte(payload))
+
+		// engine mocks
+		id := workflow.NewWorkflowIdentifier("legacycli")
+		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
+
+		// execute
+		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+
+		// assert
+		assert.Nil(t, err)
+
+		commandArgs := config.Get(configuration.RAW_CMD_ARGS)
+		assert.Contains(t, commandArgs, "path/to/target")
+	})
+
+	t.Run("should support 'file' flag", func(t *testing.T) {
+		// setup
+		config.Set("file", "path/to/target/file.js")
+
+		dataIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+		data := workflow.NewData(dataIdentifier, "application/json", []byte(payload))
+
+		// engine mocks
+		id := workflow.NewWorkflowIdentifier("legacycli")
+		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
+
+		// execute
+		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+
+		// assert
+		assert.Nil(t, err)
+
+		commandArgs := config.Get(configuration.RAW_CMD_ARGS)
+		assert.Contains(t, commandArgs, "--file=path/to/target/file.js")
 	})
 }
