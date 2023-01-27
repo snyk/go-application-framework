@@ -1,6 +1,7 @@
 package localworkflows
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -52,6 +53,11 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 	engineMock := mocks.NewMockEngine(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetEngine().Return(engineMock).Times(1)
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).Times(1)
+	invocationContextMock.EXPECT().GetLogger().Return(logger).Times(1)
+
 	t.Run("should return a depGraphList", func(t *testing.T) {
 		// setup
 		payload := `
@@ -92,21 +98,61 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		package-lock.json
 		DepGraph end`
 
-		data := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "something"), "application/json", []byte(payload))
+		expectedJson := `
+		{
+			"schemaVersion": "1.2.0",
+			"pkgManager": {
+				"name": "npm"
+			},
+			"pkgs": [
+				{
+					"id": "goof@1.0.1",
+					"info": {
+						"name": "goof",
+						"version": "1.0.1"
+					}
+				}
+			],
+			"graph": {
+				"rootNodeId": "root-node",
+				"nodes": [
+					{
+						"nodeId": "root-node",
+						"pkgId": "goof@1.0.1",
+						"deps": [
+							{
+								"nodeId": "adm-zip@0.4.7"
+							},
+							{
+								"nodeId": "body-parser@1.9.0"
+							}
+						]
+					}
+				]
+			}
+		}`
+
+		dataIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+		data := workflow.NewData(dataIdentifier, "application/json", []byte(payload))
 
 		// engine mocks
 		id := workflow.NewWorkflowIdentifier("legacycli")
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
-		// invocation context mocks
-		invocationContextMock.EXPECT().GetEngine().Return(engineMock).Times(1)
-		invocationContextMock.EXPECT().GetConfiguration().Return(config).Times(1)
-		invocationContextMock.EXPECT().GetLogger().Return(logger).Times(1)
 		// execute
 		depGraphList, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{data}, depGraphList)
+
+		var expected interface{}
+		err = json.Unmarshal([]byte(expectedJson), &expected)
+		assert.Nil(t, err)
+
+		var actual interface{}
+		err = json.Unmarshal(depGraphList[0].GetPayload().([]byte), &actual)
+		assert.Nil(t, err)
+
+		assert.Equal(t, expected, actual)
 	})
 }
