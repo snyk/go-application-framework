@@ -2,10 +2,8 @@ package localworkflows
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -15,51 +13,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_Depgraph_extractLegacyCLIError_extractError(t *testing.T) {
-
-	expectedMsgJson := `{
-		"ok": false,
-		"error": "Hello Error",
-		"path": "/"
-	  }`
-
-	inputError := &exec.ExitError{}
-	data := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "something"), "application/json", []byte(expectedMsgJson))
-
-	outputError := extractLegacyCLIError(inputError, []workflow.Data{data})
-
-	assert.NotNil(t, outputError)
-	assert.Equal(t, "Hello Error", outputError.Error())
-
-	_, ok := outputError.(*LegacyCliJsonError)
-	assert.True(t, ok)
-}
-
-func Test_Depgraph_extractLegacyCLIError_InputSameAsOutput(t *testing.T) {
-	inputError := fmt.Errorf("some other error")
-	data := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "something"), "application/json", []byte{})
-
-	outputError := extractLegacyCLIError(inputError, []workflow.Data{data})
-
-	assert.NotNil(t, outputError)
-	assert.Equal(t, inputError.Error(), outputError.Error())
-}
-
-func Test_Depgraph_InitDepGraphWorkflow(t *testing.T) {
+func Test_Output_InitOutputWorkflow(t *testing.T) {
 	config := configuration.New()
 	engine := workflow.NewWorkFlowEngine(config)
 
-	err := InitDepGraphWorkflow(engine)
+	err := InitOutputWorkflow(engine)
 	assert.Nil(t, err)
 
-	allProjects := config.Get("all-projects")
-	assert.Equal(t, false, allProjects)
+	json := config.Get("json")
+	assert.Equal(t, false, json)
 
-	inputFile := config.Get("file")
-	assert.Equal(t, "", inputFile)
+	jsonFileOutput := config.Get("json-file-output")
+	assert.Equal(t, "", jsonFileOutput)
 }
 
-func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
+func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
 	// setup mocks
