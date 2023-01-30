@@ -29,16 +29,18 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
+
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	outputDestination := mocks.NewMockOutputDestination(ctrl)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetOutputDestination().Return(outputDestination).AnyTimes()
 
 	payload := `
-	DepGraph data:
 	{
 		"schemaVersion": "1.2.0",
 		"pkgManager": {
@@ -70,17 +72,10 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 				}
 			]
 		}
-	}
-	DepGraph target:
-	package-lock.json
-	DepGraph end`
+	}`
 
-	t.Run("should output to stdout", func(t *testing.T) {
-		// mocks
-		outputDestination := mocks.NewMockOutputDestination(ctrl)
-		invocationContextMock.EXPECT().GetOutputDestination().Return(outputDestination).AnyTimes()
-
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+	t.Run("should output to stdout by default for application/json", func(t *testing.T) {
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
 		// mock assertions
@@ -92,5 +87,50 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+	})
+
+	t.Run("should output to stdout by default for text/plain", func(t *testing.T) {
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
+
+		// mock assertions
+		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data})
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+
+	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
+		expectedFileName := "test.json"
+		config.Set("json-file-output", expectedFileName)
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
+
+		// mock assertions
+		outputDestination.EXPECT().Remove(expectedFileName).Return(nil).Times(1)
+		outputDestination.EXPECT().WriteFile(expectedFileName, []byte(payload), gomock.Any()).Return(nil).Times(1)
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data})
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+
+	t.Run("should reject unsupported mimeTypes", func(t *testing.T) {
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "hammer/head", []byte(payload))
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data})
+
+		// assert
+		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, "Unsupported output type: hammer/head", err.Error())
 	})
 }

@@ -51,22 +51,17 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			}
 
 			if printJsonToCmd {
-				// fmt.Println(string(singleData))
 				outputDestination.Println(string(singleData))
 			}
 
 			if len(writeJsonToFile) > 0 {
 				debugLogger.Printf("Writing '%s' JSON of length %d to '%s'\n", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
 
-				// os.Remove(writeJsonToFile)
-				// os.WriteFile(writeJsonToFile, singleData, fs.FileMode(0666))
-
 				outputDestination.Remove(writeJsonToFile)
 				outputDestination.WriteFile(writeJsonToFile, singleData, fs.FileMode(0666))
 			}
 		} else if mimeType == "text/plain" { // handle text/pain
 			singleData := input[i].GetPayload().([]byte)
-			// fmt.Println(string(singleData))
 			outputDestination.Println(string(singleData))
 		} else {
 			err := fmt.Errorf("Unsupported output type: %s", mimeType)
