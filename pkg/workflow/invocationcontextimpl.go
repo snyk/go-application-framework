@@ -9,12 +9,13 @@ import (
 )
 
 type InvocationContextImpl struct {
-	WorkflowID     Identifier
-	WorkflowEngine *EngineImpl
-	Configuration  configuration.Configuration
-	Analytics      analytics.Analytics
-	networkAccess  networking.NetworkAccess
-	logger         *log.Logger
+	WorkflowID        Identifier
+	WorkflowEngine    *EngineImpl
+	Configuration     configuration.Configuration
+	Analytics         analytics.Analytics
+	OutputDestination OutputDestination
+	networkAccess     networking.NetworkAccess
+	logger            *log.Logger
 }
 
 func (ici *InvocationContextImpl) GetWorkflowIdentifier() Identifier {
@@ -39,4 +40,8 @@ func (ici *InvocationContextImpl) GetNetworkAccess() networking.NetworkAccess {
 
 func (ici *InvocationContextImpl) GetLogger() *log.Logger {
 	return ici.logger
+}
+
+func (ici *InvocationContextImpl) GetOutputDestination() OutputDestination {
+	return ici.OutputDestination
 }
