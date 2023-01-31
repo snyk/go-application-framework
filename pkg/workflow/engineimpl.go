@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// EngineImpl is the default implementation of the Engine interface.
 type EngineImpl struct {
 	extensionInitializer []ExtensionInit
 	workflows            map[string]Entry
@@ -25,12 +26,16 @@ type EngineImpl struct {
 	invocationCounter    int
 }
 
+// NewWorkflowIdentifier creates a new workflow identifier represented in parsed URL format.
+// It accepts a command param which is converted to a dot separated string and used as the host part of the URL.
 func NewWorkflowIdentifier(command string) Identifier {
 	dotSeparatedCommand := strings.ReplaceAll(command, " ", ".")
 	id := url.URL{Scheme: "flw", Host: dotSeparatedCommand}
 	return &id
 }
 
+// GetCommandFromWorkflowIdentifier returns the command string from a workflow identifier.
+// It returns an empty string if the identifier is not a workflow identifier.
 func GetCommandFromWorkflowIdentifier(id Identifier) string {
 	if id != nil && id.Scheme == "flw" {
 		spaceSeparatedCommand := strings.ReplaceAll(id.Host, ".", " ")
@@ -40,6 +45,8 @@ func GetCommandFromWorkflowIdentifier(id Identifier) string {
 	}
 }
 
+// NewTypeIdentifier creates a new type identifier represented in parsed URL format.
+// It accepts a workflow identifier and a data type string which is used as the path part of the URL.
 func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
 	id := *workflowID
 	id.Scheme = "tpe"
@@ -47,6 +54,7 @@ func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
 	return &id
 }
 
+// NewWorkFlowEngine is an implementation of the Engine interface.
 func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 	engine := &EngineImpl{
 		workflows:            make(map[string]Entry),
