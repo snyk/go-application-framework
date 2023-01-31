@@ -75,11 +75,14 @@ func Remove(input map[string]string, key string) map[string]string {
 	return input
 }
 
-// This method tries to find the given key is in the map and return its value. It searches different cases of the key:
-// 1. the exact match
-// 2. all lower case letters
-// 3. all upper case letters
-// If the key in any of these versions was found, it'll be returned alongside with a boolean indicating whether or not it was found.
+/*
+This method tries to find the given key is in the map. It searches different cases of the key:
+ 1. the exact match
+ 2. all lower case letters
+ 3. all upper case letters
+
+If the key in any of these versions was found, it'll be returned alongside with a boolean indicating whether or not it was found.
+*/
 func FindKeyCaseInsensitive(input map[string]string, key string) (string, bool) {
 
 	found := false
@@ -102,6 +105,14 @@ func FindKeyCaseInsensitive(input map[string]string, key string) (string, bool) 
 	return key, found
 }
 
+/*
+This method tries to find the given key is in the map and return its value. It searches different cases of the key:
+ 1. the exact match
+ 2. all lower case letters
+ 3. all upper case letters
+
+If the key in any of these versions was found, its value will be returned alongside with a boolean indicating whether or not it was found.
+*/
 func FindValueCaseInsensitive(input map[string]string, key string) (string, bool) {
 	key, found := FindKeyCaseInsensitive(input, key)
 	value := input[key]
