@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"io/fs"
 	"log"
 	"net/url"
 
@@ -36,7 +35,6 @@ type InvocationContext interface {
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
 	GetLogger() *log.Logger
-	GetOutputDestination() OutputDestination
 	//GetUserInterface() // return ui instance
 }
 
@@ -64,18 +62,4 @@ type Engine interface {
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
 	GetConfiguration() configuration.Configuration
-}
-
-type StdOut interface {
-	Println(a ...any) (n int, err error)
-}
-
-type FileOut interface {
-	Remove(name string) error
-	WriteFile(filename string, data []byte, perm fs.FileMode) error
-}
-
-type OutputDestination interface {
-	StdOut
-	FileOut
 }

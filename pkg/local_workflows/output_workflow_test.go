@@ -34,11 +34,15 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	outputDestination := mocks.NewMockOutputDestination(ctrl)
+	stdOut := mocks.NewMockStdOut(ctrl)
+	fileOut := mocks.NewMockFileOut(ctrl)
+
+	outputDestination.EXPECT().StdOut().Return(stdOut).AnyTimes()
+	outputDestination.EXPECT().FileOut().Return(fileOut).AnyTimes()
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetOutputDestination().Return(outputDestination).AnyTimes()
 
 	payload := `
 	{
@@ -79,10 +83,10 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
 		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
+		stdOut.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data})
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
 		// assert
 		assert.Nil(t, err)
@@ -94,10 +98,10 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
 
 		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
+		stdOut.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data})
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
 		// assert
 		assert.Nil(t, err)
@@ -111,11 +115,11 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
 		// mock assertions
-		outputDestination.EXPECT().Remove(expectedFileName).Return(nil).Times(1)
-		outputDestination.EXPECT().WriteFile(expectedFileName, []byte(payload), gomock.Any()).Return(nil).Times(1)
+		fileOut.EXPECT().Remove(expectedFileName).Return(nil).Times(1)
+		fileOut.EXPECT().WriteFile(expectedFileName, []byte(payload), gomock.Any()).Return(nil).Times(1)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data})
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
 		// assert
 		assert.Nil(t, err)
@@ -127,7 +131,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "hammer/head", []byte(payload))
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data})
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
 		// assert
 		assert.Equal(t, []workflow.Data{}, output)

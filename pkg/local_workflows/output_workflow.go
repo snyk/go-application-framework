@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 )
@@ -16,19 +17,18 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.Bool("json", false, "Print json output to console")
 	outputConfig.String("json-file-output", "", "Write json output to file")
 
-	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPoint)
+	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
 
 	return err
 }
 
-func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
+func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination utils.OutputDestination) (output []workflow.Data, err error) {
 	err = nil
 	output = []workflow.Data{}
 
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetLogger()
-	outputDestination := invocation.GetOutputDestination()
 
 	printJsonToCmd := config.GetBool("json")
 	writeJsonToFile := config.GetString("json-file-output")
@@ -51,18 +51,18 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			}
 
 			if printJsonToCmd {
-				outputDestination.Println(string(singleData))
+				outputDestination.StdOut().Println(string(singleData))
 			}
 
 			if len(writeJsonToFile) > 0 {
 				debugLogger.Printf("Writing '%s' JSON of length %d to '%s'\n", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
 
-				outputDestination.Remove(writeJsonToFile)
-				outputDestination.WriteFile(writeJsonToFile, singleData, fs.FileMode(0666))
+				outputDestination.FileOut().Remove(writeJsonToFile)
+				outputDestination.FileOut().WriteFile(writeJsonToFile, singleData, fs.FileMode(0666))
 			}
 		} else if mimeType == "text/plain" { // handle text/pain
 			singleData := input[i].GetPayload().([]byte)
-			outputDestination.Println(string(singleData))
+			outputDestination.StdOut().Println(string(singleData))
 		} else {
 			err := fmt.Errorf("Unsupported output type: %s", mimeType)
 			return output, err
@@ -70,4 +70,9 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	}
 
 	return output, err
+}
+
+func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
+	outputDestination := utils.NewOutputDestination()
+	return outputWorkflowEntryPoint(invocation, input, outputDestination)
 }
