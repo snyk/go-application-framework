@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	iMocks "github.com/snyk/go-application-framework/internal/mocks"
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -33,12 +35,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	outputDestination := mocks.NewMockOutputDestination(ctrl)
-	stdOut := mocks.NewMockStdOut(ctrl)
-	fileOut := mocks.NewMockFileOut(ctrl)
-
-	outputDestination.EXPECT().StdOut().Return(stdOut).AnyTimes()
-	outputDestination.EXPECT().FileOut().Return(fileOut).AnyTimes()
+	outputDestination := iMocks.NewMockOutputDestination(ctrl)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -83,7 +80,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
 		// mock assertions
-		stdOut.EXPECT().Println(payload).Return(0, nil).Times(1)
+		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
@@ -98,7 +95,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
 
 		// mock assertions
-		stdOut.EXPECT().Println(payload).Return(0, nil).Times(1)
+		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
@@ -115,8 +112,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
 		// mock assertions
-		fileOut.EXPECT().Remove(expectedFileName).Return(nil).Times(1)
-		fileOut.EXPECT().WriteFile(expectedFileName, []byte(payload), gomock.Any()).Return(nil).Times(1)
+		outputDestination.EXPECT().Remove(expectedFileName).Return(nil).Times(1)
+		outputDestination.EXPECT().WriteFile(expectedFileName, []byte(payload), utils.FILEPERM_666).Return(nil).Times(1)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)

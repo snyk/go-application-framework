@@ -2,10 +2,9 @@ package localworkflows
 
 import (
 	"fmt"
-	"io/fs"
 	"strings"
 
-	"github.com/snyk/go-application-framework/pkg/utils"
+	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 )
@@ -23,7 +22,7 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	return err
 }
 
-func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination utils.OutputDestination) (output []workflow.Data, err error) {
+func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) (output []workflow.Data, err error) {
 	err = nil
 	output = []workflow.Data{}
 
@@ -51,18 +50,18 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			}
 
 			if printJsonToCmd {
-				outputDestination.StdOut().Println(string(singleData))
+				outputDestination.Println(string(singleData))
 			}
 
 			if len(writeJsonToFile) > 0 {
 				debugLogger.Printf("Writing '%s' JSON of length %d to '%s'\n", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
 
-				outputDestination.FileOut().Remove(writeJsonToFile)
-				outputDestination.FileOut().WriteFile(writeJsonToFile, singleData, fs.FileMode(0666))
+				outputDestination.Remove(writeJsonToFile)
+				outputDestination.WriteFile(writeJsonToFile, singleData, iUtils.FILEPERM_666)
 			}
 		} else if mimeType == "text/plain" { // handle text/pain
 			singleData := input[i].GetPayload().([]byte)
-			outputDestination.StdOut().Println(string(singleData))
+			outputDestination.Println(string(singleData))
 		} else {
 			err := fmt.Errorf("Unsupported output type: %s", mimeType)
 			return output, err
@@ -73,6 +72,6 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 }
 
 func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
-	outputDestination := utils.NewOutputDestination()
+	outputDestination := iUtils.NewOutputDestination()
 	return outputWorkflowEntryPoint(invocation, input, outputDestination)
 }
