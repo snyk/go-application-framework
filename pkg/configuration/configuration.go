@@ -15,7 +15,7 @@ import (
 
 type DefaultValueFunction func(existingValue interface{}) interface{}
 
-// Configuration is an interface for accessing configuration values.
+// Configuration is an interface for managing configuration values.
 type Configuration interface {
 	Clone() Configuration
 

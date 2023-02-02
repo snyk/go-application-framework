@@ -5,6 +5,7 @@ import (
 )
 
 // Init initializes all local workflows
+// localworkflows are initialised when create a new workflow engine via app.CreateAppEngine()
 func Init(engine workflow.Engine) error {
 	var err error
 
