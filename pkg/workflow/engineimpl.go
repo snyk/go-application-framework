@@ -55,6 +55,7 @@ func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
 }
 
 // NewWorkFlowEngine is an implementation of the Engine interface.
+// It is called when creating a new app engine via CreateAppEngine().
 func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 	engine := &EngineImpl{
 		workflows:            make(map[string]Entry),
@@ -66,6 +67,7 @@ func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
 	return engine
 }
 
+// Init initializes the engine by setting up the necessary defaults.
 func (e *EngineImpl) Init() error {
 	var err error
 
@@ -103,6 +105,11 @@ func (e *EngineImpl) Init() error {
 	return err
 }
 
+// Register registers a new workflow entry with the engine.
+// In order to register a workflow, the following parameters are required:
+// - id: the workflow identifier
+// - config: the configuration options for the workflow
+// - entryPoint: the entry point function for the workflow
 func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryPoint Callback) (Entry, error) {
 	if entryPoint == nil {
 		return nil, fmt.Errorf("EntryPoint must not be nil")
@@ -133,6 +140,7 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 	return entry, nil
 }
 
+// GetWorkflows returns a list of all registered workflows.
 func (e *EngineImpl) GetWorkflows() []Identifier {
 	var result []Identifier
 
@@ -144,23 +152,28 @@ func (e *EngineImpl) GetWorkflows() []Identifier {
 	return result
 }
 
+// GetWorkflow returns the workflow entry for the given workflow identifier.
 func (e *EngineImpl) GetWorkflow(id Identifier) (Entry, bool) {
 	workflow, ok := e.workflows[id.String()]
 	return workflow, ok
 }
 
+// Invoke invokes the workflow with the given identifier.
 func (e *EngineImpl) Invoke(id Identifier) ([]Data, error) {
 	return e.InvokeWithInputAndConfig(id, []Data{}, nil)
 }
 
+// InvokeWithInput invokes the workflow with the given identifier and input data.
 func (e *EngineImpl) InvokeWithInput(id Identifier, input []Data) ([]Data, error) {
 	return e.InvokeWithInputAndConfig(id, input, nil)
 }
 
+// InvokeWithConfig invokes the workflow with the given identifier and configuration.
 func (e *EngineImpl) InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error) {
 	return e.InvokeWithInputAndConfig(id, []Data{}, config)
 }
 
+// InvokeWithInputAndConfig invokes the workflow with the given identifier, input data and configuration.
 func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error) {
 	var output []Data
 	var err error
@@ -206,22 +219,27 @@ func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, confi
 	return output, err
 }
 
+// GetAnalytics returns the analytics object.
 func (e *EngineImpl) GetAnalytics() analytics.Analytics {
 	return e.analytics
 }
 
+// GetNetworkAccess returns the network access object.
 func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
 	return e.networkAccess
 }
 
+// AddExtensionInitializer adds an extension initializer to the engine.
 func (e *EngineImpl) AddExtensionInitializer(initializer ExtensionInit) {
 	e.extensionInitializer = append(e.extensionInitializer, initializer)
 }
 
+// GetConfiguration returns the configuration object.
 func (e *EngineImpl) GetConfiguration() configuration.Configuration {
 	return e.config
 }
 
+// GetGlobalConfiguration returns the global configuration options.
 func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags := pflag.NewFlagSet("global", pflag.ContinueOnError)
 	globalFLags.String(configuration.ORGANIZATION, "", "")
