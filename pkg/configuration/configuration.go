@@ -15,6 +15,7 @@ import (
 
 type DefaultValueFunction func(existingValue interface{}) interface{}
 
+// Configuration is an interface for accessing configuration values.
 type Configuration interface {
 	Clone() Configuration
 
@@ -33,12 +34,15 @@ type Configuration interface {
 	AddAlternativeKeys(key string, altKeys []string)
 }
 
+// extendedViper is a wrapper around the viper library.
+// It adds support for default values and alternative keys.
 type extendedViper struct {
 	viper           *viper.Viper
 	alternativeKeys map[string][]string
 	defaultValues   map[string]DefaultValueFunction
 }
 
+// StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
 func StandardDefaultValueFunction(defaultValue interface{}) DefaultValueFunction {
 	return func(existingValue interface{}) interface{} {
 		if existingValue != nil {
@@ -49,6 +53,7 @@ func StandardDefaultValueFunction(defaultValue interface{}) DefaultValueFunction
 	}
 }
 
+// determineBasePath returns the base path for the configuration files.
 func determineBasePath() string {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
@@ -59,6 +64,7 @@ func determineBasePath() string {
 	return result
 }
 
+// CreateConfigurationFile creates a configuration file with the given name.
 func CreateConfigurationFile(filename string) (string, error) {
 	configPath := determineBasePath()
 	filepath := path.Join(configPath, filename)
@@ -78,6 +84,7 @@ func CreateConfigurationFile(filename string) (string, error) {
 	return filepath, err
 }
 
+// NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
 	config := &extendedViper{
 		viper:           viper.New(),
@@ -104,11 +111,13 @@ func NewFromFiles(files ...string) Configuration {
 	return config
 }
 
+// New creates a new snyk configuration file.
 func New() Configuration {
 	config := NewFromFiles("snyk")
 	return config
 }
 
+// Clone creates a copy of the current configuration.
 func (ev *extendedViper) Clone() Configuration {
 	// manually clone the Configuration instance
 	clone := NewFromFiles(ev.viper.ConfigFileUsed())
@@ -129,10 +138,12 @@ func (ev *extendedViper) Clone() Configuration {
 	return clone
 }
 
+// Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.viper.Set(key, value)
 }
 
+// Get returns a configuration value.
 func (ev *extendedViper) Get(key string) interface{} {
 
 	// try to lookup given key
@@ -155,6 +166,7 @@ func (ev *extendedViper) Get(key string) interface{} {
 	return result
 }
 
+// GetString returns a configuration value as string.
 func (ev *extendedViper) GetString(key string) string {
 	result := ev.Get(key)
 	if result == nil {
@@ -163,6 +175,7 @@ func (ev *extendedViper) GetString(key string) string {
 	return result.(string)
 }
 
+// GetBool returns a configuration value as bool.
 func (ev *extendedViper) GetBool(key string) bool {
 	result := ev.Get(key)
 	if result == nil {
@@ -181,6 +194,7 @@ func (ev *extendedViper) GetBool(key string) bool {
 	return false
 }
 
+// GetInt returns a configuration value as int.
 func (ev *extendedViper) GetInt(key string) int {
 	result := ev.Get(key)
 	if result == nil {
@@ -203,6 +217,7 @@ func (ev *extendedViper) GetInt(key string) int {
 	return 0
 }
 
+// GetFloat64 returns a configuration value as float64.
 func (ev *extendedViper) GetFloat64(key string) float64 {
 	result := ev.Get(key)
 	if result == nil {
@@ -225,6 +240,7 @@ func (ev *extendedViper) GetFloat64(key string) float64 {
 	return 0
 }
 
+// GetUrl returns a configuration value as url.URL.
 func (ev *extendedViper) GetUrl(key string) *url.URL {
 	urlString := ev.GetString(key)
 	url, err := url.Parse(urlString)
@@ -235,10 +251,12 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 	}
 }
 
+// AddFlagSet adds a flag set to the configuration.
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
 	return ev.viper.BindPFlags(flagset)
 }
 
+// GetStringSlice returns a configuration value as []string.
 func (ev *extendedViper) GetStringSlice(key string) []string {
 	output := []string{}
 
@@ -255,6 +273,7 @@ func (ev *extendedViper) GetStringSlice(key string) []string {
 	return output
 }
 
+// AllKeys returns all keys of the configuration.
 func (ev *extendedViper) AllKeys() []string {
 	keys := ev.viper.AllKeys()
 
@@ -265,10 +284,12 @@ func (ev *extendedViper) AllKeys() []string {
 	return keys
 }
 
+// AddDefaultValue adds a default value to the configuration.
 func (ev *extendedViper) AddDefaultValue(key string, defaultValue DefaultValueFunction) {
 	ev.defaultValues[key] = defaultValue
 }
 
+// AddAlternativeKeys adds alternative keys to the configuration.
 func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
 	ev.alternativeKeys[key] = altKeys
 }
