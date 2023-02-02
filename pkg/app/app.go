@@ -16,7 +16,7 @@ import (
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
-func initConfiguration(config configuration.Configuration) {
+func initConfiguration(config configuration.Configuration, apiClient api.ApiClient) {
 	dir, _ := utils.SnykCacheDir()
 
 	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
@@ -43,7 +43,8 @@ func initConfiguration(config configuration.Configuration) {
 	config.AddDefaultValue(configuration.ORGANIZATION, func(existingValue any) any {
 		client := networking.NewNetworkAccess(config).GetHttpClient()
 		url := config.GetString(configuration.API_URL)
-		apiClient := api.NewApi(url, client)
+		apiClient.SetClient(client)
+		apiClient.SetUrl(url)
 		if existingValue != nil && len(existingValue.(string)) > 0 {
 			orgId := existingValue.(string)
 			_, err := uuid.Parse(orgId)
@@ -68,7 +69,9 @@ func initConfiguration(config configuration.Configuration) {
 
 func CreateAppEngine() workflow.Engine {
 	config := configuration.New()
-	initConfiguration(config)
+	apiClient := api.NewApiInstance()
+
+	initConfiguration(config, apiClient)
 
 	engine := workflow.NewWorkFlowEngine(config)
 

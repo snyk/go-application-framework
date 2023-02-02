@@ -1,5 +1,7 @@
 package api
 
+//go:generate $GOPATH/bin/mockgen -source=api.go -destination ../mocks/api.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/api/
+
 import (
 	"encoding/json"
 	"errors"
@@ -14,6 +16,8 @@ import (
 type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)
 	GetOrgIdFromSlug(slugName string) (string, error)
+	SetUrl(url string)
+	SetClient(client *http.Client)
 }
 
 type snykApiClient struct {
@@ -70,6 +74,18 @@ func (a *snykApiClient) GetDefaultOrgId() (string, error) {
 	return userInfo.Data.Attributes.DefaultOrgContext, nil
 }
 
+func (a *snykApiClient) SetUrl(url string) {
+	a.url = url
+}
+
+func (a *snykApiClient) SetClient(client *http.Client) {
+	a.client = client
+}
+
 func NewApi(url string, httpClient *http.Client) ApiClient {
 	return &snykApiClient{url, httpClient}
+}
+
+func NewApiInstance() ApiClient {
+	return &snykApiClient{}
 }
