@@ -11,24 +11,24 @@ type SnykOSUtil interface {
 	TempDir() string
 }
 
-type baseDirectory struct{}
+type snykOsUtilImpl struct{}
 
-func (bd *baseDirectory) UserCacheDir() (string, error) {
+func (bd *snykOsUtilImpl) UserCacheDir() (string, error) {
 	return os.UserCacheDir()
 }
 
-func (bd *baseDirectory) MkdirAll(path string, perm os.FileMode) error {
+func (bd *snykOsUtilImpl) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
-func (bd *baseDirectory) Stat(name string) (os.FileInfo, error) {
+func (bd *snykOsUtilImpl) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 
-func (bd *baseDirectory) TempDir() string {
+func (bd *snykOsUtilImpl) TempDir() string {
 	return os.TempDir()
 }
 
 func NewSnykOSUtil() SnykOSUtil {
-	return &baseDirectory{}
+	return &snykOsUtilImpl{}
 }
