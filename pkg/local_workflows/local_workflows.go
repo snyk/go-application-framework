@@ -4,6 +4,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// Init initializes all local workflows
 func Init(engine workflow.Engine) error {
 	var err error
 
