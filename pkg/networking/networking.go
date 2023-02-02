@@ -21,14 +21,21 @@ const (
 	defaultUserAgent string = "snyk-cli"
 )
 
+// NetworkAccess is the interface for network access.
 type NetworkAccess interface {
+	// GetDefaultHeader returns the default header for a given URL.
 	GetDefaultHeader(url *url.URL) http.Header
+	// GetRoundtripper returns the http.Roundtripper.
 	GetRoundtripper() http.RoundTripper
+	// GetHttpClient returns the http client.
 	GetHttpClient() *http.Client
+	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key string, value string)
+	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 }
 
+// NetworkImpl is the default implementation of the NetworkAccess interface.
 type NetworkImpl struct {
 	config       configuration.Configuration
 	userAgent    string
@@ -38,12 +45,14 @@ type NetworkImpl struct {
 	caPool       *x509.CertPool
 }
 
+// customRoundtripper is a custom http.RoundTripper which decorates the request with default headers.
 type customRoundtripper struct {
 	encapsulatedRoundtripper *http.Transport
 	networkAccess            NetworkAccess
 	proxyAuthenticator       *httpauth.ProxyAuthenticator
 }
 
+// decorateRequest appends request header's to the customRoundtripper's instance.
 func (crt *customRoundtripper) decorateRequest(request *http.Request) *http.Request {
 	defaultHeader := crt.networkAccess.GetDefaultHeader(request.URL)
 
@@ -59,11 +68,13 @@ func (crt *customRoundtripper) decorateRequest(request *http.Request) *http.Requ
 	return request
 }
 
+// RoundTrip is an implementation of the http.RoundTripper interface.
 func (crt *customRoundtripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	request = crt.decorateRequest(request)
 	return crt.encapsulatedRoundtripper.RoundTrip(request)
 }
 
+// NewNetworkAccess returns a NetworkImpl instance.
 func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	// prepare logger
 	logger := log.New(os.Stderr, "NetworkAccess - ", config.GetInt(configuration.DEBUG_FORMAT))

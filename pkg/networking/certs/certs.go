@@ -15,6 +15,7 @@ import (
 	"time"
 )
 
+// MakeSelfSignedCert creates a self-signed certificate and returns it as a PEM encoded byte slice
 func MakeSelfSignedCert(certName string, dnsNames []string, debugLogger *log.Logger) (certPEMBlock []byte, keyPEMBlock []byte, err error) {
 	// create a key
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
