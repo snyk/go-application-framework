@@ -10,6 +10,7 @@ func Init(engine workflow.Engine) error {
 	initMethods := []func(workflow.Engine) error{
 		InitDepGraphWorkflow,
 		InitOutputWorkflow,
+		InitWhoAmIWorkflow,
 	}
 
 	for i := range initMethods {
