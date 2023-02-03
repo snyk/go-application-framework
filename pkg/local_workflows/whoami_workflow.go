@@ -15,6 +15,7 @@ const (
 	workflowName     = "whoami"
 	mimeTypeJSON     = "application/json"
 	endpoint         = "/user/me"
+	apiVersion       = "/v1"
 	experimentalFlag = "experimental"
 )
 
@@ -23,6 +24,7 @@ var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(workf
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
 	whoAmIConfig := pflag.NewFlagSet(workflowName, pflag.ExitOnError)
+	// add experimental flag to configuration
 	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
 
 	// register workflow with engine
@@ -45,14 +47,15 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 
 	// define userme API endpoint
 	baseUrl := config.GetString(configuration.API_URL)
-	url := baseUrl + endpoint
+	url := baseUrl + apiVersion + endpoint
 
 	// call userme API endpoint
-	whoAmI, err := fetchWhoAmI(httpClient, url, logger)
+	whoAmI, err := fetchUserMe(httpClient, url, logger)
 
 	// parse response
 	whoAmIData := workflow.NewData(
-		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, "userMe"),
+		// use workflow identifier as type identifier
+		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, workflowName),
 		mimeTypeJSON,
 		whoAmI,
 	)
@@ -61,7 +64,7 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	return []workflow.Data{whoAmIData}, err
 }
 
-func fetchWhoAmI(client *http.Client, endpoint string, logger *log.Logger) (whoAmI []byte, err error) {
+func fetchUserMe(client *http.Client, endpoint string, logger *log.Logger) (whoAmI []byte, err error) {
 	logger.Printf("Fetching user details (url: %s)", endpoint)
 	res, err := client.Get(endpoint)
 	if err != nil {
