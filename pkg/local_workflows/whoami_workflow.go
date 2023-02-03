@@ -51,7 +51,11 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	whoAmI, err := fetchWhoAmI(httpClient, url, logger)
 
 	// parse response
-	whoAmIData := workflow.NewData(WORKFLOWID_WHOAMI, mimeTypeJSON, whoAmI)
+	whoAmIData := workflow.NewData(
+		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, "userMe"),
+		mimeTypeJSON,
+		whoAmI,
+	)
 
 	// return userme data
 	return []workflow.Data{whoAmIData}, err
