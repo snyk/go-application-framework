@@ -14,7 +14,7 @@ import (
 const (
 	workflowName     = "whoami"
 	mimeTypeJSON     = "application/json"
-	endpoint         = "user/me"
+	endpoint         = "/user/me"
 	experimentalFlag = "experimental"
 )
 
