@@ -23,6 +23,7 @@ var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(workf
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
 	whoAmIConfig := pflag.NewFlagSet(workflowName, pflag.ExitOnError)
+	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
 
 	// register workflow with engine
 	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(whoAmIConfig), whoAmIWorkflowEntryPoint)
