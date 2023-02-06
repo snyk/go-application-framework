@@ -1,6 +1,7 @@
 package localworkflows
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -17,8 +18,10 @@ const (
 	endpoint         = "/user/me"
 	apiVersion       = "/v1"
 	experimentalFlag = "experimental"
+	jsonFlag         = "json"
 )
 
+// define a new workflow identifier for this workflow
 var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(workflowName)
 
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
@@ -26,6 +29,8 @@ func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	whoAmIConfig := pflag.NewFlagSet(workflowName, pflag.ExitOnError)
 	// add experimental flag to configuration
 	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
+	// add json flag to configuration
+	whoAmIConfig.String(jsonFlag, "", "output in json format")
 
 	// register workflow with engine
 	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(whoAmIConfig), whoAmIWorkflowEntryPoint)
@@ -50,18 +55,25 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	url := baseUrl + apiVersion + endpoint
 
 	// call userme API endpoint
-	whoAmI, err := fetchUserMe(httpClient, url, logger)
+	userMe, err := fetchUserMe(httpClient, url, logger)
 
-	// parse response
-	whoAmIData := workflow.NewData(
-		// use workflow identifier as type identifier
-		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, workflowName),
-		mimeTypeJSON,
-		whoAmI,
-	)
+	// extract user from response
+	user, err := extractUser(userMe)
+	if err != nil {
+		return nil, fmt.Errorf("error while extracting user from response: %w", err)
+	}
 
-	// return userme data
-	return []workflow.Data{whoAmIData}, err
+	// return full payload if json flag is set
+	if config.GetString(jsonFlag) != "" {
+		// parse response
+		userMeData := createWorkflowData(userMe)
+
+		// return userme data
+		return []workflow.Data{userMeData}, err
+	}
+
+	userData := createWorkflowData(user)
+	return []workflow.Data{userData}, err
 }
 
 func fetchUserMe(client *http.Client, endpoint string, logger *log.Logger) (whoAmI []byte, err error) {
@@ -85,4 +97,26 @@ func fetchUserMe(client *http.Client, endpoint string, logger *log.Logger) (whoA
 	logger.Println("Successfully fetched user details")
 
 	return whoAmI, nil
+}
+
+func extractUser(whoAmI []byte) (user string, err error) {
+	// parse userme response
+	var username map[string]interface{}
+	err = json.Unmarshal(whoAmI, &username)
+	if err != nil {
+		return "", fmt.Errorf("error while parsing response: %w", err)
+	}
+
+	// extract user from response
+	user = username["username"].(string)
+	return user, nil
+}
+
+func createWorkflowData(data interface{}) workflow.Data {
+	// use new type identifier when creating new data
+	return workflow.NewData(
+		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, workflowName),
+		mimeTypeJSON,
+		data,
+	)
 }
