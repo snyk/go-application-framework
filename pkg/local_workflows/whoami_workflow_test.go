@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -24,14 +25,14 @@ func (f roundTripFn) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req), nil
 }
 
-// NewTestClient returns *http.Client with Transport replaced to avoid making real calls
+// return *http.Client with Transport replaced to avoid making real calls
 func newTestClient(fn roundTripFn) *http.Client {
 	return &http.Client{
 		Transport: roundTripFn(fn),
 	}
 }
 
-func Test_WhoAmI_whoAmIWorkflowEntryPoint(t *testing.T) {
+func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
@@ -109,5 +110,75 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, expected, actual)
+	})
+}
+
+func Test_WhoAmI_whoAmIWorkflowEntryPoint_badStatusCodes(t *testing.T) {
+	// setup
+	logger := log.New(os.Stderr, "test", 0)
+	config := configuration.New()
+	config.Set("experimental", true)
+
+	// setup mocks
+	ctrl := gomock.NewController(t)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+
+	t.Run("handles unauthorized access", func(t *testing.T) {
+		// setup
+		mockClient := newTestClient(func(req *http.Request) *http.Response {
+			// Test request parameters
+			assert.Equal(t, "/v1/user/me", req.URL.String())
+			assert.Equal(t, "GET", req.Method)
+
+			return &http.Response{
+				StatusCode: 401,
+				// Send response to be tested
+				Body: ioutil.NopCloser(bytes.NewBufferString("")),
+				// Must be set to non-nil value or it panics
+				Header: make(http.Header),
+			}
+		})
+		networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).Times(1)
+
+		expectedError := errors.New("error while fetching user: invalid API key (status 401)")
+
+		// execute
+		_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+
+		// assert
+		// assert.Nil(t, err)
+		assert.Equal(t, expectedError.Error(), err.Error())
+	})
+
+	t.Run("handles unknown statusCode", func(t *testing.T) {
+		// setup
+		mockClient := newTestClient(func(req *http.Request) *http.Response {
+			// Test request parameters
+			assert.Equal(t, "/v1/user/me", req.URL.String())
+			assert.Equal(t, "GET", req.Method)
+
+			return &http.Response{
+				StatusCode: 500,
+				// Send response to be tested
+				Body: ioutil.NopCloser(bytes.NewBufferString("")),
+				// Must be set to non-nil value or it panics
+				Header: make(http.Header),
+			}
+		})
+		networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).Times(1)
+
+		expectedError := errors.New("error while fetching user: request failed (status 500)")
+
+		// execute
+		_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+
+		// assert
+		assert.Equal(t, expectedError.Error(), err.Error())
 	})
 }

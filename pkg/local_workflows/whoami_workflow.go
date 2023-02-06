@@ -56,11 +56,14 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 
 	// call userme API endpoint
 	userMe, err := fetchUserMe(httpClient, url, logger)
+	if err != nil {
+		return nil, fmt.Errorf("error while fetching user: %w", err)
+	}
 
 	// extract user from response
 	user, err := extractUser(userMe)
 	if err != nil {
-		return nil, fmt.Errorf("error while extracting user from response: %w", err)
+		return nil, fmt.Errorf("error while extracting user: %w", err)
 	}
 
 	// return full payload if json flag is set
@@ -84,9 +87,9 @@ func fetchUserMe(client *http.Client, url string, logger *log.Logger) (whoAmI []
 	}
 
 	if res.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("invalid API key (status %s)", res.Status)
+		return nil, fmt.Errorf("invalid API key (status %d)", res.StatusCode)
 	} else if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed (status %s)", res.Status)
+		return nil, fmt.Errorf("request failed (status %d)", res.StatusCode)
 	}
 
 	defer res.Body.Close()
