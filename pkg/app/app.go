@@ -43,8 +43,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 	config.AddDefaultValue(configuration.ORGANIZATION, func(existingValue any) any {
 		client := networking.NewNetworkAccess(config).GetHttpClient()
 		url := config.GetString(configuration.API_URL)
-		apiClient.SetClient(client)
-		apiClient.SetUrl(url)
+		apiClient.Init(url, client)
 		if existingValue != nil && len(existingValue.(string)) > 0 {
 			orgId := existingValue.(string)
 			_, err := uuid.Parse(orgId)

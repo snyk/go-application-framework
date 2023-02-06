@@ -16,8 +16,7 @@ import (
 type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)
 	GetOrgIdFromSlug(slugName string) (string, error)
-	SetUrl(url string)
-	SetClient(client *http.Client)
+	Init(url string, client *http.Client)
 }
 
 type snykApiClient struct {
@@ -74,16 +73,15 @@ func (a *snykApiClient) GetDefaultOrgId() (string, error) {
 	return userInfo.Data.Attributes.DefaultOrgContext, nil
 }
 
-func (a *snykApiClient) SetUrl(url string) {
+func (a *snykApiClient) Init(url string, client *http.Client) {
 	a.url = url
-}
-
-func (a *snykApiClient) SetClient(client *http.Client) {
 	a.client = client
 }
 
 func NewApi(url string, httpClient *http.Client) ApiClient {
-	return &snykApiClient{url, httpClient}
+	client := NewApiInstance()
+	client.Init(url, httpClient)
+	return client
 }
 
 func NewApiInstance() ApiClient {
