@@ -23,7 +23,7 @@ func (ici *InvocationContextImpl) GetWorkflowIdentifier() Identifier {
 	return ici.WorkflowID
 }
 
-// GetConfiguration returns the configuration that is being used by the workflow engine.
+// GetConfiguration returns the configuration that can be used inside the workflow.
 func (ici *InvocationContextImpl) GetConfiguration() configuration.Configuration {
 	return ici.Configuration
 }
