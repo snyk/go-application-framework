@@ -41,7 +41,8 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetLogger()
-	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	networkAccess := invocationCtx.GetNetworkAccess()
+	httpClient := networkAccess.GetHttpClient()
 
 	logger.Println("whoAmI workflow start")
 
