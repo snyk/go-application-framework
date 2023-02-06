@@ -41,8 +41,7 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetLogger()
-	networkAccess := invocationCtx.GetNetworkAccess()
-	httpClient := networkAccess.GetHttpClient()
+	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 
 	logger.Println("whoAmI workflow start")
 
@@ -77,9 +76,9 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	return []workflow.Data{userData}, err
 }
 
-func fetchUserMe(client *http.Client, endpoint string, logger *log.Logger) (whoAmI []byte, err error) {
-	logger.Printf("Fetching user details (url: %s)", endpoint)
-	res, err := client.Get(endpoint)
+func fetchUserMe(client *http.Client, url string, logger *log.Logger) (whoAmI []byte, err error) {
+	logger.Printf("Fetching user details (url: %s)", url)
+	res, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error while making request: %w", err)
 	}
