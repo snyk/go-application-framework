@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
@@ -61,7 +62,7 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	}
 
 	// extract user from response
-	user, err := extractUser(userMe)
+	user, err := extractUser(userMe, logger)
 	if err != nil {
 		return nil, fmt.Errorf("error while extracting user: %w", err)
 	}
@@ -102,17 +103,26 @@ func fetchUserMe(client *http.Client, url string, logger *log.Logger) (whoAmI []
 	return whoAmI, nil
 }
 
-func extractUser(whoAmI []byte) (user string, err error) {
+func extractUser(whoAmI []byte, logger *log.Logger) (username string, err error) {
+	logger.Println("Extracting user from response")
+
 	// parse userme response
-	var username map[string]interface{}
-	err = json.Unmarshal(whoAmI, &username)
+	var userMe contract.UserMe
+	err = json.Unmarshal(whoAmI, &userMe)
 	if err != nil {
 		return "", fmt.Errorf("error while parsing response: %w", err)
 	}
+	logger.Printf("Successfully parsed response (user: %+v)", userMe)
+
+	// check if userme.UserName is nil
+	if userMe.UserName == nil {
+		return "", fmt.Errorf("missing property 'username'")
+	}
 
 	// extract user from response
-	user = username["username"].(string)
-	return user, nil
+	username = *userMe.UserName
+	logger.Printf("Successfully extracted user from response (user: %s)", username)
+	return username, nil
 }
 
 func createWorkflowData(data interface{}) workflow.Data {
