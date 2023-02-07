@@ -25,6 +25,7 @@ const (
 // define a new workflow identifier for this workflow
 var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(workflowName)
 
+// InitWhoAmIWorkflow initialises the whoAmI workflow before registering it with the engine.
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
 	whoAmIConfig := pflag.NewFlagSet(workflowName, pflag.ExitOnError)
@@ -38,6 +39,9 @@ func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	return err
 }
 
+// whoAmIWorkflowEntryPoint is the entry point for the whoAmI workflow.
+// it calls the `/user/me` endpoint and returns the authenticated user's username
+// it can optionally return the full `/user/me` payload response if the json flag is set
 func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
@@ -80,6 +84,7 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	return []workflow.Data{userData}, err
 }
 
+// fetchUserMe calls the `/user/me` endpoint and returns the response body
 func fetchUserMe(client *http.Client, url string, logger *log.Logger) (whoAmI []byte, err error) {
 	logger.Printf("Fetching user details (url: %s)", url)
 	res, err := client.Get(url)
@@ -103,6 +108,7 @@ func fetchUserMe(client *http.Client, url string, logger *log.Logger) (whoAmI []
 	return whoAmI, nil
 }
 
+// extractUser extracts the username from the api response
 func extractUser(whoAmI []byte, logger *log.Logger) (username string, err error) {
 	logger.Println("Extracting user from response")
 
@@ -125,6 +131,7 @@ func extractUser(whoAmI []byte, logger *log.Logger) (username string, err error)
 	return username, nil
 }
 
+// createWorkflowData creates a new workflow.Data object
 func createWorkflowData(data interface{}) workflow.Data {
 	// use new type identifier when creating new data
 	return workflow.NewData(
