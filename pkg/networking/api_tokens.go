@@ -6,6 +6,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
+// GetAuthHeader returns the authentication header value based on the configuration.
 func GetAuthHeader(config configuration.Configuration) string {
 
 	bearerToken := config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)

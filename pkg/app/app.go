@@ -16,6 +16,7 @@ import (
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
+// initConfiguration initializes the configuration with initial values.
 func initConfiguration(config configuration.Configuration, apiClient api.ApiClient) {
 	dir, _ := utils.SnykCacheDir()
 
@@ -64,8 +65,10 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
+	config.AddAlternativeKeys(configuration.API_URL, []string{"endpoint"})
 }
 
+// CreateAppEngine creates a new workflow engine.
 func CreateAppEngine() workflow.Engine {
 	config := configuration.New()
 	apiClient := api.NewApiInstance()

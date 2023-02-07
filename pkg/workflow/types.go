@@ -17,6 +17,8 @@ type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
 type ExtensionInit func(engine Engine) error
 
 // interfaces
+
+// Data is an interface that wraps the methods that are used to manage data that is passed between workflows.
 type Data interface {
 	SetMetaData(key string, value string)
 	GetMetaData(key string) (string, error)
@@ -28,6 +30,7 @@ type Data interface {
 	SetContentLocation(string)
 }
 
+// InvocationContext is an interface that wraps various context information that is passed to a workflow when it is invoked.
 type InvocationContext interface {
 	GetWorkflowIdentifier() Identifier
 	GetConfiguration() configuration.Configuration
@@ -38,9 +41,11 @@ type InvocationContext interface {
 	//GetUserInterface() // return ui instance
 }
 
+// ConfigurationOptions is an interface that can be implemented by any type that can be used to pass configuration options to a workflow.
 type ConfigurationOptions interface {
 }
 
+// Entry is an interface that wraps the methods that are used to manage workflow entries.
 type Entry interface {
 	GetEntryPoint() Callback
 	GetConfigurationOptions() ConfigurationOptions
@@ -48,6 +53,7 @@ type Entry interface {
 	SetVisibility(visible bool)
 }
 
+// Engine is the interface that wraps the methods that are used to manage workflows.
 type Engine interface {
 	Init() error
 	AddExtensionInitializer(initializer ExtensionInit)
