@@ -15,7 +15,6 @@ import (
 
 const (
 	workflowName     = "whoami"
-	mimeTypeJSON     = "application/json"
 	endpoint         = "/user/me"
 	apiVersion       = "/v1"
 	experimentalFlag = "experimental"
@@ -74,13 +73,13 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	// return full payload if json flag is set
 	if config.GetBool(jsonFlag) {
 		// parse response
-		userMeData := createWorkflowData(userMe)
+		userMeData := createWorkflowData(userMe, "application/json")
 
 		// return userme data
 		return []workflow.Data{userMeData}, err
 	}
 
-	userData := createWorkflowData(user)
+	userData := createWorkflowData(user, "text/plain")
 	return []workflow.Data{userData}, err
 }
 
@@ -132,11 +131,11 @@ func extractUser(whoAmI []byte, logger *log.Logger) (username string, err error)
 }
 
 // createWorkflowData creates a new workflow.Data object
-func createWorkflowData(data interface{}) workflow.Data {
-	// use new type identifier when creating new data
+func createWorkflowData(data interface{}, contentType string) workflow.Data {
 	return workflow.NewData(
+		// use new type identifier when creating new data
 		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, workflowName),
-		mimeTypeJSON,
+		contentType,
 		data,
 	)
 }
