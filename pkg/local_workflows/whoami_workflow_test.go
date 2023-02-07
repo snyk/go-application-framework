@@ -117,7 +117,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 
 	t.Run("json flag returns full json response", func(t *testing.T) {
 		// setup
-		config.Set("json", "--json")
+		config.Set("json", true)
 
 		// execute
 		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)

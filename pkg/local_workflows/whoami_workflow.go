@@ -31,7 +31,7 @@ func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	// add experimental flag to configuration
 	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
 	// add json flag to configuration
-	whoAmIConfig.String(jsonFlag, "", "output in json format")
+	whoAmIConfig.Bool(jsonFlag, false, "output in json format")
 
 	// register workflow with engine
 	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(whoAmIConfig), whoAmIWorkflowEntryPoint)
@@ -68,7 +68,7 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	}
 
 	// return full payload if json flag is set
-	if config.GetString(jsonFlag) != "" {
+	if config.GetBool(jsonFlag) {
 		// parse response
 		userMeData := createWorkflowData(userMe)
 
