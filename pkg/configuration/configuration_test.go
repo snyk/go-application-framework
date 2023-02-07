@@ -32,7 +32,15 @@ func cleanupConfigstore() {
 	os.RemoveAll(file)
 }
 
+func cleanUpEnvVars() {
+	os.Unsetenv("SNYK_TOKEN")
+	os.Unsetenv("SNYK_OAUTH_TOKEN")
+	os.Unsetenv("SNYK_DOCKER_TOKEN")
+	os.Unsetenv("SNYK_DISABLE_ANALYTICS")
+}
+
 func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
+	os.Unsetenv("SNYK_TOKEN")
 	expectedValue := "mytoken"
 	expectedValue2 := "123456"
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
@@ -48,6 +56,7 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 	assert.Equal(t, expectedValue2, actualValue)
 
 	cleanupConfigstore()
+	cleanUpEnvVars()
 }
 
 func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
@@ -68,6 +77,7 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 	assert.Equal(t, expectedValueDocker, actualValue)
 
 	cleanupConfigstore()
+	cleanUpEnvVars()
 }
 
 func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
@@ -84,6 +94,7 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 	assert.False(t, actualValue)
 
 	cleanupConfigstore()
+	cleanUpEnvVars()
 }
 
 func Test_ConfigurationGet_unset(t *testing.T) {

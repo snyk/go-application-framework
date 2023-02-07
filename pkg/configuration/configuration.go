@@ -277,7 +277,7 @@ func (ev *extendedViper) GetStringSlice(key string) []string {
 func (ev *extendedViper) AllKeys() []string {
 	keys := ev.viper.AllKeys()
 
-	for k, _ := range ev.defaultValues {
+	for k := range ev.defaultValues {
 		keys = append(keys, k)
 	}
 
