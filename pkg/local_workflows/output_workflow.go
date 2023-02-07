@@ -12,6 +12,9 @@ import (
 
 var WORKFLOWID_OUTPUT_WORKFLOW workflow.Identifier = workflow.NewWorkflowIdentifier("output")
 
+// InitOutputWorkflow initializes the output workflow
+// The output workflow is responsible for handling the output destination of workflow data
+// As part of the localworkflows package, it is registered via the localworkflows.Init method
 func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig := pflag.NewFlagSet("output", pflag.ExitOnError)
 	outputConfig.Bool("json", false, "Print json output to console")
@@ -23,6 +26,8 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	return err
 }
 
+// outputWorkflowEntryPoint defines the output entry point
+// the entry point is called by the engine when the workflow is invoked
 func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
 	err = nil
 	output = []workflow.Data{}

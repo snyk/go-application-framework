@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
+// Analytics is an interface for managing analytics.
 type Analytics interface {
 	SetCmdArguments(args []string)
 	SetOrg(org string)
@@ -34,6 +35,7 @@ type Analytics interface {
 	Send() (*http.Response, error)
 }
 
+// AnalyticsImpl is the default implementation of the Analytics interface.
 type AnalyticsImpl struct {
 	clientFunc func() *http.Client
 	headerFunc func() http.Header
@@ -48,14 +50,17 @@ type AnalyticsImpl struct {
 	integrationVersion string
 }
 
+// metadataOutput defines the metadataOutput payload.
 type metadataOutput struct {
 	ErrorMessage string `json:"error-message,omitempty"`
 	ErrorCode    string `json:"error-code,omitempty"`
 }
 
+// metricsOutput defines the metricsOutput payload.
 type metricsOutput struct {
 }
 
+// analyticsOutput defines the analyticsOutput payload.
 type analyticsOutput struct {
 	Command                       string         `json:"command"`
 	Args                          []string       `json:"args"`
@@ -77,11 +82,15 @@ type analyticsOutput struct {
 	Standalone                    bool           `json:"standalone"`
 }
 
+// dataOutput defines the dataOutput payload.
 type dataOutput struct {
 	Data analyticsOutput `json:"data"`
 }
 
 var (
+	// ciEnvironments is a list of environment variables that indicate a CI environment.
+	// it is used to determine if the command is running in a CI environment.
+	// if it is, the x-is-ci header is set to true.
 	ciEnvironments []string = []string{
 		"SNYK_CI",
 		"CI",
@@ -101,6 +110,8 @@ var (
 		"SYSTEM_TEAMFOUNDATIONSERVERURI", // for Azure DevOps Pipelines
 	}
 
+	// sensitiveFieldNames is a list of field names that should be sanitized.
+	// data sanitization is used to prevent sensitive data from being sent to the analytics server.
 	sensitiveFieldNames []string = []string{
 		"tfc-token",
 		"azurerm-account-key",
@@ -115,6 +126,7 @@ const (
 	api_endpoint                       = "/v1/analytics/cli"
 )
 
+// New creates a new Analytics instance.
 func New() Analytics {
 	a := &AnalyticsImpl{}
 	a.headerFunc = func() http.Header { return http.Header{} }
@@ -123,39 +135,48 @@ func New() Analytics {
 	return a
 }
 
+// SetCmdArguments sets the command arguments.
 func (a *AnalyticsImpl) SetCmdArguments(args []string) {
 	a.args = args
 }
 
+// SetOrg sets the organization.
 func (a *AnalyticsImpl) SetOrg(org string) {
 	a.org = org
 }
 
+// SetVersion sets the version.
 func (a *AnalyticsImpl) SetVersion(version string) {
 	a.version = version
 }
 
+// SetApiUrl sets the API URL.
 func (a *AnalyticsImpl) SetApiUrl(apiUrl string) {
 	a.apiUrl = apiUrl
 }
 
+// SetIntegration sets the integration name and version.
 func (a *AnalyticsImpl) SetIntegration(name string, version string) {
 	a.integrationName = name
 	a.integrationVersion = version
 }
 
+// AddError adds an error to the error list.
 func (a *AnalyticsImpl) AddError(err error) {
 	a.errorList = append(a.errorList, err)
 }
 
+// AddHeader adds a header to the request.
 func (a *AnalyticsImpl) AddHeader(headerFunc func() http.Header) {
 	a.headerFunc = headerFunc
 }
 
+// SetClient sets the HTTP client.
 func (a *AnalyticsImpl) SetClient(clientFunc func() *http.Client) {
 	a.clientFunc = clientFunc
 }
 
+// IsCiEnvironment returns true if the command is running in a CI environment.
 func (a *AnalyticsImpl) IsCiEnvironment() bool {
 	result := false
 
@@ -170,6 +191,7 @@ func (a *AnalyticsImpl) IsCiEnvironment() bool {
 	return result
 }
 
+// GetOutputData returns the analyticsOutput data.
 func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	output := &analyticsOutput{}
 
@@ -206,6 +228,7 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	return output
 }
 
+// GetRequest returns the HTTP request.
 func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 	output := a.GetOutputData()
 
@@ -280,6 +303,7 @@ func SanitizeValuesByKey(keysToFilter []string, replacementValue string, content
 	return content, nil
 }
 
+// SanitizeUsername sanitizes the given content by replacing the given username with the replacement string.
 func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue string, content []byte) ([]byte, error) {
 	contentStr := string(content)
 	contentStr = strings.ReplaceAll(contentStr, rawUserName, replacementValue)

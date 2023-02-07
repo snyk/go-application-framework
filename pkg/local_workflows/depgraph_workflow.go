@@ -15,16 +15,19 @@ import (
 var WORKFLOWID_DEPGRAPH_WORKFLOW workflow.Identifier = workflow.NewWorkflowIdentifier("depgraph")
 var DATATYPEID_DEPGRAPH workflow.Identifier = workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
 
+// LegacyCliJsonError is the error type returned by the legacy cli
 type LegacyCliJsonError struct {
 	Ok       bool   `json:"ok"`
 	ErrorMsg string `json:"error"`
 	Path     string `json:"path"`
 }
 
+// Error returns the LegacyCliJsonError error message
 func (e *LegacyCliJsonError) Error() string {
 	return e.ErrorMsg
 }
 
+// extractLegacyCLIError extracts the error message from the legacy cli if possible
 func extractLegacyCLIError(input error, data []workflow.Data) (output error) {
 	output = input
 
@@ -44,6 +47,9 @@ func extractLegacyCLIError(input error, data []workflow.Data) (output error) {
 	return output
 }
 
+// InitDepGraphWorkflow initializes the depgraph workflow
+// The depgraph workflow is responsible for handling the depgraph data
+// As part of the localworkflows package, it is registered via the localworkflows.Init method
 func InitDepGraphWorkflow(engine workflow.Engine) error {
 	depGraphConfig := pflag.NewFlagSet("depgraph", pflag.ExitOnError)
 	depGraphConfig.Bool("all-projects", false, "Enable all projects")
@@ -53,6 +59,8 @@ func InitDepGraphWorkflow(engine workflow.Engine) error {
 	return err
 }
 
+// depgraphWorkflowEntryPoint defines the depgraph entry point
+// the entry point is called by the engine when the workflow is invoked
 func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data) (depGraphList []workflow.Data, err error) {
 	err = nil
 	depGraphList = []workflow.Data{}
