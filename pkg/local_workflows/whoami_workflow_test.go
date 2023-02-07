@@ -113,6 +113,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, expectedResponse, output[0].GetPayload())
+		assert.Equal(t, "text/plain", output[0].GetContentType())
 	})
 
 	t.Run("json flag returns full json response", func(t *testing.T) {
@@ -134,6 +135,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, expected, actual)
+		assert.Equal(t, "application/json", output[0].GetContentType())
 	})
 }
 
