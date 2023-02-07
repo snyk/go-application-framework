@@ -47,8 +47,7 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	// mock assertion
-	mockApiClient.EXPECT().SetClient(gomock.Any()).Times(1)
-	mockApiClient.EXPECT().SetUrl(gomock.Any()).Times(1)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).Times(1)
 
 	config := configuration.New()
@@ -68,8 +67,7 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	// mock assertion
-	mockApiClient.EXPECT().SetClient(gomock.Any()).Times(1)
-	mockApiClient.EXPECT().SetUrl(gomock.Any()).Times(1)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
 	config := configuration.New()
@@ -77,4 +75,23 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, defaultOrgId, actualOrgId)
+}
+
+func Test_initConfiguration_uuidOrgId(t *testing.T) {
+	orgId := "0d2bc57c-1df9-4115-996f-4f19aa12912b"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertion
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
+
+	config := configuration.New()
+	initConfiguration(config, mockApiClient)
+
+	config.Set(configuration.ORGANIZATION, orgId)
+
+	actualOrgId := config.GetString(configuration.ORGANIZATION)
+	assert.Equal(t, actualOrgId, orgId)
 }

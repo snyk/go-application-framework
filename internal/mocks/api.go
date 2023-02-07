@@ -64,26 +64,14 @@ func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgIdFromSlug", reflect.TypeOf((*MockApiClient)(nil).GetOrgIdFromSlug), slugName)
 }
 
-// SetClient mocks base method.
-func (m *MockApiClient) SetClient(client *http.Client) {
+// Init mocks base method.
+func (m *MockApiClient) Init(url string, client *http.Client) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetClient", client)
+	m.ctrl.Call(m, "Init", url, client)
 }
 
-// SetClient indicates an expected call of SetClient.
-func (mr *MockApiClientMockRecorder) SetClient(client interface{}) *gomock.Call {
+// Init indicates an expected call of Init.
+func (mr *MockApiClientMockRecorder) Init(url, client interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClient", reflect.TypeOf((*MockApiClient)(nil).SetClient), client)
-}
-
-// SetUrl mocks base method.
-func (m *MockApiClient) SetUrl(url string) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetUrl", url)
-}
-
-// SetUrl indicates an expected call of SetUrl.
-func (mr *MockApiClientMockRecorder) SetUrl(url interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUrl", reflect.TypeOf((*MockApiClient)(nil).SetUrl), url)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockApiClient)(nil).Init), url, client)
 }
