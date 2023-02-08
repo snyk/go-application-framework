@@ -14,7 +14,7 @@ Creating a new extension using the `go-application-framework` can be done in thr
 The extension workflow is the main component of your extension, it should:
 1. Uniquely identify your workflow
 2. Initialise your workflow (registering the extension with the workflow engine should happen here)
-1. Have an entry point containing the extension business logic
+3. Have an entry point containing the extension business logic
 
 # Creating `snyk whoami`
 The `snyk whoami` command was created following the steps outlined above; the following outlines the extension implementation in detail.
