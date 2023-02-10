@@ -85,6 +85,10 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 		snykCmdArguments = append(snykCmdArguments, targetDirectory)
 	}
 
+	if unmanaged := config.GetBool("unmanaged"); unmanaged {
+		snykCmdArguments = append(snykCmdArguments, "--unmanaged")
+	}
+
 	if file := config.GetString("file"); len(file) > 0 {
 		snykCmdArguments = append(snykCmdArguments, "--file="+file)
 		debugLogger.Println("File:", file)
