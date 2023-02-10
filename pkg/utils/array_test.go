@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,6 +39,8 @@ func Test_ToSlice(t *testing.T) {
 	input := map[string]string{"key1": "value1", "key2": "value2"}
 	expectedOutput := []string{"key1=value1", "key2=value2"}
 	actualOutput := ToSlice(input, "=")
+	sort.Strings(expectedOutput)
+	sort.Strings(actualOutput)
 	assert.Equal(t, expectedOutput, actualOutput)
 }
 
