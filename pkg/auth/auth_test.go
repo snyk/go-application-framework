@@ -8,5 +8,5 @@ import (
 
 func Test_Authenticate(t *testing.T) {
 	config := configuration.New()
-	Authenticate()
+	Authenticate(config)
 }
