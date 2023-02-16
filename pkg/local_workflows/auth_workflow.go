@@ -47,7 +47,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		// baseUrl := config.GetString(configuration.API_URL)
 		// url := baseUrl + apiVersionAuth + endpointAuth
 
-		auth.Authenticate()
+		auth.Authenticate(config)
 
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
