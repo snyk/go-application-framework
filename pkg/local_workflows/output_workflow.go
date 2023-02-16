@@ -64,12 +64,21 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 				outputDestination.Remove(writeJsonToFile)
 				outputDestination.WriteFile(writeJsonToFile, singleData, iUtils.FILEPERM_666)
 			}
-		} else if mimeType == "text/plain" { // handle text/pain
-			singleData := input[i].GetPayload().([]byte)
-			outputDestination.Println(string(singleData))
-		} else {
-			err := fmt.Errorf("Unsupported output type: %s", mimeType)
-			return output, err
+		} else { // handle text/pain and unknown the same way
+			// try to convert payload to a string
+			singleDataAsString := ""
+			singleData, typeCastSuccessful := input[i].GetPayload().([]byte)
+			if !typeCastSuccessful {
+				singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
+				if !typeCastSuccessful {
+					err := fmt.Errorf("Unsupported output type: %s", mimeType)
+					return output, err
+				}
+			} else {
+				singleDataAsString = string(singleData)
+			}
+
+			outputDestination.Println(singleDataAsString)
 		}
 	}
 
