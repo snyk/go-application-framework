@@ -42,6 +42,7 @@ func createVerifier(count int) []byte {
 func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, err error) {
 	var responseCode string
 	var responseState string
+	var responseError string
 	verifier := createVerifier(128)
 	state := string(createVerifier(15))
 	codeChallenge := getCodeChallenge(verifier)
@@ -78,20 +79,32 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 		srv := &http.Server{Addr: ":8080"}
 
 		http.HandleFunc("/authorization-code/callback", func(w http.ResponseWriter, r *http.Request) {
-			responseCode = html.EscapeString(r.URL.Query().Get("code"))
-			responseState = html.EscapeString(r.URL.Query().Get("state"))
-			fmt.Fprintf(w, "Code, %q", responseCode)
+			responseError = html.EscapeString(r.URL.Query().Get("error"))
+			if len(responseError) > 0 {
+				details := html.EscapeString(r.URL.Query().Get("error_description"))
+				fmt.Fprintf(w, "Error during authenticatin! (%s)\n%s", responseError, details)
+			} else {
+				responseCode = html.EscapeString(r.URL.Query().Get("code"))
+				responseState = html.EscapeString(r.URL.Query().Get("state"))
+				fmt.Fprintf(w, "Succesfully Authenticated!")
+			}
 
-			// TODO very rough handling, causes localhost website to not show
-			srv.Shutdown(ctx)
+			go func() {
+				time.Sleep(1000)
+				srv.Shutdown(ctx)
+			}()
 		})
 
 		srv.ListenAndServe()
 	}
 
+	if len(responseError) > 0 {
+		return nil, fmt.Errorf("authentication error: %s", responseError)
+	}
+
 	// check the response state before continuing
 	if state != responseState {
-		return nil, fmt.Errorf("incorrect response state: %s", responseState)
+		return nil, fmt.Errorf("incorrect response state: %s != %s", responseState, state)
 	}
 
 	// Use the custom HTTP client when requesting a token.
