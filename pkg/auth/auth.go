@@ -41,7 +41,9 @@ func createVerifier(count int) []byte {
 
 func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, err error) {
 	var responseCode string
+	var responseState string
 	verifier := createVerifier(128)
+	state := string(createVerifier(15))
 	codeChallenge := getCodeChallenge(verifier)
 	ctx := context.Background()
 
@@ -59,7 +61,7 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 		conf.RedirectURL = "http://localhost:8080/authorization-code/callback"
 	}
 
-	url := conf.AuthCodeURL("state", oauth2.AccessTypeOffline,
+	url := conf.AuthCodeURL(state, oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "s256"),
 		oauth2.SetAuthURLParam("response_type", "code"),
@@ -77,6 +79,7 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 
 		http.HandleFunc("/authorization-code/callback", func(w http.ResponseWriter, r *http.Request) {
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
+			responseState = html.EscapeString(r.URL.Query().Get("state"))
 			fmt.Fprintf(w, "Code, %q", responseCode)
 
 			// TODO very rough handling, causes localhost website to not show
@@ -86,12 +89,16 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 		srv.ListenAndServe()
 	}
 
+	// check the response state before continuing
+	if state != responseState {
+		return nil, fmt.Errorf("incorrect response state: %s", responseState)
+	}
+
 	// Use the custom HTTP client when requesting a token.
 	if httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
 	}
 
-	// TODO the docs say "Before calling Exchange, be sure to validate FormValue("state")."
 	token, err = conf.Exchange(ctx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
 	return token, err
 }
