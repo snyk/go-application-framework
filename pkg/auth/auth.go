@@ -38,6 +38,20 @@ func createVerifier(count int) []byte {
 	return b
 }
 
+func getConfigration() *oauth2.Config {
+
+	// TODO: get config from outside
+	conf := &oauth2.Config{
+		ClientID: "0oa37b7oa3zOoDWCe4h7",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token",
+			AuthURL:  "https://app.fedramp-alpha.snykgov.io/oauth/authorize",
+		},
+		RedirectURL: "http://localhost:8080/authorization-code/callback",
+	}
+	return conf
+}
+
 func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, err error) {
 	var responseCode string
 	var responseState string
@@ -46,20 +60,7 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 	state := string(createVerifier(15))
 	codeChallenge := getCodeChallenge(verifier)
 	ctx := context.Background()
-
-	// TODO: get config from outside
-	conf := &oauth2.Config{
-		ClientID: "REPLACE_ME",
-		Endpoint: oauth2.Endpoint{
-			TokenURL: "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token",
-			AuthURL:  "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/authorize",
-		},
-	}
-
-	// TOOD: there seems to be more required when running headless
-	if !headless {
-		conf.RedirectURL = "http://localhost:8080/authorization-code/callback"
-	}
+	conf := getConfigration()
 
 	url := conf.AuthCodeURL(state, oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
@@ -81,7 +82,7 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 			responseError = html.EscapeString(r.URL.Query().Get("error"))
 			if len(responseError) > 0 {
 				details := html.EscapeString(r.URL.Query().Get("error_description"))
-				fmt.Fprintf(w, "Error during authenticatin! (%s)\n%s", responseError, details)
+				fmt.Fprintf(w, "Error during authentication! (%s)\n%s", responseError, details)
 			} else {
 				responseCode = html.EscapeString(r.URL.Query().Get("code"))
 				responseState = html.EscapeString(r.URL.Query().Get("state"))
@@ -113,4 +114,18 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 
 	token, err = conf.Exchange(ctx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
 	return token, err
+}
+
+func Refresh(httpClient *http.Client, token *oauth2.Token) (newToken *oauth2.Token, err error) {
+	if token.Valid() {
+		return token, nil
+	}
+
+	ctx := context.Background()
+	conf := getConfigration()
+
+	tokenSource := conf.TokenSource(ctx, token)
+	newToken, err = tokenSource.Token()
+
+	return newToken, err
 }
