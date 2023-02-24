@@ -8,7 +8,6 @@ import (
 	"html"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/pkg/browser"
@@ -66,7 +65,7 @@ func Authenticate(httpClient *http.Client, headless bool) (token *oauth2.Token, 
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "s256"),
 		oauth2.SetAuthURLParam("response_type", "code"),
-		oauth2.SetAuthURLParam("scope", url.QueryEscape("openid")))
+		oauth2.SetAuthURLParam("scope", "offline_access"))
 
 	if headless {
 		// TODO: UI? in CLI and IDE???
