@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
-	"golang.org/x/oauth2"
 )
 
 const (
@@ -40,14 +39,6 @@ func storeConfigValue(invocationCtx workflow.InvocationContext, key string, valu
 	return legacyCLIError
 }
 
-func storeToken(invocationCtx workflow.InvocationContext, token *oauth2.Token) {
-	_ = storeConfigValue(invocationCtx, "SNYK_OAUTH_TOKEN", token.AccessToken)
-	_ = storeConfigValue(invocationCtx, "SNYK_OAUTH_TOKEN_EXPIRES", fmt.Sprintf("%d", token.Expiry.Unix()))
-	if len(token.RefreshToken) > 0 {
-		_ = storeConfigValue(invocationCtx, "SNYK_OAUTH_TOKEN_REFRESH", token.RefreshToken)
-	}
-}
-
 // authEntryPoint is the entry point for the auth workflow.
 func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	// get necessary objects from invocation context
@@ -65,18 +56,17 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		logger.Println("Headless:", headless)
 
 		httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-		token, authError := auth.Authenticate(httpClient, headless)
+		authenticator := networking.NewOAuth2Authenticator(config, httpClient)
+		authError := authenticator.Authenticate()
 		if authError != nil {
 			return output, authError
 		}
-
-		logger.Println("Oauth token expires:", token.Expiry)
 
 		// TODO: https://snyksec.atlassian.net/browse/HEAD-58
 		fmt.Println("Successfully authenticated!")
 
 		// TODO use configuration to store
-		storeToken(invocationCtx, token)
+		storeConfigValue(invocationCtx, networking.CONFIG_KEY_OAUTH_TOKEN, config.GetString(networking.CONFIG_KEY_OAUTH_TOKEN))
 
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])

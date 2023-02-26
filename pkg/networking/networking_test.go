@@ -20,6 +20,8 @@ import (
 func getConfig() configuration.Configuration {
 	config := configuration.New()
 	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, "")
+	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	return config
 }
 

@@ -10,6 +10,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	networking "github.com/snyk/go-application-framework/pkg/networking"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -33,6 +34,20 @@ func NewMockNetworkAccess(ctrl *gomock.Controller) *MockNetworkAccess {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockNetworkAccess) EXPECT() *MockNetworkAccessMockRecorder {
 	return m.recorder
+}
+
+// AddDefaultHeader mocks base method.
+func (m *MockNetworkAccess) AddDefaultHeader(request *http.Request) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddDefaultHeader", request)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddDefaultHeader indicates an expected call of AddDefaultHeader.
+func (mr *MockNetworkAccessMockRecorder) AddDefaultHeader(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDefaultHeader", reflect.TypeOf((*MockNetworkAccess)(nil).AddDefaultHeader), request)
 }
 
 // AddHeaderField mocks base method.
@@ -59,6 +74,20 @@ func (m *MockNetworkAccess) AddRootCAs(pemFileLocation string) error {
 func (mr *MockNetworkAccessMockRecorder) AddRootCAs(pemFileLocation interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRootCAs", reflect.TypeOf((*MockNetworkAccess)(nil).AddRootCAs), pemFileLocation)
+}
+
+// GetAuthenticator mocks base method.
+func (m *MockNetworkAccess) GetAuthenticator() networking.Authenticator {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAuthenticator")
+	ret0, _ := ret[0].(networking.Authenticator)
+	return ret0
+}
+
+// GetAuthenticator indicates an expected call of GetAuthenticator.
+func (mr *MockNetworkAccessMockRecorder) GetAuthenticator() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuthenticator", reflect.TypeOf((*MockNetworkAccess)(nil).GetAuthenticator))
 }
 
 // GetDefaultHeader mocks base method.
@@ -101,4 +130,69 @@ func (m *MockNetworkAccess) GetRoundtripper() http.RoundTripper {
 func (mr *MockNetworkAccessMockRecorder) GetRoundtripper() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoundtripper", reflect.TypeOf((*MockNetworkAccess)(nil).GetRoundtripper))
+}
+
+// MockAuthenticator is a mock of Authenticator interface.
+type MockAuthenticator struct {
+	ctrl     *gomock.Controller
+	recorder *MockAuthenticatorMockRecorder
+}
+
+// MockAuthenticatorMockRecorder is the mock recorder for MockAuthenticator.
+type MockAuthenticatorMockRecorder struct {
+	mock *MockAuthenticator
+}
+
+// NewMockAuthenticator creates a new mock instance.
+func NewMockAuthenticator(ctrl *gomock.Controller) *MockAuthenticator {
+	mock := &MockAuthenticator{ctrl: ctrl}
+	mock.recorder = &MockAuthenticatorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockAuthenticator) EXPECT() *MockAuthenticatorMockRecorder {
+	return m.recorder
+}
+
+// Authenticate mocks base method.
+func (m *MockAuthenticator) Authenticate() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Authenticate")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Authenticate indicates an expected call of Authenticate.
+func (mr *MockAuthenticatorMockRecorder) Authenticate() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authenticate", reflect.TypeOf((*MockAuthenticator)(nil).Authenticate))
+}
+
+// Authorize mocks base method.
+func (m *MockAuthenticator) Authorize(request *http.Request) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Authorize", request)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Authorize indicates an expected call of Authorize.
+func (mr *MockAuthenticatorMockRecorder) Authorize(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authorize", reflect.TypeOf((*MockAuthenticator)(nil).Authorize), request)
+}
+
+// IsSupported mocks base method.
+func (m *MockAuthenticator) IsSupported() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSupported")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSupported indicates an expected call of IsSupported.
+func (mr *MockAuthenticatorMockRecorder) IsSupported() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSupported", reflect.TypeOf((*MockAuthenticator)(nil).IsSupported))
 }

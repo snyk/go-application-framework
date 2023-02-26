@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -23,6 +24,8 @@ const (
 
 // NetworkAccess is the interface for network access.
 type NetworkAccess interface {
+	// AddDefaultHeader adds the default headers request.
+	AddDefaultHeader(request *http.Request) error
 	// GetDefaultHeader returns the default header for a given URL.
 	GetDefaultHeader(url *url.URL) http.Header
 	// GetRoundtripper returns the http.Roundtripper.
@@ -33,16 +36,25 @@ type NetworkAccess interface {
 	AddHeaderField(key string, value string)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
+	// Returns the current Authenticator
+	GetAuthenticator() Authenticator
+}
+
+type Authenticator interface {
+	Authenticate() error
+	Authorize(request *http.Request) error
+	IsSupported() bool
 }
 
 // NetworkImpl is the default implementation of the NetworkAccess interface.
 type NetworkImpl struct {
-	config       configuration.Configuration
-	userAgent    string
-	staticHeader http.Header
-	logger       *log.Logger
-	proxy        func(req *http.Request) (*url.URL, error)
-	caPool       *x509.CertPool
+	config        configuration.Configuration
+	userAgent     string
+	staticHeader  http.Header
+	logger        *log.Logger
+	proxy         func(req *http.Request) (*url.URL, error)
+	caPool        *x509.CertPool
+	authenticator Authenticator
 }
 
 // customRoundtripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -54,17 +66,7 @@ type customRoundtripper struct {
 
 // decorateRequest appends request header's to the customRoundtripper's instance.
 func (crt *customRoundtripper) decorateRequest(request *http.Request) *http.Request {
-	defaultHeader := crt.networkAccess.GetDefaultHeader(request.URL)
-
-	// iterate over default headers and add them if there is no existing entry yet
-	for k, v := range defaultHeader {
-		if _, found := request.Header[k]; found == false {
-			for i := range v {
-				request.Header.Add(k, v[i])
-			}
-		}
-	}
-
+	_ = crt.networkAccess.AddDefaultHeader(request)
 	return request
 }
 
@@ -97,17 +99,25 @@ func (n *NetworkImpl) AddHeaderField(key string, value string) {
 	n.staticHeader[key] = append(n.staticHeader[key], value)
 }
 
-func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
-	h := http.Header{}
+// AddDefaultHeader adds the default headers request.
+func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
+	defaultHeader := http.Header{"User-Agent": {n.userAgent}}
 
 	// add static header
 	for k, v := range n.staticHeader {
 		for i := range v {
-			h.Add(k, v[i])
+			defaultHeader.Add(k, v[i])
 		}
 	}
 
-	if url != nil {
+	// iterate over default headers and add them if there is no existing entry yet
+	for k, v := range defaultHeader {
+		for i := range v {
+			request.Header.Set(k, v[i])
+		}
+	}
+
+	if request.URL != nil {
 		// determine configured api url
 		apiUrlString := n.config.GetString(configuration.API_URL)
 		apiUrl, err := url.Parse(apiUrlString)
@@ -116,17 +126,26 @@ func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
 		}
 
 		// requests to the api automatically get an authentication token attached
-		if url.Host == apiUrl.Host {
-			authHeader := GetAuthHeader(n.config)
-			if len(authHeader) > 0 {
-				h.Add("Authorization", authHeader)
+		if strings.Contains(request.URL.Host, apiUrl.Host) {
+			err = n.GetAuthenticator().Authorize(request)
+			if err != nil {
+				return err
 			}
-
 		}
 	}
 
-	h.Add("User-Agent", n.userAgent)
-	return h
+	return nil
+}
+
+func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
+	tmpRequest := &http.Request{
+		Header: http.Header{},
+		URL:    url,
+	}
+
+	_ = n.AddDefaultHeader(tmpRequest)
+
+	return tmpRequest.Header
 }
 
 func (n *NetworkImpl) GetRoundtripper() http.RoundTripper {
@@ -182,4 +201,22 @@ func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
 	}
 
 	return err
+}
+
+func (n *NetworkImpl) GetAuthenticator() Authenticator {
+
+	// try oauth authenticator
+	if n.authenticator == nil {
+		tmpAuthenticator := NewOAuth2Authenticator(n.config, n.GetHttpClient())
+		if tmpAuthenticator.IsSupported() {
+			n.authenticator = tmpAuthenticator
+		}
+	}
+
+	// create token authenticator
+	if n.authenticator == nil {
+		n.authenticator = NewTokenAuthenticator(func() string { return GetAuthHeader(n.config) })
+	}
+
+	return n.authenticator
 }
