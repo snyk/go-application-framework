@@ -54,8 +54,9 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 				if err == nil {
 					return orgId
 				}
+			} else {
+				return orgId
 			}
-			return orgId
 		}
 
 		orgId, _ := apiClient.GetDefaultOrgId()

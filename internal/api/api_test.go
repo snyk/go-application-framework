@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/api/contract"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +17,7 @@ func Test_GetDefaultOrgId_ReturnsCorrectOrgId(t *testing.T) {
 	t.Parallel()
 	selfResponse := newMockSelfResponse(t)
 	expectedOrgId := selfResponse.Data.Attributes.DefaultOrgContext
-	server := setupSingleReponseServer(t, selfResponse)
+	server := setupSingleReponseServer(t, "/rest/self?version="+constants.SNYK_API_VERSION, selfResponse)
 	api := api.NewApi(server.URL, http.DefaultClient)
 
 	// Act
@@ -33,7 +34,7 @@ func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	// Arrange
 	t.Parallel()
 	orgResponse := newMockOrgResponse(t)
-	server := setupSingleReponseServer(t, orgResponse)
+	server := setupSingleReponseServer(t, "/v1/orgs", orgResponse)
 	api := api.NewApi(server.URL, http.DefaultClient)
 
 	for _, org := range orgResponse.Organizations {
@@ -77,13 +78,13 @@ func newMockOrgResponse(t *testing.T) contract.OrganizationsResponse {
 	}
 }
 
-func setupSingleReponseServer(t *testing.T, response any) *httptest.Server {
+func setupSingleReponseServer(t *testing.T, url string, response any) *httptest.Server {
 	t.Helper()
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		t.Error(err)
 	}
-	handler := newHttpHandler(t, jsonResponse)
+	handler := newHttpHandler(t, url, jsonResponse)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -91,9 +92,13 @@ func setupSingleReponseServer(t *testing.T, response any) *httptest.Server {
 }
 
 // returns a handler that simply returns status OK and the response provided
-func newHttpHandler(t *testing.T, resp []byte) http.HandlerFunc {
+func newHttpHandler(t *testing.T, url string, resp []byte) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.String() != url {
+			t.Errorf("expected url %s, got %s", url, r.URL)
+		}
+
 		_, err := w.Write(resp)
 		if err != nil {
 			t.Error(err)
