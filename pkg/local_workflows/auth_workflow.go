@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 )
@@ -56,7 +56,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		logger.Println("Headless:", headless)
 
 		httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
-		authenticator := networking.NewOAuth2Authenticator(config, httpClient)
+		authenticator := auth.NewOAuth2Authenticator(config, httpClient)
 		authError := authenticator.Authenticate()
 		if authError != nil {
 			return output, authError
@@ -66,7 +66,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		fmt.Println("Successfully authenticated!")
 
 		// TODO use configuration to store
-		storeConfigValue(invocationCtx, networking.CONFIG_KEY_OAUTH_TOKEN, config.GetString(networking.CONFIG_KEY_OAUTH_TOKEN))
+		storeConfigValue(invocationCtx, auth.CONFIG_KEY_OAUTH_TOKEN, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])

@@ -7,9 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
-	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
@@ -36,25 +34,16 @@ type NetworkAccess interface {
 	AddHeaderField(key string, value string)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
-	// Returns the current Authenticator
-	GetAuthenticator() Authenticator
-}
-
-type Authenticator interface {
-	Authenticate() error
-	Authorize(request *http.Request) error
-	IsSupported() bool
 }
 
 // NetworkImpl is the default implementation of the NetworkAccess interface.
 type NetworkImpl struct {
-	config        configuration.Configuration
-	userAgent     string
-	staticHeader  http.Header
-	logger        *log.Logger
-	proxy         func(req *http.Request) (*url.URL, error)
-	caPool        *x509.CertPool
-	authenticator Authenticator
+	config       configuration.Configuration
+	userAgent    string
+	staticHeader http.Header
+	logger       *log.Logger
+	proxy        func(req *http.Request) (*url.URL, error)
+	caPool       *x509.CertPool
 }
 
 // customRoundtripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -110,22 +99,22 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 		}
 	}
 
-	if request.URL != nil {
-		// determine configured api url
-		apiUrlString := n.config.GetString(configuration.API_URL)
-		apiUrl, err := url.Parse(apiUrlString)
-		if err != nil {
-			apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
-		}
+	// if request.URL != nil {
+	// 	// determine configured api url
+	// 	apiUrlString := n.config.GetString(configuration.API_URL)
+	// 	apiUrl, err := url.Parse(apiUrlString)
+	// 	if err != nil {
+	// 		apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
+	// 	}
 
-		// requests to the api automatically get an authentication token attached
-		if strings.Contains(request.URL.Host, apiUrl.Host) {
-			err = n.GetAuthenticator().Authorize(request)
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// 	// requests to the api automatically get an authentication token attached
+	// 	if strings.Contains(request.URL.Host, apiUrl.Host) {
+	// 		err = n.GetAuthenticator().Authorize(request)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 
 	return nil
 }
@@ -178,22 +167,4 @@ func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
 	}
 
 	return err
-}
-
-func (n *NetworkImpl) GetAuthenticator() Authenticator {
-
-	// try oauth authenticator
-	if n.authenticator == nil {
-		tmpAuthenticator := NewOAuth2Authenticator(n.config, n.GetHttpClient())
-		if tmpAuthenticator.IsSupported() {
-			n.authenticator = tmpAuthenticator
-		}
-	}
-
-	// create token authenticator
-	if n.authenticator == nil {
-		n.authenticator = NewTokenAuthenticator(func() string { return GetAuthHeader(n.config) })
-	}
-
-	return n.authenticator
 }

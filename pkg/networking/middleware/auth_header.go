@@ -6,19 +6,19 @@ import (
 	"strings"
 
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/networking"
 )
 
 type AuthHeaderMiddleware struct {
 	next          http.RoundTripper
-	authenticator networking.Authenticator
+	authenticator auth.Authenticator
 	config        configuration.Configuration
 }
 
 func NewAuthHeaderMiddleware(
 	config configuration.Configuration,
-	authenticator networking.Authenticator,
+	authenticator auth.Authenticator,
 	roundTripper http.RoundTripper,
 ) *AuthHeaderMiddleware {
 	return &AuthHeaderMiddleware{

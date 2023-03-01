@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
@@ -20,7 +21,7 @@ import (
 func getConfig() configuration.Configuration {
 	config := configuration.New()
 	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
-	config.Set(CONFIG_KEY_OAUTH_TOKEN, "")
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	return config
 }

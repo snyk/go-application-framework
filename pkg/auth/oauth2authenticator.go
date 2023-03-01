@@ -1,4 +1,4 @@
-package networking
+package auth
 
 import (
 	"context"
@@ -16,7 +16,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const CONFIG_KEY_OAUTH_TOKEN string = "OAUTH_TOKEN"
+const (
+	CONFIG_KEY_OAUTH_TOKEN string = "OAUTH_TOKEN"
+	OAUTH_CLIENT_ID        string = "0oa37b7oa3zOoDWCe4h7"
+)
 
 type oAuth2Authenticator struct {
 	httpClient  *http.Client
@@ -26,13 +29,16 @@ type oAuth2Authenticator struct {
 	headless    bool
 }
 
-func getConfigration() *oauth2.Config {
-	// TODO: get config from outside
+func getConfigration(config configuration.Configuration) *oauth2.Config {
+
+	appUrl := config.GetString(configuration.APP_URL)
+	appUrl = "https://app.fedramp-alpha.snykgov.io"
+
 	conf := &oauth2.Config{
-		ClientID: "0oa37b7oa3zOoDWCe4h7",
+		ClientID: OAUTH_CLIENT_ID,
 		Endpoint: oauth2.Endpoint{
 			TokenURL: "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token",
-			AuthURL:  "https://app.fedramp-alpha.snykgov.io/oauth/authorize",
+			AuthURL:  appUrl + "/oauth/authorize",
 		},
 		RedirectURL: "http://localhost:8080/authorization-code/callback",
 	}
@@ -78,11 +84,12 @@ func getToken(config configuration.Configuration) (*oauth2.Token, error) {
 
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	token, _ := getToken(config)
+	oauthConfig := getConfigration(config)
 
 	return &oAuth2Authenticator{
 		httpClient:  httpClient,
 		config:      config,
-		oauthConfig: getConfigration(),
+		oauthConfig: oauthConfig,
 		token:       token,
 	}
 }
@@ -104,10 +111,9 @@ func (o *oAuth2Authenticator) Authenticate() error {
 	verifier := createVerifier(128)
 	state := string(createVerifier(15))
 	codeChallenge := getCodeChallenge(verifier)
-	conf := getConfigration()
 	ctx := context.Background()
 
-	url := conf.AuthCodeURL(state, oauth2.AccessTypeOffline,
+	url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "s256"),
 		oauth2.SetAuthURLParam("response_type", "code"),
@@ -157,7 +163,7 @@ func (o *oAuth2Authenticator) Authenticate() error {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
 	}
 
-	token, err := conf.Exchange(ctx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
+	token, err := o.oauthConfig.Exchange(ctx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
 	if err == nil {
 		o.persistToken(token)
 	}
