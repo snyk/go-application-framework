@@ -4,7 +4,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,7 +24,7 @@ type snykApiClient struct {
 }
 
 func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
-	url := a.url + "/api/v1/orgs"
+	url := a.url + "/v1/orgs"
 	res, err := a.client.Get(url)
 	if err != nil {
 		return "", err
@@ -40,13 +39,14 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	for _, org := range userOrgInfo.Organizations {
 		if org.Slug == slugName {
 			return org.ID, nil
 		}
 	}
 
-	return "", errors.New(fmt.Sprintf("org ID not found for slug %v", slugName))
+	return "", fmt.Errorf("org ID not found for slug %v", slugName)
 }
 
 func (a *snykApiClient) GetDefaultOrgId() (string, error) {
