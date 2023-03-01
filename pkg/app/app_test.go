@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -72,6 +73,28 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 
 	config := configuration.New()
 	initConfiguration(config, mockApiClient)
+
+	actualOrgId := config.GetString(configuration.ORGANIZATION)
+	assert.Equal(t, defaultOrgId, actualOrgId)
+}
+
+func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.T) {
+	orgName := "someOrgName"
+	defaultOrgId := "someDefaultOrgId"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertion
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
+	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).Times(1)
+	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
+
+	config := configuration.New()
+	initConfiguration(config, mockApiClient)
+
+	config.Set(configuration.ORGANIZATION, orgName)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, defaultOrgId, actualOrgId)
