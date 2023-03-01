@@ -119,9 +119,9 @@ func (mr *MockNetworkAccessMockRecorder) GetHttpClient() *gomock.Call {
 }
 
 // GetRoundtripper mocks base method.
-func (m *MockNetworkAccess) GetRoundtripper() http.RoundTripper {
+func (m *MockNetworkAccess) GetRoundTripper() http.RoundTripper {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRoundtripper")
+	ret := m.ctrl.Call(m, "GetRoundTripper")
 	ret0, _ := ret[0].(http.RoundTripper)
 	return ret0
 }
@@ -129,7 +129,7 @@ func (m *MockNetworkAccess) GetRoundtripper() http.RoundTripper {
 // GetRoundtripper indicates an expected call of GetRoundtripper.
 func (mr *MockNetworkAccessMockRecorder) GetRoundtripper() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoundtripper", reflect.TypeOf((*MockNetworkAccess)(nil).GetRoundtripper))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoundTripper", reflect.TypeOf((*MockNetworkAccess)(nil).GetRoundTripper))
 }
 
 // MockAuthenticator is a mock of Authenticator interface.

@@ -1,7 +1,6 @@
 package networking
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"io"
 	"log"
@@ -13,6 +12,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
@@ -28,8 +28,8 @@ type NetworkAccess interface {
 	AddDefaultHeader(request *http.Request) error
 	// GetDefaultHeader returns the default header for a given URL.
 	GetDefaultHeader(url *url.URL) http.Header
-	// GetRoundtripper returns the http.Roundtripper.
-	GetRoundtripper() http.RoundTripper
+	// GetRoundTripper returns the http.RoundTripper.
+	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
 	GetHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
@@ -61,18 +61,11 @@ type NetworkImpl struct {
 type customRoundtripper struct {
 	encapsulatedRoundtripper *http.Transport
 	networkAccess            NetworkAccess
-	proxyAuthenticator       *httpauth.ProxyAuthenticator
-}
-
-// decorateRequest appends request header's to the customRoundtripper's instance.
-func (crt *customRoundtripper) decorateRequest(request *http.Request) *http.Request {
-	_ = crt.networkAccess.AddDefaultHeader(request)
-	return request
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
 func (crt *customRoundtripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	request = crt.decorateRequest(request)
+	_ = crt.networkAccess.AddDefaultHeader(request)
 	return crt.encapsulatedRoundtripper.RoundTrip(request)
 }
 
@@ -148,42 +141,26 @@ func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
 	return tmpRequest.Header
 }
 
-func (n *NetworkImpl) GetRoundtripper() http.RoundTripper {
+func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 	// configure insecure
 	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
 	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
-	var proxyAuthenticator *httpauth.ProxyAuthenticator
 
-	// create transport
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: insecure,
-			RootCAs:            n.caPool,
-		},
-	}
-
-	// create proxy authenticator if required
-	if httpauth.IsSupportedMechanism(authenticationMechanism) {
-		proxyAuthenticator = httpauth.NewProxyAuthenticator(authenticationMechanism, n.proxy, n.logger)
-		transport.DialContext = proxyAuthenticator.DialContext
-		transport.Proxy = nil
-	} else {
-		transport.DialContext = nil
-		transport.Proxy = n.proxy
-	}
+	rt := http.DefaultTransport.(*http.Transport).Clone()
+	rt = middleware.ApplyTlsConfig(rt, insecure, n.caPool)
+	rt = middleware.ConfigureProxy(rt, n.logger, n.proxy, authenticationMechanism)
 
 	// encapsulate everything
-	roundtrip := customRoundtripper{
-		encapsulatedRoundtripper: transport,
+	roundTrip := customRoundtripper{
+		encapsulatedRoundtripper: rt,
 		networkAccess:            n,
-		proxyAuthenticator:       proxyAuthenticator,
 	}
-	return &roundtrip
+	return &roundTrip
 }
 
 func (n *NetworkImpl) GetHttpClient() *http.Client {
 	client := *http.DefaultClient
-	client.Transport = n.GetRoundtripper()
+	client.Transport = n.GetRoundTripper()
 	return &client
 }
 
