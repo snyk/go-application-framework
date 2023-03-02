@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
@@ -48,7 +51,7 @@ type NetworkImpl struct {
 
 // customRoundtripper is a custom http.RoundTripper which decorates the request with default headers.
 type customRoundtripper struct {
-	encapsulatedRoundtripper *http.Transport
+	encapsulatedRoundtripper http.RoundTripper
 	networkAccess            NetworkAccess
 }
 
@@ -99,22 +102,22 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 		}
 	}
 
-	// if request.URL != nil {
-	// 	// determine configured api url
-	// 	apiUrlString := n.config.GetString(configuration.API_URL)
-	// 	apiUrl, err := url.Parse(apiUrlString)
-	// 	if err != nil {
-	// 		apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
-	// 	}
+	if request.URL != nil {
+		// determine configured api url
+		apiUrlString := n.config.GetString(configuration.API_URL)
+		apiUrl, err := url.Parse(apiUrlString)
+		if err != nil {
+			apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
+		}
 
-	// 	// requests to the api automatically get an authentication token attached
-	// 	if strings.Contains(request.URL.Host, apiUrl.Host) {
-	// 		err = n.GetAuthenticator().Authorize(request)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
+		// requests to the api automatically get an authentication token attached
+		if strings.Contains(request.URL.Host, apiUrl.Host) {
+			err = auth.NewTokenAuthenticator(func() string { return auth.GetAuthHeader(n.config) }).Authorize(request)
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }
@@ -138,6 +141,12 @@ func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 	rt := http.DefaultTransport.(*http.Transport).Clone()
 	rt = middleware.ApplyTlsConfig(rt, insecure, n.caPool)
 	rt = middleware.ConfigureProxy(rt, n.logger, n.proxy, authenticationMechanism)
+
+	authClient := *http.DefaultClient
+	authClient.Transport = rt.Clone()
+	authenticator := auth.CreateAuthenticator(n.config, &authClient)
+
+	//middleware := middleware.NewAuthHeaderMiddleware(n.config, authenticator, rt)
 
 	// encapsulate everything
 	roundTrip := customRoundtripper{
