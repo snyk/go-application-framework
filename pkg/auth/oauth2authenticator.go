@@ -9,6 +9,7 @@ import (
 	"html"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pkg/browser"
@@ -32,13 +33,16 @@ type oAuth2Authenticator struct {
 func getConfigration(config configuration.Configuration) *oauth2.Config {
 
 	appUrl := config.GetString(configuration.APP_URL)
-	appUrl = "https://app.fedramp-alpha.snykgov.io"
+	// "https://app.fedramp-alpha.snykgov.io"
+	// "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token"
+	tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token"
+	authUrl := appUrl + "/oauth/authorize"
 
 	conf := &oauth2.Config{
 		ClientID: OAUTH_CLIENT_ID,
 		Endpoint: oauth2.Endpoint{
-			TokenURL: "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token",
-			AuthURL:  appUrl + "/oauth/authorize",
+			TokenURL: tokenUrl,
+			AuthURL:  authUrl,
 		},
 		RedirectURL: "http://localhost:8080/authorization-code/callback",
 	}

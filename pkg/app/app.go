@@ -2,8 +2,6 @@ package app
 
 import (
 	"log"
-	"net/url"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/internal/api"
@@ -27,18 +25,22 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
 
 	config.AddDefaultValue(configuration.API_URL, func(existingValue any) any {
-		if existingValue == nil {
-			return constants.SNYK_DEFAULT_API_URL
-		} else {
-			apiString := existingValue
+		urlString := constants.SNYK_DEFAULT_API_URL
+
+		if existingValue != nil {
 			if temp, ok := existingValue.(string); ok {
-				if apiUrl, err := url.Parse(temp); err == nil {
-					apiUrl.Path = strings.Replace(apiUrl.Path, "/v1", "", 1)
-					apiString = apiUrl.String()
-				}
+				urlString = temp
 			}
-			return apiString
 		}
+
+		apiString, _ := api.GetCanonicalApiUrl(urlString)
+		return apiString
+	})
+
+	config.AddDefaultValue(configuration.APP_URL, func(existingValue any) any {
+		canonicalApiUrl := config.GetString(configuration.API_URL)
+		appUrl, _ := api.DeriveAppUrl(canonicalApiUrl)
+		return appUrl
 	})
 
 	config.AddDefaultValue(configuration.ORGANIZATION, func(existingValue any) any {
