@@ -138,15 +138,15 @@ func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
 	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
 
-	rt := http.DefaultTransport.(*http.Transport).Clone()
-	rt = middleware.ApplyTlsConfig(rt, insecure, n.caPool)
-	rt = middleware.ConfigureProxy(rt, n.logger, n.proxy, authenticationMechanism)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport = middleware.ApplyTlsConfig(transport, insecure, n.caPool)
+	transport = middleware.ConfigureProxy(transport, n.logger, n.proxy, authenticationMechanism)
 
 	authClient := *http.DefaultClient
-	authClient.Transport = rt.Clone()
+	authClient.Transport = transport.Clone()
 	authenticator := auth.CreateAuthenticator(n.config, &authClient)
 
-	//middleware := middleware.NewAuthHeaderMiddleware(n.config, authenticator, rt)
+	rt := middleware.NewAuthHeaderMiddleware(n.config, authenticator, transport)
 
 	// encapsulate everything
 	roundTrip := customRoundtripper{
