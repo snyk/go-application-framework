@@ -63,7 +63,7 @@ func (crt *customRoundtripper) RoundTrip(request *http.Request) (*http.Response,
 }
 
 // NewNetworkAccess returns a NetworkImpl instance.
-func NewNetworkAccess(config configuration.Configuration, authenticator auth.Authenticator) NetworkAccess {
+func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	// prepare logger
 	logger := log.New(os.Stderr, "NetworkAccess - ", config.GetInt(configuration.DEBUG_FORMAT))
 	if config.GetBool(configuration.DEBUG) == false {
@@ -71,12 +71,11 @@ func NewNetworkAccess(config configuration.Configuration, authenticator auth.Aut
 	}
 
 	c := NetworkImpl{
-		config:        config,
-		userAgent:     defaultUserAgent,
-		staticHeader:  http.Header{},
-		logger:        logger,
-		proxy:         http.ProxyFromEnvironment,
-		authenticator: authenticator,
+		config:       config,
+		userAgent:    defaultUserAgent,
+		staticHeader: http.Header{},
+		logger:       logger,
+		proxy:        http.ProxyFromEnvironment,
 	}
 
 	return &c
@@ -129,9 +128,9 @@ func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 
 	authClient := *http.DefaultClient
 	authClient.Transport = transport.Clone()
-	authenticator := auth.CreateAuthenticator(n.config, &authClient)
+	n.authenticator = auth.CreateAuthenticator(n.config, &authClient)
 
-	rt := middleware.NewAuthHeaderMiddleware(n.config, authenticator, transport)
+	rt := middleware.NewAuthHeaderMiddleware(n.config, n.authenticator, transport)
 
 	// encapsulate everything
 	roundTrip := customRoundtripper{
