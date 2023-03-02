@@ -7,9 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
-	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
@@ -102,22 +100,22 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 		}
 	}
 
-	if request.URL != nil {
-		// determine configured api url
-		apiUrlString := n.config.GetString(configuration.API_URL)
-		apiUrl, err := url.Parse(apiUrlString)
-		if err != nil {
-			apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
-		}
-
-		// requests to the api automatically get an authentication token attached
-		if strings.Contains(request.URL.Host, apiUrl.Host) {
-			err = auth.NewTokenAuthenticator(func() string { return auth.GetAuthHeader(n.config) }).AddAuthenticationHeader(request)
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// if request.URL != nil {
+	// 	// determine configured api url
+	// 	apiUrlString := n.config.GetString(configuration.API_URL)
+	// 	apiUrl, err := url.Parse(apiUrlString)
+	// 	if err != nil {
+	// 		apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
+	// 	}
+	//
+	// 	// requests to the api automatically get an authentication token attached
+	// 	if strings.Contains(request.URL.Host, apiUrl.Host) {
+	// 		err = auth.NewTokenAuthenticator(func() string { return auth.GetAuthHeader(n.config) }).AddAuthenticationHeader(request)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 
 	return nil
 }
