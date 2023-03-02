@@ -39,7 +39,7 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 
 		// requests to the api automatically get an authentication token attached
 		if strings.Contains(request.URL.Host, apiUrl.Host) {
-			err = n.authenticator.Authorize(request)
+			err = n.authenticator.AddAuthenticationHeader(request)
 			if err != nil {
 				return nil, err
 			}

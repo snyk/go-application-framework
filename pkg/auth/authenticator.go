@@ -8,7 +8,7 @@ import (
 
 type Authenticator interface {
 	Authenticate() error
-	Authorize(request *http.Request) error
+	AddAuthenticationHeader(request *http.Request) error
 	IsSupported() bool
 }
 

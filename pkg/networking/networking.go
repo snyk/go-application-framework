@@ -112,7 +112,7 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 
 		// requests to the api automatically get an authentication token attached
 		if strings.Contains(request.URL.Host, apiUrl.Host) {
-			err = auth.NewTokenAuthenticator(func() string { return auth.GetAuthHeader(n.config) }).Authorize(request)
+			err = auth.NewTokenAuthenticator(func() string { return auth.GetAuthHeader(n.config) }).AddAuthenticationHeader(request)
 			if err != nil {
 				return err
 			}

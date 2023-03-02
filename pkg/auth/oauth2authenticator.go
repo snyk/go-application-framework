@@ -171,7 +171,7 @@ func (o *oAuth2Authenticator) Authenticate() error {
 	return err
 }
 
-func (o *oAuth2Authenticator) Authorize(request *http.Request) error {
+func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
 	if request == nil {
 		return fmt.Errorf("request must not be nil.")
 	}

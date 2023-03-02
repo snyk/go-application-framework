@@ -19,7 +19,7 @@ func (t *tokenAuthenticator) Authenticate() error {
 	return nil
 }
 
-func (t *tokenAuthenticator) Authorize(request *http.Request) error {
+func (t *tokenAuthenticator) AddAuthenticationHeader(request *http.Request) error {
 	if request == nil {
 		return fmt.Errorf("request must not be nil.")
 	}
