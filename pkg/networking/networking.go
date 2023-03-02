@@ -35,16 +35,19 @@ type NetworkAccess interface {
 	AddHeaderField(key string, value string)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
+	// GetAuthenticator returns the authenticator.
+	GetAuthenticator() auth.Authenticator
 }
 
 // NetworkImpl is the default implementation of the NetworkAccess interface.
 type NetworkImpl struct {
-	config       configuration.Configuration
-	userAgent    string
-	staticHeader http.Header
-	logger       *log.Logger
-	proxy        func(req *http.Request) (*url.URL, error)
-	caPool       *x509.CertPool
+	config        configuration.Configuration
+	userAgent     string
+	staticHeader  http.Header
+	logger        *log.Logger
+	proxy         func(req *http.Request) (*url.URL, error)
+	caPool        *x509.CertPool
+	authenticator auth.Authenticator
 }
 
 // customRoundtripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -60,7 +63,7 @@ func (crt *customRoundtripper) RoundTrip(request *http.Request) (*http.Response,
 }
 
 // NewNetworkAccess returns a NetworkImpl instance.
-func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
+func NewNetworkAccess(config configuration.Configuration, authenticator auth.Authenticator) NetworkAccess {
 	// prepare logger
 	logger := log.New(os.Stderr, "NetworkAccess - ", config.GetInt(configuration.DEBUG_FORMAT))
 	if config.GetBool(configuration.DEBUG) == false {
@@ -68,11 +71,12 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	}
 
 	c := NetworkImpl{
-		config:       config,
-		userAgent:    defaultUserAgent,
-		staticHeader: http.Header{},
-		logger:       logger,
-		proxy:        http.ProxyFromEnvironment,
+		config:        config,
+		userAgent:     defaultUserAgent,
+		staticHeader:  http.Header{},
+		logger:        logger,
+		proxy:         http.ProxyFromEnvironment,
+		authenticator: authenticator,
 	}
 
 	return &c
@@ -99,23 +103,6 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 			request.Header.Set(k, v[i])
 		}
 	}
-
-	// if request.URL != nil {
-	// 	// determine configured api url
-	// 	apiUrlString := n.config.GetString(configuration.API_URL)
-	// 	apiUrl, err := url.Parse(apiUrlString)
-	// 	if err != nil {
-	// 		apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
-	// 	}
-	//
-	// 	// requests to the api automatically get an authentication token attached
-	// 	if strings.Contains(request.URL.Host, apiUrl.Host) {
-	// 		err = auth.NewTokenAuthenticator(func() string { return auth.GetAuthHeader(n.config) }).AddAuthenticationHeader(request)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
 
 	return nil
 }
@@ -174,4 +161,8 @@ func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
 	}
 
 	return err
+}
+
+func (n *NetworkImpl) GetAuthenticator() auth.Authenticator {
+	return n.authenticator
 }
