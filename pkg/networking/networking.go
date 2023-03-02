@@ -118,17 +118,8 @@ func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
 }
 
 func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
-	// configure insecure
-	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
-	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
-
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport = middleware.ApplyTlsConfig(transport, insecure, n.caPool)
-	transport = middleware.ConfigureProxy(transport, n.logger, n.proxy, authenticationMechanism)
-
-	authClient := *http.DefaultClient
-	authClient.Transport = transport.Clone()
-	n.authenticator = auth.CreateAuthenticator(n.config, &authClient)
+	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	n.authenticator = n.createAuthenticator(transport)
 
 	rt := middleware.NewAuthHeaderMiddleware(n.config, n.authenticator, transport)
 
@@ -138,6 +129,22 @@ func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 		networkAccess:            n,
 	}
 	return &roundTrip
+}
+
+func (n *NetworkImpl) createAuthenticator(transport *http.Transport) auth.Authenticator {
+	authClient := *http.DefaultClient
+	authClient.Transport = transport.Clone()
+	return auth.CreateAuthenticator(n.config, &authClient)
+}
+
+func (n *NetworkImpl) configureRoundTripper(base *http.Transport) *http.Transport {
+	// configure insecure
+	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
+	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
+	transport := base.Clone()
+	transport = middleware.ApplyTlsConfig(transport, insecure, n.caPool)
+	transport = middleware.ConfigureProxy(transport, n.logger, n.proxy, authenticationMechanism)
+	return transport
 }
 
 func (n *NetworkImpl) GetHttpClient() *http.Client {
@@ -163,5 +170,10 @@ func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
 }
 
 func (n *NetworkImpl) GetAuthenticator() auth.Authenticator {
+	if n.authenticator == nil {
+		transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+		n.authenticator = n.createAuthenticator(transport)
+	}
+
 	return n.authenticator
 }
