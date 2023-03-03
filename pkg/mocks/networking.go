@@ -10,6 +10,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	auth "github.com/snyk/go-application-framework/pkg/auth"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -73,6 +74,20 @@ func (m *MockNetworkAccess) AddRootCAs(pemFileLocation string) error {
 func (mr *MockNetworkAccessMockRecorder) AddRootCAs(pemFileLocation interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRootCAs", reflect.TypeOf((*MockNetworkAccess)(nil).AddRootCAs), pemFileLocation)
+}
+
+// GetAuthenticator mocks base method.
+func (m *MockNetworkAccess) GetAuthenticator() auth.Authenticator {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAuthenticator")
+	ret0, _ := ret[0].(auth.Authenticator)
+	return ret0
+}
+
+// GetAuthenticator indicates an expected call of GetAuthenticator.
+func (mr *MockNetworkAccessMockRecorder) GetAuthenticator() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuthenticator", reflect.TypeOf((*MockNetworkAccess)(nil).GetAuthenticator))
 }
 
 // GetDefaultHeader mocks base method.

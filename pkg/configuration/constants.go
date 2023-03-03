@@ -15,5 +15,5 @@ const (
 	CACHE_PATH                     string = "snyk_cache_path"
 	WORKFLOW_USE_STDIO             string = "wflstdio"
 	RAW_CMD_ARGS                   string = "raw_cmd_args"
-	APP_URL                        string = "internal_snyk_app"
+	WEB_APP_URL                    string = "internal_snyk_app"
 )

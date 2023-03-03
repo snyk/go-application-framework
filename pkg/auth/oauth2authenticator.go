@@ -2,12 +2,15 @@ package auth
 
 import (
 	"context"
+	crypto_rand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"html"
 	"math/rand"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -20,22 +23,53 @@ import (
 const (
 	CONFIG_KEY_OAUTH_TOKEN string = "OAUTH_TOKEN"
 	OAUTH_CLIENT_ID        string = "0oa37b7oa3zOoDWCe4h7"
+	CALLBACK_HOSTNAME      string = "127.0.0.1"
+	CALLBACK_PATH          string = "/authorization-code/callback"
 )
 
+var accepted_callback_ports = []int{8080, 18081, 28082, 38083, 48084}
+
 type oAuth2Authenticator struct {
-	httpClient  *http.Client
-	config      configuration.Configuration
-	oauthConfig *oauth2.Config
-	token       *oauth2.Token
-	headless    bool
+	httpClient         *http.Client
+	config             configuration.Configuration
+	oauthConfig        *oauth2.Config
+	token              *oauth2.Token
+	headless           bool
+	openBrowserFunc    func(authUrl string)
+	shutdownServerFunc func(server *http.Server)
 }
 
-func getConfigration(config configuration.Configuration) *oauth2.Config {
+func init() {
+	var seed int64
+	var b [8]byte
+	_, err := crypto_rand.Read(b[:])
+	if err != nil {
+		seed = time.Now().UnixNano() // fallback to time only if necessary
+	} else {
+		seed = int64(binary.LittleEndian.Uint64(b[:])) // based on https://stackoverflow.com/a/54491783
+	}
+	rand.Seed(seed)
+}
 
-	appUrl := config.GetString(configuration.APP_URL)
-	// "https://app.fedramp-alpha.snykgov.io"
-	// "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token"
+func openBrowser(authUrl string) {
+	_ = browser.OpenURL(authUrl)
+}
+
+func shutdownServer(server *http.Server) {
+	time.Sleep(500)
+	_ = server.Shutdown(context.Background())
+}
+
+func getRedirectUri(port int) string {
+	callback := fmt.Sprintf("http://%s:%d%s", CALLBACK_HOSTNAME, port, CALLBACK_PATH)
+	return callback
+}
+
+func getOAuthConfigration(config configuration.Configuration) *oauth2.Config {
+
+	appUrl := config.GetString(configuration.WEB_APP_URL)
 	tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token"
+	tokenUrl = "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token" // TODO remove as soon as the derived tokenUrl works
 	authUrl := appUrl + "/oauth/authorize"
 
 	conf := &oauth2.Config{
@@ -44,7 +78,6 @@ func getConfigration(config configuration.Configuration) *oauth2.Config {
 			TokenURL: tokenUrl,
 			AuthURL:  authUrl,
 		},
-		RedirectURL: "http://localhost:8080/authorization-code/callback",
 	}
 	return conf
 }
@@ -61,16 +94,15 @@ func createVerifier(count int) []byte {
 	   DIGIT = %x30-39
 	*/
 	lut := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-	b := make([]byte, count)
-	rand.Seed(time.Now().Unix())
+	verifier := make([]byte, count)
 
 	// TODO is this good enough?
-	for i := range b {
+	for i := range verifier {
 		index := rand.Int() % len(lut)
-		b[i] = lut[index]
+		verifier[i] = lut[index]
 	}
 
-	return b
+	return verifier
 }
 
 func getToken(config configuration.Configuration) (*oauth2.Token, error) {
@@ -88,13 +120,15 @@ func getToken(config configuration.Configuration) (*oauth2.Token, error) {
 
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	token, _ := getToken(config)
-	oauthConfig := getConfigration(config)
+	oauthConfig := getOAuthConfigration(config)
 
 	return &oAuth2Authenticator{
-		httpClient:  httpClient,
-		config:      config,
-		oauthConfig: oauthConfig,
-		token:       token,
+		httpClient:         httpClient,
+		config:             config,
+		oauthConfig:        oauthConfig,
+		token:              token,
+		openBrowserFunc:    openBrowser,
+		shutdownServerFunc: shutdownServer,
 	}
 }
 
@@ -117,23 +151,12 @@ func (o *oAuth2Authenticator) Authenticate() error {
 	codeChallenge := getCodeChallenge(verifier)
 	ctx := context.Background()
 
-	url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
-		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
-		oauth2.SetAuthURLParam("code_challenge_method", "s256"),
-		oauth2.SetAuthURLParam("response_type", "code"),
-		oauth2.SetAuthURLParam("scope", "offline_access"))
-
 	if o.headless {
-		// TODO: UI? in CLI and IDE???
-		fmt.Println("Please visit:", url)
-		fmt.Scanf("Enter Code: %s", responseCode)
+		// TODO:
 	} else {
-		browser.OpenURL(url)
+		srv := &http.Server{}
 
-		// TODO: can we use a random port to avoid ports conflicts --> check with Mike/Darrell
-		srv := &http.Server{Addr: ":8080"}
-
-		http.HandleFunc("/authorization-code/callback", func(w http.ResponseWriter, r *http.Request) {
+		http.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
 			responseError = html.EscapeString(r.URL.Query().Get("error"))
 			if len(responseError) > 0 {
 				details := html.EscapeString(r.URL.Query().Get("error_description"))
@@ -144,13 +167,34 @@ func (o *oAuth2Authenticator) Authenticate() error {
 				fmt.Fprintf(w, "Succesfully Authenticated!")
 			}
 
-			go func() {
-				time.Sleep(1000)
-				srv.Shutdown(ctx)
-			}()
+			go o.shutdownServerFunc(srv)
 		})
 
-		srv.ListenAndServe()
+		// iterate over different known ports if one fails
+		for _, port := range accepted_callback_ports {
+			srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
+			listener, err := net.Listen("tcp", srv.Addr)
+			if err != nil { // skip port if it can't be listened to
+				continue
+			}
+
+			// fill redirect url now that the port is known
+			o.oauthConfig.RedirectURL = getRedirectUri(port)
+
+			url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
+				oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+				oauth2.SetAuthURLParam("code_challenge_method", "s256"),
+				oauth2.SetAuthURLParam("response_type", "code"),
+				oauth2.SetAuthURLParam("scope", "offline_access"))
+
+			// launch browser
+			go o.openBrowserFunc(url)
+
+			err = srv.Serve(listener)
+			if err == http.ErrServerClosed { // if the server was shutdown normally, there is no need to iterate further
+				break
+			}
+		}
 	}
 
 	if len(responseError) > 0 {

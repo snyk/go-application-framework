@@ -37,7 +37,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 		return apiString
 	})
 
-	config.AddDefaultValue(configuration.APP_URL, func(existingValue any) any {
+	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {
 		canonicalApiUrl := config.GetString(configuration.API_URL)
 		appUrl, _ := api.DeriveAppUrl(canonicalApiUrl)
 		return appUrl

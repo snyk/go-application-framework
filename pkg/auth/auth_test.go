@@ -5,13 +5,15 @@ import (
 )
 
 func Test_Authenticate(t *testing.T) {
-	// config := configuration.New()
+	// engine := app.CreateAppEngine()
+	// config := engine.GetConfiguration()
+	// config.Set(configuration.API_URL, "https://app.fedramp-alpha.snykgov.io/api")
+
 	// networkAccess := networking.NewNetworkAccess(config)
 	// httpClient := networkAccess.GetHttpClient()
 
 	// oAuth2Authenticator := auth.NewOAuth2Authenticator(config, httpClient)
 
-	// config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "") // ensure to not use any pre-existing auth value
 	// err := oAuth2Authenticator.Authenticate()
 	// assert.Nil(t, err)
 	// fmt.Println(config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
