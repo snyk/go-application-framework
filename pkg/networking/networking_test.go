@@ -68,53 +68,57 @@ func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
 
 func Test_Roundtripper_SecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config)
+	net := NewNetworkAccess(config).(*NetworkImpl)
 
 	roundtripper := net.GetRoundTripper()
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 	customRoundtripper := roundtripper.(*customRoundtripper)
 	assert.NotNil(t, customRoundtripper)
-	assert.False(t, customRoundtripper.encapsulatedRoundtripper.TLSClientConfig.InsecureSkipVerify)
+	assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
 
 func Test_Roundtripper_InsecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config)
+	net := NewNetworkAccess(config).(*NetworkImpl)
 
 	config.Set(configuration.INSECURE_HTTPS, true)
 
 	roundtripper := net.GetRoundTripper()
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 	customRoundtripper := roundtripper.(*customRoundtripper)
 	assert.NotNil(t, customRoundtripper)
-	assert.True(t, customRoundtripper.encapsulatedRoundtripper.TLSClientConfig.InsecureSkipVerify)
+	assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
 
 func Test_Roundtripper_ProxyAuth(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config)
+	net := NewNetworkAccess(config).(*NetworkImpl)
 
 	// case: enable AnyAuth
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth))
 
 	// invoke method under test
 	roundtripper := net.GetRoundTripper()
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 
 	// find proxyAuthenticator used for AnyAuth
 	ctRoundTripper := roundtripper.(*customRoundtripper)
 	assert.NotNil(t, ctRoundTripper)
-	assert.NotNil(t, ctRoundTripper.encapsulatedRoundtripper.DialContext)
-	assert.Nil(t, ctRoundTripper.encapsulatedRoundtripper.Proxy)
+	assert.NotNil(t, transport.DialContext)
+	assert.Nil(t, transport.Proxy)
 
 	// case: disable Auth
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.NoAuth))
 
 	// invoke method under test
 	roundtripper = net.GetRoundTripper()
+	transport = net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 
 	// with Auth disabled, no proxyAuthenticator should be available
 	ctRoundTripper = roundtripper.(*customRoundtripper)
 	assert.NotNil(t, ctRoundTripper)
-	assert.Nil(t, ctRoundTripper.encapsulatedRoundtripper.DialContext)
-	assert.NotNil(t, ctRoundTripper.encapsulatedRoundtripper.Proxy)
+	assert.Nil(t, transport.DialContext)
+	assert.NotNil(t, transport.Proxy)
 }
 
 func Test_GetHTTPClient(t *testing.T) {
