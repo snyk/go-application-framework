@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"testing"
@@ -26,25 +27,26 @@ func getConfig() configuration.Configuration {
 	return config
 }
 
-func Test_GetDefaultHeader_WithAuth(t *testing.T) {
+func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
-
+	client := net.GetHttpClient()
 	token := "1265457"
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
-
 	expectedHeader := http.Header{
 		"User-Agent": {defaultUserAgent},
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
 		"Authorization": {"token " + token},
 	}
-
-	// run method under test multiple times to ensure that it behaves the same way each time
-	for i := 0; i < 3; i++ {
-		url, _ := url.Parse(config.GetString(configuration.API_URL))
-		actualHeader := net.GetDefaultHeader(url)
-		assert.Equal(t, expectedHeader, actualHeader)
-	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for key, expectedValue := range expectedHeader {
+			assert.Equal(t, expectedValue, r.Header[key])
+		}
+	})
+	server := httptest.NewServer(handler)
+	config.Set(configuration.API_URL, server.URL)
+	_, err := client.Get(server.URL)
+	assert.NoError(t, err)
 }
 
 func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
