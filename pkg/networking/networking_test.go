@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -49,23 +48,19 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
+func Test_HttpClient_CallingNonApiUrl_NoAuthHeaders(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
-
+	client := net.GetHttpClient()
 	token := "1265457"
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
-
-	expectedHeader := http.Header{
-		"User-Agent": {defaultUserAgent},
-	}
-
-	// run method under test multiple times to ensure that it behaves the same way each time
-	for i := 0; i < 3; i++ {
-		url, _ := url.Parse("https://www.myexample.com")
-		actualHeader := net.GetDefaultHeader(url)
-		assert.Equal(t, expectedHeader, actualHeader)
-	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NotContains(t, r.Header, "Authorization")
+	})
+	server := httptest.NewServer(handler)
+	config.Set(configuration.API_URL, "https://www.example.com/not/the/server/URL")
+	_, err := client.Get(server.URL)
+	assert.NoError(t, err)
 }
 
 func Test_Roundtripper_SecureHTTPS(t *testing.T) {
