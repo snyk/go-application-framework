@@ -50,16 +50,16 @@ type NetworkImpl struct {
 	authenticator auth.Authenticator
 }
 
-// customRoundtripper is a custom http.RoundTripper which decorates the request with default headers.
-type customRoundtripper struct {
-	encapsulatedRoundtripper http.RoundTripper
+// customRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
+type customRoundTripper struct {
+	encapsulatedRoundTripper http.RoundTripper
 	networkAccess            NetworkAccess
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
-func (crt *customRoundtripper) RoundTrip(request *http.Request) (*http.Response, error) {
+func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	_ = crt.networkAccess.AddDefaultHeader(request)
-	return crt.encapsulatedRoundtripper.RoundTrip(request)
+	return crt.encapsulatedRoundTripper.RoundTrip(request)
 }
 
 // NewNetworkAccess returns a NetworkImpl instance.
@@ -124,8 +124,8 @@ func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 	rt := middleware.NewAuthHeaderMiddleware(n.config, n.authenticator, transport)
 
 	// encapsulate everything
-	roundTrip := customRoundtripper{
-		encapsulatedRoundtripper: rt,
+	roundTrip := customRoundTripper{
+		encapsulatedRoundTripper: rt,
 		networkAccess:            n,
 	}
 	return &roundTrip
