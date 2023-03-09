@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	workflowNameAuth = "auth"
-	oauthFlag        = "oauth"
-	headlessFlag     = "headless"
+	workflowNameAuth  = "auth"
+	headlessFlag      = "headless"
+	authTypeParameter = "auth-type"
 )
 
 // define a new workflow identifier for this workflow
@@ -22,7 +22,7 @@ var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflo
 // InitAuth initialises the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
-	config.Bool(oauthFlag, false, "Enable OAuth authentication")
+	config.String(authTypeParameter, "token", "Authentication type (token, oauth)")
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
@@ -45,8 +45,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	engine := invocationCtx.GetEngine()
 
 	output = []workflow.Data{} // always empty
-	oauthEnabled := config.GetBool(oauthFlag)
-
+	oauthEnabled := config.GetString(authTypeParameter) == "oauth"
 	logger.Println("OAuth enabled:", oauthEnabled)
 
 	if oauthEnabled { // OAUTH flow
@@ -60,7 +59,6 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 			return output, authError
 		}
 
-		// TODO: https://snyksec.atlassian.net/browse/HEAD-58
 		fmt.Println("Successfully authenticated!")
 
 		// TODO use configuration to store
