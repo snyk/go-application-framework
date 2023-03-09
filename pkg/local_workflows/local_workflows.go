@@ -5,7 +5,7 @@ import (
 )
 
 // Init initializes all local workflows
-// localworkflows are initialised when create a new workflow engine via app.CreateAppEngine()
+// localworkflows are initialized when create a new workflow engine via app.CreateAppEngine()
 func Init(engine workflow.Engine) error {
 	var err error
 
@@ -13,7 +13,7 @@ func Init(engine workflow.Engine) error {
 		InitDepGraphWorkflow,
 		InitOutputWorkflow,
 		InitWhoAmIWorkflow,
-		InitAuth,
+		// InitAuth, Use legacy CLI for authentication for now, until OAuth is ready
 	}
 
 	for i := range initMethods {
