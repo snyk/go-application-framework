@@ -191,14 +191,14 @@ func (o *oAuth2Authenticator) Authenticate() error {
 			// launch browser
 			go o.openBrowserFunc(url)
 
-			failed := false
+			timedOut := false
 			timer := time.AfterFunc(1*time.Second, func() {
+				timedOut = true
 				o.shutdownServerFunc(srv)
-				failed = true
 			})
 			err = srv.Serve(listener)
 			if err == http.ErrServerClosed { // if the server was shutdown normally, there is no need to iterate further
-				if failed {
+				if timedOut {
 					return errors.New("authentication failed (timeout)")
 				}
 				timer.Stop()
