@@ -131,3 +131,17 @@ func (mr *MockNetworkAccessMockRecorder) GetRoundTripper() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoundTripper", reflect.TypeOf((*MockNetworkAccess)(nil).GetRoundTripper))
 }
+
+// GetUnauthorizedHttpClient mocks base method.
+func (m *MockNetworkAccess) GetUnauthorizedHttpClient() *http.Client {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUnauthorizedHttpClient")
+	ret0, _ := ret[0].(*http.Client)
+	return ret0
+}
+
+// GetUnauthorizedHttpClient indicates an expected call of GetUnauthorizedHttpClient.
+func (mr *MockNetworkAccessMockRecorder) GetUnauthorizedHttpClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnauthorizedHttpClient", reflect.TypeOf((*MockNetworkAccess)(nil).GetUnauthorizedHttpClient))
+}
