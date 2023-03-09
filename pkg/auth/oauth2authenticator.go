@@ -65,7 +65,7 @@ func getRedirectUri(port int) string {
 	return callback
 }
 
-func getOAuthConfigration(config configuration.Configuration) *oauth2.Config {
+func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 
 	appUrl := config.GetString(configuration.WEB_APP_URL)
 	tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token"
@@ -120,7 +120,7 @@ func getToken(config configuration.Configuration) (*oauth2.Token, error) {
 
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	token, _ := getToken(config)
-	oauthConfig := getOAuthConfigration(config)
+	oauthConfig := getOAuthConfiguration(config)
 
 	return &oAuth2Authenticator{
 		httpClient:         httpClient,

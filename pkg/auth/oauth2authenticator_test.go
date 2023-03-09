@@ -66,10 +66,10 @@ func Test_getOAuthConfigration(t *testing.T) {
 	config := configuration.New()
 	config.Set(configuration.WEB_APP_URL, webapp)
 
-	oauthConfig := getOAuthConfigration(config)
+	oauthConfig := getOAuthConfiguration(config)
 
 	assert.Equal(t, "", oauthConfig.RedirectURL)
 	assert.Equal(t, OAUTH_CLIENT_ID, oauthConfig.ClientID)
 	assert.Equal(t, webapp+"/oauth/authorize", oauthConfig.Endpoint.AuthURL)
-	//assert.Equal(t, "https://id.fedramp-alpha.snykgov.io/oauth2/default/v1/token", oauthConfig.Endpoint.TokenURL)
+	// assert.Equal(t, "https://id.fedramp-alpha.snykgov.io/oauth2/default/v1/token", oauthConfig.Endpoint.TokenURL)
 }
