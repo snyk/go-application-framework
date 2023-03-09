@@ -31,6 +31,8 @@ type NetworkAccess interface {
 	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
 	GetHttpClient() *http.Client
+	// GetUnauthorizedHttpClient returns an HTTP client that does not use authentication headers.
+	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key string, value string)
 	// AddRootCAs adds the root CAs from the given PEM file.
@@ -150,6 +152,12 @@ func (n *NetworkImpl) configureRoundTripper(base *http.Transport) *http.Transpor
 func (n *NetworkImpl) GetHttpClient() *http.Client {
 	client := *http.DefaultClient
 	client.Transport = n.GetRoundTripper()
+	return &client
+}
+
+func (n *NetworkImpl) GetUnauthorizedHttpClient() *http.Client {
+	client := *http.DefaultClient
+	client.Transport = n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 	return &client
 }
 

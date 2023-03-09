@@ -14,8 +14,6 @@ const (
 	workflowNameAuth = "auth"
 	oauthFlag        = "oauth"
 	headlessFlag     = "headless"
-	endpointAuth     = "/user/me"
-	apiVersionAuth   = "/v1"
 )
 
 // define a new workflow identifier for this workflow
@@ -55,7 +53,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		headless := config.GetBool(headlessFlag)
 		logger.Println("Headless:", headless)
 
-		httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+		httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
 		authenticator := auth.NewOAuth2Authenticator(config, httpClient)
 		authError := authenticator.Authenticate()
 		if authError != nil {
@@ -66,7 +64,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		fmt.Println("Successfully authenticated!")
 
 		// TODO use configuration to store
-		storeConfigValue(invocationCtx, auth.CONFIG_KEY_OAUTH_TOKEN, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+		_ = storeConfigValue(invocationCtx, auth.CONFIG_KEY_OAUTH_TOKEN, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])

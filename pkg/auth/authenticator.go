@@ -13,7 +13,6 @@ type Authenticator interface {
 }
 
 func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
-
 	var authenticator Authenticator
 
 	// try oauth authenticator
