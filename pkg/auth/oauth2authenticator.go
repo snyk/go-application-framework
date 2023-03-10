@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	CONFIG_KEY_OAUTH_TOKEN string = "OAUTH_TOKEN"
-	OAUTH_CLIENT_ID        string = "0oa37b7oa3zOoDWCe4h7"
-	CALLBACK_HOSTNAME      string = "127.0.0.1"
-	CALLBACK_PATH          string = "/authorization-code/callback"
+	CONFIG_KEY_OAUTH_TOKEN string        = "OAUTH_TOKEN"
+	OAUTH_CLIENT_ID        string        = "0oa37b7oa3zOoDWCe4h7"
+	CALLBACK_HOSTNAME      string        = "127.0.0.1"
+	CALLBACK_PATH          string        = "/authorization-code/callback"
+	TIMEOUT_SECONDS        time.Duration = 120 * time.Second
 )
 
 var accepted_callback_ports = []int{8080, 18081, 28082, 38083, 48084}
@@ -192,7 +193,7 @@ func (o *oAuth2Authenticator) Authenticate() error {
 			go o.openBrowserFunc(url)
 
 			timedOut := false
-			timer := time.AfterFunc(1*time.Second, func() {
+			timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
 				timedOut = true
 				o.shutdownServerFunc(srv)
 			})
