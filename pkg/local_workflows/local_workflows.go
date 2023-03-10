@@ -13,7 +13,7 @@ func Init(engine workflow.Engine) error {
 		InitDepGraphWorkflow,
 		InitOutputWorkflow,
 		InitWhoAmIWorkflow,
-		// InitAuth, Use legacy CLI for authentication for now, until OAuth is ready
+		InitAuth, //Use legacy CLI for authentication for now, until OAuth is ready
 	}
 
 	for i := range initMethods {
