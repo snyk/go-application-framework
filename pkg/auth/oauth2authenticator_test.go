@@ -38,7 +38,7 @@ func Test_getToken(t *testing.T) {
 	assert.Equal(t, expectedTokenString, actualTokenString)
 }
 
-func Test_getToken_notoken(t *testing.T) {
+func Test_getToken_NoToken_ReturnsNil(t *testing.T) {
 	config := configuration.New()
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, "")
 
@@ -49,7 +49,7 @@ func Test_getToken_notoken(t *testing.T) {
 	assert.Nil(t, actualToken)
 }
 
-func Test_getToken_fails(t *testing.T) {
+func Test_getToken_BadToken_ReturnsError(t *testing.T) {
 	config := configuration.New()
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, "something else")
 
@@ -60,7 +60,7 @@ func Test_getToken_fails(t *testing.T) {
 	assert.Nil(t, actualToken)
 }
 
-func Test_getOAuthConfigration(t *testing.T) {
+func Test_getOAuthConfiguration(t *testing.T) {
 	webapp := "https://app.fedramp-alpha.snykgov.io"
 
 	config := configuration.New()

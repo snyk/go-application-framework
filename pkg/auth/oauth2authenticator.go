@@ -29,7 +29,7 @@ const (
 	TIMEOUT_SECONDS        time.Duration = 120 * time.Second
 )
 
-var accepted_callback_ports = []int{8080, 18081, 28082, 38083, 48084}
+var acceptedCallbackPorts = []int{8080, 18081, 28082, 38083, 48084}
 
 type oAuth2Authenticator struct {
 	httpClient         *http.Client
@@ -154,57 +154,56 @@ func (o *oAuth2Authenticator) Authenticate() error {
 	ctx := context.Background()
 
 	if o.headless {
-		// TODO:
-	} else {
-		srv := &http.Server{}
+		return errors.New("headless mode not supported")
+	}
 
-		http.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
-			responseError = html.EscapeString(r.URL.Query().Get("error"))
-			if len(responseError) > 0 {
-				details := html.EscapeString(r.URL.Query().Get("error_description"))
-				fmt.Fprintf(w, "Error during authentication! (%s)\n%s", responseError, details)
-			} else {
-				responseCode = html.EscapeString(r.URL.Query().Get("code"))
-				responseState = html.EscapeString(r.URL.Query().Get("state"))
-				fmt.Fprintf(w, "Succesfully Authenticated!")
-			}
+	srv := &http.Server{}
+	http.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
+		responseError = html.EscapeString(r.URL.Query().Get("error"))
+		if len(responseError) > 0 {
+			details := html.EscapeString(r.URL.Query().Get("error_description"))
+			_, _ = fmt.Fprintf(w, "Error during authentication! (%s)\n%s", responseError, details)
+		} else {
+			responseCode = html.EscapeString(r.URL.Query().Get("code"))
+			responseState = html.EscapeString(r.URL.Query().Get("state"))
+			_, _ = fmt.Fprintf(w, "Succesfully Authenticated!")
+		}
 
-			go o.shutdownServerFunc(srv)
+		go o.shutdownServerFunc(srv)
+	})
+
+	// iterate over different known ports if one fails
+	for _, port := range acceptedCallbackPorts {
+		srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
+		listener, err := net.Listen("tcp", srv.Addr)
+		if err != nil { // skip port if it can't be listened to
+			continue
+		}
+
+		// fill redirect url now that the port is known
+		o.oauthConfig.RedirectURL = getRedirectUri(port)
+
+		url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
+			oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+			oauth2.SetAuthURLParam("code_challenge_method", "s256"),
+			oauth2.SetAuthURLParam("response_type", "code"),
+			oauth2.SetAuthURLParam("scope", "offline_access"))
+
+		// launch browser
+		go o.openBrowserFunc(url)
+
+		timedOut := false
+		timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
+			timedOut = true
+			o.shutdownServerFunc(srv)
 		})
-
-		// iterate over different known ports if one fails
-		for _, port := range accepted_callback_ports {
-			srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
-			listener, err := net.Listen("tcp", srv.Addr)
-			if err != nil { // skip port if it can't be listened to
-				continue
+		err = srv.Serve(listener)
+		if err == http.ErrServerClosed { // if the server was shutdown normally, there is no need to iterate further
+			if timedOut {
+				return errors.New("authentication failed (timeout)")
 			}
-
-			// fill redirect url now that the port is known
-			o.oauthConfig.RedirectURL = getRedirectUri(port)
-
-			url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
-				oauth2.SetAuthURLParam("code_challenge", codeChallenge),
-				oauth2.SetAuthURLParam("code_challenge_method", "s256"),
-				oauth2.SetAuthURLParam("response_type", "code"),
-				oauth2.SetAuthURLParam("scope", "offline_access"))
-
-			// launch browser
-			go o.openBrowserFunc(url)
-
-			timedOut := false
-			timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
-				timedOut = true
-				o.shutdownServerFunc(srv)
-			})
-			err = srv.Serve(listener)
-			if err == http.ErrServerClosed { // if the server was shutdown normally, there is no need to iterate further
-				if timedOut {
-					return errors.New("authentication failed (timeout)")
-				}
-				timer.Stop()
-				break
-			}
+			timer.Stop()
+			break
 		}
 	}
 
@@ -232,24 +231,20 @@ func (o *oAuth2Authenticator) Authenticate() error {
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
 	if request == nil {
-		return fmt.Errorf("request must not be nil.")
+		return fmt.Errorf("request must not be nil")
 	}
-
 	if o.token == nil {
-		return fmt.Errorf("oauth token mus not be nil to authorize")
+		return fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
 	ctx := context.Background()
 
-	// Use the custom HTTP client when requesting a token.
 	if o.httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
 	}
 
-	tokensource := o.oauthConfig.TokenSource(ctx, o.token)
-
-	// get a valid token, refresh if necessary
-	validToken, err := tokensource.Token()
+	tokenSource := o.oauthConfig.TokenSource(ctx, o.token)
+	validToken, err := tokenSource.Token()
 	if err != nil {
 		return err
 	}
@@ -260,7 +255,7 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 
 	accessToken := validToken.AccessToken
 	if len(accessToken) > 0 {
-		value := fmt.Sprintf("Bearer %s", accessToken)
+		value := fmt.Sprint("Bearer ", accessToken)
 		request.Header.Set("Authorization", value)
 	}
 

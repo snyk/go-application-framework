@@ -29,22 +29,21 @@ func InitAuth(engine workflow.Engine) error {
 	return err
 }
 
-func storeConfigValue(invocationCtx workflow.InvocationContext, key string, value string) error {
+func storeConfigValue(engine workflow.Engine, key string, value string) error {
 	config := configuration.New()
 	config.Set(configuration.RAW_CMD_ARGS, []string{"config", "set", key + "=" + value})
 	config.Set(configuration.WORKFLOW_USE_STDIO, false)
-	_, legacyCLIError := invocationCtx.GetEngine().InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
+	_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 	return legacyCLIError
 }
 
 // authEntryPoint is the entry point for the auth workflow.
-func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
+func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetLogger()
 	engine := invocationCtx.GetEngine()
 
-	output = []workflow.Data{} // always empty
 	oauthEnabled := config.GetString(authTypeParameter) == "oauth"
 	logger.Println("OAuth enabled:", oauthEnabled)
 
@@ -54,24 +53,26 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 
 		httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
 		authenticator := auth.NewOAuth2Authenticator(config, httpClient)
-		authError := authenticator.Authenticate()
-		if authError != nil {
-			return output, authError
+		err = authenticator.Authenticate()
+		if err != nil {
+			return nil, err
 		}
 
 		fmt.Println("Successfully authenticated!")
 
 		// TODO use configuration to store
-		_ = storeConfigValue(invocationCtx, auth.CONFIG_KEY_OAUTH_TOKEN, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
-
+		err = storeConfigValue(engine, auth.CONFIG_KEY_OAUTH_TOKEN, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+		if err != nil {
+			return nil, err
+		}
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 		config.Set(configuration.WORKFLOW_USE_STDIO, true)
 		_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 		if legacyCLIError != nil {
-			return output, legacyCLIError
+			return nil, legacyCLIError
 		}
 	}
 
-	return output, err
+	return nil, err
 }
