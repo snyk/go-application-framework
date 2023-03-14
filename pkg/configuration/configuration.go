@@ -32,16 +32,19 @@ type Configuration interface {
 	AllKeys() []string
 	AddDefaultValue(key string, defaultValue DefaultValueFunction)
 	AddAlternativeKeys(key string, altKeys []string)
-	AfterSet(key string, callback func(newValue any))
+
+	// PersistInConfigFile ensures that when Set is called with the given key, it will be persisted in the config file.
+	PersistInConfigFile(key string)
 }
 
 // extendedViper is a wrapper around the viper library.
 // It adds support for default values and alternative keys.
 type extendedViper struct {
-	viper             *viper.Viper
-	alternativeKeys   map[string][]string
-	defaultValues     map[string]DefaultValueFunction
-	afterSetCallbacks map[string][]func(newValue any)
+	viper           *viper.Viper
+	alternativeKeys map[string][]string
+	defaultValues   map[string]DefaultValueFunction
+	persistedKeys   map[string]bool
+	storage         *JsonStorage
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -88,11 +91,14 @@ func CreateConfigurationFile(filename string) (string, error) {
 
 // NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
+	configPath := determineBasePath()
+	handle, _ := os.OpenFile(path.Join(configPath, "snyk.json"), os.O_RDWR, 0666)
+	jsonStorage := NewJsonStorage(handle)
 	config := &extendedViper{
-		viper:             viper.New(),
-		alternativeKeys:   make(map[string][]string),
-		defaultValues:     make(map[string]DefaultValueFunction),
-		afterSetCallbacks: make(map[string][]func(newValue any)),
+		viper:           viper.New(),
+		alternativeKeys: make(map[string][]string),
+		defaultValues:   make(map[string]DefaultValueFunction),
+		storage:         jsonStorage,
 	}
 
 	// prepare config files
@@ -100,7 +106,6 @@ func NewFromFiles(files ...string) Configuration {
 		config.viper.SetConfigName(file)
 	}
 
-	configPath := determineBasePath()
 	config.viper.AddConfigPath(configPath)
 	config.viper.AddConfigPath(".")
 
@@ -109,7 +114,7 @@ func NewFromFiles(files ...string) Configuration {
 	config.viper.AutomaticEnv()
 
 	// read config files
-	config.viper.ReadInConfig()
+	_ = config.viper.ReadInConfig()
 
 	return config
 }
@@ -144,10 +149,8 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.viper.Set(key, value)
-	if callbacks, ok := ev.afterSetCallbacks[key]; ok {
-		for _, callback := range callbacks {
-			callback(value)
-		}
+	if ev.persistedKeys[key] {
+		_ = ev.storage.Set(key, value)
 	}
 }
 
@@ -302,10 +305,6 @@ func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
 	ev.alternativeKeys[key] = altKeys
 }
 
-func (ev *extendedViper) AfterSet(key string, callback func(newValue any)) {
-	if _, ok := ev.afterSetCallbacks[key]; !ok {
-		ev.afterSetCallbacks[key] = []func(newValue any){}
-	}
-
-	ev.afterSetCallbacks[key] = append(ev.afterSetCallbacks[key], callback)
+func (ev *extendedViper) PersistInConfigFile(key string) {
+	ev.persistedKeys[key] = true
 }
