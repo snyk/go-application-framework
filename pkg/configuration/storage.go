@@ -5,6 +5,10 @@ import (
 	"io"
 )
 
+type Storage interface {
+	Set(key string, value any) error
+}
+
 type JsonStorage struct {
 	rw      io.ReadWriter
 	decoder *json.Decoder

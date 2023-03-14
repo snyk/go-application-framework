@@ -44,7 +44,7 @@ type extendedViper struct {
 	alternativeKeys map[string][]string
 	defaultValues   map[string]DefaultValueFunction
 	persistedKeys   map[string]bool
-	storage         *JsonStorage
+	storage         Storage
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -92,12 +92,14 @@ func CreateConfigurationFile(filename string) (string, error) {
 // NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
 	configPath := determineBasePath()
-	handle, _ := os.OpenFile(path.Join(configPath, "snyk.json"), os.O_RDWR, 0666)
-	jsonStorage := NewJsonStorage(handle)
+	configRw, _ := os.OpenFile(path.Join(configPath, "snyk.json"), os.O_RDWR|os.O_CREATE, 0666)
+
+	jsonStorage := NewJsonStorage(configRw)
 	config := &extendedViper{
 		viper:           viper.New(),
 		alternativeKeys: make(map[string][]string),
 		defaultValues:   make(map[string]DefaultValueFunction),
+		persistedKeys:   make(map[string]bool),
 		storage:         jsonStorage,
 	}
 
