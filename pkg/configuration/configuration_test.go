@@ -235,3 +235,19 @@ func Test_ConfigurationClone(t *testing.T) {
 
 	cleanupConfigstore()
 }
+
+func Test_AfterSet_SetIsCalledWithSameKey_CallbackRuns(t *testing.T) {
+	const dummyValue = "dummyValue"
+	const dummyKey = "key"
+
+	passed := false
+	config := New()
+	config.AfterSet(dummyKey, func(newValue any) {
+		if newValue == dummyValue {
+			passed = true
+		}
+	})
+
+	config.Set(dummyKey, dummyValue)
+	assert.True(t, passed)
+}

@@ -32,14 +32,16 @@ type Configuration interface {
 	AllKeys() []string
 	AddDefaultValue(key string, defaultValue DefaultValueFunction)
 	AddAlternativeKeys(key string, altKeys []string)
+	AfterSet(key string, callback func(newValue any))
 }
 
 // extendedViper is a wrapper around the viper library.
 // It adds support for default values and alternative keys.
 type extendedViper struct {
-	viper           *viper.Viper
-	alternativeKeys map[string][]string
-	defaultValues   map[string]DefaultValueFunction
+	viper             *viper.Viper
+	alternativeKeys   map[string][]string
+	defaultValues     map[string]DefaultValueFunction
+	afterSetCallbacks map[string][]func(newValue any)
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -87,9 +89,10 @@ func CreateConfigurationFile(filename string) (string, error) {
 // NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
 	config := &extendedViper{
-		viper:           viper.New(),
-		alternativeKeys: make(map[string][]string),
-		defaultValues:   make(map[string]DefaultValueFunction),
+		viper:             viper.New(),
+		alternativeKeys:   make(map[string][]string),
+		defaultValues:     make(map[string]DefaultValueFunction),
+		afterSetCallbacks: make(map[string][]func(newValue any)),
 	}
 
 	// prepare config files
@@ -141,6 +144,11 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.viper.Set(key, value)
+	if callbacks, ok := ev.afterSetCallbacks[key]; ok {
+		for _, callback := range callbacks {
+			callback(value)
+		}
+	}
 }
 
 // Get returns a configuration value.
@@ -292,4 +300,12 @@ func (ev *extendedViper) AddDefaultValue(key string, defaultValue DefaultValueFu
 // AddAlternativeKeys adds alternative keys to the configuration.
 func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
 	ev.alternativeKeys[key] = altKeys
+}
+
+func (ev *extendedViper) AfterSet(key string, callback func(newValue any)) {
+	if _, ok := ev.afterSetCallbacks[key]; !ok {
+		ev.afterSetCallbacks[key] = []func(newValue any){}
+	}
+
+	ev.afterSetCallbacks[key] = append(ev.afterSetCallbacks[key], callback)
 }
