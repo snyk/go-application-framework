@@ -23,6 +23,8 @@ const (
 
 // NetworkAccess is the interface for network access.
 type NetworkAccess interface {
+	// AddHeaders adds all the custom and authentication headers to the request.
+	AddHeaders(request *http.Request) error
 	// AddDefaultHeader adds the default headers request.
 	AddDefaultHeader(request *http.Request) error
 	// GetDefaultHeader returns the default header for a given URL.
@@ -85,6 +87,16 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 
 func (n *NetworkImpl) AddHeaderField(key string, value string) {
 	n.staticHeader[key] = append(n.staticHeader[key], value)
+}
+
+func (n *NetworkImpl) AddHeaders(request *http.Request) error {
+	if err := n.AddDefaultHeader(request); err != nil {
+		return err
+	}
+	if err := n.authenticator.AddAuthenticationHeader(request); err != nil {
+		return err
+	}
+	return nil
 }
 
 // AddDefaultHeader adds the default headers request.

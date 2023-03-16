@@ -166,3 +166,21 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	_, err = client.Get("https://localhost:8443/")
 	assert.Nil(t, err)
 }
+
+func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
+	config := getConfig()
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "MyOAuthToken")
+	net := NewNetworkAccess(config)
+
+	expectedRequest, _ := http.NewRequest("GET", "https://www.snyk.io", nil)
+	err := net.AddDefaultHeader(expectedRequest)
+	assert.Nil(t, err)
+	err = net.GetAuthenticator().AddAuthenticationHeader(expectedRequest)
+	assert.Nil(t, err)
+
+	request, err := http.NewRequest("GET", "https://www.snyk.io", nil)
+	err = net.AddHeaders(request)
+	assert.Nil(t, err)
+
+	assert.Equal(t, expectedRequest.Header, request.Header)
+}
