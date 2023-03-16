@@ -29,14 +29,6 @@ func InitAuth(engine workflow.Engine) error {
 	return err
 }
 
-func storeConfigValue(engine workflow.Engine, key string, value string) error {
-	config := configuration.New()
-	config.Set(configuration.RAW_CMD_ARGS, []string{"config", "set", key + "=" + value})
-	config.Set(configuration.WORKFLOW_USE_STDIO, false)
-	_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
-	return legacyCLIError
-}
-
 // authEntryPoint is the entry point for the auth workflow.
 func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
 	// get necessary objects from invocation context
@@ -60,11 +52,6 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 
 		fmt.Println("Successfully authenticated!")
 
-		// TODO use configuration to store
-		err = storeConfigValue(engine, auth.CONFIG_KEY_OAUTH_TOKEN, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
-		if err != nil {
-			return nil, err
-		}
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 		config.Set(configuration.WORKFLOW_USE_STDIO, true)
