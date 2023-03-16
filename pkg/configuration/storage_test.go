@@ -15,6 +15,7 @@ const expectedValue = "someValue"
 
 func Test_JsonStorage_Set_NoConfigFile(t *testing.T) {
 	// Arrange
+	t.Parallel()
 	testCases := []struct {
 		name            string
 		customSetupFunc func(t *testing.T) string
@@ -35,7 +36,6 @@ func Test_JsonStorage_Set_NoConfigFile(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			configFile := testCase.customSetupFunc(t)
 			storage := configuration.NewJsonStorage(configFile)
 
