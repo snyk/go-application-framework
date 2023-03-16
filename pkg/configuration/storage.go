@@ -2,32 +2,36 @@ package configuration
 
 import (
 	"encoding/json"
-	"io"
+	"os"
 )
 
 type Storage interface {
 	Set(key string, value any) error
 }
 
-type JsonStorage struct {
-	rw      io.ReadWriter
-	decoder *json.Decoder
-	encoder *json.Encoder
+type EmptyStorage struct{}
+
+func (e *EmptyStorage) Set(_ string, _ any) error {
+	return nil
 }
 
-func NewJsonStorage(rw io.ReadWriter) *JsonStorage {
+type JsonStorage struct {
+	path string
+}
+
+func NewJsonStorage(path string) *JsonStorage {
 	return &JsonStorage{
-		rw:      rw,
-		decoder: json.NewDecoder(rw),
-		encoder: json.NewEncoder(rw),
+		path: path,
 	}
 }
 
 func (s *JsonStorage) Set(key string, value any) error {
+	fileBytes, _ := os.ReadFile(s.path)
 	config := make(map[string]any)
-	_ = s.decoder.Decode(&config)
+	json.Unmarshal(fileBytes, &config)
 	config[key] = value
-	_ = s.encoder.Encode(config)
+	configJson, _ := json.Marshal(config)
+	os.WriteFile(s.path, configJson, 0666)
 
 	return nil
 }

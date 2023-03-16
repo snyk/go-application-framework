@@ -1,12 +1,22 @@
 package configuration
 
 import (
-	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func Test_JsonStorage_NoConfigFile(t *testing.T) {
+	tempDir := t.TempDir()
+	nonExistingFile := filepath.Join(tempDir, "nonExistingFile.json")
+	storage := NewJsonStorage(nonExistingFile)
+
+	err := storage.Set("someKey", "someValue")
+	assert.Nil(t, err)
+}
 
 func Test_JsonStorage_Set(t *testing.T) {
 	// Arrange
@@ -15,25 +25,29 @@ func Test_JsonStorage_Set(t *testing.T) {
 	const expectedValue = "someValue"
 	const preExistingKey = "someOtherKey"
 	const preExistingValue = "someOtherValue"
+
 	preExistingConfig := map[string]string{
 		preExistingKey: preExistingValue,
 	}
 
-	dummyFile := bytes.Buffer{}
 	unknownJson, _ := json.Marshal(preExistingConfig)
-	dummyFile.Write(unknownJson)
-	storage := NewJsonStorage(&dummyFile)
+	// filepath.Join()
+	configFile := filepath.Join(t.TempDir(), "test.json")
+	err := os.WriteFile(configFile, unknownJson, 0666)
+	assert.Nil(t, err)
+	storage := NewJsonStorage(configFile)
 
 	// Act
-	err := storage.Set(key, expectedValue)
+	err = storage.Set(key, expectedValue)
+	assert.Nil(t, err)
 
 	// Assert
 	storedConfig := make(map[string]any)
-	_ = json.Unmarshal(dummyFile.Bytes(), &storedConfig)
+	fileBytes, err := os.ReadFile(configFile)
+	assert.Nil(t, err)
+	err = json.Unmarshal(fileBytes, &storedConfig)
+	assert.Nil(t, err)
 
-	t.Run("No error", func(t *testing.T) {
-		assert.Nil(t, err)
-	})
 	t.Run("File contains key", func(t *testing.T) {
 		assert.Equal(t, expectedValue, storedConfig[key])
 	})
@@ -42,14 +56,20 @@ func Test_JsonStorage_Set(t *testing.T) {
 	})
 	t.Run("A second call to Set does not delete the first value", func(t *testing.T) {
 		err = storage.Set("SomeWildKey", "SomeWildValue")
-		_ = json.Unmarshal(dummyFile.Bytes(), &storedConfig)
+		assert.Nil(t, err)
+		fileContent, _ := os.ReadFile(configFile)
+		_ = json.Unmarshal(fileContent, &storedConfig)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedValue, storedConfig[key])
 	})
 	t.Run("Overwrites existing value", func(t *testing.T) {
 		const newValue = "new value"
+
+		fileContent, err := os.ReadFile(configFile)
 		err = storage.Set(key, newValue)
-		_ = json.Unmarshal(dummyFile.Bytes(), &storedConfig)
+		assert.Nil(t, err)
+		fileContent, err = os.ReadFile(configFile)
+		_ = json.Unmarshal(fileContent, &storedConfig)
 		assert.Nil(t, err)
 		assert.Equal(t, newValue, storedConfig[key])
 	})
