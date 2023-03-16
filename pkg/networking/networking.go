@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -99,7 +100,7 @@ func (n *NetworkImpl) AddHeaders(request *http.Request) error {
 
 // AddDefaultHeader adds the default headers request.
 func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
-	defaultHeader := http.Header{"User-Agent": {n.userAgent}}
+	defaultHeader := http.Header{}
 
 	// add static header
 	for k, v := range n.staticHeader {
@@ -113,6 +114,11 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 		for i := range v {
 			request.Header.Set(k, v[i])
 		}
+	}
+
+	existingUserAgent := request.Header.Get("User-agent")
+	if len(existingUserAgent) == 0 || strings.Contains(existingUserAgent, "Go-http-client") {
+		request.Header.Set("User-Agent", n.userAgent)
 	}
 
 	return nil
