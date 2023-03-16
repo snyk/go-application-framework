@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/snyk/go-application-framework/internal/utils"
 )
 
 type Storage interface {
@@ -28,7 +30,7 @@ func NewJsonStorage(path string) *JsonStorage {
 
 func (s *JsonStorage) Set(key string, value any) error {
 	// Check if path to file exists
-	err := os.MkdirAll(filepath.Dir(s.path), 0666)
+	err := os.MkdirAll(filepath.Dir(s.path), utils.FILEPERM_755)
 	if err != nil {
 		return err
 	}
@@ -38,7 +40,7 @@ func (s *JsonStorage) Set(key string, value any) error {
 	_ = json.Unmarshal(fileBytes, &config)
 	config[key] = value
 	configJson, _ := json.Marshal(config)
-	_ = os.WriteFile(s.path, configJson, 0666)
+	_ = os.WriteFile(s.path, configJson, utils.FILEPERM_666)
 
 	return nil
 }
