@@ -27,8 +27,6 @@ type NetworkAccess interface {
 	AddHeaders(request *http.Request) error
 	// AddDefaultHeader adds the default headers request.
 	AddDefaultHeader(request *http.Request) error
-	// GetDefaultHeader returns the default header for a given URL.
-	GetDefaultHeader(url *url.URL) http.Header
 	// GetRoundTripper returns the http.RoundTripper.
 	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
@@ -118,17 +116,6 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 	}
 
 	return nil
-}
-
-func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
-	tmpRequest := &http.Request{
-		Header: http.Header{},
-		URL:    url,
-	}
-
-	_ = n.AddDefaultHeader(tmpRequest)
-
-	return tmpRequest.Header
 }
 
 func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {

@@ -6,7 +6,6 @@ package mocks
 
 import (
 	http "net/http"
-	url "net/url"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -62,6 +61,20 @@ func (mr *MockNetworkAccessMockRecorder) AddHeaderField(key, value interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).AddHeaderField), key, value)
 }
 
+// AddHeaders mocks base method.
+func (m *MockNetworkAccess) AddHeaders(request *http.Request) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddHeaders", request)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddHeaders indicates an expected call of AddHeaders.
+func (mr *MockNetworkAccessMockRecorder) AddHeaders(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeaders", reflect.TypeOf((*MockNetworkAccess)(nil).AddHeaders), request)
+}
+
 // AddRootCAs mocks base method.
 func (m *MockNetworkAccess) AddRootCAs(pemFileLocation string) error {
 	m.ctrl.T.Helper()
@@ -88,20 +101,6 @@ func (m *MockNetworkAccess) GetAuthenticator() auth.Authenticator {
 func (mr *MockNetworkAccessMockRecorder) GetAuthenticator() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuthenticator", reflect.TypeOf((*MockNetworkAccess)(nil).GetAuthenticator))
-}
-
-// GetDefaultHeader mocks base method.
-func (m *MockNetworkAccess) GetDefaultHeader(url *url.URL) http.Header {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDefaultHeader", url)
-	ret0, _ := ret[0].(http.Header)
-	return ret0
-}
-
-// GetDefaultHeader indicates an expected call of GetDefaultHeader.
-func (mr *MockNetworkAccessMockRecorder) GetDefaultHeader(url interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDefaultHeader", reflect.TypeOf((*MockNetworkAccess)(nil).GetDefaultHeader), url)
 }
 
 // GetHttpClient mocks base method.
