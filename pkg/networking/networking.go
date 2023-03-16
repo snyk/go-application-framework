@@ -93,7 +93,7 @@ func (n *NetworkImpl) AddHeaders(request *http.Request) error {
 	if err := n.AddDefaultHeader(request); err != nil {
 		return err
 	}
-	if err := n.authenticator.AddAuthenticationHeader(request); err != nil {
+	if err := n.GetAuthenticator().AddAuthenticationHeader(request); err != nil {
 		return err
 	}
 	return nil
