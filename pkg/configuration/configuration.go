@@ -43,8 +43,11 @@ type extendedViper struct {
 	viper           *viper.Viper
 	alternativeKeys map[string][]string
 	defaultValues   map[string]DefaultValueFunction
-	persistedKeys   map[string]bool
-	storage         Storage
+
+	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
+	// Only specific keys are persisted, so viper's native functionality is not used.
+	persistedKeys map[string]bool
+	storage       Storage
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -92,15 +95,13 @@ func CreateConfigurationFile(filename string) (string, error) {
 // NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
 	configPath := determineBasePath()
-	configRw, _ := os.OpenFile(path.Join(configPath, "snyk.json"), os.O_RDWR|os.O_CREATE, 0666)
-
-	jsonStorage := NewJsonStorage(configRw)
+	storage := createFileStorage(configPath)
 	config := &extendedViper{
 		viper:           viper.New(),
 		alternativeKeys: make(map[string][]string),
 		defaultValues:   make(map[string]DefaultValueFunction),
 		persistedKeys:   make(map[string]bool),
-		storage:         jsonStorage,
+		storage:         storage,
 	}
 
 	// prepare config files
@@ -309,4 +310,11 @@ func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
 
 func (ev *extendedViper) PersistInConfigFile(key string) {
 	ev.persistedKeys[key] = true
+}
+
+// createFileStorage creates attempts to create a JSON file storage in the configPath.
+// If it fails, a dummy storage is returned.
+func createFileStorage(configPath string) Storage {
+	file := path.Join(configPath, "snyk.json")
+	return NewJsonStorage(file)
 }
