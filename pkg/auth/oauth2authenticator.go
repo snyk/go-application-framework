@@ -106,7 +106,7 @@ func createVerifier(count int) []byte {
 	return verifier
 }
 
-func getToken(config configuration.Configuration) (*oauth2.Token, error) {
+func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 	oauthTokenString := config.GetString(CONFIG_KEY_OAUTH_TOKEN)
 	if len(oauthTokenString) > 0 {
 		token := &oauth2.Token{}
@@ -120,7 +120,7 @@ func getToken(config configuration.Configuration) (*oauth2.Token, error) {
 }
 
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
-	token, _ := getToken(config)
+	token, _ := GetOAuthToken(config)
 	oauthConfig := getOAuthConfiguration(config)
 	config.PersistInConfigFile(CONFIG_KEY_OAUTH_TOKEN)
 

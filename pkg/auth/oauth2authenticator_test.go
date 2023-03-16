@@ -31,7 +31,7 @@ func Test_getToken(t *testing.T) {
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
 
 	// method under test
-	actualToken, err := getToken(config)
+	actualToken, err := GetOAuthToken(config)
 
 	assert.Nil(t, err)
 	actualTokenString, _ := json.Marshal(actualToken)
@@ -43,7 +43,7 @@ func Test_getToken_NoToken_ReturnsNil(t *testing.T) {
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, "")
 
 	// method under test
-	actualToken, err := getToken(config)
+	actualToken, err := GetOAuthToken(config)
 
 	assert.Nil(t, err)
 	assert.Nil(t, actualToken)
@@ -54,7 +54,7 @@ func Test_getToken_BadToken_ReturnsError(t *testing.T) {
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, "something else")
 
 	// method under test
-	actualToken, err := getToken(config)
+	actualToken, err := GetOAuthToken(config)
 
 	assert.NotNil(t, err)
 	assert.Nil(t, actualToken)
