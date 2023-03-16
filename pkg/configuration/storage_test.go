@@ -1,4 +1,4 @@
-package configuration
+package configuration_test
 
 import (
 	"encoding/json"
@@ -6,23 +6,53 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_JsonStorage_NoConfigFile(t *testing.T) {
-	tempDir := t.TempDir()
-	nonExistingFile := filepath.Join(tempDir, "nonExistingFile.json")
-	storage := NewJsonStorage(nonExistingFile)
+const key = "someKey"
+const expectedValue = "someValue"
 
-	err := storage.Set("someKey", "someValue")
-	assert.Nil(t, err)
+func Test_JsonStorage_Set_NoConfigFile(t *testing.T) {
+	// Arrange
+	testCases := []struct {
+		name            string
+		customSetupFunc func(t *testing.T) string
+	}{
+		{
+			name: "File does not exist",
+			customSetupFunc: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), "test.json")
+			},
+		},
+		{
+			name: "Leading folders to the file do not exist",
+			customSetupFunc: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), "nonexistent", "test.json")
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			configFile := testCase.customSetupFunc(t)
+			storage := configuration.NewJsonStorage(configFile)
+
+			// Act
+			err := storage.Set(key, expectedValue)
+
+			// Assert
+			assert.Nil(t, err)
+			storedConfig := readStoredConfigFile(t, configFile)
+			assertConfigContainsKey(t, storedConfig, key, expectedValue)
+		})
+	}
 }
 
-func Test_JsonStorage_Set(t *testing.T) {
+func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) {
 	// Arrange
 	t.Parallel()
-	const key = "someKey"
-	const expectedValue = "someValue"
 	const preExistingKey = "someOtherKey"
 	const preExistingValue = "someOtherValue"
 
@@ -31,46 +61,71 @@ func Test_JsonStorage_Set(t *testing.T) {
 	}
 
 	unknownJson, _ := json.Marshal(preExistingConfig)
-	// filepath.Join()
 	configFile := filepath.Join(t.TempDir(), "test.json")
 	err := os.WriteFile(configFile, unknownJson, 0666)
 	assert.Nil(t, err)
-	storage := NewJsonStorage(configFile)
+	storage := configuration.NewJsonStorage(configFile)
 
 	// Act
 	err = storage.Set(key, expectedValue)
 	assert.Nil(t, err)
 
 	// Assert
+	storedConfig := readStoredConfigFile(t, configFile)
+	t.Run("File contains key", func(t *testing.T) {
+		assertConfigContainsKey(t, storedConfig, key, expectedValue)
+	})
+	t.Run("Pre-stored values are not deleted", func(t *testing.T) {
+		assertConfigContainsKey(t, storedConfig, preExistingKey, preExistingValue)
+	})
+	assertSetCallDoesNotDeleteOtherValues(t, storage, configFile, expectedValue, key)
+	t.Run("Overwrites existing value", func(t *testing.T) {
+		const newValue = "new value"
+		assert.Contains(t, storedConfig, key)
+		err = storage.Set(key, newValue)
+		assert.Nil(t, err)
+		storedConfig = readStoredConfigFile(t, configFile)
+		assert.Nil(t, err)
+		assert.Equal(t, newValue, storedConfig[key])
+	})
+}
+
+func readStoredConfigFile(t *testing.T, configFile string) map[string]any {
+	t.Helper()
+
 	storedConfig := make(map[string]any)
 	fileBytes, err := os.ReadFile(configFile)
 	assert.Nil(t, err)
 	err = json.Unmarshal(fileBytes, &storedConfig)
 	assert.Nil(t, err)
 
-	t.Run("File contains key", func(t *testing.T) {
-		assert.Equal(t, expectedValue, storedConfig[key])
-	})
-	t.Run("Pre-stored values are not deleted", func(t *testing.T) {
-		assert.Equal(t, preExistingConfig[preExistingKey], storedConfig[preExistingKey])
-	})
-	t.Run("A second call to Set does not delete the first value", func(t *testing.T) {
-		err = storage.Set("SomeWildKey", "SomeWildValue")
-		assert.Nil(t, err)
-		fileContent, _ := os.ReadFile(configFile)
-		_ = json.Unmarshal(fileContent, &storedConfig)
-		assert.Nil(t, err)
-		assert.Equal(t, expectedValue, storedConfig[key])
-	})
-	t.Run("Overwrites existing value", func(t *testing.T) {
-		const newValue = "new value"
+	return storedConfig
+}
 
-		fileContent, err := os.ReadFile(configFile)
-		err = storage.Set(key, newValue)
+func assertSetCallDoesNotDeleteOtherValues(
+	t *testing.T,
+	storage *configuration.JsonStorage,
+	configFile string,
+	preExistingValue string,
+	preExistingValueKey string,
+) bool {
+	return t.Run("A second call to Set does not delete the first value", func(t *testing.T) {
+		storedConfig := readStoredConfigFile(t, configFile)
+		assert.Equal(t, preExistingValue, storedConfig[preExistingValueKey])
+
+		err := storage.Set("SomeWildKey", "SomeWildValue")
+
 		assert.Nil(t, err)
-		fileContent, err = os.ReadFile(configFile)
-		_ = json.Unmarshal(fileContent, &storedConfig)
-		assert.Nil(t, err)
-		assert.Equal(t, newValue, storedConfig[key])
+		storedConfig = readStoredConfigFile(t, configFile)
+		assert.Equal(t, preExistingValue, storedConfig[preExistingValueKey])
 	})
+}
+
+func assertConfigContainsKey(
+	t *testing.T,
+	storedConfig map[string]any,
+	expectedValueKey string,
+	expectedValue string,
+) {
+	assert.Equal(t, expectedValue, storedConfig[expectedValueKey])
 }
