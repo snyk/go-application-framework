@@ -73,7 +73,7 @@ func getRedirectUri(port int) string {
 func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	appUrl := config.GetString(configuration.WEB_APP_URL)
 	tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token"
-	tokenUrl = "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token" // TODO remove as soon as the derived tokenUrl works
+	tokenUrl = "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token" // TODO HEAD-208
 	authUrl := appUrl + "/oauth/authorize"
 
 	conf := &oauth2.Config{
@@ -230,11 +230,12 @@ func (o *oAuth2Authenticator) Authenticate() error {
 	}
 
 	token, err := o.oauthConfig.Exchange(ctx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
-	if err == nil {
-		o.persistToken(token)
+	if err != nil {
+		return err
 	}
 
-	return err
+	o.persistToken(token)
+	return nil
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
