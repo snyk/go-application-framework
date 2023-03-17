@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strings"
@@ -11,7 +12,24 @@ const (
 	api_pattern string = "^api\\."
 	api_prefix  string = "api."
 	app_prefix  string = "app."
+	port_suffix string = ":[0-9]*$"
 )
+
+func isLocalhost(host string) bool {
+	if strings.HasPrefix(host, "localhost") {
+		return true
+	}
+
+	hostnameRegexp, _ := regexp.Compile(port_suffix)
+	host = hostnameRegexp.ReplaceAllString(host, "")
+
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+
+	return addr.IsLoopback()
+}
 
 func GetCanonicalApiUrl(userDefinedUrl string) (string, error) {
 	result := ""
@@ -21,7 +39,7 @@ func GetCanonicalApiUrl(userDefinedUrl string) (string, error) {
 	}
 
 	// for localhost we don't change the host, since there are no subdomains
-	if strings.Contains(url.Host, "localhost") {
+	if isLocalhost(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
 	} else {
 		appRegexp, _ := regexp.Compile(app_pattern)

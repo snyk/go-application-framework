@@ -41,12 +41,18 @@ func Test_GetCanonicalApiUrl(t *testing.T) {
 
 func Test_GetCanonicalApiUrl_Edgecases(t *testing.T) {
 	inputList := []string{
+		"https://127.0.0.1/api/v1",
+		"https://127.0.0.1:9000/api/v1",
 		"https://localhost:9000/api/v1",
+		"https://localhost/api",
 		"http://alpha:omega@localhost:9000",
 	}
 
 	expectedList := []string{
+		"https://127.0.0.1/api",
+		"https://127.0.0.1:9000/api",
 		"https://localhost:9000/api",
+		"https://localhost/api",
 		"http://alpha:omega@localhost:9000",
 	}
 
@@ -72,5 +78,18 @@ func Test_DeriveAppUrl(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, expected, actual)
 
+	}
+}
+
+func Test_IsLocalhost(t *testing.T) {
+	hostlistLocalhost := []string{"localhost", "localhost:3123", "127.0.0.1", "127.0.0.1:437", "::1:3212"}
+	hostlistNonLocalhost := []string{"snyk.io", "fe80::1414:d7bc:63a:1fda"}
+
+	for _, host := range hostlistLocalhost {
+		assert.True(t, isLocalhost(host))
+	}
+
+	for _, host := range hostlistNonLocalhost {
+		assert.False(t, isLocalhost(host))
 	}
 }
