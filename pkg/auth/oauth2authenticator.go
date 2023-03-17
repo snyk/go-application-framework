@@ -44,6 +44,9 @@ type oAuth2Authenticator struct {
 func init() {
 	var seed int64
 	var b [8]byte
+
+	// try to use a real random value to seed the pseudo random number generator and
+	// only fall back to time based seed if this didn't work.
 	_, err := crypto_rand.Read(b[:])
 	if err != nil {
 		seed = time.Now().UnixNano() // fallback to time only if necessary
@@ -83,11 +86,15 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	return conf
 }
 
+// This method creates a code challenge as defined in https://www.rfc-editor.org/rfc/rfc7636#section-4.2
+// It accepts a code verifier and returns the challenge as a URL safe string.
 func getCodeChallenge(verifier []byte) string {
 	shasum := sha256.Sum256(verifier)
 	return base64.RawURLEncoding.EncodeToString(shasum[:])
 }
 
+// This method creates a code verifier as defined in https://www.rfc-editor.org/rfc/rfc7636#section-4.1
+// It accepts the number of bytes it shall create and returns the verifier as a byte slice of the specified length.
 func createVerifier(count int) []byte {
 	/*
 	  unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
@@ -106,6 +113,7 @@ func createVerifier(count int) []byte {
 	return verifier
 }
 
+// This method extracts an oauth2.Token from the given configuration instance if available
 func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 	oauthTokenString := config.GetString(CONFIG_KEY_OAUTH_TOKEN)
 	if len(oauthTokenString) > 0 {
