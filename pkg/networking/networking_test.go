@@ -31,9 +31,11 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
 	token := "1265457"
+	userAgent := "James Bond"
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
+	net.AddHeaderField("User-Agent", userAgent)
 	expectedHeader := http.Header{
-		"User-Agent": {defaultUserAgent},
+		"User-Agent": {userAgent},
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
 		"Authorization": {"token " + token},
 	}

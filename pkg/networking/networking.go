@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -17,10 +16,6 @@ import (
 )
 
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
-
-const (
-	defaultUserAgent string = "snyk-cli"
-)
 
 // NetworkAccess is the interface for network access.
 type NetworkAccess interface {
@@ -45,7 +40,6 @@ type NetworkAccess interface {
 // NetworkImpl is the default implementation of the NetworkAccess interface.
 type NetworkImpl struct {
 	config        configuration.Configuration
-	userAgent     string
 	staticHeader  http.Header
 	logger        *log.Logger
 	proxy         func(req *http.Request) (*url.URL, error)
@@ -75,7 +69,6 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 
 	c := NetworkImpl{
 		config:       config,
-		userAgent:    defaultUserAgent,
 		staticHeader: http.Header{},
 		logger:       logger,
 		proxy:        http.ProxyFromEnvironment,
@@ -114,11 +107,6 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 		for i := range v {
 			request.Header.Set(k, v[i])
 		}
-	}
-
-	existingUserAgent := request.Header.Get("User-agent")
-	if len(existingUserAgent) == 0 || strings.Contains(existingUserAgent, "Go-http-client") {
-		request.Header.Set("User-Agent", n.userAgent)
 	}
 
 	return nil
