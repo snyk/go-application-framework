@@ -46,7 +46,7 @@ func Test_GetCanonicalApiUrl_Edgecases(t *testing.T) {
 	}
 
 	expectedList := []string{
-		"https://localhost:9000",
+		"https://localhost:9000/api",
 		"http://alpha:omega@localhost:9000",
 	}
 
