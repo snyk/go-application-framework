@@ -98,12 +98,14 @@ func Test_AddEnvironmentVariables_ValidToken_AddsAccessToken(t *testing.T) {
 func Test_AddEnvironmentVariables_HeadersAlreadySet_ReturnsErrorAndSameEnv(t *testing.T) {
 	config, _ := createConfigWithValidToken()
 	authenticator := NewOAuth2Authenticator(config, http.DefaultClient)
-	env := []string{fmt.Sprint("SNYK_OAUTH_TOKEN=", "SomeOtherToken")}
-	resultEnv, err := authenticator.AddEnvironmentVariables(env)
-	assert.NotNil(t, env)
+	expectedEnv := []string{"SNYK_OAUTH_TOKEN=SomeOtherToken"}
+
+	resultEnv, err := authenticator.AddEnvironmentVariables(expectedEnv)
+
+	assert.NotNil(t, expectedEnv)
 	assert.NotNil(t, err)
 	assert.Len(t, resultEnv, 1)
-	assert.Equal(t, env, resultEnv)
+	assert.Equal(t, expectedEnv, resultEnv)
 }
 
 func createConfigWithValidToken() (configuration.Configuration, oauth2.Token) {
