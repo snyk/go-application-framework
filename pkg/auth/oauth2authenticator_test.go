@@ -2,6 +2,8 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -72,4 +74,51 @@ func Test_getOAuthConfiguration(t *testing.T) {
 	assert.Equal(t, OAUTH_CLIENT_ID, oauthConfig.ClientID)
 	assert.Equal(t, webapp+"/oauth/authorize", oauthConfig.Endpoint.AuthURL)
 	// assert.Equal(t, "https://id.fedramp-alpha.snykgov.io/oauth2/default/v1/token", oauthConfig.Endpoint.TokenURL)
+}
+
+func Test_AddEnvironmentVariables_ValidToken_AddsAccessToken(t *testing.T) {
+	config, token := createConfigWithValidToken()
+
+	authenticator := NewOAuth2Authenticator(config, http.DefaultClient)
+	preExistingEnvVar := "someKey=someValue"
+	env := []string{preExistingEnvVar}
+	env, err := authenticator.AddEnvironmentVariables(env)
+
+	t.Run("no error", func(t *testing.T) {
+		assert.Nil(t, err)
+	})
+	t.Run("adds access token", func(t *testing.T) {
+		assert.Contains(t, env, fmt.Sprint("SNYK_OAUTH_TOKEN=", token.AccessToken))
+	})
+	t.Run("doesn't remove existing env vars", func(t *testing.T) {
+		assert.Contains(t, env, preExistingEnvVar)
+	})
+}
+
+func Test_AddEnvironmentVariables_HeadersAlreadySet_ReturnsErrorAndSameEnv(t *testing.T) {
+	config, _ := createConfigWithValidToken()
+	authenticator := NewOAuth2Authenticator(config, http.DefaultClient)
+	env := []string{fmt.Sprint("SNYK_OAUTH_TOKEN=", "SomeOtherToken")}
+	resultEnv, err := authenticator.AddEnvironmentVariables(env)
+	assert.NotNil(t, env)
+	assert.NotNil(t, err)
+	assert.Len(t, resultEnv, 1)
+	assert.Equal(t, env, resultEnv)
+}
+
+func createConfigWithValidToken() (configuration.Configuration, oauth2.Token) {
+	config := configuration.New()
+	token := createValidToken()
+	tokenBytes, _ := json.Marshal(token)
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, string(tokenBytes))
+	return config, token
+}
+
+func createValidToken() oauth2.Token {
+	return oauth2.Token{
+		AccessToken:  "1234",
+		TokenType:    "bearer",
+		RefreshToken: "4321",
+		Expiry:       time.Now().Add(24 * time.Hour),
+	}
 }
