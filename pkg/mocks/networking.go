@@ -36,11 +36,11 @@ func (m *MockNetworkAccess) EXPECT() *MockNetworkAccessMockRecorder {
 }
 
 // AddDefaultHeader mocks base method.
-func (m *MockNetworkAccess) AddDefaultHeader(request *http.Request) error {
+func (m *MockNetworkAccess) AddDefaultHeader(request *http.Request) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddDefaultHeader", request)
-	ret0, _ := ret[0].(error)
-	return ret0
+	_, _ = ret[0].(error)
+	return
 }
 
 // AddDefaultHeader indicates an expected call of AddDefaultHeader.

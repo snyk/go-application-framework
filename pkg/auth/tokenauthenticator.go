@@ -27,7 +27,7 @@ func (t *tokenAuthenticator) Authenticate() error {
 
 func (t *tokenAuthenticator) AddAuthenticationHeader(request *http.Request) error {
 	if request == nil {
-		return fmt.Errorf("request must not be nil.")
+		return fmt.Errorf("request must not be nil")
 	}
 
 	token := t.tokenFunc()

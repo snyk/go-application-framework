@@ -136,13 +136,15 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 
 	certPem, _keyPem, _ := certs.MakeSelfSignedCert("mycert", []string{"localhost"}, log.Default())
 	certFile, _ := os.CreateTemp("", "")
-	certFile.Write([]byte(certPem))
+	_, err := certFile.Write(certPem)
+	assert.Nil(t, err)
 
 	keyFile, _ := os.CreateTemp("", "")
-	keyFile.Write([]byte(_keyPem))
+	_, err = keyFile.Write(_keyPem)
+	assert.Nil(t, err)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		io.WriteString(w, "Hello, TLS!\n")
+		_, _ = io.WriteString(w, "Hello, TLS!\n")
 		fmt.Println("hello")
 	})
 
@@ -156,7 +158,7 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 
 	// test that we can't connect without adding the ca certificates
 	client := net.GetHttpClient()
-	_, err := client.Get("https://localhost:8443/")
+	_, err = client.Get("https://localhost:8443/")
 	assert.NotNil(t, err)
 
 	// invoke method under test
@@ -175,9 +177,8 @@ func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 	net := NewNetworkAccess(config)
 
 	expectedRequest, _ := http.NewRequest("GET", "https://www.snyk.io", nil)
-	err := net.AddDefaultHeader(expectedRequest)
-	assert.Nil(t, err)
-	err = net.GetAuthenticator().AddAuthenticationHeader(expectedRequest)
+	net.AddDefaultHeader(expectedRequest)
+	err := net.GetAuthenticator().AddAuthenticationHeader(expectedRequest)
 	assert.Nil(t, err)
 
 	request, err := http.NewRequest("GET", "https://www.snyk.io", nil)

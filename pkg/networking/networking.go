@@ -23,7 +23,7 @@ type NetworkAccess interface {
 	// AddHeaders adds all the custom and authentication headers to the request.
 	AddHeaders(request *http.Request) error
 	// AddDefaultHeader adds the default headers request.
-	AddDefaultHeader(request *http.Request) error
+	AddDefaultHeader(request *http.Request)
 	// GetRoundTripper returns the http.RoundTripper.
 	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
@@ -56,7 +56,7 @@ type customRoundTripper struct {
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
 func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	_ = crt.networkAccess.AddDefaultHeader(request)
+	crt.networkAccess.AddDefaultHeader(request)
 	return crt.encapsulatedRoundTripper.RoundTrip(request)
 }
 
@@ -83,9 +83,7 @@ func (n *NetworkImpl) AddHeaderField(key string, value string) {
 }
 
 func (n *NetworkImpl) AddHeaders(request *http.Request) error {
-	if err := n.AddDefaultHeader(request); err != nil {
-		return err
-	}
+	n.AddDefaultHeader(request)
 
 	apiUrlString := n.config.GetString(configuration.API_URL)
 	apiUrl, _ := url.Parse(apiUrlString)
@@ -100,7 +98,7 @@ func (n *NetworkImpl) AddHeaders(request *http.Request) error {
 }
 
 // AddDefaultHeader adds the default headers request.
-func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
+func (n *NetworkImpl) AddDefaultHeader(request *http.Request) {
 	defaultHeader := http.Header{}
 
 	// add static header
@@ -116,8 +114,6 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) error {
 			request.Header.Set(k, v[i])
 		}
 	}
-
-	return nil
 }
 
 func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
