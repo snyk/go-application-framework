@@ -17,17 +17,17 @@ func Test_JsonStorage_Set_NoConfigFile(t *testing.T) {
 	// Arrange
 	t.Parallel()
 	testCases := []struct {
-		name            string
+		setup           string
 		customSetupFunc func(t *testing.T) string
 	}{
 		{
-			name: "File does not exist",
+			setup: "File does not exist",
 			customSetupFunc: func(t *testing.T) string {
 				return filepath.Join(t.TempDir(), "test.json")
 			},
 		},
 		{
-			name: "Leading folders to the file do not exist",
+			setup: "Leading folders to the file do not exist",
 			customSetupFunc: func(t *testing.T) string {
 				return filepath.Join(t.TempDir(), "nonexistent", "test.json")
 			},
@@ -35,7 +35,7 @@ func Test_JsonStorage_Set_NoConfigFile(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
+		t.Run(testCase.setup+" - config file is created", func(t *testing.T) {
 			configFile := testCase.customSetupFunc(t)
 			storage := configuration.NewJsonStorage(configFile)
 
@@ -88,6 +88,45 @@ func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, newValue, storedConfig[key])
 	})
+}
+
+func Test_JsonStorage_Set_BrokenConfigFile(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	brokenJson := []byte("this }}is not j[]son")
+	storage := storageWithTempConfigFile(t, brokenJson)
+
+	// Act
+	err := storage.Set(key, expectedValue)
+
+	// Assert
+	t.Run("Returns an error", func(t *testing.T) {
+		assert.NotNil(t, err)
+	})
+}
+
+func Test_JsonStorage_Set_InvalidValue(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	storage := storageWithTempConfigFile(t, []byte("{}"))
+	invalidValue := make(chan int) // invalid because channels are not JSON serializable
+
+	// Act
+	err := storage.Set(key, invalidValue)
+
+	// Assert
+	t.Run("Returns an error", func(t *testing.T) {
+		assert.NotNil(t, err)
+	})
+}
+
+func storageWithTempConfigFile(t *testing.T, jsonBytes []byte) *configuration.JsonStorage {
+	t.Helper()
+	configFile := filepath.Join(t.TempDir(), "test.json")
+	err := os.WriteFile(configFile, jsonBytes, 0666)
+	assert.Nil(t, err)
+
+	return configuration.NewJsonStorage(configFile)
 }
 
 func readStoredConfigFile(t *testing.T, configFile string) map[string]any {

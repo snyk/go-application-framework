@@ -35,12 +35,24 @@ func (s *JsonStorage) Set(key string, value any) error {
 		return err
 	}
 
-	fileBytes, _ := os.ReadFile(s.path)
-	config := make(map[string]any)
-	_ = json.Unmarshal(fileBytes, &config)
-	config[key] = value
-	configJson, _ := json.Marshal(config)
-	_ = os.WriteFile(s.path, configJson, utils.FILEPERM_666)
+	fileBytes, err := os.ReadFile(s.path)
+	if err != nil {
+		const emptyJson = "{}"
+		fileBytes = []byte(emptyJson)
+	}
 
-	return nil
+	config := make(map[string]any)
+	err = json.Unmarshal(fileBytes, &config)
+	if err != nil {
+		return err
+	}
+
+	config[key] = value
+	configJson, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(s.path, configJson, utils.FILEPERM_666)
+
+	return err
 }
