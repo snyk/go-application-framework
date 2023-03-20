@@ -28,17 +28,19 @@ func NewAuthHeaderMiddleware(
 }
 
 func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response, error) {
-	if request.URL != nil {
-		// determine configured api url
-		apiUrlString := n.config.GetString(configuration.API_URL)
-		apiUrl, err := url.Parse(apiUrlString)
+	if request.URL == nil {
+		return n.next.RoundTrip(request)
+	}
 
-		// requests to the api automatically get an authentication token attached
-		if err == nil && strings.HasPrefix(request.URL.Host, apiUrl.Host) {
-			err = n.authenticator.AddAuthenticationHeader(request)
-			if err != nil {
-				return nil, err
-			}
+	// determine configured api url
+	apiUrlString := n.config.GetString(configuration.API_URL)
+	apiUrl, err := url.Parse(apiUrlString)
+
+	// requests to the api automatically get an authentication token attached
+	if err == nil && strings.HasPrefix(request.URL.Host, apiUrl.Host) {
+		err = n.authenticator.AddAuthenticationHeader(request)
+		if err != nil {
+			return nil, err
 		}
 	}
 
