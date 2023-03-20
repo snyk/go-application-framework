@@ -118,9 +118,8 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) {
 
 func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
-	n.authenticator = n.createAuthenticator(transport)
 
-	rt := middleware.NewAuthHeaderMiddleware(n.config, n.authenticator, transport)
+	rt := middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), transport)
 
 	// encapsulate everything
 	roundTrip := customRoundTripper{
