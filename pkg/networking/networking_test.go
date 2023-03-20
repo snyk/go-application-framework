@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +17,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
 )
 
 func getConfig() configuration.Configuration {
@@ -35,9 +37,43 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
 	net.AddHeaderField("User-Agent", userAgent)
 	expectedHeader := http.Header{
+		"User-Agent":    {userAgent},
+		"Authorization": {"token " + token},
+	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for key, expectedValue := range expectedHeader {
+			assert.Equal(t, expectedValue, r.Header[key])
+		}
+	})
+	server := httptest.NewServer(handler)
+	config.Set(configuration.API_URL, server.URL)
+	_, err := client.Get(server.URL)
+	assert.NoError(t, err)
+}
+
+func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
+	config := getConfig()
+	userAgent := "James Bond"
+	accessToken := "access me"
+
+	expectedToken := &oauth2.Token{
+		AccessToken:  accessToken,
+		TokenType:    "b",
+		RefreshToken: "c",
+		Expiry:       time.Now().Add(time.Duration(time.Minute * time.Duration(20))),
+	}
+
+	expectedTokenString, _ := json.Marshal(expectedToken)
+
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
+	net := NewNetworkAccess(config)
+	client := net.GetHttpClient()
+
+	net.AddHeaderField("User-Agent", userAgent)
+	expectedHeader := http.Header{
 		"User-Agent": {userAgent},
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
-		"Authorization": {"token " + token},
+		"Authorization": {"Bearer " + accessToken},
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for key, expectedValue := range expectedHeader {
@@ -172,18 +208,24 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 }
 
 func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
+	expectedHeader := http.Header{
+		"Secret-Header": {"secret-value"},
+		"Authorization": {"Bearer MyToken"},
+	}
+
 	config := getConfig()
-	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "MyOAuthToken")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "MyToken")
 	net := NewNetworkAccess(config)
+	net.AddHeaderField("secret-header", "secret-value")
 
-	expectedRequest, _ := http.NewRequest("GET", "https://www.snyk.io", nil)
-	net.AddDefaultHeader(expectedRequest)
-	err := net.GetAuthenticator().AddAuthenticationHeader(expectedRequest)
-	assert.Nil(t, err)
-
-	request, err := http.NewRequest("GET", "https://www.snyk.io", nil)
+	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	err = net.AddHeaders(request)
 	assert.Nil(t, err)
 
-	assert.Equal(t, expectedRequest.Header, request.Header)
+	keys := make([]string, 0, len(request.Header))
+	for k := range request.Header {
+		keys = append(keys, k)
+	}
+
+	assert.Equal(t, expectedHeader, request.Header)
 }
