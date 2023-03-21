@@ -1,77 +1,63 @@
 package networking
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
-	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
-const (
-	defaultUserAgent string = "snyk-cli"
-)
-
 // NetworkAccess is the interface for network access.
 type NetworkAccess interface {
-	// GetDefaultHeader returns the default header for a given URL.
-	GetDefaultHeader(url *url.URL) http.Header
-	// GetRoundtripper returns the http.Roundtripper.
-	GetRoundtripper() http.RoundTripper
+	// AddHeaders adds all the custom and authentication headers to the request.
+	AddHeaders(request *http.Request) error
+	// AddDefaultHeader adds the default headers request.
+	AddDefaultHeader(request *http.Request)
+	// GetRoundTripper returns the http.RoundTripper.
+	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
 	GetHttpClient() *http.Client
+	// GetUnauthorizedHttpClient returns an HTTP client that does not use authentication headers.
+	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key string, value string)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
+	// GetAuthenticator returns the authenticator.
+	GetAuthenticator() auth.Authenticator
 }
 
 // NetworkImpl is the default implementation of the NetworkAccess interface.
 type NetworkImpl struct {
-	config       configuration.Configuration
-	userAgent    string
-	staticHeader http.Header
-	logger       *log.Logger
-	proxy        func(req *http.Request) (*url.URL, error)
-	caPool       *x509.CertPool
+	config        configuration.Configuration
+	staticHeader  http.Header
+	logger        *log.Logger
+	proxy         func(req *http.Request) (*url.URL, error)
+	caPool        *x509.CertPool
+	authenticator auth.Authenticator
 }
 
-// customRoundtripper is a custom http.RoundTripper which decorates the request with default headers.
-type customRoundtripper struct {
-	encapsulatedRoundtripper *http.Transport
+// customRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
+type customRoundTripper struct {
+	encapsulatedRoundTripper http.RoundTripper
 	networkAccess            NetworkAccess
-	proxyAuthenticator       *httpauth.ProxyAuthenticator
-}
-
-// decorateRequest appends request header's to the customRoundtripper's instance.
-func (crt *customRoundtripper) decorateRequest(request *http.Request) *http.Request {
-	defaultHeader := crt.networkAccess.GetDefaultHeader(request.URL)
-
-	// iterate over default headers and add them if there is no existing entry yet
-	for k, v := range defaultHeader {
-		if _, found := request.Header[k]; found == false {
-			for i := range v {
-				request.Header.Add(k, v[i])
-			}
-		}
-	}
-
-	return request
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
-func (crt *customRoundtripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	request = crt.decorateRequest(request)
-	return crt.encapsulatedRoundtripper.RoundTrip(request)
+func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	crt.networkAccess.AddDefaultHeader(request)
+	return crt.encapsulatedRoundTripper.RoundTrip(request)
 }
 
 // NewNetworkAccess returns a NetworkImpl instance.
@@ -84,7 +70,6 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 
 	c := NetworkImpl{
 		config:       config,
-		userAgent:    defaultUserAgent,
 		staticHeader: http.Header{},
 		logger:       logger,
 		proxy:        http.ProxyFromEnvironment,
@@ -97,74 +82,78 @@ func (n *NetworkImpl) AddHeaderField(key string, value string) {
 	n.staticHeader[key] = append(n.staticHeader[key], value)
 }
 
-func (n *NetworkImpl) GetDefaultHeader(url *url.URL) http.Header {
-	h := http.Header{}
+func (n *NetworkImpl) AddHeaders(request *http.Request) error {
+	n.AddDefaultHeader(request)
+
+	apiUrlString := n.config.GetString(configuration.API_URL)
+	apiUrl, _ := url.Parse(apiUrlString)
+	isSnykApi := strings.HasPrefix(request.URL.Host, apiUrl.Host)
+
+	if isSnykApi {
+		if err := n.GetAuthenticator().AddAuthenticationHeader(request); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AddDefaultHeader adds the default headers request.
+func (n *NetworkImpl) AddDefaultHeader(request *http.Request) {
+	defaultHeader := http.Header{}
 
 	// add static header
 	for k, v := range n.staticHeader {
 		for i := range v {
-			h.Add(k, v[i])
+			defaultHeader.Add(k, v[i])
 		}
 	}
 
-	if url != nil {
-		// determine configured api url
-		apiUrlString := n.config.GetString(configuration.API_URL)
-		apiUrl, err := url.Parse(apiUrlString)
-		if err != nil {
-			apiUrl, _ = url.Parse(constants.SNYK_DEFAULT_API_URL)
-		}
-
-		// requests to the api automatically get an authentication token attached
-		if url.Host == apiUrl.Host {
-			authHeader := GetAuthHeader(n.config)
-			if len(authHeader) > 0 {
-				h.Add("Authorization", authHeader)
-			}
-
+	// iterate over default headers and add them if there is no existing entry yet
+	for k, v := range defaultHeader {
+		for i := range v {
+			request.Header.Set(k, v[i])
 		}
 	}
-
-	h.Add("User-Agent", n.userAgent)
-	return h
 }
 
-func (n *NetworkImpl) GetRoundtripper() http.RoundTripper {
+func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
+	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+
+	rt := middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), transport)
+
+	// encapsulate everything
+	roundTrip := customRoundTripper{
+		encapsulatedRoundTripper: rt,
+		networkAccess:            n,
+	}
+	return &roundTrip
+}
+
+func (n *NetworkImpl) createAuthenticator(transport *http.Transport) auth.Authenticator {
+	authClient := *http.DefaultClient
+	authClient.Transport = transport.Clone()
+	return auth.CreateAuthenticator(n.config, &authClient)
+}
+
+func (n *NetworkImpl) configureRoundTripper(base *http.Transport) *http.Transport {
 	// configure insecure
 	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
 	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
-	var proxyAuthenticator *httpauth.ProxyAuthenticator
-
-	// create transport
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: insecure,
-			RootCAs:            n.caPool,
-		},
-	}
-
-	// create proxy authenticator if required
-	if httpauth.IsSupportedMechanism(authenticationMechanism) {
-		proxyAuthenticator = httpauth.NewProxyAuthenticator(authenticationMechanism, n.proxy, n.logger)
-		transport.DialContext = proxyAuthenticator.DialContext
-		transport.Proxy = nil
-	} else {
-		transport.DialContext = nil
-		transport.Proxy = n.proxy
-	}
-
-	// encapsulate everything
-	roundtrip := customRoundtripper{
-		encapsulatedRoundtripper: transport,
-		networkAccess:            n,
-		proxyAuthenticator:       proxyAuthenticator,
-	}
-	return &roundtrip
+	transport := base.Clone()
+	transport = middleware.ApplyTlsConfig(transport, insecure, n.caPool)
+	transport = middleware.ConfigureProxy(transport, n.logger, n.proxy, authenticationMechanism)
+	return transport
 }
 
 func (n *NetworkImpl) GetHttpClient() *http.Client {
 	client := *http.DefaultClient
-	client.Transport = n.GetRoundtripper()
+	client.Transport = n.GetRoundTripper()
+	return &client
+}
+
+func (n *NetworkImpl) GetUnauthorizedHttpClient() *http.Client {
+	client := *http.DefaultClient
+	client.Transport = n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 	return &client
 }
 
@@ -182,4 +171,13 @@ func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
 	}
 
 	return err
+}
+
+func (n *NetworkImpl) GetAuthenticator() auth.Authenticator {
+	if n.authenticator == nil {
+		transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+		n.authenticator = n.createAuthenticator(transport)
+	}
+
+	return n.authenticator
 }

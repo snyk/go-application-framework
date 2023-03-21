@@ -88,11 +88,6 @@ func (e *EngineImpl) Init() error {
 		e.analytics.SetIntegration(e.config.GetString(configuration.INTEGRATION_NAME), e.config.GetString(configuration.INTEGRATION_VERSION))
 		e.analytics.SetApiUrl(e.config.GetString(configuration.API_URL))
 		e.analytics.SetOrg(e.config.GetString(configuration.ORGANIZATION))
-		e.analytics.AddHeader(func() http.Header {
-			url := e.config.GetUrl(configuration.API_URL)
-			header := e.networkAccess.GetDefaultHeader(url)
-			return header
-		})
 		e.analytics.SetClient(func() *http.Client {
 			return e.networkAccess.GetHttpClient()
 		})

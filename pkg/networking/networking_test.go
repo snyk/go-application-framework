@@ -1,117 +1,159 @@
 package networking
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
 )
 
 func getConfig() configuration.Configuration {
 	config := configuration.New()
 	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	return config
 }
 
-func Test_GetDefaultHeader_WithAuth(t *testing.T) {
+func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
-
+	client := net.GetHttpClient()
 	token := "1265457"
+	userAgent := "James Bond"
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
-
+	net.AddHeaderField("User-Agent", userAgent)
 	expectedHeader := http.Header{
-		"User-Agent": {defaultUserAgent},
-		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
+		"User-Agent":    {userAgent},
 		"Authorization": {"token " + token},
 	}
-
-	// run method under test multiple times to ensure that it behaves the same way each time
-	for i := 0; i < 3; i++ {
-		url, _ := url.Parse(config.GetString(configuration.API_URL))
-		actualHeader := net.GetDefaultHeader(url)
-		assert.Equal(t, expectedHeader, actualHeader)
-	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for key, expectedValue := range expectedHeader {
+			assert.Equal(t, expectedValue, r.Header[key])
+		}
+	})
+	server := httptest.NewServer(handler)
+	config.Set(configuration.API_URL, server.URL)
+	_, err := client.Get(server.URL)
+	assert.NoError(t, err)
 }
 
-func Test_GetDefaultHeader_WithoutAuth(t *testing.T) {
+func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
+	config := getConfig()
+	userAgent := "James Bond"
+	accessToken := "access me"
+
+	expectedToken := &oauth2.Token{
+		AccessToken:  accessToken,
+		TokenType:    "b",
+		RefreshToken: "c",
+		Expiry:       time.Now().Add(time.Duration(time.Minute * time.Duration(20))),
+	}
+
+	expectedTokenString, _ := json.Marshal(expectedToken)
+
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
+	net := NewNetworkAccess(config)
+	client := net.GetHttpClient()
+
+	net.AddHeaderField("User-Agent", userAgent)
+	expectedHeader := http.Header{
+		"User-Agent": {userAgent},
+		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
+		"Authorization": {"Bearer " + accessToken},
+	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for key, expectedValue := range expectedHeader {
+			assert.Equal(t, expectedValue, r.Header[key])
+		}
+	})
+	server := httptest.NewServer(handler)
+	config.Set(configuration.API_URL, server.URL)
+	_, err := client.Get(server.URL)
+	assert.NoError(t, err)
+}
+
+func Test_HttpClient_CallingNonApiUrl_NoAuthHeaders(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
-
+	client := net.GetHttpClient()
 	token := "1265457"
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
-
-	expectedHeader := http.Header{
-		"User-Agent": {defaultUserAgent},
-	}
-
-	// run method under test multiple times to ensure that it behaves the same way each time
-	for i := 0; i < 3; i++ {
-		url, _ := url.Parse("https://www.myexample.com")
-		actualHeader := net.GetDefaultHeader(url)
-		assert.Equal(t, expectedHeader, actualHeader)
-	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NotContains(t, r.Header, "Authorization")
+	})
+	server := httptest.NewServer(handler)
+	config.Set(configuration.API_URL, "https://www.example.com/not/the/server/URL")
+	_, err := client.Get(server.URL)
+	assert.NoError(t, err)
 }
 
-func Test_Roundtripper_SecureHTTPS(t *testing.T) {
+func Test_RoundTripper_SecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config)
+	net := NewNetworkAccess(config).(*NetworkImpl)
 
-	roundtripper := net.GetRoundtripper()
-	customRoundtripper := roundtripper.(*customRoundtripper)
-	assert.NotNil(t, customRoundtripper)
-	assert.False(t, customRoundtripper.encapsulatedRoundtripper.TLSClientConfig.InsecureSkipVerify)
+	roundTripper := net.GetRoundTripper()
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	customRoundTripper := roundTripper.(*customRoundTripper)
+	assert.NotNil(t, customRoundTripper)
+	assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
 
-func Test_Roundtripper_InsecureHTTPS(t *testing.T) {
+func Test_RoundTripper_InsecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config)
+	net := NewNetworkAccess(config).(*NetworkImpl)
 
 	config.Set(configuration.INSECURE_HTTPS, true)
 
-	roundtripper := net.GetRoundtripper()
-	customRoundtripper := roundtripper.(*customRoundtripper)
-	assert.NotNil(t, customRoundtripper)
-	assert.True(t, customRoundtripper.encapsulatedRoundtripper.TLSClientConfig.InsecureSkipVerify)
+	roundTripper := net.GetRoundTripper()
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	customRoundTripper := roundTripper.(*customRoundTripper)
+	assert.NotNil(t, customRoundTripper)
+	assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
 
-func Test_Roundtripper_ProxyAuth(t *testing.T) {
+func Test_RoundTripper_ProxyAuth(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config)
+	net := NewNetworkAccess(config).(*NetworkImpl)
 
 	// case: enable AnyAuth
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth))
 
 	// invoke method under test
-	roundtripper := net.GetRoundtripper()
+	roundTripper := net.GetRoundTripper()
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 
 	// find proxyAuthenticator used for AnyAuth
-	ctRoundTripper := roundtripper.(*customRoundtripper)
+	ctRoundTripper := roundTripper.(*customRoundTripper)
 	assert.NotNil(t, ctRoundTripper)
-	assert.NotNil(t, ctRoundTripper.proxyAuthenticator)
-	assert.Nil(t, ctRoundTripper.encapsulatedRoundtripper.Proxy)
+	assert.NotNil(t, transport.DialContext)
+	assert.Nil(t, transport.Proxy)
 
 	// case: disable Auth
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.NoAuth))
 
 	// invoke method under test
-	roundtripper = net.GetRoundtripper()
+	roundTripper = net.GetRoundTripper()
+	transport = net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 
 	// with Auth disabled, no proxyAuthenticator should be available
-	ctRoundTripper = roundtripper.(*customRoundtripper)
+	ctRoundTripper = roundTripper.(*customRoundTripper)
 	assert.NotNil(t, ctRoundTripper)
-	assert.Nil(t, ctRoundTripper.proxyAuthenticator)
-	assert.NotNil(t, ctRoundTripper.encapsulatedRoundtripper.Proxy)
+	assert.Nil(t, transport.DialContext)
+	assert.NotNil(t, transport.Proxy)
 }
 
 func Test_GetHTTPClient(t *testing.T) {
@@ -130,13 +172,15 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 
 	certPem, _keyPem, _ := certs.MakeSelfSignedCert("mycert", []string{"localhost"}, log.Default())
 	certFile, _ := os.CreateTemp("", "")
-	certFile.Write([]byte(certPem))
+	_, err := certFile.Write(certPem)
+	assert.Nil(t, err)
 
 	keyFile, _ := os.CreateTemp("", "")
-	keyFile.Write([]byte(_keyPem))
+	_, err = keyFile.Write(_keyPem)
+	assert.Nil(t, err)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		io.WriteString(w, "Hello, TLS!\n")
+		_, _ = io.WriteString(w, "Hello, TLS!\n")
 		fmt.Println("hello")
 	})
 
@@ -150,7 +194,7 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 
 	// test that we can't connect without adding the ca certificates
 	client := net.GetHttpClient()
-	_, err := client.Get("https://localhost:8443/")
+	_, err = client.Get("https://localhost:8443/")
 	assert.NotNil(t, err)
 
 	// invoke method under test
@@ -161,4 +205,27 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	client = net.GetHttpClient()
 	_, err = client.Get("https://localhost:8443/")
 	assert.Nil(t, err)
+}
+
+func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
+	expectedHeader := http.Header{
+		"Secret-Header": {"secret-value"},
+		"Authorization": {"Bearer MyToken"},
+	}
+
+	config := getConfig()
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "MyToken")
+	net := NewNetworkAccess(config)
+	net.AddHeaderField("secret-header", "secret-value")
+
+	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
+	err = net.AddHeaders(request)
+	assert.Nil(t, err)
+
+	keys := make([]string, 0, len(request.Header))
+	for k := range request.Header {
+		keys = append(keys, k)
+	}
+
+	assert.Equal(t, expectedHeader, request.Header)
 }

@@ -32,7 +32,7 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 	config := engine.GetConfiguration()
 
-	expectApiUrl := "https://somehost:2134/api"
+	expectApiUrl := "https://api.somehost:2134"
 	config.Set(configuration.API_URL, expectApiUrl+"/v1")
 
 	actualApiUrl := config.GetString(configuration.API_URL)

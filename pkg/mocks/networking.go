@@ -6,10 +6,10 @@ package mocks
 
 import (
 	http "net/http"
-	url "net/url"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	auth "github.com/snyk/go-application-framework/pkg/auth"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -35,6 +35,20 @@ func (m *MockNetworkAccess) EXPECT() *MockNetworkAccessMockRecorder {
 	return m.recorder
 }
 
+// AddDefaultHeader mocks base method.
+func (m *MockNetworkAccess) AddDefaultHeader(request *http.Request) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddDefaultHeader", request)
+	_, _ = ret[0].(error)
+	return
+}
+
+// AddDefaultHeader indicates an expected call of AddDefaultHeader.
+func (mr *MockNetworkAccessMockRecorder) AddDefaultHeader(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDefaultHeader", reflect.TypeOf((*MockNetworkAccess)(nil).AddDefaultHeader), request)
+}
+
 // AddHeaderField mocks base method.
 func (m *MockNetworkAccess) AddHeaderField(key, value string) {
 	m.ctrl.T.Helper()
@@ -45,6 +59,20 @@ func (m *MockNetworkAccess) AddHeaderField(key, value string) {
 func (mr *MockNetworkAccessMockRecorder) AddHeaderField(key, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).AddHeaderField), key, value)
+}
+
+// AddHeaders mocks base method.
+func (m *MockNetworkAccess) AddHeaders(request *http.Request) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddHeaders", request)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddHeaders indicates an expected call of AddHeaders.
+func (mr *MockNetworkAccessMockRecorder) AddHeaders(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeaders", reflect.TypeOf((*MockNetworkAccess)(nil).AddHeaders), request)
 }
 
 // AddRootCAs mocks base method.
@@ -61,18 +89,18 @@ func (mr *MockNetworkAccessMockRecorder) AddRootCAs(pemFileLocation interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRootCAs", reflect.TypeOf((*MockNetworkAccess)(nil).AddRootCAs), pemFileLocation)
 }
 
-// GetDefaultHeader mocks base method.
-func (m *MockNetworkAccess) GetDefaultHeader(url *url.URL) http.Header {
+// GetAuthenticator mocks base method.
+func (m *MockNetworkAccess) GetAuthenticator() auth.Authenticator {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDefaultHeader", url)
-	ret0, _ := ret[0].(http.Header)
+	ret := m.ctrl.Call(m, "GetAuthenticator")
+	ret0, _ := ret[0].(auth.Authenticator)
 	return ret0
 }
 
-// GetDefaultHeader indicates an expected call of GetDefaultHeader.
-func (mr *MockNetworkAccessMockRecorder) GetDefaultHeader(url interface{}) *gomock.Call {
+// GetAuthenticator indicates an expected call of GetAuthenticator.
+func (mr *MockNetworkAccessMockRecorder) GetAuthenticator() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDefaultHeader", reflect.TypeOf((*MockNetworkAccess)(nil).GetDefaultHeader), url)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuthenticator", reflect.TypeOf((*MockNetworkAccess)(nil).GetAuthenticator))
 }
 
 // GetHttpClient mocks base method.
@@ -89,16 +117,30 @@ func (mr *MockNetworkAccessMockRecorder) GetHttpClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHttpClient", reflect.TypeOf((*MockNetworkAccess)(nil).GetHttpClient))
 }
 
-// GetRoundtripper mocks base method.
-func (m *MockNetworkAccess) GetRoundtripper() http.RoundTripper {
+// GetRoundTripper mocks base method.
+func (m *MockNetworkAccess) GetRoundTripper() http.RoundTripper {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRoundtripper")
+	ret := m.ctrl.Call(m, "GetRoundTripper")
 	ret0, _ := ret[0].(http.RoundTripper)
 	return ret0
 }
 
-// GetRoundtripper indicates an expected call of GetRoundtripper.
-func (mr *MockNetworkAccessMockRecorder) GetRoundtripper() *gomock.Call {
+// GetRoundTripper indicates an expected call of GetRoundTripper.
+func (mr *MockNetworkAccessMockRecorder) GetRoundTripper() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoundtripper", reflect.TypeOf((*MockNetworkAccess)(nil).GetRoundtripper))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoundTripper", reflect.TypeOf((*MockNetworkAccess)(nil).GetRoundTripper))
+}
+
+// GetUnauthorizedHttpClient mocks base method.
+func (m *MockNetworkAccess) GetUnauthorizedHttpClient() *http.Client {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUnauthorizedHttpClient")
+	ret0, _ := ret[0].(*http.Client)
+	return ret0
+}
+
+// GetUnauthorizedHttpClient indicates an expected call of GetUnauthorizedHttpClient.
+func (mr *MockNetworkAccessMockRecorder) GetUnauthorizedHttpClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnauthorizedHttpClient", reflect.TypeOf((*MockNetworkAccess)(nil).GetUnauthorizedHttpClient))
 }

@@ -1,4 +1,4 @@
-package networking
+package auth
 
 import (
 	"fmt"
