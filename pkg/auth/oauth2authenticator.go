@@ -27,7 +27,6 @@ const (
 	CALLBACK_HOSTNAME      string        = "127.0.0.1"
 	CALLBACK_PATH          string        = "/authorization-code/callback"
 	TIMEOUT_SECONDS        time.Duration = 120 * time.Second
-	SnykOAuthTokenEnvKey   string        = "SNYK_OAUTH_TOKEN"
 )
 
 var _ Authenticator = (*oAuth2Authenticator)(nil)
@@ -42,18 +41,6 @@ type oAuth2Authenticator struct {
 	headless           bool
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
-}
-
-func (o *oAuth2Authenticator) AddEnvironmentVariables(env []string) ([]string, error) {
-	const prefix = SnykOAuthTokenEnvKey + "="
-	for _, e := range env {
-		if strings.HasPrefix(e, prefix) {
-			return env, errors.New("OAuth Token environment variable already set: " + e)
-		}
-	}
-
-	env = append(env, prefix+o.token.AccessToken)
-	return env, nil
 }
 
 func init() {

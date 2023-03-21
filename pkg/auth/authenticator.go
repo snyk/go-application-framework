@@ -11,10 +11,6 @@ type Authenticator interface {
 	Authenticate() error
 	// AddAuthenticationHeader adds the authentication header to the request.
 	AddAuthenticationHeader(request *http.Request) error
-	// AddEnvironmentVariables takes a slice of environment variables in a 'key=value' format (like the result of os.Environ),
-	// and returns a slice with the authentication environment variables added to it.
-	// If the headers are already set, an error is returned along with the original "env" slice.
-	AddEnvironmentVariables(env []string) ([]string, error)
 	// IsSupported returns true if the authenticator is ready for use.
 	// If false is returned, it is not possible to add authentication headers/env vars.
 	IsSupported() bool

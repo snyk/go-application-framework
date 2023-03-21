@@ -11,10 +11,6 @@ type tokenAuthenticator struct {
 	tokenFunc func() string
 }
 
-func (t *tokenAuthenticator) AddEnvironmentVariables(env []string) ([]string, error) {
-	return env, nil // Noop
-}
-
 func NewTokenAuthenticator(tokenFunc func() string) Authenticator {
 	return &tokenAuthenticator{
 		tokenFunc: tokenFunc,
