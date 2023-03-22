@@ -2,6 +2,7 @@ package networking
 
 import (
 	"crypto/x509"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
@@ -86,8 +88,10 @@ func (n *NetworkImpl) AddHeaders(request *http.Request) error {
 	n.AddDefaultHeader(request)
 
 	apiUrlString := n.config.GetString(configuration.API_URL)
-	apiUrl, _ := url.Parse(apiUrlString)
-	isSnykApi := strings.HasPrefix(request.URL.Host, apiUrl.Host)
+	requestUrl, _ := api.GetCanonicalApiUrl(request.URL.String())
+	isSnykApi := strings.HasPrefix(requestUrl, apiUrlString)
+
+	fmt.Println(apiUrlString, requestUrl, isSnykApi)
 
 	if isSnykApi {
 		if err := n.GetAuthenticator().AddAuthenticationHeader(request); err != nil {
