@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -89,7 +88,10 @@ func (n *NetworkImpl) AddHeaders(request *http.Request) error {
 
 	apiUrlString := n.config.GetString(configuration.API_URL)
 	requestUrl, _ := api.GetCanonicalApiUrl(request.URL.String())
-	isSnykApi := strings.HasPrefix(requestUrl, apiUrlString)
+	// isSnykApi := strings.HasPrefix(requestUrl, apiUrlString)
+
+	auth := middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), nil)
+	isSnykApi, _ := auth.IsSnykApi(request)
 
 	fmt.Println(apiUrlString, requestUrl, isSnykApi)
 
