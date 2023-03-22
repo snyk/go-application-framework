@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -32,22 +33,33 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 		return n.next.RoundTrip(request)
 	}
 
-	isSnykApi, err := n.IsSnykApi(request)
-
-	// requests to the api automatically get an authentication token attached
-	if err == nil && isSnykApi {
-		err = n.authenticator.AddAuthenticationHeader(request)
-		if err != nil {
-			return nil, err
-		}
+	err := AddAuthenticationHeader(n.authenticator, n.config, request)
+	if err != nil {
+		return nil, err
 	}
 
 	return n.next.RoundTrip(request)
 }
 
-func (n *AuthHeaderMiddleware) IsSnykApi(request *http.Request) (bool, error) {
-	// determine configured api url
-	apiUrlString := n.config.GetString(configuration.API_URL)
-	requestUrl, err := api.GetCanonicalApiUrl(request.URL.String())
-	return strings.HasPrefix(requestUrl, apiUrlString), err
+func ShouldRequireAuthentication(apiUrl string, url *url.URL) (bool, error) {
+	requestUrl, err := api.GetCanonicalApiUrl(*url)
+	if err != nil {
+		return false, err
+	}
+
+	result := strings.HasPrefix(requestUrl, apiUrl)
+	return result, nil
+}
+
+func AddAuthenticationHeader(authenticator auth.Authenticator, config configuration.Configuration, request *http.Request) error {
+	apiUrl := config.GetString(configuration.API_URL)
+	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL)
+
+	// requests to the api automatically get an authentication token attached
+	if !isSnykApi {
+		return err
+	}
+
+	err = authenticator.AddAuthenticationHeader(request)
+	return err
 }

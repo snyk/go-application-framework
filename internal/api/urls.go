@@ -31,12 +31,18 @@ func isLocalhost(host string) bool {
 	return addr.IsLoopback()
 }
 
-func GetCanonicalApiUrl(userDefinedUrl string) (string, error) {
+func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 	result := ""
 	url, err := url.Parse(userDefinedUrl)
 	if err != nil {
 		return result, err
 	}
+
+	return GetCanonicalApiUrl(*url)
+}
+
+func GetCanonicalApiUrl(url url.URL) (string, error) {
+	result := ""
 
 	// for localhost we don't change the host, since there are no subdomains
 	if isLocalhost(url.Host) {
@@ -57,7 +63,6 @@ func GetCanonicalApiUrl(userDefinedUrl string) (string, error) {
 	}
 
 	result = url.String()
-
 	return result, nil
 }
 
