@@ -13,7 +13,7 @@ var instanceList = []string{
 	"dev.snyk.io",
 }
 
-func Test_GetCanonicalApiUrl(t *testing.T) {
+func Test_GetCanonicalApiUrlFromString(t *testing.T) {
 
 	for _, instance := range instanceList {
 
@@ -30,7 +30,7 @@ func Test_GetCanonicalApiUrl(t *testing.T) {
 		expected := "https://api." + instance + ".io"
 
 		for _, input := range inputList {
-			actual, err := GetCanonicalApiUrl(input)
+			actual, err := GetCanonicalApiUrlFromString(input)
 			t.Log(input, actual)
 			assert.Nil(t, err)
 			assert.Equal(t, expected, actual)
@@ -39,7 +39,7 @@ func Test_GetCanonicalApiUrl(t *testing.T) {
 
 }
 
-func Test_GetCanonicalApiUrl_Edgecases(t *testing.T) {
+func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
 	inputList := []string{
 		"https://127.0.0.1/api/v1",
 		"https://127.0.0.1:9000/api/v1",
@@ -58,15 +58,15 @@ func Test_GetCanonicalApiUrl_Edgecases(t *testing.T) {
 
 	for i, input := range inputList {
 		expected := expectedList[i]
-		actual, err := GetCanonicalApiUrl(input)
+		actual, err := GetCanonicalApiUrlFromString(input)
 		t.Log(input, actual)
 		assert.Nil(t, err)
 		assert.Equal(t, expected, actual)
 	}
 }
 
-func Test_GetCanonicalApiUrl_Fail(t *testing.T) {
-	actual, err := GetCanonicalApiUrl(":not/a/url")
+func Test_GetCanonicalApiUrlFromString_Fail(t *testing.T) {
+	actual, err := GetCanonicalApiUrlFromString(":not/a/url")
 	assert.NotNil(t, err)
 	assert.Equal(t, "", actual)
 }

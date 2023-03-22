@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -22,8 +21,6 @@ import (
 type NetworkAccess interface {
 	// AddHeaders adds all the custom and authentication headers to the request.
 	AddHeaders(request *http.Request) error
-	// AddDefaultHeader adds the default headers request.
-	AddDefaultHeader(request *http.Request)
 	// GetRoundTripper returns the http.RoundTripper.
 	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
@@ -38,8 +35,8 @@ type NetworkAccess interface {
 	GetAuthenticator() auth.Authenticator
 }
 
-// NetworkImpl is the default implementation of the NetworkAccess interface.
-type NetworkImpl struct {
+// networkImpl is the default implementation of the NetworkAccess interface.
+type networkImpl struct {
 	config        configuration.Configuration
 	staticHeader  http.Header
 	logger        *log.Logger
@@ -51,16 +48,16 @@ type NetworkImpl struct {
 // customRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
 type customRoundTripper struct {
 	encapsulatedRoundTripper http.RoundTripper
-	networkAccess            NetworkAccess
+	networkAccess            *networkImpl
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
 func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	crt.networkAccess.AddDefaultHeader(request)
+	crt.networkAccess.addDefaultHeader(request)
 	return crt.encapsulatedRoundTripper.RoundTrip(request)
 }
 
-// NewNetworkAccess returns a NetworkImpl instance.
+// NewNetworkAccess returns a networkImpl instance.
 func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	// prepare logger
 	logger := log.New(os.Stderr, "NetworkAccess - ", config.GetInt(configuration.DEBUG_FORMAT))
@@ -68,7 +65,7 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 		logger.SetOutput(io.Discard)
 	}
 
-	c := NetworkImpl{
+	c := networkImpl{
 		config:       config,
 		staticHeader: http.Header{},
 		logger:       logger,
@@ -78,27 +75,18 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	return &c
 }
 
-func (n *NetworkImpl) AddHeaderField(key string, value string) {
+func (n *networkImpl) AddHeaderField(key string, value string) {
 	n.staticHeader[key] = append(n.staticHeader[key], value)
 }
 
-func (n *NetworkImpl) AddHeaders(request *http.Request) error {
-	n.AddDefaultHeader(request)
-
-	apiUrlString := n.config.GetString(configuration.API_URL)
-	apiUrl, _ := url.Parse(apiUrlString)
-	isSnykApi := strings.HasPrefix(request.URL.Host, apiUrl.Host)
-
-	if isSnykApi {
-		if err := n.GetAuthenticator().AddAuthenticationHeader(request); err != nil {
-			return err
-		}
-	}
-	return nil
+func (n *networkImpl) AddHeaders(request *http.Request) error {
+	n.addDefaultHeader(request)
+	err := middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
+	return err
 }
 
-// AddDefaultHeader adds the default headers request.
-func (n *NetworkImpl) AddDefaultHeader(request *http.Request) {
+// addDefaultHeader adds the default headers request.
+func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	defaultHeader := http.Header{}
 
 	// add static header
@@ -116,7 +104,7 @@ func (n *NetworkImpl) AddDefaultHeader(request *http.Request) {
 	}
 }
 
-func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
+func (n *networkImpl) GetRoundTripper() http.RoundTripper {
 	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 
 	rt := middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), transport)
@@ -129,13 +117,13 @@ func (n *NetworkImpl) GetRoundTripper() http.RoundTripper {
 	return &roundTrip
 }
 
-func (n *NetworkImpl) createAuthenticator(transport *http.Transport) auth.Authenticator {
+func (n *networkImpl) createAuthenticator(transport *http.Transport) auth.Authenticator {
 	authClient := *http.DefaultClient
 	authClient.Transport = transport.Clone()
 	return auth.CreateAuthenticator(n.config, &authClient)
 }
 
-func (n *NetworkImpl) configureRoundTripper(base *http.Transport) *http.Transport {
+func (n *networkImpl) configureRoundTripper(base *http.Transport) *http.Transport {
 	// configure insecure
 	insecure := n.config.GetBool(configuration.INSECURE_HTTPS)
 	authenticationMechanism := httpauth.AuthenticationMechanismFromString(n.config.GetString(configuration.PROXY_AUTHENTICATION_MECHANISM))
@@ -145,19 +133,19 @@ func (n *NetworkImpl) configureRoundTripper(base *http.Transport) *http.Transpor
 	return transport
 }
 
-func (n *NetworkImpl) GetHttpClient() *http.Client {
+func (n *networkImpl) GetHttpClient() *http.Client {
 	client := *http.DefaultClient
 	client.Transport = n.GetRoundTripper()
 	return &client
 }
 
-func (n *NetworkImpl) GetUnauthorizedHttpClient() *http.Client {
+func (n *networkImpl) GetUnauthorizedHttpClient() *http.Client {
 	client := *http.DefaultClient
 	client.Transport = n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 	return &client
 }
 
-func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
+func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
 	var err error
 
 	if len(pemFileLocation) > 0 {
@@ -173,7 +161,7 @@ func (n *NetworkImpl) AddRootCAs(pemFileLocation string) error {
 	return err
 }
 
-func (n *NetworkImpl) GetAuthenticator() auth.Authenticator {
+func (n *networkImpl) GetAuthenticator() auth.Authenticator {
 	if n.authenticator == nil {
 		transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 		n.authenticator = n.createAuthenticator(transport)

@@ -103,7 +103,7 @@ func Test_HttpClient_CallingNonApiUrl_NoAuthHeaders(t *testing.T) {
 
 func Test_RoundTripper_SecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config).(*NetworkImpl)
+	net := NewNetworkAccess(config).(*networkImpl)
 
 	roundTripper := net.GetRoundTripper()
 	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
@@ -114,7 +114,7 @@ func Test_RoundTripper_SecureHTTPS(t *testing.T) {
 
 func Test_RoundTripper_InsecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config).(*NetworkImpl)
+	net := NewNetworkAccess(config).(*networkImpl)
 
 	config.Set(configuration.INSECURE_HTTPS, true)
 
@@ -127,7 +127,7 @@ func Test_RoundTripper_InsecureHTTPS(t *testing.T) {
 
 func Test_RoundTripper_ProxyAuth(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config).(*NetworkImpl)
+	net := NewNetworkAccess(config).(*networkImpl)
 
 	// case: enable AnyAuth
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth))

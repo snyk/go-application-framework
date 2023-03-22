@@ -33,7 +33,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 			}
 		}
 
-		apiString, _ := api.GetCanonicalApiUrl(urlString)
+		apiString, _ := api.GetCanonicalApiUrlFromString(urlString)
 		return apiString
 	})
 
