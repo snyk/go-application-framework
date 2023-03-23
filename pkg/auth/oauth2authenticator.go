@@ -115,7 +115,7 @@ func createVerifier(count int) []byte {
 	return verifier
 }
 
-// This method extracts an oauth2.Token from the given configuration instance if available
+// GetOAuthToken extracts an oauth2.Token from the given configuration instance if available
 func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 	oauthTokenString := config.GetString(CONFIG_KEY_OAUTH_TOKEN)
 	if len(oauthTokenString) > 0 {
@@ -130,6 +130,15 @@ func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 }
 
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
+	return NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, openBrowser, shutdownServer)
+}
+
+func NewOAuth2AuthenticatorWithCustomFuncs(
+	config configuration.Configuration,
+	httpClient *http.Client,
+	openBrowserFunc func(url string),
+	shutdownServerFunc func(server *http.Server),
+) Authenticator {
 	token, _ := GetOAuthToken(config)
 	oauthConfig := getOAuthConfiguration(config)
 	config.PersistInConfigFile(CONFIG_KEY_OAUTH_TOKEN)
@@ -139,8 +148,8 @@ func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http
 		config:             config,
 		oauthConfig:        oauthConfig,
 		token:              token,
-		openBrowserFunc:    openBrowser,
-		shutdownServerFunc: shutdownServer,
+		openBrowserFunc:    openBrowserFunc,
+		shutdownServerFunc: shutdownServerFunc,
 	}
 }
 
