@@ -18,6 +18,7 @@ import (
 func initConfiguration(config configuration.Configuration, apiClient api.ApiClient) {
 	dir, _ := utils.SnykCacheDir()
 
+	config.AddDefaultValue(configuration.OAUTH_AUTH_ENABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
