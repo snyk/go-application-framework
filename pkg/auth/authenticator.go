@@ -21,10 +21,12 @@ type Authenticator interface {
 func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	var authenticator Authenticator
 
-	// try oauth authenticator
-	tmpAuthenticator := NewOAuth2Authenticator(config, httpClient)
-	if tmpAuthenticator.IsSupported() {
-		authenticator = tmpAuthenticator
+	if config.GetBool(configuration.OAUTH_AUTH_ENABLED) {
+		// try oauth authenticator
+		tmpAuthenticator := NewOAuth2Authenticator(config, httpClient)
+		if tmpAuthenticator.IsSupported() {
+			authenticator = tmpAuthenticator
+		}
 	}
 
 	// create token authenticator
