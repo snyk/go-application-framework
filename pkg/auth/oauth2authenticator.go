@@ -58,11 +58,11 @@ func init() {
 	rand.Seed(seed)
 }
 
-func openBrowser(authUrl string) {
+func OpenBrowser(authUrl string) {
 	_ = browser.OpenURL(authUrl)
 }
 
-func shutdownServer(server *http.Server) {
+func ShutdownServer(server *http.Server) {
 	time.Sleep(500)
 	_ = server.Shutdown(context.Background())
 }
@@ -130,7 +130,7 @@ func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 }
 
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
-	return NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, openBrowser, shutdownServer)
+	return NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, OpenBrowser, ShutdownServer)
 }
 
 func NewOAuth2AuthenticatorWithCustomFuncs(
