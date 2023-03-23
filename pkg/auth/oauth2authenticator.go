@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	CONFIG_KEY_OAUTH_TOKEN string        = "OAUTH_TOKEN"
+	CONFIG_KEY_OAUTH_TOKEN string        = "INTERNAL_OAUTH_TOKEN_STORAGE"
 	OAUTH_CLIENT_ID        string        = "0oa37b7oa3zOoDWCe4h7"
 	CALLBACK_HOSTNAME      string        = "127.0.0.1"
 	CALLBACK_PATH          string        = "/authorization-code/callback"
