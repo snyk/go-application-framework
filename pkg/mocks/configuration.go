@@ -116,6 +116,20 @@ func (mr *MockConfigurationMockRecorder) Get(key interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockConfiguration)(nil).Get), key)
 }
 
+// GetAlternativeKeys mocks base method.
+func (m *MockConfiguration) GetAlternativeKeys(key string) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAlternativeKeys", key)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetAlternativeKeys indicates an expected call of GetAlternativeKeys.
+func (mr *MockConfigurationMockRecorder) GetAlternativeKeys(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlternativeKeys", reflect.TypeOf((*MockConfiguration)(nil).GetAlternativeKeys), key)
+}
+
 // GetBool mocks base method.
 func (m *MockConfiguration) GetBool(key string) bool {
 	m.ctrl.T.Helper()

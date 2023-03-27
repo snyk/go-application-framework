@@ -32,6 +32,7 @@ type Configuration interface {
 	AllKeys() []string
 	AddDefaultValue(key string, defaultValue DefaultValueFunction)
 	AddAlternativeKeys(key string, altKeys []string)
+	GetAlternativeKeys(key string) []string
 
 	// PersistInConfigFile ensures that when Set is called with the given key, it will be persisted in the config file.
 	PersistInConfigFile(key string)
@@ -306,6 +307,11 @@ func (ev *extendedViper) AddDefaultValue(key string, defaultValue DefaultValueFu
 // AddAlternativeKeys adds alternative keys to the configuration.
 func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
 	ev.alternativeKeys[key] = altKeys
+}
+
+// GetAlternativeKeys returns alternative keys from the configuration.
+func (ev *extendedViper) GetAlternativeKeys(key string) []string {
+	return ev.alternativeKeys[key]
 }
 
 func (ev *extendedViper) PersistInConfigFile(key string) {
