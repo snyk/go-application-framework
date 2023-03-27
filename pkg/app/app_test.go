@@ -2,6 +2,8 @@ package app
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -39,6 +41,23 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
+func Test_CreateAppEngine_oAuthEnvVarOverridesAuthFlow(t *testing.T) {
+	for _, envVar := range []string{"SNYK_TOKEN", "SNYK_OAUTH_TOKEN", "SNYK_DOCKER_TOKEN"} {
+		t.Run(fmt.Sprintf("For %s envVar", envVar), func(t *testing.T) {
+			engine := CreateAppEngine()
+			assert.NotNil(t, engine)
+
+			config := engine.GetConfiguration()
+			config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+			assert.Equal(t, true, config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED))
+
+			// setting this env var should override the config setting for OAUTH_AUTH_FLOW_ENABLED
+			t.Setenv(envVar, envVar+"_token")
+			assert.Equal(t, false, config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED))
+		})
+	}
+}
+
 func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	orgName := "someOrgName"
 	orgId := "someOrgId"
@@ -52,7 +71,7 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient)
+	initConfiguration(config, mockApiClient, log.Default())
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -72,7 +91,7 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient)
+	initConfiguration(config, mockApiClient, log.Default())
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, defaultOrgId, actualOrgId)
@@ -92,7 +111,7 @@ func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient)
+	initConfiguration(config, mockApiClient, log.Default())
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -111,7 +130,7 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient)
+	initConfiguration(config, mockApiClient, log.Default())
 
 	config.Set(configuration.ORGANIZATION, orgId)
 

@@ -25,7 +25,7 @@ func getConfig() configuration.Configuration {
 	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
-	config.Set(configuration.OAUTH_AUTH_ENABLED, true)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	return config
 }
 

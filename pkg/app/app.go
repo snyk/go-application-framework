@@ -1,7 +1,10 @@
 package app
 
 import (
+	"io"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/internal/api"
@@ -15,10 +18,10 @@ import (
 )
 
 // initConfiguration initializes the configuration with initial values.
-func initConfiguration(config configuration.Configuration, apiClient api.ApiClient) {
+func initConfiguration(config configuration.Configuration, apiClient api.ApiClient, logger *log.Logger) {
 	dir, _ := utils.SnykCacheDir()
 
-	config.AddDefaultValue(configuration.OAUTH_AUTH_ENABLED, configuration.StandardDefaultValueFunction(false))
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
@@ -67,6 +70,25 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 		return orgId
 	})
 
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
+		alternativeBearerKeys := config.GetAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN)
+		alternativeAuthKeys := config.GetAlternativeKeys(configuration.AUTHENTICATION_TOKEN)
+		alternativeKeys := append(alternativeBearerKeys, alternativeAuthKeys...)
+
+		for _, key := range alternativeKeys {
+			hasPrefix := strings.HasPrefix(key, "snyk_")
+			if hasPrefix {
+				formattedKey := strings.ToUpper(key)
+				_, ok := os.LookupEnv(formattedKey)
+				if ok {
+					logger.Printf("Found environment variable %s, disabling OAuth flow", formattedKey)
+					return false
+				}
+			}
+		}
+		return existingValue
+	})
+
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
 	config.AddAlternativeKeys(configuration.API_URL, []string{"endpoint"})
@@ -74,10 +96,16 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 
 // CreateAppEngine creates a new workflow engine.
 func CreateAppEngine() workflow.Engine {
+	discardLogger := log.New(io.Discard, "", 0)
+	return CreateAppEngineWithLogger(discardLogger)
+}
+
+// App engine with logger injected
+func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
 	config := configuration.New()
 	apiClient := api.NewApiInstance()
 
-	initConfiguration(config, apiClient)
+	initConfiguration(config, apiClient, logger)
 
 	engine := workflow.NewWorkFlowEngine(config)
 

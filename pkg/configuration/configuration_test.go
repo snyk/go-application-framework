@@ -97,6 +97,16 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 	cleanUpEnvVars()
 }
 
+func Test_ConfigurationGet_ALTERNATE_KEYS(t *testing.T) {
+	alternateKeys := []string{"snyk_token", "snyk_cfg_api", "api"}
+
+	config := NewFromFiles(TEST_FILENAME)
+	config.AddAlternativeKeys(AUTHENTICATION_TOKEN, alternateKeys)
+
+	actualValue := config.GetAlternativeKeys(AUTHENTICATION_TOKEN)
+	assert.Equal(t, alternateKeys, actualValue)
+}
+
 func Test_ConfigurationGet_unset(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
