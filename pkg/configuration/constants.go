@@ -16,6 +16,6 @@ const (
 	WORKFLOW_USE_STDIO             string = "wflstdio"
 	RAW_CMD_ARGS                   string = "raw_cmd_args"
 	WEB_APP_URL                    string = "internal_snyk_app"
-	// feature flag to enable the new oAuth user flow
-	OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
+	// feature flags
+	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
 )

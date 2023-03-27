@@ -21,7 +21,7 @@ import (
 func initConfiguration(config configuration.Configuration, apiClient api.ApiClient, logger *log.Logger) {
 	dir, _ := utils.SnykCacheDir()
 
-	config.AddDefaultValue(configuration.OAUTH_AUTH_FLOW_ENABLED, configuration.StandardDefaultValueFunction(false))
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
@@ -70,7 +70,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 		return orgId
 	})
 
-	config.AddDefaultValue(configuration.OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
 		alternativeBearerKeys := config.GetAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN)
 		alternativeAuthKeys := config.GetAlternativeKeys(configuration.AUTHENTICATION_TOKEN)
 		alternativeKeys := append(alternativeBearerKeys, alternativeAuthKeys...)

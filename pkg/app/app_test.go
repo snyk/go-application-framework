@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -45,18 +44,16 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 func Test_CreateAppEngine_oAuthEnvVarOverridesAuthFlow(t *testing.T) {
 	for _, envVar := range []string{"SNYK_TOKEN", "SNYK_OAUTH_TOKEN", "SNYK_DOCKER_TOKEN"} {
 		t.Run(fmt.Sprintf("For %s envVar", envVar), func(t *testing.T) {
-			// loop through all env vars that can be used for authentication
 			engine := CreateAppEngine()
 			assert.NotNil(t, engine)
 
 			config := engine.GetConfiguration()
-			config.Set(configuration.OAUTH_AUTH_FLOW_ENABLED, true)
-			assert.Equal(t, true, config.GetBool(configuration.OAUTH_AUTH_FLOW_ENABLED))
+			config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+			assert.Equal(t, true, config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED))
 
-			// setting this env var should override the config
-			os.Setenv(envVar, "token")
-			assert.Equal(t, false, config.GetBool(configuration.OAUTH_AUTH_FLOW_ENABLED))
-			os.Unsetenv(envVar)
+			// setting this env var should override the config setting for OAUTH_AUTH_FLOW_ENABLED
+			t.Setenv(envVar, envVar+"_token")
+			assert.Equal(t, false, config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED))
 		})
 	}
 }

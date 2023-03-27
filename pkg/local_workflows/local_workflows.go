@@ -17,7 +17,7 @@ func Init(engine workflow.Engine) error {
 		InitWhoAmIWorkflow,
 	}
 
-	if config.GetBool(configuration.OAUTH_AUTH_FLOW_ENABLED) {
+	if config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
 		initMethods = append(initMethods, InitAuth) //Use legacy CLI for authentication for now, until OAuth is ready
 	}
 

@@ -34,7 +34,7 @@ func Test_CreateAuthenticator_token_oauthDisabled(t *testing.T) {
 	config := configuration.NewFromFiles("")
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, getTestOauthTokenStorageType())
 	config.Set(configuration.AUTHENTICATION_TOKEN, "api token")
-	config.Set(configuration.OAUTH_AUTH_FLOW_ENABLED, false)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 
 	authenticator := CreateAuthenticator(config, http.DefaultClient)
 	_, ok := authenticator.(*tokenAuthenticator)
@@ -45,7 +45,7 @@ func Test_CreateAuthenticator_oauth_oauthEnabled(t *testing.T) {
 	config := configuration.NewFromFiles("")
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, getTestOauthTokenStorageType())
 	config.Set(configuration.AUTHENTICATION_TOKEN, "api token")
-	config.Set(configuration.OAUTH_AUTH_FLOW_ENABLED, true)
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	authenticator := CreateAuthenticator(config, http.DefaultClient)
 	_, ok := authenticator.(*oAuth2Authenticator)
