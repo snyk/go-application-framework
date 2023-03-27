@@ -2,6 +2,7 @@ package app
 
 import (
 	"log"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/internal/api"
@@ -78,6 +79,12 @@ func CreateAppEngine() workflow.Engine {
 	apiClient := api.NewApiInstance()
 
 	initConfiguration(config, apiClient)
+
+	// update config if oauth token is set via env var
+	oAuthEnabled, ok := os.LookupEnv("AUTHENTICATION_BEARER_TOKEN")
+	if ok {
+		config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, oAuthEnabled)
+	}
 
 	engine := workflow.NewWorkFlowEngine(config)
 

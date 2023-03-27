@@ -154,7 +154,7 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 }
 
 func (o *oAuth2Authenticator) IsSupported() bool {
-	return o.token != nil
+	return o.token != nil && o.config.GetBool(configuration.OAUTH_AUTH_ENABLED)
 }
 
 func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
