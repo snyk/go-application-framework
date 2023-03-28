@@ -2,6 +2,7 @@ package configuration
 
 const (
 	API_URL                        string = "snyk_api"
+	AUTHENTICATION_SUBDOMAINS      string = "internal_auth_subdomain_regexp" // regular expression that defines which sub-domains of the api url require authentication
 	AUTHENTICATION_TOKEN           string = "token"
 	AUTHENTICATION_BEARER_TOKEN    string = "bearer_token"
 	INTEGRATION_NAME               string = "snyk_integration_name"

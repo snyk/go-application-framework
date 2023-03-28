@@ -29,6 +29,11 @@ func InitAuth(engine workflow.Engine) error {
 	return err
 }
 
+func OpenBrowser(authUrl string) {
+	fmt.Println(authUrl)
+	auth.OpenBrowser(authUrl)
+}
+
 // authEntryPoint is the entry point for the auth workflow.
 func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
 	// get necessary objects from invocation context
@@ -44,7 +49,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		logger.Println("Headless:", headless)
 
 		httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
-		authenticator := auth.NewOAuth2Authenticator(config, httpClient)
+		authenticator := auth.NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, OpenBrowser, auth.ShutdownServer)
 		err = authenticator.Authenticate()
 		if err != nil {
 			return nil, err

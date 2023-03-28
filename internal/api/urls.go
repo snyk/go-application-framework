@@ -8,11 +8,12 @@ import (
 )
 
 const (
-	app_pattern string = "^app\\."
-	api_pattern string = "^api\\."
-	api_prefix  string = "api."
-	app_prefix  string = "app."
-	port_suffix string = ":[0-9]*$"
+	API_PREFIX     string = "api"
+	app_pattern    string = "^app\\."
+	api_pattern    string = "^api\\."
+	api_prefix_dot string = API_PREFIX + "."
+	app_prefix     string = "app"
+	port_suffix    string = ":[0-9]*$"
 )
 
 func isLocalhost(host string) bool {
@@ -49,11 +50,11 @@ func GetCanonicalApiUrl(url url.URL) (string, error) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
 	} else {
 		appRegexp, _ := regexp.Compile(app_pattern)
-		url.Host = appRegexp.ReplaceAllString(url.Host, api_prefix)
+		url.Host = appRegexp.ReplaceAllString(url.Host, api_prefix_dot)
 
 		apiRegexp, _ := regexp.Compile(api_pattern)
 		if !apiRegexp.MatchString(url.Host) {
-			url.Host = api_prefix + url.Host
+			url.Host = api_prefix_dot + url.Host
 		}
 
 		// clean path and fragment
@@ -67,6 +68,10 @@ func GetCanonicalApiUrl(url url.URL) (string, error) {
 }
 
 func DeriveAppUrl(canonicalUrl string) (string, error) {
+	return DeriveSubdomainUrl(canonicalUrl, app_prefix)
+}
+
+func DeriveSubdomainUrl(canonicalUrl string, subdomain string) (string, error) {
 	result := ""
 	url, err := url.Parse(canonicalUrl)
 	if err != nil {
@@ -74,7 +79,7 @@ func DeriveAppUrl(canonicalUrl string) (string, error) {
 	}
 
 	apiRegexp, _ := regexp.Compile(api_pattern)
-	url.Host = apiRegexp.ReplaceAllString(url.Host, app_prefix)
+	url.Host = apiRegexp.ReplaceAllString(url.Host, subdomain+".")
 
 	result = url.String()
 	return result, nil
