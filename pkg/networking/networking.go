@@ -28,7 +28,7 @@ type NetworkAccess interface {
 	// GetUnauthorizedHttpClient returns an HTTP client that does not use authentication headers.
 	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
-	AddHeaderField(key string, value string)
+	AddHeaderField(key, value string)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
@@ -61,45 +61,34 @@ func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response,
 func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	// prepare logger
 	logger := log.New(os.Stderr, "NetworkAccess - ", config.GetInt(configuration.DEBUG_FORMAT))
-	if config.GetBool(configuration.DEBUG) == false {
+	if !config.GetBool(configuration.DEBUG) {
 		logger.SetOutput(io.Discard)
 	}
 
-	c := networkImpl{
+	return &networkImpl{
 		config:       config,
 		staticHeader: http.Header{},
 		logger:       logger,
 		proxy:        http.ProxyFromEnvironment,
 	}
-
-	return &c
 }
 
-func (n *networkImpl) AddHeaderField(key string, value string) {
-	n.staticHeader[key] = append(n.staticHeader[key], value)
+func (n *networkImpl) AddHeaderField(key, value string) {
+	n.staticHeader.Add(key, value)
 }
 
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
-	err := middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
-	return err
+	return middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
 }
 
 // addDefaultHeader adds the default headers request.
 func (n *networkImpl) addDefaultHeader(request *http.Request) {
-	defaultHeader := http.Header{}
-
-	// add static header
+	// add/replace request headers by default headers
 	for k, v := range n.staticHeader {
+		request.Header.Del(k)
 		for i := range v {
-			defaultHeader.Add(k, v[i])
-		}
-	}
-
-	// iterate over default headers and add them if there is no existing entry yet
-	for k, v := range defaultHeader {
-		for i := range v {
-			request.Header.Set(k, v[i])
+			request.Header.Add(k, v[i])
 		}
 	}
 }
