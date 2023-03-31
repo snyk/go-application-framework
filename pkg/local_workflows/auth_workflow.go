@@ -16,6 +16,15 @@ const (
 	authTypeParameter = "auth-type"
 )
 
+const templateConsoleMessage = `
+Now redirecting you to our auth page, go ahead and log in,
+and once the auth is complete, return to this prompt and you'll
+be ready to start using snyk.
+
+If you can't wait use this url:
+%s
+`
+
 // define a new workflow identifier for this workflow
 var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflowNameAuth)
 
@@ -30,7 +39,7 @@ func InitAuth(engine workflow.Engine) error {
 }
 
 func OpenBrowser(authUrl string) {
-	fmt.Println(authUrl)
+	fmt.Println(fmt.Sprintf(templateConsoleMessage, authUrl))
 	auth.OpenBrowser(authUrl)
 }
 
