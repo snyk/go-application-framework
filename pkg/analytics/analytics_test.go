@@ -14,6 +14,19 @@ import (
 )
 
 func Test_Basic(t *testing.T) {
+	testFields := []string{
+		"tfc-token",
+		"azurerm-account-key",
+		"fetch-tfstate-headers",
+		"username",
+		"user",
+		"password",
+		"passw",
+		"token",
+		"key",
+		"secret",
+	}
+
 	os.Setenv("CIRCLECI", "true")
 
 	api := "http://myapi.com"
@@ -23,8 +36,8 @@ func Test_Basic(t *testing.T) {
 
 	// prepare test data
 	args := []string{"test", "--flag", "b=1"}
-	for i := range sensitiveFieldNames {
-		args = append(args, fmt.Sprintf("%s=%s", sensitiveFieldNames[i], "secretvalue"))
+	for i := range testFields {
+		args = append(args, fmt.Sprintf("%s=%s", testFields[i], "secretvalue"))
 	}
 
 	analytics := New()
@@ -56,14 +69,15 @@ func Test_Basic(t *testing.T) {
 
 	body, err := io.ReadAll(request.Body)
 	assert.Nil(t, err)
-	assert.Equal(t, len(sensitiveFieldNames), strings.Count(string(body), sanitize_replacement_string), "Not all sensitive values have been replaced!")
+	assert.Equal(t, len(testFields), strings.Count(string(body), sanitize_replacement_string), "Not all sensitive values have been replaced!")
 
 	fmt.Println("Request Url: " + requestUrl)
 	fmt.Println("Request Body: " + string(body))
 }
 
 func Test_SanitizeValuesByKey(t *testing.T) {
-	secretValues := []string{"mypassword", "123", "#er+aVnqOjnyTtzn-snyk", "Patch", "DogsRule"}
+	secretNumber := 987654
+	secretValues := []string{"mypassword", "123", "#er+aVnqOjnyTtzn-snyk", "Patch", "DogsRule", "CatsDont", "MiceAreOk"}
 	expectedNumberOfRedacted := len(secretValues)
 
 	type sanTest struct {
@@ -79,15 +93,15 @@ func Test_SanitizeValuesByKey(t *testing.T) {
 		Password:           secretValues[2],
 		JenkinsPassword:    secretValues[0],
 		PrivateKeySecret:   secretValues[1],
-		SecretNumber:       987654,
+		SecretNumber:       secretNumber,
 		TotallyPublicValue: false,
-		Args:               []string{"--username=" + secretValues[3], "password=" + secretValues[4], "something=else"},
+		Args:               []string{"--some-username=" + secretValues[3], "password=" + secretValues[4], "--something=else", "--mytokenvalue", secretValues[5], "--mykey=" + secretValues[6]},
 	}
 
 	// test input
-	filter := []string{"password", "Secret", "username"}
+	filter := sensitiveFieldNames
 	input, _ := json.Marshal(inputStruct)
-	replacement := "REDACTED"
+	replacement := sanitize_replacement_string
 
 	fmt.Println("Before: " + string(input))
 
