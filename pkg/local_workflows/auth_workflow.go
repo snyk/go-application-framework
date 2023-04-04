@@ -64,7 +64,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 			return nil, err
 		}
 
-		fmt.Println("Successfully authenticated!")
+		fmt.Println(auth.AUTHENTICATED_MESSAGE)
 
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])

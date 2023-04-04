@@ -27,6 +27,7 @@ const (
 	CALLBACK_HOSTNAME      string        = "127.0.0.1"
 	CALLBACK_PATH          string        = "/authorization-code/callback"
 	TIMEOUT_SECONDS        time.Duration = 120 * time.Second
+	AUTHENTICATED_MESSAGE                = "Your account has been authenticated."
 )
 
 var _ Authenticator = (*oAuth2Authenticator)(nil)
@@ -162,7 +163,6 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
 	o.config.Set(CONFIG_KEY_OAUTH_TOKEN, string(tokenstring))
 	o.token = token
 }
-
 func (o *oAuth2Authenticator) Authenticate() error {
 	var responseCode string
 	var responseState string
@@ -185,7 +185,7 @@ func (o *oAuth2Authenticator) Authenticate() error {
 		} else {
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
-			_, _ = fmt.Fprintf(w, "Succesfully Authenticated!")
+			_, _ = fmt.Fprintf(w, AUTHENTICATED_MESSAGE)
 		}
 
 		go o.shutdownServerFunc(srv)
