@@ -181,7 +181,7 @@ func (o *oAuth2Authenticator) Authenticate() error {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
 			details := html.EscapeString(r.URL.Query().Get("error_description"))
-			_, _ = fmt.Fprintf(w, "Error during authentication! (%s)\n%s", responseError, details)
+			_, _ = fmt.Fprintf(w, "Failed to authenticate! (%s)\n%s", responseError, details)
 		} else {
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
