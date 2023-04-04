@@ -19,4 +19,5 @@ const (
 	WEB_APP_URL                    string = "internal_snyk_app"
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
+	INPUT_DIRECTORY            string = "targetDirectory"
 )

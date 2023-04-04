@@ -11,13 +11,18 @@ import (
 
 var WORKFLOWID_OUTPUT_WORKFLOW workflow.Identifier = workflow.NewWorkflowIdentifier("output")
 
+const (
+	OUTPUT_CONFIG_KEY_JSON      = "json"
+	OUTPUT_CONFIG_KEY_JSON_FILE = "json-file-output"
+)
+
 // InitOutputWorkflow initializes the output workflow
 // The output workflow is responsible for handling the output destination of workflow data
 // As part of the localworkflows package, it is registered via the localworkflows.Init method
 func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig := pflag.NewFlagSet("output", pflag.ExitOnError)
-	outputConfig.Bool("json", false, "Print json output to console")
-	outputConfig.String("json-file-output", "", "Write json output to file")
+	outputConfig.Bool(OUTPUT_CONFIG_KEY_JSON, false, "Print json output to console")
+	outputConfig.String(OUTPUT_CONFIG_KEY_JSON_FILE, "", "Write json output to file")
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
@@ -34,8 +39,8 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetLogger()
 
-	printJsonToCmd := config.GetBool("json")
-	writeJsonToFile := config.GetString("json-file-output")
+	printJsonToCmd := config.GetBool(OUTPUT_CONFIG_KEY_JSON)
+	writeJsonToFile := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
 
 	for i := range input {
 		mimeType := input[i].GetContentType()
@@ -46,7 +51,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'\n", input[i].GetIdentifier().String(), contentLocation, mimeType)
 
-		if strings.Contains(mimeType, "json") { // handle application/json
+		if strings.Contains(mimeType, OUTPUT_CONFIG_KEY_JSON) { // handle application/json
 			singleData := input[i].GetPayload().([]byte)
 
 			// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
