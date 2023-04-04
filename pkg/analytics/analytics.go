@@ -113,11 +113,12 @@ var (
 	// sensitiveFieldNames is a list of field names that should be sanitized.
 	// data sanitization is used to prevent sensitive data from being sent to the analytics server.
 	sensitiveFieldNames []string = []string{
-		"tfc-token",
-		"azurerm-account-key",
-		"fetch-tfstate-headers",
-		"username",
-		"password",
+		"headers",
+		"user",
+		"passw",
+		"token",
+		"key",
+		"secret",
 	}
 )
 
@@ -290,10 +291,12 @@ func (a *AnalyticsImpl) Send() (*http.Response, error) {
 // * key : "value"
 // * key = "value"
 // * key = value
+// * key "value"
+
 func SanitizeValuesByKey(keysToFilter []string, replacementValue string, content []byte) ([]byte, error) {
 	for i := range keysToFilter {
 		filter := keysToFilter[i]
-		r, err := regexp.Compile("(?i)([\"']?\\w*" + filter + "\\w*\"?)(((\\s?[:]\\s?[\"'])[^\n\"']*([\"']))|((\\s?[=]\\s?[\"']?)[^\n\"']*([\"']?)))")
+		r, err := regexp.Compile("(?i)([\"']?\\w*" + filter + "\\w*\"?)(((\\s?[:]\\s?[\"'])[^\n\"']*([\"']))|((\\s?[= ,]\\s?[\"']?)[^\n\"']*([\"']?)))")
 		if err != nil {
 			return nil, err
 		}
@@ -305,8 +308,7 @@ func SanitizeValuesByKey(keysToFilter []string, replacementValue string, content
 
 // SanitizeUsername sanitizes the given content by replacing the given username with the replacement string.
 func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue string, content []byte) ([]byte, error) {
-	contentStr := string(content)
-	contentStr = strings.ReplaceAll(contentStr, rawUserName, replacementValue)
+	valuesToSanitize := []string{rawUserName, strings.ReplaceAll(userHomeDir, "\\", "\\\\")}
 
 	if strings.Contains(rawUserName, "\\") {
 		segments := strings.Split(rawUserName, "\\")
@@ -315,8 +317,7 @@ func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue s
 			// this should never happen because we already checked for the existence of a backslash
 			return nil, fmt.Errorf("could not sanitize username")
 		} else if segmentsLen == 2 {
-			simpleUsername := segments[1]
-			contentStr = strings.ReplaceAll(contentStr, simpleUsername, replacementValue)
+			valuesToSanitize = append(valuesToSanitize, segments[1])
 		} else {
 			// don't recognize this format
 			fmt.Println(segments)
@@ -324,8 +325,15 @@ func SanitizeUsername(rawUserName string, userHomeDir string, replacementValue s
 		}
 	}
 
-	// if the homedir is still there, we ensure to remove it completely
-	contentStr = strings.ReplaceAll(contentStr, strings.ReplaceAll(userHomeDir, "\\", "\\\\"), replacementValue)
+	return SanitizeStaticValues(valuesToSanitize, replacementValue, content)
+}
+
+func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, content []byte) ([]byte, error) {
+	contentStr := string(content)
+
+	for _, valueToReplace := range valuesToSanitize {
+		contentStr = strings.ReplaceAll(contentStr, valueToReplace, replacementValue)
+	}
 
 	return []byte(contentStr), nil
 }
