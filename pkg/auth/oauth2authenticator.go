@@ -13,7 +13,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/pkg/browser"
@@ -75,8 +74,8 @@ func getRedirectUri(port int) string {
 
 func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	appUrl := config.GetString(configuration.WEB_APP_URL)
-	tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token"
-	tokenUrl = "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token" // TODO HEAD-208
+	//tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token" // TODO HEAD-208
+	tokenUrl := "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token" // TODO HEAD-208
 	authUrl := appUrl + "/oauth/authorize"
 
 	conf := &oauth2.Config{
@@ -181,11 +180,11 @@ func (o *oAuth2Authenticator) Authenticate() error {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
 			details := html.EscapeString(r.URL.Query().Get("error_description"))
-			_, _ = fmt.Fprintf(w, "Error during authentication! (%s)\n%s", responseError, details)
+			_, _ = fmt.Fprintf(w, "Failed to authenticate. (%s)\n%s", responseError, details)
 		} else {
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
-			_, _ = fmt.Fprintf(w, AUTHENTICATED_MESSAGE)
+			_, _ = fmt.Fprint(w, AUTHENTICATED_MESSAGE)
 		}
 
 		go o.shutdownServerFunc(srv)
