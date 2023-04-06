@@ -19,7 +19,10 @@ import (
 
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(config configuration.Configuration, apiClient api.ApiClient, logger *log.Logger) {
-	dir, _ := utils.SnykCacheDir()
+	dir, err := utils.SnykCacheDir()
+	if err != nil {
+		logger.Println("Failed to determine cache directory:", err)
+	}
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
@@ -44,7 +47,11 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {
 		canonicalApiUrl := config.GetString(configuration.API_URL)
-		appUrl, _ := api.DeriveAppUrl(canonicalApiUrl)
+		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
+		if err != nil {
+			logger.Println("Failed to determine default value for \"WEB_APP_URL\":", err)
+		}
+
 		return appUrl
 	})
 
@@ -58,7 +65,9 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 			isSlugName := err != nil
 			if isSlugName {
 				orgId, err = apiClient.GetOrgIdFromSlug(existingValue.(string))
-				if err == nil {
+				if err != nil {
+					logger.Println("Failed to determine default value for \"ORGANIZATION\":", err)
+				} else {
 					return orgId
 				}
 			} else {
@@ -66,7 +75,10 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 			}
 		}
 
-		orgId, _ := apiClient.GetDefaultOrgId()
+		orgId, err := apiClient.GetDefaultOrgId()
+		if err != nil {
+			logger.Println("Failed to determine default value for \"ORGANIZATION\":", err)
+		}
 
 		return orgId
 	})
@@ -93,6 +105,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
 	config.AddAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
 	config.AddAlternativeKeys(configuration.API_URL, []string{"endpoint"})
+	config.AddAlternativeKeys(configuration.ADD_TRUSTED_CA_FILE, []string{"NODE_EXTRA_CA_CERTS"})
 }
 
 // CreateAppEngine creates a new workflow engine.
