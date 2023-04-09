@@ -253,11 +253,12 @@ func (o *OAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 		return fmt.Errorf("request must not be nil")
 	}
 
-	accessToken, err := o.GetOrRefreshAccessToken()
+	err := o.GetOrRefreshAccessToken()
 	if err != nil {
 		return err
 	}
 
+	accessToken := o.token.AccessToken
 	if len(accessToken) > 0 {
 		value := fmt.Sprint("Bearer ", accessToken)
 		request.Header.Set("Authorization", value)
@@ -266,12 +267,10 @@ func (o *OAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 	return nil
 }
 
-// GetOrRefreshAccessToken returns the access token or refreshes it if it is expired.
-// It returns an error if the token is an empty string.
-// If the token is refreshed, the token is persisted in the config file.
-func (o *OAuth2Authenticator) GetOrRefreshAccessToken() (string, error) {
+// GetOrRefreshAccessToken will refresh the token if it has expired, and store it in the config file.
+func (o *OAuth2Authenticator) GetOrRefreshAccessToken() (err error) {
 	if o.token == nil {
-		return "", fmt.Errorf("oauth token must not be nil to authorize")
+		return fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
 	ctx := context.Background()
@@ -283,12 +282,12 @@ func (o *OAuth2Authenticator) GetOrRefreshAccessToken() (string, error) {
 	tokenSource := o.oauthConfig.TokenSource(ctx, o.token)
 	validToken, err := tokenSource.Token()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if validToken != o.token {
 		o.persistToken(validToken)
 	}
 
-	return validToken.AccessToken, nil
+	return nil
 }

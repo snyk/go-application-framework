@@ -37,7 +37,7 @@ func refreshEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Da
 		return nil, errors.New(failedToGetAuthenticator)
 	}
 
-	_, err = authenticator.GetOrRefreshAccessToken()
+	err = authenticator.GetOrRefreshAccessToken()
 	if err != nil {
 		return nil, err
 	}
