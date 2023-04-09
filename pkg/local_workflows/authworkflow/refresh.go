@@ -16,6 +16,7 @@ var refreshWorkflowId = workflow.NewWorkflowIdentifier(refreshWorkflowName)
 // InitRefresh registers the oauth token refresh workflow with the engine.
 func InitRefresh(engine workflow.Engine) error {
 	config := pflag.NewFlagSet(refreshWorkflowName, pflag.ExitOnError)
+	config.String(authTypeParameter, "token", "Authentication type (token, oauth)")
 	_, err := engine.Register(refreshWorkflowId, workflow.ConfigurationOptionsFromFlagset(config), refreshEntryPoint)
 	return err
 }
