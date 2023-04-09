@@ -1,7 +1,8 @@
-package localworkflows
+package authworkflow
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -25,8 +26,8 @@ If you can't wait use this url:
 %s
 `
 
-// define a new workflow identifier for this workflow
-var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflowNameAuth)
+// WorkflowIdAuth define a new workflow identifier for this workflow
+var WorkflowIdAuth = workflow.NewWorkflowIdentifier(workflowNameAuth)
 
 // InitAuth initialises the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
@@ -34,17 +35,34 @@ func InitAuth(engine workflow.Engine) error {
 	config.String(authTypeParameter, "token", "Authentication type (token, oauth)")
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 
-	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
-	return err
+	authWorkflow := NewAuthWorkflow(os.Stdout)
+	_, err := engine.Register(WorkflowIdAuth, workflow.ConfigurationOptionsFromFlagset(config), authWorkflow.authEntryPoint)
+	if err != nil {
+		return err
+	}
+
+	return InitRefresh(engine)
 }
 
-func OpenBrowser(authUrl string) {
-	fmt.Println(fmt.Sprintf(templateConsoleMessage, authUrl))
+type AuthWorkflow struct {
+	writer io.Writer
+}
+
+func NewAuthWorkflow(writer io.Writer) *AuthWorkflow {
+	return &AuthWorkflow{
+		writer: writer,
+	}
+}
+
+func (aw *AuthWorkflow) OpenBrowser(authUrl string) {
+	_, _ = fmt.Fprintf(aw.writer, templateConsoleMessage, authUrl)
 	auth.OpenBrowser(authUrl)
 }
 
-// authEntryPoint is the entry point for the auth workflow.
-func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
+func (aw *AuthWorkflow) authEntryPoint(
+	invocationCtx workflow.InvocationContext,
+	_ []workflow.Data,
+) (_ []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetLogger()
@@ -58,13 +76,13 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		logger.Println("Headless:", headless)
 
 		httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
-		authenticator := auth.NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, OpenBrowser, auth.ShutdownServer)
+		authenticator := auth.NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, aw.OpenBrowser, auth.ShutdownServer)
 		err = authenticator.Authenticate()
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Println(auth.AUTHENTICATED_MESSAGE)
+		_, _ = fmt.Fprintln(aw.writer, auth.AUTHENTICATED_MESSAGE)
 
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])

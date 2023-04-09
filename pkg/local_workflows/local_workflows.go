@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/authworkflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -18,7 +19,7 @@ func Init(engine workflow.Engine) error {
 	}
 
 	if config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
-		initMethods = append(initMethods, InitAuth) //Use legacy CLI for authentication for now, until OAuth is ready
+		initMethods = append(initMethods, authworkflow.InitAuth) // Use legacy CLI for authentication for now, until OAuth is ready
 	}
 
 	for i := range initMethods {

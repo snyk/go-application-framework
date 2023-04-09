@@ -29,11 +29,11 @@ const (
 	AUTHENTICATED_MESSAGE                = "Your account has been authenticated."
 )
 
-var _ Authenticator = (*oAuth2Authenticator)(nil)
+var _ Authenticator = (*OAuth2Authenticator)(nil)
 
 var acceptedCallbackPorts = []int{8080, 18081, 28082, 38083, 48084}
 
-type oAuth2Authenticator struct {
+type OAuth2Authenticator struct {
 	httpClient         *http.Client
 	config             configuration.Configuration
 	oauthConfig        *oauth2.Config
@@ -74,7 +74,7 @@ func getRedirectUri(port int) string {
 
 func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	appUrl := config.GetString(configuration.WEB_APP_URL)
-	//tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token" // TODO HEAD-208
+	// tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token" // TODO HEAD-208
 	tokenUrl := "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token" // TODO HEAD-208
 	authUrl := appUrl + "/oauth/authorize"
 
@@ -143,7 +143,7 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 	oauthConfig := getOAuthConfiguration(config)
 	config.PersistInConfigFile(CONFIG_KEY_OAUTH_TOKEN)
 
-	return &oAuth2Authenticator{
+	return &OAuth2Authenticator{
 		httpClient:         httpClient,
 		config:             config,
 		oauthConfig:        oauthConfig,
@@ -153,16 +153,16 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 	}
 }
 
-func (o *oAuth2Authenticator) IsSupported() bool {
+func (o *OAuth2Authenticator) IsSupported() bool {
 	return o.token != nil && o.config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
 }
 
-func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
+func (o *OAuth2Authenticator) persistToken(token *oauth2.Token) {
 	tokenstring, _ := json.Marshal(token)
 	o.config.Set(CONFIG_KEY_OAUTH_TOKEN, string(tokenstring))
 	o.token = token
 }
-func (o *oAuth2Authenticator) Authenticate() error {
+func (o *OAuth2Authenticator) Authenticate() error {
 	var responseCode string
 	var responseState string
 	var responseError string
@@ -248,12 +248,30 @@ func (o *oAuth2Authenticator) Authenticate() error {
 	return nil
 }
 
-func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
+func (o *OAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
 	if request == nil {
 		return fmt.Errorf("request must not be nil")
 	}
+
+	accessToken, err := o.GetOrRefreshAccessToken()
+	if err != nil {
+		return err
+	}
+
+	if len(accessToken) > 0 {
+		value := fmt.Sprint("Bearer ", accessToken)
+		request.Header.Set("Authorization", value)
+	}
+
+	return nil
+}
+
+// GetOrRefreshAccessToken returns the access token or refreshes it if it is expired.
+// It returns an error if the token is an empty string.
+// If the token is refreshed, the token is persisted in the config file.
+func (o *OAuth2Authenticator) GetOrRefreshAccessToken() (string, error) {
 	if o.token == nil {
-		return fmt.Errorf("oauth token must not be nil to authorize")
+		return "", fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
 	ctx := context.Background()
@@ -265,18 +283,12 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 	tokenSource := o.oauthConfig.TokenSource(ctx, o.token)
 	validToken, err := tokenSource.Token()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if validToken != o.token {
 		o.persistToken(validToken)
 	}
 
-	accessToken := validToken.AccessToken
-	if len(accessToken) > 0 {
-		value := fmt.Sprint("Bearer ", accessToken)
-		request.Header.Set("Authorization", value)
-	}
-
-	return nil
+	return validToken.AccessToken, nil
 }

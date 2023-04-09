@@ -48,6 +48,6 @@ func Test_CreateAuthenticator_oauth_oauthEnabled(t *testing.T) {
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	authenticator := CreateAuthenticator(config, http.DefaultClient)
-	_, ok := authenticator.(*oAuth2Authenticator)
+	_, ok := authenticator.(*OAuth2Authenticator)
 	assert.True(t, ok)
 }
