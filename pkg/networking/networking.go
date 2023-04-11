@@ -65,12 +65,24 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 		logger.SetOutput(io.Discard)
 	}
 
-	return &networkImpl{
+	n := &networkImpl{
 		config:       config,
 		staticHeader: http.Header{},
 		logger:       logger,
 		proxy:        http.ProxyFromEnvironment,
 	}
+
+	extraCaCertFile := config.GetString(configuration.ADD_TRUSTED_CA_FILE)
+	if len(extraCaCertFile) > 0 {
+		err := n.AddRootCAs(extraCaCertFile)
+		if err != nil {
+			logger.Printf("Failed to AddRootCAs from '%s' (%v)\n", extraCaCertFile, err)
+		} else {
+			logger.Println("Using additional CAs from file:", extraCaCertFile)
+		}
+	}
+
+	return n
 }
 
 func (n *networkImpl) AddHeaderField(key, value string) {

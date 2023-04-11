@@ -169,7 +169,7 @@ func Test_GetHTTPClient(t *testing.T) {
 
 func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config)
+	config.Set(configuration.DEBUG, true)
 
 	certPem, _keyPem, _ := certs.MakeSelfSignedCert("mycert", []string{"localhost"}, log.Default())
 	certFile, _ := os.CreateTemp("", "")
@@ -194,13 +194,14 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	time.Sleep(1000)
 
 	// test that we can't connect without adding the ca certificates
+	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
 	_, err = client.Get("https://localhost:8443/")
 	assert.NotNil(t, err)
 
 	// invoke method under test
-	err = net.AddRootCAs(certFile.Name())
-	assert.Nil(t, err)
+	config.Set(configuration.ADD_TRUSTED_CA_FILE, certFile.Name())
+	net = NewNetworkAccess(config)
 
 	// test connectability after adding ca certificates
 	client = net.GetHttpClient()
