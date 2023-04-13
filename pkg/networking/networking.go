@@ -37,12 +37,11 @@ type NetworkAccess interface {
 
 // networkImpl is the default implementation of the NetworkAccess interface.
 type networkImpl struct {
-	config        configuration.Configuration
-	staticHeader  http.Header
-	logger        *log.Logger
-	proxy         func(req *http.Request) (*url.URL, error)
-	caPool        *x509.CertPool
-	authenticator auth.Authenticator
+	config       configuration.Configuration
+	staticHeader http.Header
+	logger       *log.Logger
+	proxy        func(req *http.Request) (*url.URL, error)
+	caPool       *x509.CertPool
 }
 
 // customRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -163,10 +162,6 @@ func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
 }
 
 func (n *networkImpl) GetAuthenticator() auth.Authenticator {
-	if n.authenticator == nil {
-		transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
-		n.authenticator = n.createAuthenticator(transport)
-	}
-
-	return n.authenticator
+	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	return n.createAuthenticator(transport)
 }
