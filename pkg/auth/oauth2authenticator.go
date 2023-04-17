@@ -23,7 +23,7 @@ import (
 
 const (
 	CONFIG_KEY_OAUTH_TOKEN string        = "INTERNAL_OAUTH_TOKEN_STORAGE"
-	OAUTH_CLIENT_ID        string        = "0oa37b7oa3zOoDWCe4h7"
+	OAUTH_CLIENT_ID        string        = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
 	CALLBACK_HOSTNAME      string        = "127.0.0.1"
 	CALLBACK_PATH          string        = "/authorization-code/callback"
 	TIMEOUT_SECONDS        time.Duration = 120 * time.Second
@@ -77,9 +77,9 @@ func getRedirectUri(port int) string {
 
 func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	appUrl := config.GetString(configuration.WEB_APP_URL)
-	//tokenUrl := strings.Replace(appUrl, "app.", "id.", 1) + "/oauth2/default/v1/token" // TODO HEAD-208
-	tokenUrl := "https://snyk-fedramp-alpha.okta.com/oauth2/default/v1/token" // TODO HEAD-208
-	authUrl := appUrl + "/oauth/authorize"
+	apiUrl := config.GetString(configuration.API_URL)
+	tokenUrl := apiUrl + "/oauth2/token"
+	authUrl := appUrl + "/oauth2/authorize"
 
 	conf := &oauth2.Config{
 		ClientID: OAUTH_CLIENT_ID,
@@ -236,9 +236,10 @@ func (o *oAuth2Authenticator) Authenticate() error {
 
 		url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
 			oauth2.SetAuthURLParam("code_challenge", codeChallenge),
-			oauth2.SetAuthURLParam("code_challenge_method", "s256"),
+			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 			oauth2.SetAuthURLParam("response_type", "code"),
-			oauth2.SetAuthURLParam("scope", "offline_access"))
+			oauth2.SetAuthURLParam("scope", "offline_access"),
+			oauth2.SetAuthURLParam("version", "2021-08-11~experimental"))
 
 		// launch browser
 		go o.openBrowserFunc(url)

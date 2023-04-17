@@ -64,16 +64,18 @@ func Test_getToken_BadToken_ReturnsError(t *testing.T) {
 
 func Test_getOAuthConfiguration(t *testing.T) {
 	webapp := "https://app.fedramp-alpha.snykgov.io"
+	api := "https://api.fedramp-alpha.snykgov.io"
 
 	config := configuration.NewInMemory()
 	config.Set(configuration.WEB_APP_URL, webapp)
+	config.Set(configuration.API_URL, api)
 
 	oauthConfig := getOAuthConfiguration(config)
 
 	assert.Equal(t, "", oauthConfig.RedirectURL)
 	assert.Equal(t, OAUTH_CLIENT_ID, oauthConfig.ClientID)
-	assert.Equal(t, webapp+"/oauth/authorize", oauthConfig.Endpoint.AuthURL)
-	// assert.Equal(t, "https://id.fedramp-alpha.snykgov.io/oauth2/default/v1/token", oauthConfig.Endpoint.TokenURL)
+	assert.Equal(t, webapp+"/oauth2/authorize", oauthConfig.Endpoint.AuthURL)
+	assert.Equal(t, api+"/oauth2/token", oauthConfig.Endpoint.TokenURL)
 }
 
 func Test_AddAuthenticationHeader_validToken(t *testing.T) {
