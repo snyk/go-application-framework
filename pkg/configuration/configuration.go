@@ -34,8 +34,8 @@ type Configuration interface {
 	AddAlternativeKeys(key string, altKeys []string)
 	GetAlternativeKeys(key string) []string
 
-	// PersistInConfigFile ensures that when Set is called with the given key, it will be persisted in the config file.
-	PersistInConfigFile(key string)
+	// PersistInStorage ensures that when Set is called with the given key, it will be persisted in the config file.
+	PersistInStorage(key string)
 }
 
 // extendedViper is a wrapper around the viper library.
@@ -106,6 +106,7 @@ func NewFromFiles(files ...string) Configuration {
 	return config
 }
 
+// NewInMemory creates a new Configuration instance that is not persisted to disk.
 func NewInMemory() Configuration {
 	config := createViperDefaultConfig()
 	return config
@@ -325,7 +326,7 @@ func (ev *extendedViper) GetAlternativeKeys(key string) []string {
 	return ev.alternativeKeys[key]
 }
 
-func (ev *extendedViper) PersistInConfigFile(key string) {
+func (ev *extendedViper) PersistInStorage(key string) {
 	ev.persistedKeys[key] = true
 }
 

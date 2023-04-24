@@ -35,20 +35,6 @@ func (m *MockNetworkAccess) EXPECT() *MockNetworkAccessMockRecorder {
 	return m.recorder
 }
 
-// AddDefaultHeader mocks base method.
-func (m *MockNetworkAccess) AddDefaultHeader(request *http.Request) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddDefaultHeader", request)
-	_, _ = ret[0].(error)
-	return
-}
-
-// AddDefaultHeader indicates an expected call of AddDefaultHeader.
-func (mr *MockNetworkAccessMockRecorder) AddDefaultHeader(request interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDefaultHeader", reflect.TypeOf((*MockNetworkAccess)(nil).AddDefaultHeader), request)
-}
-
 // AddHeaderField mocks base method.
 func (m *MockNetworkAccess) AddHeaderField(key, value string) {
 	m.ctrl.T.Helper()

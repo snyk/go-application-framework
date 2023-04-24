@@ -141,7 +141,7 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 ) Authenticator {
 	token, _ := GetOAuthToken(config)
 	oauthConfig := getOAuthConfiguration(config)
-	config.PersistInConfigFile(CONFIG_KEY_OAUTH_TOKEN)
+	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
 
 	return &oAuth2Authenticator{
 		httpClient:         httpClient,

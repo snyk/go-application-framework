@@ -5,12 +5,12 @@
 package mocks
 
 import (
-	url "net/url"
-	reflect "reflect"
+	"net/url"
+	"reflect"
 
-	gomock "github.com/golang/mock/gomock"
-	configuration "github.com/snyk/go-application-framework/pkg/configuration"
-	pflag "github.com/spf13/pflag"
+	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/spf13/pflag"
 )
 
 // MockConfiguration is a mock of Configuration interface.
@@ -214,16 +214,16 @@ func (mr *MockConfigurationMockRecorder) GetUrl(key interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUrl", reflect.TypeOf((*MockConfiguration)(nil).GetUrl), key)
 }
 
-// PersistInConfigFile mocks base method.
-func (m *MockConfiguration) PersistInConfigFile(key string) {
+// PersistInStorage mocks base method.
+func (m *MockConfiguration) PersistInStorage(key string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "PersistInConfigFile", key)
+	m.ctrl.Call(m, "PersistInStorage", key)
 }
 
-// PersistInConfigFile indicates an expected call of PersistInConfigFile.
-func (mr *MockConfigurationMockRecorder) PersistInConfigFile(key interface{}) *gomock.Call {
+// PersistInStorage indicates an expected call of PersistInStorage.
+func (mr *MockConfigurationMockRecorder) PersistInStorage(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistInConfigFile", reflect.TypeOf((*MockConfiguration)(nil).PersistInConfigFile), key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistInStorage", reflect.TypeOf((*MockConfiguration)(nil).PersistInStorage), key)
 }
 
 // Set mocks base method.

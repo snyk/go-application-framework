@@ -245,3 +245,8 @@ func Test_ConfigurationClone(t *testing.T) {
 
 	cleanupConfigstore()
 }
+
+func TestNewInMemory(t *testing.T) {
+	config := NewInMemory()
+	assert.NotNil(t, config)
+}
