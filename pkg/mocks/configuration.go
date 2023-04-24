@@ -5,12 +5,12 @@
 package mocks
 
 import (
-	"net/url"
-	"reflect"
+	url "net/url"
+	reflect "reflect"
 
-	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/spf13/pflag"
+	gomock "github.com/golang/mock/gomock"
+	configuration "github.com/snyk/go-application-framework/pkg/configuration"
+	pflag "github.com/spf13/pflag"
 )
 
 // MockConfiguration is a mock of Configuration interface.

@@ -24,6 +24,19 @@ type EngineImpl struct {
 	networkAccess        networking.NetworkAccess
 	initialized          bool
 	invocationCounter    int
+	logger               *log.Logger
+}
+
+func (e *EngineImpl) GetLogger() *log.Logger {
+	return e.logger
+}
+
+func (e *EngineImpl) SetLogger(logger *log.Logger) {
+	e.logger = logger
+}
+
+func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
+	e.config = config
 }
 
 // NewWorkflowIdentifier creates a new workflow identifier represented in parsed URL format.
@@ -36,6 +49,8 @@ func NewWorkflowIdentifier(command string) Identifier {
 
 // GetCommandFromWorkflowIdentifier returns the command string from a workflow identifier.
 // It returns an empty string if the identifier is not a workflow identifier.
+//
+//goland:noinspection GoUnusedExportedFunction
 func GetCommandFromWorkflowIdentifier(id Identifier) string {
 	if id != nil && id.Scheme == "flw" {
 		spaceSeparatedCommand := strings.ReplaceAll(id.Host, ".", " ")
@@ -57,9 +72,15 @@ func NewTypeIdentifier(workflowID Identifier, dataType string) Identifier {
 // NewWorkFlowEngine is an implementation of the Engine interface.
 // It is called when creating a new app engine via CreateAppEngine().
 func NewWorkFlowEngine(configuration configuration.Configuration) Engine {
+	engine := NewDefaultWorkFlowEngine()
+	engine.SetConfiguration(configuration)
+	return engine
+}
+
+// NewDefaultWorkFlowEngine is an implementation of the Engine interface.
+func NewDefaultWorkFlowEngine() Engine {
 	engine := &EngineImpl{
 		workflows:            make(map[string]Entry),
-		config:               configuration,
 		initialized:          false,
 		extensionInitializer: make([]ExtensionInit, 0),
 		invocationCounter:    0,
@@ -129,7 +150,10 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 
 	flagset := FlagsetFromConfigurationOptions(config)
 	if flagset != nil {
-		e.config.AddFlagSet(flagset)
+		err := e.config.AddFlagSet(flagset)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return entry, nil
@@ -235,6 +259,8 @@ func (e *EngineImpl) GetConfiguration() configuration.Configuration {
 }
 
 // GetGlobalConfiguration returns the global configuration options.
+//
+//goland:noinspection GoUnusedExportedFunction
 func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags := pflag.NewFlagSet("global", pflag.ContinueOnError)
 	globalFLags.String(configuration.ORGANIZATION, "", "")
