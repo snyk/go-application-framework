@@ -165,7 +165,7 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.viper.Set(key, value)
-	if ev.persistedKeys[key] {
+	if ev.storage != nil && ev.persistedKeys[key] {
 		_ = ev.storage.Set(key, value)
 	}
 }
