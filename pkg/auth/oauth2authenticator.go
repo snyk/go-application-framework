@@ -175,8 +175,12 @@ func (o *oAuth2Authenticator) Authenticate() error {
 		return errors.New("headless mode not supported")
 	}
 
-	srv := &http.Server{}
-	http.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+
+	srv := &http.Server{
+		Handler: mux,
+	}
+	mux.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
 			details := html.EscapeString(r.URL.Query().Get("error_description"))
