@@ -68,4 +68,7 @@ type Engine interface {
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
 	GetConfiguration() configuration.Configuration
+	SetLogger(logger *log.Logger)
+	SetConfiguration(config configuration.Configuration)
+	GetLogger() *log.Logger
 }

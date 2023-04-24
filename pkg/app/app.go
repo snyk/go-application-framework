@@ -19,6 +19,10 @@ import (
 
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(config configuration.Configuration, apiClient api.ApiClient, logger *log.Logger) {
+	if logger == nil {
+		logger = log.Default() // TODO: This should be a no-op logger - or not?
+	}
+
 	dir, err := utils.SnykCacheDir()
 	if err != nil {
 		logger.Println("Failed to determine cache directory:", err)
@@ -111,19 +115,26 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 // CreateAppEngine creates a new workflow engine.
 func CreateAppEngine() workflow.Engine {
 	discardLogger := log.New(io.Discard, "", 0)
-	return CreateAppEngineWithLogger(discardLogger)
+	return CreateAppEngineWithOptions(WithConfiguration(configuration.New()), WithLogger(discardLogger))
 }
 
-// App engine with logger injected
-func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
-	config := configuration.New()
-	apiClient := api.NewApiInstance()
+func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
+	engine := workflow.NewDefaultWorkFlowEngine()
 
-	initConfiguration(config, apiClient, logger)
+	for _, opt := range opts {
+		opt(engine)
+	}
 
-	engine := workflow.NewWorkFlowEngine(config)
+	config := engine.GetConfiguration()
+	if config != nil {
+		initConfiguration(config, api.NewApiInstance(), engine.GetLogger())
+	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)
-
 	return engine
+}
+
+// CreateAppEngineWithLogger creates an App engine with logger injected
+func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
+	return CreateAppEngineWithOptions(WithLogger(logger))
 }

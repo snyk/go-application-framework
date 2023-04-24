@@ -415,6 +415,20 @@ func (mr *MockEngineMockRecorder) GetConfiguration() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfiguration", reflect.TypeOf((*MockEngine)(nil).GetConfiguration))
 }
 
+// GetLogger mocks base method.
+func (m *MockEngine) GetLogger() *log.Logger {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLogger")
+	ret0, _ := ret[0].(*log.Logger)
+	return ret0
+}
+
+// GetLogger indicates an expected call of GetLogger.
+func (mr *MockEngineMockRecorder) GetLogger() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogger", reflect.TypeOf((*MockEngine)(nil).GetLogger))
+}
+
 // GetNetworkAccess mocks base method.
 func (m *MockEngine) GetNetworkAccess() networking.NetworkAccess {
 	m.ctrl.T.Helper()
@@ -545,4 +559,28 @@ func (m *MockEngine) Register(id workflow.Identifier, config workflow.Configurat
 func (mr *MockEngineMockRecorder) Register(id, config, callback interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockEngine)(nil).Register), id, config, callback)
+}
+
+// SetConfiguration mocks base method.
+func (m *MockEngine) SetConfiguration(config configuration.Configuration) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetConfiguration", config)
+}
+
+// SetConfiguration indicates an expected call of SetConfiguration.
+func (mr *MockEngineMockRecorder) SetConfiguration(config interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConfiguration", reflect.TypeOf((*MockEngine)(nil).SetConfiguration), config)
+}
+
+// SetLogger mocks base method.
+func (m *MockEngine) SetLogger(logger *log.Logger) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetLogger", logger)
+}
+
+// SetLogger indicates an expected call of SetLogger.
+func (mr *MockEngineMockRecorder) SetLogger(logger interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLogger", reflect.TypeOf((*MockEngine)(nil).SetLogger), logger)
 }

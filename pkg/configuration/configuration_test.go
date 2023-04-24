@@ -243,5 +243,29 @@ func Test_ConfigurationClone(t *testing.T) {
 	actualAlternateValue := clonedConfig.GetString(notExistingKey)
 	assert.Equal(t, expectedAlternateValue, actualAlternateValue)
 
+	// we assume that a cloned configuration uses the same storage object. Just the pointer is cloned.
+	assert.Equal(t, config.(*extendedViper).storage, clonedConfig.(*extendedViper).storage)
+
 	cleanupConfigstore()
+}
+
+func TestNewInMemory(t *testing.T) {
+	config := NewInMemory()
+
+	assert.Nil(t, config.(*extendedViper).storage)
+	assert.NotNil(t, config)
+}
+
+func TestNewInMemory_shouldNotBreakWhenTryingToPersist(t *testing.T) {
+	config := NewInMemory()
+
+	assert.Nil(t, config.(*extendedViper).storage)
+	assert.NotNil(t, config)
+
+	const key = "test"
+	const keyValue = "keyValue"
+	config.PersistInStorage(key)
+	config.Set(key, keyValue)
+
+	assert.Equal(t, config.Get(key), keyValue)
 }

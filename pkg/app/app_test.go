@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -136,4 +137,24 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, actualOrgId, orgId)
+}
+
+func Test_CreateAppEngineWithLogger(t *testing.T) {
+	logger := log.New(os.Stdout, "", 0)
+
+	engine := CreateAppEngineWithLogger(logger)
+
+	assert.NotNil(t, engine)
+	assert.Equal(t, logger, engine.GetLogger())
+}
+
+func Test_CreateAppEngineWithConfigAndLoggerOptions(t *testing.T) {
+	logger := log.New(os.Stdout, "", 0)
+	config := configuration.NewInMemory()
+
+	engine := CreateAppEngineWithOptions(WithLogger(logger), WithConfiguration(config))
+
+	assert.NotNil(t, engine)
+	assert.Equal(t, logger, engine.GetLogger())
+	assert.Equal(t, config, engine.GetConfiguration())
 }

@@ -34,8 +34,8 @@ type Configuration interface {
 	AddAlternativeKeys(key string, altKeys []string)
 	GetAlternativeKeys(key string) []string
 
-	// PersistInConfigFile ensures that when Set is called with the given key, it will be persisted in the config file.
-	PersistInConfigFile(key string)
+	// PersistInStorage ensures that when Set is called with the given key, it will be persisted in the config file.
+	PersistInStorage(key string)
 }
 
 // extendedViper is a wrapper around the viper library.
@@ -93,17 +93,41 @@ func CreateConfigurationFile(filename string) (string, error) {
 	return filepath, err
 }
 
+// New creates a new snyk configuration file.
+func New() Configuration {
+	config := NewFromFiles("snyk")
+	return config
+}
+
 // NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
-	configPath := determineBasePath()
-	storage := createFileStorage(configPath)
+	config := createViperDefaultConfig()
+	readConfigFilesIntoViper(files, config)
+	return config
+}
+
+// NewInMemory creates a new Configuration instance that is not persisted to disk.
+func NewInMemory() Configuration {
+	config := createViperDefaultConfig()
+	return config
+}
+
+func createViperDefaultConfig() *extendedViper {
+	// prepare environment variables
 	config := &extendedViper{
 		viper:           viper.New(),
 		alternativeKeys: make(map[string][]string),
 		defaultValues:   make(map[string]DefaultValueFunction),
 		persistedKeys:   make(map[string]bool),
-		storage:         storage,
 	}
+	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	config.viper.AutomaticEnv()
+	return config
+}
+
+func readConfigFilesIntoViper(files []string, config *extendedViper) {
+	configPath := determineBasePath()
+	config.storage = createFileStorage(configPath)
 
 	// prepare config files
 	for _, file := range files {
@@ -113,20 +137,8 @@ func NewFromFiles(files ...string) Configuration {
 	config.viper.AddConfigPath(configPath)
 	config.viper.AddConfigPath(".")
 
-	// prepare environment variables
-	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	config.viper.AutomaticEnv()
-
 	// read config files
 	_ = config.viper.ReadInConfig()
-
-	return config
-}
-
-// New creates a new snyk configuration file.
-func New() Configuration {
-	config := NewFromFiles("snyk")
-	return config
 }
 
 // Clone creates a copy of the current configuration.
@@ -153,7 +165,7 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.viper.Set(key, value)
-	if ev.persistedKeys[key] {
+	if ev.storage != nil && ev.persistedKeys[key] {
 		_ = ev.storage.Set(key, value)
 	}
 }
@@ -314,7 +326,7 @@ func (ev *extendedViper) GetAlternativeKeys(key string) []string {
 	return ev.alternativeKeys[key]
 }
 
-func (ev *extendedViper) PersistInConfigFile(key string) {
+func (ev *extendedViper) PersistInStorage(key string) {
 	ev.persistedKeys[key] = true
 }
 
