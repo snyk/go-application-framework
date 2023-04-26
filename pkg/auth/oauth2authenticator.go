@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/pkg/browser"
@@ -32,6 +33,7 @@ const (
 var _ Authenticator = (*oAuth2Authenticator)(nil)
 
 var acceptedCallbackPorts = []int{8080, 18081, 28082, 38083, 48084}
+var globalRefreshMutex sync.Mutex
 
 type oAuth2Authenticator struct {
 	httpClient         *http.Client
@@ -41,6 +43,7 @@ type oAuth2Authenticator struct {
 	headless           bool
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
+	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
 }
 
 func init() {
@@ -129,6 +132,11 @@ func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 	return nil, nil
 }
 
+func refreshToken(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+	tokenSource := oauthConfig.TokenSource(ctx, token)
+	return tokenSource.Token()
+}
+
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	return NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, OpenBrowser, ShutdownServer)
 }
@@ -150,6 +158,7 @@ func NewOAuth2AuthenticatorWithCustomFuncs(
 		token:              token,
 		openBrowserFunc:    openBrowserFunc,
 		shutdownServerFunc: shutdownServerFunc,
+		tokenRefresherFunc: refreshToken,
 	}
 }
 
@@ -162,6 +171,7 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
 	o.config.Set(CONFIG_KEY_OAUTH_TOKEN, string(tokenstring))
 	o.token = token
 }
+
 func (o *oAuth2Authenticator) Authenticate() error {
 	var responseCode string
 	var responseState string
@@ -266,17 +276,29 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
 	}
 
-	tokenSource := o.oauthConfig.TokenSource(ctx, o.token)
-	validToken, err := tokenSource.Token()
-	if err != nil {
-		return err
+	// if the current token is invalid
+	if !o.token.Valid() {
+		globalRefreshMutex.Lock()
+		defer globalRefreshMutex.Unlock()
+
+		// check if the token in the config is invalid as well
+		token, _ := GetOAuthToken(o.config)
+		if !token.Valid() {
+			// use TokenSource to refresh the token
+			validToken, err := o.tokenRefresherFunc(ctx, o.oauthConfig, o.token)
+			if err != nil {
+				return err
+			}
+
+			if validToken != o.token {
+				o.persistToken(validToken)
+			}
+		} else {
+			o.token = token
+		}
 	}
 
-	if validToken != o.token {
-		o.persistToken(validToken)
-	}
-
-	accessToken := validToken.AccessToken
+	accessToken := o.token.AccessToken
 	if len(accessToken) > 0 {
 		value := fmt.Sprint("Bearer ", accessToken)
 		request.Header.Set("Authorization", value)
