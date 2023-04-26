@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -18,14 +20,14 @@ import (
 )
 
 // initConfiguration initializes the configuration with initial values.
-func initConfiguration(config configuration.Configuration, apiClient api.ApiClient, logger *log.Logger) {
+func initConfiguration(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
 	if logger == nil {
-		logger = log.Default() // TODO: This should be a no-op logger - or not?
+		logger = &zlog.Logger
 	}
 
 	dir, err := utils.SnykCacheDir()
 	if err != nil {
-		logger.Println("Failed to determine cache directory:", err)
+		logger.Print("Failed to determine cache directory:", err)
 	}
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.StandardDefaultValueFunction(false))
@@ -53,7 +55,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 		canonicalApiUrl := config.GetString(configuration.API_URL)
 		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
 		if err != nil {
-			logger.Println("Failed to determine default value for \"WEB_APP_URL\":", err)
+			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", err)
 		}
 
 		return appUrl
@@ -70,7 +72,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 			if isSlugName {
 				orgId, err = apiClient.GetOrgIdFromSlug(existingValue.(string))
 				if err != nil {
-					logger.Println("Failed to determine default value for \"ORGANIZATION\":", err)
+					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 				} else {
 					return orgId
 				}
@@ -81,7 +83,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 
 		orgId, err := apiClient.GetDefaultOrgId()
 		if err != nil {
-			logger.Println("Failed to determine default value for \"ORGANIZATION\":", err)
+			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
 
 		return orgId

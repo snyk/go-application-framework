@@ -3,11 +3,10 @@ package networking
 import (
 	"crypto/x509"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
@@ -33,15 +32,16 @@ type NetworkAccess interface {
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
+	SetLogger(logger *zerolog.Logger)
 }
 
 // networkImpl is the default implementation of the NetworkAccess interface.
 type networkImpl struct {
 	config       configuration.Configuration
 	staticHeader http.Header
-	logger       *log.Logger
 	proxy        func(req *http.Request) (*url.URL, error)
 	caPool       *x509.CertPool
+	logger       *zerolog.Logger
 }
 
 // customRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -59,15 +59,12 @@ func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response,
 // NewNetworkAccess returns a networkImpl instance.
 func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	// prepare logger
-	logger := log.New(os.Stderr, "NetworkAccess - ", config.GetInt(configuration.DEBUG_FORMAT))
-	if !config.GetBool(configuration.DEBUG) {
-		logger.SetOutput(io.Discard)
-	}
+	logger := zerolog.New(io.Discard)
 
 	n := &networkImpl{
 		config:       config,
 		staticHeader: http.Header{},
-		logger:       logger,
+		logger:       &logger,
 		proxy:        http.ProxyFromEnvironment,
 	}
 
@@ -77,7 +74,7 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 		if err != nil {
 			logger.Printf("Failed to AddRootCAs from '%s' (%v)\n", extraCaCertFile, err)
 		} else {
-			logger.Println("Using additional CAs from file:", extraCaCertFile)
+			logger.Print("Using additional CAs from file:", extraCaCertFile)
 		}
 	}
 
@@ -164,4 +161,8 @@ func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
 func (n *networkImpl) GetAuthenticator() auth.Authenticator {
 	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 	return n.createAuthenticator(transport)
+}
+
+func (n *networkImpl) SetLogger(logger *zerolog.Logger) {
+	n.logger = logger
 }

@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/url"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -68,7 +69,7 @@ type Engine interface {
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
 	GetConfiguration() configuration.Configuration
-	SetLogger(logger *log.Logger)
+	SetLogger(logger *zerolog.Logger)
 	SetConfiguration(config configuration.Configuration)
-	GetLogger() *log.Logger
+	GetLogger() *zerolog.Logger
 }

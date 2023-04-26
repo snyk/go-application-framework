@@ -2,13 +2,11 @@ package workflow
 
 import (
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -24,14 +22,14 @@ type EngineImpl struct {
 	networkAccess        networking.NetworkAccess
 	initialized          bool
 	invocationCounter    int
-	logger               *log.Logger
+	logger               *zerolog.Logger
 }
 
-func (e *EngineImpl) GetLogger() *log.Logger {
+func (e *EngineImpl) GetLogger() *zerolog.Logger {
 	return e.logger
 }
 
-func (e *EngineImpl) SetLogger(logger *log.Logger) {
+func (e *EngineImpl) SetLogger(logger *zerolog.Logger) {
 	e.logger = logger
 }
 
@@ -94,6 +92,7 @@ func (e *EngineImpl) Init() error {
 
 	e.invocationCounter = 0
 	e.networkAccess = networking.NewNetworkAccess(e.config)
+	e.networkAccess.SetLogger(e.logger)
 
 	for i := range e.extensionInitializer {
 		err = e.extensionInitializer[i](e)
@@ -208,11 +207,8 @@ func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, confi
 			e.invocationCounter++
 
 			// prepare logger
-			prefix := fmt.Sprintf("%s:%d - ", id.Host, e.invocationCounter)
-			logger := log.New(os.Stderr, prefix, e.config.GetInt(configuration.DEBUG_FORMAT))
-			if e.config.GetBool(configuration.DEBUG) == false {
-				logger.SetOutput(io.Discard)
-			}
+			prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
+			zlogger := e.logger.With().Str("ext", prefix).Logger()
 
 			// prepare configuration
 			if config == nil {
@@ -225,7 +221,7 @@ func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, confi
 				Configuration:  config,
 				WorkflowEngine: e,
 				networkAccess:  e.networkAccess,
-				logger:         logger,
+				logger:         &zlogger,
 			}
 
 			// invoke workflow through its callback

@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	zerolog "github.com/rs/zerolog"
 	analytics "github.com/snyk/go-application-framework/pkg/analytics"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
@@ -416,10 +417,10 @@ func (mr *MockEngineMockRecorder) GetConfiguration() *gomock.Call {
 }
 
 // GetLogger mocks base method.
-func (m *MockEngine) GetLogger() *log.Logger {
+func (m *MockEngine) GetLogger() *zerolog.Logger {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLogger")
-	ret0, _ := ret[0].(*log.Logger)
+	ret0, _ := ret[0].(*zerolog.Logger)
 	return ret0
 }
 
@@ -574,7 +575,7 @@ func (mr *MockEngineMockRecorder) SetConfiguration(config interface{}) *gomock.C
 }
 
 // SetLogger mocks base method.
-func (m *MockEngine) SetLogger(logger *log.Logger) {
+func (m *MockEngine) SetLogger(logger *zerolog.Logger) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetLogger", logger)
 }
