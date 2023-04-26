@@ -6,6 +6,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -49,6 +50,7 @@ type extendedViper struct {
 	// Only specific keys are persisted, so viper's native functionality is not used.
 	persistedKeys map[string]bool
 	storage       Storage
+	mutex         sync.Mutex
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -143,6 +145,9 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 
 // Clone creates a copy of the current configuration.
 func (ev *extendedViper) Clone() Configuration {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
 	// manually clone the Configuration instance
 	clone := NewFromFiles(ev.viper.ConfigFileUsed())
 	keys := ev.viper.AllKeys()
@@ -164,14 +169,18 @@ func (ev *extendedViper) Clone() Configuration {
 
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
 	ev.viper.Set(key, value)
 	if ev.storage != nil && ev.persistedKeys[key] {
 		_ = ev.storage.Set(key, value)
 	}
 }
 
-// Get returns a configuration value.
-func (ev *extendedViper) Get(key string) interface{} {
+func (ev *extendedViper) get(key string) interface{} {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
 
 	// try to lookup given key
 	result := ev.viper.Get(key)
@@ -185,6 +194,14 @@ func (ev *extendedViper) Get(key string) interface{} {
 		result = ev.viper.Get(tempKey)
 		i++
 	}
+
+	return result
+}
+
+// Get returns a configuration value.
+func (ev *extendedViper) Get(key string) interface{} {
+	// use synchronized get()
+	result := ev.get(key)
 
 	if ev.defaultValues[key] != nil {
 		result = ev.defaultValues[key](result)
