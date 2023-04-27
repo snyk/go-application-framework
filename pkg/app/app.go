@@ -134,7 +134,7 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 	return engine
 }
 
-// CreateAppEngineWithLogger creates an App engine with logger injected
+// Deprecated: Use CreateAppEngineWithOptions instead.
 func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
 	return CreateAppEngineWithOptions(WithLogger(logger))
 }

@@ -142,7 +142,7 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 func Test_CreateAppEngineWithLogger(t *testing.T) {
 	logger := log.New(os.Stdout, "", 0)
 
-	engine := CreateAppEngineWithLogger(logger)
+	engine := CreateAppEngineWithOptions(WithLogger(logger))
 
 	assert.NotNil(t, engine)
 	assert.Equal(t, logger, engine.GetLogger())
