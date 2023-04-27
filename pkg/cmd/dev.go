@@ -16,11 +16,11 @@ import (
 func Dev(initializers ...workflow.ExtensionInit) (*cobra.Command, error) {
 	// Initialize the engine with the given workflows
 	logger := log.New(os.Stderr, "", 0)
-	engine := app.CreateAppEngineWithLogger(logger)
-	engine.SetConfiguration(configuration.New())
-	for _, i := range initializers {
-		engine.AddExtensionInitializer(i)
-	}
+	engine := app.CreateAppEngineWithOptions(
+		app.WithLogger(logger),
+		app.WithConfiguration(configuration.New()),
+		app.WithInitializers(initializers...),
+	)
 	if err := engine.Init(); err != nil {
 		return nil, err
 	}

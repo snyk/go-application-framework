@@ -34,3 +34,11 @@ func WithZeroLogger(logger *zerolog.Logger) Opts {
 		engine.SetLogger(logger)
 	}
 }
+
+func WithInitializers(initializers ...workflow.ExtensionInit) Opts {
+	return func(engine workflow.Engine) {
+		for _, i := range initializers {
+			engine.AddExtensionInitializer(i)
+		}
+	}
+}
