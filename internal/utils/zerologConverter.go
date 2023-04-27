@@ -9,9 +9,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// since the are a couple of places that take different types of loggers outside of our scope, we introduce these simple wrapper to adapt between the worlds.
+// Since there are a couple of places that take different types of loggers outside of our scope, we introduce these simple wrappers to adapt between the worlds.
 
-// ToZeroLogDebug is an io.Writer that can be used for example in log.Logger to write to an existing zerolog writer
+// ToZeroLogDebug is an io.Writer that can be used for example with log.Logger to write to an existing zerolog writer
 type ToZeroLogDebug struct {
 	Logger *zerolog.Logger
 }
@@ -22,7 +22,7 @@ func (w *ToZeroLogDebug) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// ToLog is an io.Writer that can be used to write into a log.Logger, for example from a zerolog.Logger
+// ToLog is an io.Writer that can be used to write into a log.Logger, for example into an existing zerolog.Logger
 type ToLog struct {
 	Logger *log.Logger
 }
