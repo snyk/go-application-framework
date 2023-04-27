@@ -58,7 +58,12 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		logger.Println("Headless:", headless)
 
 		httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
-		authenticator := auth.NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, OpenBrowser, auth.ShutdownServer)
+		authenticator := auth.NewOAuth2AuthenticatorWithOpts(
+			config,
+			auth.WithHttpClient(httpClient),
+			auth.WithOpenBrowserFunc(OpenBrowser),
+			auth.WithShutdownServerFunc(auth.ShutdownServer),
+		)
 		err = authenticator.Authenticate()
 		if err != nil {
 			return nil, err

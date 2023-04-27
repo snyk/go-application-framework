@@ -137,29 +137,46 @@ func refreshToken(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2
 	return tokenSource.Token()
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
-	return NewOAuth2AuthenticatorWithCustomFuncs(config, httpClient, OpenBrowser, ShutdownServer)
+	return NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
 }
 
+func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...OAuth2AuthenticatorOption) Authenticator {
+	o := &oAuth2Authenticator{}
+	o.config = config
+	o.token, _ = GetOAuthToken(config)
+	o.oauthConfig = getOAuthConfiguration(config)
+	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
+
+	// set defaults
+	o.httpClient = http.DefaultClient
+	o.openBrowserFunc = OpenBrowser
+	o.shutdownServerFunc = ShutdownServer
+	o.tokenRefresherFunc = refreshToken
+
+	// apply options
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
+// Deprecated: use NewOAuth2AuthenticatorWithOpts instead
+//
+//goland:noinspection GoUnusedExportedFunction
 func NewOAuth2AuthenticatorWithCustomFuncs(
 	config configuration.Configuration,
 	httpClient *http.Client,
 	openBrowserFunc func(url string),
 	shutdownServerFunc func(server *http.Server),
 ) Authenticator {
-	token, _ := GetOAuthToken(config)
-	oauthConfig := getOAuthConfiguration(config)
-	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
-
-	return &oAuth2Authenticator{
-		httpClient:         httpClient,
-		config:             config,
-		oauthConfig:        oauthConfig,
-		token:              token,
-		openBrowserFunc:    openBrowserFunc,
-		shutdownServerFunc: shutdownServerFunc,
-		tokenRefresherFunc: refreshToken,
-	}
+	return NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithHttpClient(httpClient),
+		WithOpenBrowserFunc(openBrowserFunc),
+		WithShutdownServerFunc(shutdownServerFunc),
+	)
 }
 
 func (o *oAuth2Authenticator) IsSupported() bool {
