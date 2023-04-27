@@ -15,7 +15,7 @@ import (
 // test their extensions outside of the main Snyk CLI.
 func Cmd(initializers ...workflow.ExtensionInit) (*cobra.Command, error) {
 	// Initialize the engine with the given workflows
-	logger := zerolog.New(os.Stderr)
+	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	engine := app.CreateAppEngineWithOptions(
 		app.WithZeroLogger(&logger),
 		app.WithConfiguration(configuration.New()),
