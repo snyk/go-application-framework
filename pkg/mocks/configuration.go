@@ -172,6 +172,20 @@ func (mr *MockConfigurationMockRecorder) GetInt(key interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInt", reflect.TypeOf((*MockConfiguration)(nil).GetInt), key)
 }
 
+// GetStorage mocks base method.
+func (m *MockConfiguration) GetStorage() configuration.Storage {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStorage")
+	ret0, _ := ret[0].(configuration.Storage)
+	return ret0
+}
+
+// GetStorage indicates an expected call of GetStorage.
+func (mr *MockConfigurationMockRecorder) GetStorage() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockConfiguration)(nil).GetStorage))
+}
+
 // GetString mocks base method.
 func (m *MockConfiguration) GetString(key string) string {
 	m.ctrl.T.Helper()
@@ -236,4 +250,16 @@ func (m *MockConfiguration) Set(key string, value interface{}) {
 func (mr *MockConfigurationMockRecorder) Set(key, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockConfiguration)(nil).Set), key, value)
+}
+
+// SetStorage mocks base method.
+func (m *MockConfiguration) SetStorage(storage configuration.Storage) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetStorage", storage)
+}
+
+// SetStorage indicates an expected call of SetStorage.
+func (mr *MockConfigurationMockRecorder) SetStorage(storage interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStorage", reflect.TypeOf((*MockConfiguration)(nil).SetStorage), storage)
 }

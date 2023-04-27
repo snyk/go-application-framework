@@ -37,6 +37,8 @@ type Configuration interface {
 
 	// PersistInStorage ensures that when Set is called with the given key, it will be persisted in the config file.
 	PersistInStorage(key string)
+	SetStorage(storage Storage)
+	GetStorage() Storage
 }
 
 // extendedViper is a wrapper around the viper library.
@@ -344,7 +346,21 @@ func (ev *extendedViper) GetAlternativeKeys(key string) []string {
 }
 
 func (ev *extendedViper) PersistInStorage(key string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
 	ev.persistedKeys[key] = true
+}
+
+func (ev *extendedViper) SetStorage(storage Storage) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+	ev.storage = storage
+}
+
+func (ev *extendedViper) GetStorage() Storage {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+	return ev.storage
 }
 
 // createFileStorage creates attempts to create a JSON file storage in the configPath.
