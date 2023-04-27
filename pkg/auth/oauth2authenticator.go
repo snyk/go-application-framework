@@ -132,7 +132,7 @@ func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 	return nil, nil
 }
 
-func refreshToken(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+func RefreshToken(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 	tokenSource := oauthConfig.TokenSource(ctx, token)
 	return tokenSource.Token()
 }
@@ -153,7 +153,7 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 	o.httpClient = http.DefaultClient
 	o.openBrowserFunc = OpenBrowser
 	o.shutdownServerFunc = ShutdownServer
-	o.tokenRefresherFunc = refreshToken
+	o.tokenRefresherFunc = RefreshToken
 
 	// apply options
 	for _, opt := range opts {
