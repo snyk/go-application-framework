@@ -211,6 +211,20 @@ func (mr *MockInvocationContextMockRecorder) GetEngine() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEngine", reflect.TypeOf((*MockInvocationContext)(nil).GetEngine))
 }
 
+// GetEnhancedLogger mocks base method.
+func (m *MockInvocationContext) GetEnhancedLogger() *zerolog.Logger {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEnhancedLogger")
+	ret0, _ := ret[0].(*zerolog.Logger)
+	return ret0
+}
+
+// GetEnhancedLogger indicates an expected call of GetEnhancedLogger.
+func (mr *MockInvocationContextMockRecorder) GetEnhancedLogger() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEnhancedLogger", reflect.TypeOf((*MockInvocationContext)(nil).GetEnhancedLogger))
+}
+
 // GetLogger mocks base method.
 func (m *MockInvocationContext) GetLogger() *log.Logger {
 	m.ctrl.T.Helper()

@@ -39,6 +39,7 @@ type InvocationContext interface {
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
 	GetLogger() *log.Logger
+	GetEnhancedLogger() *zerolog.Logger
 	//GetUserInterface() // return ui instance
 }
 

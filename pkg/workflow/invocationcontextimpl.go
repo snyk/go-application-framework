@@ -45,7 +45,12 @@ func (ici *InvocationContextImpl) GetNetworkAccess() networking.NetworkAccess {
 	return ici.networkAccess
 }
 
-// GetLogger returns the logger instance that is being used by the workflow engine.
+// Deprecated: GetLogger returns the logger instance that is being used by the workflow engine.
 func (ici *InvocationContextImpl) GetLogger() *log.Logger {
 	return log.New(&utils.ToZeroLogDebug{Logger: ici.logger}, "", 0)
+}
+
+// GetEnhancedLogger returns the logger instance that is being used by the workflow engine.
+func (ici *InvocationContextImpl) GetEnhancedLogger() *zerolog.Logger {
+	return ici.logger
 }
