@@ -84,6 +84,7 @@ func NewDefaultWorkFlowEngine() Engine {
 		extensionInitializer: make([]ExtensionInit, 0),
 		invocationCounter:    0,
 		logger:               &zlog.Logger,
+		config:               configuration.New(),
 	}
 	return engine
 }
