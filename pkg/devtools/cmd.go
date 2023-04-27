@@ -1,4 +1,4 @@
-package cmd
+package devtools
 
 import (
 	"os"
@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Dev is a helper utility for extension authors to define a lightweight CLI to
+// Cmd is a helper utility for extension authors to define a lightweight CLI to
 // test their extensions outside of the main Snyk CLI.
-func Dev(initializers ...workflow.ExtensionInit) (*cobra.Command, error) {
+func Cmd(initializers ...workflow.ExtensionInit) (*cobra.Command, error) {
 	// Initialize the engine with the given workflows
 	logger := zerolog.New(os.Stderr)
 	engine := app.CreateAppEngineWithOptions(

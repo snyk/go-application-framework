@@ -1,10 +1,10 @@
-package cmd_test
+package devtools_test
 
 import (
 	"fmt"
 	"log"
 
-	"github.com/snyk/go-application-framework/pkg/cmd"
+	"github.com/snyk/go-application-framework/pkg/devtools"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 )
@@ -29,9 +29,9 @@ func initHelloWorkflow(e workflow.Engine) error {
 	return nil
 }
 
-func ExampleDev() {
+func ExampleCmd() {
 	// Initialize the command with one or more workflows
-	root, err := cmd.Dev(initHelloWorkflow)
+	root, err := devtools.Cmd(initHelloWorkflow)
 	if err != nil {
 		log.Fatal(err)
 	}
