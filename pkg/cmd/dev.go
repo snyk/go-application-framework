@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"log"
 	"os"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -15,9 +15,9 @@ import (
 // test their extensions outside of the main Snyk CLI.
 func Dev(initializers ...workflow.ExtensionInit) (*cobra.Command, error) {
 	// Initialize the engine with the given workflows
-	logger := log.New(os.Stderr, "", 0)
+	logger := zerolog.New(os.Stderr)
 	engine := app.CreateAppEngineWithOptions(
-		app.WithLogger(logger),
+		app.WithZeroLogger(&logger),
 		app.WithConfiguration(configuration.New()),
 		app.WithInitializers(initializers...),
 	)
