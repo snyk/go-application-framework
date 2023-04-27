@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	zerolog "github.com/rs/zerolog"
 	auth "github.com/snyk/go-application-framework/pkg/auth"
 )
 
@@ -129,4 +130,16 @@ func (m *MockNetworkAccess) GetUnauthorizedHttpClient() *http.Client {
 func (mr *MockNetworkAccessMockRecorder) GetUnauthorizedHttpClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnauthorizedHttpClient", reflect.TypeOf((*MockNetworkAccess)(nil).GetUnauthorizedHttpClient))
+}
+
+// SetLogger mocks base method.
+func (m *MockNetworkAccess) SetLogger(logger *zerolog.Logger) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetLogger", logger)
+}
+
+// SetLogger indicates an expected call of SetLogger.
+func (mr *MockNetworkAccessMockRecorder) SetLogger(logger interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLogger", reflect.TypeOf((*MockNetworkAccess)(nil).SetLogger), logger)
 }

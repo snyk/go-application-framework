@@ -3,11 +3,10 @@ package app
 import (
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -72,7 +71,7 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient, log.Default())
+	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -92,7 +91,7 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient, log.Default())
+	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, defaultOrgId, actualOrgId)
@@ -112,7 +111,7 @@ func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient, log.Default())
+	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -131,7 +130,7 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 
 	config := configuration.New()
-	initConfiguration(config, mockApiClient, log.Default())
+	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgId)
 
@@ -140,19 +139,19 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 }
 
 func Test_CreateAppEngineWithLogger(t *testing.T) {
-	logger := log.New(os.Stdout, "", 0)
+	logger := &zlog.Logger
 
-	engine := CreateAppEngineWithOptions(WithLogger(logger))
+	engine := CreateAppEngineWithOptions(WithZeroLogger(logger))
 
 	assert.NotNil(t, engine)
 	assert.Equal(t, logger, engine.GetLogger())
 }
 
 func Test_CreateAppEngineWithConfigAndLoggerOptions(t *testing.T) {
-	logger := log.New(os.Stdout, "", 0)
+	logger := &zlog.Logger
 	config := configuration.NewInMemory()
 
-	engine := CreateAppEngineWithOptions(WithLogger(logger), WithConfiguration(config))
+	engine := CreateAppEngineWithOptions(WithZeroLogger(logger), WithConfiguration(config))
 
 	assert.NotNil(t, engine)
 	assert.Equal(t, logger, engine.GetLogger())

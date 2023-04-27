@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -82,6 +83,7 @@ func NewDefaultWorkFlowEngine() Engine {
 		initialized:          false,
 		extensionInitializer: make([]ExtensionInit, 0),
 		invocationCounter:    0,
+		logger:               &zlog.Logger,
 	}
 	return engine
 }
