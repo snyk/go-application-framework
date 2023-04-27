@@ -220,8 +220,8 @@ func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 	net := NewNetworkAccess(config)
 	net.AddHeaderField("secret-header", "secret-value")
 
-	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
-	err = net.AddHeaders(request)
+	request, _ := http.NewRequest("GET", "https://api.snyk.io", nil)
+	err := net.AddHeaders(request)
 	assert.Nil(t, err)
 
 	keys := make([]string, 0, len(request.Header))

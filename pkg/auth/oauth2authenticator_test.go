@@ -86,7 +86,7 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 	}
 
 	config := configuration.NewInMemory()
-	authenticator := NewOAuth2Authenticator(config, http.DefaultClient)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config)
 	authenticator.(*oAuth2Authenticator).persistToken(newToken)
 	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		assert.False(t, true, "The token is valid and no refresh is required!")
@@ -130,7 +130,7 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 	}
 
 	config := configuration.NewInMemory()
-	authenticator := NewOAuth2Authenticator(config, http.DefaultClient)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config)
 	authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
 	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		return newToken, nil
@@ -173,7 +173,7 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 	}
 
 	config := configuration.NewInMemory()
-	authenticator := NewOAuth2Authenticator(config, http.DefaultClient)
+	authenticator := NewOAuth2AuthenticatorWithOpts(config)
 	authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
 	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		assert.False(t, true, "The token is valid and no refresh is required!")
@@ -185,7 +185,7 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 	}
 
 	// have authenticator2 update the token "in parallel"
-	authenticator2 := NewOAuth2Authenticator(config, http.DefaultClient)
+	authenticator2 := NewOAuth2AuthenticatorWithOpts(config)
 	authenticator2.(*oAuth2Authenticator).persistToken(newToken)
 
 	// run method under test

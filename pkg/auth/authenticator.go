@@ -22,7 +22,7 @@ func CreateAuthenticator(config configuration.Configuration, httpClient *http.Cl
 	var authenticator Authenticator
 
 	// try oauth authenticator
-	tmpAuthenticator := NewOAuth2Authenticator(config, httpClient)
+	tmpAuthenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
 	if tmpAuthenticator.IsSupported() {
 		authenticator = tmpAuthenticator
 	}
