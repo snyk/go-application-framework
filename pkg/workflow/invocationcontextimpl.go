@@ -3,6 +3,8 @@ package workflow
 import (
 	"log"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -15,7 +17,7 @@ type InvocationContextImpl struct {
 	Configuration  configuration.Configuration
 	Analytics      analytics.Analytics
 	networkAccess  networking.NetworkAccess
-	logger         *log.Logger
+	logger         *zerolog.Logger
 }
 
 // GetWorkflowIdentifier returns the identifier of the workflow that is being invoked.
@@ -43,7 +45,12 @@ func (ici *InvocationContextImpl) GetNetworkAccess() networking.NetworkAccess {
 	return ici.networkAccess
 }
 
-// GetLogger returns the logger instance that is being used by the workflow engine.
+// Deprecated: GetLogger returns the logger instance that is being used by the workflow engine.
 func (ici *InvocationContextImpl) GetLogger() *log.Logger {
+	return log.New(&utils.ToZeroLogDebug{Logger: ici.logger}, "", 0)
+}
+
+// GetEnhancedLogger returns the logger instance that is being used by the workflow engine.
+func (ici *InvocationContextImpl) GetEnhancedLogger() *zerolog.Logger {
 	return ici.logger
 }

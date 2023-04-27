@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
 func ConfigureProxy(
 	transport *http.Transport,
-	logger *log.Logger,
+	logger *zerolog.Logger,
 	proxy func(req *http.Request) (*url.URL, error),
 	authenticationMechanism httpauth.AuthenticationMechanism,
 ) *http.Transport {
@@ -19,7 +21,7 @@ func ConfigureProxy(
 	// create proxy authenticator if required
 	var proxyAuthenticator *httpauth.ProxyAuthenticator
 	if httpauth.IsSupportedMechanism(authenticationMechanism) {
-		proxyAuthenticator = httpauth.NewProxyAuthenticator(authenticationMechanism, proxy, logger)
+		proxyAuthenticator = httpauth.NewProxyAuthenticator(authenticationMechanism, proxy, log.New(&utils.ToZeroLogDebug{Logger: logger}, "", 0))
 		transport.DialContext = proxyAuthenticator.DialContext
 		transport.Proxy = nil
 	} else {

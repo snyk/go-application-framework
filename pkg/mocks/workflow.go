@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	zerolog "github.com/rs/zerolog"
 	analytics "github.com/snyk/go-application-framework/pkg/analytics"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
@@ -208,6 +209,20 @@ func (m *MockInvocationContext) GetEngine() workflow.Engine {
 func (mr *MockInvocationContextMockRecorder) GetEngine() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEngine", reflect.TypeOf((*MockInvocationContext)(nil).GetEngine))
+}
+
+// GetEnhancedLogger mocks base method.
+func (m *MockInvocationContext) GetEnhancedLogger() *zerolog.Logger {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEnhancedLogger")
+	ret0, _ := ret[0].(*zerolog.Logger)
+	return ret0
+}
+
+// GetEnhancedLogger indicates an expected call of GetEnhancedLogger.
+func (mr *MockInvocationContextMockRecorder) GetEnhancedLogger() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEnhancedLogger", reflect.TypeOf((*MockInvocationContext)(nil).GetEnhancedLogger))
 }
 
 // GetLogger mocks base method.
@@ -416,10 +431,10 @@ func (mr *MockEngineMockRecorder) GetConfiguration() *gomock.Call {
 }
 
 // GetLogger mocks base method.
-func (m *MockEngine) GetLogger() *log.Logger {
+func (m *MockEngine) GetLogger() *zerolog.Logger {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLogger")
-	ret0, _ := ret[0].(*log.Logger)
+	ret0, _ := ret[0].(*zerolog.Logger)
 	return ret0
 }
 
@@ -574,7 +589,7 @@ func (mr *MockEngineMockRecorder) SetConfiguration(config interface{}) *gomock.C
 }
 
 // SetLogger mocks base method.
-func (m *MockEngine) SetLogger(logger *log.Logger) {
+func (m *MockEngine) SetLogger(logger *zerolog.Logger) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetLogger", logger)
 }
