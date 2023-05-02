@@ -151,7 +151,15 @@ func (ev *extendedViper) Clone() Configuration {
 	defer ev.mutex.Unlock()
 
 	// manually clone the Configuration instance
-	clone := NewFromFiles(ev.viper.ConfigFileUsed())
+	configFileUsed := ev.viper.ConfigFileUsed()
+	var clone Configuration
+	if configFileUsed != "" {
+		clone = NewFromFiles(configFileUsed)
+	} else {
+		clone = NewInMemory()
+		clone.SetStorage(ev.storage)
+	}
+
 	keys := ev.viper.AllKeys()
 	for i := range keys {
 		value := ev.viper.Get(keys[i])
@@ -172,9 +180,11 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
 
 	ev.viper.Set(key, value)
+
+	ev.mutex.Unlock()
+
 	if ev.storage != nil && ev.persistedKeys[key] {
 		_ = ev.storage.Set(key, value)
 	}
