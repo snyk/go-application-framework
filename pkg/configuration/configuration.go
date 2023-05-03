@@ -16,6 +16,11 @@ import (
 
 type DefaultValueFunction func(existingValue interface{}) interface{}
 
+type configType string
+
+const inMemory configType = "in-memory"
+const jsonFile configType = "json"
+
 // Configuration is an interface for managing configuration values.
 type Configuration interface {
 	Clone() Configuration
@@ -47,6 +52,7 @@ type extendedViper struct {
 	viper           *viper.Viper
 	alternativeKeys map[string][]string
 	defaultValues   map[string]DefaultValueFunction
+	configType      configType
 
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
@@ -106,13 +112,19 @@ func New() Configuration {
 // NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
 	config := createViperDefaultConfig()
+	config.configType = jsonFile
 	readConfigFilesIntoViper(files, config)
 	return config
+}
+
+func (ev *extendedViper) getConfigType() configType {
+	return ev.configType
 }
 
 // NewInMemory creates a new Configuration instance that is not persisted to disk.
 func NewInMemory() Configuration {
 	config := createViperDefaultConfig()
+	config.configType = inMemory
 	return config
 }
 
@@ -151,7 +163,15 @@ func (ev *extendedViper) Clone() Configuration {
 	defer ev.mutex.Unlock()
 
 	// manually clone the Configuration instance
-	clone := NewFromFiles(ev.viper.ConfigFileUsed())
+	var clone Configuration
+	if ev.configType == jsonFile {
+		configFileUsed := ev.viper.ConfigFileUsed()
+		clone = NewFromFiles(configFileUsed)
+	} else {
+		clone = NewInMemory()
+	}
+
+	clone.SetStorage(ev.storage)
 	keys := ev.viper.AllKeys()
 	for i := range keys {
 		value := ev.viper.Get(keys[i])
@@ -172,9 +192,11 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
 
 	ev.viper.Set(key, value)
+
+	ev.mutex.Unlock()
+
 	if ev.storage != nil && ev.persistedKeys[key] {
 		_ = ev.storage.Set(key, value)
 	}

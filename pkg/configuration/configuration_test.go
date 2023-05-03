@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -251,9 +252,17 @@ func Test_ConfigurationClone(t *testing.T) {
 
 func TestNewInMemory(t *testing.T) {
 	config := NewInMemory()
-
-	assert.Nil(t, config.(*extendedViper).storage)
+	ev := config.(*extendedViper)
+	assert.Nil(t, ev.storage)
 	assert.NotNil(t, config)
+	assert.Equal(t, inMemory, ev.getConfigType())
+}
+
+func TestNewFromFiles(t *testing.T) {
+	config := NewFromFiles(filepath.Join(t.TempDir(), t.Name()))
+	ev := config.(*extendedViper)
+	assert.NotNil(t, config)
+	assert.Equal(t, jsonFile, ev.getConfigType())
 }
 
 func TestNewInMemory_shouldNotBreakWhenTryingToPersist(t *testing.T) {
