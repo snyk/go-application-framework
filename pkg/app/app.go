@@ -3,8 +3,6 @@ package app
 import (
 	"io"
 	"log"
-	"os"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -30,11 +28,9 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 		logger.Print("Failed to determine cache directory:", err)
 	}
 
-	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
 	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
-	config.AddDefaultValue(configuration.DEBUG_FORMAT, configuration.StandardDefaultValueFunction(log.Ldate|log.Ltime|log.Lmicroseconds|log.Lmsgprefix|log.LUTC))
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 
@@ -88,30 +84,6 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 
 		return orgId
 	})
-
-	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
-		alternativeBearerKeys := config.GetAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN)
-		alternativeAuthKeys := config.GetAlternativeKeys(configuration.AUTHENTICATION_TOKEN)
-		alternativeKeys := append(alternativeBearerKeys, alternativeAuthKeys...)
-
-		for _, key := range alternativeKeys {
-			hasPrefix := strings.HasPrefix(key, "snyk_")
-			if hasPrefix {
-				formattedKey := strings.ToUpper(key)
-				_, ok := os.LookupEnv(formattedKey)
-				if ok {
-					logger.Printf("Found environment variable %s, disabling OAuth flow", formattedKey)
-					return false
-				}
-			}
-		}
-		return existingValue
-	})
-
-	config.AddAlternativeKeys(configuration.AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
-	config.AddAlternativeKeys(configuration.AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
-	config.AddAlternativeKeys(configuration.API_URL, []string{"endpoint"})
-	config.AddAlternativeKeys(configuration.ADD_TRUSTED_CA_FILE, []string{"NODE_EXTRA_CA_CERTS"})
 }
 
 // CreateAppEngine creates a new workflow engine.
