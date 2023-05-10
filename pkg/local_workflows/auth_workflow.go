@@ -30,6 +30,9 @@ var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflo
 
 // InitAuth initialises the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
+	if !engine.GetConfiguration().GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
+		return nil //Use legacy CLI for authentication for now, until OAuth is ready
+	}
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
 	config.String(authTypeParameter, "token", "Authentication type (token, oauth)")
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
