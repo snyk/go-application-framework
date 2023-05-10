@@ -54,5 +54,10 @@ func Test_CreateAuthenticator_oauth_oauthEnabled(t *testing.T) {
 
 func Test_IsKnownOAuthEndpoint(t *testing.T) {
 	assert.True(t, IsKnownOAuthEndpoint("https://snykgov.io"))
-	assert.False(t, IsKnownOAuthEndpoint("https://app.snyk.io"))
+	assert.True(t, IsKnownOAuthEndpoint("https://snykgov.io/"))
+	assert.True(t, IsKnownOAuthEndpoint("https://snykgov.io/some/path/"))
+	assert.True(t, IsKnownOAuthEndpoint("https://www.snykgov.io/"))
+	assert.False(t, IsKnownOAuthEndpoint("https://snyk.io"))
+	assert.False(t, IsKnownOAuthEndpoint("https://snyk.io/"))
+	assert.False(t, IsKnownOAuthEndpoint("https://snyk.io/"))
 }
