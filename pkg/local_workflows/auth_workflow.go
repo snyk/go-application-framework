@@ -38,7 +38,7 @@ func InitAuth(engine workflow.Engine) error {
 		return nil // Use legacy CLI for authentication for now, until OAuth is ready
 	}
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
-	config.String(authTypeParameter, "token", authTypeDescription)
+	config.String(authTypeParameter, "", authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
@@ -60,7 +60,15 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	customEndpoint := config.GetString(configuration.API_URL)
 	isOAuthSelected := config.GetString(authTypeParameter) == authTypeOAuth
 	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
-	oauthEnabled := isOAuthSelected || (auth.IsKnownOAuthEndpoint(customEndpoint) && !isTokenSelected)
+	var oauthEnabled bool
+	if isOAuthSelected {
+		oauthEnabled = true
+	} else if isTokenSelected {
+		oauthEnabled = false
+	} else {
+		oauthEnabled = auth.IsKnownOAuthEndpoint(customEndpoint)
+	}
+
 	logger.Println("OAuth enabled:", oauthEnabled)
 
 	if oauthEnabled { // OAUTH flow
