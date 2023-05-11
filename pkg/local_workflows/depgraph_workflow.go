@@ -81,6 +81,11 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 		snykCmdArguments = append(snykCmdArguments, "--all-projects")
 	}
 
+	if exclude := config.GetString("exclude"); exclude != "" {
+		snykCmdArguments = append(snykCmdArguments, "--exclude="+exclude)
+		debugLogger.Println("Exclude:", exclude)
+	}
+
 	if targetDirectory := config.GetString("targetDirectory"); err == nil {
 		snykCmdArguments = append(snykCmdArguments, targetDirectory)
 	}
