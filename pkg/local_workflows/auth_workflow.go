@@ -14,7 +14,11 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	authTypeParameter = "auth-type"
+	authTypeOAuth     = "oauth"
+	authTypeToken     = "token"
 )
+
+var authTypeDescription = fmt.Sprint("Authentication type (", authTypeToken, ", ", authTypeOAuth, ")")
 
 const templateConsoleMessage = `
 Now redirecting you to our auth page, go ahead and log in,
@@ -30,8 +34,11 @@ var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflo
 
 // InitAuth initialises the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
+	if !engine.GetConfiguration().GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
+		return nil // Use legacy CLI for authentication for now, until OAuth is ready
+	}
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
-	config.String(authTypeParameter, "token", "Authentication type (token, oauth)")
+	config.String(authTypeParameter, "", authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
@@ -50,7 +57,18 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	logger := invocationCtx.GetLogger()
 	engine := invocationCtx.GetEngine()
 
-	oauthEnabled := config.GetString(authTypeParameter) == "oauth"
+	customEndpoint := config.GetString(configuration.API_URL)
+	isOAuthSelected := config.GetString(authTypeParameter) == authTypeOAuth
+	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
+	var oauthEnabled bool
+	if isOAuthSelected {
+		oauthEnabled = true
+	} else if isTokenSelected {
+		oauthEnabled = false
+	} else {
+		oauthEnabled = auth.IsKnownOAuthEndpoint(customEndpoint)
+	}
+
 	logger.Println("OAuth enabled:", oauthEnabled)
 
 	if oauthEnabled { // OAUTH flow

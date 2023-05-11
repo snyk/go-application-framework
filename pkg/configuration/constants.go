@@ -1,7 +1,7 @@
 package configuration
 
 const (
-	API_URL                        string = "snyk_api"
+	API_URL                        string = "snyk_api"                // AKA "endpoint" in the config file
 	AUTHENTICATION_SUBDOMAINS      string = "internal_auth_subdomain" // array of additional subdomains to add authentication for
 	AUTHENTICATION_TOKEN           string = "token"
 	AUTHENTICATION_BEARER_TOKEN    string = "bearer_token"
