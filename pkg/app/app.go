@@ -1,8 +1,12 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -84,6 +88,17 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 
 		return orgId
 	})
+
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
+		endpoint, err := json.Marshal(config.Get(configuration.API_URL))
+		if err != nil {
+			shasum := sha256.Sum256(endpoint)
+			return strings.Contains(base64.RawURLEncoding.EncodeToString(shasum[:]), "sha1")
+		} else {
+			return false
+		}
+	})
+
 }
 
 // CreateAppEngine creates a new workflow engine.
