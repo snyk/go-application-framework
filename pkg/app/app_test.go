@@ -139,3 +139,37 @@ func Test_CreateAppEngineWithConfigAndLoggerOptions(t *testing.T) {
 	assert.Equal(t, logger, engine.GetLogger())
 	assert.Equal(t, config, engine.GetConfiguration())
 }
+
+func Test_initConfiguration_existingValueOfOAuthFFRespected(t *testing.T) {
+	existingValue := false
+	endpoint := "https://snykgov.io"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	config := configuration.New()
+	initConfiguration(config, mockApiClient, &zlog.Logger)
+
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, existingValue)
+	config.Set(configuration.API_URL, endpoint)
+
+	actualOAuthFF := config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
+	assert.Equal(t, existingValue, actualOAuthFF)
+}
+
+func Test_initConfiguration_setValueOfOAuthFF(t *testing.T) {
+	endpoint := "https://snykgov.io"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	config := configuration.New()
+	initConfiguration(config, mockApiClient, &zlog.Logger)
+
+	config.Set(configuration.API_URL, endpoint)
+
+	actualOAuthFF := config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
+	assert.Equal(t, true, actualOAuthFF)
+}
