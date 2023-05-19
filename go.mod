@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/rs/zerolog v1.29.1
-	github.com/snyk/go-httpauth v0.0.0-20230328170530-1af63c87b650
+	github.com/snyk/go-httpauth v0.0.0-20230512081507-800aedece3cb
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
