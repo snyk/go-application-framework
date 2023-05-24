@@ -54,6 +54,8 @@ func InitDepGraphWorkflow(engine workflow.Engine) error {
 	depGraphConfig := pflag.NewFlagSet("depgraph", pflag.ExitOnError)
 	depGraphConfig.Bool("all-projects", false, "Enable all projects")
 	depGraphConfig.String("file", "", "Input file")
+	depGraphConfig.String("detection-depth", "", "Detection depth")
+	depGraphConfig.BoolP("prune-repeated-subdependencies", "p", false, "Prune repeated sub-dependencies")
 
 	_, err := engine.Register(WORKFLOWID_DEPGRAPH_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(depGraphConfig), depgraphWorkflowEntryPoint)
 	return err
@@ -84,6 +86,16 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 	if exclude := config.GetString("exclude"); exclude != "" {
 		snykCmdArguments = append(snykCmdArguments, "--exclude="+exclude)
 		debugLogger.Println("Exclude:", exclude)
+	}
+
+	if detectionDepth := config.GetString("detection-depth"); detectionDepth != "" {
+		snykCmdArguments = append(snykCmdArguments, "--detection-depth="+detectionDepth)
+		debugLogger.Println("Detection depth:", detectionDepth)
+	}
+
+	if pruneRepeatedSubDependencies := config.GetBool("prune-repeated-subdependencies"); pruneRepeatedSubDependencies {
+		snykCmdArguments = append(snykCmdArguments, "--prune-repeated-subdependencies")
+		debugLogger.Println("Prune repeated sub-dependencies:", pruneRepeatedSubDependencies)
 	}
 
 	if targetDirectory := config.GetString("targetDirectory"); err == nil {
