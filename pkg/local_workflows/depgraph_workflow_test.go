@@ -170,6 +170,27 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, expected, actual)
 	})
 
+	t.Run("should support 'debug' flag", func(t *testing.T) {
+		// setup
+		config.Set(configuration.DEBUG, true)
+
+		dataIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_DEPGRAPH_WORKFLOW, "depgraph")
+		data := workflow.NewData(dataIdentifier, "application/json", []byte(payload))
+
+		// engine mocks
+		id := workflow.NewWorkflowIdentifier("legacycli")
+		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
+
+		// execute
+		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+
+		// assert
+		assert.Nil(t, err)
+
+		commandArgs := config.Get(configuration.RAW_CMD_ARGS)
+		assert.Contains(t, commandArgs, "--debug")
+	})
+
 	t.Run("should support 'all-projects' flag", func(t *testing.T) {
 		// setup
 		config.Set("all-projects", true)
