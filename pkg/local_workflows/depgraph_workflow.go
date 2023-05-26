@@ -111,6 +111,10 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 		debugLogger.Println("File:", file)
 	}
 
+	if config.GetBool(configuration.DEBUG) {
+		snykCmdArguments = append(snykCmdArguments, "--debug")
+	}
+
 	config.Set(configuration.RAW_CMD_ARGS, snykCmdArguments)
 	legacyData, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 	if legacyCLIError != nil {
