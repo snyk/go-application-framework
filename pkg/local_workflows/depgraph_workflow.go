@@ -52,6 +52,7 @@ func extractLegacyCLIError(input error, data []workflow.Data) (output error) {
 // As part of the localworkflows package, it is registered via the localworkflows.Init method
 func InitDepGraphWorkflow(engine workflow.Engine) error {
 	depGraphConfig := pflag.NewFlagSet("depgraph", pflag.ExitOnError)
+	depGraphConfig.Bool("fail-fast", false, "Fail fast when scanning all projects")
 	depGraphConfig.Bool("all-projects", false, "Enable all projects")
 	depGraphConfig.String("file", "", "Input file")
 	depGraphConfig.String("detection-depth", "", "Detection depth")
@@ -81,6 +82,10 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 	snykCmdArguments := []string{"test", "--print-graph", "--json"}
 	if allProjects := config.GetBool("all-projects"); allProjects {
 		snykCmdArguments = append(snykCmdArguments, "--all-projects")
+	}
+
+	if config.GetBool("fail-fast") {
+		snykCmdArguments = append(snykCmdArguments, "--fail-fast")
 	}
 
 	if exclude := config.GetString("exclude"); exclude != "" {
