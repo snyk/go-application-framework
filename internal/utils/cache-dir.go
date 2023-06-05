@@ -1,6 +1,9 @@
 package utils
 
-import "path"
+import (
+	"os"
+	"path"
+)
 
 func SnykCacheDir() (string, error) {
 	osutil := NewSnykOSUtil()
@@ -9,20 +12,16 @@ func SnykCacheDir() (string, error) {
 
 func SnykCacheDirImpl(osUtil SnykOSUtil) (string, error) {
 	baseDirectory, err := osUtil.UserCacheDir()
-	subDir := "snyk-cli"
-	if err != nil {
-		// Returning "snyk" to be used as the cache directory name later.
-		return subDir, err
-	}
-
+	subDir := path.Join("snyk", "snyk-cli")
 	snykCacheDir := path.Join(baseDirectory, subDir)
-	err = osUtil.MkdirAll(snykCacheDir, FILEPERM_755)
-	if err != nil {
-		// Returning "snyk" to be used as the cache directory name later.
-		return "snyk", err
+
+	err2 := os.MkdirAll(snykCacheDir, FILEPERM_755)
+	if err2 != nil {
+		// Returning "snyk-cli" to be used as the cache directory name later.
+		return subDir, err2
 	}
 
-	return snykCacheDir, nil
+	return snykCacheDir, err
 }
 
 func FullPathInSnykCacheDir(cacheDir string, filename string) (string, error) {
