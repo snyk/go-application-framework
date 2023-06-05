@@ -27,7 +27,7 @@ func (m *mockCacheDirOSUtil) MkdirAll(path string, perm os.FileMode) error {
 	return m.dirError
 }
 
-func (m *mockCacheDirOSUtil) Stat(name string) (os.FileInfo, error) {
+func (m *mockCacheDirOSUtil) Stat(_ string) (os.FileInfo, error) {
 	return nil, nil
 }
 
@@ -45,7 +45,7 @@ func newMockSnykCacheDirUtil(cacheDir string, cacheDirError error, dirError erro
 
 func Test_SnykCacheDir_returnsCacheDir(t *testing.T) {
 	cacheDir := "path/to/cache/dir"
-	expectedDirName := "snyk"
+	expectedDirName := "snyk-cli"
 	expectedDir := path.Join(cacheDir, expectedDirName)
 
 	osutil := newMockSnykCacheDirUtil(cacheDir, nil, nil)
@@ -56,7 +56,7 @@ func Test_SnykCacheDir_returnsCacheDir(t *testing.T) {
 }
 
 func Test_SnykCacheDir_handlesCacheDirErr(t *testing.T) {
-	expectedDir := "snyk"
+	expectedDir := "snyk-cli"
 	expectedErr := errors.New("error getting cache dir")
 
 	osutil := newMockSnykCacheDirUtil("", expectedErr, nil)
