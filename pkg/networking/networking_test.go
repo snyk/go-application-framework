@@ -56,6 +56,8 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	config := getConfig()
 	userAgent := "James Bond"
 	accessToken := "access me"
+	integrationName := "my-integration"
+	integrationVersion := "1.0.0"
 
 	expectedToken := &oauth2.Token{
 		AccessToken:  accessToken,
@@ -67,18 +69,21 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	expectedTokenString, _ := json.Marshal(expectedToken)
 
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
+	config.Set(configuration.INTEGRATION_NAME, integrationName)
+	config.Set(configuration.INTEGRATION_VERSION, integrationVersion)
 	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
 
 	net.AddHeaderField("User-Agent", userAgent)
-	expectedHeader := http.Header{
-		"User-Agent": {userAgent},
+	expectedHeaders := map[string]string{
+		"User-Agent": userAgent,
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
-		"Authorization": {"Bearer " + accessToken},
+		"Authorization":      "Bearer " + accessToken,
+		"x-snyk-integration": integrationName + "/" + integrationVersion,
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for key, expectedValue := range expectedHeader {
-			assert.Equal(t, expectedValue, r.Header[key])
+		for key, expectedValue := range expectedHeaders {
+			assert.Equal(t, expectedValue, r.Header.Get(key)) // Use Get for case-insensitive comparison
 		}
 	})
 	server := httptest.NewServer(handler)
