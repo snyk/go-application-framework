@@ -24,7 +24,14 @@ func NewIntegrationHeaderMiddleware(
 func (n *IntegrationHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response, error) {
 	name := n.config.GetString(configuration.INTEGRATION_NAME)
 	version := n.config.GetString(configuration.INTEGRATION_VERSION)
-	request.Header.Add("x-snyk-integration", name+"/"+version)
+	apiUrl := n.config.GetString(configuration.API_URL)
+	isSnykApi, err := IsSnykApi(apiUrl, request.URL, nil)
+	if err != nil {
+		return n.next.RoundTrip(request)
+	}
+	if name != "" && version != "" && isSnykApi {
+		request.Header.Add("x-snyk-integration", name+"/"+version)
+	}
 
 	return n.next.RoundTrip(request)
 }
