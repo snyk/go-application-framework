@@ -41,7 +41,7 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	return n.next.RoundTrip(request)
 }
 
-func ShouldRequireAuthentication(apiUrl string, url *url.URL, additionalSubdomains []string) (matchesPattern bool, err error) {
+func IsSnykApi(apiUrl string, url *url.URL, additionalSubdomains []string) (matchesPattern bool, err error) {
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
 		matchesPattern := false
@@ -69,10 +69,14 @@ func ShouldRequireAuthentication(apiUrl string, url *url.URL, additionalSubdomai
 
 }
 
-func AddAuthenticationHeader(authenticator auth.Authenticator, config configuration.Configuration, request *http.Request) error {
+func AddAuthenticationHeader(
+	authenticator auth.Authenticator,
+	config configuration.Configuration,
+	request *http.Request,
+) error {
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
-	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains)
+	isSnykApi, err := IsSnykApi(apiUrl, request.URL, additionalSubdomains)
 
 	// requests to the api automatically get an authentication token attached
 	if !isSnykApi {

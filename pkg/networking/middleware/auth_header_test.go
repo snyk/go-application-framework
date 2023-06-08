@@ -28,7 +28,7 @@ func Test_ShouldRequireAuthentication(t *testing.T) {
 
 	for u, expected := range cases {
 		requestUrl, _ := url.Parse(u)
-		actual, err := middleware.ShouldRequireAuthentication(apiUrl, requestUrl, additionalSubdomains)
+		actual, err := middleware.IsSnykApi(apiUrl, requestUrl, additionalSubdomains)
 		assert.Nil(t, err)
 		assert.Equal(t, expected, actual)
 	}
@@ -49,7 +49,7 @@ func Test_ShouldRequireAuthentication_subdomains(t *testing.T) {
 	for u, expected := range cases {
 		t.Run(u, func(t *testing.T) {
 			requestUrl, _ := url.Parse(u)
-			actual, err := middleware.ShouldRequireAuthentication(apiUrl, requestUrl, additionalSubdomains)
+			actual, err := middleware.IsSnykApi(apiUrl, requestUrl, additionalSubdomains)
 			assert.Nil(t, err)
 			assert.Equal(t, expected, actual)
 		})
