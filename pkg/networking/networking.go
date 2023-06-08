@@ -44,16 +44,16 @@ type networkImpl struct {
 	logger       *zerolog.Logger
 }
 
-// customRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
-type customRoundTripper struct {
+// DefaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
+type DefaultHeadersRoundTripper struct {
 	encapsulatedRoundTripper http.RoundTripper
 	networkAccess            *networkImpl
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
-func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	crt.networkAccess.addDefaultHeader(request)
-	return crt.encapsulatedRoundTripper.RoundTrip(request)
+func (rt *DefaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	rt.networkAccess.addDefaultHeader(request)
+	return rt.encapsulatedRoundTripper.RoundTrip(request)
 }
 
 // NewNetworkAccess returns a networkImpl instance.
@@ -102,12 +102,13 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 }
 
 func (n *networkImpl) GetRoundTripper() http.RoundTripper {
-	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
-
-	rt := middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), transport)
+	var rt http.RoundTripper
+	rt = n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	rt = middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
+	rt = middleware.NewIntegrationHeaderMiddleware(n.config, rt)
 
 	// encapsulate everything
-	roundTrip := customRoundTripper{
+	roundTrip := DefaultHeadersRoundTripper{
 		encapsulatedRoundTripper: rt,
 		networkAccess:            n,
 	}
