@@ -54,6 +54,7 @@ func InitDepGraphWorkflow(engine workflow.Engine) error {
 	depGraphConfig := pflag.NewFlagSet("depgraph", pflag.ExitOnError)
 	depGraphConfig.Bool("fail-fast", false, "Fail fast when scanning all projects")
 	depGraphConfig.Bool("all-projects", false, "Enable all projects")
+	depGraphConfig.Bool("dev", false, "Include dev dependencies")
 	depGraphConfig.String("file", "", "Input file")
 	depGraphConfig.String("detection-depth", "", "Detection depth")
 	depGraphConfig.BoolP("prune-repeated-subdependencies", "p", false, "Prune repeated sub-dependencies")
@@ -118,6 +119,10 @@ func depgraphWorkflowEntryPoint(invocation workflow.InvocationContext, input []w
 
 	if config.GetBool(configuration.DEBUG) {
 		snykCmdArguments = append(snykCmdArguments, "--debug")
+	}
+
+	if config.GetBool("dev") {
+		snykCmdArguments = append(snykCmdArguments, "--dev")
 	}
 
 	config.Set(configuration.RAW_CMD_ARGS, snykCmdArguments)
