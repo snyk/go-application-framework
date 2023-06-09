@@ -18,7 +18,7 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 	config := configuration.New()
 	engine := workflow.NewWorkFlowEngine(config)
 
-	err := InitOutputWorkflow(engine)
+	err := workflow.Register(Output, engine)
 	assert.Nil(t, err)
 
 	json := config.Get("json")
@@ -36,6 +36,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	outputDestination := iMocks.NewMockOutputDestination(ctrl)
+	Output.destination = outputDestination
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -83,11 +84,11 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		output, err := Output.Entrypoint(invocationContextMock, []workflow.Data{data})
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, []workflow.Data(nil), output)
 	})
 
 	t.Run("should output to stdout by default for text/plain", func(t *testing.T) {
@@ -98,11 +99,11 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		output, err := Output.Entrypoint(invocationContextMock, []workflow.Data{data})
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, []workflow.Data(nil), output)
 	})
 
 	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
@@ -116,11 +117,11 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		outputDestination.EXPECT().WriteFile(expectedFileName, []byte(payload), utils.FILEPERM_666).Return(nil).Times(1)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		output, err := Output.Entrypoint(invocationContextMock, []workflow.Data{data})
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, []workflow.Data(nil), output)
 	})
 
 	t.Run("should print unsupported mimeTypes that are string convertible", func(t *testing.T) {
@@ -131,11 +132,11 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		output, err := Output.Entrypoint(invocationContextMock, []workflow.Data{data})
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, []workflow.Data(nil), output)
 	})
 
 	t.Run("should reject unsupported mimeTypes", func(t *testing.T) {
@@ -143,10 +144,10 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		data := workflow.NewData(workflowIdentifier, "hammer/head", workflowIdentifier) // re-using workflowIdentifier as data to have some non string data
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		output, err := Output.Entrypoint(invocationContextMock, []workflow.Data{data})
 
 		// assert
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, []workflow.Data(nil), output)
 		assert.Equal(t, "Unsupported output type: hammer/head", err.Error())
 	})
 }

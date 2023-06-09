@@ -52,7 +52,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_requireExperimentalFlag(t *testing.T) 
 	expectedError := errors.New("set `--experimental` flag to enable whoAmI command")
 
 	// run test
-	_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+	_, err := WhoAmI.Entrypoint(invocationContextMock, nil)
 	assert.Equal(t, expectedError.Error(), err.Error())
 }
 
@@ -108,7 +108,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		expectedResponse := "user.name@snyk.io"
 
 		// execute
-		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+		output, err := WhoAmI.Entrypoint(invocationContextMock, nil)
 
 		// assert
 		assert.Nil(t, err)
@@ -121,7 +121,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		config.Set("json", true)
 
 		// execute
-		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+		output, err := WhoAmI.Entrypoint(invocationContextMock, nil)
 
 		// assert
 		assert.Nil(t, err)
@@ -175,7 +175,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 		expectedError := errors.New("error while fetching user: invalid API key (status 401)")
 
 		// execute
-		_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+		_, err := WhoAmI.Entrypoint(invocationContextMock, nil)
 
 		// assert
 		// assert.Nil(t, err)
@@ -202,7 +202,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 		expectedError := errors.New("error while fetching user: request failed (status 500)")
 
 		// execute
-		_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+		_, err := WhoAmI.Entrypoint(invocationContextMock, nil)
 
 		// assert
 		assert.Equal(t, expectedError.Error(), err.Error())
@@ -259,7 +259,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
 	expectedError := errors.New("error while extracting user: missing property 'username'")
 
 	// execute
-	_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+	_, err := WhoAmI.Entrypoint(invocationContextMock, nil)
 
 	// assert
 	assert.Error(t, err)

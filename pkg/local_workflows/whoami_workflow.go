@@ -10,7 +10,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -22,32 +21,50 @@ const (
 )
 
 // define a new workflow identifier for this workflow
-var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(workflowName)
+var (
+	WORKFLOWID_WHOAMI workflow.Identifier = WhoAmI.Identifier()
+
+	WhoAmI = &whoAmIWorkflow{
+		Workflow: &workflow.Workflow{
+			Name:     "whoami",
+			TypeName: "whoami",
+			Visible:  true,
+			Flags: workflow.Flags{
+				workflow.Flag[bool]{
+					Name:         experimentalFlag,
+					Usage:        "enable experimental whoAmI command",
+					DefaultValue: false,
+				},
+				workflow.Flag[bool]{
+					Name:         jsonFlag,
+					Usage:        "output in json format",
+					DefaultValue: false,
+				},
+			},
+		},
+	}
+)
 
 // InitWhoAmIWorkflow initialises the whoAmI workflow before registering it with the engine.
+// Deprecated: use `workflow.Register(WhoAmI, engine)` directly.
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
-	// initialise workflow configuration
-	whoAmIConfig := pflag.NewFlagSet(workflowName, pflag.ExitOnError)
-	// add experimental flag to configuration
-	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
-	// add json flag to configuration
-	whoAmIConfig.Bool(jsonFlag, false, "output in json format")
+	return workflow.Register(WhoAmI, engine)
+}
 
-	// register workflow with engine
-	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(whoAmIConfig), whoAmIWorkflowEntryPoint)
-	return err
+type whoAmIWorkflow struct {
+	*workflow.Workflow
 }
 
 // whoAmIWorkflowEntryPoint is the entry point for the whoAmI workflow.
 // it calls the `/user/me` endpoint and returns the authenticated user's username
 // it can optionally return the full `/user/me` payload response if the json flag is set
-func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
+func (w whoAmIWorkflow) Entrypoint(invocation workflow.InvocationContext, _ []workflow.Data) (depGraphList []workflow.Data, err error) {
 	// get necessary objects from invocation context
-	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetLogger()
-	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
+	config := invocation.GetConfiguration()
+	logger := w.Logger(invocation)
+	httpClient := invocation.GetNetworkAccess().GetHttpClient()
 
-	logger.Println("whoAmI workflow start")
+	logger.Println("start")
 
 	// only run if experimental flag is set
 	if !config.GetBool(experimentalFlag) {

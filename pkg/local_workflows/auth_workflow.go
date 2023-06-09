@@ -7,7 +7,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -18,55 +17,60 @@ const (
 	authTypeToken     = "token"
 )
 
-var authTypeDescription = fmt.Sprint("Authentication type (", authTypeToken, ", ", authTypeOAuth, ")")
-
-const templateConsoleMessage = `
-Now redirecting you to our auth page, go ahead and log in,
-and once the auth is complete, return to this prompt and you'll
-be ready to start using snyk.
-
-If you can't wait use this url:
-%s
-`
-
 // define a new workflow identifier for this workflow
-var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflowNameAuth)
+var (
+	WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflowNameAuth)
+	Auth                                = &authWorkflow{
+		Workflow: &workflow.Workflow{
+			Name:    workflowNameAuth,
+			Visible: true,
+			Flags: workflow.Flags{
+				workflow.Flag[string]{
+					Name:  authTypeParameter,
+					Usage: fmt.Sprintf("Authentication type (%s, %s)", authTypeToken, authTypeOAuth),
+
+					DefaultValue: "",
+				},
+				workflow.Flag[bool]{
+					Name:         headlessFlag,
+					Usage:        "Enable headless OAuth authentication",
+					DefaultValue: false,
+				},
+			},
+		},
+	}
+)
+
+type authWorkflow struct {
+	*workflow.Workflow
+}
 
 // InitAuth initialises the auth workflow before registering it with the engine.
+// Deprecated: use `workflow.Register(AuthWorkflow, engine)` directly.
 func InitAuth(engine workflow.Engine) error {
+	// Only register if the OAuth flow is ready.
 	if !engine.GetConfiguration().GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
-		return nil // Use legacy CLI for authentication for now, until OAuth is ready
+		return nil
 	}
-	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
-	config.String(authTypeParameter, "", authTypeDescription)
-	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
-
-	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
-	return err
+	return workflow.Register(Auth, engine)
 }
 
-func OpenBrowser(authUrl string) {
-	fmt.Println(fmt.Sprintf(templateConsoleMessage, authUrl))
-	auth.OpenBrowser(authUrl)
-}
-
-// authEntryPoint is the entry point for the auth workflow.
-func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
+func (a *authWorkflow) Entrypoint(invocationCtx workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetLogger()
 	engine := invocationCtx.GetEngine()
+	logger := a.Logger(invocationCtx)
 
-	customEndpoint := config.GetString(configuration.API_URL)
-	isOAuthSelected := config.GetString(authTypeParameter) == authTypeOAuth
-	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
 	var oauthEnabled bool
-	if isOAuthSelected {
+	switch config.GetString(authTypeParameter) {
+	case authTypeOAuth:
 		oauthEnabled = true
-	} else if isTokenSelected {
+
+	case authTypeToken:
 		oauthEnabled = false
-	} else {
-		oauthEnabled = auth.IsKnownOAuthEndpoint(customEndpoint)
+
+	default:
+		oauthEnabled = auth.IsKnownOAuthEndpoint(config.GetString(configuration.API_URL))
 	}
 
 	logger.Println("OAuth enabled:", oauthEnabled)
@@ -82,8 +86,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 			auth.WithOpenBrowserFunc(OpenBrowser),
 			auth.WithShutdownServerFunc(auth.ShutdownServer),
 		)
-		err = authenticator.Authenticate()
-		if err != nil {
+		if err := authenticator.Authenticate(); err != nil {
 			return nil, err
 		}
 
@@ -98,5 +101,19 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		}
 	}
 
-	return nil, err
+	return nil, nil
+}
+
+const templateConsoleMessage = `
+Now redirecting you to our auth page, go ahead and log in,
+and once the auth is complete, return to this prompt and you'll
+be ready to start using snyk.
+
+If you can't wait use this url:
+%s
+`
+
+func OpenBrowser(authUrl string) {
+	fmt.Println(fmt.Sprintf(templateConsoleMessage, authUrl))
+	auth.OpenBrowser(authUrl)
 }

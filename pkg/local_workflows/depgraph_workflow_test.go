@@ -49,7 +49,7 @@ func Test_Depgraph_InitDepGraphWorkflow(t *testing.T) {
 	config := configuration.New()
 	engine := workflow.NewWorkFlowEngine(config)
 
-	err := InitDepGraphWorkflow(engine)
+	err := workflow.Register(OpenSourceDepGraph, engine)
 	assert.Nil(t, err)
 
 	allProjects := config.Get("all-projects")
@@ -154,7 +154,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		depGraphList, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		depGraphList, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -182,7 +182,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -203,7 +203,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -224,7 +224,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -245,7 +245,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -266,7 +266,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -287,7 +287,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -308,7 +308,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -329,7 +329,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -350,7 +350,7 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
 		assert.Nil(t, err)
@@ -368,9 +368,9 @@ func Test_Depgraph_depgraphWorkflowEntryPoint(t *testing.T) {
 		engineMock.EXPECT().InvokeWithConfig(id, config).Return([]workflow.Data{data}, nil).Times(1)
 
 		// execute
-		_, err := depgraphWorkflowEntryPoint(invocationContextMock, []workflow.Data{})
+		_, err := OpenSourceDepGraph.Entrypoint(invocationContextMock, []workflow.Data{})
 
 		// assert
-		assert.Equal(t, "No dependency graphs found", err.Error())
+		assert.Equal(t, "could not extract depGraphs from CLI output: no dependency graphs found", err.Error())
 	})
 }
