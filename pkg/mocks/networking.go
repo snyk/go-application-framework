@@ -11,6 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	zerolog "github.com/rs/zerolog"
 	auth "github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -88,6 +89,18 @@ func (m *MockNetworkAccess) GetAuthenticator() auth.Authenticator {
 func (mr *MockNetworkAccessMockRecorder) GetAuthenticator() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuthenticator", reflect.TypeOf((*MockNetworkAccess)(nil).GetAuthenticator))
+}
+
+func (m *MockNetworkAccess) SetUserAgent(userAgent middleware.UserAgentInfo) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetUserAgent", userAgent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (mr *MockNetworkAccessMockRecorder) SetUserAgent(userAgent interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserAgent", reflect.TypeOf((*MockNetworkAccess)(nil).SetUserAgent), userAgent)
 }
 
 // GetHttpClient mocks base method.
