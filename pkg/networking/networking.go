@@ -93,26 +93,13 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
 }
 
-// A middleware that captures the headers of the request and doesn't send it
-type headerCapture struct {
-	capturedHeaders map[string]string
-}
-
-func (h *headerCapture) RoundTrip(request *http.Request) (*http.Response, error) {
-	h.capturedHeaders = make(map[string]string)
-	for k, v := range request.Header {
-		h.capturedHeaders[k] = v[0]
-	}
-	return nil, nil
-}
-
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
-	hc := &headerCapture{}
+	hc := &middleware.HeaderCapture{}
 	var rt http.RoundTripper = hc
 	rt = n.addMiddlewaresToRoundTripper(rt)
 	_, err := rt.RoundTrip(request)
-	for k, v := range hc.capturedHeaders {
+	for k, v := range hc.CapturedHeaders {
 		request.Header.Set(k, v)
 	}
 
@@ -120,7 +107,6 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 }
 
 func (n *networkImpl) SetUserAgent(userAgent middleware.UserAgentInfo) error {
-	// n.staticHeader.Set("User-Agent", userAgent.ToUserAgentHeader())
 	n.snykAppEnvironment = &userAgent
 	return nil
 }

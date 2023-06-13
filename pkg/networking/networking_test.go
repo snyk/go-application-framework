@@ -55,17 +55,6 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 
 func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	config := getConfig()
-	userAgent := middleware.UserAgentInfo{
-		App:                           "snyk-cli",
-		AppVersion:                    "1.0.0",
-		Integration:                   "my-integration",
-		IntegrationVersion:            "1.0.0",
-		IntegrationEnvironment:        "test",
-		IntegrationEnvironmentVersion: "1.0.0",
-		OS:                            "WIN",
-		Arch:                          "amd64",
-		ProcessName:                   "snyk-win.exe",
-	}
 	accessToken := "access me"
 	integrationName := "my-integration"
 	integrationVersion := "1.0.0"
@@ -80,7 +69,6 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	expectedTokenString, _ := json.Marshal(expectedToken)
 
 	expectedHeaders := map[string]string{
-		"User-Agent": userAgent.ToUserAgentHeader(),
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
 		"Authorization": "Bearer " + accessToken,
 	}
@@ -95,7 +83,6 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	server := httptest.NewServer(handler)
 	config.Set(configuration.API_URL, server.URL)
 	net := NewNetworkAccess(config)
-	assert.NoError(t, net.SetUserAgent(userAgent))
 	client := net.GetHttpClient()
 
 	_, err := client.Get(server.URL)
