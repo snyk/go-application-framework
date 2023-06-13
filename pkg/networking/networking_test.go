@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -54,7 +55,17 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 
 func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	config := getConfig()
-	userAgent := "James Bond"
+	userAgent := middleware.SnykAppEnvironment{
+		App:                           "snyk-cli",
+		AppVersion:                    "1.0.0",
+		Integration:                   "my-integration",
+		IntegrationVersion:            "1.0.0",
+		IntegrationEnvironment:        "test",
+		IntegrationEnvironmentVersion: "1.0.0",
+		OS:                            "WIN",
+		Arch:                          "amd64",
+		ProcessName:                   "snyk-win.exe",
+	}
 	accessToken := "access me"
 	integrationName := "my-integration"
 	integrationVersion := "1.0.0"
@@ -68,43 +79,61 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 
 	expectedTokenString, _ := json.Marshal(expectedToken)
 
-	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
-	config.Set(configuration.INTEGRATION_NAME, integrationName)
-	config.Set(configuration.INTEGRATION_VERSION, integrationVersion)
-	net := NewNetworkAccess(config)
-	client := net.GetHttpClient()
-
-	net.AddHeaderField("User-Agent", userAgent)
 	expectedHeaders := map[string]string{
-		"User-Agent": userAgent,
+		"User-Agent": userAgent.ToUserAgentHeader(),
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
-		"Authorization":      "Bearer " + accessToken,
-		"x-snyk-integration": integrationName + "/" + integrationVersion,
+		"Authorization": "Bearer " + accessToken,
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for key, expectedValue := range expectedHeaders {
 			assert.Equal(t, expectedValue, r.Header.Get(key)) // Use Get for case-insensitive comparison
 		}
 	})
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
+	config.Set(configuration.INTEGRATION_NAME, integrationName)
+	config.Set(configuration.INTEGRATION_VERSION, integrationVersion)
 	server := httptest.NewServer(handler)
 	config.Set(configuration.API_URL, server.URL)
+	net := NewNetworkAccess(config)
+	assert.NoError(t, net.SetUserAgent(userAgent))
+	client := net.GetHttpClient()
+
 	_, err := client.Get(server.URL)
 	assert.NoError(t, err)
 }
 
-func Test_HttpClient_CallingNonApiUrl_NoAuthHeaders(t *testing.T) {
+func Test_HttpClient_CallingNonApiUrl(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
 	token := "1265457"
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.NotContains(t, r.Header, "Authorization")
+		headers := make(map[string]string)
+		for key := range r.Header {
+			headers[key] = r.Header.Get(key)
+		}
+		headersJson, err := json.Marshal(headers)
+		assert.NoError(t, err)
+		_, err = w.Write(headersJson)
+		assert.NoError(t, err)
 	})
 	server := httptest.NewServer(handler)
 	config.Set(configuration.API_URL, "https://www.example.com/not/the/server/URL")
-	_, err := client.Get(server.URL)
+	rsp, err := client.Get(server.URL)
 	assert.NoError(t, err)
+	capturedHeaders := make(map[string]string)
+	rspBody, err := io.ReadAll(rsp.Body)
+	assert.NoError(t, err)
+	assert.NoError(t, json.Unmarshal(rspBody, &capturedHeaders))
+
+	t.Run("No auth headers", func(t *testing.T) { assert.NotContains(t, capturedHeaders, "Authorization") })
+	t.Run("No User-Agent", func(t *testing.T) {
+		ua := capturedHeaders["User-Agent"]
+		assert.NotEmpty(t, ua)
+		assert.NotContains(t, ua, "snyk")
+		assert.Contains(t, ua, "Go-http-client") // By default, this is the User-Agent in go HTTP client
+	})
 }
 
 func Test_RoundTripper_SecureHTTPS(t *testing.T) {
@@ -258,15 +287,15 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 	net := NewNetworkAccess(config)
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
-	userAgentInfo := SnykAppEnvironment{
+	userAgentInfo := middleware.SnykAppEnvironment{
 		App:                           app,
 		AppVersion:                    appVersion,
 		Integration:                   integrationName,
 		IntegrationVersion:            integrationVersion,
 		IntegrationEnvironment:        integrationEnvironment,
 		IntegrationEnvironmentVersion: integrationEnvironmentVersion,
-		Goos:                          osName,
-		Goarch:                        arch,
+		OS:                            osName,
+		Arch:                          arch,
 		ProcessName:                   processName,
 	}
 	err = net.SetUserAgent(userAgentInfo)
@@ -295,13 +324,13 @@ func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testi
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 
-	userAgentInfo := SnykAppEnvironment{
+	userAgentInfo := middleware.SnykAppEnvironment{
 		App:                app,
 		AppVersion:         appVersion,
 		Integration:        integrationName,
 		IntegrationVersion: integrationVersion,
-		Goos:               osName,
-		Goarch:             arch,
+		OS:                 osName,
+		Arch:               arch,
 		ProcessName:        processName,
 	}
 	err = net.SetUserAgent(userAgentInfo)
@@ -327,11 +356,11 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 	t.Run("Without integration environment", func(t *testing.T) {
-		userAgentInfo := SnykAppEnvironment{
+		userAgentInfo := middleware.SnykAppEnvironment{
 			App:         app,
 			AppVersion:  appVersion,
-			Goos:        osName,
-			Goarch:      arch,
+			OS:          osName,
+			Arch:        arch,
 			ProcessName: processName,
 		}
 		err = net.SetUserAgent(userAgentInfo)
@@ -342,11 +371,11 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 	})
 
 	t.Run("With integration environment", func(t *testing.T) {
-		userAgentInfo := SnykAppEnvironment{
+		userAgentInfo := middleware.SnykAppEnvironment{
 			App:                           app,
 			AppVersion:                    appVersion,
-			Goos:                          osName,
-			Goarch:                        arch,
+			OS:                            osName,
+			Arch:                          arch,
 			ProcessName:                   processName,
 			IntegrationEnvironment:        "Doesn't matter",
 			IntegrationEnvironmentVersion: "Shouldn't show",

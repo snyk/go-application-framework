@@ -33,14 +33,36 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 		return n.next.RoundTrip(request)
 	}
 
-	err := AddAuthenticationHeader(n.authenticator, n.config, request)
+	// RoundTrippers should not modify the source request according to the docs, so cloning is used.
+	newRequest := request.Clone(request.Context())
+	err := AddAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	return n.next.RoundTrip(request)
+	return n.next.RoundTrip(newRequest)
 }
 
+// IsSnykApi checks if a URL aligns with a pattern of specified Snyk API URLs.
+//
+// apiUrl: Base API URL.
+// url: The URL to check.
+// additionalSubdomains: Subdomains to append to apiUrl for comparison.
+//
+// Returns true if the URL matches the pattern, false otherwise.
+// In case of an error generating the URL, an error is returned.
+//
+// Example 1:
+// apiUrl: "https://snyk.io/api/"
+// url: "https://snyk.io/api/v1/projects"
+// additionalSubdomains: []string{}
+// Result: true, nil // The URL matches the base API URL
+//
+// Example 2:
+// apiUrl: "https://snyk.io/api/"
+// url: "https://test.snyk.io/api/v1/projects"
+// additionalSubdomains: []string{"test"}
+// Result: true, nil // The URL matches the API URL with the "test" subdomain
 func IsSnykApi(apiUrl string, url *url.URL, additionalSubdomains []string) (matchesPattern bool, err error) {
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {

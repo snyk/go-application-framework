@@ -1,4 +1,4 @@
-package networking
+package middleware
 
 import "fmt"
 
@@ -9,8 +9,8 @@ type SnykAppEnvironment struct {
 	IntegrationVersion            string
 	IntegrationEnvironment        string
 	IntegrationEnvironmentVersion string
-	Goos                          string
-	Goarch                        string
+	OS                            string
+	Arch                          string
 	ProcessName                   string
 }
 
@@ -24,7 +24,7 @@ func (s SnykAppEnvironment) String() string { return s.ToUserAgentHeader() }
 func (s SnykAppEnvironment) ToUserAgentHeader() string {
 	str := fmt.Sprint(
 		s.App, "/", s.AppVersion,
-		" (", s.Goos, ";", s.Goarch, ";", s.ProcessName, ")",
+		" (", s.OS, ";", s.Arch, ";", s.ProcessName, ")",
 	)
 	if s.Integration != "" {
 		str += fmt.Sprint(" ", s.Integration, "/", s.IntegrationVersion)

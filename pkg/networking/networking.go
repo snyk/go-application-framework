@@ -32,7 +32,8 @@ type NetworkAccess interface {
 	// SetUserAgent sets the user agent header according to the Snyk environment.
 	// The format is the following pattern:
 	// <app>/<appVer> (<os>;<arch>;<procName>) <integration>/<integrationVersion> (<integrationEnv>/<integrationEnvVersion>)
-	SetUserAgent(userAgent SnykAppEnvironment) error
+	// The header will only be present when sending requests to the snyk API
+	SetUserAgent(userAgent middleware.SnykAppEnvironment) error
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
@@ -42,11 +43,12 @@ type NetworkAccess interface {
 
 // networkImpl is the default implementation of the NetworkAccess interface.
 type networkImpl struct {
-	config       configuration.Configuration
-	staticHeader http.Header
-	proxy        func(req *http.Request) (*url.URL, error)
-	caPool       *x509.CertPool
-	logger       *zerolog.Logger
+	config             configuration.Configuration
+	staticHeader       http.Header
+	proxy              func(req *http.Request) (*url.URL, error)
+	caPool             *x509.CertPool
+	logger             *zerolog.Logger
+	snykAppEnvironment *middleware.SnykAppEnvironment
 }
 
 // DefaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -57,8 +59,9 @@ type DefaultHeadersRoundTripper struct {
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
 func (rt *DefaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	rt.networkAccess.addDefaultHeader(request)
-	return rt.encapsulatedRoundTripper.RoundTrip(request)
+	newRequest := request.Clone(request.Context())
+	rt.networkAccess.addDefaultHeader(newRequest)
+	return rt.encapsulatedRoundTripper.RoundTrip(newRequest)
 }
 
 // NewNetworkAccess returns a networkImpl instance.
@@ -90,13 +93,35 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
 }
 
-func (n *networkImpl) AddHeaders(request *http.Request) error {
-	n.addDefaultHeader(request)
-	return middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
+// A middleware that captures the headers of the request and doesn't send it
+type headerCapture struct {
+	capturedHeaders map[string]string
 }
 
-func (n *networkImpl) SetUserAgent(userAgent SnykAppEnvironment) error {
-	n.staticHeader.Set("User-Agent", userAgent.ToUserAgentHeader())
+func (h *headerCapture) RoundTrip(request *http.Request) (*http.Response, error) {
+	h.capturedHeaders = make(map[string]string)
+	for k, v := range request.Header {
+		h.capturedHeaders[k] = v[0]
+	}
+	return nil, nil
+}
+
+func (n *networkImpl) AddHeaders(request *http.Request) error {
+	n.addDefaultHeader(request)
+	hc := &headerCapture{}
+	var rt http.RoundTripper = hc
+	rt = n.addMiddlewaresToRoundTripper(rt)
+	_, err := rt.RoundTrip(request)
+	for k, v := range hc.capturedHeaders {
+		request.Header.Set(k, v)
+	}
+
+	return err
+}
+
+func (n *networkImpl) SetUserAgent(userAgent middleware.SnykAppEnvironment) error {
+	// n.staticHeader.Set("User-Agent", userAgent.ToUserAgentHeader())
+	n.snykAppEnvironment = &userAgent
 	return nil
 }
 
@@ -111,18 +136,19 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	}
 }
 
-func (n *networkImpl) GetRoundTripper() http.RoundTripper {
-	var rt http.RoundTripper
-	rt = n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+func (n *networkImpl) addMiddlewaresToRoundTripper(rt http.RoundTripper) http.RoundTripper {
 	rt = middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
-	rt = middleware.NewIntegrationHeaderMiddleware(n.config, rt)
-
-	// encapsulate everything
+	rt = middleware.NewUserAgentMiddleware(n.config, rt, n.snykAppEnvironment)
 	roundTrip := DefaultHeadersRoundTripper{
 		encapsulatedRoundTripper: rt,
 		networkAccess:            n,
 	}
 	return &roundTrip
+}
+
+func (n *networkImpl) GetRoundTripper() http.RoundTripper {
+	rt := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	return n.addMiddlewaresToRoundTripper(rt)
 }
 
 func (n *networkImpl) createAuthenticator(transport *http.Transport) auth.Authenticator {
