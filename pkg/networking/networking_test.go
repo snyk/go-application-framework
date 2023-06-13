@@ -275,3 +275,86 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
 }
+
+func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testing.T) {
+	app := "snyk-ls"
+	appVersion := "20230508.144458"
+	osName := "DARWIN"
+	arch := "ARM64"
+	integrationName := "VS_CODE"
+	integrationVersion := "1.20.1"
+	processName := "snyk-ls"
+	expectedHeader := fmt.Sprint(
+		app, "/", appVersion,
+		" (", osName, ";", arch, ";", processName, ") ",
+		integrationName, "/", integrationVersion,
+	)
+
+	config := getConfig()
+	net := NewNetworkAccess(config)
+	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
+	assert.Nil(t, err)
+
+	userAgentInfo := SnykAppEnvironment{
+		App:                app,
+		AppVersion:         appVersion,
+		Integration:        integrationName,
+		IntegrationVersion: integrationVersion,
+		Goos:               osName,
+		Goarch:             arch,
+		ProcessName:        processName,
+	}
+	err = net.SetUserAgent(userAgentInfo)
+	assert.Nil(t, err)
+	err = net.AddHeaders(request)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
+}
+
+func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
+	app := "snyk-ls"
+	appVersion := "20230508.144458"
+	osName := "DARWIN"
+	arch := "ARM64"
+	processName := "snyk-ls"
+	expectedHeader := fmt.Sprint(
+		app, "/", appVersion,
+		" (", osName, ";", arch, ";", processName, ")",
+	)
+
+	config := getConfig()
+	net := NewNetworkAccess(config)
+	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
+	assert.Nil(t, err)
+	t.Run("Without integration environment", func(t *testing.T) {
+		userAgentInfo := SnykAppEnvironment{
+			App:         app,
+			AppVersion:  appVersion,
+			Goos:        osName,
+			Goarch:      arch,
+			ProcessName: processName,
+		}
+		err = net.SetUserAgent(userAgentInfo)
+		assert.Nil(t, err)
+		err = net.AddHeaders(request)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
+	})
+
+	t.Run("With integration environment", func(t *testing.T) {
+		userAgentInfo := SnykAppEnvironment{
+			App:                           app,
+			AppVersion:                    appVersion,
+			Goos:                          osName,
+			Goarch:                        arch,
+			ProcessName:                   processName,
+			IntegrationEnvironment:        "Doesn't matter",
+			IntegrationEnvironmentVersion: "Shouldn't show",
+		}
+		err = net.SetUserAgent(userAgentInfo)
+		assert.Nil(t, err)
+		err = net.AddHeaders(request)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
+	})
+}

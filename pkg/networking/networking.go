@@ -2,7 +2,6 @@ package networking
 
 import (
 	"crypto/x509"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -39,27 +38,6 @@ type NetworkAccess interface {
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
 	SetLogger(logger *zerolog.Logger)
-}
-
-type SnykAppEnvironment struct {
-	App                           string
-	AppVersion                    string
-	Integration                   string
-	IntegrationVersion            string
-	IntegrationEnvironment        string
-	IntegrationEnvironmentVersion string
-	Goos                          string
-	Goarch                        string
-	ProcessName                   string
-}
-
-func (s SnykAppEnvironment) String() string {
-	return fmt.Sprint(
-		s.App, "/", s.AppVersion,
-		" (", s.Goos, ";", s.Goarch, ";", s.ProcessName, ") ",
-		s.Integration, "/", s.IntegrationVersion,
-		" (", s.IntegrationEnvironment, "/", s.IntegrationEnvironmentVersion, ")",
-	)
 }
 
 // networkImpl is the default implementation of the NetworkAccess interface.
@@ -118,7 +96,7 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 }
 
 func (n *networkImpl) SetUserAgent(userAgent SnykAppEnvironment) error {
-	n.staticHeader.Set("User-Agent", userAgent.String())
+	n.staticHeader.Set("User-Agent", userAgent.ToUserAgentHeader())
 	return nil
 }
 
