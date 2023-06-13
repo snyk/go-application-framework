@@ -236,3 +236,42 @@ func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 
 	assert.Equal(t, expectedHeader, request.Header)
 }
+
+func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
+	app := "snyk-ls"
+	appVersion := "20230508.144458"
+	osName := "DARWIN"
+	arch := "ARM64"
+	integrationName := "VS_CODE"
+	integrationVersion := "1.20.1"
+	integrationEnvironment := "language-server"
+	integrationEnvironmentVersion := "1.2.3.4"
+	processName := "snyk-ls"
+	expectedHeader := fmt.Sprint(
+		app, "/", appVersion,
+		" (", osName, ";", arch, ";", processName, ") ",
+		integrationName, "/", integrationVersion,
+		" (", integrationEnvironment, "/", integrationEnvironmentVersion, ")",
+	)
+
+	config := getConfig()
+	net := NewNetworkAccess(config)
+	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
+	assert.Nil(t, err)
+	userAgentInfo := SnykAppEnvironment{
+		App:                           app,
+		AppVersion:                    appVersion,
+		Integration:                   integrationName,
+		IntegrationVersion:            integrationVersion,
+		IntegrationEnvironment:        integrationEnvironment,
+		IntegrationEnvironmentVersion: integrationEnvironmentVersion,
+		Goos:                          osName,
+		Goarch:                        arch,
+		ProcessName:                   processName,
+	}
+	err = net.SetUserAgent(userAgentInfo)
+	assert.Nil(t, err)
+	err = net.AddHeaders(request)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
+}

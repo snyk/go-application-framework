@@ -2,6 +2,7 @@ package networking
 
 import (
 	"crypto/x509"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,10 +18,11 @@ import (
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
 // NetworkAccess is the interface for network access.
+// It provides methods to get an HTTP client with default behaviors that handle authentication headers for Snyk API calls.
 type NetworkAccess interface {
 	// AddHeaders adds all the custom and authentication headers to the request.
 	AddHeaders(request *http.Request) error
-	// GetRoundTripper returns the http.RoundTripper.
+	// GetRoundTripper returns the http.RoundTripper that is used by the http.Client.
 	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
 	GetHttpClient() *http.Client
@@ -28,11 +30,36 @@ type NetworkAccess interface {
 	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key, value string)
+	// SetUserAgent sets the user agent header according to the Snyk environment.
+	// The format is the following pattern:
+	// <app>/<appVer> (<os>;<arch>;<procName>) <integration>/<integrationVersion> (<integrationEnv>/<integrationEnvVersion>)
+	SetUserAgent(userAgent SnykAppEnvironment) error
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
 	SetLogger(logger *zerolog.Logger)
+}
+
+type SnykAppEnvironment struct {
+	App                           string
+	AppVersion                    string
+	Integration                   string
+	IntegrationVersion            string
+	IntegrationEnvironment        string
+	IntegrationEnvironmentVersion string
+	Goos                          string
+	Goarch                        string
+	ProcessName                   string
+}
+
+func (s SnykAppEnvironment) String() string {
+	return fmt.Sprint(
+		s.App, "/", s.AppVersion,
+		" (", s.Goos, ";", s.Goarch, ";", s.ProcessName, ") ",
+		s.Integration, "/", s.IntegrationVersion,
+		" (", s.IntegrationEnvironment, "/", s.IntegrationEnvironmentVersion, ")",
+	)
 }
 
 // networkImpl is the default implementation of the NetworkAccess interface.
@@ -88,6 +115,11 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
 	return middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
+}
+
+func (n *networkImpl) SetUserAgent(userAgent SnykAppEnvironment) error {
+	n.staticHeader.Set("User-Agent", userAgent.String())
+	return nil
 }
 
 // addDefaultHeader adds the default headers request.
