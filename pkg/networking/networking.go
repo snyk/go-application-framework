@@ -33,7 +33,7 @@ type NetworkAccess interface {
 	// The format is the following pattern:
 	// <app>/<appVer> (<os>;<arch>;<procName>) <integration>/<integrationVersion> (<integrationEnv>/<integrationEnvVersion>)
 	// The header will only be present when sending requests to the snyk API
-	SetUserAgent(userAgent middleware.SnykAppEnvironment) error
+	SetUserAgent(userAgent middleware.UserAgentInfo) error
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
@@ -48,7 +48,7 @@ type networkImpl struct {
 	proxy              func(req *http.Request) (*url.URL, error)
 	caPool             *x509.CertPool
 	logger             *zerolog.Logger
-	snykAppEnvironment *middleware.SnykAppEnvironment
+	snykAppEnvironment *middleware.UserAgentInfo
 }
 
 // DefaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -119,7 +119,7 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 	return err
 }
 
-func (n *networkImpl) SetUserAgent(userAgent middleware.SnykAppEnvironment) error {
+func (n *networkImpl) SetUserAgent(userAgent middleware.UserAgentInfo) error {
 	// n.staticHeader.Set("User-Agent", userAgent.ToUserAgentHeader())
 	n.snykAppEnvironment = &userAgent
 	return nil

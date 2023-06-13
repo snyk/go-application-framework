@@ -9,13 +9,13 @@ import (
 type UserAgentMiddleware struct {
 	next               http.RoundTripper
 	config             configuration.Configuration
-	snykAppEnvironment *SnykAppEnvironment
+	snykAppEnvironment *UserAgentInfo
 }
 
 func NewUserAgentMiddleware(
 	config configuration.Configuration,
 	roundTripper http.RoundTripper,
-	snykAppEnvironment *SnykAppEnvironment,
+	snykAppEnvironment *UserAgentInfo,
 ) *UserAgentMiddleware {
 	return &UserAgentMiddleware{
 		next:               roundTripper,

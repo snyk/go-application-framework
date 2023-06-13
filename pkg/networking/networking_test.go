@@ -55,7 +55,7 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 
 func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	config := getConfig()
-	userAgent := middleware.SnykAppEnvironment{
+	userAgent := middleware.UserAgentInfo{
 		App:                           "snyk-cli",
 		AppVersion:                    "1.0.0",
 		Integration:                   "my-integration",
@@ -287,7 +287,7 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 	net := NewNetworkAccess(config)
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
-	userAgentInfo := middleware.SnykAppEnvironment{
+	userAgentInfo := middleware.UserAgentInfo{
 		App:                           app,
 		AppVersion:                    appVersion,
 		Integration:                   integrationName,
@@ -324,7 +324,7 @@ func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testi
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 
-	userAgentInfo := middleware.SnykAppEnvironment{
+	userAgentInfo := middleware.UserAgentInfo{
 		App:                app,
 		AppVersion:         appVersion,
 		Integration:        integrationName,
@@ -356,7 +356,7 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 	t.Run("Without integration environment", func(t *testing.T) {
-		userAgentInfo := middleware.SnykAppEnvironment{
+		userAgentInfo := middleware.UserAgentInfo{
 			App:         app,
 			AppVersion:  appVersion,
 			OS:          osName,
@@ -371,7 +371,7 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 	})
 
 	t.Run("With integration environment", func(t *testing.T) {
-		userAgentInfo := middleware.SnykAppEnvironment{
+		userAgentInfo := middleware.UserAgentInfo{
 			App:                           app,
 			AppVersion:                    appVersion,
 			OS:                            osName,
