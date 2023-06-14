@@ -17,10 +17,11 @@ import (
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
 // NetworkAccess is the interface for network access.
+// It provides methods to get an HTTP client with default behaviors that handle authentication headers for Snyk API calls.
 type NetworkAccess interface {
 	// AddHeaders adds all the custom and authentication headers to the request.
 	AddHeaders(request *http.Request) error
-	// GetRoundTripper returns the http.RoundTripper.
+	// GetRoundTripper returns the http.RoundTripper that is used by the http.Client.
 	GetRoundTripper() http.RoundTripper
 	// GetHttpClient returns the http client.
 	GetHttpClient() *http.Client
@@ -44,16 +45,17 @@ type networkImpl struct {
 	logger       *zerolog.Logger
 }
 
-// customRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
-type customRoundTripper struct {
+// defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
+type defaultHeadersRoundTripper struct {
 	encapsulatedRoundTripper http.RoundTripper
 	networkAccess            *networkImpl
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
-func (crt *customRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	crt.networkAccess.addDefaultHeader(request)
-	return crt.encapsulatedRoundTripper.RoundTrip(request)
+func (rt *defaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	newRequest := request.Clone(request.Context())
+	rt.networkAccess.addDefaultHeader(newRequest)
+	return rt.encapsulatedRoundTripper.RoundTrip(newRequest)
 }
 
 // NewNetworkAccess returns a networkImpl instance.
@@ -101,17 +103,18 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	}
 }
 
-func (n *networkImpl) GetRoundTripper() http.RoundTripper {
-	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
-
-	rt := middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), transport)
-
-	// encapsulate everything
-	roundTrip := customRoundTripper{
+func (n *networkImpl) addMiddlewaresToRoundTripper(rt http.RoundTripper) http.RoundTripper {
+	rt = middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
+	roundTrip := defaultHeadersRoundTripper{
 		encapsulatedRoundTripper: rt,
 		networkAccess:            n,
 	}
 	return &roundTrip
+}
+
+func (n *networkImpl) GetRoundTripper() http.RoundTripper {
+	rt := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	return n.addMiddlewaresToRoundTripper(rt)
 }
 
 func (n *networkImpl) createAuthenticator(transport *http.Transport) auth.Authenticator {

@@ -33,15 +33,21 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 		return n.next.RoundTrip(request)
 	}
 
-	err := AddAuthenticationHeader(n.authenticator, n.config, request)
+	// RoundTrippers should not modify the source request according to the docs, so cloning is used.
+	newRequest := request.Clone(request.Context())
+	err := AddAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	return n.next.RoundTrip(request)
+	return n.next.RoundTrip(newRequest)
 }
 
-func ShouldRequireAuthentication(apiUrl string, url *url.URL, additionalSubdomains []string) (matchesPattern bool, err error) {
+func ShouldRequireAuthentication(
+	apiUrl string,
+	url *url.URL,
+	additionalSubdomains []string,
+) (matchesPattern bool, err error) {
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
 		matchesPattern := false
@@ -69,7 +75,11 @@ func ShouldRequireAuthentication(apiUrl string, url *url.URL, additionalSubdomai
 
 }
 
-func AddAuthenticationHeader(authenticator auth.Authenticator, config configuration.Configuration, request *http.Request) error {
+func AddAuthenticationHeader(
+	authenticator auth.Authenticator,
+	config configuration.Configuration,
+	request *http.Request,
+) error {
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains)

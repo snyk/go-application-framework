@@ -5,12 +5,12 @@
 package mocks
 
 import (
-	http "net/http"
-	reflect "reflect"
+	"net/http"
+	"reflect"
 
-	gomock "github.com/golang/mock/gomock"
-	zerolog "github.com/rs/zerolog"
-	auth "github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/auth"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
