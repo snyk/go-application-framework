@@ -1,51 +1,13 @@
-package middleware
+package networking
 
 import (
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
-
-type UserAgentMiddleware struct {
-	next          http.RoundTripper
-	config        configuration.Configuration
-	userAgentInfo *UserAgentInfo
-}
-
-func NewUserAgentMiddleware(
-	config configuration.Configuration,
-	roundTripper http.RoundTripper,
-	userAgentInfo *UserAgentInfo,
-) *UserAgentMiddleware {
-	return &UserAgentMiddleware{
-		next:          roundTripper,
-		config:        config,
-		userAgentInfo: userAgentInfo,
-	}
-}
-
-func (n *UserAgentMiddleware) RoundTrip(request *http.Request) (*http.Response, error) {
-	// Only add headers if the request is going to a Snyk API URL.
-	apiUrl := n.config.GetString(configuration.API_URL)
-	parsedUrl, err := url.Parse(apiUrl)
-	if err != nil || n.userAgentInfo == nil || !isSnykUrl(parsedUrl.Hostname()) {
-		return n.next.RoundTrip(request)
-	}
-
-	newRequest := request.Clone(request.Context())
-	newRequest.Header.Set("User-Agent", n.userAgentInfo.ToUserAgentHeader())
-	return n.next.RoundTrip(newRequest)
-}
-
-func isSnykUrl(hostname string) bool {
-	return strings.HasSuffix(hostname, "snykgov.io") || strings.HasSuffix(hostname, "snyk.io")
-}
 
 type UserAgentInfo struct {
 	App                           string
@@ -78,14 +40,12 @@ func UserAgentFromConfig(config configuration.Configuration, app string, appVers
 	}
 }
 
-func (s UserAgentInfo) String() string { return s.ToUserAgentHeader() }
-
 // ToUserAgentHeader returns a string that can be used as a User-Agent header.
 // The string is following this format:
 // <app>/<appVer> (<os>;<arch>;<procName>) <integration>/<integrationVersion> (<integrationEnv>/<integrationEnvVersion>)
 // Everything other than the app, app version and system information (os/arch/process name) is optional.
 // The integration environment is only added if the integration is set.
-func (s UserAgentInfo) ToUserAgentHeader() string {
+func (s UserAgentInfo) String() string {
 	str := fmt.Sprint(
 		s.App, "/", s.AppVersion,
 		" (", s.OS, ";", s.Arch, ";", s.ProcessName, ")",

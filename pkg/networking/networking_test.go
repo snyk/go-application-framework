@@ -15,7 +15,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
-	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -274,7 +273,7 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 	net := NewNetworkAccess(config)
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
-	userAgentInfo := middleware.UserAgentInfo{
+	userAgentInfo := UserAgentInfo{
 		App:                           app,
 		AppVersion:                    appVersion,
 		Integration:                   integrationName,
@@ -285,8 +284,7 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 		Arch:                          arch,
 		ProcessName:                   processName,
 	}
-	err = net.SetUserAgent(userAgentInfo)
-	assert.Nil(t, err)
+	net.AddHeaderField("User-Agent", userAgentInfo.String())
 	err = net.AddHeaders(request)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
@@ -311,7 +309,7 @@ func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testi
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 
-	userAgentInfo := middleware.UserAgentInfo{
+	userAgentInfo := UserAgentInfo{
 		App:                app,
 		AppVersion:         appVersion,
 		Integration:        integrationName,
@@ -320,8 +318,7 @@ func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testi
 		Arch:               arch,
 		ProcessName:        processName,
 	}
-	err = net.SetUserAgent(userAgentInfo)
-	assert.Nil(t, err)
+	net.AddHeaderField("User-Agent", userAgentInfo.String())
 	err = net.AddHeaders(request)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
@@ -343,22 +340,21 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 	t.Run("Without integration environment", func(t *testing.T) {
-		userAgentInfo := middleware.UserAgentInfo{
+		userAgentInfo := UserAgentInfo{
 			App:         app,
 			AppVersion:  appVersion,
 			OS:          osName,
 			Arch:        arch,
 			ProcessName: processName,
 		}
-		err = net.SetUserAgent(userAgentInfo)
-		assert.Nil(t, err)
+		net.AddHeaderField("User-Agent", userAgentInfo.String())
 		err = net.AddHeaders(request)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
 	})
 
 	t.Run("With integration environment", func(t *testing.T) {
-		userAgentInfo := middleware.UserAgentInfo{
+		userAgentInfo := UserAgentInfo{
 			App:                           app,
 			AppVersion:                    appVersion,
 			OS:                            osName,
@@ -367,8 +363,7 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 			IntegrationEnvironment:        "Doesn't matter",
 			IntegrationEnvironmentVersion: "Shouldn't show",
 		}
-		err = net.SetUserAgent(userAgentInfo)
-		assert.Nil(t, err)
+		net.AddHeaderField("User-Agent", userAgentInfo.String())
 		err = net.AddHeaders(request)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))

@@ -29,11 +29,6 @@ type NetworkAccess interface {
 	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key, value string)
-	// SetUserAgent sets the user agent header according to the Snyk environment.
-	// The format is the following pattern:
-	// <app>/<appVer> (<os>;<arch>;<procName>) <integration>/<integrationVersion> (<integrationEnv>/<integrationEnvVersion>)
-	// The header will only be present when sending requests to the snyk API
-	SetUserAgent(userAgent middleware.UserAgentInfo) error
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
@@ -43,12 +38,11 @@ type NetworkAccess interface {
 
 // networkImpl is the default implementation of the NetworkAccess interface.
 type networkImpl struct {
-	config        configuration.Configuration
-	staticHeader  http.Header
-	proxy         func(req *http.Request) (*url.URL, error)
-	caPool        *x509.CertPool
-	logger        *zerolog.Logger
-	userAgentInfo *middleware.UserAgentInfo
+	config       configuration.Configuration
+	staticHeader http.Header
+	proxy        func(req *http.Request) (*url.URL, error)
+	caPool       *x509.CertPool
+	logger       *zerolog.Logger
 }
 
 // defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -105,11 +99,6 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 	return err
 }
 
-func (n *networkImpl) SetUserAgent(userAgent middleware.UserAgentInfo) error {
-	n.userAgentInfo = &userAgent
-	return nil
-}
-
 // addDefaultHeader adds the default headers request.
 func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	// add/replace request headers by default headers
@@ -123,7 +112,6 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 
 func (n *networkImpl) addMiddlewaresToRoundTripper(rt http.RoundTripper) http.RoundTripper {
 	rt = middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
-	rt = middleware.NewUserAgentMiddleware(n.config, rt, n.userAgentInfo)
 	roundTrip := defaultHeadersRoundTripper{
 		encapsulatedRoundTripper: rt,
 		networkAccess:            n,
