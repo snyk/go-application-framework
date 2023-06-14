@@ -89,14 +89,7 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
-	hc := &middleware.HeaderCaptureMiddleware{}
-	rt := n.addMiddlewaresToRoundTripper(hc)
-	_, err := rt.RoundTrip(request)
-	for k, v := range hc.CapturedHeaders {
-		request.Header.Set(k, v)
-	}
-
-	return err
+	return middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
 }
 
 // addDefaultHeader adds the default headers request.
