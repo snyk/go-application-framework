@@ -43,22 +43,22 @@ type NetworkAccess interface {
 
 // networkImpl is the default implementation of the NetworkAccess interface.
 type networkImpl struct {
-	config             configuration.Configuration
-	staticHeader       http.Header
-	proxy              func(req *http.Request) (*url.URL, error)
-	caPool             *x509.CertPool
-	logger             *zerolog.Logger
-	snykAppEnvironment *middleware.UserAgentInfo
+	config        configuration.Configuration
+	staticHeader  http.Header
+	proxy         func(req *http.Request) (*url.URL, error)
+	caPool        *x509.CertPool
+	logger        *zerolog.Logger
+	userAgentInfo *middleware.UserAgentInfo
 }
 
-// DefaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
-type DefaultHeadersRoundTripper struct {
+// defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
+type defaultHeadersRoundTripper struct {
 	encapsulatedRoundTripper http.RoundTripper
 	networkAccess            *networkImpl
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
-func (rt *DefaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+func (rt *defaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	newRequest := request.Clone(request.Context())
 	rt.networkAccess.addDefaultHeader(newRequest)
 	return rt.encapsulatedRoundTripper.RoundTrip(newRequest)
@@ -95,9 +95,8 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
-	hc := &middleware.HeaderCapture{}
-	var rt http.RoundTripper = hc
-	rt = n.addMiddlewaresToRoundTripper(rt)
+	hc := &middleware.HeaderCaptureMiddleware{}
+	rt := n.addMiddlewaresToRoundTripper(hc)
 	_, err := rt.RoundTrip(request)
 	for k, v := range hc.CapturedHeaders {
 		request.Header.Set(k, v)
@@ -107,7 +106,7 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 }
 
 func (n *networkImpl) SetUserAgent(userAgent middleware.UserAgentInfo) error {
-	n.snykAppEnvironment = &userAgent
+	n.userAgentInfo = &userAgent
 	return nil
 }
 
@@ -124,8 +123,8 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 
 func (n *networkImpl) addMiddlewaresToRoundTripper(rt http.RoundTripper) http.RoundTripper {
 	rt = middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
-	rt = middleware.NewUserAgentMiddleware(n.config, rt, n.snykAppEnvironment)
-	roundTrip := DefaultHeadersRoundTripper{
+	rt = middleware.NewUserAgentMiddleware(n.config, rt, n.userAgentInfo)
+	roundTrip := defaultHeadersRoundTripper{
 		encapsulatedRoundTripper: rt,
 		networkAccess:            n,
 	}

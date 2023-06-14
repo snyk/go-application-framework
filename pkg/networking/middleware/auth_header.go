@@ -43,27 +43,11 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	return n.next.RoundTrip(newRequest)
 }
 
-// IsSnykApi checks if a URL aligns with a pattern of specified Snyk API URLs.
-//
-// apiUrl: Base API URL.
-// url: The URL to check.
-// additionalSubdomains: Subdomains to append to apiUrl for comparison.
-//
-// Returns true if the URL matches the pattern, false otherwise.
-// In case of an error generating the URL, an error is returned.
-//
-// Example 1:
-// apiUrl: "https://snyk.io/api/"
-// url: "https://snyk.io/api/v1/projects"
-// additionalSubdomains: []string{}
-// Result: true, nil // The URL matches the base API URL
-//
-// Example 2:
-// apiUrl: "https://snyk.io/api/"
-// url: "https://test.snyk.io/api/v1/projects"
-// additionalSubdomains: []string{"test"}
-// Result: true, nil // The URL matches the API URL with the "test" subdomain
-func IsSnykApi(apiUrl string, url *url.URL, additionalSubdomains []string) (matchesPattern bool, err error) {
+func ShouldRequireAuthentication(
+	apiUrl string,
+	url *url.URL,
+	additionalSubdomains []string,
+) (matchesPattern bool, err error) {
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
 		matchesPattern := false
@@ -98,7 +82,7 @@ func AddAuthenticationHeader(
 ) error {
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
-	isSnykApi, err := IsSnykApi(apiUrl, request.URL, additionalSubdomains)
+	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains)
 
 	// requests to the api automatically get an authentication token attached
 	if !isSnykApi {

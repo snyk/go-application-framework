@@ -11,7 +11,7 @@ import (
 func Test_RequestToSnykUrl_UserAgentAdded(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
-	capturer := &HeaderCapture{}
+	capturer := &HeaderCaptureMiddleware{}
 	userAgent := UserAgentFromConfig(config, "test-app", "0.0.1")
 	mw := NewUserAgentMiddleware(config, capturer, &userAgent)
 
