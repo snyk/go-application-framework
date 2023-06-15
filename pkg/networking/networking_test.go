@@ -26,6 +26,10 @@ func getConfig() configuration.Configuration {
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	config.Set(configuration.INTEGRATION_ENVIRONMENT, "IntEnv")
+	config.Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, "IntEnv1.0")
+	config.Set(configuration.INTEGRATION_NAME, "Int")
+	config.Set(configuration.INTEGRATION_VERSION, "Int1.3")
 	return config
 }
 
@@ -368,4 +372,29 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, expectedHeader, request.Header.Get("User-Agent"))
 	})
+}
+
+func Test_UserAgentInfo_WithOSManuallySet(t *testing.T) {
+	expectedOs := "myOs"
+	ua := UserAgent(UaWithOS(expectedOs))
+	assert.Equal(t, expectedOs, ua.OS)
+}
+
+func Test_UserAgentInfo_Complete(t *testing.T) {
+	config := getConfig()
+	expectedOs := "myOs"
+	expectedAppName := "myApp"
+	expectedAppVersion := "12.23.5"
+
+	ua := UserAgent(UaWithOS(expectedOs), UaWithConfig(config), UaWithApplication(expectedAppName, expectedAppVersion))
+
+	t.Log(ua.String())
+
+	assert.Equal(t, expectedOs, ua.OS)
+	assert.Equal(t, expectedAppName, ua.App)
+	assert.Equal(t, expectedAppVersion, ua.AppVersion)
+	assert.Equal(t, config.GetString(configuration.INTEGRATION_NAME), ua.Integration)
+	assert.Equal(t, config.GetString(configuration.INTEGRATION_VERSION), ua.IntegrationVersion)
+	assert.Equal(t, config.GetString(configuration.INTEGRATION_ENVIRONMENT), ua.IntegrationEnvironment)
+	assert.Equal(t, config.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION), ua.IntegrationEnvironmentVersion)
 }
