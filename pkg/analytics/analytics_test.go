@@ -14,6 +14,8 @@ import (
 )
 
 func Test_Basic(t *testing.T) {
+
+	os.Setenv("CIRCLECI", "true")
 	testFields := []string{
 		"tfc-token",
 		"azurerm-account-key",
@@ -27,8 +29,7 @@ func Test_Basic(t *testing.T) {
 		"secret",
 	}
 
-	os.Setenv("CIRCLECI", "true")
-
+	os := "my-special-OS"
 	api := "http://myapi.com"
 	org := "MyOrgAs"
 	h := http.Header{}
@@ -40,39 +41,60 @@ func Test_Basic(t *testing.T) {
 		args = append(args, fmt.Sprintf("%s=%s", testFields[i], "secretvalue"))
 	}
 
-	analytics := New()
-	analytics.SetCmdArguments(args)
-	analytics.AddError(fmt.Errorf("Something went terrible wrong."))
-	analytics.SetVersion("1234567")
-	analytics.SetOrg(org)
-	analytics.SetApiUrl(api)
-	analytics.SetIntegration("Jenkins", "1.2.3.4")
-	analytics.AddHeader(func() http.Header {
-		return h.Clone()
-	})
+	commandList := []string{"", "iac capture"}
+	for _, cmd := range commandList {
+		t.Run(cmd, func(t *testing.T) {
 
-	// invoke method under test
-	request, err := analytics.GetRequest()
+			analytics := New()
+			analytics.SetCmdArguments(args)
+			analytics.AddError(fmt.Errorf("Something went terrible wrong."))
+			analytics.SetVersion("1234567")
+			analytics.SetOrg(org)
+			analytics.SetApiUrl(api)
+			analytics.SetOperatingSystem(os)
+			analytics.SetIntegration("Jenkins", "1.2.3.4")
+			analytics.SetCommand(cmd)
+			analytics.AddHeader(func() http.Header {
+				return h.Clone()
+			})
 
-	// compare results
-	assert.Nil(t, err)
-	assert.NotNil(t, request)
-	assert.True(t, analytics.IsCiEnvironment())
+			// invoke method under test
+			request, err := analytics.GetRequest()
 
-	expectedAuthHeader, _ := h["Authorization"]
-	actualAuthHeader, _ := request.Header["Authorization"]
-	assert.Equal(t, expectedAuthHeader, actualAuthHeader)
+			// compare results
+			assert.Nil(t, err)
+			assert.NotNil(t, request)
+			assert.True(t, analytics.IsCiEnvironment())
 
-	requestUrl := request.URL.String()
-	assert.Equal(t, "http://myapi.com/v1/analytics/cli?org=MyOrgAs", requestUrl)
-	assert.True(t, strings.Contains(requestUrl, org))
+			expectedAuthHeader, _ := h["Authorization"]
+			actualAuthHeader, _ := request.Header["Authorization"]
+			assert.Equal(t, expectedAuthHeader, actualAuthHeader)
 
-	body, err := io.ReadAll(request.Body)
-	assert.Nil(t, err)
-	assert.Equal(t, len(testFields), strings.Count(string(body), sanitize_replacement_string), "Not all sensitive values have been replaced!")
+			requestUrl := request.URL.String()
+			assert.Equal(t, "http://myapi.com/v1/analytics/cli?org=MyOrgAs", requestUrl)
+			assert.True(t, strings.Contains(requestUrl, org))
 
-	fmt.Println("Request Url: " + requestUrl)
-	fmt.Println("Request Body: " + string(body))
+			body, err := io.ReadAll(request.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, len(testFields), strings.Count(string(body), sanitize_replacement_string), "Not all sensitive values have been replaced!")
+
+			var requestBody dataOutput
+			err = json.Unmarshal(body, &requestBody)
+			assert.Nil(t, err)
+
+			assert.Equal(t, os, requestBody.Data.OsPlatform)
+
+			if len(cmd) > 0 {
+				assert.Equal(t, cmd, requestBody.Data.Command)
+			} else {
+				assert.Equal(t, "test", requestBody.Data.Command)
+			}
+
+			fmt.Println("Request Url: " + requestUrl)
+			fmt.Println("Request Body: " + string(body))
+		})
+	}
+
 }
 
 func Test_SanitizeValuesByKey(t *testing.T) {

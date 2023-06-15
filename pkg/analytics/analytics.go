@@ -26,6 +26,8 @@ type Analytics interface {
 	SetVersion(version string)
 	SetApiUrl(apiUrl string)
 	SetIntegration(name string, version string)
+	SetCommand(command string)
+	SetOperatingSystem(os string)
 	AddError(err error)
 	AddHeader(headerFunc func() http.Header)
 	SetClient(clientFunc func() *http.Client)
@@ -48,6 +50,8 @@ type AnalyticsImpl struct {
 	errorList          []error
 	integrationName    string
 	integrationVersion string
+	os                 string
+	command            string
 }
 
 // metadataOutput defines the metadataOutput payload.
@@ -133,6 +137,7 @@ func New() Analytics {
 	a.headerFunc = func() http.Header { return http.Header{} }
 	a.created = time.Now()
 	a.clientFunc = func() *http.Client { return &http.Client{} }
+	a.os = runtime.GOOS
 	return a
 }
 
@@ -160,6 +165,14 @@ func (a *AnalyticsImpl) SetApiUrl(apiUrl string) {
 func (a *AnalyticsImpl) SetIntegration(name string, version string) {
 	a.integrationName = name
 	a.integrationVersion = version
+}
+
+func (a *AnalyticsImpl) SetCommand(command string) {
+	a.command = command
+}
+
+func (a *AnalyticsImpl) SetOperatingSystem(os string) {
+	a.os = os
 }
 
 // AddError adds an error to the error list.
@@ -212,11 +225,13 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 
 	output.Args = a.args
 
-	if len(a.args) > 0 {
+	if len(a.command) > 0 {
+		output.Command = a.command
+	} else if len(a.args) > 0 {
 		output.Command = a.args[0]
 	}
 
-	output.OsPlatform = runtime.GOOS
+	output.OsPlatform = a.os
 	output.OsArch = runtime.GOARCH
 	output.Version = a.version
 	output.NodeVersion = runtime.Version()
