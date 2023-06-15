@@ -9,6 +9,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
+type UserAgentOptions func(ua *UserAgentInfo)
+
 type UserAgentInfo struct {
 	App                           string
 	AppVersion                    string
@@ -22,22 +24,48 @@ type UserAgentInfo struct {
 }
 
 func UserAgentFromConfig(config configuration.Configuration, app string, appVersion string) UserAgentInfo {
-	processName, _ := os.Executable()
-	integration := config.GetString(configuration.INTEGRATION_NAME)
-	integrationVersion := config.GetString(configuration.INTEGRATION_VERSION)
-	integrationEnvironment := config.GetString(configuration.INTEGRATION_ENVIRONMENT)
-	integrationEnvironmentVersion := config.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
-	return UserAgentInfo{
-		App:                           app,
-		AppVersion:                    appVersion,
-		OS:                            runtime.GOOS,
-		Arch:                          runtime.GOARCH,
-		ProcessName:                   filepath.Base(processName),
-		Integration:                   integration,
-		IntegrationVersion:            integrationVersion,
-		IntegrationEnvironment:        integrationEnvironment,
-		IntegrationEnvironmentVersion: integrationEnvironmentVersion,
+	ua := UserAgent(UaWithConfig(config), UaWithApplication(app, appVersion))
+	return ua
+}
+
+func UaWithConfig(config configuration.Configuration) UserAgentOptions {
+	result := func(ua *UserAgentInfo) {
+		ua.Integration = config.GetString(configuration.INTEGRATION_NAME)
+		ua.IntegrationVersion = config.GetString(configuration.INTEGRATION_VERSION)
+		ua.IntegrationEnvironment = config.GetString(configuration.INTEGRATION_ENVIRONMENT)
+		ua.IntegrationEnvironmentVersion = config.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
 	}
+	return result
+}
+
+func UaWithApplication(app string, appVersion string) UserAgentOptions {
+	result := func(ua *UserAgentInfo) {
+		ua.App = app
+		ua.AppVersion = appVersion
+	}
+	return result
+}
+
+func UaWithOS(osName string) UserAgentOptions {
+	result := func(ua *UserAgentInfo) {
+		ua.OS = osName
+	}
+	return result
+}
+
+func UserAgent(opts ...UserAgentOptions) UserAgentInfo {
+	processName, _ := os.Executable()
+	ua := UserAgentInfo{
+		OS:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+		ProcessName: filepath.Base(processName),
+	}
+
+	for _, opt := range opts {
+		opt(&ua)
+	}
+
+	return ua
 }
 
 // ToUserAgentHeader returns a string that can be used as a User-Agent header.
