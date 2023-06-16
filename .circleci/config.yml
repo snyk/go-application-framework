@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  prodsec: snyk/prodsec-orb@1.0
+
 executors:
   linux:
     machine:
@@ -27,6 +30,11 @@ workflows:
   version: 2
   test_and_release:
     jobs:
+      - prodsec/secrets-scan:
+          name: Scan repository for secrets
+          context:
+            - snyk-bot-slack
+          channel: hammerhead-alerts
       - unit_test:
           name: Unit tests
       - build:
