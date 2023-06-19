@@ -1,6 +1,9 @@
 package app
 
 import (
+	"io"
+	"log"
+
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
@@ -13,8 +16,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
-	"io"
-	"log"
 )
 
 // initConfiguration initializes the configuration with initial values.
@@ -80,6 +81,34 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 		orgId, err := apiClient.GetDefaultOrgId()
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+		}
+
+		return orgId
+	})
+
+	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, func(existingValue any) any {
+		client := networking.NewNetworkAccess(config).GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient.Init(url, client)
+		if existingValue != nil && len(existingValue.(string)) > 0 {
+			orgName := existingValue.(string)
+			_, err := uuid.Parse(orgName)
+			isUUID := err == nil
+			if isUUID {
+				orgName, err = apiClient.GetSlugFromOrgId(existingValue.(string))
+				if err != nil {
+					logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
+				} else {
+					return orgName
+				}
+			} else {
+				return orgName
+			}
+		}
+
+		orgId, err := apiClient.GetDefaultOrgId()
+		if err != nil {
+			logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
 		}
 
 		return orgId

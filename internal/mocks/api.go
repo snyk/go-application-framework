@@ -64,6 +64,21 @@ func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgIdFromSlug", reflect.TypeOf((*MockApiClient)(nil).GetOrgIdFromSlug), slugName)
 }
 
+// GetSlugFromOrgId mocks base method.
+func (m *MockApiClient) GetSlugFromOrgId(orgId string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSlugFromOrgId", orgId)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSlugFromOrgId indicates an expected call of GetSlugFromOrgId.
+func (mr *MockApiClientMockRecorder) GetSlugFromOrgId(orgId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlugFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetSlugFromOrgId), orgId)
+}
+
 // Init mocks base method.
 func (m *MockApiClient) Init(url string, client *http.Client) {
 	m.ctrl.T.Helper()

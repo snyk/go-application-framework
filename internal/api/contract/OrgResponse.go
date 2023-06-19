@@ -16,3 +16,20 @@ type Group struct {
 type OrganizationsResponse struct {
 	Organizations []Organization `json:"orgs"`
 }
+
+type RestApiOrganizationAttributes struct {
+	GroupId    string `json:"group_id,omitempty"`
+	IsPersonal bool   `json:"is_personal,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Slug       string `json:"slug,omitempty"`
+}
+
+type RestApiOrganizationData struct {
+	Attributes RestApiOrganizationAttributes `json:"attributes,omitempty"`
+	Id         string                        `json:"id,omitempty"`
+	Type       string                        `json:"type,omitempty"`
+}
+
+type RestApiOrganizationsResponse struct {
+	Data RestApiOrganizationData
+}

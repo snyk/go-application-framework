@@ -15,6 +15,7 @@ import (
 type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)
 	GetOrgIdFromSlug(slugName string) (string, error)
+	GetSlugFromOrgId(orgId string) (string, error)
 	Init(url string, client *http.Client)
 }
 
@@ -47,6 +48,30 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("org ID not found for slug %v", slugName)
+}
+
+func (a *snykApiClient) GetSlugFromOrgId(orgId string) (string, error) {
+	url := a.url + "/rest/orgs/" + orgId + "?version=" + constants.SNYK_API_VERSION
+	res, err := a.client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("unable to retrieve org slugname: %w", err)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("unable to retrieve org slugname: %w", err)
+	}
+
+	if res.StatusCode != 200 {
+		return "", fmt.Errorf("unable to retrieve org slugname (status: %d)", res.StatusCode)
+	}
+
+	var restApiOrgInfo contract.RestApiOrganizationsResponse
+	err = json.Unmarshal(body, &restApiOrgInfo)
+	if err != nil {
+		return "", err
+	}
+
+	return restApiOrgInfo.Data.Attributes.Slug, nil
 }
 
 func (a *snykApiClient) GetDefaultOrgId() (string, error) {
