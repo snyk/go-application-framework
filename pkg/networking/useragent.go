@@ -2,8 +2,6 @@ package networking
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -20,7 +18,6 @@ type UserAgentInfo struct {
 	IntegrationEnvironmentVersion string
 	OS                            string
 	Arch                          string
-	ProcessName                   string
 }
 
 func UserAgentFromConfig(config configuration.Configuration, app string, appVersion string) UserAgentInfo {
@@ -54,11 +51,9 @@ func UaWithOS(osName string) UserAgentOptions {
 }
 
 func UserAgent(opts ...UserAgentOptions) UserAgentInfo {
-	processName, _ := os.Executable()
 	ua := UserAgentInfo{
-		OS:          runtime.GOOS,
-		Arch:        runtime.GOARCH,
-		ProcessName: filepath.Base(processName),
+		OS:   runtime.GOOS,
+		Arch: runtime.GOARCH,
 	}
 
 	for _, opt := range opts {
@@ -76,7 +71,7 @@ func UserAgent(opts ...UserAgentOptions) UserAgentInfo {
 func (s UserAgentInfo) String() string {
 	str := fmt.Sprint(
 		s.App, "/", s.AppVersion,
-		" (", s.OS, ";", s.Arch, ";", s.ProcessName, ")",
+		" (", s.OS, ";", s.Arch, ")",
 	)
 	if s.Integration != "" {
 		str += fmt.Sprint(" ", s.Integration, "/", s.IntegrationVersion)
