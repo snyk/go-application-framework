@@ -261,10 +261,9 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 	integrationVersion := "1.20.1"
 	integrationEnvironment := "language-server"
 	integrationEnvironmentVersion := "1.2.3.4"
-	processName := "snyk-ls"
 	expectedHeader := fmt.Sprint(
 		app, "/", appVersion,
-		" (", osName, ";", arch, ";", processName, ") ",
+		" (", osName, ";", arch, ") ",
 		integrationName, "/", integrationVersion,
 		" (", integrationEnvironment, "/", integrationEnvironmentVersion, ")",
 	)
@@ -282,7 +281,6 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 		IntegrationEnvironmentVersion: integrationEnvironmentVersion,
 		OS:                            osName,
 		Arch:                          arch,
-		ProcessName:                   processName,
 	}
 	net.AddHeaderField("User-Agent", userAgentInfo.String())
 	err = net.AddHeaders(request)
@@ -297,10 +295,9 @@ func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testi
 	arch := "ARM64"
 	integrationName := "VS_CODE"
 	integrationVersion := "1.20.1"
-	processName := "snyk-ls"
 	expectedHeader := fmt.Sprint(
 		app, "/", appVersion,
-		" (", osName, ";", arch, ";", processName, ") ",
+		" (", osName, ";", arch, ") ",
 		integrationName, "/", integrationVersion,
 	)
 
@@ -316,7 +313,6 @@ func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testi
 		IntegrationVersion: integrationVersion,
 		OS:                 osName,
 		Arch:               arch,
-		ProcessName:        processName,
 	}
 	net.AddHeaderField("User-Agent", userAgentInfo.String())
 	err = net.AddHeaders(request)
@@ -329,10 +325,9 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 	appVersion := "20230508.144458"
 	osName := "DARWIN"
 	arch := "ARM64"
-	processName := "snyk-ls"
 	expectedHeader := fmt.Sprint(
 		app, "/", appVersion,
-		" (", osName, ";", arch, ";", processName, ")",
+		" (", osName, ";", arch, ")",
 	)
 
 	config := getConfig()
@@ -341,11 +336,10 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 	assert.Nil(t, err)
 	t.Run("Without integration environment", func(t *testing.T) {
 		userAgentInfo := UserAgentInfo{
-			App:         app,
-			AppVersion:  appVersion,
-			OS:          osName,
-			Arch:        arch,
-			ProcessName: processName,
+			App:        app,
+			AppVersion: appVersion,
+			OS:         osName,
+			Arch:       arch,
 		}
 		net.AddHeaderField("User-Agent", userAgentInfo.String())
 		err = net.AddHeaders(request)
@@ -359,7 +353,6 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 			AppVersion:                    appVersion,
 			OS:                            osName,
 			Arch:                          arch,
-			ProcessName:                   processName,
 			IntegrationEnvironment:        "Doesn't matter",
 			IntegrationEnvironmentVersion: "Shouldn't show",
 		}
