@@ -7,7 +7,7 @@ const (
 	AUTHENTICATION_BEARER_TOKEN     string = "bearer_token"
 	INTEGRATION_NAME                string = "snyk_integration_name"
 	INTEGRATION_VERSION             string = "snyk_integration_version"
-	INTEGRATION_ENVIRONMENT         string = "snyk_integration_environment_name"
+	INTEGRATION_ENVIRONMENT         string = "snyk_integration_environment"
 	INTEGRATION_ENVIRONMENT_VERSION string = "snyk_integration_environment_version"
 	ANALYTICS_DISABLED              string = "snyk_disable_analytics"
 	ORGANIZATION                    string = "org"
