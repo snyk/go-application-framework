@@ -21,15 +21,11 @@ import (
 )
 
 func getConfig() configuration.Configuration {
-	config := configuration.New()
+	config := configuration.NewInMemory()
 	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-	config.Set(configuration.INTEGRATION_ENVIRONMENT, "IntEnv")
-	config.Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, "IntEnv1.0")
-	config.Set(configuration.INTEGRATION_NAME, "Int")
-	config.Set(configuration.INTEGRATION_VERSION, "Int1.3")
 	return config
 }
 
@@ -381,10 +377,20 @@ func Test_UserAgentInfo_WithOSManuallySet(t *testing.T) {
 }
 
 func Test_UserAgentInfo_Complete(t *testing.T) {
-	config := getConfig()
 	expectedOs := "myOs"
 	expectedAppName := "myApp"
 	expectedAppVersion := "12.23.5"
+	expectedIntName := "Int"
+	expectedIntVersion := "1.2.3"
+	expectedIntEnvName := "IntEnv"
+	expectedIntEnvVersion := "4.5.6"
+
+	t.Setenv("SNYK_INTEGRATION_NAME", expectedIntName)
+	t.Setenv("SNYK_INTEGRATION_VERSION", expectedIntVersion)
+	t.Setenv("SNYK_INTEGRATION_ENVIRONMENT", expectedIntEnvName)
+	t.Setenv("SNYK_INTEGRATION_ENVIRONMENT_VERSION", expectedIntEnvVersion)
+
+	config := getConfig()
 
 	ua := UserAgent(UaWithOS(expectedOs), UaWithConfig(config), UaWithApplication(expectedAppName, expectedAppVersion))
 
@@ -393,8 +399,8 @@ func Test_UserAgentInfo_Complete(t *testing.T) {
 	assert.Equal(t, expectedOs, ua.OS)
 	assert.Equal(t, expectedAppName, ua.App)
 	assert.Equal(t, expectedAppVersion, ua.AppVersion)
-	assert.Equal(t, config.GetString(configuration.INTEGRATION_NAME), ua.Integration)
-	assert.Equal(t, config.GetString(configuration.INTEGRATION_VERSION), ua.IntegrationVersion)
-	assert.Equal(t, config.GetString(configuration.INTEGRATION_ENVIRONMENT), ua.IntegrationEnvironment)
-	assert.Equal(t, config.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION), ua.IntegrationEnvironmentVersion)
+	assert.Equal(t, expectedIntName, ua.Integration)
+	assert.Equal(t, expectedIntVersion, ua.IntegrationVersion)
+	assert.Equal(t, expectedIntEnvName, ua.IntegrationEnvironment)
+	assert.Equal(t, expectedIntEnvVersion, ua.IntegrationEnvironmentVersion)
 }
