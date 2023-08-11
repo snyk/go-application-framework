@@ -52,7 +52,7 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).Times(1)
 
-	config := configuration.New()
+	config := configuration.NewInMemory()
 	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgName)
@@ -72,7 +72,7 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
-	config := configuration.New()
+	config := configuration.NewInMemory()
 	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
@@ -92,7 +92,7 @@ func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).Times(1)
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
-	config := configuration.New()
+	config := configuration.NewInMemory()
 	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgName)
@@ -111,7 +111,7 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 
-	config := configuration.New()
+	config := configuration.NewInMemory()
 	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgId)
@@ -148,7 +148,7 @@ func Test_initConfiguration_existingValueOfOAuthFFRespected(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
-	config := configuration.New()
+	config := configuration.NewInMemory()
 	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, existingValue)
@@ -165,7 +165,7 @@ func Test_initConfiguration_setValueOfOAuthFF(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
-	config := configuration.New()
+	config := configuration.NewInMemory()
 	initConfiguration(config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.API_URL, endpoint)
