@@ -21,6 +21,7 @@ const (
 	WEB_APP_URL                     string = "internal_snyk_app"
 	INPUT_DIRECTORY                 string = "targetDirectory"
 	ADD_TRUSTED_CA_FILE             string = "internal_additional_trusted_ca_file" // pem file location containing additional CAs to trust
+	FIPS_ENABLED                    string = "gofips"
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
