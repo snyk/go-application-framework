@@ -1,7 +1,10 @@
 //go:build !boringcrypto && !goexperiment.systemcrypto && !goexperiment.cngcrypto && !goexperiment.opensslcrypto
 
-package fips
+package fips_enable
 
-func IsAvailable() bool {
-	return false
+// Don't import anything else
+import "os"
+
+func init() {
+	os.Setenv("GOFIPS", "0")
 }
