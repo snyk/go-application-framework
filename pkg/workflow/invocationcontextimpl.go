@@ -8,16 +8,38 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
+
+func NewInvocationContext(
+	id Identifier,
+	config configuration.Configuration,
+	engine Engine,
+	network networking.NetworkAccess,
+	logger zerolog.Logger,
+	analyticsImpl analytics.Analytics,
+	ui ui.UserInterface,
+) InvocationContextImpl {
+	return InvocationContextImpl{
+		WorkflowID:     id,
+		Configuration:  config,
+		WorkflowEngine: engine,
+		networkAccess:  network,
+		logger:         &logger,
+		Analytics:      analyticsImpl,
+		ui:             ui,
+	}
+}
 
 // InvocationContextImpl is the default implementation of the InvocationContext interface.
 type InvocationContextImpl struct {
 	WorkflowID     Identifier
-	WorkflowEngine *EngineImpl
+	WorkflowEngine Engine
 	Configuration  configuration.Configuration
 	Analytics      analytics.Analytics
 	networkAccess  networking.NetworkAccess
 	logger         *zerolog.Logger
+	ui             ui.UserInterface
 }
 
 // GetWorkflowIdentifier returns the identifier of the workflow that is being invoked.
@@ -53,4 +75,8 @@ func (ici *InvocationContextImpl) GetLogger() *log.Logger {
 // GetEnhancedLogger returns the logger instance that is being used by the workflow engine.
 func (ici *InvocationContextImpl) GetEnhancedLogger() *zerolog.Logger {
 	return ici.logger
+}
+
+func (ici *InvocationContextImpl) GetUserInterface() ui.UserInterface {
+	return ici.ui
 }
