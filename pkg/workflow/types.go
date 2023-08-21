@@ -8,6 +8,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 //go:generate $GOPATH/bin/mockgen -source=types.go -destination ../mocks/workflow.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/workflow/
@@ -40,7 +41,7 @@ type InvocationContext interface {
 	GetNetworkAccess() networking.NetworkAccess
 	GetLogger() *log.Logger
 	GetEnhancedLogger() *zerolog.Logger
-	//GetUserInterface() // return ui instance
+	GetUserInterface() ui.UserInterface
 }
 
 // ConfigurationOptions is an interface that can be implemented by any type that can be used to pass configuration options to a workflow.
