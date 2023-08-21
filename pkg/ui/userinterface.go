@@ -13,7 +13,6 @@ type UserInterface interface {
 	Output(output string) error
 	OutputError(err error) error
 	ProgressBar() ProgressBar
-	ProgressBarWithTitle(title string) ProgressBar
 }
 
 var red = color.New(color.FgRed)
@@ -36,8 +35,4 @@ func (ui *consoleUi) OutputError(err error) error {
 
 func (ui *consoleUi) ProgressBar() ProgressBar {
 	return newProgressBar(ui.writer)
-}
-
-func (ui *consoleUi) ProgressBarWithTitle(title string) ProgressBar {
-	return newProgressBar(ui.writer).withTitle(title)
 }

@@ -5,10 +5,20 @@ import (
 	"io"
 	"math"
 	"strings"
+
+	"github.com/snyk/go-application-framework/pkg/utils"
+)
+
+const (
+	barCharacter    = "="
+	currentPosition = ">"
+	barWidth        = 50
+	clearLine       = "\r\033[K"
 )
 
 type ProgressBar interface {
-	SetProgress(progress float32) error
+	SetProgress(progress float64) error
+	Clear() error
 }
 
 func newProgressBar(writer io.Writer) *consoleProgressBar {
@@ -17,38 +27,23 @@ func newProgressBar(writer io.Writer) *consoleProgressBar {
 
 type consoleProgressBar struct {
 	writer io.Writer
-	title  string
 }
 
-func (p consoleProgressBar) SetProgress(progress float32) error {
-	if progress < 0 {
-		progress = 0
-	} else if progress > 1 {
-		progress = 1
-	}
-
-	const barWidth = 50
+func (p consoleProgressBar) SetProgress(progress float64) error {
+	progress = math.Max(0, math.Min(1, progress))
 	pos := int(progress * barWidth)
 
-	_, err := fmt.Fprint(p.writer, "\r\033[K")
+	_, err := fmt.Fprint(p.writer, clearLine)
 	if err != nil {
 		return err
 	}
-	if p.title != "" {
-		_, err = fmt.Fprintln(p.writer, p.title)
-		if err != nil {
-			return err
-		}
-	}
 	barCount := int(math.Max(0, float64(barWidth-pos-1)))
 
-	progressBar := strings.Repeat("=", pos) + ">" + strings.Repeat(" ", barCount)
+	progressBar := strings.Repeat(barCharacter, pos) + currentPosition + strings.Repeat(" ", barCount)
 	_, err = fmt.Fprintf(p.writer, "[%s] %3.1f%%", progressBar, progress*100)
 	return err
 }
 
-func (p consoleProgressBar) withTitle(title string) consoleProgressBar {
-	newP := p
-	newP.title = title
-	return newP
+func (p consoleProgressBar) Clear() error {
+	return utils.ErrorOf(fmt.Fprint(p.writer, clearLine))
 }
