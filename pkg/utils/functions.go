@@ -12,6 +12,6 @@ package utils
 //	func Foo() error{
 //		return ErrorOf(Bar())
 //	}
-func ErrorOf(_ any, err error) error {
-	return err
-}
+func ErrorOf(_ any, err error) error { return err }
+
+func ValueOf[T any](value T, err error) T { return value }

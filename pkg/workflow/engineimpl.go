@@ -224,10 +224,10 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			}
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, config, e, e.networkAccess, zlogger, e.analytics, ui.NewConsoleUi())
+			context := NewInvocationContext(id, config, e, e.networkAccess, zlogger, e.analytics, ui.DefaultUi())
 
 			// invoke workflow through its callback
-			output, err = callback(&context, input)
+			output, err = callback(context, input)
 		}
 	} else {
 		err = fmt.Errorf("workflow '%v' not found", id)

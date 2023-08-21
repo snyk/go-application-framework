@@ -4,10 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
-	"github.com/fatih/color"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
@@ -18,18 +16,15 @@ type UserInterface interface {
 	Input(prompt string) (string, error)
 }
 
-var red = color.New(color.FgRed)
-
-func NewConsoleUi() UserInterface {
-	return &consoleUi{
-		writer: os.Stdout,
-		reader: bufio.NewReader(os.Stdin),
-	}
+func DefaultUi() UserInterface {
+	// Default Console UI should not have errors (this is tested in consoleui_test.go)
+	return utils.ValueOf(NewConsoleUiBuilder().Build())
 }
 
 type consoleUi struct {
-	writer io.Writer
-	reader *bufio.Reader
+	writer      io.Writer
+	errorWriter io.Writer
+	reader      *bufio.Reader
 }
 
 func (ui *consoleUi) Output(output string) error {
@@ -37,7 +32,7 @@ func (ui *consoleUi) Output(output string) error {
 }
 
 func (ui *consoleUi) OutputError(err error) error {
-	return utils.ErrorOf(red.Fprintln(ui.writer, "Error: "+err.Error()))
+	return utils.ErrorOf(fmt.Fprintln(ui.errorWriter, "Error: "+err.Error()))
 }
 
 func (ui *consoleUi) NewProgressBar() ProgressBar {
