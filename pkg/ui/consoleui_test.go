@@ -69,3 +69,22 @@ func TestConsoleUi_Input(t *testing.T) {
 	assert.Equal(t, strings.TrimSpace(inputMsg), resp)
 	assert.Equal(t, prompt+": ", outputBuffer.String())
 }
+
+type fakeProgressBar struct{}
+
+func (f fakeProgressBar) SetProgress(_ float64) error { return nil }
+func (f fakeProgressBar) Clear() error                { return nil }
+
+func TestNewProgressBar_ReturnsCorrectProgressBar(t *testing.T) {
+	customProgressBar := &fakeProgressBar{}
+	builder := ui.NewConsoleUiBuilder().
+		WithProgressBarGenerator(func() ui.ProgressBar {
+			return customProgressBar
+		})
+
+	userInterface, err := builder.Build()
+	assert.NoError(t, err)
+
+	progressBar := userInterface.NewProgressBar()
+	assert.Equal(t, customProgressBar, progressBar)
+}

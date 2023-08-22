@@ -22,10 +22,10 @@ func DefaultUi() UserInterface {
 }
 
 type consoleUi struct {
-	writer         io.Writer
-	errorWriter    io.Writer
-	progressWriter io.Writer
-	reader         *bufio.Reader
+	writer             io.Writer
+	errorWriter        io.Writer
+	progressBarFactory func() ProgressBar
+	reader             *bufio.Reader
 }
 
 func (ui *consoleUi) Output(output string) error {
@@ -37,7 +37,7 @@ func (ui *consoleUi) OutputError(err error) error {
 }
 
 func (ui *consoleUi) NewProgressBar() ProgressBar {
-	return newProgressBar(ui.progressWriter)
+	return ui.progressBarFactory()
 }
 
 func (ui *consoleUi) Input(prompt string) (string, error) {
