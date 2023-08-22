@@ -60,9 +60,10 @@ func (b *ConsoleUiBuilder) Build() (UserInterface, error) {
 		return nil, b.err
 	}
 	return &consoleUi{
-		writer:      b.outputWriter,
-		errorWriter: b.errorOutputWriter,
-		reader:      b.inputReader,
+		writer:         b.outputWriter,
+		errorWriter:    b.errorOutputWriter,
+		progressWriter: b.progressWriter,
+		reader:         b.inputReader,
 	}, nil
 }
 
