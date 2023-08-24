@@ -10,7 +10,6 @@ func Init(engine workflow.Engine) error {
 	var err error
 
 	initMethods := []func(workflow.Engine) error{
-		InitDepGraphWorkflow,
 		InitOutputWorkflow,
 		InitWhoAmIWorkflow,
 		InitAuth,
