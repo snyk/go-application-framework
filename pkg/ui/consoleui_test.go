@@ -70,10 +70,13 @@ func TestConsoleUi_Input(t *testing.T) {
 	assert.Equal(t, prompt+": ", outputBuffer.String())
 }
 
+var _ ui.ProgressBar = &fakeProgressBar{}
+
 type fakeProgressBar struct{}
 
-func (f fakeProgressBar) SetProgress(_ float64) error { return nil }
-func (f fakeProgressBar) Clear() error                { return nil }
+func (f fakeProgressBar) UpdateProgress(_ float64) error { return nil }
+func (f fakeProgressBar) SetTitle(_ string)              {}
+func (f fakeProgressBar) Clear() error                   { return nil }
 
 func TestNewProgressBar_ReturnsCorrectProgressBar(t *testing.T) {
 	customProgressBar := &fakeProgressBar{}
