@@ -3,6 +3,7 @@ package networking
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -79,6 +80,8 @@ func (s UserAgentInfo) String() string {
 			str += fmt.Sprint(" (", s.IntegrationEnvironment, "/", s.IntegrationEnvironmentVersion, ")")
 		}
 	}
+
+	str = strings.Trim(strings.ReplaceAll(strings.ReplaceAll(str, "\r", ""), "\n", " "), " ")
 
 	return str
 }
