@@ -13,6 +13,7 @@ import (
 	analytics "github.com/snyk/go-application-framework/pkg/analytics"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
+	ui "github.com/snyk/go-application-framework/pkg/ui"
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -251,6 +252,20 @@ func (m *MockInvocationContext) GetNetworkAccess() networking.NetworkAccess {
 func (mr *MockInvocationContextMockRecorder) GetNetworkAccess() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkAccess", reflect.TypeOf((*MockInvocationContext)(nil).GetNetworkAccess))
+}
+
+// GetUserInterface mocks base method.
+func (m *MockInvocationContext) GetUserInterface() ui.UserInterface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserInterface")
+	ret0, _ := ret[0].(ui.UserInterface)
+	return ret0
+}
+
+// GetUserInterface indicates an expected call of GetUserInterface.
+func (mr *MockInvocationContextMockRecorder) GetUserInterface() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserInterface", reflect.TypeOf((*MockInvocationContext)(nil).GetUserInterface))
 }
 
 // GetWorkflowIdentifier mocks base method.

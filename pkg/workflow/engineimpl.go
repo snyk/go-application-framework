@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/spf13/pflag"
 )
 
@@ -211,12 +212,16 @@ func (e *EngineImpl) InvokeWithConfig(id Identifier, config configuration.Config
 }
 
 // InvokeWithInputAndConfig invokes the workflow with the given identifier, input data and configuration.
-func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error) {
+func (e *EngineImpl) InvokeWithInputAndConfig(
+	id Identifier,
+	input []Data,
+	config configuration.Configuration,
+) ([]Data, error) {
 	var output []Data
 	var err error
 
 	if e.initialized == false {
-		return output, fmt.Errorf("Workflow must be initialized with init() before it can be invoked.")
+		return output, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
 	}
 
 	workflow, ok := e.GetWorkflow(id)
@@ -235,19 +240,13 @@ func (e *EngineImpl) InvokeWithInputAndConfig(id Identifier, input []Data, confi
 			}
 
 			// create a context object for the invocation
-			context := InvocationContextImpl{
-				WorkflowID:     id,
-				Configuration:  config,
-				WorkflowEngine: e,
-				networkAccess:  e.networkAccess,
-				logger:         &zlogger,
-			}
+			context := NewInvocationContext(id, config, e, e.networkAccess, zlogger, e.analytics, ui.DefaultUi())
 
 			// invoke workflow through its callback
-			output, err = callback(&context, input)
+			output, err = callback(context, input)
 		}
 	} else {
-		err = fmt.Errorf("Workflow '%v' not found.", id)
+		err = fmt.Errorf("workflow '%v' not found", id)
 	}
 
 	return output, err

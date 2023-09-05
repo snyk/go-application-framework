@@ -3,6 +3,7 @@ module github.com/snyk/go-application-framework
 go 1.18
 
 require (
+	github.com/fatih/color v1.13.0
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/go-uuid v1.0.3
