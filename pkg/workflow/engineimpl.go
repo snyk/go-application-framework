@@ -119,19 +119,9 @@ func (e *EngineImpl) Init() error {
 }
 
 func (e *EngineImpl) initAnalytics() analytics.Analytics {
-	apiUrlString := e.config.GetString(configuration.API_URL)
-	apiUrl, err := url.Parse(apiUrlString)
-
-	// Disable analytics when using FedRAMP compliant API
-	if err != nil || strings.HasSuffix(strings.ToLower(apiUrl.Host), "snykgov.io") {
-		// Use an Analytics implementation that doesn't send any data.
-		// This allows us to avoid having to check for nil analytics objects or host URLs in multiple places.
-		return analytics.Noop
-	}
-
 	a := analytics.New()
 	a.SetIntegration(e.config.GetString(configuration.INTEGRATION_NAME), e.config.GetString(configuration.INTEGRATION_VERSION))
-	a.SetApiUrl(apiUrlString)
+	a.SetApiUrl(e.config.GetString(configuration.API_URL))
 	a.SetOrg(e.config.GetString(configuration.ORGANIZATION))
 	a.SetClient(func() *http.Client {
 		return e.networkAccess.GetHttpClient()
