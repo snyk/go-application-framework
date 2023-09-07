@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -95,7 +96,7 @@ var (
 	// ciEnvironments is a list of environment variables that indicate a CI environment.
 	// it is used to determine if the command is running in a CI environment.
 	// if it is, the x-is-ci header is set to true.
-	ciEnvironments []string = []string{
+	ciEnvironments = []string{
 		"SNYK_CI",
 		"CI",
 		"CONTINUOUS_INTEGRATION",
@@ -116,7 +117,7 @@ var (
 
 	// sensitiveFieldNames is a list of field names that should be sanitized.
 	// data sanitization is used to prevent sensitive data from being sent to the analytics server.
-	sensitiveFieldNames []string = []string{
+	sensitiveFieldNames = []string{
 		"headers",
 		"user",
 		"passw",
@@ -246,6 +247,9 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 
 // GetRequest returns the HTTP request.
 func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
+	if !a.isEnabled() {
+		return nil, DisabledInFedrampErr
+	}
 	output := a.GetOutputData()
 
 	outputJson, err := json.Marshal(dataOutput{Data: *output})
@@ -290,6 +294,9 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 }
 
 func (a *AnalyticsImpl) Send() (*http.Response, error) {
+	if !a.isEnabled() {
+		return nil, DisabledInFedrampErr
+	}
 	request, err := a.GetRequest()
 	if err != nil {
 		return nil, err
@@ -300,6 +307,15 @@ func (a *AnalyticsImpl) Send() (*http.Response, error) {
 
 	return response, err
 }
+
+func (a *AnalyticsImpl) isEnabled() bool {
+	const fedRampHostSuffix = "snykgov.io"
+	parsedUrl, err := url.Parse(a.apiUrl)
+	hostname := strings.ToLower(parsedUrl.Host)
+	return err == nil && !strings.HasSuffix(hostname, fedRampHostSuffix)
+}
+
+var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments")
 
 // This method sanitizes the given content by searching for key-value mappings. It thereby replaces all keys defined in keysToFilter by the replacement string
 // Supported patterns are:
