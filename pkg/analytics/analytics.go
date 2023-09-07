@@ -311,8 +311,12 @@ func (a *AnalyticsImpl) Send() (*http.Response, error) {
 func (a *AnalyticsImpl) isEnabled() bool {
 	const fedRampHostSuffix = "snykgov.io"
 	parsedUrl, err := url.Parse(a.apiUrl)
+	if err != nil {
+		return false
+	}
 	hostname := strings.ToLower(parsedUrl.Host)
-	return err == nil && !strings.HasSuffix(hostname, fedRampHostSuffix)
+
+	return !strings.HasSuffix(hostname, fedRampHostSuffix)
 }
 
 var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments")
