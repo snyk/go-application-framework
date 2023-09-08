@@ -8,11 +8,12 @@ import (
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/ui"
-	"github.com/spf13/pflag"
 )
 
 // EngineImpl is the default implementation of the Engine interface.
@@ -25,6 +26,7 @@ type EngineImpl struct {
 	initialized          bool
 	invocationCounter    int
 	logger               *zerolog.Logger
+	ui                   ui.UserInterface
 }
 
 func (e *EngineImpl) GetLogger() *zerolog.Logger {
@@ -86,6 +88,7 @@ func NewDefaultWorkFlowEngine() Engine {
 		invocationCounter:    0,
 		logger:               &zlog.Logger,
 		config:               configuration.New(),
+		ui:                   ui.DefaultUi(),
 	}
 	return engine
 }
@@ -224,7 +227,7 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			}
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, config, e, e.networkAccess, zlogger, e.analytics, ui.DefaultUi())
+			context := NewInvocationContext(id, config, e, e.networkAccess, zlogger, e.analytics, e.ui)
 
 			// invoke workflow through its callback
 			output, err = callback(context, input)
@@ -254,6 +257,14 @@ func (e *EngineImpl) AddExtensionInitializer(initializer ExtensionInit) {
 // GetConfiguration returns the configuration object.
 func (e *EngineImpl) GetConfiguration() configuration.Configuration {
 	return e.config
+}
+
+func (e *EngineImpl) GetUserInterface() ui.UserInterface {
+	return e.ui
+}
+
+func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
+	e.ui = userInterface
 }
 
 // GetGlobalConfiguration returns the global configuration options.

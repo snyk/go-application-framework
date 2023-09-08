@@ -9,6 +9,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
+//go:generate $GOPATH/bin/mockgen -source=userinterface.go -destination ../mocks/userinterface.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/
+
 type UserInterface interface {
 	Output(output string) error
 	OutputError(err error) error
