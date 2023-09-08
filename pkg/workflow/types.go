@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -74,4 +75,6 @@ type Engine interface {
 	SetLogger(logger *zerolog.Logger)
 	SetConfiguration(config configuration.Configuration)
 	GetLogger() *zerolog.Logger
+	GetUserInterface() ui.UserInterface
+	SetUserInterface(ui ui.UserInterface)
 }

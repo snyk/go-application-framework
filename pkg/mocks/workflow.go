@@ -473,6 +473,20 @@ func (mr *MockEngineMockRecorder) GetNetworkAccess() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkAccess", reflect.TypeOf((*MockEngine)(nil).GetNetworkAccess))
 }
 
+// GetUserInterface mocks base method.
+func (m *MockEngine) GetUserInterface() ui.UserInterface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserInterface")
+	ret0, _ := ret[0].(ui.UserInterface)
+	return ret0
+}
+
+// GetUserInterface indicates an expected call of GetUserInterface.
+func (mr *MockEngineMockRecorder) GetUserInterface() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserInterface", reflect.TypeOf((*MockEngine)(nil).GetUserInterface))
+}
+
 // GetWorkflow mocks base method.
 func (m *MockEngine) GetWorkflow(id workflow.Identifier) (workflow.Entry, bool) {
 	m.ctrl.T.Helper()
@@ -613,4 +627,16 @@ func (m *MockEngine) SetLogger(logger *zerolog.Logger) {
 func (mr *MockEngineMockRecorder) SetLogger(logger interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLogger", reflect.TypeOf((*MockEngine)(nil).SetLogger), logger)
+}
+
+// SetUserInterface mocks base method.
+func (m *MockEngine) SetUserInterface(ui ui.UserInterface) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetUserInterface", ui)
+}
+
+// SetUserInterface indicates an expected call of SetUserInterface.
+func (mr *MockEngineMockRecorder) SetUserInterface(ui interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserInterface", reflect.TypeOf((*MockEngine)(nil).SetUserInterface), ui)
 }
