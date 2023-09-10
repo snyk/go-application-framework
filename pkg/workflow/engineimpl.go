@@ -111,13 +111,7 @@ func (e *EngineImpl) Init() error {
 	// later scan here for extension binaries
 
 	if e.analytics == nil {
-		e.analytics = analytics.New()
-		e.analytics.SetIntegration(e.config.GetString(configuration.INTEGRATION_NAME), e.config.GetString(configuration.INTEGRATION_VERSION))
-		e.analytics.SetApiUrl(e.config.GetString(configuration.API_URL))
-		e.analytics.SetOrg(e.config.GetString(configuration.ORGANIZATION))
-		e.analytics.SetClient(func() *http.Client {
-			return e.networkAccess.GetHttpClient()
-		})
+		e.analytics = e.initAnalytics()
 	}
 
 	if err == nil {
@@ -125,6 +119,18 @@ func (e *EngineImpl) Init() error {
 	}
 
 	return err
+}
+
+func (e *EngineImpl) initAnalytics() analytics.Analytics {
+	a := analytics.New()
+	a.SetIntegration(e.config.GetString(configuration.INTEGRATION_NAME), e.config.GetString(configuration.INTEGRATION_VERSION))
+	a.SetApiUrl(e.config.GetString(configuration.API_URL))
+	a.SetOrg(e.config.GetString(configuration.ORGANIZATION))
+	a.SetClient(func() *http.Client {
+		return e.networkAccess.GetHttpClient()
+	})
+
+	return a
 }
 
 // Register registers a new workflow entry with the engine.
