@@ -1,9 +1,14 @@
 package app
 
 import (
+	"io"
+	"log"
+
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/snyk/go-httpauth/pkg/httpauth"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -12,9 +17,6 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/snyk/go-httpauth/pkg/httpauth"
-	"io"
-	"log"
 )
 
 // initConfiguration initializes the configuration with initial values.
@@ -88,6 +90,14 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
 		if existingValue == nil {
 			return auth.IsKnownOAuthEndpoint(config.GetString(configuration.API_URL))
+		} else {
+			return existingValue
+		}
+	})
+
+	config.AddDefaultValue(configuration.IS_FEDRAMP, func(existingValue any) any {
+		if existingValue == nil {
+			return api.IsFedramp(config.GetString(configuration.API_URL))
 		} else {
 			return existingValue
 		}

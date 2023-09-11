@@ -23,6 +23,7 @@ const (
 	ADD_TRUSTED_CA_FILE             string = "internal_additional_trusted_ca_file" // pem file location containing additional CAs to trust
 	FIPS_ENABLED                    string = "gofips"
 	WORKING_DIRECTORY               string = "internal_working_dir"
+	IS_FEDRAMP                      string = "internal_is_fedramp"
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"

@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-uuid"
+
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
@@ -309,14 +311,7 @@ func (a *AnalyticsImpl) Send() (*http.Response, error) {
 }
 
 func (a *AnalyticsImpl) isEnabled() bool {
-	const fedRampHostSuffix = "snykgov.io"
-	parsedUrl, err := url.Parse(a.apiUrl)
-	if err != nil {
-		return false
-	}
-	hostname := strings.ToLower(parsedUrl.Host)
-
-	return !strings.HasSuffix(hostname, fedRampHostSuffix)
+	return !api.IsFedramp(a.apiUrl)
 }
 
 var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments")
