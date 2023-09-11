@@ -2,9 +2,8 @@ package auth
 
 import (
 	"net/http"
-	"net/url"
-	"strings"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -38,11 +37,5 @@ func CreateAuthenticator(config configuration.Configuration, httpClient *http.Cl
 }
 
 func IsKnownOAuthEndpoint(endpoint string) bool {
-	parsedURL, err := url.Parse(endpoint)
-	if err != nil {
-		return false
-	}
-
-	hostname := parsedURL.Hostname()
-	return strings.HasSuffix(hostname, "snykgov.io")
+	return api.IsFedramp(endpoint)
 }

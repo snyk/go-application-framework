@@ -6,10 +6,11 @@ import (
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_CreateAppEngine(t *testing.T) {
@@ -158,7 +159,7 @@ func Test_initConfiguration_existingValueOfOAuthFFRespected(t *testing.T) {
 	assert.Equal(t, existingValue, actualOAuthFF)
 }
 
-func Test_initConfiguration_setValueOfOAuthFF(t *testing.T) {
+func Test_initConfiguration_snykgov(t *testing.T) {
 	endpoint := "https://snykgov.io"
 
 	// setup mock
@@ -171,5 +172,27 @@ func Test_initConfiguration_setValueOfOAuthFF(t *testing.T) {
 	config.Set(configuration.API_URL, endpoint)
 
 	actualOAuthFF := config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
-	assert.Equal(t, true, actualOAuthFF)
+	assert.True(t, actualOAuthFF)
+
+	isFedramp := config.GetBool(configuration.IS_FEDRAMP)
+	assert.True(t, isFedramp)
+}
+
+func Test_initConfiguration_NOT_snykgov(t *testing.T) {
+	endpoint := "https://api.eu.snyk.io"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	config := configuration.NewInMemory()
+	initConfiguration(config, mockApiClient, &zlog.Logger)
+
+	config.Set(configuration.API_URL, endpoint)
+
+	actualOAuthFF := config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
+	assert.False(t, actualOAuthFF)
+
+	isFedramp := config.GetBool(configuration.IS_FEDRAMP)
+	assert.False(t, isFedramp)
 }
