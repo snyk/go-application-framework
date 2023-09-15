@@ -14,6 +14,7 @@ const (
 	api_prefix_dot string = API_PREFIX + "."
 	app_prefix     string = "app"
 	port_suffix    string = ":[0-9]*$"
+	stella_host    string = "stella:8000"
 )
 
 func isLocalhost(host string) bool {
@@ -32,6 +33,10 @@ func isLocalhost(host string) bool {
 	return addr.IsLoopback()
 }
 
+func isUsingStella (host string) bool {
+	return strings.HasPrefix(host, stella_host)
+}
+
 func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 	result := ""
 	url, err := url.Parse(userDefinedUrl)
@@ -46,7 +51,7 @@ func GetCanonicalApiUrl(url url.URL) (string, error) {
 	result := ""
 
 	// for localhost we don't change the host, since there are no subdomains
-	if isLocalhost(url.Host) {
+	if isLocalhost(url.Host) || isUsingStella(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
 	} else {
 		appRegexp, _ := regexp.Compile(app_pattern)
