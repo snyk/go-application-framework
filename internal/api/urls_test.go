@@ -47,6 +47,7 @@ func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
 		"https://localhost:9000/api/v1",
 		"https://localhost/api",
 		"http://alpha:omega@localhost:9000",
+		"http://stella:8000",
 	}
 
 	expectedList := []string{
@@ -55,6 +56,7 @@ func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
 		"https://localhost:9000/api",
 		"https://localhost/api",
 		"http://alpha:omega@localhost:9000",
+		"http://stella:8000",
 	}
 
 	for i, input := range inputList {
