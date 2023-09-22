@@ -1,0 +1,11 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: go-application-framework
+  annotations:
+    github.com/project-slug: snyk/go-application-framework
+    github.com/team-slug: snyk/hammerhead
+spec:
+  type: external-library
+  lifecycle: "-"
+  owner: hammerhead
