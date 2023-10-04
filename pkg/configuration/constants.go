@@ -24,6 +24,7 @@ const (
 	FIPS_ENABLED                    string = "gofips"
 	WORKING_DIRECTORY               string = "internal_working_dir"
 	IS_FEDRAMP                      string = "internal_is_fedramp"
+	UNKNOWN_ARGS                    string = "internal_unknown_arguments" // arguments unknown to the current application but maybe relevant for delegated application calls
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
