@@ -29,6 +29,7 @@ func (t *tokenAuthenticator) AddAuthenticationHeader(request *http.Request) erro
 	token := t.tokenFunc()
 	if len(token) > 0 {
 		request.Header.Set("Authorization", token)
+		request.Header.Set("Session-Token", token)
 	}
 
 	return nil
