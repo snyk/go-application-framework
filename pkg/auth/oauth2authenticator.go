@@ -17,8 +17,9 @@ import (
 	"time"
 
 	"github.com/pkg/browser"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"golang.org/x/oauth2"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 const (
@@ -322,6 +323,7 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 	if len(accessToken) > 0 {
 		value := fmt.Sprint("Bearer ", accessToken)
 		request.Header.Set("Authorization", value)
+		request.Header.Set("Session-Token", value)
 	}
 
 	return nil

@@ -12,13 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-httpauth/pkg/httpauth"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
+
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
-	"github.com/snyk/go-httpauth/pkg/httpauth"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/oauth2"
 )
 
 func getConfig() configuration.Configuration {
@@ -41,6 +42,7 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	expectedHeader := http.Header{
 		"User-Agent":    {userAgent},
 		"Authorization": {"token " + token},
+		"Session-Token": {"token " + token},
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for key, expectedValue := range expectedHeader {
@@ -71,6 +73,7 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	expectedHeaders := map[string]string{
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
 		"Authorization": "Bearer " + accessToken,
+		"Session-Token": "Bearer " + accessToken,
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for key, expectedValue := range expectedHeaders {
@@ -238,6 +241,7 @@ func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 	expectedHeader := http.Header{
 		"Secret-Header": {"secret-value"},
 		"Authorization": {"Bearer MyToken"},
+		"Session-Token": {"Bearer MyToken"},
 	}
 
 	config := getConfig()
