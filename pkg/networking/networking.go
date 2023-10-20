@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
@@ -52,11 +53,50 @@ type defaultHeadersRoundTripper struct {
 	networkAccess            *networkImpl
 }
 
+func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, response *http.Response, err error) {
+	if rt.networkAccess == nil && rt.networkAccess.logger == nil {
+		return
+	}
+
+	logHeader := http.Header{}
+	loglevel := zerolog.TraceLevel
+
+	if rt.networkAccess.logger.GetLevel() == loglevel {
+		for i, v := range request.Header {
+			for _, value := range v {
+				if strings.ToLower(i) == "authorization" || strings.ToLower(i) == "session-token" {
+					authHeader := strings.Split(value, " ")
+					if len(authHeader) == 2 && len(authHeader[1]) > 4 {
+						value = authHeader[0] + " " + authHeader[1][0:4] + "***"
+					} else {
+						value = "***"
+					}
+				}
+				logHeader.Add(i, value)
+			}
+		}
+	}
+
+	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request: %s, %s, %v", request.Method, request.URL.String(), logHeader)
+
+	if response != nil {
+		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response: %d, %v", response.StatusCode, response.Header)
+	}
+
+	if err != nil {
+		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< error: %s", err.Error())
+	}
+}
+
 // RoundTrip is an implementation of the http.RoundTripper interface.
 func (rt *defaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	newRequest := request.Clone(request.Context())
 	rt.networkAccess.addDefaultHeader(newRequest)
-	return rt.encapsulatedRoundTripper.RoundTrip(newRequest)
+	response, err := rt.encapsulatedRoundTripper.RoundTrip(newRequest)
+
+	rt.logRoundTrip(newRequest, response, err)
+
+	return response, err
 }
 
 // NewNetworkAccess returns a networkImpl instance.
