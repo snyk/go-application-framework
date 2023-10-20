@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 func Test_CreateAppEngine(t *testing.T) {
@@ -54,7 +55,8 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).Times(1)
 
 	config := configuration.NewInMemory()
-	initConfiguration(config, mockApiClient, &zlog.Logger)
+	engine := workflow.NewWorkFlowEngine(config)
+	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -74,7 +76,8 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
 	config := configuration.NewInMemory()
-	initConfiguration(config, mockApiClient, &zlog.Logger)
+	engine := workflow.NewWorkFlowEngine(config)
+	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, defaultOrgId, actualOrgId)
@@ -94,7 +97,8 @@ func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
 
 	config := configuration.NewInMemory()
-	initConfiguration(config, mockApiClient, &zlog.Logger)
+	engine := workflow.NewWorkFlowEngine(config)
+	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -113,7 +117,8 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 
 	config := configuration.NewInMemory()
-	initConfiguration(config, mockApiClient, &zlog.Logger)
+	engine := workflow.NewWorkFlowEngine(config)
+	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.ORGANIZATION, orgId)
 
@@ -150,7 +155,7 @@ func Test_initConfiguration_existingValueOfOAuthFFRespected(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	config := configuration.NewInMemory()
-	initConfiguration(config, mockApiClient, &zlog.Logger)
+	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, existingValue)
 	config.Set(configuration.API_URL, endpoint)
@@ -167,7 +172,7 @@ func Test_initConfiguration_snykgov(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	config := configuration.NewInMemory()
-	initConfiguration(config, mockApiClient, &zlog.Logger)
+	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.API_URL, endpoint)
 
@@ -186,7 +191,7 @@ func Test_initConfiguration_NOT_snykgov(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	config := configuration.NewInMemory()
-	initConfiguration(config, mockApiClient, &zlog.Logger)
+	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.API_URL, endpoint)
 
