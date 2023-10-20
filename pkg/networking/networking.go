@@ -53,7 +53,11 @@ type defaultHeadersRoundTripper struct {
 	networkAccess            *networkImpl
 }
 
-func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, response *http.Response) {
+func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, response *http.Response, err error) {
+	if rt.networkAccess == nil && rt.networkAccess.logger == nil {
+		return
+	}
+
 	logHeader := http.Header{}
 	loglevel := zerolog.TraceLevel
 
@@ -74,7 +78,14 @@ func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, respon
 	}
 
 	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request: %s, %s, %v", request.Method, request.URL.String(), logHeader)
-	rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response: %d, %v", response.StatusCode, response.Header)
+
+	if response != nil {
+		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response: %d, %v", response.StatusCode, response.Header)
+	}
+
+	if err != nil {
+		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< error: %s", err.Error())
+	}
 }
 
 // RoundTrip is an implementation of the http.RoundTripper interface.
@@ -83,7 +94,7 @@ func (rt *defaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Re
 	rt.networkAccess.addDefaultHeader(newRequest)
 	response, err := rt.encapsulatedRoundTripper.RoundTrip(newRequest)
 
-	rt.logRoundTrip(newRequest, response)
+	rt.logRoundTrip(newRequest, response, err)
 
 	return response, err
 }
