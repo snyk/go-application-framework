@@ -7,11 +7,12 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-httpauth/pkg/httpauth"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
-	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
@@ -103,24 +104,18 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	}
 }
 
-func (n *networkImpl) addMiddlewaresToRoundTripper(rt http.RoundTripper) http.RoundTripper {
-	rt = middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
-	roundTrip := defaultHeadersRoundTripper{
-		encapsulatedRoundTripper: rt,
+func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
+	transport := http.DefaultTransport.(*http.Transport)
+	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
+		encapsulatedRoundTripper: n.configureRoundTripper(transport),
 	}
-	return &roundTrip
+	return &rt
 }
 
 func (n *networkImpl) GetRoundTripper() http.RoundTripper {
-	rt := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
-	return n.addMiddlewaresToRoundTripper(rt)
-}
-
-func (n *networkImpl) createAuthenticator(transport *http.Transport) auth.Authenticator {
-	authClient := *http.DefaultClient
-	authClient.Transport = transport.Clone()
-	return auth.CreateAuthenticator(n.config, &authClient)
+	rt := n.getUnauthorizedRoundTripper()
+	return middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
 }
 
 func (n *networkImpl) configureRoundTripper(base *http.Transport) *http.Transport {
@@ -141,7 +136,7 @@ func (n *networkImpl) GetHttpClient() *http.Client {
 
 func (n *networkImpl) GetUnauthorizedHttpClient() *http.Client {
 	client := *http.DefaultClient
-	client.Transport = n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	client.Transport = n.getUnauthorizedRoundTripper()
 	return &client
 }
 
@@ -162,8 +157,8 @@ func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
 }
 
 func (n *networkImpl) GetAuthenticator() auth.Authenticator {
-	transport := n.configureRoundTripper(http.DefaultTransport.(*http.Transport))
-	return n.createAuthenticator(transport)
+	authClient := n.GetUnauthorizedHttpClient()
+	return auth.CreateAuthenticator(n.config, authClient)
 }
 
 func (n *networkImpl) SetLogger(logger *zerolog.Logger) {
