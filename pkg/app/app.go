@@ -15,12 +15,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // initConfiguration initializes the configuration with initial values.
-func initConfiguration(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
+func initConfiguration(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
 	if logger == nil {
 		logger = &zlog.Logger
 	}
@@ -60,7 +59,7 @@ func initConfiguration(config configuration.Configuration, apiClient api.ApiClie
 	})
 
 	config.AddDefaultValue(configuration.ORGANIZATION, func(existingValue any) any {
-		client := networking.NewNetworkAccess(config).GetHttpClient()
+		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient.Init(url, client)
 		if existingValue != nil && len(existingValue.(string)) > 0 {
@@ -120,7 +119,7 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 
 	config := engine.GetConfiguration()
 	if config != nil {
-		initConfiguration(config, api.NewApiInstance(), engine.GetLogger())
+		initConfiguration(engine, config, api.NewApiInstance(), engine.GetLogger())
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)

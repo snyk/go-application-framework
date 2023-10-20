@@ -98,8 +98,7 @@ func (e *EngineImpl) Init() error {
 	var err error
 
 	e.invocationCounter = 0
-	e.networkAccess = networking.NewNetworkAccess(e.config)
-	e.networkAccess.SetLogger(e.logger)
+	_ = e.GetNetworkAccess()
 
 	for i := range e.extensionInitializer {
 		err = e.extensionInitializer[i](e)
@@ -252,6 +251,11 @@ func (e *EngineImpl) GetAnalytics() analytics.Analytics {
 
 // GetNetworkAccess returns the network access object.
 func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
+	if e.networkAccess == nil {
+		e.networkAccess = networking.NewNetworkAccess(e.config)
+		e.networkAccess.SetLogger(e.logger)
+	}
+
 	return e.networkAccess
 }
 
