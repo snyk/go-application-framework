@@ -54,7 +54,7 @@ type defaultHeadersRoundTripper struct {
 }
 
 func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, response *http.Response, err error) {
-	if rt.networkAccess == nil && rt.networkAccess.logger == nil {
+	if rt.networkAccess == nil || rt.networkAccess.logger == nil {
 		return
 	}
 
