@@ -76,5 +76,5 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_happyPath(t *testing.T) {
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
-	reportAnalyticsEntryPoint(invocationContextMock, nil)
+	reportAnalyticsEntrypoint(invocationContextMock, nil)
 }

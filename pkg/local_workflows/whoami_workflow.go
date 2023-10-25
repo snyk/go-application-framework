@@ -14,20 +14,20 @@ import (
 )
 
 const (
-	workflowName     = "whoami"
-	endpoint         = "/user/me"
-	apiVersion       = "/v1"
-	experimentalFlag = "experimental"
-	jsonFlag         = "json"
+	whoAmIworkflowName = "whoami"
+	userMeEndpoint     = "/user/me"
+	apiVersion         = "/v1"
+	experimentalFlag   = "experimental"
+	jsonFlag           = "json"
 )
 
 // define a new workflow identifier for this workflow
-var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(workflowName)
+var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(whoAmIworkflowName)
 
 // InitWhoAmIWorkflow initialises the whoAmI workflow before registering it with the engine.
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
-	whoAmIConfig := pflag.NewFlagSet(workflowName, pflag.ExitOnError)
+	whoAmIConfig := pflag.NewFlagSet(whoAmIworkflowName, pflag.ExitOnError)
 	// add experimental flag to configuration
 	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
 	// add json flag to configuration
@@ -39,7 +39,7 @@ func InitWhoAmIWorkflow(engine workflow.Engine) error {
 }
 
 // whoAmIWorkflowEntryPoint is the entry point for the whoAmI workflow.
-// it calls the `/user/me` endpoint and returns the authenticated user's username
+// it calls the `/user/me` userMeEndpoint and returns the authenticated user's username
 // it can optionally return the full `/user/me` payload response if the json flag is set
 func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	// get necessary objects from invocation context
@@ -54,11 +54,11 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 		return nil, fmt.Errorf("set `--experimental` flag to enable whoAmI command")
 	}
 
-	// define userme API endpoint
+	// define userme API userMeEndpoint
 	baseUrl := config.GetString(configuration.API_URL)
-	url := baseUrl + apiVersion + endpoint
+	url := baseUrl + apiVersion + userMeEndpoint
 
-	// call userme API endpoint
+	// call userme API userMeEndpoint
 	userMe, err := fetchUserMe(httpClient, url, logger)
 	if err != nil {
 		return nil, fmt.Errorf("error while fetching user: %w", err)
@@ -83,7 +83,7 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	return []workflow.Data{userData}, err
 }
 
-// fetchUserMe calls the `/user/me` endpoint and returns the response body
+// fetchUserMe calls the `/user/me` userMeEndpoint and returns the response body
 func fetchUserMe(client *http.Client, url string, logger *log.Logger) (whoAmI []byte, err error) {
 	logger.Printf("Fetching user details (url: %s)", url)
 	res, err := client.Get(url)
@@ -134,7 +134,7 @@ func extractUser(whoAmI []byte, logger *log.Logger) (username string, err error)
 func createWorkflowData(data interface{}, contentType string) workflow.Data {
 	return workflow.NewData(
 		// use new type identifier when creating new data
-		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, workflowName),
+		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, whoAmIworkflowName),
 		contentType,
 		data,
 	)
