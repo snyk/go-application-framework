@@ -86,7 +86,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_happyPath(t *testing.T) {
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.NoError(t, err)
 }
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.T) {
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *testing.T) {
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
@@ -112,6 +112,33 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 			Header: make(http.Header),
 		}
 	})
+
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
+
+	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
+	require.Error(t, err)
+}
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.T) {
+	// setup
+	logger := log.New(os.Stderr, "test", 0)
+	config := configuration.New()
+	orgId := "orgId"
+
+	config.Set(configuration.ORGANIZATION, orgId)
+
+	requestPayload := `{}`
+
+	// setup mocks
+	ctrl := gomock.NewController(t)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	input := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(requestPayload))
+
+	mockClient := newErrorProducingTestClient(func(req *http.Request) *http.Response { return nil })
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
