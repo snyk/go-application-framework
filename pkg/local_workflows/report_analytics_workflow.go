@@ -2,7 +2,6 @@ package localworkflows
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -31,26 +30,23 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	logger := invocationCtx.GetLogger()
 	logger.Println(reportAnalyticsWorkflowName + " workflow start")
 
-	url := fmt.Sprintf("%s/rest/%s/analytics", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
+	url := fmt.Sprintf("%s/rest/api/orgs/%s/analytics", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
 
 	for i, input := range inputData {
 		logger.Println(fmt.Sprintf("%s: processing element %d", reportAnalyticsWorkflowName, i))
 		err = callEndpoint(invocationCtx, input, url)
+		if err != nil {
+			break
+		}
 	}
-	return []workflow.Data{}, err
+	return nil, err
 }
 
 func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
 	logger := invocationCtx.GetLogger()
-	// Marshal the payload to JSON
-	payloadBytes, err := json.Marshal(input.GetPayload())
-	if err != nil {
-		logger.Printf("Error marshaling payload: %v\n", err)
-		return err
-	}
 
 	// Create a request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(input.GetPayload().([]byte)))
 	if err != nil {
 		logger.Printf("Error creating request: %v\n", err)
 		return err
