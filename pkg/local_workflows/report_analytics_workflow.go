@@ -3,24 +3,38 @@ package localworkflows
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"net/http"
+	"path/filepath"
+	"time"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
-	"io"
-	"net/http"
-	"time"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 const reportAnalyticsWorkflowName = "reportAnalytics"
 
 var WORKFLOWID_REPORT_ANALYTICS workflow.Identifier = workflow.NewWorkflowIdentifier(reportAnalyticsWorkflowName)
 
+var scanDoneSchemaLoader gojsonschema.JSONLoader
+
 // InitReportAnalyticsWorkflow initialises the whoAmI workflow before registering it with the engine.
 func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
 	config := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
+	filePath, err := filepath.Abs(filepath.Join("json_schemas", "scan_done_analytics_event.json"))
+
+	if err != nil {
+		return err
+	}
+
+	uriFilePath := "file://" + filepath.ToSlash(filePath)
+	scanDoneSchemaLoader = gojsonschema.NewReferenceLoader(uriFilePath)
+
 	// register workflow with engine
-	_, err := engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(config), reportAnalyticsEntrypoint)
+	_, err = engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(config), reportAnalyticsEntrypoint)
 	return err
 }
 
@@ -35,9 +49,21 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 	for i, input := range inputData {
 		logger.Println(fmt.Sprintf("%s: processing element %d", reportAnalyticsWorkflowName, i))
+		documentLoader := gojsonschema.NewBytesLoader(input.GetPayload().([]byte))
+		result, err := gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
+
+		if err != nil {
+			logger.Printf("Error validating input: %v\n", err)
+			break
+		}
+
+		if !result.Valid() {
+			return nil, fmt.Errorf("Error validating input: %v\n", result.Errors())
+		}
+
 		err = callEndpoint(invocationCtx, input, url)
 		if err != nil {
-			break
+			return nil, fmt.Errorf("Error calling endpoint: %v\n", err)
 		}
 	}
 	return nil, err
