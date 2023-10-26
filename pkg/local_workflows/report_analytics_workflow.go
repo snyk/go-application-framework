@@ -3,15 +3,13 @@ package localworkflows
 import (
 	"bytes"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
-	"io"
-	"net/http"
-	"time"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/xeipuuv/gojsonschema"
+	"io"
+	"net/http"
 )
 
 const reportAnalyticsWorkflowName = "reportAnalytics"
@@ -37,7 +35,7 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 
 // initializeSchemaLoader initializes the schema loader for the reportAnalytics workflow.
 func initializeSchemaLoader() error {
-	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneSchema)
+	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneEventSchema)
 	return nil
 }
 
@@ -97,32 +95,4 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 
 	defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
 	return nil
-}
-
-type ScanDoneAnalyticsData struct {
-	Data struct {
-		Type       string `json:"type"`
-		Attributes struct {
-			DeviceId                      string `json:"deviceId"`
-			Application                   string `json:"application"`
-			ApplicationVersion            string `json:"application_version"`
-			Os                            string `json:"os"`
-			Arch                          string `json:"arch"`
-			IntegrationName               string `json:"integration_name"`
-			IntegrationVersion            string `json:"integration_version"`
-			IntegrationEnvironment        string `json:"integration_environment"`
-			IntegrationEnvironmentVersion string `json:"integration_environment_version"`
-			EventType                     string `json:"event_type"`
-			Status                        string `json:"status"`
-			ScanType                      string `json:"scan_type"`
-			UniqueIssueCount              struct {
-				Critical int `json:"critical"`
-				High     int `json:"high"`
-				Medium   int `json:"medium"`
-				Low      int `json:"low"`
-			} `json:"unique_issue_count"`
-			DurationMs        string    `json:"duration_ms"`
-			TimestampFinished time.Time `json:"timestamp_finished"`
-		} `json:"attributes"`
-	} `json:"data"`
 }

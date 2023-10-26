@@ -1,6 +1,8 @@
 package json_schemas
 
-const ScanDoneSchema = `{
+import "time"
+
+const ScanDoneEventSchema = `{
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "required": [
@@ -130,3 +132,31 @@ const ScanDoneSchema = `{
   }
 }
 `
+
+type ScanDoneEvent struct {
+	Data struct {
+		Type       string `json:"type"`
+		Attributes struct {
+			DeviceId                      string `json:"deviceId"`
+			Application                   string `json:"application"`
+			ApplicationVersion            string `json:"application_version"`
+			Os                            string `json:"os"`
+			Arch                          string `json:"arch"`
+			IntegrationName               string `json:"integration_name"`
+			IntegrationVersion            string `json:"integration_version"`
+			IntegrationEnvironment        string `json:"integration_environment"`
+			IntegrationEnvironmentVersion string `json:"integration_environment_version"`
+			EventType                     string `json:"event_type"`
+			Status                        string `json:"status"`
+			ScanType                      string `json:"scan_type"`
+			UniqueIssueCount              struct {
+				Critical int `json:"critical"`
+				High     int `json:"high"`
+				Medium   int `json:"medium"`
+				Low      int `json:"low"`
+			} `json:"unique_issue_count"`
+			DurationMs        string    `json:"duration_ms"`
+			TimestampFinished time.Time `json:"timestamp_finished"`
+		} `json:"attributes"`
+	} `json:"data"`
+}
