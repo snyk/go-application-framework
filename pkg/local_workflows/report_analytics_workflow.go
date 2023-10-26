@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -20,22 +21,35 @@ var WORKFLOWID_REPORT_ANALYTICS workflow.Identifier = workflow.NewWorkflowIdenti
 
 var scanDoneSchemaLoader gojsonschema.JSONLoader
 
-// InitReportAnalyticsWorkflow initialises the whoAmI workflow before registering it with the engine.
+// InitReportAnalyticsWorkflow initialises the reportAnalytics workflow before registering it with the engine.
 func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
 	config := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
-	filePath, err := filepath.Abs(filepath.Join("json_schemas", "scan_done_analytics_event.json"))
 
+	err := initializeSchemaLoader()
 	if err != nil {
 		return err
 	}
 
-	uriFilePath := "file://" + filepath.ToSlash(filePath)
-	scanDoneSchemaLoader = gojsonschema.NewReferenceLoader(uriFilePath)
-
 	// register workflow with engine
 	_, err = engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(config), reportAnalyticsEntrypoint)
 	return err
+}
+
+// initializeSchemaLoader initializes the schema loader for the reportAnalytics workflow.
+func initializeSchemaLoader() error {
+	filePath, err := filepath.Abs(filepath.Join("json_schemas", "scan_done_analytics_event.json"))
+	if err != nil {
+		return err
+	}
+
+	schema, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	scanDoneSchemaLoader = gojsonschema.NewStringLoader(string(schema))
+	return nil
 }
 
 // reportAnalyticsEntrypoint is the entry point for the reportAnalytics workflow.
