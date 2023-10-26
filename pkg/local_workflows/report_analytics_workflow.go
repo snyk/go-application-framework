@@ -3,10 +3,9 @@ package localworkflows
 import (
 	"bytes"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -38,17 +37,7 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 
 // initializeSchemaLoader initializes the schema loader for the reportAnalytics workflow.
 func initializeSchemaLoader() error {
-	filePath, err := filepath.Abs(filepath.Join("json_schemas", "scan_done_analytics_event.json"))
-	if err != nil {
-		return err
-	}
-
-	schema, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	scanDoneSchemaLoader = gojsonschema.NewStringLoader(string(schema))
+	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneSchema)
 	return nil
 }
 
