@@ -23,20 +23,12 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
 	config := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
 
-	err := initializeSchemaLoader()
-	if err != nil {
-		return err
-	}
+	// load json schema for scan done event
+	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneEventSchema)
 
 	// register workflow with engine
-	_, err = engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(config), reportAnalyticsEntrypoint)
+	_, err := engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(config), reportAnalyticsEntrypoint)
 	return err
-}
-
-// initializeSchemaLoader initializes the schema loader for the reportAnalytics workflow.
-func initializeSchemaLoader() error {
-	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneEventSchema)
-	return nil
 }
 
 // reportAnalyticsEntrypoint is the entry point for the reportAnalytics workflow.
