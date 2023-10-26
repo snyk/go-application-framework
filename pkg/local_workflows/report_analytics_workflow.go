@@ -137,7 +137,3 @@ type ScanDoneAnalyticsData struct {
 		} `json:"attributes"`
 	} `json:"data"`
 }
-
-func NewScanDoneAnalyticsData() *ScanDoneAnalyticsData {
-	panic("not implemented")
-}

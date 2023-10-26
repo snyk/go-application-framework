@@ -169,7 +169,6 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T)
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.Error(t, err)
 }
-
 func testGetScanDonePayload(payload string) workflow.Data {
 	return workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(payload))
 }
