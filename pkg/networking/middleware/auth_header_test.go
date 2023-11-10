@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_ShouldRequireAuthentication(t *testing.T) {
@@ -28,11 +29,10 @@ func Test_ShouldRequireAuthentication(t *testing.T) {
 
 	for u, expected := range cases {
 		requestUrl, _ := url.Parse(u)
-		actual, err := middleware.ShouldRequireAuthentication(apiUrl, requestUrl, additionalSubdomains)
+		actual, err := middleware.ShouldRequireAuthentication(apiUrl, requestUrl, additionalSubdomains, additionalSubdomains)
 		assert.Nil(t, err)
 		assert.Equal(t, expected, actual)
 	}
-
 }
 
 func Test_ShouldRequireAuthentication_subdomains(t *testing.T) {
@@ -42,19 +42,21 @@ func Test_ShouldRequireAuthentication_subdomains(t *testing.T) {
 		"https://mydomain.eu.snyk.io:443": true,
 		"https://whatever.eu.snyk.io":     false,
 		"https://deeproxy.eu.snyk.io":     true,
+		"https://somethingelse.com/":      true,
+		"https://definitelynot.com/":      false,
 	}
 
 	additionalSubdomains := []string{"deeproxy", "mydomain"}
+	additionalUrls := []string{"https://somethingelse.com/"}
 
 	for u, expected := range cases {
 		t.Run(u, func(t *testing.T) {
 			requestUrl, _ := url.Parse(u)
-			actual, err := middleware.ShouldRequireAuthentication(apiUrl, requestUrl, additionalSubdomains)
+			actual, err := middleware.ShouldRequireAuthentication(apiUrl, requestUrl, additionalSubdomains, additionalUrls)
 			assert.Nil(t, err)
 			assert.Equal(t, expected, actual)
 		})
 	}
-
 }
 
 func Test_AddAuthenticationHeader(t *testing.T) {
