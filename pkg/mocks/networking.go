@@ -5,12 +5,13 @@
 package mocks
 
 import (
-	"net/http"
-	"reflect"
+	http "net/http"
+	reflect "reflect"
 
-	"github.com/golang/mock/gomock"
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/auth"
+	gomock "github.com/golang/mock/gomock"
+	zerolog "github.com/rs/zerolog"
+	auth "github.com/snyk/go-application-framework/pkg/auth"
+	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -90,6 +91,20 @@ func (mr *MockNetworkAccessMockRecorder) GetAuthenticator() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuthenticator", reflect.TypeOf((*MockNetworkAccess)(nil).GetAuthenticator))
 }
 
+// GetConfiguration mocks base method.
+func (m *MockNetworkAccess) GetConfiguration() configuration.Configuration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfiguration")
+	ret0, _ := ret[0].(configuration.Configuration)
+	return ret0
+}
+
+// GetConfiguration indicates an expected call of GetConfiguration.
+func (mr *MockNetworkAccessMockRecorder) GetConfiguration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfiguration", reflect.TypeOf((*MockNetworkAccess)(nil).GetConfiguration))
+}
+
 // GetHttpClient mocks base method.
 func (m *MockNetworkAccess) GetHttpClient() *http.Client {
 	m.ctrl.T.Helper()
@@ -102,6 +117,20 @@ func (m *MockNetworkAccess) GetHttpClient() *http.Client {
 func (mr *MockNetworkAccessMockRecorder) GetHttpClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHttpClient", reflect.TypeOf((*MockNetworkAccess)(nil).GetHttpClient))
+}
+
+// GetLogger mocks base method.
+func (m *MockNetworkAccess) GetLogger() *zerolog.Logger {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLogger")
+	ret0, _ := ret[0].(*zerolog.Logger)
+	return ret0
+}
+
+// GetLogger indicates an expected call of GetLogger.
+func (mr *MockNetworkAccessMockRecorder) GetLogger() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogger", reflect.TypeOf((*MockNetworkAccess)(nil).GetLogger))
 }
 
 // GetRoundTripper mocks base method.
@@ -130,6 +159,18 @@ func (m *MockNetworkAccess) GetUnauthorizedHttpClient() *http.Client {
 func (mr *MockNetworkAccessMockRecorder) GetUnauthorizedHttpClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnauthorizedHttpClient", reflect.TypeOf((*MockNetworkAccess)(nil).GetUnauthorizedHttpClient))
+}
+
+// SetConfiguration mocks base method.
+func (m *MockNetworkAccess) SetConfiguration(configuration configuration.Configuration) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetConfiguration", configuration)
+}
+
+// SetConfiguration indicates an expected call of SetConfiguration.
+func (mr *MockNetworkAccessMockRecorder) SetConfiguration(configuration interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConfiguration", reflect.TypeOf((*MockNetworkAccess)(nil).SetConfiguration), configuration)
 }
 
 // SetLogger mocks base method.

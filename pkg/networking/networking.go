@@ -35,7 +35,11 @@ type NetworkAccess interface {
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
+
 	SetLogger(logger *zerolog.Logger)
+	SetConfiguration(configuration configuration.Configuration)
+	GetLogger() *zerolog.Logger
+	GetConfiguration() configuration.Configuration
 }
 
 // networkImpl is the default implementation of the NetworkAccess interface.
@@ -54,33 +58,40 @@ type defaultHeadersRoundTripper struct {
 }
 
 func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, response *http.Response, err error) {
-	if rt.networkAccess == nil || rt.networkAccess.logger == nil {
+	loglevel := zerolog.TraceLevel
+
+	if rt.networkAccess == nil || rt.networkAccess.logger == nil || rt.networkAccess.logger.GetLevel() != loglevel {
 		return
 	}
 
 	logHeader := http.Header{}
-	loglevel := zerolog.TraceLevel
-
-	if rt.networkAccess.logger.GetLevel() == loglevel {
-		for i, v := range request.Header {
-			for _, value := range v {
-				if strings.ToLower(i) == "authorization" || strings.ToLower(i) == "session-token" {
-					authHeader := strings.Split(value, " ")
-					if len(authHeader) == 2 && len(authHeader[1]) > 4 {
-						value = authHeader[0] + " " + authHeader[1][0:4] + "***"
-					} else {
-						value = "***"
-					}
+	for i, v := range request.Header {
+		for _, value := range v {
+			if strings.ToLower(i) == "authorization" || strings.ToLower(i) == "session-token" {
+				authHeader := strings.Split(value, " ")
+				if len(authHeader) == 2 && len(authHeader[1]) > 4 {
+					value = authHeader[0] + " " + authHeader[1][0:4] + "***"
+				} else {
+					value = "***"
 				}
-				logHeader.Add(i, value)
 			}
+			logHeader.Add(i, value)
 		}
 	}
 
-	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request: %s, %s, %v", request.Method, request.URL.String(), logHeader)
+	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request [%p]: %s %s", request, request.Method, request.URL.String())
+	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request [%p]: header: %v", request, logHeader)
 
 	if response != nil {
-		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response: %d, %v", response.StatusCode, response.Header)
+		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: %d %s", request, response.StatusCode, response.Status)
+		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: header: %v", request, response.Header)
+
+		// read body for error code
+		if response.StatusCode < 200 || 299 < response.StatusCode {
+			if bodyBytes, err := io.ReadAll(response.Body); err == nil {
+				rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: body: %v", request, string(bodyBytes))
+			}
+		}
 	}
 
 	if err != nil {
@@ -203,4 +214,16 @@ func (n *networkImpl) GetAuthenticator() auth.Authenticator {
 
 func (n *networkImpl) SetLogger(logger *zerolog.Logger) {
 	n.logger = logger
+}
+
+func (n *networkImpl) SetConfiguration(configuration configuration.Configuration) {
+	n.config = configuration
+}
+
+func (n *networkImpl) GetLogger() *zerolog.Logger {
+	return n.logger
+}
+
+func (n *networkImpl) GetConfiguration() configuration.Configuration {
+	return n.config
 }

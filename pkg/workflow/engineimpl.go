@@ -35,10 +35,18 @@ func (e *EngineImpl) GetLogger() *zerolog.Logger {
 
 func (e *EngineImpl) SetLogger(logger *zerolog.Logger) {
 	e.logger = logger
+
+	if e.networkAccess != nil {
+		e.networkAccess.SetLogger(logger)
+	}
 }
 
 func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
 	e.config = config
+
+	if e.networkAccess != nil {
+		e.networkAccess.SetConfiguration(config)
+	}
 }
 
 // NewWorkflowIdentifier creates a new workflow identifier represented in parsed URL format.
