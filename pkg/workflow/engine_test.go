@@ -5,9 +5,11 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 var expectedDataIdentifier []Identifier
@@ -131,4 +133,27 @@ func Test_EngineRegisterErrorHandling(t *testing.T) {
 	entry, err = engine.Register(&url.URL{}, ConfigurationOptionsFromFlagset(flagset), nil)
 	assert.NotNil(t, err)
 	assert.Nil(t, entry)
+}
+
+func Test_Engine_SetterGlobalValues(t *testing.T) {
+	config := configuration.NewInMemory()
+	config2 := configuration.NewInMemory()
+	logger2 := &zerolog.Logger{}
+
+	engine := NewWorkFlowEngine(config)
+
+	err := engine.Init()
+	logger := engine.GetLogger()
+	assert.Nil(t, err)
+
+	engine.SetConfiguration(config2)
+	assert.Equal(t, config2, engine.GetConfiguration())
+	assert.Equal(t, config2, engine.GetNetworkAccess().GetConfiguration())
+	assert.NotEqual(t, config, engine.GetConfiguration())
+
+	engine.SetLogger(logger2)
+	assert.Equal(t, logger2, engine.GetLogger())
+	assert.Equal(t, logger2, engine.GetNetworkAccess().GetLogger())
+	assert.NotEqual(t, logger, engine.GetLogger())
+
 }
