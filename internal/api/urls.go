@@ -1,7 +1,7 @@
 package api
 
 import (
-	"net/netip"
+	"net"
 	"net/url"
 	"regexp"
 	"strings"
@@ -13,28 +13,32 @@ const (
 	api_pattern    string = "^api\\."
 	api_prefix_dot string = API_PREFIX + "."
 	app_prefix     string = "app"
-	port_suffix    string = ":[0-9]*$"
-	stella_host    string = "stella:8000"
 )
 
-func isLocalhost(host string) bool {
-	if strings.HasPrefix(host, "localhost") {
+func isImmutableHost(host string) bool {
+	knownHostNames := map[string]bool{
+		"localhost": true,
+		"stella":    true,
+	}
+
+	// get rid of port
+	portlessHost := strings.Split(host, ":")[0]
+
+	if knownHostNames[portlessHost] {
 		return true
 	}
 
-	hostnameRegexp, _ := regexp.Compile(port_suffix)
-	host = hostnameRegexp.ReplaceAllString(host, "")
-
-	addr, err := netip.ParseAddr(host)
-	if err != nil {
-		return false
+	// ipv6 hosts must start with "["
+	if strings.HasPrefix(host, "[") {
+		return true
 	}
 
-	return addr.IsLoopback()
-}
+	_, _, err := net.ParseCIDR(portlessHost + "/24")
+	if err == nil {
+		return true
+	}
 
-func isUsingStella (host string) bool {
-	return strings.HasPrefix(host, stella_host)
+	return false
 }
 
 func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
@@ -51,7 +55,7 @@ func GetCanonicalApiUrl(url url.URL) (string, error) {
 	result := ""
 
 	// for localhost we don't change the host, since there are no subdomains
-	if isLocalhost(url.Host) || isUsingStella(url.Host) {
+	if isImmutableHost(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
 	} else {
 		appRegexp, _ := regexp.Compile(app_pattern)

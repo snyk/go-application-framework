@@ -48,6 +48,10 @@ func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
 		"https://localhost/api",
 		"http://alpha:omega@localhost:9000",
 		"http://stella:8000",
+		"http://192.168.2.1/v1",
+		"http://192.168.2.1:8080/v1",
+		"http://[2001:db8::]/v1",
+		"http://[2001:db8::]:8080/v1",
 	}
 
 	expectedList := []string{
@@ -57,6 +61,10 @@ func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
 		"https://localhost/api",
 		"http://alpha:omega@localhost:9000",
 		"http://stella:8000",
+		"http://192.168.2.1",
+		"http://192.168.2.1:8080",
+		"http://[2001:db8::]",
+		"http://[2001:db8::]:8080",
 	}
 
 	for i, input := range inputList {
@@ -84,15 +92,15 @@ func Test_DeriveAppUrl(t *testing.T) {
 	}
 }
 
-func Test_IsLocalhost(t *testing.T) {
-	hostlistLocalhost := []string{"localhost", "localhost:3123", "127.0.0.1", "127.0.0.1:437", "::1:3212"}
-	hostlistNonLocalhost := []string{"snyk.io", "fe80::1414:d7bc:63a:1fda"}
+func Test_isImmutableHost(t *testing.T) {
+	hostlistLocalhost := []string{"localhost", "localhost:3123", "127.0.0.1", "127.0.0.1:437", "[::1]:3212"}
+	hostlistNonLocalhost := []string{"snyk.io"}
 
 	for _, host := range hostlistLocalhost {
-		assert.True(t, isLocalhost(host))
+		assert.True(t, isImmutableHost(host))
 	}
 
 	for _, host := range hostlistNonLocalhost {
-		assert.False(t, isLocalhost(host))
+		assert.False(t, isImmutableHost(host), host)
 	}
 }
