@@ -141,29 +141,10 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	testInitReportAnalyticsWorkflow(ctrl)
 
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
-		// Test request parameters
-		require.Equal(t, "/rest/api/orgs/"+orgId+"/analytics", req.URL.String())
-		require.Equal(t, "POST", req.Method)
-		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
-		body, err := io.ReadAll(req.Body)
-		require.NoError(t, err)
-		require.Equal(t, requestPayload, string(body))
-
-		return &http.Response{
-			StatusCode: 201,
-			// Send response to be tested
-			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
-			// Must be set to non-nil value or it panics
-			Header: make(http.Header),
-		}
-	})
-
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
-	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.Error(t, err)
@@ -186,29 +167,10 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	testInitReportAnalyticsWorkflow(ctrl)
 
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
-		// Test request parameters
-		require.Equal(t, "/rest/api/orgs/"+orgId+"/analytics", req.URL.String())
-		require.Equal(t, "POST", req.Method)
-		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
-		body, err := io.ReadAll(req.Body)
-		require.NoError(t, err)
-		require.Equal(t, requestPayload, string(body))
-
-		return &http.Response{
-			StatusCode: 201,
-			// Send response to be tested
-			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
-			// Must be set to non-nil value or it panics
-			Header: make(http.Header),
-		}
-	})
-
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
-	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.Error(t, err)
