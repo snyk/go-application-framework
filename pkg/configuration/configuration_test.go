@@ -278,3 +278,36 @@ func TestNewInMemory_shouldNotBreakWhenTryingToPersist(t *testing.T) {
 
 	assert.Equal(t, config.Get(key), keyValue)
 }
+
+func Test_DefaultValuehandling(t *testing.T) {
+	keyNoDefault := "name"
+	keyWithDefault := "last name"
+	valueWithDefault := "default"
+	valueExplicitlySet := "explicitly set value"
+
+	config := NewInMemory()
+	config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) interface{} {
+		if existingValue != nil {
+			return existingValue
+		}
+
+		return valueWithDefault
+	})
+
+	// access value that has a default value
+	actualValue, actualWasSet := config.GetAndIsSet(keyWithDefault)
+	assert.Equal(t, valueWithDefault, actualValue.(string))
+	assert.False(t, actualWasSet)
+
+	// access value that has a default value but is explicitly set
+	config.Set(keyWithDefault, valueExplicitlySet)
+	actualValue, actualWasSet = config.GetAndIsSet(keyWithDefault)
+	assert.Equal(t, valueExplicitlySet, actualValue.(string))
+	assert.True(t, actualWasSet)
+
+	// access value that has NO default value
+	actualValue, actualWasSet = config.GetAndIsSet(keyNoDefault)
+	assert.Nil(t, actualValue)
+	assert.False(t, actualWasSet)
+
+}
