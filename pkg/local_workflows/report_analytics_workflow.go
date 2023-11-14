@@ -48,20 +48,17 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 		if validationErr != nil {
 			err := fmt.Errorf("error validating input at index %d: %w", i, validationErr)
-			logger.Printf("%v\n", err)
 			return nil, err
 		}
 
 		if !result.Valid() {
 			err := fmt.Errorf("validation failed for input at index %d: %v", i, result.Errors())
-			logger.Printf("%v\n", err)
 			return nil, err
 		}
 
 		callErr := callEndpoint(invocationCtx, input, url)
 		if callErr != nil {
 			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
-			logger.Printf("%v\n", err)
 			return nil, err
 		}
 
