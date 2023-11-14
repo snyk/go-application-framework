@@ -3,7 +3,6 @@ package localworkflows
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -45,7 +44,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 		return &http.Response{
 			StatusCode: 201,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(requestPayload)),
+			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -81,7 +80,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 			// error code!
 			StatusCode: 500,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(requestPayload)),
+			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -142,33 +141,41 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	testInitReportAnalyticsWorkflow(ctrl)
 
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
-		// Test request parameters
-		require.Equal(t, "/rest/api/orgs/"+orgId+"/analytics", req.URL.String())
-		require.Equal(t, "POST", req.Method)
-		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
-		body, err := io.ReadAll(req.Body)
-		require.NoError(t, err)
-		require.Equal(t, requestPayload, string(body))
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
 
-		return &http.Response{
-			StatusCode: 201,
-			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(requestPayload)),
-			// Must be set to non-nil value or it panics
-			Header: make(http.Header),
-		}
-	})
+	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
+	require.Error(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testing.T) {
+	// setup
+	logger := log.New(os.Stderr, "test", 0)
+	config := configuration.New()
+	orgId := "orgId"
+
+	config.Set(configuration.ORGANIZATION, orgId)
+	requestPayload := ""
+
+	input := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(requestPayload))
+
+	// setup mocks
+	ctrl := gomock.NewController(t)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	testInitReportAnalyticsWorkflow(ctrl)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
-	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.Error(t, err)
 }
+
 func testGetScanDonePayload(payload string) workflow.Data {
 	return workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(payload))
 }

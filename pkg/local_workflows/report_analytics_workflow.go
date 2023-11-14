@@ -3,13 +3,14 @@ package localworkflows
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/xeipuuv/gojsonschema"
-	"io"
-	"net/http"
 )
 
 const reportAnalyticsWorkflowName = "reportAnalytics"
@@ -32,7 +33,7 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 }
 
 // reportAnalyticsEntrypoint is the entry point for the reportAnalytics workflow.
-func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputData []workflow.Data) (output []workflow.Data, err error) {
+func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputData []workflow.Data) ([]workflow.Data, error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetLogger()
@@ -41,25 +42,29 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	url := fmt.Sprintf("%s/rest/api/orgs/%s/analytics", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
 
 	for i, input := range inputData {
-		logger.Println(fmt.Sprintf("%s: processing element %d", reportAnalyticsWorkflowName, i))
+		logger.Printf(fmt.Sprintf("%s: processing element %d", reportAnalyticsWorkflowName, i))
 		documentLoader := gojsonschema.NewBytesLoader(input.GetPayload().([]byte))
-		result, err := gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
+		result, validationErr := gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
 
-		if err != nil {
-			logger.Printf("Error validating input: %v\n", err)
-			break
+		if validationErr != nil {
+			err := fmt.Errorf("error validating input at index %d: %w", i, validationErr)
+			return nil, err
 		}
 
 		if !result.Valid() {
-			return nil, fmt.Errorf("Error validating input: %v\n", result.Errors())
+			err := fmt.Errorf("validation failed for input at index %d: %v", i, result.Errors())
+			return nil, err
 		}
 
-		err = callEndpoint(invocationCtx, input, url)
-		if err != nil {
-			return nil, fmt.Errorf("Error calling endpoint: %v\n", err)
+		callErr := callEndpoint(invocationCtx, input, url)
+		if callErr != nil {
+			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
+			return nil, err
 		}
+
 	}
-	return nil, err
+	logger.Println(reportAnalyticsWorkflowName + " workflow end")
+	return nil, nil
 }
 
 func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
