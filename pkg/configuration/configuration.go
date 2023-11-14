@@ -27,6 +27,7 @@ type Configuration interface {
 
 	Set(key string, value interface{})
 	Get(key string) interface{}
+	GetAndIsSet(key string) (interface{}, bool)
 	GetString(key string) string
 	GetStringSlice(key string) []string
 	GetBool(key string) bool
@@ -222,15 +223,22 @@ func (ev *extendedViper) get(key string) interface{} {
 	return result
 }
 
-// Get returns a configuration value.
-func (ev *extendedViper) Get(key string) interface{} {
+// get config value and boolean value that indicates if the returned value is explicitely set or not.
+func (ev *extendedViper) GetAndIsSet(key string) (interface{}, bool) {
 	// use synchronized get()
-	result := ev.get(key)
+	value := ev.get(key)
+	wasSet := value != nil
 
 	if ev.defaultValues[key] != nil {
-		result = ev.defaultValues[key](result)
+		value = ev.defaultValues[key](value)
 	}
 
+	return value, wasSet
+}
+
+// Get returns a configuration value.
+func (ev *extendedViper) Get(key string) interface{} {
+	result, _ := ev.GetAndIsSet(key)
 	return result
 }
 

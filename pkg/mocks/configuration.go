@@ -130,6 +130,21 @@ func (mr *MockConfigurationMockRecorder) GetAlternativeKeys(key interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlternativeKeys", reflect.TypeOf((*MockConfiguration)(nil).GetAlternativeKeys), key)
 }
 
+// GetAndIsSet mocks base method.
+func (m *MockConfiguration) GetAndIsSet(key string) (interface{}, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAndIsSet", key)
+	ret0, _ := ret[0].(interface{})
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetAndIsSet indicates an expected call of GetAndIsSet.
+func (mr *MockConfigurationMockRecorder) GetAndIsSet(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAndIsSet", reflect.TypeOf((*MockConfiguration)(nil).GetAndIsSet), key)
+}
+
 // GetBool mocks base method.
 func (m *MockConfiguration) GetBool(key string) bool {
 	m.ctrl.T.Helper()
