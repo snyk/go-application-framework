@@ -3,7 +3,6 @@ package localworkflows
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -45,7 +44,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 		return &http.Response{
 			StatusCode: 201,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(requestPayload)),
+			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -81,7 +80,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 			// error code!
 			StatusCode: 500,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(requestPayload)),
+			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -154,7 +153,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T)
 		return &http.Response{
 			StatusCode: 201,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(requestPayload)),
+			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -199,7 +198,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 		return &http.Response{
 			StatusCode: 201,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(requestPayload)),
+			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
