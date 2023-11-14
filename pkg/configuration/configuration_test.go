@@ -280,34 +280,49 @@ func TestNewInMemory_shouldNotBreakWhenTryingToPersist(t *testing.T) {
 }
 
 func Test_DefaultValuehandling(t *testing.T) {
-	keyNoDefault := "name"
-	keyWithDefault := "last name"
-	valueWithDefault := "default"
-	valueExplicitlySet := "explicitly set value"
 
-	config := NewInMemory()
-	config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) interface{} {
-		if existingValue != nil {
-			return existingValue
-		}
+	t.Run("set value in code", func(t *testing.T) {
+		keyNoDefault := "name"
+		keyWithDefault := "last name"
+		valueWithDefault := "default"
+		valueExplicitlySet := "explicitly set value"
 
-		return valueWithDefault
+		config := NewInMemory()
+		config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) interface{} {
+			if existingValue != nil {
+				return existingValue
+			}
+
+			return valueWithDefault
+		})
+
+		// access value that has a default value
+		actualValue, actualWasSet := config.GetAndIsSet(keyWithDefault)
+		assert.Equal(t, valueWithDefault, actualValue.(string))
+		assert.False(t, actualWasSet)
+
+		// access value that has a default value but is explicitly set
+		config.Set(keyWithDefault, valueExplicitlySet)
+		actualValue, actualWasSet = config.GetAndIsSet(keyWithDefault)
+		assert.Equal(t, valueExplicitlySet, actualValue.(string))
+		assert.True(t, actualWasSet)
+
+		// access value that has NO default value
+		actualValue, actualWasSet = config.GetAndIsSet(keyNoDefault)
+		assert.Nil(t, actualValue)
+		assert.False(t, actualWasSet)
 	})
 
-	// access value that has a default value
-	actualValue, actualWasSet := config.GetAndIsSet(keyWithDefault)
-	assert.Equal(t, valueWithDefault, actualValue.(string))
-	assert.False(t, actualWasSet)
+	t.Run("set value as env", func(t *testing.T) {
+		key := "SNYK_CFG_ORG"
+		value := "hello"
+		t.Setenv(key, value)
+		config := NewInMemory()
+		config.AddAlternativeKeys(ORGANIZATION, []string{"SNYK_CFG_ORG", "snyk_cfg_org"})
 
-	// access value that has a default value but is explicitly set
-	config.Set(keyWithDefault, valueExplicitlySet)
-	actualValue, actualWasSet = config.GetAndIsSet(keyWithDefault)
-	assert.Equal(t, valueExplicitlySet, actualValue.(string))
-	assert.True(t, actualWasSet)
-
-	// access value that has NO default value
-	actualValue, actualWasSet = config.GetAndIsSet(keyNoDefault)
-	assert.Nil(t, actualValue)
-	assert.False(t, actualWasSet)
+		actual, wasSet := config.GetAndIsSet(ORGANIZATION)
+		assert.Equal(t, value, actual)
+		assert.True(t, wasSet)
+	})
 
 }
