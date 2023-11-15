@@ -226,7 +226,7 @@ func testGetScanDonePayloadString() string {
 
 func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 	engine := mocks.NewMockEngine(ctrl)
-	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes().Return(&workflow.EntryImpl{}, nil)
 	return InitReportAnalyticsWorkflow(engine)
 }
 
