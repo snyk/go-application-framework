@@ -234,6 +234,10 @@ func Test_ConfigurationClone(t *testing.T) {
 			originalValue := config.Get(key)
 			clonedValue := clonedConfig.Get(key)
 			assert.Equal(t, originalValue, clonedValue)
+
+			originalValueIsSet := config.IsSet(key)
+			clonedValueIsSet := clonedConfig.IsSet(key)
+			assert.Equal(t, originalValueIsSet, clonedValueIsSet)
 		}
 	}
 

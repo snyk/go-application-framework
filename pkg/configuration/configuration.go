@@ -54,6 +54,7 @@ type extendedViper struct {
 	alternativeKeys map[string][]string
 	defaultValues   map[string]DefaultValueFunction
 	configType      configType
+	flagsets        []*pflag.FlagSet
 
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
@@ -187,6 +188,10 @@ func (ev *extendedViper) Clone() Configuration {
 
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
+	}
+
+	for _, v := range ev.flagsets {
+		clone.AddFlagSet(v)
 	}
 
 	return clone
@@ -333,6 +338,7 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 
 // AddFlagSet adds a flag set to the configuration.
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
+	ev.flagsets = append(ev.flagsets, flagset)
 	return ev.viper.BindPFlags(flagset)
 }
 
