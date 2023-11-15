@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,7 +23,7 @@ func prepareConfigstore(content string) error {
 	}
 
 	// write content to file
-	err = ioutil.WriteFile(file, []byte(content), 0755)
+	err = os.WriteFile(file, []byte(content), 0755)
 	return err
 }
 
@@ -297,36 +296,55 @@ func Test_DefaultValuehandling(t *testing.T) {
 		})
 
 		// access value that has a default value
-		actualValue, actualWasSet := config.GetAndIsSet(keyWithDefault)
-		assert.Equal(t, valueWithDefault, actualValue.(string))
+		actualValue := config.GetString(keyWithDefault)
+		actualWasSet := config.IsSet(keyWithDefault)
+		assert.Equal(t, valueWithDefault, actualValue)
 		assert.False(t, actualWasSet)
 
 		// access value that has a default value but is explicitly set
 		config.Set(keyWithDefault, valueExplicitlySet)
-		actualValue, actualWasSet = config.GetAndIsSet(keyWithDefault)
-		assert.Equal(t, valueExplicitlySet, actualValue.(string))
+		actualValue = config.GetString(keyWithDefault)
+		actualWasSet = config.IsSet(keyWithDefault)
+		assert.Equal(t, valueExplicitlySet, actualValue)
 		assert.True(t, actualWasSet)
 
 		// access value that has NO default value
-		actualValue, actualWasSet = config.GetAndIsSet(keyNoDefault)
-		assert.Nil(t, actualValue)
+		actualValueI := config.Get(keyNoDefault)
+		actualWasSet = config.IsSet(keyNoDefault)
+		assert.Nil(t, actualValueI)
 		assert.False(t, actualWasSet)
 	})
 
 	t.Run("set value as env", func(t *testing.T) {
 		key := "SNYK_CFG_ORG"
-		value := "hello"
+		expected := "hello"
+		defaultValue := "something"
 		flagset := pflag.NewFlagSet("test", pflag.ExitOnError)
 		flagset.String(ORGANIZATION, "", "org")
 
-		t.Setenv(key, value)
 		config := NewInMemory()
 		config.AddFlagSet(flagset)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
+		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) interface{} {
+			if existingValue != nil {
+				return existingValue
+			}
+			return defaultValue
+		})
 
-		actual, wasSet := config.GetAndIsSet(ORGANIZATION)
-		assert.Equal(t, value, actual)
+		// not set
+		actual := config.GetString(ORGANIZATION)
+		wasSet := config.IsSet(ORGANIZATION)
+		assert.Equal(t, defaultValue, actual)
+		assert.False(t, wasSet)
+
+		// set via env var
+		t.Setenv(key, expected)
+		actual = config.GetString(ORGANIZATION)
+		wasSet = config.IsSet(ORGANIZATION)
+		assert.Equal(t, expected, actual)
 		assert.True(t, wasSet)
+
 	})
 
 }
