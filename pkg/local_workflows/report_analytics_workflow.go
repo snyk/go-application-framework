@@ -34,7 +34,10 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneEventSchema)
 
 	// register workflow with engine
-	_, err := engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(params), reportAnalyticsEntrypoint)
+	result, err := engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(params), reportAnalyticsEntrypoint)
+
+	// don't display in help
+	result.SetVisibility(false)
 	return err
 }
 
