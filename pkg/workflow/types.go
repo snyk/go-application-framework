@@ -18,6 +18,10 @@ import (
 type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
 type ExtensionInit func(engine Engine) error
+type RuntimeInfo struct {
+	AppName    string
+	AppVersion string
+}
 
 // interfaces
 
@@ -43,6 +47,7 @@ type InvocationContext interface {
 	GetLogger() *log.Logger
 	GetEnhancedLogger() *zerolog.Logger
 	GetUserInterface() ui.UserInterface
+	GetRuntimeInfo() RuntimeInfo
 }
 
 // ConfigurationOptions is an interface that can be implemented by any type that can be used to pass configuration options to a workflow.
@@ -77,4 +82,6 @@ type Engine interface {
 	GetLogger() *zerolog.Logger
 	GetUserInterface() ui.UserInterface
 	SetUserInterface(ui ui.UserInterface)
+	GetRuntimeInfo() RuntimeInfo
+	SetRuntimeInfo(ri RuntimeInfo)
 }

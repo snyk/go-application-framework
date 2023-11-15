@@ -42,3 +42,12 @@ func WithInitializers(initializers ...workflow.ExtensionInit) Opts {
 		}
 	}
 }
+
+func WithRuntimeInfo(name, version string) Opts {
+	return func(engine workflow.Engine) {
+		engine.SetRuntimeInfo(workflow.RuntimeInfo{
+			AppName:    name,
+			AppVersion: version,
+		})
+	}
+}

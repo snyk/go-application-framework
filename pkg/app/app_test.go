@@ -146,6 +146,13 @@ func Test_CreateAppEngineWithConfigAndLoggerOptions(t *testing.T) {
 	assert.Equal(t, config, engine.GetConfiguration())
 }
 
+func Test_CreateAppEngineWithRuntimeInfo(t *testing.T) {
+	engine := CreateAppEngineWithOptions(WithRuntimeInfo("some-app", "some.version"))
+
+	assert.NotNil(t, engine)
+	assert.Equal(t, workflow.RuntimeInfo{AppName: "some-app", AppVersion: "some.version"}, engine.GetRuntimeInfo())
+}
+
 func Test_initConfiguration_existingValueOfOAuthFFRespected(t *testing.T) {
 	existingValue := false
 	endpoint := "https://snykgov.io"

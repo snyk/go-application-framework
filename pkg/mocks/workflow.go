@@ -254,6 +254,20 @@ func (mr *MockInvocationContextMockRecorder) GetNetworkAccess() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkAccess", reflect.TypeOf((*MockInvocationContext)(nil).GetNetworkAccess))
 }
 
+// GetRuntimeInfo mocks base method.
+func (m *MockInvocationContext) GetRuntimeInfo() workflow.RuntimeInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRuntimeInfo")
+	ret0, _ := ret[0].(workflow.RuntimeInfo)
+	return ret0
+}
+
+// GetRuntimeInfo indicates an expected call of GetRuntimeInfo.
+func (mr *MockInvocationContextMockRecorder) GetRuntimeInfo() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRuntimeInfo", reflect.TypeOf((*MockInvocationContext)(nil).GetRuntimeInfo))
+}
+
 // GetUserInterface mocks base method.
 func (m *MockInvocationContext) GetUserInterface() ui.UserInterface {
 	m.ctrl.T.Helper()
@@ -473,6 +487,20 @@ func (mr *MockEngineMockRecorder) GetNetworkAccess() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkAccess", reflect.TypeOf((*MockEngine)(nil).GetNetworkAccess))
 }
 
+// GetRuntimeInfo mocks base method.
+func (m *MockEngine) GetRuntimeInfo() workflow.RuntimeInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRuntimeInfo")
+	ret0, _ := ret[0].(workflow.RuntimeInfo)
+	return ret0
+}
+
+// GetRuntimeInfo indicates an expected call of GetRuntimeInfo.
+func (mr *MockEngineMockRecorder) GetRuntimeInfo() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRuntimeInfo", reflect.TypeOf((*MockEngine)(nil).GetRuntimeInfo))
+}
+
 // GetUserInterface mocks base method.
 func (m *MockEngine) GetUserInterface() ui.UserInterface {
 	m.ctrl.T.Helper()
@@ -627,6 +655,18 @@ func (m *MockEngine) SetLogger(logger *zerolog.Logger) {
 func (mr *MockEngineMockRecorder) SetLogger(logger interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLogger", reflect.TypeOf((*MockEngine)(nil).SetLogger), logger)
+}
+
+// SetRuntimeInfo mocks base method.
+func (m *MockEngine) SetRuntimeInfo(ri workflow.RuntimeInfo) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetRuntimeInfo", ri)
+}
+
+// SetRuntimeInfo indicates an expected call of SetRuntimeInfo.
+func (mr *MockEngineMockRecorder) SetRuntimeInfo(ri interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRuntimeInfo", reflect.TypeOf((*MockEngine)(nil).SetRuntimeInfo), ri)
 }
 
 // SetUserInterface mocks base method.

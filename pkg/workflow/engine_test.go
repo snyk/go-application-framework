@@ -155,5 +155,14 @@ func Test_Engine_SetterGlobalValues(t *testing.T) {
 	assert.Equal(t, logger2, engine.GetLogger())
 	assert.Equal(t, logger2, engine.GetNetworkAccess().GetLogger())
 	assert.NotEqual(t, logger, engine.GetLogger())
+}
 
+func Test_Engine_SetterRuntimeInfo(t *testing.T) {
+	ri := RuntimeInfo{"some-app", "some.version"}
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	engine.SetRuntimeInfo(ri)
+
+	assert.Equal(t, ri, engine.GetRuntimeInfo())
 }

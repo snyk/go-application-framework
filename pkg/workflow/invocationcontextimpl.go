@@ -42,6 +42,8 @@ type invocationContextImpl struct {
 	ui             ui.UserInterface
 }
 
+var _ InvocationContext = (*invocationContextImpl)(nil)
+
 // GetWorkflowIdentifier returns the identifier of the workflow that is being invoked.
 func (ici *invocationContextImpl) GetWorkflowIdentifier() Identifier {
 	return ici.WorkflowID
@@ -79,4 +81,8 @@ func (ici *invocationContextImpl) GetEnhancedLogger() *zerolog.Logger {
 
 func (ici *invocationContextImpl) GetUserInterface() ui.UserInterface {
 	return ici.ui
+}
+
+func (ici *invocationContextImpl) GetRuntimeInfo() RuntimeInfo {
+	return ici.WorkflowEngine.GetRuntimeInfo()
 }
