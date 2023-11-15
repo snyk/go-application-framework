@@ -30,25 +30,9 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	testInitReportAnalyticsWorkflow(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
-		// Test request parameters
-		require.Equal(t, "/rest/api/orgs/"+orgId+"/analytics", req.URL.String())
-		require.Equal(t, "POST", req.Method)
-		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
-		body, err := io.ReadAll(req.Body)
-		require.NoError(t, err)
-		require.Equal(t, requestPayload, string(body))
-
-		return &http.Response{
-			StatusCode: 201,
-			// Send response to be tested
-			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
-			// Must be set to non-nil value or it panics
-			Header: make(http.Header),
-		}
-	})
+	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -59,6 +43,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testGetScanDonePayload(requestPayload)})
 	require.NoError(t, err)
 }
+
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *testing.T) {
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
@@ -73,7 +58,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	testInitReportAnalyticsWorkflow(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		return &http.Response{
@@ -95,6 +80,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testGetScanDonePayload(requestPayload)})
 	require.Error(t, err)
 }
+
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.T) {
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
@@ -109,7 +95,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	testInitReportAnalyticsWorkflow(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	mockClient := newErrorProducingTestClient(func(req *http.Request) *http.Response { return nil })
 
@@ -139,7 +125,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T)
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	testInitReportAnalyticsWorkflow(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -148,6 +134,34 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInput(t *testing.T)
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.Error(t, err)
+}
+
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
+	// setup
+	logger := log.New(os.Stderr, "test", 0)
+	config := configuration.New()
+	requestPayload := testGetScanDonePayloadString()
+	config.Set("inputData", requestPayload)
+	orgId := "orgId"
+
+	config.Set(configuration.ORGANIZATION, orgId)
+
+	// setup mocks
+	ctrl := gomock.NewController(t)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
+	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
+
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
+
+	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{})
+
+	require.NoError(t, err)
 }
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testing.T) {
@@ -165,7 +179,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	testInitReportAnalyticsWorkflow(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -210,8 +224,29 @@ func testGetScanDonePayloadString() string {
 	}`
 }
 
-func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) {
+func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 	engine := mocks.NewMockEngine(ctrl)
 	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-	InitReportAnalyticsWorkflow(engine)
+	return InitReportAnalyticsWorkflow(engine)
+}
+
+func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
+	mockClient := newTestClient(func(req *http.Request) *http.Response {
+		// Test request parameters
+		require.Equal(t, "/rest/api/orgs/"+orgId+"/analytics", req.URL.String())
+		require.Equal(t, "POST", req.Method)
+		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+		body, err := io.ReadAll(req.Body)
+		require.NoError(t, err)
+		require.Equal(t, requestPayload, string(body))
+
+		return &http.Response{
+			StatusCode: 201,
+			// Send response to be tested
+			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
+			// Must be set to non-nil value or it panics
+			Header: make(http.Header),
+		}
+	})
+	return mockClient
 }
