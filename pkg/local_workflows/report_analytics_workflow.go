@@ -52,7 +52,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
-		logger.Printf(fmt.Sprintf("%s: adding command line input", reportAnalyticsWorkflowName))
+		logger.Printf("adding command line input")
 		data := workflow.NewData(
 			workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName),
 			"application/json",
@@ -62,7 +62,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	}
 
 	for i, input := range inputData {
-		logger.Printf(fmt.Sprintf("%s: processing element %d", reportAnalyticsWorkflowName, i))
+		logger.Printf(fmt.Sprintf("processing element %d", i))
 		documentLoader := gojsonschema.NewBytesLoader(input.GetPayload().([]byte))
 		result, validationErr := gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
 
