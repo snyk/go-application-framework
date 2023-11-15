@@ -27,7 +27,7 @@ type Configuration interface {
 
 	Set(key string, value interface{})
 	Get(key string) interface{}
-	GetAndIsSet(key string) (interface{}, bool)
+	IsSet(key string) bool
 	GetString(key string) string
 	GetStringSlice(key string) []string
 	GetBool(key string) bool
@@ -54,6 +54,7 @@ type extendedViper struct {
 	alternativeKeys map[string][]string
 	defaultValues   map[string]DefaultValueFunction
 	configType      configType
+	flagsets        []*pflag.FlagSet
 
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
@@ -175,8 +176,10 @@ func (ev *extendedViper) Clone() Configuration {
 	clone.SetStorage(ev.storage)
 	keys := ev.viper.AllKeys()
 	for i := range keys {
-		value := ev.viper.Get(keys[i])
-		clone.Set(keys[i], value)
+		if isSet := ev.viper.IsSet(keys[i]); isSet {
+			value := ev.viper.Get(keys[i])
+			clone.Set(keys[i], value)
+		}
 	}
 
 	for k, v := range ev.defaultValues {
@@ -185,6 +188,10 @@ func (ev *extendedViper) Clone() Configuration {
 
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
+	}
+
+	for _, v := range ev.flagsets {
+		clone.AddFlagSet(v)
 	}
 
 	return clone
@@ -209,37 +216,39 @@ func (ev *extendedViper) get(key string) interface{} {
 
 	// try to lookup given key
 	result := ev.viper.Get(key)
+	isSet := ev.viper.IsSet(key)
 
 	// try to lookup alternative keys if available
-	i := 0
-	altKeys := ev.alternativeKeys[key]
-	altKeysSize := len(altKeys)
-	for result == nil && i < altKeysSize {
-		tempKey := altKeys[i]
-		result = ev.viper.Get(tempKey)
-		i++
+	if !isSet {
+		for _, altKey := range ev.alternativeKeys[key] {
+			result = ev.viper.Get(altKey)
+		}
 	}
 
 	return result
 }
 
-// get config value and boolean value that indicates if the returned value is explicitely set or not.
-func (ev *extendedViper) GetAndIsSet(key string) (interface{}, bool) {
+// returns true if a value for the given key was explicitly set
+func (ev *extendedViper) IsSet(key string) bool {
+	isSet := ev.viper.IsSet(key)
+	if !isSet {
+		for _, altKey := range ev.alternativeKeys[key] {
+			isSet = ev.viper.IsSet(altKey)
+		}
+	}
+	return isSet
+}
+
+// Get returns a configuration value.
+func (ev *extendedViper) Get(key string) interface{} {
 	// use synchronized get()
 	value := ev.get(key)
-	wasSet := value != nil
 
 	if ev.defaultValues[key] != nil {
 		value = ev.defaultValues[key](value)
 	}
 
-	return value, wasSet
-}
-
-// Get returns a configuration value.
-func (ev *extendedViper) Get(key string) interface{} {
-	result, _ := ev.GetAndIsSet(key)
-	return result
+	return value
 }
 
 // GetString returns a configuration value as string.
@@ -329,6 +338,7 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 
 // AddFlagSet adds a flag set to the configuration.
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
+	ev.flagsets = append(ev.flagsets, flagset)
 	return ev.viper.BindPFlags(flagset)
 }
 

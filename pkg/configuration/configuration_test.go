@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,7 +23,7 @@ func prepareConfigstore(content string) error {
 	}
 
 	// write content to file
-	err = ioutil.WriteFile(file, []byte(content), 0755)
+	err = os.WriteFile(file, []byte(content), 0755)
 	return err
 }
 
@@ -235,6 +234,10 @@ func Test_ConfigurationClone(t *testing.T) {
 			originalValue := config.Get(key)
 			clonedValue := clonedConfig.Get(key)
 			assert.Equal(t, originalValue, clonedValue)
+
+			originalValueIsSet := config.IsSet(key)
+			clonedValueIsSet := clonedConfig.IsSet(key)
+			assert.Equal(t, originalValueIsSet, clonedValueIsSet)
 		}
 	}
 
@@ -280,34 +283,72 @@ func TestNewInMemory_shouldNotBreakWhenTryingToPersist(t *testing.T) {
 }
 
 func Test_DefaultValuehandling(t *testing.T) {
-	keyNoDefault := "name"
-	keyWithDefault := "last name"
-	valueWithDefault := "default"
-	valueExplicitlySet := "explicitly set value"
 
-	config := NewInMemory()
-	config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) interface{} {
-		if existingValue != nil {
-			return existingValue
-		}
+	t.Run("set value in code", func(t *testing.T) {
+		keyNoDefault := "name"
+		keyWithDefault := "last name"
+		valueWithDefault := "default"
+		valueExplicitlySet := "explicitly set value"
 
-		return valueWithDefault
+		config := NewInMemory()
+		config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) interface{} {
+			if existingValue != nil {
+				return existingValue
+			}
+
+			return valueWithDefault
+		})
+
+		// access value that has a default value
+		actualValue := config.GetString(keyWithDefault)
+		actualWasSet := config.IsSet(keyWithDefault)
+		assert.Equal(t, valueWithDefault, actualValue)
+		assert.False(t, actualWasSet)
+
+		// access value that has a default value but is explicitly set
+		config.Set(keyWithDefault, valueExplicitlySet)
+		actualValue = config.GetString(keyWithDefault)
+		actualWasSet = config.IsSet(keyWithDefault)
+		assert.Equal(t, valueExplicitlySet, actualValue)
+		assert.True(t, actualWasSet)
+
+		// access value that has NO default value
+		actualValueI := config.Get(keyNoDefault)
+		actualWasSet = config.IsSet(keyNoDefault)
+		assert.Nil(t, actualValueI)
+		assert.False(t, actualWasSet)
 	})
 
-	// access value that has a default value
-	actualValue, actualWasSet := config.GetAndIsSet(keyWithDefault)
-	assert.Equal(t, valueWithDefault, actualValue.(string))
-	assert.False(t, actualWasSet)
+	t.Run("set value as env", func(t *testing.T) {
+		key := "SNYK_CFG_ORG"
+		expected := "hello"
+		defaultValue := "something"
+		flagset := pflag.NewFlagSet("test", pflag.ExitOnError)
+		flagset.String(ORGANIZATION, "", "org")
 
-	// access value that has a default value but is explicitly set
-	config.Set(keyWithDefault, valueExplicitlySet)
-	actualValue, actualWasSet = config.GetAndIsSet(keyWithDefault)
-	assert.Equal(t, valueExplicitlySet, actualValue.(string))
-	assert.True(t, actualWasSet)
+		config := NewInMemory()
+		config.AddFlagSet(flagset)
+		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
+		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) interface{} {
+			if existingValue != nil {
+				return existingValue
+			}
+			return defaultValue
+		})
 
-	// access value that has NO default value
-	actualValue, actualWasSet = config.GetAndIsSet(keyNoDefault)
-	assert.Nil(t, actualValue)
-	assert.False(t, actualWasSet)
+		// not set
+		actual := config.GetString(ORGANIZATION)
+		wasSet := config.IsSet(ORGANIZATION)
+		assert.Equal(t, defaultValue, actual)
+		assert.False(t, wasSet)
+
+		// set via env var
+		t.Setenv(key, expected)
+		actual = config.GetString(ORGANIZATION)
+		wasSet = config.IsSet(ORGANIZATION)
+		assert.Equal(t, expected, actual)
+		assert.True(t, wasSet)
+
+	})
 
 }

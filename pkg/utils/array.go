@@ -24,6 +24,15 @@ func Contains(list []string, element string) bool {
 	return false
 }
 
+func ContainsPrefix(list []string, element string) bool {
+	for _, a := range list {
+		if strings.HasPrefix(a, element) {
+			return true
+		}
+	}
+	return false
+}
+
 // RemoveSimilar removes all elements from the list which contain the given element.
 // Returns the filtered list.
 //
