@@ -316,9 +316,13 @@ func Test_DefaultValuehandling(t *testing.T) {
 	t.Run("set value as env", func(t *testing.T) {
 		key := "SNYK_CFG_ORG"
 		value := "hello"
+		flagset := pflag.NewFlagSet("test", pflag.ExitOnError)
+		flagset.String(ORGANIZATION, "", "org")
+
 		t.Setenv(key, value)
 		config := NewInMemory()
-		config.AddAlternativeKeys(ORGANIZATION, []string{"SNYK_CFG_ORG", "snyk_cfg_org"})
+		config.AddFlagSet(flagset)
+		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
 
 		actual, wasSet := config.GetAndIsSet(ORGANIZATION)
 		assert.Equal(t, value, actual)
