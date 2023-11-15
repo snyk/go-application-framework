@@ -13,22 +13,31 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
-const reportAnalyticsWorkflowName = "reportAnalytics"
+var (
+	WORKFLOWID_REPORT_ANALYTICS workflow.Identifier = workflow.NewWorkflowIdentifier(reportAnalyticsWorkflowName)
 
-var WORKFLOWID_REPORT_ANALYTICS workflow.Identifier = workflow.NewWorkflowIdentifier(reportAnalyticsWorkflowName)
+	scanDoneSchemaLoader gojsonschema.JSONLoader
+)
 
-var scanDoneSchemaLoader gojsonschema.JSONLoader
+const (
+	reportAnalyticsWorkflowName      = "reportAnalytics"
+	reportAnalyticsInputDataFlagName = "inputData"
+)
 
 // InitReportAnalyticsWorkflow initialises the reportAnalytics workflow before registering it with the engine.
 func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
-	config := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
+	params := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
+	params.StringP(reportAnalyticsInputDataFlagName, "i", "", "Input data containing scan done event")
 
 	// load json schema for scan done event
 	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneEventSchema)
 
 	// register workflow with engine
-	_, err := engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(config), reportAnalyticsEntrypoint)
+	result, err := engine.Register(WORKFLOWID_REPORT_ANALYTICS, workflow.ConfigurationOptionsFromFlagset(params), reportAnalyticsEntrypoint)
+
+	// don't display in help
+	result.SetVisibility(false)
 	return err
 }
 
@@ -41,8 +50,19 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 	url := fmt.Sprintf("%s/rest/api/orgs/%s/analytics", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
 
+	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
+	if commandLineInput != "" {
+		logger.Printf("adding command line input")
+		data := workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName),
+			"application/json",
+			[]byte(commandLineInput),
+		)
+		inputData = append(inputData, data)
+	}
+
 	for i, input := range inputData {
-		logger.Printf(fmt.Sprintf("%s: processing element %d", reportAnalyticsWorkflowName, i))
+		logger.Printf(fmt.Sprintf("processing element %d", i))
 		documentLoader := gojsonschema.NewBytesLoader(input.GetPayload().([]byte))
 		result, validationErr := gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
 
