@@ -35,7 +35,7 @@ func (ri *defaultRuntimeInfo) SetVersion(v string) {
 	ri.version = v
 }
 
-func New(opts ...opt) *defaultRuntimeInfo {
+func New(opts ...opt) RuntimeInfo {
 	ri := &defaultRuntimeInfo{}
 
 	for _, fn := range opts {
