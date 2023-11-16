@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 var expectedDataIdentifier []Identifier
@@ -158,7 +159,7 @@ func Test_Engine_SetterGlobalValues(t *testing.T) {
 }
 
 func Test_Engine_SetterRuntimeInfo(t *testing.T) {
-	ri := RuntimeInfo{"some-app", "some.version"}
+	ri := runtimeinfo.New()
 	config := configuration.NewInMemory()
 	engine := NewWorkFlowEngine(config)
 

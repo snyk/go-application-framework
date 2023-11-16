@@ -13,6 +13,7 @@ import (
 	analytics "github.com/snyk/go-application-framework/pkg/analytics"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
+	runtimeinfo "github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	ui "github.com/snyk/go-application-framework/pkg/ui"
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -255,10 +256,10 @@ func (mr *MockInvocationContextMockRecorder) GetNetworkAccess() *gomock.Call {
 }
 
 // GetRuntimeInfo mocks base method.
-func (m *MockInvocationContext) GetRuntimeInfo() workflow.RuntimeInfo {
+func (m *MockInvocationContext) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRuntimeInfo")
-	ret0, _ := ret[0].(workflow.RuntimeInfo)
+	ret0, _ := ret[0].(runtimeinfo.RuntimeInfo)
 	return ret0
 }
 
@@ -488,10 +489,10 @@ func (mr *MockEngineMockRecorder) GetNetworkAccess() *gomock.Call {
 }
 
 // GetRuntimeInfo mocks base method.
-func (m *MockEngine) GetRuntimeInfo() workflow.RuntimeInfo {
+func (m *MockEngine) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRuntimeInfo")
-	ret0, _ := ret[0].(workflow.RuntimeInfo)
+	ret0, _ := ret[0].(runtimeinfo.RuntimeInfo)
 	return ret0
 }
 
@@ -658,7 +659,7 @@ func (mr *MockEngineMockRecorder) SetLogger(logger interface{}) *gomock.Call {
 }
 
 // SetRuntimeInfo mocks base method.
-func (m *MockEngine) SetRuntimeInfo(ri workflow.RuntimeInfo) {
+func (m *MockEngine) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetRuntimeInfo", ri)
 }
