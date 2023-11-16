@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -144,6 +145,16 @@ func Test_CreateAppEngineWithConfigAndLoggerOptions(t *testing.T) {
 	assert.NotNil(t, engine)
 	assert.Equal(t, logger, engine.GetLogger())
 	assert.Equal(t, config, engine.GetConfiguration())
+}
+
+func Test_CreateAppEngineWithRuntimeInfo(t *testing.T) {
+	ri := runtimeinfo.New(
+		runtimeinfo.WithName("some-app"),
+		runtimeinfo.WithVersion("some.version"))
+	engine := CreateAppEngineWithOptions(WithRuntimeInfo(ri))
+
+	assert.NotNil(t, engine)
+	assert.Equal(t, ri, engine.GetRuntimeInfo())
 }
 
 func Test_initConfiguration_existingValueOfOAuthFFRespected(t *testing.T) {

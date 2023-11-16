@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
@@ -27,7 +28,10 @@ type EngineImpl struct {
 	invocationCounter    int
 	logger               *zerolog.Logger
 	ui                   ui.UserInterface
+	runtimeInfo          runtimeinfo.RuntimeInfo
 }
+
+var _ Engine = (*EngineImpl)(nil)
 
 func (e *EngineImpl) GetLogger() *zerolog.Logger {
 	return e.logger
@@ -220,7 +224,7 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 	var output []Data
 	var err error
 
-	if e.initialized == false {
+	if !e.initialized {
 		return output, fmt.Errorf("workflow must be initialized with init() before it can be invoked")
 	}
 
@@ -283,6 +287,14 @@ func (e *EngineImpl) GetUserInterface() ui.UserInterface {
 
 func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
 	e.ui = userInterface
+}
+
+func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
+	return e.runtimeInfo
+}
+
+func (e *EngineImpl) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
+	e.runtimeInfo = ri
 }
 
 // GetGlobalConfiguration returns the global configuration options.

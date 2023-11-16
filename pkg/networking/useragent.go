@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 type UserAgentOptions func(ua *UserAgentInfo)
@@ -49,6 +50,13 @@ func UaWithOS(osName string) UserAgentOptions {
 		ua.OS = osName
 	}
 	return result
+}
+
+func UaWithRuntimeInfo(ri runtimeinfo.RuntimeInfo) UserAgentOptions {
+	return func(ua *UserAgentInfo) {
+		ua.App = ri.GetName()
+		ua.AppVersion = ri.GetVersion()
+	}
 }
 
 func UserAgent(opts ...UserAgentOptions) UserAgentInfo {

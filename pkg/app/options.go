@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -40,5 +41,11 @@ func WithInitializers(initializers ...workflow.ExtensionInit) Opts {
 		for _, i := range initializers {
 			engine.AddExtensionInitializer(i)
 		}
+	}
+}
+
+func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) Opts {
+	return func(engine workflow.Engine) {
+		engine.SetRuntimeInfo(ri)
 	}
 }

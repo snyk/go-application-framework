@@ -8,6 +8,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
@@ -41,6 +42,8 @@ type invocationContextImpl struct {
 	logger         *zerolog.Logger
 	ui             ui.UserInterface
 }
+
+var _ InvocationContext = (*invocationContextImpl)(nil)
 
 // GetWorkflowIdentifier returns the identifier of the workflow that is being invoked.
 func (ici *invocationContextImpl) GetWorkflowIdentifier() Identifier {
@@ -79,4 +82,8 @@ func (ici *invocationContextImpl) GetEnhancedLogger() *zerolog.Logger {
 
 func (ici *invocationContextImpl) GetUserInterface() ui.UserInterface {
 	return ici.ui
+}
+
+func (ici *invocationContextImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
+	return ici.WorkflowEngine.GetRuntimeInfo()
 }

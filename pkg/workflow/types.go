@@ -9,6 +9,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
@@ -43,6 +44,7 @@ type InvocationContext interface {
 	GetLogger() *log.Logger
 	GetEnhancedLogger() *zerolog.Logger
 	GetUserInterface() ui.UserInterface
+	GetRuntimeInfo() runtimeinfo.RuntimeInfo
 }
 
 // ConfigurationOptions is an interface that can be implemented by any type that can be used to pass configuration options to a workflow.
@@ -77,4 +79,6 @@ type Engine interface {
 	GetLogger() *zerolog.Logger
 	GetUserInterface() ui.UserInterface
 	SetUserInterface(ui ui.UserInterface)
+	GetRuntimeInfo() runtimeinfo.RuntimeInfo
+	SetRuntimeInfo(ri runtimeinfo.RuntimeInfo)
 }
