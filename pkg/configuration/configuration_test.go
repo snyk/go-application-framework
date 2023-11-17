@@ -98,13 +98,20 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 }
 
 func Test_ConfigurationGet_ALTERNATE_KEYS(t *testing.T) {
+	key := "snyk_cfg_api"
+	expected := "value"
 	alternateKeys := []string{"snyk_token", "snyk_cfg_api", "api"}
 
-	config := NewFromFiles(TEST_FILENAME)
+	config := NewInMemory()
 	config.AddAlternativeKeys(AUTHENTICATION_TOKEN, alternateKeys)
+
+	config.Set(key, expected)
 
 	actualValue := config.GetAlternativeKeys(AUTHENTICATION_TOKEN)
 	assert.Equal(t, alternateKeys, actualValue)
+
+	actual := config.GetString(AUTHENTICATION_TOKEN)
+	assert.Equal(t, expected, actual)
 }
 
 func Test_ConfigurationGet_unset(t *testing.T) {
