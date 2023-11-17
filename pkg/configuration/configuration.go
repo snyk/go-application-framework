@@ -219,10 +219,14 @@ func (ev *extendedViper) get(key string) interface{} {
 	isSet := ev.viper.IsSet(key)
 
 	// try to lookup alternative keys if available
-	if !isSet {
-		for _, altKey := range ev.alternativeKeys[key] {
-			result = ev.viper.Get(altKey)
-		}
+	index := 0
+	alternativeKeys := ev.alternativeKeys[key]
+	alternativeKeysSize := len(alternativeKeys)
+	for !isSet && index < alternativeKeysSize {
+		altKey := alternativeKeys[index]
+		result = ev.viper.Get(altKey)
+		isSet = ev.viper.IsSet(altKey)
+		index++
 	}
 
 	return result
