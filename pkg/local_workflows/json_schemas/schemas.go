@@ -23,7 +23,7 @@ const ScanDoneEventSchema = `{
         "attributes": {
           "type": "object",
           "required": [
-            "deviceId",
+            "device_id",
             "application",
             "application_version",
             "os",
@@ -40,7 +40,7 @@ const ScanDoneEventSchema = `{
             "timestamp_finished"
           ],
           "properties": {
-            "deviceId": {
+            "device_id": {
               "type": "string",
               "description": "The unique identifier for the device."
             },
@@ -137,7 +137,7 @@ type ScanDoneEvent struct {
 	Data struct {
 		Type       string `json:"type"`
 		Attributes struct {
-			DeviceId                      string `json:"deviceId"`
+			DeviceId                      string `json:"device_id"`
 			Application                   string `json:"application"`
 			ApplicationVersion            string `json:"application_version"`
 			Os                            string `json:"os"`
