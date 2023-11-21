@@ -17,7 +17,7 @@ const (
 	whoAmIworkflowName = "whoami"
 	userMeEndpoint     = "/user/me"
 	apiVersion         = "/v1"
-	experimentalFlag   = "experimental"
+	experimentalFlag   = configuration.FLAG_EXPERIMENTAL
 	jsonFlag           = "json"
 )
 
