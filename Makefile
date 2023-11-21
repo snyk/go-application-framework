@@ -29,7 +29,7 @@ test:
 
 .PHONY: testv
 testv: 
-	@echo "Testing versbosely..."
+	@echo "Testing verbosely..."
 	@go test -v ./...
 
 .PHONY: generate
