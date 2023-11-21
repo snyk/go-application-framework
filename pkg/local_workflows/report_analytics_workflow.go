@@ -29,7 +29,7 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 	// initialise workflow configuration
 	params := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
 	params.StringP(reportAnalyticsInputDataFlagName, "i", "", "Input data containing scan done event")
-	params.Bool(experimentalFlag, false, "enable experimental analytics report command")
+	params.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental analytics report command")
 
 	// load json schema for scan done event
 	scanDoneSchemaLoader = gojsonschema.NewStringLoader(json_schemas.ScanDoneEventSchema)
@@ -49,7 +49,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	logger := invocationCtx.GetLogger()
 	logger.Println(reportAnalyticsWorkflowName + " workflow start")
 
-	if !config.GetBool(experimentalFlag) {
+	if !config.GetBool(configuration.FLAG_EXPERIMENTAL) {
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
