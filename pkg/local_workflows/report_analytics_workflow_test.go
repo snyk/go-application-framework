@@ -23,6 +23,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 	orgId := "orgId"
 
 	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(experimentalFlag, true)
 
 	requestPayload := testGetScanDonePayloadString()
 
@@ -145,6 +146,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	orgId := "orgId"
 
 	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(experimentalFlag, true)
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -199,23 +201,23 @@ func testGetScanDonePayloadString() string {
 		"data": {
 			"type": "analytics",
 			"attributes": {
-				"deviceId": "unique-uuid",
+				"device_id": "unique-uuid",
 				"application": "snyk-cli",
 				"application_version": "1.1233.0",
 				"os": "macOS",
 				"arch": "ARM64",
-							"integration_name": "IntelliJ",
-							"integration_version": "2.5.5",
-							"integration_environment": "Pycharm",
-							"integration_environment_version": "2023.1",
+				"integration_name": "IntelliJ",
+				"integration_version": "2.5.5",
+				"integration_environment": "Pycharm",
+				"integration_environment_version": "2023.1",
 				"event_type": "Scan done",
 				"status": "Succeeded",
 				"scan_type": "Snyk Open Source",
 				"unique_issue_count": {
-						"critical": 15,
-											"high": 10,
-						"medium": 1,
-						"low": 2
+					"critical": 15,
+					"high": 10,
+					"medium": 1,
+					"low": 2
 				},
 				"duration_ms": "1000",
 				"timestamp_finished": "2023-09-01T12:00:00Z"
