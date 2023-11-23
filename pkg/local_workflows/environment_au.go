@@ -23,17 +23,17 @@ func InitAuEnvironmentWorkflow(engine workflow.Engine) error {
 	return err
 }
 
-// euEnvironmentEntrypoint is the entry point
+// auEnvironmentEntrypoint is the entry point
 func auEnvironmentEntrypoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetLogger()
-	logger.Println(euEnvironmentWorkflowName + " workflow start")
+	logger.Println(auEnvironmentWorkflowName + " workflow start")
 	key := "endpoint"
 
 	config.PersistInStorage(key)
 	config.Set(key, "https://app.au.snyk.io/api")
 
-	logger.Println(euEnvironmentWorkflowName + " workflow end")
+	logger.Println(auEnvironmentWorkflowName + " workflow end")
 	return nil, nil
 }
