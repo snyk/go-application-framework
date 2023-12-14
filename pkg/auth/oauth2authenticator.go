@@ -18,6 +18,7 @@ import (
 
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -193,6 +194,42 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
 }
 
 func (o *oAuth2Authenticator) Authenticate() error {
+	var err error
+
+	// TODO: determine mode based on configuration or something else
+	mode := "client_credentials_"
+
+	if mode == "client_credentials" {
+		err = o.grant_client_credentials()
+	} else {
+		err = o.grant_authorization_code()
+	}
+
+	return err
+}
+
+func (o *oAuth2Authenticator) grant_client_credentials() error {
+	ctx := context.Background()
+
+	apiUrl := o.config.GetString(configuration.API_URL)
+	tokenUrl := apiUrl + "/oauth2/token"
+
+	config := clientcredentials.Config{}
+	config.ClientID = o.config.GetString("client_id")
+	config.ClientSecret = o.config.GetString("client_secret")
+	config.TokenURL = tokenUrl
+
+	// Use the custom HTTP client when requesting a token.
+	if o.httpClient != nil {
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
+	}
+
+	token, err := config.Token(ctx)
+	o.persistToken(token)
+	return err
+}
+
+func (o *oAuth2Authenticator) grant_authorization_code() error {
 	var responseCode string
 	var responseState string
 	var responseError string
