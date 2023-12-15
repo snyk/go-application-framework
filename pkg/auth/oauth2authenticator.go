@@ -24,12 +24,21 @@ import (
 )
 
 const (
-	CONFIG_KEY_OAUTH_TOKEN string        = "INTERNAL_OAUTH_TOKEN_STORAGE"
-	OAUTH_CLIENT_ID        string        = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
-	CALLBACK_HOSTNAME      string        = "127.0.0.1"
-	CALLBACK_PATH          string        = "/authorization-code/callback"
-	TIMEOUT_SECONDS        time.Duration = 120 * time.Second
-	AUTHENTICATED_MESSAGE                = "Your account has been authenticated."
+	CONFIG_KEY_OAUTH_TOKEN  string        = "INTERNAL_OAUTH_TOKEN_STORAGE"
+	OAUTH_CLIENT_ID         string        = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
+	CALLBACK_HOSTNAME       string        = "127.0.0.1"
+	CALLBACK_PATH           string        = "/authorization-code/callback"
+	TIMEOUT_SECONDS         time.Duration = 120 * time.Second
+	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
+	PARAMETER_CLIENT_ID     string        = "client-id"
+	PARAMETER_CLIENT_SECRET string        = "client-secret"
+)
+
+type GrantType int
+
+const (
+	ClientCredentialsGrant GrantType = iota
+	AuthorizationCodeGrant
 )
 
 var _ Authenticator = (*oAuth2Authenticator)(nil)
@@ -139,6 +148,14 @@ func RefreshToken(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2
 	return tokenSource.Token()
 }
 
+func determineGrantType(config configuration.Configuration) GrantType {
+	grandType := AuthorizationCodeGrant
+	if config.IsSet(PARAMETER_CLIENT_SECRET) && config.IsSet(PARAMETER_CLIENT_ID) {
+		grandType = ClientCredentialsGrant
+	}
+	return grandType
+}
+
 //goland:noinspection GoUnusedExportedFunction
 func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	return NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
@@ -195,11 +212,9 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
 
 func (o *oAuth2Authenticator) Authenticate() error {
 	var err error
-
-	// TODO: determine mode based on configuration or something else
-	mode := "client_credentials_"
-
-	if mode == "client_credentials" {
+	
+	mode := determineGrantType(o.config)
+	if mode == ClientCredentialsGrant {
 		err = o.grant_client_credentials()
 	} else {
 		err = o.grant_authorization_code()
@@ -215,8 +230,8 @@ func (o *oAuth2Authenticator) grant_client_credentials() error {
 	tokenUrl := apiUrl + "/oauth2/token"
 
 	config := clientcredentials.Config{}
-	config.ClientID = o.config.GetString("client_id")
-	config.ClientSecret = o.config.GetString("client_secret")
+	config.ClientID = o.config.GetString(PARAMETER_CLIENT_ID)
+	config.ClientSecret = o.config.GetString(PARAMETER_CLIENT_SECRET)
 	config.TokenURL = tokenUrl
 
 	// Use the custom HTTP client when requesting a token.

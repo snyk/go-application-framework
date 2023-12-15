@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -40,6 +41,8 @@ func InitAuth(engine workflow.Engine) error {
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
 	config.String(authTypeParameter, "", authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
+	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
+	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
 
 	_, err := engine.Register(WORKFLOWID_AUTH, workflow.ConfigurationOptionsFromFlagset(config), authEntryPoint)
 	return err
