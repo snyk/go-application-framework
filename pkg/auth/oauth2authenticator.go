@@ -171,11 +171,11 @@ func refreshTokenClientCredentials(ctx context.Context, oauthConfig *oauth2.Conf
 }
 
 func determineGrantType(config configuration.Configuration) GrantType {
-	grandType := AuthorizationCodeGrant
+	grantType := AuthorizationCodeGrant
 	if config.IsSet(PARAMETER_CLIENT_SECRET) && config.IsSet(PARAMETER_CLIENT_ID) {
-		grandType = ClientCredentialsGrant
+		grantType = ClientCredentialsGrant
 	}
-	return grandType
+	return grantType
 }
 
 //goland:noinspection GoUnusedExportedFunction
@@ -243,15 +243,15 @@ func (o *oAuth2Authenticator) Authenticate() error {
 	var err error
 
 	if o.grantType == ClientCredentialsGrant {
-		err = o.grant_client_credentials()
+		err = o.authenticateWithClientCredentialsGrant()
 	} else {
-		err = o.grant_authorization_code()
+		err = o.authenticateWithAuthorizationCode()
 	}
 
 	return err
 }
 
-func (o *oAuth2Authenticator) grant_client_credentials() error {
+func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant() error {
 	ctx := context.Background()
 	config := getOAuthConfigurationClientCredentials(o.oauthConfig)
 
@@ -269,7 +269,7 @@ func (o *oAuth2Authenticator) grant_client_credentials() error {
 	return err
 }
 
-func (o *oAuth2Authenticator) grant_authorization_code() error {
+func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	var responseCode string
 	var responseState string
 	var responseError string
