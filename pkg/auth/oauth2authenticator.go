@@ -52,6 +52,7 @@ type oAuth2Authenticator struct {
 	oauthConfig        *oauth2.Config
 	token              *oauth2.Token
 	headless           bool
+	grantType          GrantType
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
@@ -98,6 +99,21 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 			TokenURL: tokenUrl,
 			AuthURL:  authUrl,
 		},
+	}
+
+	if determineGrantType(config) == ClientCredentialsGrant {
+		conf.ClientID = config.GetString(PARAMETER_CLIENT_ID)
+		conf.ClientSecret = config.GetString(PARAMETER_CLIENT_SECRET)
+	}
+
+	return conf
+}
+
+func getOAuthConfigurationClientCredentials(in *oauth2.Config) *clientcredentials.Config {
+	conf := &clientcredentials.Config{
+		ClientID:     in.ClientID,
+		ClientSecret: in.ClientSecret,
+		TokenURL:     in.Endpoint.TokenURL,
 	}
 	return conf
 }
@@ -148,6 +164,12 @@ func RefreshToken(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2
 	return tokenSource.Token()
 }
 
+func refreshTokenClientCredentials(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+	conf := getOAuthConfigurationClientCredentials(oauthConfig)
+	tokenSource := conf.TokenSource(ctx)
+	return tokenSource.Token()
+}
+
 func determineGrantType(config configuration.Configuration) GrantType {
 	grandType := AuthorizationCodeGrant
 	if config.IsSet(PARAMETER_CLIENT_SECRET) && config.IsSet(PARAMETER_CLIENT_ID) {
@@ -172,7 +194,14 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 	o.httpClient = http.DefaultClient
 	o.openBrowserFunc = OpenBrowser
 	o.shutdownServerFunc = ShutdownServer
-	o.tokenRefresherFunc = RefreshToken
+	o.grantType = determineGrantType(config)
+
+	// set refresh function depending on grant type
+	if o.grantType == ClientCredentialsGrant {
+		o.tokenRefresherFunc = refreshTokenClientCredentials
+	} else {
+		o.tokenRefresherFunc = RefreshToken
+	}
 
 	// apply options
 	for _, opt := range opts {
@@ -212,9 +241,8 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
 
 func (o *oAuth2Authenticator) Authenticate() error {
 	var err error
-	
-	mode := determineGrantType(o.config)
-	if mode == ClientCredentialsGrant {
+
+	if o.grantType == ClientCredentialsGrant {
 		err = o.grant_client_credentials()
 	} else {
 		err = o.grant_authorization_code()
@@ -225,22 +253,19 @@ func (o *oAuth2Authenticator) Authenticate() error {
 
 func (o *oAuth2Authenticator) grant_client_credentials() error {
 	ctx := context.Background()
-
-	apiUrl := o.config.GetString(configuration.API_URL)
-	tokenUrl := apiUrl + "/oauth2/token"
-
-	config := clientcredentials.Config{}
-	config.ClientID = o.config.GetString(PARAMETER_CLIENT_ID)
-	config.ClientSecret = o.config.GetString(PARAMETER_CLIENT_SECRET)
-	config.TokenURL = tokenUrl
+	config := getOAuthConfigurationClientCredentials(o.oauthConfig)
 
 	// Use the custom HTTP client when requesting a token.
 	if o.httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
 	}
 
+	// get token
 	token, err := config.Token(ctx)
-	o.persistToken(token)
+	if err == nil {
+		o.persistToken(token)
+	}
+
 	return err
 }
 
