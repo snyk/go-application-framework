@@ -86,7 +86,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
-		return true
+		if existingValue == nil {
+			return true
+		} else {
+			return existingValue
+		}
 	})
 
 	config.AddDefaultValue(configuration.IS_FEDRAMP, func(existingValue any) any {
