@@ -262,10 +262,11 @@ func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant() error {
 
 	// get token
 	token, err := config.Token(ctx)
-	if err == nil {
-		o.persistToken(token)
+	if err != nil {
+		return err
 	}
 
+	o.persistToken(token)
 	return err
 }
 
