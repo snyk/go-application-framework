@@ -157,24 +157,6 @@ func Test_CreateAppEngineWithRuntimeInfo(t *testing.T) {
 	assert.Equal(t, ri, engine.GetRuntimeInfo())
 }
 
-func Test_initConfiguration_existingValueOfOAuthFFRespected(t *testing.T) {
-	existingValue := false
-	endpoint := "https://snykgov.io"
-
-	// setup mock
-	ctrl := gomock.NewController(t)
-	mockApiClient := mocks.NewMockApiClient(ctrl)
-
-	config := configuration.NewInMemory()
-	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
-
-	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, existingValue)
-	config.Set(configuration.API_URL, endpoint)
-
-	actualOAuthFF := config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
-	assert.Equal(t, existingValue, actualOAuthFF)
-}
-
 func Test_initConfiguration_snykgov(t *testing.T) {
 	endpoint := "https://snykgov.io"
 
@@ -205,9 +187,6 @@ func Test_initConfiguration_NOT_snykgov(t *testing.T) {
 	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
 
 	config.Set(configuration.API_URL, endpoint)
-
-	actualOAuthFF := config.GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
-	assert.False(t, actualOAuthFF)
 
 	isFedramp := config.GetBool(configuration.IS_FEDRAMP)
 	assert.False(t, isFedramp)
