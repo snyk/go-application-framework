@@ -12,7 +12,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/utils"
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -87,11 +86,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
-		if existingValue == nil {
-			return auth.IsKnownOAuthEndpoint(config.GetString(configuration.API_URL))
-		} else {
-			return existingValue
-		}
+		return true
 	})
 
 	config.AddDefaultValue(configuration.IS_FEDRAMP, func(existingValue any) any {
