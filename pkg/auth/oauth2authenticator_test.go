@@ -207,20 +207,35 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token)
 }
 
-func Test_determineGrantType(t *testing.T) {
+func Test_determineGrantType_empty(t *testing.T) {
 	config := configuration.NewInMemory()
 	expected := AuthorizationCodeGrant
 	actual := determineGrantType(config)
 	assert.Equal(t, expected, actual)
+}
 
+func Test_determineGrantType_secret_only(t *testing.T) {
+	config := configuration.NewInMemory()
 	config.Set(PARAMETER_CLIENT_SECRET, "secret")
-	expected = AuthorizationCodeGrant
-	actual = determineGrantType(config)
+	expected := AuthorizationCodeGrant
+	actual := determineGrantType(config)
 	assert.Equal(t, expected, actual)
+}
 
+func Test_determineGrantType_id_only(t *testing.T) {
+	config := configuration.NewInMemory()
 	config.Set(PARAMETER_CLIENT_ID, "id")
-	expected = ClientCredentialsGrant
-	actual = determineGrantType(config)
+	expected := AuthorizationCodeGrant
+	actual := determineGrantType(config)
+	assert.Equal(t, expected, actual)
+}
+
+func Test_determineGrantType_both(t *testing.T) {
+	config := configuration.NewInMemory()
+	config.Set(PARAMETER_CLIENT_ID, "id")
+	config.Set(PARAMETER_CLIENT_SECRET, "secret")
+	expected := ClientCredentialsGrant
+	actual := determineGrantType(config)
 	assert.Equal(t, expected, actual)
 }
 
