@@ -46,7 +46,6 @@ func TestScrubbingWriter_Write(t *testing.T) {
 	}
 
 	mockWriter := &mockWriter{}
-
 	writer := NewScrubbingWriter(mockWriter, scrubDict)
 
 	n, err := writer.Write([]byte("password"))
@@ -65,14 +64,13 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 	}
 
 	mockWriter := &mockWriter{}
-
 	writer := NewScrubbingWriter(mockWriter, scrubDict)
 
 	n, err := writer.WriteLevel(zerolog.InfoLevel, s)
 	assert.Nil(t, err)
 	assert.Equal(t, len(s), n)
 
-	require.NotContainsf(t, mockWriter.written, "password", "password should be scrubbed")
+	require.Equal(t, "***", string(mockWriter.written), "password should be scrubbed")
 }
 
 func TestScrubbingIoWriter(t *testing.T) {
@@ -87,10 +85,10 @@ func TestScrubbingIoWriter(t *testing.T) {
 
 	bufioWriter := bytes.NewBufferString("")
 	writer := NewScrubbingIoWriter(bufioWriter, scrubDict)
+
 	// invoke method under test
 	n, err := writer.Write([]byte(patternWithSecret))
 	assert.Nil(t, err)
 	assert.Equal(t, len(patternWithSecret), n)
-
 	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
 }
