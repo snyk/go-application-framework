@@ -36,7 +36,8 @@ type scrubbingIoWriter struct {
 }
 
 func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
-	return w.writer.WriteLevel(level, scrub(p, w.scrubDict))
+	n, err = w.writer.WriteLevel(level, scrub(p, w.scrubDict))
+	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
 func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict map[string]bool) zerolog.LevelWriter {
@@ -47,7 +48,8 @@ func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict map[string]bool) z
 }
 
 func (w *scrubbingLevelWriter) Write(p []byte) (n int, err error) {
-	return w.writer.Write(scrub(p, w.scrubDict))
+	n, err = w.writer.Write(scrub(p, w.scrubDict))
+	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
 func scrub(p []byte, scrubDict map[string]bool) []byte {

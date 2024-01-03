@@ -49,12 +49,17 @@ func TestScrubbingWriter_Write(t *testing.T) {
 
 	writer := NewScrubbingWriter(mockWriter, scrubDict)
 
-	_, _ = writer.Write([]byte("password"))
+	n, err := writer.Write([]byte("password"))
 
-	require.NotContainsf(t, mockWriter.written, "password", "password should be scrubbed")
+	assert.Nil(t, err)
+	assert.Equal(t, len("password"), n)
+
+	require.Equal(t, "***", string(mockWriter.written), "password should be scrubbed")
 }
 
 func TestScrubbingWriter_WriteLevel(t *testing.T) {
+	s := []byte("password")
+
 	scrubDict := map[string]bool{
 		"password": true,
 	}
@@ -63,7 +68,9 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 
 	writer := NewScrubbingWriter(mockWriter, scrubDict)
 
-	_, _ = writer.WriteLevel(zerolog.InfoLevel, []byte("password"))
+	n, err := writer.WriteLevel(zerolog.InfoLevel, s)
+	assert.Nil(t, err)
+	assert.Equal(t, len(s), n)
 
 	require.NotContainsf(t, mockWriter.written, "password", "password should be scrubbed")
 }
