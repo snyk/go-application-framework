@@ -81,8 +81,9 @@ func TestScrubbingIoWriter(t *testing.T) {
 	bufioWriter := bytes.NewBufferString("")
 	writer := NewScrubbingIoWriter(bufioWriter, scrubDict)
 	// invoke method under test
-	_, err := writer.Write([]byte(patternWithSecret))
+	n, err := writer.Write([]byte(patternWithSecret))
 	assert.Nil(t, err)
+	assert.Equal(t, len(patternWithSecret), n)
 
 	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
 }

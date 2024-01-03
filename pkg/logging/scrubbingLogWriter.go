@@ -66,5 +66,12 @@ func NewScrubbingIoWriter(writer io.Writer, scrubDict map[string]bool) io.Writer
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
-	return w.writer.Write(scrub(p, w.scrubDict))
+	_, err = w.writer.Write(scrub(p, w.scrubDict))
+	if err != nil {
+		// in case of an error of the underlying writer, we return zero bytes written,
+		// since it is difficult to map back to the unredacted length.
+		return 0, err
+	}
+
+	return len(p), err
 }
