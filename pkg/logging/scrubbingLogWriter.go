@@ -23,6 +23,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const redactMask string = "***"
+
 type scrubbingLevelWriter struct {
 	writer    zerolog.LevelWriter
 	scrubDict map[string]bool
@@ -51,7 +53,7 @@ func (w *scrubbingLevelWriter) Write(p []byte) (n int, err error) {
 func scrub(p []byte, scrubDict map[string]bool) []byte {
 	s := string(p)
 	for term := range scrubDict {
-		s = strings.Replace(s, term, "***", -1)
+		s = strings.Replace(s, term, redactMask, -1)
 	}
 	return []byte(s)
 }
