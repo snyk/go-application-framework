@@ -18,9 +18,11 @@ package logging
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,15 +70,19 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 
 func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]bool{
+		"token":    true,
 		"password": true,
 	}
 
+	pattern := "%s for my account, including my %s"
+	patternWithSecret := fmt.Sprintf(pattern, "password", "token")
+	patternWithMaskedSecret := fmt.Sprintf(pattern, redactMask, redactMask)
+
 	bufioWriter := bytes.NewBufferString("")
-
 	writer := NewScrubbingIoWriter(bufioWriter, scrubDict)
-
 	// invoke method under test
-	_, _ = writer.Write([]byte("password"))
+	_, err := writer.Write([]byte(patternWithSecret))
+	assert.Nil(t, err)
 
-	require.Equal(t, "***", bufioWriter.String(), "password should be scrubbed")
+	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
 }
