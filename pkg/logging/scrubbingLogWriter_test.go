@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -63,4 +64,16 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 	_, _ = writer.WriteLevel(zerolog.InfoLevel, []byte("password"))
 
 	require.NotContainsf(t, mockWriter.written, "password", "password should be scrubbed")
+}
+
+func TestScrubbingIOWriter(t *testing.T) {
+	scrubDict := map[string]bool{
+		"password": true,
+	}
+
+	s := string("abc")
+	bufioWriter := bytes.NewBufferString(s)
+
+	writer := NewScrubbingIOWriter(bufioWriter, scrubDict)
+
 }
