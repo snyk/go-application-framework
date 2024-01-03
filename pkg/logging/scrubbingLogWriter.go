@@ -17,35 +17,52 @@
 package logging
 
 import (
+	"io"
 	"strings"
 
 	"github.com/rs/zerolog"
 )
 
-type scrubbingWriter struct {
+type scrubbingLevelWriter struct {
 	writer    zerolog.LevelWriter
 	scrubDict map[string]bool
 }
 
-func (w *scrubbingWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
-	return w.writer.WriteLevel(level, w.scrub(p))
+type scrubbingIoWriter struct {
+	writer    io.Writer
+	scrubDict map[string]bool
+}
+
+func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
+	return w.writer.WriteLevel(level, scrub(p, w.scrubDict))
 }
 
 func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict map[string]bool) zerolog.LevelWriter {
-	return &scrubbingWriter{
+	return &scrubbingLevelWriter{
 		writer:    writer,
 		scrubDict: scrubDict,
 	}
 }
 
-func (w *scrubbingWriter) Write(p []byte) (n int, err error) {
-	return w.writer.Write(w.scrub(p))
+func (w *scrubbingLevelWriter) Write(p []byte) (n int, err error) {
+	return w.writer.Write(scrub(p, w.scrubDict))
 }
 
-func (w *scrubbingWriter) scrub(p []byte) []byte {
+func scrub(p []byte, scrubDict map[string]bool) []byte {
 	s := string(p)
-	for term := range w.scrubDict {
+	for term := range scrubDict {
 		s = strings.Replace(s, term, "***", -1)
 	}
 	return []byte(s)
+}
+
+func NewScrubbingIoWriter(writer io.Writer, scrubDict map[string]bool) io.Writer {
+	return &scrubbingIoWriter{
+		writer:    writer,
+		scrubDict: scrubDict,
+	}
+}
+
+func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
+	return w.writer.Write(scrub(p, w.scrubDict))
 }

@@ -66,14 +66,17 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 	require.NotContainsf(t, mockWriter.written, "password", "password should be scrubbed")
 }
 
-func TestScrubbingIOWriter(t *testing.T) {
+func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]bool{
 		"password": true,
 	}
 
-	s := string("abc")
-	bufioWriter := bytes.NewBufferString(s)
+	bufioWriter := bytes.NewBufferString("")
 
-	writer := NewScrubbingIOWriter(bufioWriter, scrubDict)
+	writer := NewScrubbingIoWriter(bufioWriter, scrubDict)
 
+	// invoke method under test
+	_, _ = writer.Write([]byte("password"))
+
+	require.Equal(t, "***", bufioWriter.String(), "password should be scrubbed")
 }
