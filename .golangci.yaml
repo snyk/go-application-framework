@@ -1,0 +1,157 @@
+run:
+  build-tags:
+    - integration
+  concurrency: 4
+  issues-exit-code: 1
+  skip-dirs: []
+  tests: true
+  timeout: 5m
+
+linters-settings:
+  errcheck:
+    check-blank: true
+    check-type-assertions: true
+  exhaustive:
+    default-signifies-exhaustive: true
+  goconst:
+    ignore-calls: false
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+  gocyclo:
+    min-complexity: 15
+  gofumpt:
+    module-path: github.com/snyk/go-application-framework
+    extra-rules: true
+  goimports:
+    local-prefixes: github.com/snyk/go-application-framework
+  gosimple:
+    checks: ['all']
+  govet:
+    check-shadowing: true
+    enable-all: true
+    disable:
+      - fieldalignment
+  lll:
+    line-length: 160
+  misspell:
+    locale: US
+  nolintlint:
+    allow-unused: false
+    require-explanation: true
+    require-specific: true
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+  promlinter:
+    strict: true
+  revive:
+    rules:
+      - name: blank-imports
+        disabled: true
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+        disable-stuttering-check: true
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+        disabled: true
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+  staticcheck:
+    checks: ['all']
+  stylecheck:
+    checks: ['all']
+    http-status-code-whitelist: []
+  varcheck:
+    exported-fields: true
+
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - dogsled
+    - dupl
+    - durationcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forbidigo
+    - forcetypeassert
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gofumpt
+    - goimports
+    - goprintffuncname
+    - gosec
+    - interfacebloat
+    - ireturn
+    - lll
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - promlinter
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tagliatelle
+    - tenv
+    - testpackage
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    - wrapcheck
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - bodyclose
+        - forcetypeassert
+        - goconst
+        - ireturn
+    - path: test/
+      linters:
+        - testpackage
+  include:
+    - EXC0012
+    - EXC0014

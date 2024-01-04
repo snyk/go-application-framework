@@ -47,8 +47,8 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	return dict
 }
 
-func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
-	n, err = w.writer.WriteLevel(level, scrub(p, w.scrubDict))
+func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
+	_, err := w.writer.WriteLevel(level, scrub(p, w.scrubDict))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
@@ -59,9 +59,8 @@ func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zer
 	}
 }
 
-func (w *scrubbingLevelWriter) Write(p []byte) (n int, err error) {
-	n, err = w.writer.Write(scrub(p, w.scrubDict))
-
+func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
+	_, err := w.writer.Write(scrub(p, w.scrubDict))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
