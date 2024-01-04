@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
@@ -64,23 +63,8 @@ func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, respon
 		return
 	}
 
-	logHeader := http.Header{}
-	for i, v := range request.Header {
-		for _, value := range v {
-			if strings.ToLower(i) == "authorization" || strings.ToLower(i) == "session-token" {
-				authHeader := strings.Split(value, " ")
-				if len(authHeader) == 2 && len(authHeader[1]) > 4 {
-					value = authHeader[0] + " " + authHeader[1][0:4] + "***"
-				} else {
-					value = "***"
-				}
-			}
-			logHeader.Add(i, value)
-		}
-	}
-
 	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request [%p]: %s %s", request, request.Method, request.URL.String())
-	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request [%p]: header: %v", request, logHeader)
+	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request [%p]: header: %v", request, request.Header)
 
 	if response != nil {
 		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: %d %s", request, response.StatusCode, response.Status)
