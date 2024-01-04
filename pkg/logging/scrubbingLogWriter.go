@@ -21,9 +21,12 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 const redactMask string = "***"
+
+type ScrubbingDict map[string]bool
 
 type scrubbingLevelWriter struct {
 	writer    zerolog.LevelWriter
@@ -33,6 +36,14 @@ type scrubbingLevelWriter struct {
 type scrubbingIoWriter struct {
 	writer    io.Writer
 	scrubDict map[string]bool
+}
+
+func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
+	dict := map[string]bool{}
+
+	dict[config.GetString(configuration.AUTHENTICATION_TOKEN)] = true
+
+	return dict
 }
 
 func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
@@ -49,6 +60,7 @@ func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict map[string]bool) z
 
 func (w *scrubbingLevelWriter) Write(p []byte) (n int, err error) {
 	n, err = w.writer.Write(scrub(p, w.scrubDict))
+
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,12 +42,11 @@ func (m *mockWriter) WriteLevel(_ zerolog.Level, p []byte) (n int, err error) {
 }
 
 func TestScrubbingWriter_Write(t *testing.T) {
-	scrubDict := map[string]bool{
-		"password": true,
-	}
-
 	mockWriter := &mockWriter{}
-	writer := NewScrubbingWriter(mockWriter, scrubDict)
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "password")
+
+	writer := NewScrubbingWriter(mockWriter, GetScrubDictFromConfig(config))
 
 	n, err := writer.Write([]byte("password"))
 
@@ -59,12 +59,11 @@ func TestScrubbingWriter_Write(t *testing.T) {
 func TestScrubbingWriter_WriteLevel(t *testing.T) {
 	s := []byte("password")
 
-	scrubDict := map[string]bool{
-		"password": true,
-	}
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "password")
 
 	mockWriter := &mockWriter{}
-	writer := NewScrubbingWriter(mockWriter, scrubDict)
+	writer := NewScrubbingWriter(mockWriter, GetScrubDictFromConfig(config))
 
 	n, err := writer.WriteLevel(zerolog.InfoLevel, s)
 	assert.Nil(t, err)
