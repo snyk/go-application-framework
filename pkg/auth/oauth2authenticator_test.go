@@ -15,9 +15,41 @@ import (
 
 func Test_GetVerifier(t *testing.T) {
 	expectedCount := 23
-	verifier := createVerifier(expectedCount)
+	verifier, err := createVerifier(expectedCount)
+	assert.NoError(t, err)
 	actualCount := len(verifier)
 	assert.Equal(t, expectedCount, actualCount)
+}
+
+func Test_randIndex(t *testing.T) {
+	tests := map[string]struct {
+		limit int
+		err   string
+	}{
+		"limit negative fails": {
+			limit: -1,
+			err:   "invalid limit -1",
+		},
+		"limit zero fails": {
+			err: "invalid limit 0",
+		},
+		"limit one ok": {
+			limit: 1,
+		},
+		"other limit ok": {
+			limit: 213,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			index, err := randIndex(test.limit)
+			if test.err != "" {
+				assert.ErrorContains(t, err, test.err)
+			} else {
+				assert.Conditionf(t, func() (success bool) { return index >= 0 && index < test.limit }, "index %d within range", index)
+			}
+		})
+	}
 }
 
 func Test_getToken(t *testing.T) {
@@ -243,8 +275,9 @@ func Test_Authenticate_CredentialsGrant(t *testing.T) {
 	go func() {
 		mux := http.NewServeMux()
 		srv := &http.Server{
-			Handler: mux,
-			Addr:    "localhost:3221",
+			Handler:           mux,
+			Addr:              "localhost:3221",
+			ReadHeaderTimeout: time.Second * 30,
 		}
 		mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 			newToken := &oauth2.Token{
