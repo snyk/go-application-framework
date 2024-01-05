@@ -24,6 +24,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type mockWriter struct {
@@ -41,12 +43,11 @@ func (m *mockWriter) WriteLevel(_ zerolog.Level, p []byte) (n int, err error) {
 }
 
 func TestScrubbingWriter_Write(t *testing.T) {
-	scrubDict := map[string]bool{
-		"password": true,
-	}
-
 	mockWriter := &mockWriter{}
-	writer := NewScrubbingWriter(mockWriter, scrubDict)
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "password")
+
+	writer := NewScrubbingWriter(mockWriter, GetScrubDictFromConfig(config))
 
 	n, err := writer.Write([]byte("password"))
 
@@ -59,12 +60,11 @@ func TestScrubbingWriter_Write(t *testing.T) {
 func TestScrubbingWriter_WriteLevel(t *testing.T) {
 	s := []byte("password")
 
-	scrubDict := map[string]bool{
-		"password": true,
-	}
+	config := configuration.NewInMemory()
+	config.Set(configuration.AUTHENTICATION_TOKEN, "password")
 
 	mockWriter := &mockWriter{}
-	writer := NewScrubbingWriter(mockWriter, scrubDict)
+	writer := NewScrubbingWriter(mockWriter, GetScrubDictFromConfig(config))
 
 	n, err := writer.WriteLevel(zerolog.InfoLevel, s)
 	assert.Nil(t, err)
@@ -91,4 +91,13 @@ func TestScrubbingIoWriter(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, len(patternWithSecret), n)
 	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
+}
+
+func TestScrubFunction(t *testing.T) {
+	dict := ScrubbingDict{"secret": true, "": true, "special": false, "be disclosed": true}
+	input := "This is my secret message, which might not be special but definitely should not be disclosed."
+	expected := "This is my *** message, which might not be *** but definitely should not ***."
+
+	actual := scrub([]byte(input), dict)
+	assert.Equal(t, expected, string(actual))
 }
