@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -39,7 +40,7 @@ type scrubbingIoWriter struct {
 }
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
-	dict := map[string]bool{}
+	dict := ScrubbingDict{}
 
 	dict[config.GetString(configuration.AUTHENTICATION_TOKEN)] = true
 
@@ -51,7 +52,7 @@ func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (n int,
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
-func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict map[string]bool) zerolog.LevelWriter {
+func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zerolog.LevelWriter {
 	return &scrubbingLevelWriter{
 		writer:    writer,
 		scrubDict: scrubDict,
@@ -64,15 +65,17 @@ func (w *scrubbingLevelWriter) Write(p []byte) (n int, err error) {
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
-func scrub(p []byte, scrubDict map[string]bool) []byte {
+func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	s := string(p)
 	for term := range scrubDict {
-		s = strings.Replace(s, term, redactMask, -1)
+		if len(term) > 0 {
+			s = strings.Replace(s, term, redactMask, -1)
+		}
 	}
 	return []byte(s)
 }
 
-func NewScrubbingIoWriter(writer io.Writer, scrubDict map[string]bool) io.Writer {
+func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
 	return &scrubbingIoWriter{
 		writer:    writer,
 		scrubDict: scrubDict,

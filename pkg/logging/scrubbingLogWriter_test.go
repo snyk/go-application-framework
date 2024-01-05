@@ -22,9 +22,10 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type mockWriter struct {
@@ -90,4 +91,13 @@ func TestScrubbingIoWriter(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, len(patternWithSecret), n)
 	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
+}
+
+func TestScrubFunction(t *testing.T) {
+	dict := ScrubbingDict{"secret": true, "": true, "special": false, "be disclosed": true}
+	input := "This is my secret message, which might not be special but definitely should not be disclosed."
+	expected := "This is my *** message, which might not be *** but definitely should not ***."
+
+	actual := scrub([]byte(input), dict)
+	assert.Equal(t, expected, string(actual))
 }
