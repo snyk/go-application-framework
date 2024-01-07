@@ -95,6 +95,8 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 		config.Set(configuration.WORKFLOW_USE_STDIO, true)
+		config.Set(configuration.AUTHENTICATION_TOKEN, "")
+
 		_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 		if legacyCLIError != nil {
 			return nil, legacyCLIError

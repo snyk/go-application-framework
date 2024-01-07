@@ -243,8 +243,12 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 				config = e.config.Clone()
 			}
 
+			// prepare networkAccess
+			networkAccess := e.networkAccess.Clone()
+			networkAccess.SetConfiguration(config)
+
 			// create a context object for the invocation
-			context := NewInvocationContext(id, config, e, e.networkAccess, zlogger, e.analytics, e.ui)
+			context := NewInvocationContext(id, config, e, networkAccess, zlogger, e.analytics, e.ui)
 
 			// invoke workflow through its callback
 			output, err = callback(context, input)

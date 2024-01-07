@@ -12,6 +12,7 @@ import (
 	zerolog "github.com/rs/zerolog"
 	auth "github.com/snyk/go-application-framework/pkg/auth"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
+	networking "github.com/snyk/go-application-framework/pkg/networking"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -75,6 +76,20 @@ func (m *MockNetworkAccess) AddRootCAs(pemFileLocation string) error {
 func (mr *MockNetworkAccessMockRecorder) AddRootCAs(pemFileLocation interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRootCAs", reflect.TypeOf((*MockNetworkAccess)(nil).AddRootCAs), pemFileLocation)
+}
+
+// Clone mocks base method.
+func (m *MockNetworkAccess) Clone() networking.NetworkAccess {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Clone")
+	ret0, _ := ret[0].(networking.NetworkAccess)
+	return ret0
+}
+
+// Clone indicates an expected call of Clone.
+func (mr *MockNetworkAccessMockRecorder) Clone() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockNetworkAccess)(nil).Clone))
 }
 
 // GetAuthenticator mocks base method.
