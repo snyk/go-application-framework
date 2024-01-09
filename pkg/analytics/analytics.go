@@ -55,6 +55,8 @@ type AnalyticsImpl struct {
 	integrationVersion string
 	os                 string
 	command            string
+
+	userCurrent func() (*user.User, error)
 }
 
 // metadataOutput defines the metadataOutput payload.
@@ -136,7 +138,9 @@ const (
 
 // New creates a new Analytics instance.
 func New() Analytics {
-	a := &AnalyticsImpl{}
+	a := &AnalyticsImpl{
+		userCurrent: user.Current,
+	}
 	a.headerFunc = func() http.Header { return http.Header{} }
 	a.created = time.Now()
 	a.clientFunc = func() *http.Client { return &http.Client{} }
@@ -264,7 +268,7 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 		return nil, err
 	}
 
-	user, err := user.Current()
+	user, err := a.userCurrent()
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,6 @@ import (
 )
 
 func Test_Basic(t *testing.T) {
-
 	os.Setenv("CIRCLECI", "true")
 	testFields := []string{
 		"tfc-token",
@@ -44,8 +43,7 @@ func Test_Basic(t *testing.T) {
 	commandList := []string{"", "iac capture"}
 	for _, cmd := range commandList {
 		t.Run(cmd, func(t *testing.T) {
-
-			analytics := New()
+			analytics := newTestAnalytics(t)
 			analytics.SetCmdArguments(args)
 			analytics.AddError(fmt.Errorf("Something went terrible wrong."))
 			analytics.SetVersion("1234567")
@@ -163,7 +161,7 @@ func Test_SanitizeUsername(t *testing.T) {
 		homeDir      string
 	}
 
-	user, err := user.Current()
+	user, err := testUserCurrent(t)()
 	assert.Nil(t, err)
 
 	// runs 3 cases
@@ -231,4 +229,23 @@ func Test_SanitizeUsername(t *testing.T) {
 
 	}
 
+}
+
+func newTestAnalytics(t *testing.T) Analytics {
+	t.Helper()
+	a := New()
+	a.(*AnalyticsImpl).userCurrent = testUserCurrent(t)
+	return a
+}
+
+func testUserCurrent(t *testing.T) func() (*user.User, error) {
+	return func() (*user.User, error) {
+		return &user.User{
+			Uid:      "1000",
+			Gid:      "1000",
+			Username: "test-runner-user",
+			Name:     "Test Runner User",
+			HomeDir:  t.TempDir(),
+		}, nil
+	}
 }
