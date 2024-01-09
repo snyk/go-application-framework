@@ -178,17 +178,25 @@ func Test_Engine_ClonedNetworkAccess(t *testing.T) {
 
 	workflowId := NewWorkflowIdentifier("cmd")
 	_, err := engine.Register(workflowId, ConfigurationOptionsFromFlagset(pflag.NewFlagSet("1", pflag.ExitOnError)), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		assert.Equal(t, expected, invocation.GetNetworkAccess().GetConfiguration().GetInt(valueName))
+		assert.Equal(t, expected, invocation.GetConfiguration().GetInt(valueName))
+
+		newValue := 1
+
 		// changing the network configuration inside a callback
-		invocation.GetNetworkAccess().GetConfiguration().Set(valueName, 1)
+		invocation.GetNetworkAccess().GetConfiguration().Set(valueName, newValue)
+
+		assert.Equal(t, newValue, invocation.GetNetworkAccess().GetConfiguration().GetInt(valueName))
+		assert.Equal(t, newValue, invocation.GetConfiguration().GetInt(valueName))
 		return []Data{}, nil
 	})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = engine.Init()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	_, err = engine.Invoke(workflowId)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// ensure that the config value in the original config wasn't changed
 	actual := config.GetInt(valueName)
