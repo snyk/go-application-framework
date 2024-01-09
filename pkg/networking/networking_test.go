@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -412,4 +413,30 @@ func Test_UserAgentInfo_Complete(t *testing.T) {
 	assert.Equal(t, expectedIntVersion, ua.IntegrationVersion)
 	assert.Equal(t, expectedIntEnvName, ua.IntegrationEnvironment)
 	assert.Equal(t, expectedIntEnvVersion, ua.IntegrationEnvironmentVersion)
+}
+
+func TestNetworkImpl_Clone(t *testing.T) {
+	config := configuration.NewInMemory()
+	network := NewNetworkAccess(config)
+
+	config2 := configuration.NewInMemory()
+	config2.Set(configuration.AUTHENTICATION_TOKEN, "test")
+	clonedNetwork := network.Clone()
+	clonedNetwork.SetConfiguration(config2)
+
+	url1, _ := url.Parse("")
+	req1 := &http.Request{
+		Header: http.Header{},
+		URL:    url1,
+	}
+	req2 := &http.Request{
+		Header: http.Header{},
+		URL:    url1,
+	}
+
+	network.AddHeaders(req1)
+	clonedNetwork.AddHeaders(req2)
+
+	assert.NotEqual(t, req1, req2)
+	assert.NotEqual(t, network.GetConfiguration(), clonedNetwork.GetConfiguration())
 }

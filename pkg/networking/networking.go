@@ -39,6 +39,8 @@ type NetworkAccess interface {
 	SetConfiguration(configuration configuration.Configuration)
 	GetLogger() *zerolog.Logger
 	GetConfiguration() configuration.Configuration
+
+	Clone() NetworkAccess
 }
 
 // networkImpl is the default implementation of the NetworkAccess interface.
@@ -210,4 +212,19 @@ func (n *networkImpl) GetLogger() *zerolog.Logger {
 
 func (n *networkImpl) GetConfiguration() configuration.Configuration {
 	return n.config
+}
+
+func (n *networkImpl) Clone() NetworkAccess {
+	clone := &networkImpl{
+		config:       n.config.Clone(),
+		logger:       n.logger,
+		staticHeader: n.staticHeader.Clone(),
+		proxy:        n.proxy,
+	}
+
+	if n.caPool != nil {
+		clone.caPool = n.caPool.Clone()
+	}
+
+	return clone
 }
