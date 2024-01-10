@@ -51,7 +51,7 @@ func ShouldRequireAuthentication(
 ) (matchesPattern bool, err error) {
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
-		matchesPattern := false
+		var matchesPattern bool
 		referenceUrl := ""
 		prefixUrl := ""
 		if len(subdomain) == 0 {

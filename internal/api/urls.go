@@ -52,7 +52,7 @@ func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 }
 
 func GetCanonicalApiUrl(url url.URL) (string, error) {
-	result := ""
+	var result string
 
 	// for localhost we don't change the host, since there are no subdomains
 	if isImmutableHost(url.Host) {

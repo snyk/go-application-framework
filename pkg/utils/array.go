@@ -127,7 +127,7 @@ func ToSlice(input map[string]string, combineBy string) []string {
 //	key := "A"
 //	map = Remove(map, key)  // map is {"c": "d"}
 func Remove(input map[string]string, key string) map[string]string {
-	found := false
+	var found bool
 	key, found = FindKeyCaseInsensitive(input, key)
 	if found {
 		delete(input, key)
@@ -149,11 +149,8 @@ func Remove(input map[string]string, key string) map[string]string {
 //	key := "A"
 //	key, found = FindKeyCaseInsensitive(map, key)  // key is "a" and found is true
 func FindKeyCaseInsensitive(input map[string]string, key string) (string, bool) {
-
-	found := false
-
 	// look for exact match
-	_, found = input[key]
+	_, found := input[key]
 
 	// look for lower case match
 	if !found {

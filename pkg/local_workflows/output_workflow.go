@@ -71,7 +71,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			}
 		} else { // handle text/pain and unknown the same way
 			// try to convert payload to a string
-			singleDataAsString := ""
+			var singleDataAsString string
 			singleData, typeCastSuccessful := input[i].GetPayload().([]byte)
 			if !typeCastSuccessful {
 				singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
