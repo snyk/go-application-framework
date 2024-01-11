@@ -235,7 +235,7 @@ func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
-		require.Equal(t, "/rest/api/orgs/"+orgId+"/analytics", req.URL.String())
+		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2023-11-09~experimental", req.URL.String())
 		require.Equal(t, "POST", req.Method)
 		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 		body, err := io.ReadAll(req.Body)

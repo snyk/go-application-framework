@@ -53,7 +53,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
-	url := fmt.Sprintf("%s/rest/api/orgs/%s/analytics", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
+	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=2023-11-09~experimental", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
 
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
