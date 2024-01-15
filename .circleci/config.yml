@@ -34,7 +34,7 @@ workflows:
           name: Scan repository for secrets
           context:
             - snyk-bot-slack
-          channel: hammerhead-alerts
+          channel: cli-alerts
       - unit_test:
           name: Unit tests
       - build:

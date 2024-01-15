@@ -4,8 +4,8 @@ metadata:
   name: go-application-framework
   annotations:
     github.com/project-slug: snyk/go-application-framework
-    github.com/team-slug: snyk/hammerhead
+    github.com/team-slug: snyk/cli
 spec:
   type: external-library
   lifecycle: "-"
-  owner: hammerhead
+  owner: cli
