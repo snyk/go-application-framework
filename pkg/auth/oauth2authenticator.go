@@ -2,15 +2,14 @@ package auth
 
 import (
 	"context"
-	crypto_rand "crypto/rand"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
-	"math/rand"
+	"math/big"
 	"net"
 	"net/http"
 	"sync"
@@ -24,6 +23,7 @@ import (
 )
 
 const (
+	//nolint:gosec // not a token value, but a configuration key
 	CONFIG_KEY_OAUTH_TOKEN  string        = "INTERNAL_OAUTH_TOKEN_STORAGE"
 	OAUTH_CLIENT_ID         string        = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
 	CALLBACK_HOSTNAME       string        = "127.0.0.1"
@@ -56,21 +56,6 @@ type oAuth2Authenticator struct {
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
-}
-
-func init() {
-	var seed int64
-	var b [8]byte
-
-	// try to use a real random value to seed the pseudo random number generator and
-	// only fall back to time based seed if this didn't work.
-	_, err := crypto_rand.Read(b[:])
-	if err != nil {
-		seed = time.Now().UnixNano() // fallback to time only if necessary
-	} else {
-		seed = int64(binary.LittleEndian.Uint64(b[:])) // based on https://stackoverflow.com/a/54491783
-	}
-	rand.Seed(seed)
 }
 
 func OpenBrowser(authUrl string) {
@@ -127,7 +112,7 @@ func getCodeChallenge(verifier []byte) string {
 
 // This method creates a code verifier as defined in https://www.rfc-editor.org/rfc/rfc7636#section-4.1
 // It accepts the number of bytes it shall create and returns the verifier as a byte slice of the specified length.
-func createVerifier(count int) []byte {
+func createVerifier(count int) ([]byte, error) {
 	/*
 	  unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
 	   ALPHA = %x41-5A / %x61-7A
@@ -136,13 +121,27 @@ func createVerifier(count int) []byte {
 	lut := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 	verifier := make([]byte, count)
 
-	// TODO is this good enough?
 	for i := range verifier {
-		index := rand.Int() % len(lut)
+		index, err := randIndex(len(lut))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create verifier: %w", err)
+		}
 		verifier[i] = lut[index]
 	}
 
-	return verifier
+	return verifier, nil
+}
+
+// randIndex provides a secure random number in the range [0, limit).
+func randIndex(limit int) (int, error) {
+	if limit <= 0 {
+		return -1, fmt.Errorf("invalid limit %d", limit)
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(limit)))
+	if err != nil {
+		return -1, fmt.Errorf("failed to read secure random bytes: %w", err)
+	}
+	return int(n.Int64()), nil
 }
 
 // GetOAuthToken extracts an oauth2.Token from the given configuration instance if available
@@ -274,8 +273,15 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	var responseCode string
 	var responseState string
 	var responseError string
-	verifier := createVerifier(128)
-	state := string(createVerifier(15))
+	verifier, err := createVerifier(128)
+	if err != nil {
+		return err
+	}
+	stateBytes, err := createVerifier(15)
+	if err != nil {
+		return err
+	}
+	state := string(stateBytes)
 	codeChallenge := getCodeChallenge(verifier)
 	ctx := context.Background()
 
@@ -285,6 +291,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 
 	mux := http.NewServeMux()
 
+	//nolint:gosec // ignoring read timeouts here as we're client to ourselves
 	srv := &http.Server{
 		Handler: mux,
 	}

@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"bytes"
+	//nolint:gosec // insecure sha1 used for legacy identifier
 	"crypto/sha1"
 	"encoding/json"
 	"errors"
@@ -225,6 +226,7 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	}
 
 	// deepcode ignore InsecureHash: It is just being used to generate an id, without any security concerns
+	//nolint:gosec // sha1 only used to generate an id
 	shasum := sha1.New()
 	uuid, _ := uuid.GenerateUUID()
 	io.WriteString(shasum, uuid)

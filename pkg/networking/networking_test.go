@@ -218,12 +218,18 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	})
 
 	listenerReady := make(chan struct{})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	assert.Nil(t, err)
+	t.Cleanup(func() {
+		listener.Close()
+	})
+
+	serverURL := fmt.Sprintf("https://localhost:%d/", listener.Addr().(*net.TCPAddr).Port)
 	listen := func() {
-		listener, err := net.Listen("tcp", ":8443")
-		assert.Nil(t, err)
 		listenerReady <- struct{}{} // Signal that listener is ready (using empty struct)
-		err = http.ServeTLS(listener, nil, certFile.Name(), keyFile.Name())
-		assert.Nil(t, err)
+		//nolint:gosec // client timeouts not a concern in tests
+		err := http.ServeTLS(listener, nil, certFile.Name(), keyFile.Name())
+		t.Log("server stopped", err)
 	}
 	go listen()
 
@@ -232,7 +238,7 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	// test that we can't connect without adding the ca certificates
 	networkAccess := NewNetworkAccess(config)
 	client := networkAccess.GetHttpClient()
-	_, err = client.Get("https://localhost:8443/")
+	_, err = client.Get(serverURL)
 	assert.NotNil(t, err)
 
 	// invoke method under test
@@ -241,7 +247,7 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 
 	// test connectability after adding ca certificates
 	client = networkAccess.GetHttpClient()
-	_, err = client.Get("https://localhost:8443/")
+	_, err = client.Get(serverURL)
 	assert.Nil(t, err)
 }
 
