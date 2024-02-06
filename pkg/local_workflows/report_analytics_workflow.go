@@ -32,9 +32,9 @@ const (
 	reportAnalyticsInputDataFlagName = "inputData"
 )
 
-// InitReportAnalyticsWorkflow initialises the reportAnalytics workflow before registering it with the engine.
+// InitReportAnalyticsWorkflow initializes the reportAnalytics workflow before registering it with the engine.
 func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
-	// initialise workflow configuration
+	// initialize workflow configuration
 	params := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
 	params.StringP(reportAnalyticsInputDataFlagName, "i", "", "Input data containing scan done event")
 	params.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental analytics report command")
