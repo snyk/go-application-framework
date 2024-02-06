@@ -22,8 +22,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 	// setup
 	logger := log.New(os.Stderr, "test: ", 0)
 	config := configuration.New()
-	orgId := "orgId"
-	config.Set(configuration.ORGANIZATION, orgId)
+	orgID := "orgId"
+	config.Set(configuration.ORGANIZATION, orgID)
 	config.Set(experimentalFlag, true)
 	config.Set(configuration.CACHE_PATH, t.TempDir())
 
@@ -35,7 +35,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
-	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
+	mockClient := testGetMockHTTPClient(t, orgID, requestPayload)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -51,9 +51,9 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
-	orgId := "orgId"
+	orgID := "orgId"
 
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, orgID)
 
 	requestPayload := testGetScanDonePayloadString()
 
