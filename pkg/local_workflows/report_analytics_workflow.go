@@ -2,15 +2,23 @@ package localworkflows
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
+	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/persistence"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
-	"github.com/xeipuuv/gojsonschema"
 )
 
 var (
@@ -53,8 +61,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
-	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=2023-11-09~experimental", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
-
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
 		logger.Printf("adding command line input")
@@ -64,6 +70,10 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			[]byte(commandLineInput),
 		)
 		inputData = append(inputData, data)
+	}
+	db, err := getReportAnalyticsDatabase(config)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get report analytics database")
 	}
 
 	for i, input := range inputData {
@@ -81,27 +91,150 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			return nil, err
 		}
 
-		callErr := callEndpoint(invocationCtx, input, url)
-		if callErr != nil {
-			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
-			return nil, err
+		_, err := appendToOutbox(invocationCtx, db, input.GetPayload().([]byte))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to append to outbox")
 		}
+	}
 
+	err = sendOutbox(invocationCtx, db)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to send outbox")
 	}
 	logger.Println(reportAnalyticsWorkflowName + " workflow end")
 	return nil, nil
 }
 
-func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
+func getReportAnalyticsDatabase(conf configuration.Configuration) (*sql.DB, error) {
+	db, err := persistence.GetDatabase(conf, reportAnalyticsWorkflowName)
+	return db, err
+}
+
+func getReportAnalyticsEndpoint(config configuration.Configuration) string {
+	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=2023-11-09~experimental", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
+	return url
+}
+
+func appendToOutbox(ctx workflow.InvocationContext, db *sql.DB, payload []byte) (string, error) {
+	commit := false
+	logger := ctx.GetLogger()
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	defer finalizeTx(tx, logger, &commit)
+
+	if err != nil {
+		return "", errors.Wrap(err, "failed to start transaction")
+	}
+
+	err = createOutboxTable(tx)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create outbox table")
+	}
+
+	query := "INSERT INTO outbox (id, timestamp, retries, payload) VALUES (?, ?, ?, ?)"
+	id := uuid.New()
+	_, err = tx.Exec(query, id.String(), time.Now().Unix(), 0, payload)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to insert into outbox")
+	}
+	commit = true
+	return id.String(), nil
+}
+
+func finalizeTx(tx *sql.Tx, logger *log.Logger, commit *bool) {
+	if *commit {
+		err := tx.Commit()
+		if err != nil {
+			logger.Println("failed to commit transaction ")
+			return
+		}
+		logger.Println("committed transaction")
+	} else {
+		err := tx.Rollback()
+		if err != nil {
+			logger.Println("failed to roll back transaction")
+			return
+		}
+		logger.Println("rolled back transaction")
+	}
+}
+
+func sendOutbox(ctx workflow.InvocationContext, db *sql.DB) error {
+	commit := false
+	logger := ctx.GetLogger()
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return errors.Wrap(err, "failed to start transaction")
+	}
+	defer finalizeTx(tx, logger, &commit)
+
+	maxRetries := 3
+	query, err := tx.Query("SELECT id, retries, payload FROM outbox WHERE retries < ?", maxRetries)
+	if err != nil {
+		return errors.Wrap(err, "failed to query outbox")
+	}
+	defer func() {
+		err = query.Close()
+		if err != nil {
+			logger.Println("failed to close query")
+		}
+	}()
+
+	for query.Next() {
+		var id string
+		var payload []byte
+		var retries int
+
+		err := query.Scan(&id, &retries, &payload)
+		if err != nil {
+			return errors.Wrap(err, "failed to scan outbox")
+		}
+
+		err = callEndpoint(ctx, payload)
+		logger.Println("sent analytics report to endpoint: " + id)
+		if err != nil {
+			logger.Printf("failed to call endpoint: %v\n", err)
+			_, err := tx.Exec("UPDATE outbox SET retries = ? WHERE id = ?", retries+1, id)
+			if err != nil {
+				return errors.Wrap(err, "failed to update outbox")
+			}
+			break // stop processing outbox
+		}
+		_, err = tx.Exec("DELETE FROM outbox WHERE id = ? OR retries >= ?", id, maxRetries)
+		logger.Println("updated analytics report in outbox: " + id)
+		if err != nil {
+			return errors.Wrap(err, "failed to update outbox")
+		}
+	}
+	commit = true
+	return nil
+}
+
+func createOutboxTable(tx *sql.Tx) error {
+	query := "CREATE TABLE IF NOT EXISTS " +
+		"outbox (" +
+		"id TEXT PRIMARY KEY, " +
+		"timestamp INTEGER NOT NULL, " +
+		"retries INTEGER DEFAULT 0, " +
+		"payload BLOB NOT NULL)"
+
+	_, err := tx.Exec(query)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func callEndpoint(invocationCtx workflow.InvocationContext, payload []byte) error {
 	logger := invocationCtx.GetLogger()
+	url := getReportAnalyticsEndpoint(invocationCtx.GetConfiguration())
 
 	// Create a request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(input.GetPayload().([]byte)))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logger.Printf("Error creating request: %v\n", err)
 		return err
 	}
-	req.Header.Set("Content-Type", input.GetContentType())
+	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request
 

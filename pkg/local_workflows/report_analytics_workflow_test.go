@@ -8,22 +8,24 @@ import (
 	"os"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/golang/mock/gomock"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 )
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing.T) {
 	// setup
-	logger := log.New(os.Stderr, "test", 0)
+	logger := log.New(os.Stderr, "test: ", 0)
 	config := configuration.New()
 	orgId := "orgId"
-
 	config.Set(configuration.ORGANIZATION, orgId)
 	config.Set(experimentalFlag, true)
+	config.Set(configuration.CACHE_PATH, t.TempDir())
 
 	requestPayload := testGetScanDonePayloadString()
 
@@ -168,7 +170,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testing.T) {
 	// setup
-	logger := log.New(os.Stderr, "test", 0)
+	logger := log.New(os.Stderr, "test:", 0)
 	config := configuration.New()
 	orgId := "orgId"
 
@@ -190,6 +192,58 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.Error(t, err)
+}
+
+func Test_ReportAnalytics_AppendToOutbox_InsertsIntoDatabase(t *testing.T) {
+	conf := configuration.NewInMemory()
+	conf.Set(configuration.CACHE_PATH, t.TempDir())
+	ctrl := gomock.NewController(t)
+	ctx := mocks.NewMockInvocationContext(ctrl)
+	ctx.EXPECT().GetLogger().AnyTimes().Return(log.New(os.Stderr, "test:", 0))
+	db, err := getReportAnalyticsDatabase(conf)
+	require.NoError(t, err)
+
+	id, err := appendToOutbox(ctx, db, []byte(testGetScanDonePayloadString()))
+
+	require.NoError(t, err)
+	require.Greater(t, len(id), 0)
+
+	var payload []byte
+	err = db.QueryRow("SELECT payload FROM outbox WHERE id = $1", id).Scan(&payload)
+	require.NoError(t, err)
+	require.Equal(t, testGetScanDonePayloadString(), string(payload))
+}
+
+func Test_ReportAnalytics_SendOutbox_shouldReportToApi(t *testing.T) {
+	conf := configuration.NewInMemory()
+	conf.Set(configuration.CACHE_PATH, t.TempDir())
+	orgId := "orgId"
+	conf.Set(configuration.ORGANIZATION, orgId)
+
+	ctrl := gomock.NewController(t)
+	ctx := mocks.NewMockInvocationContext(ctrl)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	ctx.EXPECT().GetLogger().AnyTimes().Return(log.New(os.Stderr, "test:", 0))
+	ctx.EXPECT().GetConfiguration().AnyTimes().Return(conf)
+	ctx.EXPECT().GetNetworkAccess().AnyTimes().Return(networkAccessMock)
+	payloadString := testGetScanDonePayloadString()
+	mockClient := testGetMockHTTPClient(t, orgId, payloadString)
+	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
+
+	db, err := getReportAnalyticsDatabase(conf)
+
+	for i := 0; i < 5; i++ {
+		_, err = appendToOutbox(ctx, db, []byte(payloadString))
+		require.NoError(t, err)
+	}
+
+	err = sendOutbox(ctx, db)
+
+	require.NoError(t, err)
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM outbox").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, 0, count)
 }
 
 func testGetScanDonePayload(payload string) workflow.Data {
