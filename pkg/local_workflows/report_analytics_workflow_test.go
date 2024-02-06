@@ -87,9 +87,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
-	orgId := testOrgID
-
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 
 	requestPayload := testGetScanDonePayloadString()
 
@@ -117,9 +115,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	config := configuration.New()
 	requestPayload := testGetScanDonePayloadString()
 	config.Set("inputData", requestPayload)
-	orgId := testOrgID
-
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 	config.Set(experimentalFlag, true)
 
 	// setup mocks
@@ -127,7 +123,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
-	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
+	mockClient := testGetMockHTTPClient(t, testOrgID, requestPayload)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -144,9 +140,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 	// setup
 	logger := log.New(os.Stderr, "test:", 0)
 	config := configuration.New()
-	orgId := testOrgID
-
-	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.ORGANIZATION, testOrgID)
 	requestPayload := ""
 
 	input := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(requestPayload))
@@ -189,8 +183,7 @@ func Test_ReportAnalytics_AppendToOutbox_InsertsIntoDatabase(t *testing.T) {
 func Test_ReportAnalytics_SendOutbox_shouldReportToApi(t *testing.T) {
 	conf := configuration.NewInMemory()
 	conf.Set(configuration.CACHE_PATH, t.TempDir())
-	orgId := testOrgID
-	conf.Set(configuration.ORGANIZATION, orgId)
+	conf.Set(configuration.ORGANIZATION, testOrgID)
 
 	ctrl := gomock.NewController(t)
 	ctx := mocks.NewMockInvocationContext(ctrl)
@@ -199,7 +192,7 @@ func Test_ReportAnalytics_SendOutbox_shouldReportToApi(t *testing.T) {
 	ctx.EXPECT().GetConfiguration().AnyTimes().Return(conf)
 	ctx.EXPECT().GetNetworkAccess().AnyTimes().Return(networkAccessMock)
 	payloadString := testGetScanDonePayloadString()
-	mockClient := testGetMockHTTPClient(t, orgId, payloadString)
+	mockClient := testGetMockHTTPClient(t, testOrgID, payloadString)
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	db, err := getReportAnalyticsOutboxDatabase(conf)
@@ -259,10 +252,11 @@ func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 	return InitReportAnalyticsWorkflow(engine)
 }
 
-func testGetMockHTTPClient(t *testing.T, orgId, requestPayload string) *http.Client {
+func testGetMockHTTPClient(t *testing.T, testOrgID, requestPayload string) *http.Client {
+	t.Helper()
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
-		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2023-11-09~experimental", req.URL.String())
+		require.Equal(t, "/hidden/orgs/"+testOrgID+"/analytics?version=2023-11-09~experimental", req.URL.String())
 		require.Equal(t, "POST", req.Method)
 		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 		body, err := io.ReadAll(req.Body)
