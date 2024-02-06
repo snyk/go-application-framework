@@ -6,13 +6,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 func Test_GetDatabase(t *testing.T) {
 	conf := configuration.NewInMemory()
 	conf.Set(configuration.CACHE_PATH, t.TempDir())
 
-	database, err := GetDatabase(conf, t.Name())
+	database, err := GetDatabase(conf, workflow.NewWorkflowIdentifier("huhu"), t.Name())
 
 	require.NoError(t, err)
 	require.NotNil(t, database)

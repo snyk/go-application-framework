@@ -71,7 +71,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		)
 		inputData = append(inputData, data)
 	}
-	db, err := getReportAnalyticsDatabase(config)
+	db, err := getReportAnalyticsOutboxDatabase(config)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get report analytics database")
 	}
@@ -105,8 +105,8 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	return nil, nil
 }
 
-func getReportAnalyticsDatabase(conf configuration.Configuration) (*sql.DB, error) {
-	db, err := persistence.GetDatabase(conf, reportAnalyticsWorkflowName)
+func getReportAnalyticsOutboxDatabase(conf configuration.Configuration) (*sql.DB, error) {
+	db, err := persistence.GetDatabase(conf, WORKFLOWID_REPORT_ANALYTICS, "outbox")
 	return db, err
 }
 

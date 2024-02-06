@@ -200,7 +200,7 @@ func Test_ReportAnalytics_AppendToOutbox_InsertsIntoDatabase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctx := mocks.NewMockInvocationContext(ctrl)
 	ctx.EXPECT().GetLogger().AnyTimes().Return(log.New(os.Stderr, "test:", 0))
-	db, err := getReportAnalyticsDatabase(conf)
+	db, err := getReportAnalyticsOutboxDatabase(conf)
 	require.NoError(t, err)
 
 	id, err := appendToOutbox(ctx, db, []byte(testGetScanDonePayloadString()))
@@ -230,7 +230,7 @@ func Test_ReportAnalytics_SendOutbox_shouldReportToApi(t *testing.T) {
 	mockClient := testGetMockHTTPClient(t, orgId, payloadString)
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
-	db, err := getReportAnalyticsDatabase(conf)
+	db, err := getReportAnalyticsOutboxDatabase(conf)
 
 	for i := 0; i < 5; i++ {
 		_, err = appendToOutbox(ctx, db, []byte(payloadString))
