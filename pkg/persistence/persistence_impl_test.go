@@ -4,41 +4,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-func Test_Create(t *testing.T) {
-	id, _ := createPersistableForTest(t)
+func Test_GetDatabase(t *testing.T) {
+	conf := configuration.NewInMemory()
+	conf.Set(configuration.CACHE_PATH, t.TempDir())
 
-	require.Equal(t, "id", string(id))
-}
-
-func createPersistableForTest(t *testing.T) (PersistableID, *SqlitePersistor) {
-	p := &defaultPersistable{
-		id:       "id",
-		status:   Open,
-		category: "category",
-		payload:  []byte("payload"),
-	}
-	opt := DsnOpt{
-		dsn: t.TempDir() + "/test.db",
-	}
-
-	persistor := NewSqlitePersistor(opt)
-	id, err := persistor.Create(p, "category")
-	require.NoError(t, err)
-
-	return id, persistor
-}
-
-func Test_Get(t *testing.T) {
-	id, persistor := createPersistableForTest(t)
-	require.Equal(t, "id", string(id))
-
-	obj, err := persistor.Get(id, "category")
+	database, err := GetDatabase(conf, t.Name())
 
 	require.NoError(t, err)
-	require.Equal(t, []byte("payload"), obj.Bytes())
-	require.Equal(t, id, obj.ID())
-	require.Equal(t, Open, obj.Status())
-	require.Equal(t, PersistableCategory("category"), obj.Category())
+	require.NotNil(t, database)
+
+	err = database.Ping()
+	require.NoError(t, err)
 }
