@@ -167,7 +167,7 @@ func sendOutbox(ctx workflow.InvocationContext, db *sql.DB) error {
 	}
 	defer finalizeTx(tx, logger, &commit)
 
-	maxRetries := 3
+	maxRetries := 100
 	query, err := tx.Query("SELECT id, retries, payload FROM outbox WHERE retries < ?", maxRetries)
 	if err != nil {
 		return errors.Wrap(err, "failed to query outbox")
@@ -199,7 +199,13 @@ func sendOutbox(ctx workflow.InvocationContext, db *sql.DB) error {
 			}
 			break // stop processing outbox
 		}
-		_, err = tx.Exec("DELETE FROM outbox WHERE id = ? OR retries >= ?", id, maxRetries)
+		timeout := time.Now().Add(-time.Hour * 24 * 5).Unix()
+		_, err = tx.Exec(
+			"DELETE FROM outbox WHERE id = ? OR retries >= ? OR timestamp < ?",
+			id,
+			maxRetries,
+			timeout,
+		)
 		logger.Println("updated analytics report in outbox: " + id)
 		if err != nil {
 			return errors.Wrap(err, "failed to update outbox")
