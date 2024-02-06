@@ -53,6 +53,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
 	config.Set(configuration.ORGANIZATION, testOrgID)
+	config.Set(configuration.CACHE_PATH, t.TempDir())
 
 	requestPayload := testGetScanDonePayloadString()
 
@@ -88,6 +89,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
 	config.Set(configuration.ORGANIZATION, testOrgID)
+	config.Set(configuration.CACHE_PATH, t.TempDir())
 
 	requestPayload := testGetScanDonePayloadString()
 
@@ -117,6 +119,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	config.Set("inputData", requestPayload)
 	config.Set(configuration.ORGANIZATION, testOrgID)
 	config.Set(experimentalFlag, true)
+	config.Set(configuration.CACHE_PATH, t.TempDir())
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -141,6 +144,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 	logger := log.New(os.Stderr, "test:", 0)
 	config := configuration.New()
 	config.Set(configuration.ORGANIZATION, testOrgID)
+	config.Set(configuration.CACHE_PATH, t.TempDir())
 	requestPayload := ""
 
 	input := workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(requestPayload))
