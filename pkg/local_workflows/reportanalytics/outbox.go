@@ -3,22 +3,33 @@ package reportanalytics
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/pressly/goose/v3"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
+
 // GetReportAnalyticsOutboxDatabase returns the database for the outbox.
 func GetReportAnalyticsOutboxDatabase(conf configuration.Configuration) (*sql.DB, error) {
 	db, err := GetDatabase(conf, "report_analytics", "outbox")
 	if err != nil {
-		return db, errors.Wrap(err, "failed to get database")
+		return nil, errors.Wrap(err, "failed to get database")
 	}
+
+	err = createOutboxTable(db)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create outbox table")
+	}
+
 	return db, nil
 }
 
@@ -31,11 +42,6 @@ func AppendToOutbox(ctx workflow.InvocationContext, db *sql.DB, payload []byte) 
 
 	if err != nil {
 		return "", errors.Wrap(err, "failed to start transaction")
-	}
-
-	err = createOutboxTable(tx)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create outbox table")
 	}
 
 	query := "INSERT INTO outbox (id, timestamp, retries, payload) VALUES (?, ?, ?, ?)"
@@ -66,18 +72,17 @@ func finalizeTx(tx *sql.Tx, logger *log.Logger, commit *bool) {
 	}
 }
 
-func createOutboxTable(tx *sql.Tx) error {
-	query := "CREATE TABLE IF NOT EXISTS " +
-		"outbox (" +
-		"id TEXT PRIMARY KEY, " +
-		"timestamp INTEGER NOT NULL, " +
-		"retries INTEGER DEFAULT 0, " +
-		"payload BLOB NOT NULL)"
+func createOutboxTable(db *sql.DB) error {
+	goose.SetBaseFS(embedMigrations)
 
-	_, err := tx.Exec(query)
-	if err != nil {
-		return errors.Wrap(err, "failed to create outbox table")
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return errors.Wrap(err, "unknown dialect for migrations")
 	}
+
+	if err := goose.Up(db, "migrations"); err != nil {
+		return errors.Wrap(err, "error execution migrations for report analytics outbox")
+	}
+
 	return nil
 }
 

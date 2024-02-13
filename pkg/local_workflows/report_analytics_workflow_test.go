@@ -51,7 +51,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *testing.T) {
 	// setup
-	logger := log.New(os.Stderr, "test", 0)
+	logger := log.New(os.Stderr, "test:", 0)
 	config := configuration.New()
 	config.Set(configuration.ORGANIZATION, testOrgID)
 	config.Set(configuration.CACHE_PATH, t.TempDir())
@@ -87,7 +87,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.T) {
 	// setup
-	logger := log.New(os.Stderr, "test", 0)
+	logger := log.New(os.Stderr, "test:", 0)
 	config := configuration.New()
 	config.Set(configuration.ORGANIZATION, testOrgID)
 	config.Set(configuration.CACHE_PATH, t.TempDir())
@@ -114,7 +114,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	// setup
-	logger := log.New(os.Stderr, "test", 0)
+	logger := log.New(os.Stderr, "test:", 0)
 	config := configuration.New()
 	requestPayload := testGetScanDonePayloadString()
 	config.Set("inputData", requestPayload)
