@@ -1,4 +1,4 @@
-package persistence
+package reportanalytics
 
 import (
 	"database/sql"
@@ -8,15 +8,13 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // GetDatabase returns a database connection for the given name.
-func GetDatabase(conf configuration.Configuration, workflowID workflow.Identifier, name string) (*sql.DB, error) {
+func GetDatabase(conf configuration.Configuration, prefix, name string) (*sql.DB, error) {
 	cachePath := conf.GetString(configuration.CACHE_PATH)
-	extension := workflowID.Host
 
-	dbFile := filepath.Join(cachePath, extension+"_"+name+".db")
+	dbFile := filepath.Join(cachePath, prefix+"_"+name+".db")
 
 	db, err := sql.Open("sqlite", dbFile)
 	if err != nil {

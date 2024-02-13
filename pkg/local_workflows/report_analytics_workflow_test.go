@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/reportanalytics"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/golang/mock/gomock"
@@ -170,10 +171,11 @@ func Test_ReportAnalytics_AppendToOutbox_InsertsIntoDatabase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctx := mocks.NewMockInvocationContext(ctrl)
 	ctx.EXPECT().GetLogger().AnyTimes().Return(log.New(os.Stderr, "test:", 0))
-	db, err := getReportAnalyticsOutboxDatabase(conf)
+	db, err := reportanalytics.GetReportAnalyticsOutboxDatabase(conf)
 	require.NoError(t, err)
 
-	id, err := appendToOutbox(ctx, db, []byte(testGetScanDonePayloadString()))
+	id, err := reportanalytics.
+		AppendToOutbox(ctx, db, []byte(testGetScanDonePayloadString()))
 
 	require.NoError(t, err)
 	require.Greater(t, len(id), 0)
@@ -199,15 +201,15 @@ func Test_ReportAnalytics_SendOutbox_shouldReportToApi(t *testing.T) {
 	mockClient := testGetMockHTTPClient(t, testOrgID, payloadString)
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
-	db, err := getReportAnalyticsOutboxDatabase(conf)
+	db, err := reportanalytics.GetReportAnalyticsOutboxDatabase(conf)
 	require.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
-		_, err = appendToOutbox(ctx, db, []byte(payloadString))
+		_, err = reportanalytics.AppendToOutbox(ctx, db, []byte(payloadString))
 		require.NoError(t, err)
 	}
 
-	err = sendOutbox(ctx, db)
+	err = reportanalytics.SendOutbox(ctx, db, "application/json")
 
 	require.NoError(t, err)
 	var count int
