@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -271,12 +273,31 @@ func Test_determineGrantType_both(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err //nolint:wrapcheck
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err //nolint:wrapcheck
+	}
+	defer func(l *net.TCPListener) {
+		_ = l.Close()
+	}(l)
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
 func Test_Authenticate_CredentialsGrant(t *testing.T) {
+	port, err := getFreePort()
+	assert.Nil(t, err)
+	host := fmt.Sprint("localhost:", port)
 	go func() {
 		mux := http.NewServeMux()
 		srv := &http.Server{
 			Handler:           mux,
-			Addr:              "localhost:3221",
+			Addr:              host,
 			ReadHeaderTimeout: time.Second * 30,
 		}
 		mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
@@ -304,10 +325,10 @@ func Test_Authenticate_CredentialsGrant(t *testing.T) {
 	config := configuration.NewInMemory()
 	config.Set(PARAMETER_CLIENT_SECRET, "secret")
 	config.Set(PARAMETER_CLIENT_ID, "id")
-	config.Set(configuration.API_URL, "http://localhost:3221")
+	config.Set(configuration.API_URL, "http://"+host)
 
 	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
-	err := authenticator.Authenticate()
+	err = authenticator.Authenticate()
 	assert.Nil(t, err)
 
 	token := config.GetString(CONFIG_KEY_OAUTH_TOKEN)
