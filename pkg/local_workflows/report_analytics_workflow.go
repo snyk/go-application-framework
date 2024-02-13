@@ -7,9 +7,9 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/xeipuuv/gojsonschema"
 
+	"github.com/snyk/go-application-framework/internal/localworkflows/reportanalytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/reportanalytics"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 

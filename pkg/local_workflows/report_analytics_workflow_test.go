@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/reportanalytics"
+	"github.com/snyk/go-application-framework/internal/localworkflows/reportanalytics"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/golang/mock/gomock"
