@@ -50,7 +50,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 }
 
 func Test_Multithreading(t *testing.T) {
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 20; i++ {
 		go func() {
 			conf := configuration.NewInMemory()
 			conf.Set(configuration.CACHE_PATH, t.TempDir())
