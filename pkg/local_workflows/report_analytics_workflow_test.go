@@ -49,6 +49,18 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportToApi(t *testing
 	require.NoError(t, err)
 }
 
+func Test_Multithreading(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		go func() {
+			conf := configuration.NewInMemory()
+			conf.Set(configuration.CACHE_PATH, t.TempDir())
+			conf.Set(configuration.ORGANIZATION, testOrgID)
+
+			shouldReportToApi(t, conf)
+		}()
+	}
+}
+
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *testing.T) {
 	// setup
 	logger := log.New(os.Stderr, "test:", 0)
@@ -191,6 +203,11 @@ func Test_ReportAnalytics_SendOutbox_shouldReportToApi(t *testing.T) {
 	conf.Set(configuration.CACHE_PATH, t.TempDir())
 	conf.Set(configuration.ORGANIZATION, testOrgID)
 
+	shouldReportToApi(t, conf)
+}
+
+func shouldReportToApi(t *testing.T, conf configuration.Configuration) {
+	t.Helper()
 	ctrl := gomock.NewController(t)
 	ctx := mocks.NewMockInvocationContext(ctrl)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)

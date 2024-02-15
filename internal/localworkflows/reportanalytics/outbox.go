@@ -22,6 +22,9 @@ var dbMutex = &sync.Mutex{}
 
 // GetReportAnalyticsOutboxDatabase returns the database for the outbox.
 func GetReportAnalyticsOutboxDatabase(conf configuration.Configuration) (*sql.DB, error) {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
 	db, err := GetDatabase(conf, "report_analytics", "outbox")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get database")
@@ -31,7 +34,6 @@ func GetReportAnalyticsOutboxDatabase(conf configuration.Configuration) (*sql.DB
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create outbox table")
 	}
-
 	return db, nil
 }
 
@@ -77,8 +79,6 @@ func finalizeTx(tx *sql.Tx, logger *log.Logger, commit *bool) {
 }
 
 func createOutboxTable(db *sql.DB) error {
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
 	goose.SetBaseFS(embedMigrations)
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
