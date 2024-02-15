@@ -44,6 +44,7 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 
 	// don't display in help
 	result.SetVisibility(false)
+
 	return nil
 }
 
@@ -99,7 +100,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 	}
 
-	err = reportanalytics.SendOutbox(invocationCtx, db, jsonContentType)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to send outbox")
 	}

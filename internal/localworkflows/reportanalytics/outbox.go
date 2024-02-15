@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,7 @@ import (
 
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
+var dbMutex = &sync.Mutex{}
 
 // GetReportAnalyticsOutboxDatabase returns the database for the outbox.
 func GetReportAnalyticsOutboxDatabase(conf configuration.Configuration) (*sql.DB, error) {
@@ -35,6 +37,8 @@ func GetReportAnalyticsOutboxDatabase(conf configuration.Configuration) (*sql.DB
 
 // AppendToOutbox appends a new analytics entry to the outbox.
 func AppendToOutbox(ctx workflow.InvocationContext, db *sql.DB, payload []byte) (string, error) {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
 	commit := false
 	logger := ctx.GetLogger()
 	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -73,6 +77,8 @@ func finalizeTx(tx *sql.Tx, logger *log.Logger, commit *bool) {
 }
 
 func createOutboxTable(db *sql.DB) error {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
 	goose.SetBaseFS(embedMigrations)
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
@@ -88,6 +94,8 @@ func createOutboxTable(db *sql.DB) error {
 
 // SendOutbox sends outbox to the endpoint.
 func SendOutbox(ctx workflow.InvocationContext, db *sql.DB, contentType string) error {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
 	commit := false
 	logger := ctx.GetLogger()
 	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
