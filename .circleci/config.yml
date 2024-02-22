@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  prodsec: snyk/prodsec-orb@1.0
+  prodsec: snyk/prodsec-orb@1
 
 executors:
   linux:
@@ -24,10 +24,19 @@ jobs:
       - run:
           name: Build
           command: make build
+
+  security-scans:
+    resource_class: small
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - prodsec/security_scans:
+          mode: auto
+
   
 # Orchestrate our job run sequence
 workflows:
-  version: 2
   test_and_release:
     jobs:
       - prodsec/secrets-scan:
@@ -35,6 +44,8 @@ workflows:
           context:
             - snyk-bot-slack
           channel: cli-alerts
+      - security-scans:
+          context: devex_cli
       - unit_test:
           name: Unit tests
       - build:
