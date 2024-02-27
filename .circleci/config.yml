@@ -28,7 +28,7 @@ jobs:
   security-scans:
     resource_class: small
     docker:
-      - image: cimg/base:stable
+      - image: cimg/go:1.22
     steps:
       - checkout
       - prodsec/security_scans:
