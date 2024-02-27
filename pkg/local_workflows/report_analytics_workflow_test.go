@@ -2,16 +2,22 @@ package localworkflows
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
+	"time"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/golang/mock/gomock"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 )
@@ -252,4 +258,52 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *h
 		}
 	})
 	return mockClient
+}
+
+func Test_normalizeInput_valueToHigh(t *testing.T) {
+	input := testGetScanDonePayloadString()
+	var payload json_schemas.ScanDoneEvent
+	err := json.Unmarshal([]byte(input), &payload)
+	require.NoError(t, err)
+	payload.Data.Attributes.DurationMs = strconv.FormatInt(time.Now().UnixMilli(), 10)
+	faultyInput, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	normalized := normalizeInput(faultyInput)
+	err = json.Unmarshal(normalized, &payload)
+
+	require.NoError(t, err)
+	require.Equal(t, "0", payload.Data.Attributes.DurationMs)
+}
+
+func Test_normalizeInput_valueToLow(t *testing.T) {
+	input := testGetScanDonePayloadString()
+	var payload json_schemas.ScanDoneEvent
+	err := json.Unmarshal([]byte(input), &payload)
+	require.NoError(t, err)
+	payload.Data.Attributes.DurationMs = "-1"
+	faultyInput, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	normalized := normalizeInput(faultyInput)
+	err = json.Unmarshal(normalized, &payload)
+
+	require.NoError(t, err)
+	require.Equal(t, "0", payload.Data.Attributes.DurationMs)
+}
+
+func Test_normalizeInput_valueNormal(t *testing.T) {
+	input := testGetScanDonePayloadString()
+	var payload json_schemas.ScanDoneEvent
+	err := json.Unmarshal([]byte(input), &payload)
+	require.NoError(t, err)
+	payload.Data.Attributes.DurationMs = "1000"
+	faultyInput, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	normalized := normalizeInput(faultyInput)
+	err = json.Unmarshal(normalized, &payload)
+
+	require.NoError(t, err)
+	require.Equal(t, "1000", payload.Data.Attributes.DurationMs)
 }
