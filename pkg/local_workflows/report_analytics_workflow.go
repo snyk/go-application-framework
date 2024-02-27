@@ -2,15 +2,18 @@ package localworkflows
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+
+	"github.com/spf13/pflag"
+	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
-	"github.com/xeipuuv/gojsonschema"
 )
 
 var (
@@ -81,27 +84,53 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			return nil, err
 		}
 
-		callErr := callEndpoint(invocationCtx, input, url)
+		payload := input.GetPayload().([]byte)
+
+		normalizeInput(payload)
+
+		callErr := callEndpoint(invocationCtx, payload, url, input.GetContentType())
 		if callErr != nil {
 			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
 			return nil, err
 		}
-
 	}
 	logger.Println(reportAnalyticsWorkflowName + " workflow end")
 	return nil, nil
 }
 
-func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
+func normalizeInput(input []byte) []byte {
+	var scanDoneEvent json_schemas.ScanDoneEvent
+	err := json.Unmarshal(input, &scanDoneEvent)
+	if err != nil {
+		return input
+	}
+
+	durationMs, err := strconv.ParseInt(scanDoneEvent.Data.Attributes.DurationMs, 10, 64)
+	if err != nil {
+		return input
+	}
+
+	if durationMs > 1000*3600*12 || durationMs < 0 {
+		scanDoneEvent.Data.Attributes.DurationMs = "0"
+	}
+
+	normalized, err := json.Marshal(scanDoneEvent)
+	if err != nil {
+		return input
+	}
+	return normalized
+}
+
+func callEndpoint(invocationCtx workflow.InvocationContext, input []byte, url string, contentType string) error {
 	logger := invocationCtx.GetLogger()
 
 	// Create a request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(input.GetPayload().([]byte)))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(input))
 	if err != nil {
 		logger.Printf("Error creating request: %v\n", err)
 		return err
 	}
-	req.Header.Set("Content-Type", input.GetContentType())
+	req.Header.Set("Content-Type", contentType)
 
 	// Send the request
 
