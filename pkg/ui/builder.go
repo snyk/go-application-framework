@@ -70,7 +70,7 @@ func (b *ConsoleUiBuilder) Build() (UserInterface, error) {
 func NewConsoleUiBuilder() *ConsoleUiBuilder {
 	return &ConsoleUiBuilder{
 		outputWriter:       os.Stdout,
-		errorOutputWriter:  newColoredWriter(os.Stdout, red),
+		errorOutputWriter:  newColoredWriter(os.Stderr, red),
 		progressBarFactory: func() ProgressBar { return newProgressBar(os.Stderr) },
 		inputReader:        bufio.NewReader(os.Stdin),
 	}
