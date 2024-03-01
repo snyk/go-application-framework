@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"os/user"
 	"strings"
 	"testing"
@@ -14,7 +13,7 @@ import (
 )
 
 func Test_Basic(t *testing.T) {
-	os.Setenv("CIRCLECI", "true")
+	t.Setenv("CIRCLECI", "true")
 	testFields := []string{
 		"tfc-token",
 		"azurerm-account-key",
@@ -64,8 +63,8 @@ func Test_Basic(t *testing.T) {
 			assert.NotNil(t, request)
 			assert.True(t, analytics.IsCiEnvironment())
 
-			expectedAuthHeader, _ := h["Authorization"]
-			actualAuthHeader, _ := request.Header["Authorization"]
+			expectedAuthHeader := h["Authorization"]
+			actualAuthHeader := request.Header["Authorization"]
 			assert.Equal(t, expectedAuthHeader, actualAuthHeader)
 
 			requestUrl := request.URL.String()
@@ -74,7 +73,7 @@ func Test_Basic(t *testing.T) {
 
 			body, err := io.ReadAll(request.Body)
 			assert.Nil(t, err)
-			assert.Equal(t, len(testFields), strings.Count(string(body), sanitize_replacement_string), "Not all sensitive values have been replaced!")
+			assert.Equal(t, len(testFields), strings.Count(string(body), sanitizeReplacementString), "Not all sensitive values have been replaced!")
 
 			var requestBody dataOutput
 			err = json.Unmarshal(body, &requestBody)
@@ -92,7 +91,6 @@ func Test_Basic(t *testing.T) {
 			fmt.Println("Request Body: " + string(body))
 		})
 	}
-
 }
 
 func Test_SanitizeValuesByKey(t *testing.T) {
@@ -121,7 +119,7 @@ func Test_SanitizeValuesByKey(t *testing.T) {
 	// test input
 	filter := sensitiveFieldNames
 	input, _ := json.Marshal(inputStruct)
-	replacement := sanitize_replacement_string
+	replacement := sanitizeReplacementString
 
 	fmt.Println("Before: " + string(input))
 
@@ -226,9 +224,7 @@ func Test_SanitizeUsername(t *testing.T) {
 
 		var outputStruct sanTest
 		json.Unmarshal(output, &outputStruct)
-
 	}
-
 }
 
 func newTestAnalytics(t *testing.T) Analytics {
@@ -239,6 +235,7 @@ func newTestAnalytics(t *testing.T) Analytics {
 }
 
 func testUserCurrent(t *testing.T) func() (*user.User, error) {
+	t.Helper()
 	return func() (*user.User, error) {
 		return &user.User{
 			Uid:      "1000",

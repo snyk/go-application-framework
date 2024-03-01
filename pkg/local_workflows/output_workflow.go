@@ -52,10 +52,13 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'\n", input[i].GetIdentifier().String(), contentLocation, mimeType)
 
 		if strings.Contains(mimeType, OUTPUT_CONFIG_KEY_JSON) { // handle application/json
-			singleData := input[i].GetPayload().([]byte)
+			singleData, ok := input[i].GetPayload().([]byte)
+			if !ok {
+				return nil, fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
+			}
 
 			// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
-			if printJsonToCmd == false && len(writeJsonToFile) == 0 {
+			if !printJsonToCmd && len(writeJsonToFile) == 0 {
 				printJsonToCmd = true
 			}
 
@@ -76,8 +79,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			if !typeCastSuccessful {
 				singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
 				if !typeCastSuccessful {
-					err := fmt.Errorf("Unsupported output type: %s", mimeType)
-					return output, err
+					return output, fmt.Errorf("unsupported output type: %s", mimeType)
 				}
 			} else {
 				singleDataAsString = string(singleData)

@@ -47,8 +47,8 @@ func MakeSelfSignedCert(certName string, dnsNames []string, debugLogger *log.Log
 		debugLogger.Println("MakeSelfSignedCert added ", dnsName)
 	}
 
-	certDERBytes, err_CreateCertificate := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	if err_CreateCertificate != nil {
+	certDERBytes, errCreateCertificate := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if errCreateCertificate != nil {
 		return nil, nil, err
 	}
 
@@ -137,7 +137,6 @@ func GetAllCerts(pemData []byte) ([]*x509.Certificate, error) {
 
 // Get global Certificate pool including x509.SystemCertPool() + extraCertificateLocation
 func AddCertificatesToPool(pool *x509.CertPool, extraCertificateLocation string) error {
-
 	_, extracCertList, err := GetExtraCaCert(extraCertificateLocation)
 	if err != nil {
 		return err

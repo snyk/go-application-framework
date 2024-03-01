@@ -29,6 +29,8 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer res.Body.Close()
+
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
@@ -55,13 +57,14 @@ func (a *snykApiClient) GetDefaultOrgId() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to retrieve org ID: %w", err)
 	}
+	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", fmt.Errorf("unable to retrieve org ID: %w", err)
 	}
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unable to retrieve org ID (status: %d)", res.StatusCode)
 	}
 

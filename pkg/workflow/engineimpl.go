@@ -155,7 +155,7 @@ func (e *EngineImpl) Register(id Identifier, config ConfigurationOptions, entryP
 	}
 
 	if config == nil {
-		return nil, fmt.Errorf("Config must not be nil")
+		return nil, fmt.Errorf("config must not be nil")
 	}
 
 	if id == nil {

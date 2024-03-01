@@ -33,7 +33,7 @@ If you can't wait use this url:
 // define a new workflow identifier for this workflow
 var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflowNameAuth)
 
-// InitAuth initialises the auth workflow before registering it with the engine.
+// InitAuth initializes the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
 	if !engine.GetConfiguration().GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
 		return nil // Use legacy CLI for authentication for now, until OAuth is ready
@@ -91,7 +91,6 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		}
 
 		fmt.Println(auth.AUTHENTICATED_MESSAGE)
-
 	} else { // LEGACY flow
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 		config.Set(configuration.WORKFLOW_USE_STDIO, true)

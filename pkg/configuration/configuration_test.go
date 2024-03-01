@@ -51,7 +51,7 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 	actualValue := config.GetString(AUTHENTICATION_TOKEN)
 	assert.Equal(t, expectedValue, actualValue)
 
-	os.Setenv("SNYK_TOKEN", expectedValue2)
+	t.Setenv("SNYK_TOKEN", expectedValue2)
 	actualValue = config.GetString(AUTHENTICATION_TOKEN)
 	assert.Equal(t, expectedValue2, actualValue)
 
@@ -67,14 +67,17 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 	config := NewFromFiles(TEST_FILENAME)
 	config.AddAlternativeKeys(AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
 
-	os.Setenv("SNYK_OAUTH_TOKEN", expectedValue)
-	actualValue := config.GetString(AUTHENTICATION_BEARER_TOKEN)
-	assert.Equal(t, expectedValue, actualValue)
+	t.Run("oauth token", func(t *testing.T) {
+		t.Setenv("SNYK_OAUTH_TOKEN", expectedValue)
+		actualValue := config.GetString(AUTHENTICATION_BEARER_TOKEN)
+		assert.Equal(t, expectedValue, actualValue)
+	})
 
-	os.Unsetenv("SNYK_OAUTH_TOKEN")
-	os.Setenv("SNYK_DOCKER_TOKEN", expectedValueDocker)
-	actualValue = config.GetString(AUTHENTICATION_BEARER_TOKEN)
-	assert.Equal(t, expectedValueDocker, actualValue)
+	t.Run("docker token", func(t *testing.T) {
+		t.Setenv("SNYK_DOCKER_TOKEN", expectedValueDocker)
+		actualValue := config.GetString(AUTHENTICATION_BEARER_TOKEN)
+		assert.Equal(t, expectedValueDocker, actualValue)
+	})
 
 	cleanupConfigstore()
 	cleanUpEnvVars()
@@ -85,11 +88,11 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 
 	config := NewFromFiles(TEST_FILENAME)
 
-	os.Setenv("SNYK_DISABLE_ANALYTICS", "1")
+	t.Setenv("SNYK_DISABLE_ANALYTICS", "1")
 	actualValue := config.GetBool(ANALYTICS_DISABLED)
 	assert.True(t, actualValue)
 
-	os.Setenv("SNYK_DISABLE_ANALYTICS", "0")
+	t.Setenv("SNYK_DISABLE_ANALYTICS", "0")
 	actualValue = config.GetBool(ANALYTICS_DISABLED)
 	assert.False(t, actualValue)
 
@@ -290,7 +293,6 @@ func TestNewInMemory_shouldNotBreakWhenTryingToPersist(t *testing.T) {
 }
 
 func Test_DefaultValuehandling(t *testing.T) {
-
 	t.Run("set value in code", func(t *testing.T) {
 		keyNoDefault := "name"
 		keyWithDefault := "last name"
@@ -355,7 +357,5 @@ func Test_DefaultValuehandling(t *testing.T) {
 		wasSet = config.IsSet(ORGANIZATION)
 		assert.Equal(t, expected, actual)
 		assert.True(t, wasSet)
-
 	})
-
 }

@@ -52,8 +52,7 @@ func ShouldRequireAuthentication(
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
 		var matchesPattern bool
-		referenceUrl := ""
-		prefixUrl := ""
+		var prefixUrl, referenceUrl string
 		if len(subdomain) == 0 {
 			prefixUrl = apiUrl
 			referenceUrl, err = api.GetCanonicalApiUrl(*url)
@@ -81,7 +80,6 @@ func ShouldRequireAuthentication(
 	}
 
 	return false, nil
-
 }
 
 func AddAuthenticationHeader(

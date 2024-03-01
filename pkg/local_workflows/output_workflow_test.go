@@ -125,7 +125,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 	t.Run("should print unsupported mimeTypes that are string convertible", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		data := workflow.NewData(workflowIdentifier, "hammer/head", string(payload))
+		data := workflow.NewData(workflowIdentifier, "hammer/head", payload)
 
 		// mock assertions
 		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
@@ -147,6 +147,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Equal(t, []workflow.Data{}, output)
-		assert.Equal(t, "Unsupported output type: hammer/head", err.Error())
+		assert.Equal(t, "unsupported output type: hammer/head", err.Error())
 	})
 }

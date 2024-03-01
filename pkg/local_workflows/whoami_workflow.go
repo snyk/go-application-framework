@@ -24,9 +24,9 @@ const (
 // define a new workflow identifier for this workflow
 var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(whoAmIworkflowName)
 
-// InitWhoAmIWorkflow initialises the whoAmI workflow before registering it with the engine.
+// InitWhoAmIWorkflow initializes the whoAmI workflow before registering it with the engine.
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
-	// initialise workflow configuration
+	// initialize workflow configuration
 	whoAmIConfig := pflag.NewFlagSet(whoAmIworkflowName, pflag.ExitOnError)
 	// add experimental flag to configuration
 	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
