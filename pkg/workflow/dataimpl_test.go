@@ -8,7 +8,6 @@ import (
 )
 
 func Test_NewDataFromInput(t *testing.T) {
-
 	expectedContentType := "application/json"
 	expectedContentType2 := "application/binary"
 	expectedContentLocation := "/folder/of/source/file.json"
@@ -33,5 +32,4 @@ func Test_NewDataFromInput(t *testing.T) {
 
 	fmt.Println(input)
 	fmt.Println(output)
-
 }

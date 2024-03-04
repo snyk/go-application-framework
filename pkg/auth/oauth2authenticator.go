@@ -155,6 +155,7 @@ func GetOAuthToken(config configuration.Configuration) (*oauth2.Token, error) {
 		}
 		return token, nil
 	}
+	//nolint:nilnil // using a sentinel error here breaks existing API contract
 	return nil, nil
 }
 
@@ -312,8 +313,8 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	// iterate over different known ports if one fails
 	for _, port := range acceptedCallbackPorts {
 		srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
-		listener, err := net.Listen("tcp", srv.Addr)
-		if err != nil { // skip port if it can't be listened to
+		listener, listenErr := net.Listen("tcp", srv.Addr)
+		if listenErr != nil { // skip port if it can't be listened to
 			continue
 		}
 
@@ -335,8 +336,8 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			timedOut = true
 			o.shutdownServerFunc(srv)
 		})
-		err = srv.Serve(listener)
-		if err == http.ErrServerClosed { // if the server was shutdown normally, there is no need to iterate further
+		listenErr = srv.Serve(listener)
+		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
 			if timedOut {
 				return errors.New("authentication failed (timeout)")
 			}

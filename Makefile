@@ -2,15 +2,20 @@ LOG_PREFIX = --
 GOOS = $(shell go env GOOS)
 GOARCH = $(shell go env GOARCH)
 
+GO_BIN := $(shell pwd)/.bin
+OVERRIDE_GOCI_LINT_V := v1.55.2
+SHELL := env PATH=$(GO_BIN):$(PATH) $(SHELL)
+
 .PHONY: format
 format:
 	@echo "Formatting..."
 	@gofmt -w -l -e .
 
 .PHONY: lint
-lint:
+lint: $(GO_BIN)/golangci-lint
 	@echo "Linting..."
 	@./scripts/lint.sh
+	$(GO_BIN)/golangci-lint run ./...
 
 .PHONY: build
 build:
@@ -23,18 +28,21 @@ clean:
 	@GOOS=$(GOOS) GOARCH=$(GOARCH) go clean -testcache
 
 .PHONY: test
-test: 
+test:
 	@echo "Testing..."
 	@go test -cover ./...
 
 .PHONY: testv
-testv: 
+testv:
 	@echo "Testing verbosely..."
 	@go test -v ./...
 
 .PHONY: generate
-generate: 
+generate:
 	@go generate ./...
+
+$(GO_BIN)/golangci-lint:
+	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
 
 .PHONY: help
 help:

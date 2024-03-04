@@ -74,7 +74,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		assert.Equal(t, "GET", req.Method)
 
 		return &http.Response{
-			StatusCode: 200,
+			StatusCode: http.StatusOK,
 			// Send response to be tested
 			Body: ioutil.NopCloser(bytes.NewBufferString(payload)),
 			// Must be set to non-nil value or it panics
@@ -148,7 +148,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 			assert.Equal(t, "GET", req.Method)
 
 			return &http.Response{
-				StatusCode: 401,
+				StatusCode: http.StatusUnauthorized,
 				// Send response to be tested
 				Body: ioutil.NopCloser(bytes.NewBufferString("")),
 				// Must be set to non-nil value or it panics
@@ -175,7 +175,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 			assert.Equal(t, "GET", req.Method)
 
 			return &http.Response{
-				StatusCode: 500,
+				StatusCode: http.StatusInternalServerError,
 				// Send response to be tested
 				Body: ioutil.NopCloser(bytes.NewBufferString("")),
 				// Must be set to non-nil value or it panics
@@ -226,7 +226,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
 		assert.Equal(t, "GET", req.Method)
 
 		return &http.Response{
-			StatusCode: 200,
+			StatusCode: http.StatusOK,
 			// Send response to be tested
 			Body: ioutil.NopCloser(bytes.NewBufferString(payloadMissingUserNameProperty)),
 			// Must be set to non-nil value or it panics

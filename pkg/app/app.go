@@ -61,12 +61,13 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient.Init(url, client)
-		if existingValue != nil && len(existingValue.(string)) > 0 {
-			orgId := existingValue.(string)
+		existingString, ok := existingValue.(string)
+		if existingValue != nil && ok && len(existingString) > 0 {
+			orgId := existingString
 			_, err := uuid.Parse(orgId)
 			isSlugName := err != nil
 			if isSlugName {
-				orgId, err = apiClient.GetOrgIdFromSlug(existingValue.(string))
+				orgId, err = apiClient.GetOrgIdFromSlug(existingString)
 				if err != nil {
 					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 				} else {
@@ -100,7 +101,6 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 			return existingValue
 		}
 	})
-
 }
 
 // CreateAppEngine creates a new workflow engine.

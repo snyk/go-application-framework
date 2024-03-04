@@ -67,7 +67,7 @@ func (d *DataImpl) SetMetaData(key string, value string) {
 // GetMetaData returns the value of the given header key.
 func (d *DataImpl) GetMetaData(key string) (string, error) {
 	var value string
-	err := fmt.Errorf("Key '%s' not found!", key)
+	err := fmt.Errorf("key '%s' not found", key)
 	if values, ok := d.header[key]; ok {
 		if len(values) > 0 {
 			value = values[0]

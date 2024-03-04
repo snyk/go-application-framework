@@ -3,7 +3,6 @@ package localworkflows
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -24,9 +23,9 @@ const (
 	reportAnalyticsInputDataFlagName = "inputData"
 )
 
-// InitReportAnalyticsWorkflow initialises the reportAnalytics workflow before registering it with the engine.
+// InitReportAnalyticsWorkflow initializes the reportAnalytics workflow before registering it with the engine.
 func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
-	// initialise workflow configuration
+	// initialize workflow configuration
 	params := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
 	params.StringP(reportAnalyticsInputDataFlagName, "i", "", "Input data containing scan done event")
 	params.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental analytics report command")
@@ -68,7 +67,11 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 	for i, input := range inputData {
 		logger.Printf(fmt.Sprintf("processing element %d", i))
-		documentLoader := gojsonschema.NewBytesLoader(input.GetPayload().([]byte))
+		payload, ok := input.GetPayload().([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
+		}
+		documentLoader := gojsonschema.NewBytesLoader(payload)
 		result, validationErr := gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
 
 		if validationErr != nil {
@@ -86,7 +89,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
 			return nil, err
 		}
-
 	}
 	logger.Println(reportAnalyticsWorkflowName + " workflow end")
 	return nil, nil
@@ -96,7 +98,7 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 	logger := invocationCtx.GetLogger()
 
 	// Create a request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(input.GetPayload().([]byte)))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(input.GetPayload().([]byte)))
 	if err != nil {
 		logger.Printf("Error creating request: %v\n", err)
 		return err
@@ -110,11 +112,11 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 		logger.Printf("Error sending request: %v\n", err)
 		return err
 	}
+	defer resp.Body.Close()
 
-	if resp.StatusCode != 201 {
-		return fmt.Errorf("Error sending request: %v\n", resp.Status)
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("error sending request: %v", resp.Status)
 	}
 
-	defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
 	return nil
 }

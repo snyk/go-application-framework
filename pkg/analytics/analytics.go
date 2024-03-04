@@ -133,8 +133,8 @@ var (
 )
 
 const (
-	sanitize_replacement_string string = "REDACTED"
-	api_endpoint                       = "/v1/analytics/cli"
+	sanitizeReplacementString string = "REDACTED"
+	apiEndpoint               string = "/v1/analytics/cli"
 )
 
 // New creates a new Analytics instance.
@@ -247,7 +247,7 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	output.Ci = a.IsCiEnvironment()
 	output.IntegrationName = a.integrationName
 	output.IntegrationVersion = a.integrationVersion
-	output.DurationMs = int64(time.Since(a.created).Milliseconds())
+	output.DurationMs = time.Since(a.created).Milliseconds()
 	output.Standalone = true // standalone means binary deployment, which is always true for go applications.
 
 	return output
@@ -265,7 +265,7 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 		return nil, err
 	}
 
-	outputJson, err = SanitizeValuesByKey(sensitiveFieldNames, sanitize_replacement_string, outputJson)
+	outputJson, err = SanitizeValuesByKey(sensitiveFieldNames, sanitizeReplacementString, outputJson)
 	if err != nil {
 		return nil, err
 	}
@@ -274,12 +274,12 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	outputJson, err = SanitizeUsername(user.Username, user.HomeDir, sanitize_replacement_string, outputJson)
+	outputJson, err = SanitizeUsername(user.Username, user.HomeDir, sanitizeReplacementString, outputJson)
 	if err != nil {
 		return nil, err
 	}
 
-	analyticsUrl, _ := url.Parse(a.apiUrl + api_endpoint)
+	analyticsUrl, _ := url.Parse(a.apiUrl + apiEndpoint)
 	if len(a.org) > 0 {
 		query := url.Values{}
 		query.Add("org", a.org)
@@ -320,7 +320,7 @@ func (a *AnalyticsImpl) isEnabled() bool {
 	return !api.IsFedramp(a.apiUrl)
 }
 
-var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments")
+var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname // breaking API change
 
 // This method sanitizes the given content by searching for key-value mappings. It thereby replaces all keys defined in keysToFilter by the replacement string
 // Supported patterns are:

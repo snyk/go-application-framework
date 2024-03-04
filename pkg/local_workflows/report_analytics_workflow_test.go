@@ -64,7 +64,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		return &http.Response{
 			// error code!
-			StatusCode: 500,
+			StatusCode: http.StatusInternalServerError,
 			// Send response to be tested
 			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics
@@ -233,6 +233,7 @@ func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 }
 
 func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
+	t.Helper()
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
 		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2023-11-09~experimental", req.URL.String())
@@ -243,7 +244,7 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *h
 		require.Equal(t, requestPayload, string(body))
 
 		return &http.Response{
-			StatusCode: 201,
+			StatusCode: http.StatusCreated,
 			// Send response to be tested
 			Body: io.NopCloser(bytes.NewBufferString(requestPayload)),
 			// Must be set to non-nil value or it panics

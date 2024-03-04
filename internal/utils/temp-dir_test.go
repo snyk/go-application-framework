@@ -66,7 +66,7 @@ func Test_systemTempDirectory_handlesWhenTempDirNotExists(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expectedDir, tempDir)
 	assert.Equal(t, expectedDir, osutil.(*mockTempDirOSUtil).dirPath)
-	assert.Equal(t, os.FileMode(FILEPERM_755), osutil.(*mockTempDirOSUtil).dirPerm)
+	assert.Equal(t, FILEPERM_755, osutil.(*mockTempDirOSUtil).dirPerm)
 }
 
 func Test_systemTempDirectory_handlesTempDirFailure(t *testing.T) {
@@ -107,7 +107,7 @@ func Test_snykTempDirectoryImpl_handlesWhenSnykTempDirNotExists(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expectedResult, tempDir)
 	assert.Equal(t, expectedResult, osutil.(*mockTempDirOSUtil).dirPath)
-	assert.Equal(t, os.FileMode(FILEPERM_755), osutil.(*mockTempDirOSUtil).dirPerm)
+	assert.Equal(t, FILEPERM_755, osutil.(*mockTempDirOSUtil).dirPerm)
 }
 
 func Test_snykTempDirectoryImpl_handlesSnykTempDirFailure(t *testing.T) {

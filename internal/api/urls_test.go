@@ -14,9 +14,7 @@ var instanceList = []string{
 }
 
 func Test_GetCanonicalApiUrlFromString(t *testing.T) {
-
 	for _, instance := range instanceList {
-
 		inputList := []string{
 			"https://" + instance + ".io/api/v1",
 			"https://" + instance + ".io/api",
@@ -37,7 +35,6 @@ func Test_GetCanonicalApiUrlFromString(t *testing.T) {
 			assert.Equal(t, expected, actual)
 		}
 	}
-
 }
 
 func Test_GetCanonicalApiUrlFromString_Edgecases(t *testing.T) {
@@ -88,7 +85,6 @@ func Test_DeriveAppUrl(t *testing.T) {
 		actual, err := DeriveAppUrl("https://api." + instance)
 		assert.Nil(t, err)
 		assert.Equal(t, expected, actual)
-
 	}
 }
 

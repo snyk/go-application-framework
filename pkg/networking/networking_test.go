@@ -88,7 +88,7 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 		AccessToken:  accessToken,
 		TokenType:    "b",
 		RefreshToken: "c",
-		Expiry:       time.Now().Add(time.Duration(time.Minute * time.Duration(20))),
+		Expiry:       time.Now().Add(time.Minute * 20),
 	}
 
 	expectedTokenString, _ := json.Marshal(expectedToken)
@@ -228,8 +228,8 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	listen := func() {
 		listenerReady <- struct{}{} // Signal that listener is ready (using empty struct)
 		//nolint:gosec // client timeouts not a concern in tests
-		err := http.ServeTLS(listener, nil, certFile.Name(), keyFile.Name())
-		t.Log("server stopped", err)
+		serveErr := http.ServeTLS(listener, nil, certFile.Name(), keyFile.Name())
+		t.Log("server stopped", serveErr)
 	}
 	go listen()
 
@@ -263,14 +263,9 @@ func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 	net := NewNetworkAccess(config)
 	net.AddHeaderField("secret-header", "secret-value")
 
-	request, _ := http.NewRequest("GET", "https://api.snyk.io", nil)
+	request, _ := http.NewRequest(http.MethodGet, "https://api.snyk.io", nil)
 	err := net.AddHeaders(request)
 	assert.Nil(t, err)
-
-	keys := make([]string, 0, len(request.Header))
-	for k := range request.Header {
-		keys = append(keys, k)
-	}
 
 	assert.Equal(t, expectedHeader, request.Header)
 }
@@ -293,7 +288,7 @@ func Test_AddUserAgent_AddsUserAgentHeaderToSnykApiRequests(t *testing.T) {
 
 	config := getConfig()
 	net := NewNetworkAccess(config)
-	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
+	request, err := http.NewRequest(http.MethodGet, "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 	userAgentInfo := UserAgentInfo{
 		App:                           app,
@@ -326,7 +321,7 @@ func Test_AddUserAgent_MissingIntegrationEnvironment_FormattedCorrectly(t *testi
 
 	config := getConfig()
 	net := NewNetworkAccess(config)
-	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
+	request, err := http.NewRequest(http.MethodGet, "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 
 	userAgentInfo := UserAgentInfo{
@@ -355,7 +350,7 @@ func Test_AddUserAgent_NoIntegrationInfo_FormattedCorrectly(t *testing.T) {
 
 	config := getConfig()
 	net := NewNetworkAccess(config)
-	request, err := http.NewRequest("GET", "https://api.snyk.io", nil)
+	request, err := http.NewRequest(http.MethodGet, "https://api.snyk.io", nil)
 	assert.Nil(t, err)
 	t.Run("Without integration environment", func(t *testing.T) {
 		userAgentInfo := UserAgentInfo{

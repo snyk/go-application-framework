@@ -8,7 +8,6 @@ import (
 
 // GetAuthHeader returns the authentication header value based on the configuration.
 func GetAuthHeader(config configuration.Configuration) string {
-
 	bearerToken := config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
 	if len(bearerToken) > 0 {
 		return fmt.Sprintf("Bearer %s", bearerToken)

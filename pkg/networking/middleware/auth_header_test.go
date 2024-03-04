@@ -96,5 +96,4 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 
 	err = middleware.AddAuthenticationHeader(authenticator, config, request3)
 	assert.Nil(t, err)
-
 }

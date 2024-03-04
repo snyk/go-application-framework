@@ -74,7 +74,7 @@ func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, respon
 
 		// read body for error code
 		if response.StatusCode < 200 || 299 < response.StatusCode {
-			if bodyBytes, err := io.ReadAll(response.Body); err == nil {
+			if bodyBytes, bodyErr := io.ReadAll(response.Body); bodyErr == nil {
 				rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: body: %v", request, string(bodyBytes))
 			}
 		}
@@ -142,7 +142,7 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 }
 
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
-	transport := http.DefaultTransport.(*http.Transport)
+	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
 		encapsulatedRoundTripper: n.configureRoundTripper(transport),

@@ -23,19 +23,23 @@ func Test_JsonStorage_Set_NoConfigFile(t *testing.T) {
 		{
 			setup: "File does not exist",
 			customSetupFunc: func(t *testing.T) string {
+				t.Helper()
 				return filepath.Join(t.TempDir(), "test.json")
 			},
 		},
 		{
 			setup: "Leading folders to the file do not exist",
 			customSetupFunc: func(t *testing.T) string {
+				t.Helper()
 				return filepath.Join(t.TempDir(), "nonexistent", "test.json")
 			},
 		},
 	}
 
-	for _, testCase := range testCases {
+	for i := range testCases {
+		testCase := testCases[i]
 		t.Run(testCase.setup+" - config file is created", func(t *testing.T) {
+			t.Parallel()
 			configFile := testCase.customSetupFunc(t)
 			storage := configuration.NewJsonStorage(configFile)
 
@@ -73,13 +77,16 @@ func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) {
 	// Assert
 	storedConfig := readStoredConfigFile(t, configFile)
 	t.Run("File contains key", func(t *testing.T) {
+		t.Parallel()
 		assertConfigContainsKey(t, storedConfig, key, expectedValue)
 	})
 	t.Run("Pre-stored values are not deleted", func(t *testing.T) {
+		t.Parallel()
 		assertConfigContainsKey(t, storedConfig, preExistingKey, preExistingValue)
 	})
 	assertSetCallDoesNotDeleteOtherValues(t, storage, configFile, expectedValue, key)
 	t.Run("Overwrites existing value", func(t *testing.T) {
+		t.Parallel()
 		const newValue = "new value"
 		assert.Contains(t, storedConfig, key)
 		err = storage.Set(key, newValue)
@@ -101,6 +108,7 @@ func Test_JsonStorage_Set_BrokenConfigFile(t *testing.T) {
 
 	// Assert
 	t.Run("Returns an error", func(t *testing.T) {
+		t.Parallel()
 		assert.NotNil(t, err)
 	})
 }
@@ -116,6 +124,7 @@ func Test_JsonStorage_Set_InvalidValue(t *testing.T) {
 
 	// Assert
 	t.Run("Returns an error", func(t *testing.T) {
+		t.Parallel()
 		assert.NotNil(t, err)
 	})
 }
@@ -148,6 +157,7 @@ func assertSetCallDoesNotDeleteOtherValues(
 	preExistingValue string,
 	preExistingValueKey string,
 ) bool {
+	t.Helper()
 	return t.Run("A second call to Set does not delete the first value", func(t *testing.T) {
 		storedConfig := readStoredConfigFile(t, configFile)
 		assert.Equal(t, preExistingValue, storedConfig[preExistingValueKey])
@@ -166,5 +176,6 @@ func assertConfigContainsKey(
 	expectedValueKey string,
 	expectedValue string,
 ) {
+	t.Helper()
 	assert.Equal(t, expectedValue, storedConfig[expectedValueKey])
 }

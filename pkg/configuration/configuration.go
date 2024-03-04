@@ -261,7 +261,10 @@ func (ev *extendedViper) GetString(key string) string {
 	if result == nil {
 		return ""
 	}
-	return result.(string)
+	if s, ok := result.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // GetBool returns a configuration value as bool.
@@ -271,12 +274,11 @@ func (ev *extendedViper) GetBool(key string) bool {
 		return false
 	}
 
-	switch result.(type) {
+	switch v := result.(type) {
 	case bool:
-		return result.(bool)
+		return v
 	case string:
-		stringResult := result.(string)
-		boolResult, _ := strconv.ParseBool(stringResult)
+		boolResult, _ := strconv.ParseBool(v)
 		return boolResult
 	}
 
@@ -290,17 +292,17 @@ func (ev *extendedViper) GetInt(key string) int {
 		return 0
 	}
 
-	switch result.(type) {
+	switch v := result.(type) {
 	case string:
-		stringResult := result.(string)
+		stringResult := v
 		temp, _ := strconv.ParseInt(stringResult, 10, 32)
 		return int(temp)
 	case float32:
-		return int(result.(float32))
+		return int(v)
 	case float64:
-		return int(result.(float64))
+		return int(v)
 	case int:
-		return int(result.(int))
+		return v
 	}
 
 	return 0
@@ -313,17 +315,17 @@ func (ev *extendedViper) GetFloat64(key string) float64 {
 		return 0
 	}
 
-	switch result.(type) {
+	switch v := result.(type) {
 	case string:
-		stringResult := result.(string)
+		stringResult := v
 		temp, _ := strconv.ParseFloat(stringResult, 64)
-		return float64(temp)
+		return temp
 	case float32:
-		return float64(result.(float32))
+		return float64(v)
 	case float64:
-		return float64(result.(float64))
+		return v
 	case int:
-		return float64(result.(int))
+		return float64(v)
 	}
 
 	return 0
@@ -355,9 +357,9 @@ func (ev *extendedViper) GetStringSlice(key string) []string {
 		return output
 	}
 
-	switch result.(type) {
+	switch v := result.(type) {
 	case []string:
-		return result.([]string)
+		return v
 	}
 
 	return output
