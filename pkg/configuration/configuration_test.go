@@ -163,6 +163,14 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 	actualValueFloat = config.GetFloat64("number")
 	assert.Equal(t, 798.36, actualValueFloat)
 
+	// assert existing behavior: invalid float is 0
+	actualValueFloat = config.GetFloat64("api")
+	assert.Equal(t, 0.0, actualValueFloat)
+
+	// assert existing behavior: invalid int is 0
+	actualValueInt = config.GetInt("api")
+	assert.Equal(t, 0, actualValueInt)
+
 	cleanupConfigstore(t)
 }
 
