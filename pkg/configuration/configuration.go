@@ -156,6 +156,7 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 	config.viper.AddConfigPath(".")
 
 	// read config files
+	//nolint:errcheck // breaking api change needed to fix this
 	_ = config.viper.ReadInConfig()
 }
 
@@ -191,6 +192,7 @@ func (ev *extendedViper) Clone() Configuration {
 	}
 
 	for _, v := range ev.flagsets {
+		//nolint:errcheck // breaking api change needed to fix this
 		clone.AddFlagSet(v)
 	}
 
@@ -206,6 +208,7 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.mutex.Unlock()
 
 	if ev.storage != nil && ev.persistedKeys[key] {
+		//nolint:errcheck // breaking api change needed to fix this
 		_ = ev.storage.Set(key, value)
 	}
 }
@@ -278,7 +281,10 @@ func (ev *extendedViper) GetBool(key string) bool {
 	case bool:
 		return v
 	case string:
-		boolResult, _ := strconv.ParseBool(v)
+		boolResult, err := strconv.ParseBool(v)
+		if err != nil {
+			return false
+		}
 		return boolResult
 	}
 
@@ -295,8 +301,11 @@ func (ev *extendedViper) GetInt(key string) int {
 	switch v := result.(type) {
 	case string:
 		stringResult := v
-		temp, _ := strconv.ParseInt(stringResult, 10, 32)
-		return int(temp)
+		i, err := strconv.ParseInt(stringResult, 10, 32)
+		if err != nil {
+			return 0
+		}
+		return int(i)
 	case float32:
 		return int(v)
 	case float64:
@@ -318,8 +327,11 @@ func (ev *extendedViper) GetFloat64(key string) float64 {
 	switch v := result.(type) {
 	case string:
 		stringResult := v
-		temp, _ := strconv.ParseFloat(stringResult, 64)
-		return temp
+		f, err := strconv.ParseFloat(stringResult, 64)
+		if err != nil {
+			return 0
+		}
+		return f
 	case float32:
 		return float64(v)
 	case float64:

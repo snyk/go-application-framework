@@ -59,11 +59,13 @@ type oAuth2Authenticator struct {
 }
 
 func OpenBrowser(authUrl string) {
+	//nolint:errcheck // breaking api change needed to fix this
 	_ = browser.OpenURL(authUrl)
 }
 
 func ShutdownServer(server *http.Server) {
 	time.Sleep(500)
+	//nolint:errcheck // breaking api change needed to fix this
 	_ = server.Shutdown(context.Background())
 }
 
@@ -186,6 +188,7 @@ func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http
 func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...OAuth2AuthenticatorOption) Authenticator {
 	o := &oAuth2Authenticator{}
 	o.config = config
+	//nolint:errcheck // breaking api change needed to fix this
 	o.token, _ = GetOAuthToken(config)
 	o.oauthConfig = getOAuthConfiguration(config)
 	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
@@ -233,10 +236,14 @@ func (o *oAuth2Authenticator) IsSupported() bool {
 	return tokenExistent && featureEnabled
 }
 
-func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) {
-	tokenstring, _ := json.Marshal(token)
+func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) error {
+	tokenstring, err := json.Marshal(token)
+	if err != nil {
+		return err
+	}
 	o.config.Set(CONFIG_KEY_OAUTH_TOKEN, string(tokenstring))
 	o.token = token
+	return nil
 }
 
 func (o *oAuth2Authenticator) Authenticate() error {
@@ -266,7 +273,7 @@ func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant() error {
 		return err
 	}
 
-	o.persistToken(token)
+	err = o.persistToken(token)
 	return err
 }
 
@@ -365,7 +372,9 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		return err
 	}
 
-	o.persistToken(token)
+	if err = o.persistToken(token); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -389,7 +398,10 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 		defer globalRefreshMutex.Unlock()
 
 		// check if the token in the config is invalid as well
-		token, _ := GetOAuthToken(o.config)
+		token, err := GetOAuthToken(o.config)
+		if err != nil {
+			return err
+		}
 		if !token.Valid() {
 			// use TokenSource to refresh the token
 			validToken, err := o.tokenRefresherFunc(ctx, o.oauthConfig, o.token)
@@ -398,7 +410,9 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 			}
 
 			if validToken != o.token {
-				o.persistToken(validToken)
+				if err := o.persistToken(validToken); err != nil {
+					return err
+				}
 			}
 		} else {
 			o.token = token

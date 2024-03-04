@@ -187,8 +187,12 @@ func (e *EngineImpl) GetWorkflows() []Identifier {
 	var result []Identifier
 
 	for k := range e.workflows {
-		tmp, _ := url.Parse(k)
-		result = append(result, tmp)
+		u, err := url.Parse(k)
+		if err != nil {
+			// a panic here is reasonable; how did we register an invalid URL in the first place?
+			panic(fmt.Sprintf("invalid workflow url: %q", k))
+		}
+		result = append(result, u)
 	}
 
 	return result

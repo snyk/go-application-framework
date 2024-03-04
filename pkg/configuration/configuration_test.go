@@ -27,9 +27,12 @@ func prepareConfigstore(content string) error {
 	return err
 }
 
-func cleanupConfigstore() {
-	file, _ := CreateConfigurationFile(TEST_FILENAME_JSON)
-	os.RemoveAll(file)
+func cleanupConfigstore(t *testing.T) {
+	t.Helper()
+	file, err := CreateConfigurationFile(TEST_FILENAME_JSON)
+	assert.NoError(t, err)
+	err = os.RemoveAll(file)
+	assert.NoError(t, err)
 }
 
 func cleanUpEnvVars() {
@@ -55,7 +58,7 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 	actualValue = config.GetString(AUTHENTICATION_TOKEN)
 	assert.Equal(t, expectedValue2, actualValue)
 
-	cleanupConfigstore()
+	cleanupConfigstore(t)
 	cleanUpEnvVars()
 }
 
@@ -79,7 +82,7 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 		assert.Equal(t, expectedValueDocker, actualValue)
 	})
 
-	cleanupConfigstore()
+	cleanupConfigstore(t)
 	cleanUpEnvVars()
 }
 
@@ -96,7 +99,7 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 	actualValue = config.GetBool(ANALYTICS_DISABLED)
 	assert.False(t, actualValue)
 
-	cleanupConfigstore()
+	cleanupConfigstore(t)
 	cleanUpEnvVars()
 }
 
@@ -130,7 +133,7 @@ func Test_ConfigurationGet_unset(t *testing.T) {
 	actualValueBool := config.GetBool("notthere")
 	assert.False(t, actualValueBool)
 
-	cleanupConfigstore()
+	cleanupConfigstore(t)
 }
 
 func Test_ConfigurationSet_differentCases(t *testing.T) {
@@ -160,7 +163,7 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 	actualValueFloat = config.GetFloat64("number")
 	assert.Equal(t, 798.36, actualValueFloat)
 
-	cleanupConfigstore()
+	cleanupConfigstore(t)
 }
 
 func Test_ConfigurationGet_Url(t *testing.T) {
@@ -200,7 +203,8 @@ func Test_ConfigurationClone(t *testing.T) {
 	flagset.Float64("size", 10, "size")
 
 	config := NewFromFiles(TEST_FILENAME)
-	config.AddFlagSet(flagset)
+	err := config.AddFlagSet(flagset)
+	assert.NoError(t, err)
 
 	// test cloning of default values
 	defaultValueKey := "MyDefault"
@@ -260,12 +264,13 @@ func Test_ConfigurationClone(t *testing.T) {
 	// we assume that a cloned configuration uses the same storage object. Just the pointer is cloned.
 	assert.Equal(t, config.(*extendedViper).storage, clonedConfig.(*extendedViper).storage)
 
-	cleanupConfigstore()
+	cleanupConfigstore(t)
 }
 
 func TestNewInMemory(t *testing.T) {
 	config := NewInMemory()
-	ev := config.(*extendedViper)
+	ev, ok := config.(*extendedViper)
+	assert.True(t, ok)
 	assert.Nil(t, ev.storage)
 	assert.NotNil(t, config)
 	assert.Equal(t, inMemory, ev.getConfigType())
@@ -273,7 +278,8 @@ func TestNewInMemory(t *testing.T) {
 
 func TestNewFromFiles(t *testing.T) {
 	config := NewFromFiles(filepath.Join(t.TempDir(), t.Name()))
-	ev := config.(*extendedViper)
+	ev, ok := config.(*extendedViper)
+	assert.True(t, ok)
 	assert.NotNil(t, config)
 	assert.Equal(t, jsonFile, ev.getConfigType())
 }
@@ -336,7 +342,8 @@ func Test_DefaultValuehandling(t *testing.T) {
 		flagset.String(ORGANIZATION, "", "org")
 
 		config := NewInMemory()
-		config.AddFlagSet(flagset)
+		err := config.AddFlagSet(flagset)
+		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
 		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) interface{} {
 			if existingValue != nil {

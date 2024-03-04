@@ -170,10 +170,6 @@ issues:
     - path: test/
       linters:
         - testpackage
-    - path: \.go
-      linters:
-        # TODO: revisit this one; ignoring errors is BAD
-        - errcheck
   include:
     - EXC0012
     - EXC0014

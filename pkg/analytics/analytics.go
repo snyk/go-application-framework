@@ -228,7 +228,9 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	// deepcode ignore InsecureHash: It is just being used to generate an id, without any security concerns
 	//nolint:gosec // sha1 only used to generate an id
 	shasum := sha1.New()
+	//nolint:errcheck // breaking api change needed to fix this
 	uuid, _ := uuid.GenerateUUID()
+	//nolint:errcheck // breaking api change needed to fix this
 	io.WriteString(shasum, uuid)
 	output.Id = fmt.Sprintf("%x", shasum.Sum(nil))
 
@@ -279,7 +281,10 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 		return nil, err
 	}
 
-	analyticsUrl, _ := url.Parse(a.apiUrl + apiEndpoint)
+	analyticsUrl, err := url.Parse(a.apiUrl + apiEndpoint)
+	if err != nil {
+		return nil, err
+	}
 	if len(a.org) > 0 {
 		query := url.Values{}
 		query.Add("org", a.org)

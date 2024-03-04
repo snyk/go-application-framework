@@ -91,7 +91,8 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 		Expiry:       time.Now().Add(time.Minute * 20),
 	}
 
-	expectedTokenString, _ := json.Marshal(expectedToken)
+	expectedTokenString, err := json.Marshal(expectedToken)
+	assert.NoError(t, err)
 
 	expectedHeaders := map[string]string{
 		// deepcode ignore HardcodedPassword/test: <please specify a reason of ignoring this>
@@ -111,7 +112,7 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders_OAuth(t *testing.T) {
 	net := NewNetworkAccess(config)
 	client := net.GetHttpClient()
 
-	_, err := client.Get(server.URL)
+	_, err = client.Get(server.URL)
 	assert.NoError(t, err)
 }
 
@@ -151,14 +152,16 @@ func Test_HttpClient_CallingNonApiUrl(t *testing.T) {
 
 func Test_RoundTripper_SecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config).(*networkImpl)
+	net, ok := NewNetworkAccess(config).(*networkImpl)
+	assert.True(t, ok)
 	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
 	assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
 
 func Test_RoundTripper_InsecureHTTPS(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config).(*networkImpl)
+	net, ok := NewNetworkAccess(config).(*networkImpl)
+	assert.True(t, ok)
 
 	config.Set(configuration.INSECURE_HTTPS, true)
 	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
@@ -167,7 +170,8 @@ func Test_RoundTripper_InsecureHTTPS(t *testing.T) {
 
 func Test_RoundTripper_ProxyAuth(t *testing.T) {
 	config := getConfig()
-	net := NewNetworkAccess(config).(*networkImpl)
+	net, ok := NewNetworkAccess(config).(*networkImpl)
+	assert.True(t, ok)
 
 	// case: enable AnyAuth
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth))
@@ -203,23 +207,27 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	config := getConfig()
 	config.Set(configuration.DEBUG, true)
 
-	certPem, _keyPem, _ := certs.MakeSelfSignedCert("mycert", []string{"localhost"}, log.Default())
-	certFile, _ := os.CreateTemp("", "")
-	_, err := certFile.Write(certPem)
-	assert.Nil(t, err)
+	certPem, _keyPem, err := certs.MakeSelfSignedCert("mycert", []string{"localhost"}, log.Default())
+	assert.NoError(t, err)
+	certFile, err := os.CreateTemp("", "")
+	assert.NoError(t, err)
+	_, err = certFile.Write(certPem)
+	assert.NoError(t, err)
 
-	keyFile, _ := os.CreateTemp("", "")
+	keyFile, err := os.CreateTemp("", "")
+	assert.NoError(t, err)
 	_, err = keyFile.Write(_keyPem)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		_, _ = io.WriteString(w, "Hello, TLS!\n")
+		_, err = io.WriteString(w, "Hello, TLS!\n")
+		assert.NoError(t, err)
 		fmt.Println("hello")
 	})
 
 	listenerReady := make(chan struct{})
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	t.Cleanup(func() {
 		listener.Close()
 	})
@@ -263,9 +271,10 @@ func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 	net := NewNetworkAccess(config)
 	net.AddHeaderField("secret-header", "secret-value")
 
-	request, _ := http.NewRequest(http.MethodGet, "https://api.snyk.io", nil)
-	err := net.AddHeaders(request)
-	assert.Nil(t, err)
+	request, err := http.NewRequest(http.MethodGet, "https://api.snyk.io", nil)
+	assert.NoError(t, err)
+	err = net.AddHeaders(request)
+	assert.NoError(t, err)
 
 	assert.Equal(t, expectedHeader, request.Header)
 }
@@ -425,7 +434,8 @@ func TestNetworkImpl_Clone(t *testing.T) {
 	clonedNetwork := network.Clone()
 	clonedNetwork.SetConfiguration(config2)
 
-	url1, _ := url.Parse("")
+	url1, err := url.Parse("")
+	assert.NoError(t, err)
 	req1 := &http.Request{
 		Header: http.Header{},
 		URL:    url1,
@@ -435,8 +445,10 @@ func TestNetworkImpl_Clone(t *testing.T) {
 		URL:    url1,
 	}
 
-	network.AddHeaders(req1)
-	clonedNetwork.AddHeaders(req2)
+	err = network.AddHeaders(req1)
+	assert.NoError(t, err)
+	err = clonedNetwork.AddHeaders(req2)
+	assert.NoError(t, err)
 
 	assert.NotEqual(t, req1, req2)
 	assert.NotEqual(t, network.GetConfiguration(), clonedNetwork.GetConfiguration())

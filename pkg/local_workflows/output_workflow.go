@@ -32,9 +32,8 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 
 // outputWorkflowEntryPoint defines the output entry point
 // the entry point is called by the engine when the workflow is invoked
-func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) (output []workflow.Data, err error) {
-	err = nil
-	output = []workflow.Data{}
+func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
+	output := []workflow.Data{}
 
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetLogger()
@@ -69,8 +68,12 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			if len(writeJsonToFile) > 0 {
 				debugLogger.Printf("Writing '%s' JSON of length %d to '%s'\n", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
 
-				outputDestination.Remove(writeJsonToFile)
-				outputDestination.WriteFile(writeJsonToFile, singleData, iUtils.FILEPERM_666)
+				if err := outputDestination.Remove(writeJsonToFile); err != nil {
+					return nil, fmt.Errorf("failed to remove existing output file: %w", err)
+				}
+				if err := outputDestination.WriteFile(writeJsonToFile, singleData, iUtils.FILEPERM_666); err != nil {
+					return nil, fmt.Errorf("failed to write json output: %w", err)
+				}
 			}
 		} else { // handle text/pain and unknown the same way
 			// try to convert payload to a string
@@ -89,7 +92,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		}
 	}
 
-	return output, err
+	return output, nil
 }
 
 func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {

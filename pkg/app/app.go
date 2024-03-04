@@ -43,7 +43,10 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 			}
 		}
 
-		apiString, _ := api.GetCanonicalApiUrlFromString(urlString)
+		apiString, err := api.GetCanonicalApiUrlFromString(urlString)
+		if err != nil {
+			logger.Warn().Err(err).Str(configuration.API_URL, urlString).Msg("failed to get api url")
+		}
 		return apiString
 	})
 
