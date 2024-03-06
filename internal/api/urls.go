@@ -15,6 +15,11 @@ const (
 	appPrefix    string = "app"
 )
 
+var (
+	apiRegexp = regexp.MustCompile(apiPattern)
+	appRegexp = regexp.MustCompile(appPattern)
+)
+
 func isImmutableHost(host string) bool {
 	knownHostNames := map[string]bool{
 		"localhost": true,
@@ -54,10 +59,8 @@ func GetCanonicalApiUrl(url url.URL) (string, error) {
 	if isImmutableHost(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
 	} else {
-		appRegexp, _ := regexp.Compile(appPattern)
 		url.Host = appRegexp.ReplaceAllString(url.Host, apiPrefixDot)
 
-		apiRegexp, _ := regexp.Compile(apiPattern)
 		if !apiRegexp.MatchString(url.Host) {
 			url.Host = apiPrefixDot + url.Host
 		}
@@ -83,7 +86,6 @@ func DeriveSubdomainUrl(canonicalUrl string, subdomain string) (string, error) {
 		return result, err
 	}
 
-	apiRegexp, _ := regexp.Compile(apiPattern)
 	url.Host = apiRegexp.ReplaceAllString(url.Host, subdomain+".")
 
 	result = url.String()

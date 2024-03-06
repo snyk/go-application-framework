@@ -118,23 +118,26 @@ func Test_SanitizeValuesByKey(t *testing.T) {
 
 	// test input
 	filter := sensitiveFieldNames
-	input, _ := json.Marshal(inputStruct)
+	input, err := json.Marshal(inputStruct)
+	assert.NoError(t, err)
+
 	replacement := sanitizeReplacementString
 
 	fmt.Println("Before: " + string(input))
 
 	// invoke method under test
 	output, err := SanitizeValuesByKey(filter, replacement, input)
+	assert.NoError(t, err)
 
 	fmt.Println("After: " + string(output))
 
-	assert.Nil(t, err, "Failed to santize!")
+	assert.NoError(t, err, "Failed to santize!")
 	actualNumberOfRedacted := strings.Count(string(output), replacement)
 	assert.Equal(t, expectedNumberOfRedacted, actualNumberOfRedacted)
 
 	var outputStruct sanTest
 	err = json.Unmarshal(output, &outputStruct)
-	assert.Nil(t, err, "Failed to decode json object!")
+	assert.NoError(t, err, "Failed to decode json object!")
 
 	// count how often the known secrets are being found in the input and the output
 	secretsCountAfter := 0
@@ -201,14 +204,15 @@ func Test_SanitizeUsername(t *testing.T) {
 			Other:    fmt.Sprintf("some other value where %s is contained", rawUserName),
 		}
 
-		input, _ := json.Marshal(inputStruct)
+		input, err := json.Marshal(inputStruct)
+		assert.NoError(t, err)
 		fmt.Printf("%d - Before: %s\n", i, string(input))
 
 		// invoke method under test
 		output, err := SanitizeUsername(rawUserName, homeDir, replacement, input)
 
 		fmt.Printf("%d - After: %s\n", i, string(output))
-		assert.Nil(t, err, "Failed to santize static values!")
+		assert.NoError(t, err, "Failed to santize static values!")
 
 		numRedacted := strings.Count(string(output), replacement)
 		assert.Equal(t, 2, numRedacted)
@@ -223,7 +227,8 @@ func Test_SanitizeUsername(t *testing.T) {
 		assert.Equal(t, 0, numHomeDirInstances)
 
 		var outputStruct sanTest
-		json.Unmarshal(output, &outputStruct)
+		err = json.Unmarshal(output, &outputStruct)
+		assert.NoError(t, err)
 	}
 }
 

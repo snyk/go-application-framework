@@ -142,6 +142,7 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 }
 
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
+	//nolint:errcheck // breaking api change needed to fix this
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,

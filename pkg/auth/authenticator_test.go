@@ -11,7 +11,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func getTestOauthTokenStorageType() string {
+func getTestOauthTokenStorageType(t *testing.T) string {
+	t.Helper()
 	expectedToken := &oauth2.Token{
 		AccessToken:  "a",
 		TokenType:    "b",
@@ -19,7 +20,8 @@ func getTestOauthTokenStorageType() string {
 		Expiry:       time.Now(),
 	}
 
-	expectedTokenString, _ := json.Marshal(expectedToken)
+	expectedTokenString, err := json.Marshal(expectedToken)
+	assert.NoError(t, err)
 	return string(expectedTokenString)
 }
 
@@ -32,7 +34,7 @@ func Test_CreateAuthenticator_token(t *testing.T) {
 
 func Test_CreateAuthenticator_token_oauthDisabled(t *testing.T) {
 	config := configuration.NewFromFiles("")
-	config.Set(CONFIG_KEY_OAUTH_TOKEN, getTestOauthTokenStorageType())
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, getTestOauthTokenStorageType(t))
 	config.Set(configuration.AUTHENTICATION_TOKEN, "api token")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 
@@ -43,7 +45,7 @@ func Test_CreateAuthenticator_token_oauthDisabled(t *testing.T) {
 
 func Test_CreateAuthenticator_oauth_oauthEnabled(t *testing.T) {
 	config := configuration.NewFromFiles("")
-	config.Set(CONFIG_KEY_OAUTH_TOKEN, getTestOauthTokenStorageType())
+	config.Set(CONFIG_KEY_OAUTH_TOKEN, getTestOauthTokenStorageType(t))
 	config.Set(configuration.AUTHENTICATION_TOKEN, "api token")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 

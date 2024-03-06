@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -60,16 +61,18 @@ func Test_getToken(t *testing.T) {
 		Expiry:       time.Now(),
 	}
 
-	expectedTokenString, _ := json.Marshal(expectedToken)
+	expectedTokenString, err := json.Marshal(expectedToken)
+	assert.NoError(t, err)
 
 	config := configuration.NewInMemory()
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
 
 	// method under test
 	actualToken, err := GetOAuthToken(config)
+	assert.NoError(t, err)
 
-	assert.Nil(t, err)
-	actualTokenString, _ := json.Marshal(actualToken)
+	actualTokenString, err := json.Marshal(actualToken)
+	assert.NoError(t, err)
 	assert.Equal(t, expectedTokenString, actualTokenString)
 }
 
@@ -122,7 +125,8 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
-	authenticator.(*oAuth2Authenticator).persistToken(newToken)
+	err := authenticator.(*oAuth2Authenticator).persistToken(newToken)
+	assert.NoError(t, err)
 	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		assert.False(t, true, "The token is valid and no refresh is required!")
 		return newToken, nil
@@ -133,8 +137,8 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 	}
 
 	// run method under test
-	err := authenticator.AddAuthenticationHeader(emptyRequest)
-	assert.Nil(t, err)
+	err = authenticator.AddAuthenticationHeader(emptyRequest)
+	assert.NoError(t, err)
 
 	// compare
 	expectedAuthHeader := "Bearer " + newToken.AccessToken
@@ -143,7 +147,7 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 
 	// compare changed token in config
 	actualToken, err := GetOAuthToken(config)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, *newToken, *actualToken)
 	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token)
 }
@@ -166,7 +170,8 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
-	authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
+	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
+	assert.NoError(t, err)
 	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		return newToken, nil
 	}
@@ -176,8 +181,8 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 	}
 
 	// run method under test
-	err := authenticator.AddAuthenticationHeader(emptyRequest)
-	assert.Nil(t, err)
+	err = authenticator.AddAuthenticationHeader(emptyRequest)
+	assert.NoError(t, err)
 
 	// compare
 	expectedAuthHeader := "Bearer " + newToken.AccessToken
@@ -186,7 +191,7 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 
 	// compare changed token in config
 	actualToken, err := GetOAuthToken(config)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, *newToken, *actualToken)
 	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token)
 }
@@ -209,7 +214,8 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
-	authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
+	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
+	assert.NoError(t, err)
 	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		assert.False(t, true, "The token is valid and no refresh is required!")
 		return newToken, nil
@@ -221,11 +227,12 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 
 	// have authenticator2 update the token "in parallel"
 	authenticator2 := NewOAuth2AuthenticatorWithOpts(config)
-	authenticator2.(*oAuth2Authenticator).persistToken(newToken)
+	err = authenticator2.(*oAuth2Authenticator).persistToken(newToken)
+	assert.NoError(t, err)
 
 	// run method under test
-	err := authenticator.AddAuthenticationHeader(emptyRequest)
-	assert.Nil(t, err)
+	err = authenticator.AddAuthenticationHeader(emptyRequest)
+	assert.NoError(t, err)
 
 	// compare
 	expectedAuthHeader := "Bearer " + newToken.AccessToken
@@ -234,7 +241,7 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 
 	// compare changed token in config
 	actualToken, err := GetOAuthToken(config)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, *newToken, *actualToken)
 	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token)
 }
@@ -272,39 +279,27 @@ func Test_determineGrantType_both(t *testing.T) {
 }
 
 func Test_Authenticate_CredentialsGrant(t *testing.T) {
-	go func() {
-		mux := http.NewServeMux()
-		srv := &http.Server{
-			Handler:           mux,
-			Addr:              "localhost:3221",
-			ReadHeaderTimeout: time.Second * 30,
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
+		newToken := &oauth2.Token{
+			AccessToken: "a",
+			TokenType:   "b",
+			Expiry:      time.Now().Add(60 * time.Second).UTC(),
 		}
-		mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
-			newToken := &oauth2.Token{
-				AccessToken: "a",
-				TokenType:   "b",
-				Expiry:      time.Now().Add(60 * time.Second).UTC(),
-			}
-			data, err := json.Marshal(newToken)
-			assert.Nil(t, err)
+		data, err := json.Marshal(newToken)
+		assert.Nil(t, err)
 
-			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
-			_, err = w.Write(data)
-			assert.Nil(t, err)
-		})
-
-		timer := time.AfterFunc(3*time.Second, func() {
-			srv.Shutdown(context.Background())
-		})
-
-		srv.ListenAndServe()
-		timer.Stop()
-	}()
+		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, err = w.Write(data)
+		assert.Nil(t, err)
+	})
 
 	config := configuration.NewInMemory()
 	config.Set(PARAMETER_CLIENT_SECRET, "secret")
 	config.Set(PARAMETER_CLIENT_ID, "id")
-	config.Set(configuration.API_URL, "http://localhost:3221")
+	config.Set(configuration.API_URL, srv.URL)
 
 	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
 	err := authenticator.Authenticate()

@@ -94,12 +94,14 @@ func (d *DataImpl) GetIdentifier() Identifier {
 
 // GetContentType returns the Content-Type header of the given data instance.
 func (d *DataImpl) GetContentType() string {
+	//nolint:errcheck // breaking api change required to fix this
 	result, _ := d.GetMetaData(Content_type_key)
 	return result
 }
 
 // GetContentLocation returns the Content-Location header of the given data instance.
 func (d *DataImpl) GetContentLocation() string {
+	//nolint:errcheck // breaking api change required to fix this
 	result, _ := d.GetMetaData(Content_location_key)
 	return result
 }

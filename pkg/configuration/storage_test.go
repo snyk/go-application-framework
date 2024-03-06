@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 const key = "someKey"
@@ -64,15 +65,16 @@ func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) {
 		preExistingKey: preExistingValue,
 	}
 
-	unknownJson, _ := json.Marshal(preExistingConfig)
+	unknownJson, err := json.Marshal(preExistingConfig)
+	assert.NoError(t, err)
 	configFile := filepath.Join(t.TempDir(), "test.json")
-	err := os.WriteFile(configFile, unknownJson, 0666)
-	assert.Nil(t, err)
+	err = os.WriteFile(configFile, unknownJson, 0666)
+	assert.NoError(t, err)
 	storage := configuration.NewJsonStorage(configFile)
 
 	// Act
 	err = storage.Set(key, expectedValue)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Assert
 	storedConfig := readStoredConfigFile(t, configFile)
@@ -90,9 +92,9 @@ func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) {
 		const newValue = "new value"
 		assert.Contains(t, storedConfig, key)
 		err = storage.Set(key, newValue)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		storedConfig = readStoredConfigFile(t, configFile)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, newValue, storedConfig[key])
 	})
 }
