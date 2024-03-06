@@ -372,10 +372,8 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		return err
 	}
 
-	if err = o.persistToken(token); err != nil {
-		return err
-	}
-	return nil
+	err = o.persistToken(token)
+	return err
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
