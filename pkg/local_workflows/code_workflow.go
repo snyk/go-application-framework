@@ -28,13 +28,13 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetLogger()
+	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
 
 	config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 	config.Set(configuration.WORKFLOW_USE_STDIO, true)
 
-	logger.Println("code workflow start")
+	logger.Debug().Msg("code workflow start")
 
 	// run legacycli
 	_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
