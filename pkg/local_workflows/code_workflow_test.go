@@ -1,20 +1,37 @@
 package localworkflows
 
 import (
-	"log"
 	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 )
 
+func TestInit(t *testing.T) {
+	// set
+	config := configuration.New()
+	engine := workflow.NewWorkFlowEngine(config)
+
+	err := InitCodeWorkflow(engine)
+	assert.NoError(t, err)
+
+	err = InitCodeWorkflow(engine)
+	assert.NoError(t, err)
+
+	// Verify that the workflow is registered with the correct id
+	wrkflw, ok := engine.GetWorkflow(WORKFLOWID_CODE)
+	assert.True(t, ok)
+	assert.NotNil(t, wrkflw)
+}
+
 func Test_Code_codeWorkflowEntryPoint_happyPath(t *testing.T) {
 	// set
-	logger := log.New(os.Stderr, "test", 0)
+	logger := zerolog.Logger{}
 	config := configuration.New()
 	engine := mocks.NewMockEngine(gomock.NewController(t))
 
@@ -26,7 +43,7 @@ func Test_Code_codeWorkflowEntryPoint_happyPath(t *testing.T) {
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationContextMock.EXPECT().GetEngine().Return(engine).AnyTimes()
 	engine.EXPECT().InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config).Return(nil, nil)
 
@@ -37,7 +54,4 @@ func Test_Code_codeWorkflowEntryPoint_happyPath(t *testing.T) {
 		assert.Equal(t, []string{"-user=bla"}, config.GetStringSlice(configuration.RAW_CMD_ARGS))
 		assert.Nil(t, err)
 	})
-
-	// Write to stderr if any unsupported flags are passed
-	// Future work: Stop passing through unsupported flags
 }
