@@ -38,8 +38,8 @@ var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWor
 // InitCodeWorkflow initializes the code workflow before registering it with the engine.
 func InitCodeWorkflow(engine workflow.Engine) error {
 	// register workflow with engine
-	flags := pflag.FlagSet{}
-	_, err := engine.Register(WORKFLOWID_CODE, workflow.ConfigurationOptionsFromFlagset(&flags), codeWorkflowEntryPoint)
+	flags := GetCodeFlagSet()
+	_, err := engine.Register(WORKFLOWID_CODE, workflow.ConfigurationOptionsFromFlagset(flags), codeWorkflowEntryPoint)
 	return err
 }
 
