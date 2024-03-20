@@ -57,10 +57,10 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	logger.Debug().Msg("code workflow start")
 
 	// run legacycli
-	_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
+	legacyCliResponse, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 	if legacyCLIError != nil {
 		return nil, legacyCLIError
 	}
 
-	return nil, err
+	return legacyCliResponse, err
 }

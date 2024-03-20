@@ -4,15 +4,21 @@ import (
 	"os"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInit(t *testing.T) {
+func Test_Code_codeWorkflowEntryPoint_happyPath(t *testing.T) {
+	flagString := "--user-=bla"
+	callback1 := func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		typeId := workflow.NewTypeIdentifier(invocation.GetWorkflowIdentifier(), "wfl1data")
+		d := workflow.NewData(typeId, "text/plain", nil)
+		assert.Equal(t, []string{flagString}, invocation.GetConfiguration().Get(configuration.RAW_CMD_ARGS))
+		return []workflow.Data{d}, nil
+	}
+
 	// set
 	config := configuration.New()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -20,38 +26,22 @@ func TestInit(t *testing.T) {
 	err := InitCodeWorkflow(engine)
 	assert.NoError(t, err)
 
-	err = InitCodeWorkflow(engine)
-	assert.NoError(t, err)
+	// Create legacycli workflow
+	mockLegacyCliWorkflowId := workflow.NewWorkflowIdentifier("legacycli")
+	entry1, err := engine.Register(mockLegacyCliWorkflowId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("1", pflag.ExitOnError)), callback1)
+	assert.Nil(t, err)
+	assert.NotNil(t, entry1)
 
-	// Verify that the workflow is registered with the correct id
+	err = engine.Init()
+
+	// Method under test
 	wrkflw, ok := engine.GetWorkflow(WORKFLOWID_CODE)
 	assert.True(t, ok)
 	assert.NotNil(t, wrkflw)
-}
 
-func Test_Code_codeWorkflowEntryPoint_happyPath(t *testing.T) {
-	// set
-	logger := zerolog.Logger{}
-	config := configuration.New()
-	engine := mocks.NewMockEngine(gomock.NewController(t))
+	os.Args = []string{"cmd", flagString}
 
-	// Mocks
-	ctrl := gomock.NewController(t)
-	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-
-	os.Args = []string{"cmd", "-user=bla"}
-
-	// invocation context mocks
-	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-	invocationContextMock.EXPECT().GetEngine().Return(engine).AnyTimes()
-	engine.EXPECT().InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config).Return(nil, nil)
-
-	t.Run("invokes legacycli workflow", func(t *testing.T) {
-		// run
-		_, err := codeWorkflowEntryPoint(invocationContextMock, nil)
-
-		assert.Equal(t, []string{"-user=bla"}, config.GetStringSlice(configuration.RAW_CMD_ARGS))
-		assert.Nil(t, err)
-	})
+	rs, err := engine.InvokeWithConfig(WORKFLOWID_CODE, config)
+	assert.NoError(t, err)
+	assert.NotNil(t, rs)
 }
