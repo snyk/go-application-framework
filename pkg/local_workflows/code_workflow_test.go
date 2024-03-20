@@ -33,6 +33,7 @@ func Test_Code_codeWorkflowEntryPoint_happyPath(t *testing.T) {
 	assert.NotNil(t, entry1)
 
 	err = engine.Init()
+	assert.NoError(t, err)
 
 	// Method under test
 	wrkflw, ok := engine.GetWorkflow(WORKFLOWID_CODE)
