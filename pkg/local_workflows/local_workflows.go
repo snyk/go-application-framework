@@ -14,7 +14,6 @@ func Init(engine workflow.Engine) error {
 		InitWhoAmIWorkflow,
 		InitAuth,
 		InitReportAnalyticsWorkflow,
-		InitCodeWorkflow,
 	}
 
 	for i := range initMethods {
