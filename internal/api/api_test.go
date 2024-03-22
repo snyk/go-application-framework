@@ -133,7 +133,7 @@ func newHttpHandler(t *testing.T, url string, resp []byte) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.String() != url {
-			w.WriteHeader(403)
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 

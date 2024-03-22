@@ -194,7 +194,6 @@ func Test_initConfiguration_NOT_snykgov(t *testing.T) {
 }
 
 func Test_initConfiguration_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
-
 	// setup mock
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
