@@ -104,6 +104,22 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 			return existingValue
 		}
 	})
+
+	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, func(existingValue interface{}) interface{} {
+		if existingValue == nil {
+			flagname := "snykCodeConsistentIgnores"
+			client := engine.GetNetworkAccess().GetHttpClient()
+			url := config.GetString(configuration.API_URL)
+			apiClient.Init(url, client)
+			result, err := apiClient.GetFeatureFlag(flagname)
+			if err != nil {
+				logger.Printf("Failed to determine feature flag \"%s\": %s", flagname, err)
+			}
+			return result
+		} else {
+			return existingValue
+		}
+	})
 }
 
 // CreateAppEngine creates a new workflow engine.

@@ -31,6 +31,7 @@ const (
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
+	FF_CODE_CONSISTENT_IGNORES string = "internal_snyk_code_ignores_enabled"
 
 	// flags
 	FLAG_EXPERIMENTAL string = "experimental"
