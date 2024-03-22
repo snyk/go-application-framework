@@ -1,0 +1,20 @@
+Testing TODO: GET project path
+
+{{ range (index .Runs 0).Results }}
+   ✗ [{{ .Level }}] {{ .RuleId }}
+      Path: {{ (index .Locations 0).PhysicalLocation.ArtifactLocation.Uri }}, line {{ (index .Locations 0).PhysicalLocation.Region.StartLine }}
+      Info: {{ .Message.Text }}
+{{ end }}
+
+ {{"✔ Test completed" | fg.Green }}
+
+ Organization:      TODO: GET organization
+ Test type:         Static code analysis
+ Project path:      TODO: GET project path
+
+ Summary:
+
+   {{ len (index .Runs 0).Results }} Code issues found
+   {{ "XX [High]" | fg.Red }}   {{ "XX [Medium]" | fg.Yellow }}   XX [Low]
+
+
