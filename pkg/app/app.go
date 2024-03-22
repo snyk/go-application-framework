@@ -23,10 +23,11 @@ func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config confi
 			flagname := "snykCodeConsistentIgnores"
 			client := engine.GetNetworkAccess().GetHttpClient()
 			url := config.GetString(configuration.API_URL)
+			org := config.GetString(configuration.ORGANIZATION)
 			apiClient.Init(url, client)
-			result, err := apiClient.GetFeatureFlag(flagname)
+			result, err := apiClient.GetFeatureFlag(flagname, org)
 			if err != nil {
-				logger.Printf("Failed to determine feature flag \"%s\": %s", flagname, err)
+				logger.Printf("Failed to determine feature flag \"%s\" for org \"%s\": %s", flagname, org, err)
 			}
 			return result
 		} else {

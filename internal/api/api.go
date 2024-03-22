@@ -16,7 +16,7 @@ type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)
 	GetOrgIdFromSlug(slugName string) (string, error)
 	Init(url string, client *http.Client)
-	GetFeatureFlag(flagname string) (bool, error)
+	GetFeatureFlag(flagname string, origId string) (bool, error)
 }
 
 type snykApiClient struct {
@@ -77,10 +77,15 @@ func (a *snykApiClient) GetDefaultOrgId() (string, error) {
 	return userInfo.Data.Attributes.DefaultOrgContext, nil
 }
 
-func (a *snykApiClient) GetFeatureFlag(flagname string) (bool, error) {
+func (a *snykApiClient) GetFeatureFlag(flagname string, orgId string) (bool, error) {
 	const defaultResult = false
 
-	url := a.url + "/v1/cli-config/feature-flags/" + flagname
+	url := a.url + "/v1/cli-config/feature-flags/" + flagname + "?org=" + orgId
+
+	if len(orgId) <= 0 {
+		return defaultResult, fmt.Errorf("failed to lookup feature flag with orgiId not set")
+	}
+
 	res, err := a.client.Get(url)
 	if err != nil {
 		return defaultResult, fmt.Errorf("unable to retrieve feature flag: %w", err)
