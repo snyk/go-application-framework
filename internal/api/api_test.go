@@ -6,10 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_GetDefaultOrgId_ReturnsCorrectOrgId(t *testing.T) {
@@ -50,6 +51,42 @@ func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 		// Assert
 		assert.Equal(t, expectedOrgId, orgId)
 	}
+}
+
+func Test_GetFeatureFlag_false(t *testing.T) {
+	// Arrange
+	t.Parallel()
+
+	featureFlagName := "myFlag"
+	featureFlagResponse := contract.OrgFeatureFlagResponse{
+		Code: 403,
+	}
+	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName, featureFlagResponse)
+	api := api.NewApi(server.URL, http.DefaultClient)
+
+	actual, err := api.GetFeatureFlag(featureFlagName)
+	assert.NoError(t, err)
+	assert.False(t, actual)
+
+	actual, err = api.GetFeatureFlag("unknownFF")
+	assert.Error(t, err)
+	assert.False(t, actual)
+}
+
+func Test_GetFeatureFlag_true(t *testing.T) {
+	// Arrange
+	t.Parallel()
+
+	featureFlagName := "myFlag"
+	featureFlagResponse := contract.OrgFeatureFlagResponse{
+		Code: 200,
+	}
+	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName, featureFlagResponse)
+	api := api.NewApi(server.URL, http.DefaultClient)
+
+	actual, err := api.GetFeatureFlag(featureFlagName)
+	assert.NoError(t, err)
+	assert.True(t, actual)
 }
 
 func newMockOrgResponse(t *testing.T) contract.OrganizationsResponse {
@@ -96,7 +133,8 @@ func newHttpHandler(t *testing.T, url string, resp []byte) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.String() != url {
-			t.Errorf("expected url %s, got %s", url, r.URL)
+			w.WriteHeader(403)
+			return
 		}
 
 		_, err := w.Write(resp)
