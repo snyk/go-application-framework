@@ -97,8 +97,8 @@ func (a *snykApiClient) GetFeatureFlag(flagname string) (bool, error) {
 		return defaultResult, fmt.Errorf("unable to retrieve feature flag (status: %d): %w", res.StatusCode, err)
 	}
 
-	if res.StatusCode != http.StatusOK || flag.Code == "401" || flag.Code == "403" {
-		return defaultResult, nil
+	if res.StatusCode != http.StatusOK || flag.Code == http.StatusUnauthorized || flag.Code == http.StatusForbidden {
+		return defaultResult, err
 	}
 
 	return true, nil

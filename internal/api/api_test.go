@@ -59,7 +59,7 @@ func Test_GetFeatureFlag_false(t *testing.T) {
 
 	featureFlagName := "myFlag"
 	featureFlagResponse := contract.OrgFeatureFlagResponse{
-		Code: "403",
+		Code: http.StatusForbidden,
 	}
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName, featureFlagResponse)
 	api := api.NewApi(server.URL, http.DefaultClient)
@@ -79,7 +79,7 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 
 	featureFlagName := "myFlag"
 	featureFlagResponse := contract.OrgFeatureFlagResponse{
-		Code: "200",
+		Code: http.StatusOK,
 	}
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName, featureFlagResponse)
 	api := api.NewApi(server.URL, http.DefaultClient)
