@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_Output_InitOutputWorkflow(t *testing.T) {
@@ -119,6 +120,26 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
 		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+
+	t.Run("should output to (real) file when json-file-output is provided", func(t *testing.T) {
+		expectedFileName := t.TempDir() + "test.json"
+		config.Set("json-file-output", expectedFileName)
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
+
+		// mock assertions
+		realOutputDestination := &utils.OutputDestinationImpl{}
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, realOutputDestination)
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+		assert.FileExists(t, expectedFileName)
+
+		output, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, realOutputDestination)
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
 	})
