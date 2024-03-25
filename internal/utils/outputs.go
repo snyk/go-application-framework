@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -20,6 +21,9 @@ func (odi *OutputDestinationImpl) Println(a ...any) (n int, err error) {
 }
 
 func (odi *OutputDestinationImpl) Remove(name string) error {
+	if _, err := os.Stat(name); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	return os.Remove(name)
 }
 
