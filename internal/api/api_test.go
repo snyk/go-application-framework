@@ -57,18 +57,19 @@ func Test_GetFeatureFlag_false(t *testing.T) {
 	// Arrange
 	t.Parallel()
 
+	org := "myOrg"
 	featureFlagName := "myFlag"
 	featureFlagResponse := contract.OrgFeatureFlagResponse{
 		Code: http.StatusForbidden,
 	}
-	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName, featureFlagResponse)
+	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
 	api := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := api.GetFeatureFlag(featureFlagName)
+	actual, err := api.GetFeatureFlag(featureFlagName, org)
 	assert.NoError(t, err)
 	assert.False(t, actual)
 
-	actual, err = api.GetFeatureFlag("unknownFF")
+	actual, err = api.GetFeatureFlag("unknownFF", org)
 	assert.Error(t, err)
 	assert.False(t, actual)
 }
@@ -77,14 +78,15 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 	// Arrange
 	t.Parallel()
 
+	org := "myOrg"
 	featureFlagName := "myFlag"
 	featureFlagResponse := contract.OrgFeatureFlagResponse{
 		Code: http.StatusOK,
 	}
-	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName, featureFlagResponse)
+	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
 	api := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := api.GetFeatureFlag(featureFlagName)
+	actual, err := api.GetFeatureFlag(featureFlagName, org)
 	assert.NoError(t, err)
 	assert.True(t, actual)
 }

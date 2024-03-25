@@ -194,15 +194,18 @@ func Test_initConfiguration_NOT_snykgov(t *testing.T) {
 }
 
 func Test_initConfiguration_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
+	orgId := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	config := configuration.NewInMemory()
+	config.Set(configuration.ORGANIZATION, orgId)
+
 	// setup mock
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores").Return(true, nil).Times(1)
-	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores").Return(false, nil).Times(1)
-	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores").Return(false, fmt.Errorf("error")).Times(1)
+	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(true, nil).Times(1)
+	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(false, nil).Times(1)
+	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(false, fmt.Errorf("error")).Times(1)
 
-	config := configuration.NewInMemory()
 	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
 
 	consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
