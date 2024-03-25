@@ -49,6 +49,21 @@ func (mr *MockApiClientMockRecorder) GetDefaultOrgId() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDefaultOrgId", reflect.TypeOf((*MockApiClient)(nil).GetDefaultOrgId))
 }
 
+// GetFeatureFlag mocks base method.
+func (m *MockApiClient) GetFeatureFlag(flagname string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFeatureFlag", flagname)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFeatureFlag indicates an expected call of GetFeatureFlag.
+func (mr *MockApiClientMockRecorder) GetFeatureFlag(flagname interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeatureFlag", reflect.TypeOf((*MockApiClient)(nil).GetFeatureFlag), flagname)
+}
+
 // GetOrgIdFromSlug mocks base method.
 func (m *MockApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 	m.ctrl.T.Helper()

@@ -3,9 +3,10 @@ package localworkflows
 import (
 	"os"
 
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -45,7 +46,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 
 // codeWorkflowEntryPoint is the entry point for the code workflow.
 // it provides a wrapper for the legacycli workflow
-func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
+func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (result []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
@@ -56,11 +57,14 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 
 	logger.Debug().Msg("code workflow start")
 
-	// run legacycli
-	legacyCliResponse, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
-	if legacyCLIError != nil {
-		return nil, legacyCLIError
+	if config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES) {
+		logger.Debug().Msg("Ignores: Consistent")
+	} else {
+		logger.Debug().Msg("Ignores: legacy")
 	}
 
-	return legacyCliResponse, err
+	// run legacycli
+	result, err = engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
+
+	return result, err
 }

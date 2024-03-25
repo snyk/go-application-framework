@@ -17,6 +17,25 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		if existingValue == nil {
+			flagname := "snykCodeConsistentIgnores"
+			client := engine.GetNetworkAccess().GetHttpClient()
+			url := config.GetString(configuration.API_URL)
+			apiClient.Init(url, client)
+			result, err := apiClient.GetFeatureFlag(flagname)
+			if err != nil {
+				logger.Printf("Failed to determine feature flag \"%s\": %s", flagname, err)
+			}
+			return result
+		} else {
+			return existingValue
+		}
+	}
+	return callback
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
 	if logger == nil {
@@ -104,6 +123,8 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 			return existingValue
 		}
 	})
+
+	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, apiClient, logger))
 }
 
 // CreateAppEngine creates a new workflow engine.

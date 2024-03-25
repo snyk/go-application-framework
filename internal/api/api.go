@@ -16,6 +16,7 @@ type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)
 	GetOrgIdFromSlug(slugName string) (string, error)
 	Init(url string, client *http.Client)
+	GetFeatureFlag(flagname string) (bool, error)
 }
 
 type snykApiClient struct {
@@ -74,6 +75,33 @@ func (a *snykApiClient) GetDefaultOrgId() (string, error) {
 	}
 
 	return userInfo.Data.Attributes.DefaultOrgContext, nil
+}
+
+func (a *snykApiClient) GetFeatureFlag(flagname string) (bool, error) {
+	const defaultResult = false
+
+	url := a.url + "/v1/cli-config/feature-flags/" + flagname
+	res, err := a.client.Get(url)
+	if err != nil {
+		return defaultResult, fmt.Errorf("unable to retrieve feature flag: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return defaultResult, fmt.Errorf("unable to retrieve feature flag: %w", err)
+	}
+
+	var flag contract.OrgFeatureFlagResponse
+	if err = json.Unmarshal(body, &flag); err != nil {
+		return defaultResult, fmt.Errorf("unable to retrieve feature flag (status: %d): %w", res.StatusCode, err)
+	}
+
+	if res.StatusCode != http.StatusOK || flag.Code == http.StatusUnauthorized || flag.Code == http.StatusForbidden {
+		return defaultResult, err
+	}
+
+	return true, nil
 }
 
 func (a *snykApiClient) Init(url string, client *http.Client) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -190,4 +191,26 @@ func Test_initConfiguration_NOT_snykgov(t *testing.T) {
 
 	isFedramp := config.GetBool(configuration.IS_FEDRAMP)
 	assert.False(t, isFedramp)
+}
+
+func Test_initConfiguration_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores").Return(true, nil).Times(1)
+	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores").Return(false, nil).Times(1)
+	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores").Return(false, fmt.Errorf("error")).Times(1)
+
+	config := configuration.NewInMemory()
+	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
+
+	consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	assert.True(t, consistentIgnores)
+
+	consistentIgnores = config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	assert.False(t, consistentIgnores)
+
+	consistentIgnores = config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	assert.False(t, consistentIgnores)
 }
