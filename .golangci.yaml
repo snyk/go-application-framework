@@ -170,6 +170,10 @@ issues:
     - path: test/
       linters:
         - testpackage
+    - path: pkg/local_workflows/auth|report_analytics|whoami|output_workflow.go
+      linters:
+        - staticcheck
+      text: SA1019
   include:
     - EXC0012
     - EXC0014

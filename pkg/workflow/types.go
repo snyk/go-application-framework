@@ -41,6 +41,7 @@ type InvocationContext interface {
 	GetEngine() Engine
 	GetAnalytics() analytics.Analytics
 	GetNetworkAccess() networking.NetworkAccess
+	// Deprecated: Use GetEnhancedLogger instead
 	GetLogger() *log.Logger
 	GetEnhancedLogger() *zerolog.Logger
 	GetUserInterface() ui.UserInterface
