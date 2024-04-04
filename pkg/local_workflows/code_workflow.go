@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"os"
+	"slices"
 
 	"github.com/spf13/pflag"
 
@@ -10,7 +11,8 @@ import (
 )
 
 const (
-	codeWorkflowName = "code.test"
+	codeWorkflowName             = "code.test"
+	codeWorkflowExperimentalFlag = configuration.FLAG_EXPERIMENTAL
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -29,6 +31,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	flagSet.String("target-name", "", "The name of the target to test.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
 	flagSet.String("remote-repo-url", "", "The URL of the remote repository to test.")
+	flagSet.Bool("experimental", false, "Enable experimental code test command")
 
 	return flagSet
 }
@@ -52,7 +55,25 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
 
-	config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
+	useExperimentalOutput := config.GetBool(codeWorkflowExperimentalFlag) && !slices.Contains(os.Args, "--report")
+
+	if useExperimentalOutput {
+		args := []string{"--json"}
+
+		// Add the rest of the arguments
+		for _, arg := range os.Args[1:] {
+			if arg == "--experimental" || arg == "--json" || arg == "--sarif" {
+				continue
+			}
+
+			args = append(args, arg)
+		}
+
+		config.Set(configuration.RAW_CMD_ARGS, args)
+	} else {
+		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
+	}
+
 	config.Set(configuration.WORKFLOW_USE_STDIO, true)
 
 	logger.Debug().Msg("code workflow start")
