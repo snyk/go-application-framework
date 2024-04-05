@@ -2,8 +2,9 @@ package analytics
 
 import (
 	"bytes"
+	"crypto/sha256"
+
 	//nolint:gosec // insecure sha1 used for legacy identifier
-	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,7 @@ type Analytics interface {
 	AddHeader(headerFunc func() http.Header)
 	SetClient(clientFunc func() *http.Client)
 	IsCiEnvironment() bool
-	GetOutputData() *analyticsOutput
+	GetOutputData() *AnalyticsOutput
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
 }
@@ -70,8 +71,8 @@ type metadataOutput struct {
 type metricsOutput struct {
 }
 
-// analyticsOutput defines the analyticsOutput payload.
-type analyticsOutput struct {
+// AnalyticsOutput defines the AnalyticsOutput payload.
+type AnalyticsOutput struct {
 	Command                       string         `json:"command"`
 	Args                          []string       `json:"args"`
 	OsPlatform                    string         `json:"osPlatform"`
@@ -94,7 +95,7 @@ type analyticsOutput struct {
 
 // dataOutput defines the dataOutput payload.
 type dataOutput struct {
-	Data analyticsOutput `json:"data"`
+	Data AnalyticsOutput `json:"data"`
 }
 
 var (
@@ -214,8 +215,8 @@ func (a *AnalyticsImpl) IsCiEnvironment() bool {
 }
 
 // GetOutputData returns the analyticsOutput data.
-func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
-	output := &analyticsOutput{}
+func (a *AnalyticsImpl) GetOutputData() *AnalyticsOutput {
+	output := &AnalyticsOutput{}
 
 	errorCount := len(a.errorList)
 	if errorCount > 0 {
@@ -225,13 +226,17 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 		}
 	}
 
-	// deepcode ignore InsecureHash: It is just being used to generate an id, without any security concerns
-	//nolint:gosec // sha1 only used to generate an id
-	shasum := sha1.New()
-	//nolint:errcheck // breaking api change needed to fix this
-	uuid, _ := uuid.GenerateUUID()
-	//nolint:errcheck // breaking api change needed to fix this
-	io.WriteString(shasum, uuid)
+	shasum := sha256.New() // generating a sha256 is not necessary, but gets rid of linter and sec warnings
+	generatedUUID, err := uuid.GenerateUUID()
+	if err != nil {
+		return nil // we can't continue without uuid
+	}
+
+	_, err = io.WriteString(shasum, generatedUUID)
+	if err != nil {
+		return nil
+	}
+
 	output.Id = fmt.Sprintf("%x", shasum.Sum(nil))
 
 	output.Args = a.args
@@ -272,11 +277,11 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 		return nil, err
 	}
 
-	user, err := a.userCurrent()
+	currentUser, err := a.userCurrent()
 	if err != nil {
 		return nil, err
 	}
-	outputJson, err = SanitizeUsername(user.Username, user.HomeDir, sanitizeReplacementString, outputJson)
+	outputJson, err = SanitizeUsername(currentUser.Username, currentUser.HomeDir, sanitizeReplacementString, outputJson)
 	if err != nil {
 		return nil, err
 	}
