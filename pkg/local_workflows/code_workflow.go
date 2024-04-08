@@ -1,9 +1,18 @@
 package localworkflows
 
 import (
+	"context"
+	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 
+	codeclient "github.com/snyk/code-client-go"
+	"github.com/snyk/code-client-go/bundle"
+	"github.com/snyk/code-client-go/deepcode"
+	"github.com/snyk/code-client-go/http"
+	"github.com/snyk/code-client-go/observability"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -38,6 +47,67 @@ func GetCodeFlagSet() *pflag.FlagSet {
 
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
+
+type codeClientConfig struct {
+	localConfiguration configuration.Configuration
+}
+
+func (c *codeClientConfig) Organization() string {
+	return c.localConfiguration.GetString(configuration.ORGANIZATION)
+}
+
+func (c *codeClientConfig) IsFedramp() bool {
+	return c.localConfiguration.GetBool(configuration.IS_FEDRAMP)
+}
+
+func (c *codeClientConfig) SnykCodeApi() string {
+	return c.localConfiguration.GetString(configuration.API_URL) // TODO: what URL
+}
+
+type codeClientErrorReporter struct{}
+
+func (c *codeClientErrorReporter) FlushErrorReporting() {}
+func (c *codeClientErrorReporter) CaptureError(err error, options observability.ErrorReporterOptions) bool {
+	return true
+}
+
+type codeClientSpan struct {
+	ctx             context.Context
+	transactionName string
+	operationName   string
+}
+
+func (c *codeClientSpan) SetTransactionName(name string) { c.transactionName = name }
+func (c *codeClientSpan) StartSpan(ctx context.Context)  { c.ctx = ctx }
+func (c *codeClientSpan) Finish()                        {}
+func (c *codeClientSpan) GetOperation() string           { return c.operationName }
+func (c *codeClientSpan) GetTxName() string              { return c.transactionName }
+func (c *codeClientSpan) GetTraceId() string             { return "" } // TODO: interaction id
+func (c *codeClientSpan) Context() context.Context       { return c.ctx }
+func (c *codeClientSpan) GetDurationMs() int64           { return 0 }
+
+type codeClientInstrumentor struct{}
+
+func (c *codeClientInstrumentor) StartSpan(ctx context.Context, operation string) observability.Span {
+	return &codeClientSpan{ctx: ctx, operationName: operation}
+}
+func (c *codeClientInstrumentor) NewTransaction(ctx context.Context, txName string, operation string) observability.Span {
+	return &codeClientSpan{ctx: ctx, operationName: operation, transactionName: txName}
+}
+func (c *codeClientInstrumentor) Finish(span observability.Span) {
+	span.Finish()
+}
+
+// todo: recursively iterate and filter
+func getFiles(path string, results chan<- string) {
+	filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+		if !d.IsDir() {
+			fmt.Println(path)
+			//results <- path
+		}
+		return nil
+	})
+}
 
 // InitCodeWorkflow initializes the code workflow before registering it with the engine.
 func InitCodeWorkflow(engine workflow.Engine) error {
@@ -80,12 +150,39 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 
 	if config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES) {
 		logger.Debug().Msg("Ignores: Consistent")
+
+		ctx := context.Background()
+		codeInstrumentor := &codeClientInstrumentor{}
+		codeErrorReporter := &codeClientErrorReporter{}
+
+		// invoke code-client-go
+		httpClient := http.NewHTTPClient(logger, &codeClientConfig{
+			localConfiguration: config,
+		}, invocationCtx.GetNetworkAccess().GetHttpClient, codeInstrumentor, codeErrorReporter)
+
+		snykCode := deepcode.NewSnykCodeClient(logger, httpClient, codeInstrumentor)
+
+		bundleManager := bundle.NewBundleManager(logger, snykCode, codeInstrumentor, codeErrorReporter)
+		codeScanner := codeclient.NewCodeScanner(bundleManager, codeInstrumentor, codeErrorReporter, logger)
+
+		changedFiles := make(map[string]bool)
+		path := config.GetString(configuration.INPUT_DIRECTORY)
+
+		files := make(chan string)
+		getFiles(path, files)
+
+		return nil, err
+
+		sarif, _, err := codeScanner.UploadAndAnalyze(ctx, path, files, changedFiles)
+		fmt.Println(sarif)
+
+		return nil, err
 	} else {
 		logger.Debug().Msg("Ignores: legacy")
-	}
 
-	// run legacycli
-	result, err = engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
+		// run legacycli
+		result, err = engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
+	}
 
 	return result, err
 }
