@@ -1,0 +1,22 @@
+[1m[37m[39m[22m
+[1m[37mTesting /path/to/project ...[39m[22m
+[1m[37m[39m[22m
+{{ if len .Findings }}{{ range .Findings }}{{ .ColorCode }} ✗ [{{ .Severity }}] [1m{{ .Title }}[22m[39m
+   Path: {{ .Path }}, line {{ .Line }}
+   Info: {{ .Message }}
+
+{{ end }}{{else}}[1m[37m[39m[22m{{ end }}
+[32m✔ Test completed[39m
+
+Organization:      [1m{{ .Meta.OrgName }}[22m
+Test type:         [1mStatic code analysis[22m
+Project path:      [1m{{ .Meta.TestPath }}[22m
+
+[1mSummary:[22m
+
+{{ if len .Findings }}  {{ len .Findings }} Code issues found
+{{ if .Summary.High }}[31m  {{ .Summary.High }} [High] [39m[33m  {{end}}{{ if .Summary.Medium }}{{ .Summary.Medium }} [Medium] [39m{{end}}{{if .Summary.Low }}  {{ .Summary.Low }} [Low] {{ end }}
+
+{{ else }}[32m✔ Awesome! No issues were found.[39m
+
+{{ end }}
