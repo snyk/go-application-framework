@@ -2,7 +2,7 @@ package localworkflows
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"github.com/rs/zerolog"
 	"io/fs"
 	"os"
@@ -63,7 +63,7 @@ func (c *codeClientConfig) IsFedramp() bool {
 }
 
 func (c *codeClientConfig) SnykCodeApi() string {
-	return strings.Replace(c.localConfiguration.GetString(configuration.API_URL), "api", "deeproxy", -1) // TODO: what URL
+	return strings.Replace(c.localConfiguration.GetString(configuration.API_URL), "api", "deeproxy", -1)
 }
 
 type codeClientErrorReporter struct{}
@@ -180,10 +180,21 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		files := make(chan string)
 		getFilesForPath(path, files, logger)
 
-		sarif, _, err := codeScanner.UploadAndAnalyze(ctx, path, files, changedFiles)
-		fmt.Println(sarif)
+		result, _, err := codeScanner.UploadAndAnalyze(ctx, path, files, changedFiles)
 
-		return nil, err
+		data, err := json.Marshal(result.Sarif)
+
+		if err != nil {
+			return nil, err
+		}
+
+		sarifData := workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_CODE, "sarif"),
+			"application/json",
+			data,
+		)
+		return []workflow.Data{sarifData}, nil
+
 	} else {
 		logger.Debug().Msg("Ignores: legacy")
 
