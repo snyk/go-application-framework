@@ -3,10 +3,12 @@ package localworkflows
 import (
 	"context"
 	"fmt"
+	"github.com/rs/zerolog"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	codeclient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/bundle"
@@ -61,7 +63,7 @@ func (c *codeClientConfig) IsFedramp() bool {
 }
 
 func (c *codeClientConfig) SnykCodeApi() string {
-	return c.localConfiguration.GetString(configuration.API_URL) // TODO: what URL
+	return strings.Replace(c.localConfiguration.GetString(configuration.API_URL), "api", "deeproxy", -1) // TODO: what URL
 }
 
 type codeClientErrorReporter struct{}
@@ -99,14 +101,21 @@ func (c *codeClientInstrumentor) Finish(span observability.Span) {
 }
 
 // todo: recursively iterate and filter
-func getFiles(path string, results chan<- string) {
-	filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
-		if !d.IsDir() {
-			fmt.Println(path)
-			//results <- path
+func getFilesForPath(path string, results chan<- string, logger *zerolog.Logger) {
+	go func() {
+		defer close(results)
+		err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+			if !d.IsDir() && err == nil {
+				logger.Debug().Msg(path)
+				results <- path
+			}
+			return err
+		})
+
+		if err != nil {
+			logger.Error().Err(err)
 		}
-		return nil
-	})
+	}()
 }
 
 // InitCodeWorkflow initializes the code workflow before registering it with the engine.
@@ -169,9 +178,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		path := config.GetString(configuration.INPUT_DIRECTORY)
 
 		files := make(chan string)
-		getFiles(path, files)
-
-		return nil, err
+		getFilesForPath(path, files, logger)
 
 		sarif, _, err := codeScanner.UploadAndAnalyze(ctx, path, files, changedFiles)
 		fmt.Println(sarif)
