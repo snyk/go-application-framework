@@ -3,6 +3,7 @@ package app
 import (
 	"io"
 	"log"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -120,6 +121,18 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.IS_FEDRAMP, func(existingValue any) any {
 		if existingValue == nil {
 			return api.IsFedramp(config.GetString(configuration.API_URL))
+		} else {
+			return existingValue
+		}
+	})
+
+	config.AddDefaultValue(configuration.INPUT_DIRECTORY, func(existingValue any) any {
+		if existingValue == nil {
+			path, err := os.Getwd()
+			if err != nil {
+				return ""
+			}
+			return path
 		} else {
 			return existingValue
 		}

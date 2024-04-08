@@ -3,12 +3,13 @@ package localworkflows
 import (
 	"context"
 	"encoding/json"
-	"github.com/rs/zerolog"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	codeclient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/bundle"
@@ -106,7 +107,7 @@ func getFilesForPath(path string, results chan<- string, logger *zerolog.Logger)
 		defer close(results)
 		err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
 			if !d.IsDir() && err == nil {
-				logger.Debug().Msg(path)
+				//logger.Debug().Msg(path)
 				results <- path
 			}
 			return err
@@ -176,7 +177,8 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 
 		changedFiles := make(map[string]bool)
 		path := config.GetString(configuration.INPUT_DIRECTORY)
-
+		logger.Debug().Msgf("Path: %s", path)
+		
 		files := make(chan string)
 		getFilesForPath(path, files, logger)
 
