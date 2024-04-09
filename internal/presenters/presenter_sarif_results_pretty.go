@@ -148,7 +148,7 @@ func SortFindings(findings []Finding) []Finding {
 
 	slices.SortFunc(result, func(a, b Finding) int {
 		if a.SeverityLevel != b.SeverityLevel {
-			return int(a.SeverityLevel - b.SeverityLevel)
+			return a.SeverityLevel - b.SeverityLevel
 		}
 
 		return 0
