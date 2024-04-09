@@ -142,9 +142,7 @@ func SummariseFindings(findings []Finding) FindingsSummary {
 func SortFindings(findings []Finding) []Finding {
 	result := make([]Finding, 0, len(findings))
 
-	for id := range findings {
-		result = append(result, findings[id])
-	}
+	result = append(result, findings...)
 
 	slices.SortFunc(result, func(a, b Finding) int {
 		if a.SeverityLevel != b.SeverityLevel {
