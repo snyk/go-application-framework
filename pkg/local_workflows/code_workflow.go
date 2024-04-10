@@ -9,11 +9,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
 
 	codeclient "github.com/snyk/code-client-go"
-	"github.com/snyk/code-client-go/bundle"
-	"github.com/snyk/code-client-go/deepcode"
 	"github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/observability"
 	"github.com/spf13/pflag"
@@ -65,6 +64,10 @@ func (c *codeClientConfig) IsFedramp() bool {
 
 func (c *codeClientConfig) SnykCodeApi() string {
 	return strings.Replace(c.localConfiguration.GetString(configuration.API_URL), "api", "deeproxy", -1)
+}
+
+func (c *codeClientConfig) SnykApi() string {
+	return c.localConfiguration.GetString(configuration.API_URL)
 }
 
 type codeClientErrorReporter struct{}
@@ -159,33 +162,35 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	logger.Debug().Msg("code workflow start")
 
 	if config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES) {
+		changedFiles := make(map[string]bool)
+		path := config.GetString(configuration.INPUT_DIRECTORY)
+		interactionId, err := uuid.GenerateUUID()
+		if err != nil {
+			return nil, err
+		}
+
 		logger.Debug().Msg("Ignores: Consistent")
+		logger.Debug().Msgf("Interaction ID: %s", interactionId)
+		logger.Debug().Msgf("Path: %s", path)
 
 		ctx := context.Background()
 		codeInstrumentor := &codeClientInstrumentor{}
 		codeErrorReporter := &codeClientErrorReporter{}
-
-		// invoke code-client-go
-		httpClient := http.NewHTTPClient(logger, &codeClientConfig{
+		httpClient := http.NewHTTPClient(logger, invocationCtx.GetNetworkAccess().GetHttpClient, codeInstrumentor, codeErrorReporter)
+		codeScannerConfig := &codeClientConfig{
 			localConfiguration: config,
-		}, invocationCtx.GetNetworkAccess().GetHttpClient, codeInstrumentor, codeErrorReporter)
+		}
+		codeScanner := codeclient.NewCodeScanner(httpClient, codeScannerConfig, codeInstrumentor, codeErrorReporter, logger)
 
-		snykCode := deepcode.NewSnykCodeClient(logger, httpClient, codeInstrumentor)
-
-		bundleManager := bundle.NewBundleManager(logger, snykCode, codeInstrumentor, codeErrorReporter)
-		codeScanner := codeclient.NewCodeScanner(bundleManager, codeInstrumentor, codeErrorReporter, logger)
-
-		changedFiles := make(map[string]bool)
-		path := config.GetString(configuration.INPUT_DIRECTORY)
-		logger.Debug().Msgf("Path: %s", path)
-		
 		files := make(chan string)
 		getFilesForPath(path, files, logger)
 
-		result, _, err := codeScanner.UploadAndAnalyze(ctx, path, files, changedFiles)
+		result, _, err := codeScanner.UploadAndAnalyze(ctx, interactionId, path, files, changedFiles)
+		if err != nil {
+			return nil, err
+		}
 
 		data, err := json.Marshal(result.Sarif)
-
 		if err != nil {
 			return nil, err
 		}
