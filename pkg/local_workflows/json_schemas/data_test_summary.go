@@ -1,4 +1,4 @@
-package workflow
+package json_schemas
 
 const TestSummarySchema = `{
 	"$schema": "http://json-schema.org/draft-07/schema#",
