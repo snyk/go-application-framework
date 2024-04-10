@@ -44,6 +44,11 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	for i := range input {
 		mimeType := input[i].GetContentType()
+
+		if strings.HasPrefix(mimeType, workflow.CONTENT_TYPE_TEST_SUMMARY) {
+			continue
+		}
+
 		contentLocation := input[i].GetContentLocation()
 		if len(contentLocation) == 0 {
 			contentLocation = "unknown"
