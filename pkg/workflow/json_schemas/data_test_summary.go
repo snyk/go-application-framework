@@ -40,12 +40,14 @@ const TestSummarySchema = `{
 	}
   }`
 
+type TestSummaryResult struct {
+	Severity string `json:"severity"`
+	Total    int    `json:"total"`
+	Open     int    `json:"open"`
+	Ignored  int    `json:"ignored"`
+}
+
 type TestSummary struct {
-	Results []struct {
-		Severity string `json:"severity"`
-		Total    int    `json:"total"`
-		Open     int    `json:"open"`
-		Ignored  int    `json:"ignored"`
-	} `json:"results"`
-	Type string `json:"type"`
+	Results []TestSummaryResult `json:"results"`
+	Type    string              `json:"type"`
 }
