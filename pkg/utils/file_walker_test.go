@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFileWalker_GetAllFiles(t *testing.T) {
+func TestFileWalker_GetAllFiles_getsAllFilesForPath(t *testing.T) {
 	//ignoreFiles := []string{".gitignore"}
 	tempDir := t.TempDir()
 	tempFile1 := filepath.Join(tempDir, "test1.ts")
@@ -29,7 +29,26 @@ func TestFileWalker_GetAllFiles(t *testing.T) {
 	assert.Equal(t, len(expectedFiles), actualFilesChanLen)
 }
 
-func TestFileWalker_GetRules(t *testing.T) {
+func TestFileWalker_GetRules_includesDotGitRuleByDefault(t *testing.T) {
+	// create temp filesystem
+	tempDir := t.TempDir()
+	tempFile1 := filepath.Join(tempDir, "test1.ts")
+	createFileInPath(tempFile1, []byte{}, t)
+	tempFile2 := filepath.Join(tempDir, "test2.ts")
+	createFileInPath(tempFile2, []byte{}, t)
+
+	// expected rules should include .git rule by default
+	expectedRules := []string{"**/.git/**", "**/.gitignore/**"}
+
+	// create fileWalker
+	fileWalker := NewFileWalker(tempDir)
+	actualRules, err := fileWalker.GetRules([]string{})
+	assert.NoError(t, err)
+
+	assert.Equal(t, expectedRules, actualRules)
+}
+
+func TestFileWalker_GetRules_getsIgnoreRulesForPath(t *testing.T) {
 	// create temp filesystem
 	tempDir := t.TempDir()
 	tempFile1 := filepath.Join(tempDir, "test1.ts")
@@ -37,92 +56,72 @@ func TestFileWalker_GetRules(t *testing.T) {
 	tempFile2 := filepath.Join(tempDir, "test2.ts")
 	createFileInPath(tempFile2, []byte{}, t)
 	ignoreFile := filepath.Join(tempDir, ".gitignore")
-	createFileInPath(ignoreFile, []byte(".git\ntest1.ts\n"), t)
+	createFileInPath(ignoreFile, []byte("test1.ts\n"), t)
 
 	// create expected rules
 	expectedRules := []string{
-		fmt.Sprintf("%s/**/.git/**", tempDir), // apply ignore in all subDirs
-		fmt.Sprintf("%s/**/.git", tempDir),    // apply ignore in curDir
-		fmt.Sprintf("%s/**/test1.ts/**", tempDir),
-		fmt.Sprintf("%s/**/test1.ts", tempDir),
+		"**/.git/**",
+		"**/.gitignore/**",
+		fmt.Sprintf("%s/**/test1.ts/**", tempDir), // apply ignore in subDirs
+		fmt.Sprintf("%s/**/test1.ts", tempDir),    // apply ignore in curDir
 	}
 
 	// create fileWalker
+	ruleFiles := []string{".gitignore"}
 	fileWalker := NewFileWalker(tempDir)
-	actualRules, err := fileWalker.GetRules()
+	actualRules, err := fileWalker.GetRules(ruleFiles)
 	assert.NoError(t, err)
 
 	assert.Equal(t, expectedRules, actualRules)
 }
 
-//func TestFileWalker_GetIgnoreFiles(t *testing.T) {
-//	ignoreFiles := []string{".gitignore"}
-//	tempDir := t.TempDir()
-//	tempSubDir := filepath.Join(tempDir, "tempSubDir")
-//	err := os.Mkdir(tempSubDir, os.ModePerm)
-//	assert.NoError(t, err)
-//
-//	createFileInPath(filepath.Join(tempDir, "test1.ts"), []byte{}, t)
-//	createFileInPath(filepath.Join(tempDir, "test2.ts"), []byte{}, t)
-//	createFileInPath(filepath.Join(tempSubDir, "test3.ts"), []byte{}, t)
-//
-//	expectedFile := filepath.Join(tempSubDir, ".gitignore")
-//	createFileInPath(expectedFile, []byte{}, t)
-//	expectedIgnoreFileCount := 1
-//
-//	// GetFile() asynchronously returns all files in the filesystem
-//	// Filter() listens to the result of GetAllFiles() and applies filter rules.
-//	// GetRules() retuns an array of all gitignor ... files in the specified path
-//	// how to load the filter rules, so that they are available for the first file in each directory
-//	fileWalker := NewFileWalker(path)
-//	channel := fileWarker.Filter(fileWarker.GetFile(), fileWalker.GetRules())
-//
-//	fileWalker := NewFileWalker(ignoreFiles)
-//	files, err := fileWalker.GetAllFiles(tempDir)
-//	assert.NoError(t, err)
-//
-//	actualFiles, err := fileWalker.GetIgnoreFiles(files)
-//	assert.NoError(t, err)
-//
-//	var actualFilesChanLen int
-//	for _, actualFile := range actualFiles {
-//		actualFilesChanLen++
-//		assert.Contains(t, expectedFile, actualFile)
-//	}
-//	assert.Equal(t, expectedIgnoreFileCount, actualFilesChanLen)
-//}
+func TestFileWalker_GetFilteredFiles_filtersFiles(t *testing.T) {
+	// create temp filesystem
+	tempDir := t.TempDir()
+	tempSubDir := filepath.Join(tempDir, "tempSubDir")
+	err := os.Mkdir(tempSubDir, os.ModePerm)
+	assert.NoError(t, err)
 
-//func TestFileWalker_GetFilesFilterIgnored(t *testing.T) {
-//	ignoreFiles := []string{".gitignore"}
-//	tempDir := t.TempDir()
-//	tempSubDir := t.TempDir()
-//	filepath.Join(tempDir, "test1.ts")
-//	filepath.Join(tempDir, "test2.ts")
-//	filepath.Join(tempDir, tempSubDir, "test3.ts")
-//
-//	createGitIgnoreFile(tempDir, []string{"test1.ts", filepath.Join(tempDir, tempSubDir)})
-//
-//	fileWalker := NewFileWalker(ignoreFiles)
-//
-//	actualFilesFiltered, err := fileWalker.GetFilesFilterIgnored(tempDir)
-//	assert.NoError(t, err)
-//
-//	expectedFile := "test2.ts"
-//
-//	for actualFileFiltered := range actualFilesFiltered {
-//		assert.Contains(t, expectedFile, actualFileFiltered)
-//	}
-//}
+	// create ignore file in root dir ignoring any file with name 'test1.ts'
+	ignoreFile := filepath.Join(tempDir, ".gitignore")
+	createFileInPath(ignoreFile, []byte("test1.ts\n"), t)
 
-func createGitIgnoreFile(path string, ignoredFiles []string, t *testing.T) {
-	t.Helper()
-	var data []byte
-	for _, ignoredFile := range ignoredFiles {
-		data = append(data, []byte(ignoredFile+"\n")...)
+	// create files in root dir
+	tempFile1 := filepath.Join(tempDir, "test1.ts")
+	createFileInPath(tempFile1, []byte{}, t)
+	tempFile2 := filepath.Join(tempDir, "test2.ts")
+	createFileInPath(tempFile2, []byte{}, t)
+
+	// create files in sub dir
+	tempSubFile1 := filepath.Join(tempSubDir, "test1.ts")
+	createFileInPath(tempSubFile1, []byte{}, t)
+	tempSubFile2 := filepath.Join(tempSubDir, "test2.ts")
+	createFileInPath(tempSubFile2, []byte{}, t)
+
+	// create fileWalker
+	ruleFiles := []string{".gitignore"}
+	fileWalker := NewFileWalker(tempDir)
+
+	// get and filter files
+	files := fileWalker.GetAllFiles()
+	globs, err := fileWalker.GetRules(ruleFiles)
+	assert.NoError(t, err)
+	filteredFiles := fileWalker.GetFilteredFiles(files, globs)
+
+	// set expected files
+	expectedFiles := []string{
+		fmt.Sprintf("%s/test2.ts", tempDir),
+		fmt.Sprintf("%s/test2.ts", tempSubDir),
 	}
 
-	gitIgnorePath := filepath.Join(path, ".gitignore")
-	createFileInPath(gitIgnorePath, data, t)
+	// assert files are filtered correctly
+	var actualFilteredFilesLen int
+	for file := range filteredFiles {
+		actualFilteredFilesLen++
+		assert.Contains(t, expectedFiles, file)
+	}
+
+	assert.Equal(t, len(expectedFiles), actualFilteredFilesLen)
 }
 
 func createFileInPath(filePath string, content []byte, t *testing.T) {

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	gitignore "github.com/sabhiram/go-gitignore"
 )
 
 type FileWalker struct {
@@ -33,15 +35,18 @@ func (fw *FileWalker) GetAllFiles() chan string {
 	return filesCh
 }
 
-// GetRules iterate a channel of filepaths and filter on rule files
-func (fw *FileWalker) GetRules() ([]string, error) {
+// GetRules builds a list of glob patterns that can be used to filter files
+func (fw *FileWalker) GetRules(ruleFiles []string) ([]string, error) {
+	defaultGlob := []string{"**/.git/**", "**/.gitignore/**"}
 	files := fw.GetAllFiles()
 
 	// iterate files channel and find ignore files
 	var ignoreFiles = make([]string, 0)
 	for file := range files {
-		if strings.Contains(file, ".gitignore") {
-			ignoreFiles = append(ignoreFiles, file)
+		for _, ruleFile := range ruleFiles {
+			if strings.Contains(file, ruleFile) {
+				ignoreFiles = append(ignoreFiles, file)
+			}
 		}
 	}
 
@@ -51,99 +56,29 @@ func (fw *FileWalker) GetRules() ([]string, error) {
 		return nil, err
 	}
 
-	return globs, nil
+	return append(defaultGlob, globs...), nil
 }
 
-//// GetFilesFilterIgnored gets files for a given dir path and fetches all files in the directory, omitting any ignored files
-//func (fw *FileWalker) GetFilesFilterIgnored(path string) (chan string, error) {
-//	//// walk and get files
-//	//files := fw.GetAllFiles(path)
-//	//
-//	//// get and parse ignore globs
-//	//fw.buildGlobs()
-//	//parsedIgnoreGlobs := gitignore.CompileIgnoreLines(fw.globs...)
-//	//
-//	//// iterate files and filter out ignored files
-//	//var filteredFiles = make(chan string)
-//	//go func() {
-//	//	defer close(filteredFiles)
-//	//	for file := range files {
-//	//		fileIsIgnored := parsedIgnoreGlobs.MatchesPath(file)
-//	//		if !fileIsIgnored {
-//	//			fmt.Printf("HELLO WORLD: %s\n", file)
-//	//			filteredFiles <- file
-//	//		}
-//	//	}
-//	//}()
-//	//return filteredFiles
-//
-//	files, err := fw.GetAllFiles(path)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	ignoreFiles, err := fw.GetIgnoreFiles(files)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	ignoreGlobs, err := fw.buildGlobs(ignoreFiles)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if len(ignoreGlobs) > 0 {
-//		for _, glob := range ignoreGlobs {
-//			fmt.Printf("Ignore files with glob: %s\n", glob)
-//		}
-//	}
-//
-//	return nil, fmt.Errorf("GetFilesFilterIgnored() not implemented")
-//}
+// GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
+func (fw *FileWalker) GetFilteredFiles(filesCh chan string, globs []string) chan string {
+	var filteredFilesCh = make(chan string)
 
-//// GetIgnoreFiles inspects a files channel and returns supported ignore files
-//func (fw *FileWalker) GetIgnoreFiles(filesCh chan string) ([]string, error) {
-//	ignoreFilePaths := make([]string, 0)
-//
-//	for file := range filesCh {
-//		for _, ignoreFile := range fw.ignoreFiles {
-//			if strings.Contains(file, ignoreFile) {
-//				ignoreFilePaths = append(ignoreFilePaths, file)
-//			}
-//		}
-//	}
-//
-//	return ignoreFilePaths, nil
-//}
+	// create pattern matcher used to match files to glob patterns
+	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 
-//// walk traverses a given root directory
-//func (fw *FileWalker) walk(path string, resultsCh chan string) error {
-//	err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
-//		//if d.IsDir() && err == nil {
-//		//	//	check if dir has any ignoreFiles in it
-//		//	for _, ignoreFile := range fw.ignoreFiles {
-//		//		ignoreFilePath := filepath.Join(path, ignoreFile)
-//		//		_, err := os.Stat(ignoreFilePath)
-//		//		if err == nil {
-//		//			//	dir contains valid ignore file
-//		//			fmt.Printf("Valid ignorefile: %s\n", ignoreFilePath)
-//		//			fw.ignoreFilePaths = append(fw.ignoreFilePaths, ignoreFilePath)
-//		//		}
-//		//	}
-//		//}
-//
-//		if !d.IsDir() && err == nil {
-//			resultsCh <- path
-//		}
-//		return nil
-//	})
-//
-//	if err != nil {
-//		fw.logger.Error().Err(err)
-//	}
-//
-//	return nil
-//}
+	// iterate the files channel
+	go func() {
+		defer close(filteredFilesCh)
+		for file := range filesCh {
+			// files that do not match the glob pattern are filtered
+			if !globPatternMatcher.MatchesPath(file) {
+				filteredFilesCh <- file
+			}
+		}
+	}()
+
+	return filteredFilesCh
+}
 
 // buildGlobs iterates a list of ignore files and returns a list of glob patterns that can be used to test for ignored files
 func (fw *FileWalker) buildGlobs(ignoreFiles []string) ([]string, error) {
