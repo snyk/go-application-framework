@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -9,38 +10,42 @@ import (
 	gitignore "github.com/sabhiram/go-gitignore"
 )
 
-type FileWalker struct {
-	path string
+type FileFilter struct {
+	path         string
+	defaultRules []string
 }
 
-func NewFileWalker(path string) *FileWalker {
-	return &FileWalker{
-		path: path,
+func NewFileFilter(path string) *FileFilter {
+	return &FileFilter{
+		path:         path,
+		defaultRules: []string{"**/.git/**"},
 	}
 }
 
-// GetAllFiles traverses a given dir path and fetches all files in the directory
-func (fw *FileWalker) GetAllFiles() chan string {
+// GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
+func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
-		_ = filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
+		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
 			if !d.IsDir() && err == nil {
 				filesCh <- path
 			}
 			return err
 		})
+		if err != nil {
+			fmt.Printf("walk dir failed: %v", err)
+		}
 	}()
 
 	return filesCh
 }
 
-// GetRules builds a list of glob patterns that can be used to filter files
-func (fw *FileWalker) GetRules(ruleFiles []string) ([]string, error) {
-	defaultGlob := []string{"**/.git/**", "**/.gitignore/**"}
+// GetRules builds a list of glob patterns that can be used to filter filesToFilter
+func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	files := fw.GetAllFiles()
 
-	// iterate files channel and find ignore files
+	// iterate filesToFilter channel and find ignore filesToFilter
 	var ignoreFiles = make([]string, 0)
 	for file := range files {
 		for _, ruleFile := range ruleFiles {
@@ -50,27 +55,27 @@ func (fw *FileWalker) GetRules(ruleFiles []string) ([]string, error) {
 		}
 	}
 
-	// iterate ignore files and extract glob patterns
+	// iterate ignore filesToFilter and extract glob patterns
 	globs, err := fw.buildGlobs(ignoreFiles)
 	if err != nil {
 		return nil, err
 	}
 
-	return append(defaultGlob, globs...), nil
+	return append(fw.defaultRules, globs...), nil
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
-func (fw *FileWalker) GetFilteredFiles(filesCh chan string, globs []string) chan string {
+func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
-	// create pattern matcher used to match files to glob patterns
+	// create pattern matcher used to match filesToFilter to glob patterns
 	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 
-	// iterate the files channel
 	go func() {
 		defer close(filteredFilesCh)
+		// iterate the filesToFilter channel
 		for file := range filesCh {
-			// files that do not match the glob pattern are filtered
+			// filesToFilter that do not match the glob pattern are filtered
 			if !globPatternMatcher.MatchesPath(file) {
 				filteredFilesCh <- file
 			}
@@ -80,8 +85,8 @@ func (fw *FileWalker) GetFilteredFiles(filesCh chan string, globs []string) chan
 	return filteredFilesCh
 }
 
-// buildGlobs iterates a list of ignore files and returns a list of glob patterns that can be used to test for ignored files
-func (fw *FileWalker) buildGlobs(ignoreFiles []string) ([]string, error) {
+// buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
+func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
 		var content []byte
@@ -98,7 +103,7 @@ func (fw *FileWalker) buildGlobs(ignoreFiles []string) ([]string, error) {
 }
 
 // parseIgnoreFile builds a list of glob patterns from a given ignore file
-func (fw *FileWalker) parseIgnoreFile(content []byte, filePath string) (ignores []string) {
+func (fw *FileFilter) parseIgnoreFile(content []byte, filePath string) (ignores []string) {
 	ignores = []string{}
 	lines := strings.Split(string(content), "\n")
 
@@ -113,18 +118,17 @@ func (fw *FileWalker) parseIgnoreFile(content []byte, filePath string) (ignores 
 }
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
-func (fw *FileWalker) parseIgnoreRuleToGlobs(rule string, filePath string) (globs []string) {
+func (fw *FileFilter) parseIgnoreRuleToGlobs(rule string, filePath string) (globs []string) {
 	// Mappings from .gitignore format to glob format:
 	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
 	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
 	// `foo/` => `**/foo/**` (meaning: Ignore (root/sub) foo dirs and their paths underneath.)
-	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo files and dirs and their paths underneath.)
+	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo filesToFilter and dirs and their paths underneath.)
 	prefix := ""
 	const negation = "!"
 	const slash = "/"
 	const all = "**"
-	baseDir := filepath.Dir(filePath)
-	baseDir = filepath.ToSlash(filePath)
+	baseDir := filepath.ToSlash(filePath)
 
 	if strings.HasPrefix(rule, negation) {
 		rule = rule[1:]
