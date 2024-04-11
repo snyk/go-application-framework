@@ -24,6 +24,7 @@ import (
 )
 
 const (
+	summaryType                  = "sast"
 	codeWorkflowName             = "code.test"
 	codeWorkflowExperimentalFlag = configuration.FLAG_EXPERIMENTAL
 )
@@ -238,7 +239,10 @@ func sarifLevelToSeverity(level string) string {
 		severity = "Medium"
 	} else if level == "error" {
 		severity = "High"
+	} else {
+		severity = "unmapped"
 	}
+
 	return severity
 }
 
@@ -248,7 +252,7 @@ func createCodeSummary(input *sarif.SarifResponse) *json_schemas.TestSummary {
 	}
 
 	summary := &json_schemas.TestSummary{
-		Type: "sast",
+		Type: summaryType,
 	}
 	resultMap := map[string]*json_schemas.TestSummaryResult{}
 
