@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/sarif"
 
 	codeclient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -186,21 +188,22 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		getFilesForPath(path, files, logger)
 
 		result, _, err := codeScanner.UploadAndAnalyze(ctx, interactionId, path, files, changedFiles)
+		if err != nil || result == nil {
+			return nil, err
+		}
+
+		sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(WORKFLOWID_CODE, "sarif"), result.Sarif, "application/json")
 		if err != nil {
 			return nil, err
 		}
 
-		data, err := json.Marshal(result.Sarif)
+		summary := createCodeSummary(result)
+		summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(WORKFLOWID_CODE, "summary"), summary, "application/json")
 		if err != nil {
 			return nil, err
 		}
 
-		sarifData := workflow.NewData(
-			workflow.NewTypeIdentifier(WORKFLOWID_CODE, "sarif"),
-			"application/json",
-			data,
-		)
-		return []workflow.Data{sarifData}, nil
+		return []workflow.Data{sarifData, summaryData}, nil
 
 	} else {
 		logger.Debug().Msg("Ignores: legacy")
@@ -210,4 +213,62 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	}
 
 	return result, err
+}
+
+func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string) (workflow.Data, error) {
+	bytes, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	data := workflow.NewData(
+		id,
+		contentType,
+		bytes,
+	)
+
+	return data, nil
+}
+
+func sarifLevelToSeverity(level string) string {
+	var severity string
+	if level == "note" {
+		severity = "Low"
+	} else if level == "warning" {
+		severity = "Medium"
+	} else if level == "error" {
+		severity = "High"
+	}
+	return severity
+}
+
+func createCodeSummary(input *sarif.SarifResponse) *json_schemas.TestSummary {
+	if input == nil {
+		return nil
+	}
+
+	summary := &json_schemas.TestSummary{
+		Type: "sast",
+	}
+	resultMap := map[string]*json_schemas.TestSummaryResult{}
+
+	for _, run := range input.Sarif.Runs {
+		for _, result := range run.Results {
+			severity := sarifLevelToSeverity(result.Level)
+
+			if _, ok := resultMap[severity]; !ok {
+				resultMap[severity] = &json_schemas.TestSummaryResult{}
+			}
+
+			resultMap[severity].Total++
+		}
+	}
+
+	for k, v := range resultMap {
+		local := *v
+		local.Severity = k
+		summary.Results = append(summary.Results, local)
+	}
+
+	return summary
 }
