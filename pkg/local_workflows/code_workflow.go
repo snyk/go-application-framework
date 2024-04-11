@@ -179,7 +179,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		ctx := context.Background()
 		codeInstrumentor := &codeClientInstrumentor{}
 		codeErrorReporter := &codeClientErrorReporter{}
-		httpClient := http.NewHTTPClient(logger, invocationCtx.GetNetworkAccess().GetHttpClient, codeInstrumentor, codeErrorReporter)
+		httpClient := http.NewHTTPClient(invocationCtx.GetNetworkAccess().GetHttpClient, http.WithLogger(logger))
 		codeScannerConfig := &codeClientConfig{
 			localConfiguration: config,
 		}
