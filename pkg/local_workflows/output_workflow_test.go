@@ -11,6 +11,7 @@ import (
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -173,7 +174,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 	t.Run("should reject test summary mimeType", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		data := workflow.NewData(workflowIdentifier, workflow.CONTENT_TYPE_TEST_SUMMARY, []byte(payload))
+		data := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(payload))
 
 		// mock assertions
 		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(0)
@@ -187,7 +188,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should reject versioned test summary mimeType", func(t *testing.T) {
-		versionedTestSummaryContentType := workflow.CONTENT_TYPE_TEST_SUMMARY + "; version=2024-04-10"
+		versionedTestSummaryContentType := content_type.TEST_SUMMARY + "; version=2024-04-10"
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, versionedTestSummaryContentType, []byte(payload))
 
@@ -204,7 +205,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 	t.Run("should reject test summary mimeType and display known mimeType", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		testSummaryData := workflow.NewData(workflowIdentifier, workflow.CONTENT_TYPE_TEST_SUMMARY, []byte(payload))
+		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(payload))
 		textData := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
 
 		// mock assertions
