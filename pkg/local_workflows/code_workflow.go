@@ -28,7 +28,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	flagSet.String("target-name", "", "The name of the target to test.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
 	flagSet.String("remote-repo-url", "", "The URL of the remote repository to test.")
-	flagSet.Bool("experimental", false, "Enable experimental code test command")
+	flagSet.Bool(configuration.FLAG_EXPERIMENTAL, false, "Enable experimental code test command")
 
 	return flagSet
 }
@@ -50,14 +50,18 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
+	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	reportEnabled := config.GetBool("report")
 
 	logger.Debug().Msg("code workflow start")
+	logger.Debug().Msgf("Consistent Ignores: %v", ignoresFeatureFlag)
+	logger.Debug().Msgf("Report enabled: %v", reportEnabled)
 
-	if config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES) {
-		logger.Debug().Msg("Ignores: Consistent")
+	if ignoresFeatureFlag && !reportEnabled {
+		logger.Debug().Msg("Implementation: Native")
 		result, err = code_workflow.EntryPointNative(invocationCtx)
 	} else {
-		logger.Debug().Msg("Ignores: legacy")
+		logger.Debug().Msg("Implementation: legacy")
 		result, err = code_workflow.EntryPointLegacy(invocationCtx)
 	}
 
