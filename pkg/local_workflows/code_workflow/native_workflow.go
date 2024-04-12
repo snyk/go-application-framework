@@ -159,11 +159,11 @@ func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string)
 func sarifLevelToSeverity(level string) string {
 	var severity string
 	if level == "note" {
-		severity = "Low"
+		severity = "low"
 	} else if level == "warning" {
-		severity = "Medium"
+		severity = "medium"
 	} else if level == "error" {
-		severity = "High"
+		severity = "high"
 	} else {
 		severity = "unmapped"
 	}
@@ -177,9 +177,7 @@ func createCodeSummary(input *sarif.SarifResponse) *json_schemas.TestSummary {
 		return nil
 	}
 
-	summary := &json_schemas.TestSummary{
-		Type: summaryType,
-	}
+	summary := json_schemas.NewTestSummary(summaryType)
 	resultMap := map[string]*json_schemas.TestSummaryResult{}
 
 	for _, run := range input.Sarif.Runs {
