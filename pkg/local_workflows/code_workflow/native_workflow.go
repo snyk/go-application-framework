@@ -139,6 +139,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext) ([]workflow.Data
 	return []workflow.Data{sarifData, summaryData}, nil
 }
 
+// Create new Workflow data out of the given object and content type
 func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string) (workflow.Data, error) {
 	bytes, err := json.Marshal(obj)
 	if err != nil {
@@ -154,6 +155,7 @@ func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string)
 	return data, nil
 }
 
+// Convert Sarif Level to internal Severity
 func sarifLevelToSeverity(level string) string {
 	var severity string
 	if level == "note" {
@@ -169,6 +171,7 @@ func sarifLevelToSeverity(level string) string {
 	return severity
 }
 
+// Iterate through the sarif data and create a summary out of it.
 func createCodeSummary(input *sarif.SarifResponse) *json_schemas.TestSummary {
 	if input == nil {
 		return nil
@@ -188,9 +191,17 @@ func createCodeSummary(input *sarif.SarifResponse) *json_schemas.TestSummary {
 			}
 
 			resultMap[severity].Total++
+
+			// evaluate if the result is suppressed/ignored or not
+			if len(result.Suppressions) > 0 {
+				resultMap[severity].Ignored++
+			} else {
+				resultMap[severity].Open++
+			}
 		}
 	}
 
+	// fill final map
 	for k, v := range resultMap {
 		local := *v
 		local.Severity = k
