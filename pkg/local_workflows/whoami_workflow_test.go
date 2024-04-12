@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
@@ -76,7 +77,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(payload)),
+			Body: io.NopCloser(bytes.NewBufferString(payload)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -150,7 +151,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,
 				// Send response to be tested
-				Body: ioutil.NopCloser(bytes.NewBufferString("")),
+				Body: io.NopCloser(bytes.NewBufferString("")),
 				// Must be set to non-nil value or it panics
 				Header: make(http.Header),
 			}
@@ -177,7 +178,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 			return &http.Response{
 				StatusCode: http.StatusInternalServerError,
 				// Send response to be tested
-				Body: ioutil.NopCloser(bytes.NewBufferString("")),
+				Body: io.NopCloser(bytes.NewBufferString("")),
 				// Must be set to non-nil value or it panics
 				Header: make(http.Header),
 			}
@@ -228,7 +229,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(payloadMissingUserNameProperty)),
+			Body: io.NopCloser(bytes.NewBufferString(payloadMissingUserNameProperty)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
