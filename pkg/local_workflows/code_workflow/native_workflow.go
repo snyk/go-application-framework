@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
@@ -98,6 +99,23 @@ func EntryPointNative(invocationCtx workflow.InvocationContext) ([]workflow.Data
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	id := invocationCtx.GetWorkflowIdentifier()
+	ui := invocationCtx.GetUserInterface()
+
+	progress := ui.NewProgressBar()
+	progress.SetTitle("Scanning")
+	go func() {
+		for {
+			localerr := progress.UpdateProgress(-1)
+			if localerr != nil {
+				logger.Trace().Err(localerr).Msg("failed to update progress.")
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
+	//nolint:errcheck // we don't care about the deferred return value
+	defer progress.Clear()
+
 	changedFiles := make(map[string]bool)
 	path := config.GetString(configuration.INPUT_DIRECTORY)
 	interactionId, err := uuid.GenerateUUID()
