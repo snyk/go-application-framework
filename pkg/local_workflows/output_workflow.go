@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/pflag"
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -45,7 +46,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	for i := range input {
 		mimeType := input[i].GetContentType()
 
-		if strings.HasPrefix(mimeType, workflow.CONTENT_TYPE_TEST_SUMMARY) {
+		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
 			continue
 		}
 
