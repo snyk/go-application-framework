@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -42,14 +44,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	output := []workflow.Data{}
 
 	config := invocation.GetConfiguration()
-	debugLogger := invocation.GetLogger()
-
-	printJsonToCmd := config.GetBool(OUTPUT_CONFIG_KEY_JSON) || config.GetBool(OUTPUT_CONFIG_KEY_SARIF)
-
-	writeJsonToFile := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
-	if len(writeJsonToFile) == 0 {
-		writeJsonToFile = config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
-	}
+	debugLogger := invocation.GetEnhancedLogger()
 
 	for i := range input {
 		mimeType := input[i].GetContentType()
@@ -63,51 +58,74 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			contentLocation = "unknown"
 		}
 
-		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'\n", input[i].GetIdentifier().String(), contentLocation, mimeType)
+		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'", input[i].GetIdentifier().String(), contentLocation, mimeType)
 
 		if strings.Contains(mimeType, OUTPUT_CONFIG_KEY_JSON) { // handle application/json
-			singleData, ok := input[i].GetPayload().([]byte)
-			if !ok {
-				return nil, fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
-			}
-
-			// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
-			if !printJsonToCmd && len(writeJsonToFile) == 0 {
-				printJsonToCmd = true
-			}
-
-			if printJsonToCmd {
-				outputDestination.Println(string(singleData))
-			}
-
-			if len(writeJsonToFile) > 0 {
-				debugLogger.Printf("Writing '%s' JSON of length %d to '%s'\n", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
-
-				if err := outputDestination.Remove(writeJsonToFile); err != nil {
-					return nil, fmt.Errorf("failed to remove existing output file: %w", err)
-				}
-				if err := outputDestination.WriteFile(writeJsonToFile, singleData, iUtils.FILEPERM_666); err != nil {
-					return nil, fmt.Errorf("failed to write json output: %w", err)
-				}
+			err := handleContentTypeJson(config, input, i, outputDestination, debugLogger)
+			if err != nil {
+				return output, err
 			}
 		} else { // handle text/pain and unknown the same way
-			// try to convert payload to a string
-			var singleDataAsString string
-			singleData, typeCastSuccessful := input[i].GetPayload().([]byte)
-			if !typeCastSuccessful {
-				singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
-				if !typeCastSuccessful {
-					return output, fmt.Errorf("unsupported output type: %s", mimeType)
-				}
-			} else {
-				singleDataAsString = string(singleData)
+			err := handleContentTypeOthers(input, i, mimeType, outputDestination)
+			if err != nil {
+				return output, err
 			}
-
-			outputDestination.Println(singleDataAsString)
 		}
 	}
 
 	return output, nil
+}
+
+func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outputDestination iUtils.OutputDestination) error {
+	// try to convert payload to a string
+	var singleDataAsString string
+	singleData, typeCastSuccessful := input[i].GetPayload().([]byte)
+	if !typeCastSuccessful {
+		singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
+		if !typeCastSuccessful {
+			return fmt.Errorf("unsupported output type: %s", mimeType)
+		}
+	} else {
+		singleDataAsString = string(singleData)
+	}
+
+	outputDestination.Println(singleDataAsString)
+	return nil
+}
+
+func handleContentTypeJson(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
+	printJsonToCmd := config.GetBool(OUTPUT_CONFIG_KEY_JSON) || config.GetBool(OUTPUT_CONFIG_KEY_SARIF)
+
+	writeJsonToFile := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
+	if len(writeJsonToFile) == 0 {
+		writeJsonToFile = config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
+	}
+
+	singleData, ok := input[i].GetPayload().([]byte)
+	if !ok {
+		return fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
+	}
+
+	// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
+	if !printJsonToCmd && len(writeJsonToFile) == 0 {
+		printJsonToCmd = true
+	}
+
+	if printJsonToCmd {
+		outputDestination.Println(string(singleData))
+	}
+
+	if len(writeJsonToFile) > 0 {
+		debugLogger.Printf("Writing '%s' JSON of length %d to '%s'", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
+
+		if err := outputDestination.Remove(writeJsonToFile); err != nil {
+			return fmt.Errorf("failed to remove existing output file: %w", err)
+		}
+		if err := outputDestination.WriteFile(writeJsonToFile, singleData, iUtils.FILEPERM_666); err != nil {
+			return fmt.Errorf("failed to write json output: %w", err)
+		}
+	}
+	return nil
 }
 
 func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
