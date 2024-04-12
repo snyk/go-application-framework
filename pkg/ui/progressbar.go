@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"strings"
+	"sync/atomic"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -12,10 +13,11 @@ import (
 //go:generate $GOPATH/bin/mockgen -source=progressbar.go -destination ../mocks/progressbar.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/
 
 const (
-	barCharacter    = "="
-	currentPosition = ">"
-	barWidth        = 50
-	clearLine       = "\r\033[K"
+	barCharacter     = "="
+	currentPosition  = ">"
+	barWidth         = 50
+	clearLine        = "\r\033[K"
+	InfiniteProgress = -1.0
 )
 
 // ProgressBar is an interface for interacting with some visual progress-bar.
@@ -59,31 +61,48 @@ type ProgressBar interface {
 }
 
 func newProgressBar(writer io.Writer) *consoleProgressBar {
-	return &consoleProgressBar{writer: writer}
+	p := &consoleProgressBar{writer: writer}
+	p.active.Store(true)
+	return p
 }
 
 type consoleProgressBar struct {
-	writer io.Writer
-	title  string
+	writer   io.Writer
+	title    string
+	position int
+	active   atomic.Bool
 }
 
 func (p *consoleProgressBar) UpdateProgress(progress float64) error {
-	progress = math.Max(0, math.Min(1, progress))
-	pos := int(progress * barWidth)
+	if !p.active.Load() {
+		return fmt.Errorf("progress not active")
+	}
+
+	position := 0
+	progressString := ""
+	if progress >= 0 {
+		progress = math.Max(0, math.Min(1, progress))
+		position = int(progress * barWidth)
+		progressString = fmt.Sprintf("%3.1f%% ", progress*100)
+	} else {
+		p.position++
+		position = p.position % barWidth
+	}
 
 	_, err := fmt.Fprint(p.writer, clearLine)
 	if err != nil {
 		return err
 	}
-	barCount := int(math.Max(0, float64(barWidth-pos-1)))
+	barCount := int(math.Max(0, float64(barWidth-position-1)))
 
-	progressBar := strings.Repeat(barCharacter, pos) + currentPosition + strings.Repeat(" ", barCount)
-	_, err = fmt.Fprint(p.writer, "[", progressBar, "] ", fmt.Sprintf("%3.1f", progress*100), "% ", p.title)
+	progressBar := strings.Repeat(barCharacter, position) + currentPosition + strings.Repeat(" ", barCount)
+	_, err = fmt.Fprint(p.writer, "[", progressBar, "] ", progressString, p.title)
 	return err
 }
 
 func (p *consoleProgressBar) SetTitle(title string) { p.title = title }
 
 func (p *consoleProgressBar) Clear() error {
+	p.active.Store(false)
 	return utils.ErrorOf(fmt.Fprint(p.writer, clearLine))
 }
