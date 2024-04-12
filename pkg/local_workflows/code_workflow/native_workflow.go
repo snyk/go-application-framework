@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -97,7 +98,6 @@ func EntryPointNative(invocationCtx workflow.InvocationContext) ([]workflow.Data
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	id := invocationCtx.GetWorkflowIdentifier()
-
 	changedFiles := make(map[string]bool)
 	path := config.GetString(configuration.INPUT_DIRECTORY)
 	interactionId, err := uuid.GenerateUUID()
@@ -125,13 +125,13 @@ func EntryPointNative(invocationCtx workflow.InvocationContext) ([]workflow.Data
 		return nil, err
 	}
 
-	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, "application/sarif+json")
+	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, "application/sarif+json", path)
 	if err != nil {
 		return nil, err
 	}
 
 	summary := createCodeSummary(&result.Sarif)
-	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, "application/json")
+	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext) ([]workflow.Data
 }
 
 // Create new Workflow data out of the given object and content type
-func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string) (workflow.Data, error) {
+func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string, path string) (workflow.Data, error) {
 	bytes, err := json.Marshal(obj)
 	if err != nil {
 		return nil, err
@@ -151,6 +151,8 @@ func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string)
 		contentType,
 		bytes,
 	)
+
+	data.SetContentLocation(path)
 
 	return data, nil
 }
