@@ -14,8 +14,10 @@ import (
 var WORKFLOWID_OUTPUT_WORKFLOW workflow.Identifier = workflow.NewWorkflowIdentifier("output")
 
 const (
-	OUTPUT_CONFIG_KEY_JSON      = "json"
-	OUTPUT_CONFIG_KEY_JSON_FILE = "json-file-output"
+	OUTPUT_CONFIG_KEY_JSON       = "json"
+	OUTPUT_CONFIG_KEY_JSON_FILE  = "json-file-output"
+	OUTPUT_CONFIG_KEY_SARIF      = "sarif"
+	OUTPUT_CONFIG_KEY_SARIF_FILE = "sarif-file-output"
 )
 
 // InitOutputWorkflow initializes the output workflow
@@ -25,6 +27,8 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig := pflag.NewFlagSet("output", pflag.ExitOnError)
 	outputConfig.Bool(OUTPUT_CONFIG_KEY_JSON, false, "Print json output to console")
 	outputConfig.String(OUTPUT_CONFIG_KEY_JSON_FILE, "", "Write json output to file")
+	outputConfig.Bool(OUTPUT_CONFIG_KEY_SARIF, false, "Print sarif output to console")
+	outputConfig.String(OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
@@ -40,8 +44,12 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetLogger()
 
-	printJsonToCmd := config.GetBool(OUTPUT_CONFIG_KEY_JSON)
+	printJsonToCmd := config.GetBool(OUTPUT_CONFIG_KEY_JSON) || config.GetBool(OUTPUT_CONFIG_KEY_SARIF)
+
 	writeJsonToFile := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
+	if len(writeJsonToFile) == 0 {
+		writeJsonToFile = config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
+	}
 
 	for i := range input {
 		mimeType := input[i].GetContentType()
