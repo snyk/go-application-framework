@@ -56,7 +56,7 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	}
 
 	// iterate ignore filesToFilter and extract glob patterns
-	globs, err := fw.buildGlobs(ignoreFiles)
+	globs, err := buildGlobs(ignoreFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
-func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
+func buildGlobs(ignoreFiles []string) ([]string, error) {
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
 		var content []byte
@@ -95,7 +95,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			return nil, err
 		}
 		// .gitignore, .dcignore, etc. are just a list of ignore rules
-		parsedRules := fw.parseIgnoreFile(content, filepath.Dir(ignoreFile))
+		parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
 		globs = append(globs, parsedRules...)
 	}
 
@@ -103,7 +103,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 }
 
 // parseIgnoreFile builds a list of glob patterns from a given ignore file
-func (fw *FileFilter) parseIgnoreFile(content []byte, filePath string) (ignores []string) {
+func parseIgnoreFile(content []byte, filePath string) (ignores []string) {
 	ignores = []string{}
 	lines := strings.Split(string(content), "\n")
 
@@ -111,14 +111,14 @@ func (fw *FileFilter) parseIgnoreFile(content []byte, filePath string) (ignores 
 		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 			continue
 		}
-		globs := fw.parseIgnoreRuleToGlobs(line, filePath)
+		globs := parseIgnoreRuleToGlobs(line, filePath)
 		ignores = append(ignores, globs...)
 	}
 	return ignores
 }
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
-func (fw *FileFilter) parseIgnoreRuleToGlobs(rule string, filePath string) (globs []string) {
+func parseIgnoreRuleToGlobs(rule string, filePath string) (globs []string) {
 	// Mappings from .gitignore format to glob format:
 	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
 	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
