@@ -4,15 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
+	"net/http"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
 	codeclient "github.com/snyk/code-client-go"
-	"github.com/snyk/code-client-go/http"
-	"github.com/snyk/code-client-go/observability"
+	codeclienthttp "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -23,57 +21,66 @@ import (
 
 const summaryType = "sast"
 
-type codeClientConfig struct {
-	localConfiguration configuration.Configuration
+type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error)
+
+func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...OptionalAnalysisFunctions) ([]workflow.Data, error) {
+	// get necessary objects from invocation context
+	config := invocationCtx.GetConfiguration()
+	logger := invocationCtx.GetEnhancedLogger()
+	id := invocationCtx.GetWorkflowIdentifier()
+
+	path := config.GetString(configuration.INPUT_DIRECTORY)
+
+	logger.Debug().Msgf("Path: %s", path)
+
+	analyzeFnc := defaultAnalyzeFunction
+	if len(opts) == 1 {
+		analyzeFnc = opts[0]
+	}
+
+	result, err := analyzeFnc(path, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config)
+	if err != nil || result == nil {
+		return nil, err
+	}
+
+	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, "application/sarif+json", path)
+	if err != nil {
+		return nil, err
+	}
+
+	summary := createCodeSummary(&result.Sarif)
+	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
+	if err != nil {
+		return nil, err
+	}
+
+	return []workflow.Data{sarifData, summaryData}, nil
 }
 
-func (c *codeClientConfig) Organization() string {
-	return c.localConfiguration.GetString(configuration.ORGANIZATION)
-}
+func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration) (*sarif.SarifResponse, error) {
+	var result *sarif.SarifResponse
 
-func (c *codeClientConfig) IsFedramp() bool {
-	return c.localConfiguration.GetBool(configuration.IS_FEDRAMP)
-}
+	interactionId, err := uuid.GenerateUUID()
+	if err != nil {
+		return nil, err
+	}
 
-func (c *codeClientConfig) SnykCodeApi() string {
-	return strings.Replace(c.localConfiguration.GetString(configuration.API_URL), "api", "deeproxy", -1)
-}
+	logger.Debug().Msgf("Interaction ID: %s", interactionId)
 
-func (c *codeClientConfig) SnykApi() string {
-	return c.localConfiguration.GetString(configuration.API_URL)
-}
+	files := make(chan string)
+	getFilesForPath(path, files, logger)
 
-type codeClientErrorReporter struct{}
-
-func (c *codeClientErrorReporter) FlushErrorReporting() {}
-func (c *codeClientErrorReporter) CaptureError(err error, options observability.ErrorReporterOptions) bool {
-	return true
-}
-
-type codeClientSpan struct {
-	transactionName string
-	operationName   string
-}
-
-func (c *codeClientSpan) SetTransactionName(name string) { c.transactionName = name }
-func (c *codeClientSpan) StartSpan(ctx context.Context)  {}
-func (c *codeClientSpan) Finish()                        {}
-func (c *codeClientSpan) GetOperation() string           { return c.operationName }
-func (c *codeClientSpan) GetTxName() string              { return c.transactionName }
-func (c *codeClientSpan) GetTraceId() string             { return "" } // TODO: interaction id
-func (c *codeClientSpan) Context() context.Context       { return context.Background() }
-func (c *codeClientSpan) GetDurationMs() int64           { return 0 }
-
-type codeClientInstrumentor struct{}
-
-func (c *codeClientInstrumentor) StartSpan(ctx context.Context, operation string) observability.Span {
-	return &codeClientSpan{operationName: operation}
-}
-func (c *codeClientInstrumentor) NewTransaction(ctx context.Context, txName string, operation string) observability.Span {
-	return &codeClientSpan{operationName: operation, transactionName: txName}
-}
-func (c *codeClientInstrumentor) Finish(span observability.Span) {
-	span.Finish()
+	changedFiles := make(map[string]bool)
+	ctx := context.Background()
+	codeInstrumentor := &codeClientInstrumentor{}
+	codeErrorReporter := &codeClientErrorReporter{}
+	httpClient := codeclienthttp.NewHTTPClient(httpClientFunc, codeclienthttp.WithLogger(logger))
+	codeScannerConfig := &codeClientConfig{
+		localConfiguration: config,
+	}
+	codeScanner := codeclient.NewCodeScanner(httpClient, codeScannerConfig, codeInstrumentor, codeErrorReporter, logger)
+	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, path, files, changedFiles)
+	return result, err
 }
 
 // todo: recursively iterate and filter
@@ -92,69 +99,6 @@ func getFilesForPath(path string, results chan<- string, logger *zerolog.Logger)
 			logger.Error().Err(err)
 		}
 	}()
-}
-
-func EntryPointNative(invocationCtx workflow.InvocationContext) ([]workflow.Data, error) {
-	// get necessary objects from invocation context
-	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetEnhancedLogger()
-	id := invocationCtx.GetWorkflowIdentifier()
-	ui := invocationCtx.GetUserInterface()
-
-	progress := ui.NewProgressBar()
-	progress.SetTitle("Scanning")
-	go func() {
-		for {
-			localerr := progress.UpdateProgress(-1)
-			if localerr != nil {
-				logger.Trace().Err(localerr).Msg("failed to update progress.")
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-	}()
-
-	//nolint:errcheck // we don't care about the deferred return value
-	defer progress.Clear()
-
-	changedFiles := make(map[string]bool)
-	path := config.GetString(configuration.INPUT_DIRECTORY)
-	interactionId, err := uuid.GenerateUUID()
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Debug().Msgf("Interaction ID: %s", interactionId)
-	logger.Debug().Msgf("Path: %s", path)
-
-	ctx := context.Background()
-	codeInstrumentor := &codeClientInstrumentor{}
-	codeErrorReporter := &codeClientErrorReporter{}
-	httpClient := http.NewHTTPClient(invocationCtx.GetNetworkAccess().GetHttpClient, http.WithLogger(logger))
-	codeScannerConfig := &codeClientConfig{
-		localConfiguration: config,
-	}
-	codeScanner := codeclient.NewCodeScanner(httpClient, codeScannerConfig, codeInstrumentor, codeErrorReporter, logger)
-
-	files := make(chan string)
-	getFilesForPath(path, files, logger)
-
-	result, _, err := codeScanner.UploadAndAnalyze(ctx, interactionId, path, files, changedFiles)
-	if err != nil || result == nil {
-		return nil, err
-	}
-
-	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, "application/sarif+json", path)
-	if err != nil {
-		return nil, err
-	}
-
-	summary := createCodeSummary(&result.Sarif)
-	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
-	if err != nil {
-		return nil, err
-	}
-
-	return []workflow.Data{sarifData, summaryData}, nil
 }
 
 // Create new Workflow data out of the given object and content type
