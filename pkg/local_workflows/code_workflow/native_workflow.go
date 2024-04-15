@@ -59,6 +59,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	return []workflow.Data{sarifData, summaryData}, nil
 }
 
+// default function that uses the code-client-go library
 func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration) (*sarif.SarifResponse, error) {
 	var result *sarif.SarifResponse
 
@@ -87,10 +88,10 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 	return result, err
 }
 
-// todo: recursively iterate and filter
+// Return a channel that notifies each file in the path that doesn't match the filter rules
 func getFilesForPath(path string) (<-chan string, error) {
 	filter := utils.NewFileFilter(path)
-	rules, err := filter.GetRules([]string{})
+	rules, err := filter.GetRules([]string{".gitignore", ".dcignore"})
 	if err != nil {
 		return nil, err
 	}
