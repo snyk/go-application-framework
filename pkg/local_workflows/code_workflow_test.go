@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"testing"
@@ -149,11 +150,12 @@ func Test_Code_legacyImplementation_experimentalFlagAndReport(t *testing.T) {
 	assert.Equal(t, expectedData, rs[0].GetPayload().(string))
 }
 
-func Test_Code_nativeImplementation(t *testing.T) {
+func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 	expectedSummary := json_schemas.TestSummary{
 		Results: []json_schemas.TestSummaryResult{
 			{Severity: "high", Total: 3, Open: 2, Ignored: 1},
 			{Severity: "medium", Total: 1, Open: 1},
+			{Severity: "low", Total: 1, Open: 0, Ignored: 1},
 		},
 	}
 
@@ -181,6 +183,11 @@ func Test_Code_nativeImplementation(t *testing.T) {
 						Results: []sarif.Result{
 							{Level: "error"},
 							{Level: "error", Suppressions: make([]sarif.Suppression, 1)},
+						},
+					},
+					{
+						Results: []sarif.Result{
+							{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
 						},
 					},
 				},
@@ -217,4 +224,24 @@ func Test_Code_nativeImplementation(t *testing.T) {
 			assert.Fail(t, "unexpected data")
 		}
 	}
+}
+
+func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
+	config := configuration.NewInMemory()
+	networkAccess := networking.NewNetworkAccess(config)
+
+	mockController := gomock.NewController(t)
+	invocationContext := mocks.NewMockInvocationContext(mockController)
+	invocationContext.EXPECT().GetConfiguration().Return(config)
+	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
+	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
+	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+
+	analysisFunc := func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error) {
+		return nil, fmt.Errorf("something went wrong")
+	}
+
+	rs, err := code_workflow.EntryPointNative(invocationContext, analysisFunc)
+	assert.Error(t, err)
+	assert.Nil(t, rs)
 }
