@@ -3,9 +3,7 @@ package code_workflow
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
 	"net/http"
-	"path/filepath"
 
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
@@ -16,6 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -70,8 +69,10 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 
 	logger.Debug().Msgf("Interaction ID: %s", interactionId)
 
-	files := make(chan string)
-	getFilesForPath(path, files, logger)
+	files, err := getFilesForPath(path)
+	if err != nil {
+		return nil, err
+	}
 
 	changedFiles := make(map[string]bool)
 	ctx := context.Background()
@@ -87,21 +88,15 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 }
 
 // todo: recursively iterate and filter
-func getFilesForPath(path string, results chan<- string, logger *zerolog.Logger) {
-	go func() {
-		defer close(results)
-		err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
-			if !d.IsDir() && err == nil {
-				//logger.Debug().Msg(path)
-				results <- path
-			}
-			return err
-		})
+func getFilesForPath(path string) (<-chan string, error) {
+	filter := utils.NewFileFilter(path)
+	rules, err := filter.GetRules([]string{})
+	if err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			logger.Error().Err(err)
-		}
-	}()
+	results := filter.GetFilteredFiles(filter.GetAllFiles(), rules)
+	return results, nil
 }
 
 // Create new Workflow data out of the given object and content type
