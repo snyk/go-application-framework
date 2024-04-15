@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ func TestPresenterSarifResultsPretty_NoIssues(t *testing.T) {
 	fd, err := os.Open("testdata/no-issues.json")
 	require.Nil(t, err)
 
-	var input presenters.SarifResults
+	var input sarif.SarifDocument
 
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
@@ -38,7 +39,7 @@ func TestPresenterSarifResultsPretty_LowIssues(t *testing.T) {
 	fd, err := os.Open("testdata/3-low-issues.json")
 	require.Nil(t, err)
 
-	var input presenters.SarifResults
+	var input sarif.SarifDocument
 
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
@@ -56,7 +57,7 @@ func TestPresenterSarifResultsPretty_MediumHighIssues(t *testing.T) {
 	fd, err := os.Open("testdata/4-high-5-medium.json")
 	require.Nil(t, err)
 
-	var input presenters.SarifResults
+	var input sarif.SarifDocument
 
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)

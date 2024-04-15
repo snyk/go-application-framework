@@ -13,12 +13,6 @@ import (
 //go:embed test_results.gotmpl
 var templateString string
 
-type SarifResults struct {
-	Schema  string      `json:"$schema"`
-	Version string      `json:"version"`
-	Runs    []sarif.Run `json:"runs"`
-}
-
 type Finding struct {
 	ID            string
 	ColorCode     string
@@ -36,7 +30,7 @@ type FindingsSummary struct {
 	Low    int
 }
 
-func convertSarifToFindingsList(input SarifResults) []Finding {
+func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 	var findings []Finding
 	for i, run := range input.Runs {
 		for j, result := range run.Results {
@@ -97,7 +91,7 @@ type templateData struct {
 	Meta     TestMeta
 }
 
-func PresenterSarifResultsPretty(input SarifResults, meta TestMeta) (string, error) {
+func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (string, error) {
 	buff := &bytes.Buffer{}
 	tmpl, err := template.New("test_results").Parse(templateString)
 	if err != nil {
