@@ -59,6 +59,14 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 
 	if ignoresFeatureFlag && !reportEnabled {
 		logger.Debug().Msg("Implementation: Native")
+
+		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name", "target-file", "remote-repo-url"}
+		for _, v := range unsupportedParameter {
+			if config.IsSet(v) {
+				logger.Warn().Msgf("The parameter \"%s\" is not yet supported in this experimental implementation!", v)
+			}
+		}
+
 		result, err = code_workflow.EntryPointNative(invocationCtx)
 	} else {
 		logger.Debug().Msg("Implementation: legacy")
