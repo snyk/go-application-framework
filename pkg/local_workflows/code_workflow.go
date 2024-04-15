@@ -1,18 +1,15 @@
 package localworkflows
 
 import (
-	"os"
-	"slices"
-
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 const (
-	codeWorkflowName             = "code.test"
-	codeWorkflowExperimentalFlag = configuration.FLAG_EXPERIMENTAL
+	codeWorkflowName = "code.test"
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -31,7 +28,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	flagSet.String("target-name", "", "The name of the target to test.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
 	flagSet.String("remote-repo-url", "", "The URL of the remote repository to test.")
-	flagSet.Bool("experimental", false, "Enable experimental code test command")
+	flagSet.Bool(configuration.FLAG_EXPERIMENTAL, false, "Enable experimental code test command")
 
 	return flagSet
 }
@@ -53,39 +50,28 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
-	engine := invocationCtx.GetEngine()
-
-	useExperimentalOutput := config.GetBool(codeWorkflowExperimentalFlag) && !slices.Contains(os.Args, "--report")
-
-	if useExperimentalOutput {
-		args := []string{"--json"}
-
-		// Add the rest of the arguments
-		for _, arg := range os.Args[1:] {
-			if arg == "--experimental" || arg == "--json" || arg == "--sarif" {
-				continue
-			}
-
-			args = append(args, arg)
-		}
-
-		config.Set(configuration.RAW_CMD_ARGS, args)
-	} else {
-		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
-	}
-
-	config.Set(configuration.WORKFLOW_USE_STDIO, true)
+	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	reportEnabled := config.GetBool("report")
 
 	logger.Debug().Msg("code workflow start")
+	logger.Debug().Msgf("Consistent Ignores: %v", ignoresFeatureFlag)
+	logger.Debug().Msgf("Report enabled: %v", reportEnabled)
 
-	if config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES) {
-		logger.Debug().Msg("Ignores: Consistent")
+	if ignoresFeatureFlag && !reportEnabled {
+		logger.Debug().Msg("Implementation: Native")
+
+		unsupportedParameter := []string{"severity-threshold", "project-name", "project-id", "commit-id", "target-name", "target-file", "remote-repo-url"}
+		for _, v := range unsupportedParameter {
+			if config.IsSet(v) {
+				logger.Warn().Msgf("The parameter \"%s\" is not yet supported in this experimental implementation!", v)
+			}
+		}
+
+		result, err = code_workflow.EntryPointNative(invocationCtx)
 	} else {
-		logger.Debug().Msg("Ignores: legacy")
+		logger.Debug().Msg("Implementation: legacy")
+		result, err = code_workflow.EntryPointLegacy(invocationCtx)
 	}
-
-	// run legacycli
-	result, err = engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 
 	return result, err
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"io"
 	"log"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -37,50 +38,8 @@ func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config confi
 	return callback
 }
 
-// initConfiguration initializes the configuration with initial values.
-func initConfiguration(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
-	if logger == nil {
-		logger = &zlog.Logger
-	}
-
-	dir, err := utils.SnykCacheDir()
-	if err != nil {
-		logger.Print("Failed to determine cache directory:", err)
-	}
-
-	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
-	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
-	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
-	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
-	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
-
-	config.AddDefaultValue(configuration.API_URL, func(existingValue any) any {
-		urlString := constants.SNYK_DEFAULT_API_URL
-
-		if existingValue != nil {
-			if temp, ok := existingValue.(string); ok {
-				urlString = temp
-			}
-		}
-
-		apiString, err := api.GetCanonicalApiUrlFromString(urlString)
-		if err != nil {
-			logger.Warn().Err(err).Str(configuration.API_URL, urlString).Msg("failed to get api url")
-		}
-		return apiString
-	})
-
-	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {
-		canonicalApiUrl := config.GetString(configuration.API_URL)
-		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
-		if err != nil {
-			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", err)
-		}
-
-		return appUrl
-	})
-
-	config.AddDefaultValue(configuration.ORGANIZATION, func(existingValue any) any {
+func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient.Init(url, client)
@@ -107,7 +66,74 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		}
 
 		return orgId
+	}
+	return callback
+}
+
+func defaultFuncApiUrl(logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		urlString := constants.SNYK_DEFAULT_API_URL
+
+		if existingValue != nil {
+			if temp, ok := existingValue.(string); ok {
+				urlString = temp
+			}
+		}
+
+		apiString, err := api.GetCanonicalApiUrlFromString(urlString)
+		if err != nil {
+			logger.Warn().Err(err).Str(configuration.API_URL, urlString).Msg("failed to get api url")
+		}
+		return apiString
+	}
+	return callback
+}
+
+func defaultInputDirectory() configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		if existingValue == nil {
+			path, err := os.Getwd()
+			if err != nil {
+				return ""
+			}
+			return path
+		} else {
+			return existingValue
+		}
+	}
+	return callback
+}
+
+// initConfiguration initializes the configuration with initial values.
+func initConfiguration(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
+	if logger == nil {
+		logger = &zlog.Logger
+	}
+
+	dir, err := utils.SnykCacheDir()
+	if err != nil {
+		logger.Print("Failed to determine cache directory:", err)
+	}
+
+	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
+	config.AddDefaultValue(configuration.WORKFLOW_USE_STDIO, configuration.StandardDefaultValueFunction(false))
+	config.AddDefaultValue(configuration.PROXY_AUTHENTICATION_MECHANISM, configuration.StandardDefaultValueFunction(httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth)))
+	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
+	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
+
+	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(logger))
+
+	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {
+		canonicalApiUrl := config.GetString(configuration.API_URL)
+		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
+		if err != nil {
+			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", err)
+		}
+
+		return appUrl
 	})
+
+	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, apiClient, logger))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
 		if existingValue == nil {
@@ -125,6 +151,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		}
 	})
 
+	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, apiClient, logger))
 }
 

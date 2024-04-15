@@ -1,11 +1,10 @@
 package localworkflows
 
 import (
-	"log"
-	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
@@ -31,7 +30,7 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 }
 
 func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
-	logger := log.New(os.Stderr, "test", 0)
+	logger := &zerolog.Logger{}
 	config := configuration.New()
 
 	// setup mocks
@@ -41,7 +40,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 
 	payload := `
 	{
