@@ -1,4 +1,4 @@
 # add false positives here
-a14897166d0414fea81e59d7797722d30402ceb0:pkg/ui/testdata/4-high-5-medium.json:generic-api-key:1085
-a14897166d0414fea81e59d7797722d30402ceb0:pkg/ui/testdata/4-high-5-medium.json:generic-api-key:1090
-a14897166d0414fea81e59d7797722d30402ceb0:pkg/ui/testdata/4-high-5-medium.json:generic-api-key:1110
+d79fad3ae8f466378405aa61c2e273d1d478fa41:pkg/ui/testdata/4-high-5-medium.json:generic-api-key:1085
+d79fad3ae8f466378405aa61c2e273d1d478fa41:pkg/ui/testdata/4-high-5-medium.json:generic-api-key:1090
+d79fad3ae8f466378405aa61c2e273d1d478fa41:pkg/ui/testdata/4-high-5-medium.json:generic-api-key:1110
