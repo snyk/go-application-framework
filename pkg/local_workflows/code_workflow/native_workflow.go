@@ -19,7 +19,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-const summaryType = "sast"
+const (
+	summaryType        = "sast"
+	SARIF_CONTENT_TYPE = "application/sarif+json"
+)
 
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error)
 
@@ -43,7 +46,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, "application/sarif+json", path)
+	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, SARIF_CONTENT_TYPE, path)
 	if err != nil {
 		return nil, err
 	}
