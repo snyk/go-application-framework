@@ -217,7 +217,7 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 				}
 			}
 			assert.Equal(t, len(expectedSummary.Results), count)
-		} else if v.GetContentType() == code_workflow.SARIF_CONTENT_TYPE {
+		} else if v.GetContentType() == content_type.SARIF_JSON {
 			_, ok := v.GetPayload().([]byte)
 			assert.True(t, ok)
 		} else {

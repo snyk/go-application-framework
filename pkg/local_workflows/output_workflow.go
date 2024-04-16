@@ -12,7 +12,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/presenters"
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -116,7 +115,7 @@ func handleContentTypeJson(config configuration.Configuration, input []workflow.
 	// yes: do we have a presenter
 	//  yes: use presenter
 	//  no: print json to cmd
-	if showToHuman && input[i].GetContentType() == code_workflow.SARIF_CONTENT_TYPE {
+	if showToHuman && input[i].GetContentType() == content_type.SARIF_JSON {
 		humanReadanbleSarifOutput(config, input, i, outputDestination, debugLogger, singleData)
 	} else {
 		// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled

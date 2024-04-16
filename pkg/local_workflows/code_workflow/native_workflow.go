@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	summaryType        = "sast"
-	SARIF_CONTENT_TYPE = "application/sarif+json"
+	summaryType = "sast"
 )
 
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error)
@@ -45,7 +44,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, SARIF_CONTENT_TYPE, path)
+	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
 	if err != nil {
 		return nil, err
 	}

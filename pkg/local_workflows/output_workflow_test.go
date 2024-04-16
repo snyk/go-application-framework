@@ -12,7 +12,6 @@ import (
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -251,7 +250,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		sarifData := workflow.NewData(workflowIdentifier, code_workflow.SARIF_CONTENT_TYPE, rawSarif)
+		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
 		sarifData.SetContentLocation("/mypath")
 
 		// mock assertions
