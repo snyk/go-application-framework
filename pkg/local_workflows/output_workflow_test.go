@@ -1,15 +1,18 @@
 package localworkflows
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
 
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -212,6 +215,49 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{testSummaryData, textData}, outputDestination)
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+
+	t.Run("should print human readable output for sarif data", func(t *testing.T) {
+		input := sarif.SarifDocument{
+			Runs: []sarif.Run{
+				{
+					Results: []sarif.Result{
+						{Level: "error"},
+						{Level: "warning"},
+					},
+				},
+				{
+					Results: []sarif.Result{
+						{Level: "error"},
+						{Level: "error", Suppressions: make([]sarif.Suppression, 1)},
+					},
+				},
+				{
+					Results: []sarif.Result{
+						{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
+					},
+				},
+			},
+		}
+
+		rawSarif, err := json.Marshal(input)
+		assert.Nil(t, err)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		sarifData := workflow.NewData(workflowIdentifier, code_workflow.SARIF_CONTENT_TYPE, rawSarif)
+		sarifData.SetContentLocation("/mypath")
+
+		// mock assertions
+		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
+			assert.Contains(t, str, "Total issues:   5")
+		}).Times(1)
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 
 		// assert
 		assert.Nil(t, err)
