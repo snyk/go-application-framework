@@ -1,23 +1,14 @@
-[1m[37m[39m[22m
-[1m[37mTesting /path/to/project ...[39m[22m
-[1m[37m[39m[22m
-{{ if len .Findings }}[1mOpen Issues[22m
-[1m[37m[39m[22m
-{{ range .Findings }}{{ .ColorCode }} ✗ [{{ .Severity }}] [1m{{ .Title }}[22m[39m
+
+Testing /path/to/project ...
+
+{{ if len .Findings }}Open Issues
+
+{{ range .Findings }} ✗ [{{ .Severity }}] {{ .Title }}
    Path: {{ .Path }}, line {{ .Line }}
    Info: {{ .Message }}
 
-{{ end }}{{else}}[1m[37m[39m[22m{{ end }}
-[1mTest Summary[22m
-
-Organization:      [1m{{ .Meta.OrgName }}[22m
-Test type:         [1mStatic code analysis[22m
-Project path:      [1m{{ .Meta.TestPath }}[22m
-
-Total issues:   [1m{{ len .Findings }}[22m
-{{ if len .Findings }}Ignored issues: [1m0[22m
-Open issues:    [1m{{ len .Findings }}[22m [{{ if .Summary.High }}[31m {{ .Summary.High }} HIGH [39m[33m{{end}}{{ if .Summary.Medium }} {{ .Summary.Medium }} MEDIUM [39m{{end}}{{if .Summary.Low }} {{ .Summary.Low }} LOW {{ end }}]
-{{ end }}
-[1m💡 Tip[22m
+{{ end }}{{else}}{{ end }}
+{{ .Summary }}
+💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.

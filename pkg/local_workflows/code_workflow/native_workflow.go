@@ -50,7 +50,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	summary := createCodeSummary(&result.Sarif)
+	summary := CreateCodeSummary(&result.Sarif)
 	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
 	if err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func sarifLevelToSeverity(level string) string {
 }
 
 // Iterate through the sarif data and create a summary out of it.
-func createCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
+func CreateCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
 	if input == nil {
 		return nil
 	}

@@ -5,9 +5,12 @@ import (
 	_ "embed"
 	"fmt"
 	"slices"
+	"strings"
 	"text/template"
 
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
 //go:embed test_results.gotmpl
@@ -87,7 +90,7 @@ type TestMeta struct {
 
 type templateData struct {
 	Findings []Finding
-	Summary  FindingsSummary
+	Summary  string
 	Meta     TestMeta
 }
 
@@ -102,7 +105,7 @@ func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (stri
 
 	err = tmpl.Execute(buff, templateData{
 		Findings: SortFindings(findings),
-		Summary:  SummariseFindings(findings),
+		Summary:  presenterSummary(code_workflow.CreateCodeSummary(&input), meta),
 		Meta:     meta,
 	})
 
@@ -111,6 +114,59 @@ func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (stri
 	}
 
 	return buff.String(), nil
+}
+
+func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
+	var buff bytes.Buffer
+	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
+
+Organization:      {{ .Org }}
+Test type:         {{ .Type }}
+Project path:      {{ .TestPath }}
+
+Total issues:   {{ .TotalIssueCount }}
+{{ if .TotalIssueCount }}Ignored issues: 0
+Open issues:    {{ .OpenIssueCountWithSeverities }}
+{{ end }}`))
+
+	totalIssueCount := 0
+	openIssueCount := 0
+	ignoredIssueCount := 0
+	openIssueLabelledCount := ""
+
+	slices.Reverse(summary.SeverityOrderAsc)
+
+	for _, severity := range summary.SeverityOrderAsc {
+		for _, result := range summary.Results {
+			if result.Severity == severity {
+				totalIssueCount += result.Total
+				openIssueCount += result.Open
+				ignoredIssueCount += result.Ignored
+				openIssueLabelledCount += fmt.Sprintf(" %d %s ", result.Open, strings.ToUpper(result.Severity))
+			}
+		}
+	}
+
+	openIssueCountWithSeverities := fmt.Sprintf("%d [%s]", openIssueCount, openIssueLabelledCount)
+
+	err := summaryTemplate.Execute(&buff, struct {
+		Org                          string
+		TestPath                     string
+		Type                         string
+		TotalIssueCount              int
+		OpenIssueCountWithSeverities string
+	}{
+		Org:                          meta.OrgName,
+		TestPath:                     meta.TestPath,
+		Type:                         "Static code analysis",
+		TotalIssueCount:              totalIssueCount,
+		OpenIssueCountWithSeverities: openIssueCountWithSeverities,
+	})
+	if err != nil {
+		return fmt.Sprintf("failed to execute summary template: %v", err)
+	}
+
+	return buff.String()
 }
 
 func SummariseFindings(findings []Finding) FindingsSummary {
