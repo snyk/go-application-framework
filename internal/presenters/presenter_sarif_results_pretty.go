@@ -9,6 +9,7 @@ import (
 	"text/template"
 
 	"github.com/snyk/code-client-go/sarif"
+
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
@@ -31,8 +32,8 @@ type FindingsSummary struct {
 
 func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 	var findings []Finding
-	for i, run := range input.Runs {
-		for j, result := range run.Results {
+	for _, run := range input.Runs {
+		for _, result := range run.Results {
 			severity := "n/a"
 			severityLevel := 0
 			var rule sarif.Rule
@@ -69,7 +70,6 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				Line:          result.Locations[0].PhysicalLocation.Region.StartLine,
 				Message:       result.Message.Text,
 			})
-			fmt.Printf("Run %d, Result %d: %s\n", i, j, result.Level)
 		}
 	}
 	return findings
@@ -82,6 +82,7 @@ type TestMeta struct {
 
 func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (string, error) {
 	findings := convertSarifToFindingsList(input)
+	summary := code_workflow.CreateCodeSummary(&input)
 
 	str := fmt.Sprintf(`
 Testing %s ...
@@ -91,7 +92,7 @@ Testing %s ...
 `,
 		meta.TestPath,
 		renderFindings(SortFindings(findings)),
-		presenterSummary(code_workflow.CreateCodeSummary(&input), meta),
+		presenterSummary(summary, meta),
 		getTip(),
 	)
 
@@ -131,13 +132,14 @@ func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
   Project path:      {{ .TestPath }}
 
   Total issues:   {{ .TotalIssueCount }}{{ if .TotalIssueCount }}
-  Ignored issues: 0
+  Ignored issues: {{ .IgnoredIssueCountWithSeverities }} 
   Open issues:    {{ .OpenIssueCountWithSeverities }}{{ end }}`))
 
 	totalIssueCount := 0
 	openIssueCount := 0
 	ignoredIssueCount := 0
 	openIssueLabelledCount := ""
+	ignoredIssueLabelledCount := ""
 
 	slices.Reverse(summary.SeverityOrderAsc)
 
@@ -148,28 +150,34 @@ func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
 				openIssueCount += result.Open
 				ignoredIssueCount += result.Ignored
 				openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Open, strings.ToUpper(severity)))
+				ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Ignored, strings.ToUpper(severity)))
 			}
 		}
 	}
 
 	openIssueCountWithSeverities := fmt.Sprintf("%s [%s]", renderBold(strconv.Itoa(openIssueCount)), openIssueLabelledCount)
+	ignoredIssueCountWithSeverities := fmt.Sprintf("%s [%s]", renderBold(strconv.Itoa(ignoredIssueCount)), ignoredIssueLabelledCount)
 	testType := summary.Type
 	if testType == "sast" {
 		testType = "Static code analysis"
 	}
 
 	err := summaryTemplate.Execute(&buff, struct {
-		Org                          string
-		TestPath                     string
-		Type                         string
-		TotalIssueCount              int
-		OpenIssueCountWithSeverities string
+		Org                             string
+		TestPath                        string
+		Type                            string
+		TotalIssueCount                 int
+		IgnoreIssueCount                int
+		OpenIssueCountWithSeverities    string
+		IgnoredIssueCountWithSeverities string
 	}{
-		Org:                          meta.OrgName,
-		TestPath:                     meta.TestPath,
-		Type:                         testType,
-		TotalIssueCount:              totalIssueCount,
-		OpenIssueCountWithSeverities: openIssueCountWithSeverities,
+		Org:                             meta.OrgName,
+		TestPath:                        meta.TestPath,
+		Type:                            testType,
+		TotalIssueCount:                 totalIssueCount,
+		IgnoreIssueCount:                ignoredIssueCount,
+		OpenIssueCountWithSeverities:    openIssueCountWithSeverities,
+		IgnoredIssueCountWithSeverities: ignoredIssueCountWithSeverities,
 	})
 	if err != nil {
 		return fmt.Sprintf("failed to execute summary template: %v", err)
