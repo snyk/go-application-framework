@@ -61,13 +61,18 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				title = rule.Name
 			}
 
+			location := sarif.Location{}
+			if len(result.Locations) > 0 {
+				location = result.Locations[0]
+			}
+
 			findings = append(findings, Finding{
 				ID:            result.RuleID,
 				SeverityLevel: severityLevel,
 				Severity:      severity,
 				Title:         title,
-				Path:          result.Locations[0].PhysicalLocation.ArtifactLocation.URI,
-				Line:          result.Locations[0].PhysicalLocation.Region.StartLine,
+				Path:          location.PhysicalLocation.ArtifactLocation.URI,
+				Line:          location.PhysicalLocation.Region.StartLine,
 				Message:       result.Message.Text,
 			})
 		}

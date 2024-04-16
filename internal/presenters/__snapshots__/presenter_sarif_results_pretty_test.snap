@@ -26,7 +26,7 @@ Open Issues
 │   Project path:      /path/to/project        │
 │                                              │
 │   Total issues:   3                          │
-│   Ignored issues: 0                          │
+│   Ignored issues: 0 [ 0 LOW ]                │
 │   Open issues:    3 [ 3 LOW ]                │
 ╰──────────────────────────────────────────────╯
 💡 Tip
@@ -86,7 +86,7 @@ Open Issues
 │   Project path:      /path/to/project        │
 │                                              │
 │   Total issues:   9                          │
-│   Ignored issues: 0                          │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM ]     │
 │   Open issues:    9 [ 4 HIGH  5 MEDIUM ]     │
 ╰──────────────────────────────────────────────╯
 💡 Tip
@@ -165,7 +165,7 @@ Open Issues
 │   Project path:      /path/to/project        │
 │                                              │
 │   Total issues:   9                          │
-│   Ignored issues: 0                          │
+│   Ignored issues: [1m0[0m [[31m 0 HIGH [0m[33m 0 MEDIUM [0m]     │
 │   Open issues:    [1m9[0m [[31m 4 HIGH [0m[33m 5 MEDIUM [0m]     │
 ╰──────────────────────────────────────────────╯
 💡 Tip
