@@ -176,26 +176,6 @@ Open issues:    {{ .OpenIssueCountWithSeverities }}
 	return buff.String()
 }
 
-func SummariseFindings(findings []Finding) FindingsSummary {
-	summary := FindingsSummary{
-		High:   0,
-		Medium: 0,
-		Low:    0,
-	}
-
-	for _, finding := range findings {
-		if finding.Severity == "HIGH" {
-			summary.High++
-		} else if finding.Severity == "MEDIUM" {
-			summary.Medium++
-		} else if finding.Severity == "LOW" {
-			summary.Low++
-		}
-	}
-
-	return summary
-}
-
 func SortFindings(findings []Finding) []Finding {
 	result := make([]Finding, 0, len(findings))
 
