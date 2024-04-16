@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -106,15 +107,27 @@ func renderFindings(findings []Finding) string {
 
 	response := "\nOpen Issues\n\n"
 
+	titleStyle := lipgloss.NewStyle().Bold(true)
+
 	for _, finding := range findings {
-		response += fmt.Sprintf(` ✗ [%s] %s
+		response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s
 
-`, finding.Severity, finding.Title, finding.Path, finding.Line, finding.Message)
+`, getSeverityLable(finding.Severity), titleStyle.Render(finding.Title), finding.Path, finding.Line, finding.Message)
 	}
 
 	return response
+}
+
+func getSeverityLable(severity string) string {
+	severityToColor := map[string]lipgloss.TerminalColor{
+		"LOW":    lipgloss.NoColor{},
+		"MEDIUM": lipgloss.AdaptiveColor{Light: "9", Dark: "3"},
+		"HIGH":   lipgloss.AdaptiveColor{Light: "9", Dark: "1"},
+	}
+	severityStyle := lipgloss.NewStyle().Foreground(severityToColor[severity])
+	return severityStyle.Render(fmt.Sprintf("✗ [%s]", severity))
 }
 
 func getTip() string {
@@ -155,6 +168,10 @@ Open issues:    {{ .OpenIssueCountWithSeverities }}
 	}
 
 	openIssueCountWithSeverities := fmt.Sprintf("%d [%s]", openIssueCount, openIssueLabelledCount)
+	testType := summary.Type
+	if testType == "sast" {
+		testType = "Static code analysis"
+	}
 
 	err := summaryTemplate.Execute(&buff, struct {
 		Org                          string
@@ -165,7 +182,7 @@ Open issues:    {{ .OpenIssueCountWithSeverities }}
 	}{
 		Org:                          meta.OrgName,
 		TestPath:                     meta.TestPath,
-		Type:                         "Static code analysis",
+		Type:                         testType,
 		TotalIssueCount:              totalIssueCount,
 		OpenIssueCountWithSeverities: openIssueCountWithSeverities,
 	})
