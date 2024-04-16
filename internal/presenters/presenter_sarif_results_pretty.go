@@ -13,9 +13,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
-//go:embed test_results.gotmpl
-var templateString string
-
 type Finding struct {
 	ID            string
 	Severity      string
@@ -83,32 +80,22 @@ type TestMeta struct {
 	TestPath string
 }
 
-type templateData struct {
-	Findings string
-	Summary  string
-	Meta     TestMeta
-}
-
 func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (string, error) {
-	buff := &bytes.Buffer{}
-	tmpl, err := template.New("test_results").Parse(templateString)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
-	}
-
 	findings := convertSarifToFindingsList(input)
 
-	err = tmpl.Execute(buff, templateData{
-		Findings: renderFindings(SortFindings(findings)),
-		Summary:  presenterSummary(code_workflow.CreateCodeSummary(&input), meta),
-		Meta:     meta,
-	})
+	str := fmt.Sprintf(`
+Testing %s ...
+%s
+%s
+%s
+`,
+		meta.TestPath,
+		renderFindings(SortFindings(findings)),
+		presenterSummary(code_workflow.CreateCodeSummary(&input), meta),
+		getTip(),
+	)
 
-	if err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	return buff.String(), nil
+	return str, nil
 }
 
 func renderFindings(findings []Finding) string {
@@ -128,6 +115,12 @@ func renderFindings(findings []Finding) string {
 	}
 
 	return response
+}
+
+func getTip() string {
+	return `💡 Tip
+
+To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.`
 }
 
 func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
