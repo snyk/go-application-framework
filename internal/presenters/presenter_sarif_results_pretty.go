@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -114,26 +115,30 @@ func renderFindings(findings []Finding) string {
    Path: %s, line %d
    Info: %s
 
-`, getSeverityLable(finding.Severity), titleStyle.Render(finding.Title), finding.Path, finding.Line, finding.Message)
+`, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", finding.Severity)), titleStyle.Render(finding.Title), finding.Path, finding.Line, finding.Message)
 	}
 
 	return response
 }
 
-func getSeverityLable(severity string) string {
+func renderInSeverityColor(severity string, str string) string {
 	severityToColor := map[string]lipgloss.TerminalColor{
 		"LOW":    lipgloss.NoColor{},
 		"MEDIUM": lipgloss.AdaptiveColor{Light: "9", Dark: "3"},
 		"HIGH":   lipgloss.AdaptiveColor{Light: "9", Dark: "1"},
 	}
-	severityStyle := lipgloss.NewStyle().Foreground(severityToColor[severity])
-	return severityStyle.Render(fmt.Sprintf("✗ [%s]", severity))
+	severityStyle := lipgloss.NewStyle().Foreground(severityToColor[strings.ToUpper(severity)])
+	return severityStyle.Render(str)
 }
 
 func getTip() string {
 	return `💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.`
+}
+
+func renderBold(str string) string {
+	return lipgloss.NewStyle().Bold(true).Render(str)
 }
 
 func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
@@ -162,12 +167,12 @@ Open issues:    {{ .OpenIssueCountWithSeverities }}
 				totalIssueCount += result.Total
 				openIssueCount += result.Open
 				ignoredIssueCount += result.Ignored
-				openIssueLabelledCount += fmt.Sprintf(" %d %s ", result.Open, strings.ToUpper(result.Severity))
+				openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Open, strings.ToUpper(severity)))
 			}
 		}
 	}
 
-	openIssueCountWithSeverities := fmt.Sprintf("%d [%s]", openIssueCount, openIssueLabelledCount)
+	openIssueCountWithSeverities := fmt.Sprintf("%s [%s]", renderBold(strconv.Itoa(openIssueCount)), openIssueLabelledCount)
 	testType := summary.Type
 	if testType == "sast" {
 		testType = "Static code analysis"
