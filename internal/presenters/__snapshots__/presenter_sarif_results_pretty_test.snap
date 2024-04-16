@@ -18,16 +18,17 @@ Open Issues
    Info: The SHA1 hash (used in crypto.sha1.New) is insecure. Consider changing it to a secure hash algorithm
 
 
-Test Summary
-
-Organization:      test-org
-Test type:         Static code analysis
-Project path:      /path/to/project
-
-Total issues:   3
-Ignored issues: 0
-Open issues:    3 [ 3 LOW ]
-
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   3                          │
+│   Ignored issues: 0                          │
+│   Open issues:    3 [ 3 LOW ]                │
+╰──────────────────────────────────────────────╯
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
@@ -77,16 +78,17 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-Test Summary
-
-Organization:      test-org
-Test type:         Static code analysis
-Project path:      /path/to/project
-
-Total issues:   9
-Ignored issues: 0
-Open issues:    9 [ 4 HIGH  5 MEDIUM ]
-
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   9                          │
+│   Ignored issues: 0                          │
+│   Open issues:    9 [ 4 HIGH  5 MEDIUM ]     │
+╰──────────────────────────────────────────────╯
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
@@ -97,14 +99,15 @@ To view ignored issues, use the --include-ignores option. To view ignored issues
 
 Testing /path/to/project ...
 
-Test Summary
-
-Organization:      test-org
-Test type:         Static code analysis
-Project path:      /path/to/project
-
-Total issues:   0
-
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   0                          │
+╰──────────────────────────────────────────────╯
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
@@ -154,16 +157,17 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-Test Summary
-
-Organization:      test-org
-Test type:         Static code analysis
-Project path:      /path/to/project
-
-Total issues:   9
-Ignored issues: 0
-Open issues:    [1m9[0m [[31m 4 HIGH [0m[33m 5 MEDIUM [0m]
-
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   9                          │
+│   Ignored issues: 0                          │
+│   Open issues:    [1m9[0m [[31m 4 HIGH [0m[33m 5 MEDIUM [0m]     │
+╰──────────────────────────────────────────────╯
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.

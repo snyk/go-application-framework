@@ -2,14 +2,12 @@ package presenters
 
 import (
 	"bytes"
-	_ "embed"
 	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 	"text/template"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -107,27 +105,15 @@ func renderFindings(findings []Finding) string {
 
 	response := "\nOpen Issues\n\n"
 
-	titleStyle := lipgloss.NewStyle().Bold(true)
-
 	for _, finding := range findings {
 		response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s
 
-`, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", finding.Severity)), titleStyle.Render(finding.Title), finding.Path, finding.Line, finding.Message)
+`, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", finding.Severity)), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
 	}
 
 	return response
-}
-
-func renderInSeverityColor(severity string, str string) string {
-	severityToColor := map[string]lipgloss.TerminalColor{
-		"LOW":    lipgloss.NoColor{},
-		"MEDIUM": lipgloss.AdaptiveColor{Light: "9", Dark: "3"},
-		"HIGH":   lipgloss.AdaptiveColor{Light: "9", Dark: "1"},
-	}
-	severityStyle := lipgloss.NewStyle().Foreground(severityToColor[strings.ToUpper(severity)])
-	return severityStyle.Render(str)
 }
 
 func getTip() string {
@@ -136,22 +122,17 @@ func getTip() string {
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.`
 }
 
-func renderBold(str string) string {
-	return lipgloss.NewStyle().Bold(true).Render(str)
-}
-
 func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
 	var buff bytes.Buffer
 	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
 
-Organization:      {{ .Org }}
-Test type:         {{ .Type }}
-Project path:      {{ .TestPath }}
+  Organization:      {{ .Org }}
+  Test type:         {{ .Type }}
+  Project path:      {{ .TestPath }}
 
-Total issues:   {{ .TotalIssueCount }}
-{{ if .TotalIssueCount }}Ignored issues: 0
-Open issues:    {{ .OpenIssueCountWithSeverities }}
-{{ end }}`))
+  Total issues:   {{ .TotalIssueCount }}{{ if .TotalIssueCount }}
+  Ignored issues: 0
+  Open issues:    {{ .OpenIssueCountWithSeverities }}{{ end }}`))
 
 	totalIssueCount := 0
 	openIssueCount := 0
@@ -194,7 +175,7 @@ Open issues:    {{ .OpenIssueCountWithSeverities }}
 		return fmt.Sprintf("failed to execute summary template: %v", err)
 	}
 
-	return buff.String()
+	return boxStyle.Render(buff.String())
 }
 
 func SortFindings(findings []Finding) []Finding {
