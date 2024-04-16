@@ -18,7 +18,6 @@ var templateString string
 
 type Finding struct {
 	ID            string
-	ColorCode     string
 	Severity      string
 	SeverityLevel int
 	Title         string
@@ -39,7 +38,6 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 		for j, result := range run.Results {
 			severity := "n/a"
 			severityLevel := 0
-			colorCode := ""
 			var rule sarif.Rule
 			for _, ruleItem := range run.Tool.Driver.Rules {
 				if ruleItem.ID == result.RuleID {
@@ -53,11 +51,9 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 			} else if result.Level == "warning" {
 				severity = "MEDIUM"
 				severityLevel = 1
-				colorCode = "\u001B[33m"
 			} else if result.Level == "error" {
 				severity = "HIGH"
 				severityLevel = 2
-				colorCode = "\u001B[31m"
 			}
 
 			var title string
@@ -69,7 +65,6 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 
 			findings = append(findings, Finding{
 				ID:            result.RuleID,
-				ColorCode:     colorCode,
 				SeverityLevel: severityLevel,
 				Severity:      severity,
 				Title:         title,
@@ -89,7 +84,7 @@ type TestMeta struct {
 }
 
 type templateData struct {
-	Findings []Finding
+	Findings string
 	Summary  string
 	Meta     TestMeta
 }
@@ -104,7 +99,7 @@ func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (stri
 	findings := convertSarifToFindingsList(input)
 
 	err = tmpl.Execute(buff, templateData{
-		Findings: SortFindings(findings),
+		Findings: renderFindings(SortFindings(findings)),
 		Summary:  presenterSummary(code_workflow.CreateCodeSummary(&input), meta),
 		Meta:     meta,
 	})
@@ -114,6 +109,25 @@ func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (stri
 	}
 
 	return buff.String(), nil
+}
+
+func renderFindings(findings []Finding) string {
+
+	if len(findings) == 0 {
+		return ""
+	}
+
+	response := "\nOpen Issues\n\n"
+
+	for _, finding := range findings {
+		response += fmt.Sprintf(` ✗ [%s] %s
+   Path: %s, line %d
+   Info: %s
+
+`, finding.Severity, finding.Title, finding.Path, finding.Line, finding.Message)
+	}
+
+	return response
 }
 
 func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {

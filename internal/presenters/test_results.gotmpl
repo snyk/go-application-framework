@@ -1,13 +1,6 @@
 
 Testing /path/to/project ...
-
-{{ if len .Findings }}Open Issues
-
-{{ range .Findings }} ✗ [{{ .Severity }}] {{ .Title }}
-   Path: {{ .Path }}, line {{ .Line }}
-   Info: {{ .Message }}
-
-{{ end }}{{else}}{{ end }}
+{{ .Findings }}
 {{ .Summary }}
 💡 Tip
 
