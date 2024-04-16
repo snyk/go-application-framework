@@ -34,7 +34,7 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 
 func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	logger := &zerolog.Logger{}
-	config := configuration.New()
+	config := configuration.NewInMemory()
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -112,6 +112,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
 		expectedFileName := "test.json"
 		config.Set("json-file-output", expectedFileName)
+		defer config.Set("json-file-output", nil)
+
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
@@ -130,6 +132,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	t.Run("should output to (real) file when json-file-output is provided", func(t *testing.T) {
 		expectedFileName := t.TempDir() + "test.json"
 		config.Set("json-file-output", expectedFileName)
+		defer config.Set("json-file-output", nil)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
