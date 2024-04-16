@@ -1,0 +1,113 @@
+
+[TestPresenterSarifResultsPretty_LowIssues - 1]
+[1m[37m[39m[22m
+[1m[37mTesting /path/to/project ...[39m[22m
+[1m[37m[39m[22m
+[1mOpen Issues[22m
+[1m[37m[39m[22m
+ ✗ [LOW] [1mUse of Hardcoded Credentials[22m[39m
+   Path: pkg/analytics/analytics_test.go, line 248
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] [1mUse of Hardcoded Credentials[22m[39m
+   Path: internal/api/api_test.go, line 159
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] [1mUse of Password Hash With Insufficient Computational Effort[22m[39m
+   Path: pkg/analytics/analytics.go, line 230
+   Info: The SHA1 hash (used in crypto.sha1.New) is insecure. Consider changing it to a secure hash algorithm
+
+
+[1mTest Summary[22m
+
+Organization:      [1mtest-org[22m
+Test type:         [1mStatic code analysis[22m
+Project path:      [1m/path/to/project[22m
+
+Total issues:   [1m3[22m
+Ignored issues: [1m0[22m
+Open issues:    [1m3[22m [ 3 LOW ]
+
+[1m💡 Tip[22m
+
+To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+
+---
+
+[TestPresenterSarifResultsPretty_MediumHighIssues - 1]
+[1m[37m[39m[22m
+[1m[37mTesting /path/to/project ...[39m[22m
+[1m[37m[39m[22m
+[1mOpen Issues[22m
+[1m[37m[39m[22m
+[33m ✗ [MEDIUM] [1mCleartext Transmission of Sensitive Information[22m[39m
+   Path: app.js, line 63
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+[33m ✗ [MEDIUM] [1mInformation Exposure[22m[39m
+   Path: app.js, line 23
+   Info: Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.
+
+[33m ✗ [MEDIUM] [1mAllocation of Resources Without Limits or Throttling[22m[39m
+   Path: routes/index.js, line 69
+   Info: This endpoint handler performs a system command execution and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.
+
+[33m ✗ [MEDIUM] [1mCross-Site Request Forgery (CSRF)[22m[39m
+   Path: app.js, line 23
+   Info: CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.
+
+[33m ✗ [MEDIUM] [1mUse of Hardcoded Credentials[22m[39m
+   Path: db.js, line 30
+   Info: Do not hardcode passwords in code. Found hardcoded password used in password.
+
+[31m ✗ [HIGH] [1mHardcoded Secret[22m[39m
+   Path: app.js, line 60
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+[31m ✗ [HIGH] [1mNoSQL Injection[22m[39m
+   Path: routes/index.js, line 31
+   Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+[31m ✗ [HIGH] [1mNoSQL Injection[22m[39m
+   Path: routes/index.js, line 108
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+[31m ✗ [HIGH] [1mNoSQL Injection[22m[39m
+   Path: routes/index.js, line 136
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+
+[1mTest Summary[22m
+
+Organization:      [1mtest-org[22m
+Test type:         [1mStatic code analysis[22m
+Project path:      [1m/path/to/project[22m
+
+Total issues:   [1m9[22m
+Ignored issues: [1m0[22m
+Open issues:    [1m9[22m [[31m 4 HIGH [39m[33m 5 MEDIUM [39m]
+
+[1m💡 Tip[22m
+
+To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+
+---
+
+[TestPresenterSarifResultsPretty_NoIssues - 1]
+[1m[37m[39m[22m
+[1m[37mTesting /path/to/project ...[39m[22m
+[1m[37m[39m[22m
+[1m[37m[39m[22m
+[1mTest Summary[22m
+
+Organization:      [1mtest-org[22m
+Test type:         [1mStatic code analysis[22m
+Project path:      [1m/path/to/project[22m
+
+Total issues:   [1m0[22m
+
+[1m💡 Tip[22m
+
+To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+
+---

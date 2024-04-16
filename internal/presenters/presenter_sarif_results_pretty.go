@@ -46,13 +46,13 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 			}
 
 			if result.Level == "note" {
-				severity = "Low"
+				severity = "LOW"
 			} else if result.Level == "warning" {
-				severity = "Medium"
+				severity = "MEDIUM"
 				severityLevel = 1
 				colorCode = "\u001B[33m"
 			} else if result.Level == "error" {
-				severity = "High"
+				severity = "HIGH"
 				severityLevel = 2
 				colorCode = "\u001B[31m"
 			}
@@ -121,11 +121,11 @@ func SummariseFindings(findings []Finding) FindingsSummary {
 	}
 
 	for _, finding := range findings {
-		if finding.Severity == "High" {
+		if finding.Severity == "HIGH" {
 			summary.High++
-		} else if finding.Severity == "Medium" {
+		} else if finding.Severity == "MEDIUM" {
 			summary.Medium++
-		} else if finding.Severity == "Low" {
+		} else if finding.Severity == "LOW" {
 			summary.Low++
 		}
 	}

@@ -3,12 +3,11 @@ package presenters_test
 import (
 	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 
+	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/internal/presenters"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,13 +25,10 @@ func TestPresenterSarifResultsPretty_NoIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
 
-	expected, err := os.ReadFile("testdata/no-issues.txt")
-	require.Nil(t, err)
-
 	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
 
 	require.Nil(t, err)
-	assert.Equal(t, string(expected), result)
+	snaps.MatchSnapshot(t, result)
 }
 
 func TestPresenterSarifResultsPretty_LowIssues(t *testing.T) {
@@ -44,13 +40,10 @@ func TestPresenterSarifResultsPretty_LowIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
 
-	expected, err := os.ReadFile("testdata/3-low-issues.txt")
-	require.Nil(t, err)
-
 	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
 
 	require.Nil(t, err)
-	assert.Equal(t, strings.Split(string(expected), "\n"), strings.Split(result, "\n"))
+	snaps.MatchSnapshot(t, result)
 }
 
 func TestPresenterSarifResultsPretty_MediumHighIssues(t *testing.T) {
@@ -62,11 +55,8 @@ func TestPresenterSarifResultsPretty_MediumHighIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
 
-	expected, err := os.ReadFile("testdata/4-high-5-medium.txt")
-	require.Nil(t, err)
-
 	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
 
 	require.Nil(t, err)
-	assert.Equal(t, strings.Split(string(expected), "\n"), strings.Split(result, "\n"))
+	snaps.MatchSnapshot(t, result)
 }
