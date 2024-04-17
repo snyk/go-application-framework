@@ -9,8 +9,8 @@ import (
 	"text/template"
 
 	"github.com/snyk/code-client-go/sarif"
+	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
@@ -87,7 +87,7 @@ type TestMeta struct {
 
 func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (string, error) {
 	findings := convertSarifToFindingsList(input)
-	summary := code_workflow.CreateCodeSummary(&input)
+	summary := sarif2.CreateCodeSummary(&input)
 
 	str := fmt.Sprintf(`
 Testing %s ...
