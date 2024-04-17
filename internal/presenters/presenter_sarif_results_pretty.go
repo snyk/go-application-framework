@@ -86,7 +86,7 @@ Testing %s ...
 `,
 		meta.TestPath,
 		renderFindings(SortFindings(findings, summary.SeverityOrderAsc)),
-		presenterSummary(summary, meta),
+		renderSummary(summary, meta),
 		getTip(),
 	)
 
@@ -118,7 +118,7 @@ func getTip() string {
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.`
 }
 
-func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
+func renderSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
 	var buff bytes.Buffer
 	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
 
