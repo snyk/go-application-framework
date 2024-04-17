@@ -15,13 +15,12 @@ import (
 )
 
 type Finding struct {
-	ID            string
-	Severity      string
-	SeverityLevel int
-	Title         string
-	Message       string
-	Path          string
-	Line          int
+	ID       string
+	Severity string
+	Title    string
+	Message  string
+	Path     string
+	Line     int
 }
 
 type FindingsSummary struct {
@@ -35,20 +34,12 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 	for _, run := range input.Runs {
 		for _, result := range run.Results {
 			severity := "n/a"
-			severityLevel := 0
 			var rule sarif.Rule
 			for _, ruleItem := range run.Tool.Driver.Rules {
 				if ruleItem.ID == result.RuleID {
 					rule = ruleItem
 					break
 				}
-			}
-
-			if result.Level == "note" {
-			} else if result.Level == "warning" {
-				severityLevel = 1
-			} else if result.Level == "error" {
-				severityLevel = 2
 			}
 
 			severity = sarif_utils.SarifLevelToSeverity(result.Level)
@@ -66,13 +57,12 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 			}
 
 			findings = append(findings, Finding{
-				ID:            result.RuleID,
-				SeverityLevel: severityLevel,
-				Severity:      severity,
-				Title:         title,
-				Path:          location.PhysicalLocation.ArtifactLocation.URI,
-				Line:          location.PhysicalLocation.Region.StartLine,
-				Message:       result.Message.Text,
+				ID:       result.RuleID,
+				Severity: severity,
+				Title:    title,
+				Path:     location.PhysicalLocation.ArtifactLocation.URI,
+				Line:     location.PhysicalLocation.Region.StartLine,
+				Message:  result.Message.Text,
 			})
 		}
 	}
@@ -95,7 +85,7 @@ Testing %s ...
 %s
 `,
 		meta.TestPath,
-		renderFindings(SortFindings(findings)),
+		renderFindings(SortFindings(findings, summary.SeverityOrderAsc)),
 		presenterSummary(summary, meta),
 		getTip(),
 	)
@@ -191,14 +181,14 @@ func presenterSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
 	return boxStyle.Render(buff.String())
 }
 
-func SortFindings(findings []Finding) []Finding {
+func SortFindings(findings []Finding, order []string) []Finding {
 	result := make([]Finding, 0, len(findings))
 
 	result = append(result, findings...)
 
 	slices.SortFunc(result, func(a, b Finding) int {
-		if a.SeverityLevel != b.SeverityLevel {
-			return a.SeverityLevel - b.SeverityLevel
+		if a.Severity != b.Severity {
+			return slices.Index(order, a.Severity) - slices.Index(order, b.Severity)
 		}
 
 		return 0
