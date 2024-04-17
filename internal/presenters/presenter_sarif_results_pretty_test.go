@@ -27,6 +27,7 @@ func TestPresenterSarifResultsPretty_NoIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
 
+	lipgloss.SetColorProfile(termenv.Ascii)
 	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
 
 	require.Nil(t, err)
@@ -42,6 +43,7 @@ func TestPresenterSarifResultsPretty_LowIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
 
+	lipgloss.SetColorProfile(termenv.Ascii)
 	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
 
 	require.Nil(t, err)
@@ -57,6 +59,7 @@ func TestPresenterSarifResultsPretty_MediumHighIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&input)
 	require.Nil(t, err)
 
+	lipgloss.SetColorProfile(termenv.Ascii)
 	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
 
 	require.Nil(t, err)
