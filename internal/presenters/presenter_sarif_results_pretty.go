@@ -33,7 +33,6 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 	var findings []Finding
 	for _, run := range input.Runs {
 		for _, result := range run.Results {
-			severity := "n/a"
 			var rule sarif.Rule
 			for _, ruleItem := range run.Tool.Driver.Rules {
 				if ruleItem.ID == result.RuleID {
@@ -42,7 +41,7 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				}
 			}
 
-			severity = sarif_utils.SarifLevelToSeverity(result.Level)
+			severity := sarif_utils.SarifLevelToSeverity(result.Level)
 
 			var title string
 			if rule.ShortDescription.Text != "" {
