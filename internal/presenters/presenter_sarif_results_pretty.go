@@ -9,7 +9,7 @@ import (
 	"text/template"
 
 	"github.com/snyk/code-client-go/sarif"
-	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
+	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
@@ -45,14 +45,13 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 			}
 
 			if result.Level == "note" {
-				severity = "LOW"
 			} else if result.Level == "warning" {
-				severity = "MEDIUM"
 				severityLevel = 1
 			} else if result.Level == "error" {
-				severity = "HIGH"
 				severityLevel = 2
 			}
+
+			severity = sarif_utils.SarifLevelToSeverity(result.Level)
 
 			var title string
 			if rule.ShortDescription.Text != "" {
@@ -87,7 +86,7 @@ type TestMeta struct {
 
 func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (string, error) {
 	findings := convertSarifToFindingsList(input)
-	summary := sarif2.CreateCodeSummary(&input)
+	summary := sarif_utils.CreateCodeSummary(&input)
 
 	str := fmt.Sprintf(`
 Testing %s ...
@@ -116,14 +115,15 @@ func renderFindings(findings []Finding) string {
    Path: %s, line %d
    Info: %s
 
-`, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", finding.Severity)), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
+`, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
 	}
 
 	return response
 }
 
 func getTip() string {
-	return `💡 Tip
+	return `
+💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.`
 }

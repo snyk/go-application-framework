@@ -29,6 +29,7 @@ Open Issues
 │   Ignored issues: 0 [ 0 LOW ]                │
 │   Open issues:    3 [ 3 LOW ]                │
 ╰──────────────────────────────────────────────╯
+
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
@@ -89,6 +90,7 @@ Open Issues
 │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM ]     │
 │   Open issues:    9 [ 4 HIGH  5 MEDIUM ]     │
 ╰──────────────────────────────────────────────╯
+
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
@@ -108,6 +110,7 @@ Testing /path/to/project ...
 │                                              │
 │   Total issues:   0                          │
 ╰──────────────────────────────────────────────╯
+
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
@@ -168,6 +171,7 @@ Open Issues
 │   Ignored issues: [1m0[0m [[31m 0 HIGH [0m[33m 0 MEDIUM [0m]     │
 │   Open issues:    [1m9[0m [[31m 4 HIGH [0m[33m 5 MEDIUM [0m]     │
 ╰──────────────────────────────────────────────╯
+
 💡 Tip
 
 To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
