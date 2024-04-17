@@ -10,17 +10,12 @@ import (
 	codeclient "github.com/snyk/code-client-go"
 	codeclienthttp "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/sarif"
+	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-)
-
-const (
-	summaryType        = "sast"
-	SARIF_CONTENT_TYPE = "application/sarif+json"
 )
 
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error)
@@ -45,12 +40,12 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, SARIF_CONTENT_TYPE, path)
+	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
 	if err != nil {
 		return nil, err
 	}
 
-	summary := createCodeSummary(&result.Sarif)
+	summary := sarif2.CreateCodeSummary(&result.Sarif)
 	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
 	if err != nil {
 		return nil, err
@@ -116,58 +111,4 @@ func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string,
 	data.SetContentLocation(path)
 
 	return data, nil
-}
-
-// Convert Sarif Level to internal Severity
-func sarifLevelToSeverity(level string) string {
-	var severity string
-	if level == "note" {
-		severity = "low"
-	} else if level == "warning" {
-		severity = "medium"
-	} else if level == "error" {
-		severity = "high"
-	} else {
-		severity = "unmapped"
-	}
-
-	return severity
-}
-
-// Iterate through the sarif data and create a summary out of it.
-func createCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
-	if input == nil {
-		return nil
-	}
-
-	summary := json_schemas.NewTestSummary(summaryType)
-	resultMap := map[string]*json_schemas.TestSummaryResult{}
-
-	for _, run := range input.Runs {
-		for _, result := range run.Results {
-			severity := sarifLevelToSeverity(result.Level)
-
-			if _, ok := resultMap[severity]; !ok {
-				resultMap[severity] = &json_schemas.TestSummaryResult{}
-			}
-
-			resultMap[severity].Total++
-
-			// evaluate if the result is suppressed/ignored or not
-			if len(result.Suppressions) > 0 {
-				resultMap[severity].Ignored++
-			} else {
-				resultMap[severity].Open++
-			}
-		}
-	}
-
-	// fill final map
-	for k, v := range resultMap {
-		local := *v
-		local.Severity = k
-		summary.Results = append(summary.Results, local)
-	}
-
-	return summary
 }

@@ -1,10 +1,12 @@
 package localworkflows
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
 
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
@@ -31,7 +33,7 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 
 func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	logger := &zerolog.Logger{}
-	config := configuration.New()
+	config := configuration.NewInMemory()
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -109,6 +111,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
 		expectedFileName := "test.json"
 		config.Set("json-file-output", expectedFileName)
+		defer config.Set("json-file-output", nil)
+
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
@@ -127,6 +131,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	t.Run("should output to (real) file when json-file-output is provided", func(t *testing.T) {
 		expectedFileName := t.TempDir() + "test.json"
 		config.Set("json-file-output", expectedFileName)
+		defer config.Set("json-file-output", nil)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
@@ -212,6 +217,49 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{testSummaryData, textData}, outputDestination)
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+
+	t.Run("should print human readable output for sarif data", func(t *testing.T) {
+		input := sarif.SarifDocument{
+			Runs: []sarif.Run{
+				{
+					Results: []sarif.Result{
+						{Level: "error"},
+						{Level: "warning"},
+					},
+				},
+				{
+					Results: []sarif.Result{
+						{Level: "error"},
+						{Level: "error", Suppressions: make([]sarif.Suppression, 1)},
+					},
+				},
+				{
+					Results: []sarif.Result{
+						{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
+					},
+				},
+			},
+		}
+
+		rawSarif, err := json.Marshal(input)
+		assert.Nil(t, err)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
+		sarifData.SetContentLocation("/mypath")
+
+		// mock assertions
+		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
+			assert.Contains(t, str, "Total issues:   5")
+		}).Times(1)
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 
 		// assert
 		assert.Nil(t, err)

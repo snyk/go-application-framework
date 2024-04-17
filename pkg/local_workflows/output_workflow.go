@@ -1,12 +1,15 @@
 package localworkflows
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/presenters"
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -95,37 +98,74 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 
 func handleContentTypeJson(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
 	printJsonToCmd := config.GetBool(OUTPUT_CONFIG_KEY_JSON) || config.GetBool(OUTPUT_CONFIG_KEY_SARIF)
+	showToHuman := !printJsonToCmd
 
-	writeJsonToFile := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
-	if len(writeJsonToFile) == 0 {
-		writeJsonToFile = config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
+	jsonFileName := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
+	if len(jsonFileName) == 0 {
+		jsonFileName = config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
 	}
+	writeToFile := len(jsonFileName) > 0
 
 	singleData, ok := input[i].GetPayload().([]byte)
 	if !ok {
 		return fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
 	}
 
-	// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
-	if !printJsonToCmd && len(writeJsonToFile) == 0 {
-		printJsonToCmd = true
-	}
-
-	if printJsonToCmd {
-		outputDestination.Println(string(singleData))
-	}
-
-	if len(writeJsonToFile) > 0 {
-		debugLogger.Printf("Writing '%s' JSON of length %d to '%s'", input[i].GetIdentifier().String(), len(singleData), writeJsonToFile)
-
-		if err := outputDestination.Remove(writeJsonToFile); err != nil {
-			return fmt.Errorf("failed to remove existing output file: %w", err)
+	// are we in human readable mode
+	// yes: do we have a presenter
+	//  yes: use presenter
+	//  no: print json to cmd
+	if showToHuman && input[i].GetContentType() == content_type.SARIF_JSON {
+		humanReadanbleSarifOutput(config, input, i, outputDestination, debugLogger, singleData)
+	} else {
+		// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
+		if !printJsonToCmd && !writeToFile {
+			printJsonToCmd = true
 		}
-		if err := outputDestination.WriteFile(writeJsonToFile, singleData, iUtils.FILEPERM_666); err != nil {
-			return fmt.Errorf("failed to write json output: %w", err)
+
+		if printJsonToCmd {
+			outputDestination.Println(string(singleData))
+		}
+	}
+
+	if writeToFile {
+		err := jsonWriteToFile(debugLogger, input, i, singleData, jsonFileName, outputDestination)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, singleData []byte, jsonFileName string, outputDestination iUtils.OutputDestination) error {
+	debugLogger.Printf("Writing '%s' JSON of length %d to '%s'", input[i].GetIdentifier().String(), len(singleData), jsonFileName)
+
+	if err := outputDestination.Remove(jsonFileName); err != nil {
+		return fmt.Errorf("failed to remove existing output file: %w", err)
+	}
+	if err := outputDestination.WriteFile(jsonFileName, singleData, iUtils.FILEPERM_666); err != nil {
+		return fmt.Errorf("failed to write json output: %w", err)
+	}
+	return nil
+}
+
+func humanReadanbleSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
+	var sarif sarif.SarifDocument
+	err := json.Unmarshal(singleData, &sarif)
+	if err != nil {
+		debugLogger.Println(err)
+	}
+
+	meta := presenters.TestMeta{
+		OrgName:  config.GetString(configuration.ORGANIZATION),
+		TestPath: input[i].GetContentLocation(),
+	}
+	humanReadableResult, err := presenters.PresenterSarifResultsPretty(sarif, meta)
+	if err != nil {
+		debugLogger.Println(err)
+	}
+
+	outputDestination.Println(humanReadableResult)
 }
 
 func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
