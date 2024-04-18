@@ -36,4 +36,5 @@ const (
 	// flags
 	FLAG_EXPERIMENTAL    string = "experimental"
 	FLAG_INCLUDE_IGNORES string = "include-ignores"
+	FLAG_ONLY_IGNORES    string = "only-ignores"
 )

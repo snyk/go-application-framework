@@ -77,7 +77,7 @@ type TestMeta struct {
 	TestPath string
 }
 
-func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta, showIgnored bool) (string, error) {
+func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta, showIgnored bool, showOpen bool) (string, error) {
 	findings := convertSarifToFindingsList(input)
 	summary := sarif_utils.CreateCodeSummary(&input)
 
@@ -88,7 +88,7 @@ Testing %s ...
 %s
 `,
 		meta.TestPath,
-		renderFindings(SortFindings(findings, summary.SeverityOrderAsc), showIgnored),
+		renderFindings(SortFindings(findings, summary.SeverityOrderAsc), showIgnored, showOpen),
 		renderSummary(summary, meta),
 		getTip(),
 	)
@@ -96,7 +96,7 @@ Testing %s ...
 	return str, nil
 }
 
-func renderFindings(findings []Finding, showIgnored bool) string {
+func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string {
 	if len(findings) == 0 {
 		return ""
 	}
@@ -107,6 +107,11 @@ func renderFindings(findings []Finding, showIgnored bool) string {
 		if finding.Ignored && !showIgnored {
 			continue
 		}
+
+		if !showOpen && !finding.Ignored {
+			continue
+		}
+
 		response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s

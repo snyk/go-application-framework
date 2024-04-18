@@ -28,7 +28,7 @@ func TestPresenterSarifResultsPretty_NoIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false, true)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -44,7 +44,7 @@ func TestPresenterSarifResultsPretty_LowIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false, true)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -60,7 +60,7 @@ func TestPresenterSarifResultsPretty_MediumHighIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false, true)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -76,7 +76,7 @@ func TestPresenterSarifResultsPretty_MediumHighIssuesWithColor(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false, true)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -92,7 +92,7 @@ func TestPresenterSarifResultsPretty_DefaultHideIgnored(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false, true)
 
 	require.Nil(t, err)
 	require.NotContains(t, result, "Path: src/main.ts, line 58")
@@ -108,7 +108,7 @@ func TestPresenterSarifResultsPretty_IncludeIgnored(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, true)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, true, true)
 
 	require.Nil(t, err)
 	require.Contains(t, result, "Path: src/main.ts, line 58")
