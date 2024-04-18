@@ -23,7 +23,7 @@ const (
 	OUTPUT_CONFIG_KEY_JSON_FILE       = "json-file-output"
 	OUTPUT_CONFIG_KEY_SARIF           = "sarif"
 	OUTPUT_CONFIG_KEY_SARIF_FILE      = "sarif-file-output"
-	OUTPUT_CONFIG_KEY_INCLUDE_IGNORES = "include-ignores"
+	OUTPUT_CONFIG_KEY_INCLUDE_IGNORES = configuration.FLAG_INCLUDE_IGNORES
 )
 
 // InitOutputWorkflow initializes the output workflow

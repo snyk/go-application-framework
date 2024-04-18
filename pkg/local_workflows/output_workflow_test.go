@@ -379,7 +379,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 			assert.Contains(t, str, "Ignored rule")
 		}).Times(1)
 
-		config.Set("include-ignores", true)
+		config.Set(configuration.FLAG_INCLUDE_IGNORES, true)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
