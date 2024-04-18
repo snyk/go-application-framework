@@ -21,6 +21,7 @@ type Finding struct {
 	Message  string
 	Path     string
 	Line     int
+	Ignored  bool
 }
 
 type FindingsSummary struct {
@@ -55,6 +56,8 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				location = result.Locations[0]
 			}
 
+			isIgnored := len(result.Suppressions) > 0
+
 			findings = append(findings, Finding{
 				ID:       result.RuleID,
 				Severity: severity,
@@ -62,6 +65,7 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				Path:     location.PhysicalLocation.ArtifactLocation.URI,
 				Line:     location.PhysicalLocation.Region.StartLine,
 				Message:  result.Message.Text,
+				Ignored:  isIgnored,
 			})
 		}
 	}
@@ -73,7 +77,7 @@ type TestMeta struct {
 	TestPath string
 }
 
-func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (string, error) {
+func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta, showIgnored bool) (string, error) {
 	findings := convertSarifToFindingsList(input)
 	summary := sarif_utils.CreateCodeSummary(&input)
 
@@ -84,7 +88,7 @@ Testing %s ...
 %s
 `,
 		meta.TestPath,
-		renderFindings(SortFindings(findings, summary.SeverityOrderAsc)),
+		renderFindings(SortFindings(findings, summary.SeverityOrderAsc), showIgnored),
 		renderSummary(summary, meta),
 		getTip(),
 	)
@@ -92,7 +96,7 @@ Testing %s ...
 	return str, nil
 }
 
-func renderFindings(findings []Finding) string {
+func renderFindings(findings []Finding, showIgnored bool) string {
 	if len(findings) == 0 {
 		return ""
 	}
@@ -100,6 +104,9 @@ func renderFindings(findings []Finding) string {
 	response := "\nOpen Issues\n\n"
 
 	for _, finding := range findings {
+		if finding.Ignored && !showIgnored {
+			continue
+		}
 		response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s

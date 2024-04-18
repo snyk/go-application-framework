@@ -28,7 +28,7 @@ func TestPresenterSarifResultsPretty_NoIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -44,7 +44,7 @@ func TestPresenterSarifResultsPretty_LowIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -60,7 +60,7 @@ func TestPresenterSarifResultsPretty_MediumHighIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -76,8 +76,40 @@ func TestPresenterSarifResultsPretty_MediumHighIssuesWithColor(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
-	result, err := presenters.PresenterSarifResultsPretty(input, testMeta)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
 
 	require.Nil(t, err)
 	snaps.MatchSnapshot(t, result)
+}
+
+func TestPresenterSarifResultsPretty_DefaultHideIgnored(t *testing.T) {
+	fd, err := os.Open("testdata/with-ignores.json")
+	require.Nil(t, err)
+
+	var input sarif.SarifDocument
+
+	err = json.NewDecoder(fd).Decode(&input)
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, false)
+
+	require.Nil(t, err)
+	require.NotContains(t, result, "Path: src/main.ts, line 58")
+}
+
+func TestPresenterSarifResultsPretty_IncludeIgnored(t *testing.T) {
+	fd, err := os.Open("testdata/with-ignores.json")
+	require.Nil(t, err)
+
+	var input sarif.SarifDocument
+
+	err = json.NewDecoder(fd).Decode(&input)
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, true)
+
+	require.Nil(t, err)
+	require.Contains(t, result, "Path: src/main.ts, line 58")
 }
