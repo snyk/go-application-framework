@@ -72,13 +72,18 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 
 	changedFiles := make(map[string]bool)
 	ctx := context.Background()
-	codeInstrumentor := &codeClientInstrumentor{}
-	codeErrorReporter := &codeClientErrorReporter{}
-	httpClient := codeclienthttp.NewHTTPClient(httpClientFunc, codeclienthttp.WithLogger(logger))
+	httpClient := codeclienthttp.NewHTTPClient(
+		httpClientFunc,
+		codeclienthttp.WithLogger(logger),
+	)
 	codeScannerConfig := &codeClientConfig{
 		localConfiguration: config,
 	}
-	codeScanner := codeclient.NewCodeScanner(httpClient, codeScannerConfig, codeInstrumentor, codeErrorReporter, logger)
+	codeScanner := codeclient.NewCodeScanner(
+		codeScannerConfig,
+		httpClient,
+		codeclient.WithLogger(logger),
+	)
 	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, path, files, changedFiles)
 	return result, err
 }
