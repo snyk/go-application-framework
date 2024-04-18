@@ -19,10 +19,11 @@ import (
 var WORKFLOWID_OUTPUT_WORKFLOW workflow.Identifier = workflow.NewWorkflowIdentifier("output")
 
 const (
-	OUTPUT_CONFIG_KEY_JSON       = "json"
-	OUTPUT_CONFIG_KEY_JSON_FILE  = "json-file-output"
-	OUTPUT_CONFIG_KEY_SARIF      = "sarif"
-	OUTPUT_CONFIG_KEY_SARIF_FILE = "sarif-file-output"
+	OUTPUT_CONFIG_KEY_JSON            = "json"
+	OUTPUT_CONFIG_KEY_JSON_FILE       = "json-file-output"
+	OUTPUT_CONFIG_KEY_SARIF           = "sarif"
+	OUTPUT_CONFIG_KEY_SARIF_FILE      = "sarif-file-output"
+	OUTPUT_CONFIG_KEY_INCLUDE_IGNORES = "include-ignores"
 )
 
 // InitOutputWorkflow initializes the output workflow
@@ -34,6 +35,7 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(OUTPUT_CONFIG_KEY_JSON_FILE, "", "Write json output to file")
 	outputConfig.Bool(OUTPUT_CONFIG_KEY_SARIF, false, "Print sarif output to console")
 	outputConfig.String(OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
+	outputConfig.Bool(OUTPUT_CONFIG_KEY_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
@@ -150,6 +152,7 @@ func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, 
 }
 
 func humanReadanbleSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
+	includeIgnoredFindings := config.GetBool(OUTPUT_CONFIG_KEY_INCLUDE_IGNORES)
 	var sarif sarif.SarifDocument
 	err := json.Unmarshal(singleData, &sarif)
 	if err != nil {
@@ -160,7 +163,7 @@ func humanReadanbleSarifOutput(config configuration.Configuration, input []workf
 		OrgName:  config.GetString(configuration.ORGANIZATION),
 		TestPath: input[i].GetContentLocation(),
 	}
-	humanReadableResult, err := presenters.PresenterSarifResultsPretty(sarif, meta)
+	humanReadableResult, err := presenters.PresenterSarifResultsPretty(sarif, meta, includeIgnoredFindings)
 	if err != nil {
 		debugLogger.Println(err)
 	}
