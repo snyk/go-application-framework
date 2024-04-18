@@ -4,10 +4,12 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
-var boxStyle = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.NoColor{}).
+var boxStyle = lipgloss.NewStyle().
+	BorderStyle(lipgloss.RoundedBorder()).
+	BorderForeground(ui.TokenColor("border.plain")).
 	PaddingLeft(1).
 	PaddingRight(4)
 
@@ -16,11 +18,8 @@ func renderBold(str string) string {
 }
 
 func renderInSeverityColor(severity string, str string) string {
-	severityToColor := map[string]lipgloss.TerminalColor{
-		"LOW":    lipgloss.NoColor{},
-		"MEDIUM": lipgloss.AdaptiveColor{Light: "9", Dark: "3"},
-		"HIGH":   lipgloss.AdaptiveColor{Light: "9", Dark: "1"},
-	}
-	severityStyle := lipgloss.NewStyle().Foreground(severityToColor[strings.ToUpper(severity)])
+	severityStyle := lipgloss.NewStyle().Foreground(
+		ui.TokenColor("severity." + strings.ToLower(severity)),
+	)
 	return severityStyle.Render(str)
 }
