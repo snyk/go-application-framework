@@ -169,7 +169,7 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 			response += renderFinding(finding)
 		}
 
-		response += renderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/")
+		response += renderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/") + "\n"
 	}
 
 	return response
