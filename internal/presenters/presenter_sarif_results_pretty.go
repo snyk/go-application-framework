@@ -111,10 +111,6 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 				continue
 			}
 
-			if !showOpen && !finding.Ignored {
-				continue
-			}
-
 			response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s
