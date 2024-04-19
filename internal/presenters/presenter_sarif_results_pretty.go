@@ -125,17 +125,14 @@ func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta, showI
 	findings := convertSarifToFindingsList(input)
 	summary := sarif_utils.CreateCodeSummary(&input)
 
-	str := fmt.Sprintf(`
-Testing %s ...
-%s
-%s
-%s
-`,
-		meta.TestPath,
+	str := strings.Join([]string{
+		"",
+		renderBold(fmt.Sprintf("Testing %s ...", meta.TestPath)),
 		renderFindings(SortFindings(findings, summary.SeverityOrderAsc), showIgnored, showOpen),
 		renderSummary(summary, meta),
 		getFinalTip(showIgnored, showOpen),
-	)
+		"",
+	}, "\n")
 
 	return str, nil
 }
@@ -148,7 +145,7 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 	response := ""
 
 	if showOpen {
-		response += "\nOpen Issues\n\n"
+		response += renderTitle("Open Issues")
 
 		for _, finding := range findings {
 			if finding.Ignored {
@@ -168,7 +165,7 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 	}
 
 	if showIgnored {
-		response += "\nIgnored Issues\n\n"
+		response += renderTitle("Ignored Issues")
 
 		for _, finding := range findings {
 			if !finding.Ignored {
@@ -219,6 +216,10 @@ func getFinalTip(showIgnored bool, showOpen bool) string {
 
 func renderDivider() string {
 	return "─────────────────────────────────────────────────────\n"
+}
+
+func renderTitle(str string) string {
+	return fmt.Sprintf("\n%s\n\n", renderBold(str))
 }
 
 func renderTip(str string) string {

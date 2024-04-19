@@ -119,9 +119,9 @@ To view ignored issues, use the --include-ignores option. To view ignored issues
 
 [TestPresenterSarifResultsPretty_MediumHighIssuesWithColor - 1]
 
-Testing /path/to/project ...
+[1mTesting /path/to/project ...[0m
 
-Open Issues
+[1mOpen Issues[0m
 
  [33m✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
    Path: app.js, line 63
