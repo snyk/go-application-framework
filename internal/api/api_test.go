@@ -19,10 +19,10 @@ func Test_GetDefaultOrgId_ReturnsCorrectOrgId(t *testing.T) {
 	selfResponse := newMockSelfResponse(t)
 	expectedOrgId := selfResponse.Data.Attributes.DefaultOrgContext
 	server := setupSingleReponseServer(t, "/rest/self?version="+constants.SNYK_API_VERSION, selfResponse)
-	api := api.NewApi(server.URL, http.DefaultClient)
+	client := api.NewApi(server.URL, http.DefaultClient)
 
 	// Act
-	orgId, err := api.GetDefaultOrgId()
+	orgId, err := client.GetDefaultOrgId()
 	if err != nil {
 		t.Error(err)
 	}
@@ -63,13 +63,13 @@ func Test_GetFeatureFlag_false(t *testing.T) {
 		Code: http.StatusForbidden,
 	}
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
-	api := api.NewApi(server.URL, http.DefaultClient)
+	client := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := api.GetFeatureFlag(featureFlagName, org)
+	actual, err := client.GetFeatureFlag(featureFlagName, org)
 	assert.NoError(t, err)
 	assert.False(t, actual)
 
-	actual, err = api.GetFeatureFlag("unknownFF", org)
+	actual, err = client.GetFeatureFlag("unknownFF", org)
 	assert.Error(t, err)
 	assert.False(t, actual)
 }
@@ -84,9 +84,9 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 		Code: http.StatusOK,
 	}
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
-	api := api.NewApi(server.URL, http.DefaultClient)
+	client := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := api.GetFeatureFlag(featureFlagName, org)
+	actual, err := client.GetFeatureFlag(featureFlagName, org)
 	assert.NoError(t, err)
 	assert.True(t, actual)
 }
@@ -148,7 +148,7 @@ func newMockOrgResponse(t *testing.T) contract.OrganizationsResponse {
 }
 `
 	var response contract.OrganizationsResponse
-	json.Unmarshal([]byte(orgJson), response)
+	_ = json.Unmarshal([]byte(orgJson), &response)
 	return response
 }
 
