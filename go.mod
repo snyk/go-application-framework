@@ -18,7 +18,7 @@ require (
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.9.0
 	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/oauth2 v0.5.0
+	golang.org/x/oauth2 v0.5.0 // TODO: this should be updated
 )
 
 require (
