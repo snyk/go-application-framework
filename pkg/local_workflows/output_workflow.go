@@ -161,16 +161,10 @@ func humanReadanbleSarifOutput(config configuration.Configuration, input []workf
 		debugLogger.Println(err)
 	}
 
-	meta := presenters.TestMeta{
-		OrgName:  config.GetString(configuration.ORGANIZATION),
-		TestPath: input[i].GetContentLocation(),
-	}
-	debugLogger.Printf("humanReadanbleSarifOutput: %v", meta)
-
 	p := presenters.SarifTestResults(
 		sarif,
-		presenters.WithOrgName(meta.OrgName),
-		presenters.WithTestPath(meta.TestPath),
+		presenters.WithOrgName(config.GetString(configuration.ORGANIZATION)),
+		presenters.WithTestPath(input[i].GetContentLocation()),
 		presenters.WithIgnored(includeIgnoredFindings),
 		presenters.WithOpen(includeOpenFindings),
 	)

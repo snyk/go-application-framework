@@ -50,24 +50,21 @@ func RenderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 }
 
 func RenderFinding(finding Finding) string {
-	ignoredProperties := "\n"
+	properties := "\n"
 	titlePrefix := "✗ "
 
 	if finding.Ignored {
 		titlePrefix = "! [ IGNORED ] "
-		ignoredProperties = getIgnoredProperties(finding, ignoredProperties)
-	} else {
-
 	}
+
+	properties = getFormattedProperties(finding.Properties)
 
 	return strings.Join([]string{
 		fmt.Sprintf(" %s %s",
 			renderInSeverityColor(finding.Severity, fmt.Sprintf("%s[%s]", titlePrefix, strings.ToUpper(finding.Severity))),
 			renderBold(finding.Title),
 		),
-		fmt.Sprintf("   Path: %s, line %d", finding.Path, finding.Line),
-		fmt.Sprintf("   Info: %s", finding.Message),
-		ignoredProperties,
+		properties,
 	}, "\n")
 }
 
@@ -77,6 +74,29 @@ func RenderDivider() string {
 
 func RenderTitle(str string) string {
 	return fmt.Sprintf("\n%s\n\n", renderBold(str))
+}
+
+func getFormattedProperties(properties []FindingProperty) string {
+	formattedProperties := ""
+	labelLength := 0
+
+	for _, property := range properties {
+		if len(property.Label) > labelLength {
+			labelLength = len(property.Label) + 1
+		}
+	}
+
+	labelAndPropertyFormat := "   %-" + fmt.Sprintf("%d", labelLength) + "s %s\n"
+
+	for _, property := range properties {
+		if property.Label == "" {
+			formattedProperties += "\n"
+			continue
+		}
+		formattedProperties += fmt.Sprintf(labelAndPropertyFormat, property.Label+":", property.Value)
+	}
+
+	return formattedProperties
 }
 
 func RenderTip(str string) string {

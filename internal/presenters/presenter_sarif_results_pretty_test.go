@@ -13,11 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testMeta = presenters.TestMeta{
-	OrgName:  "test-org",
-	TestPath: "/path/to/project",
-}
-
 func TestPresenterSarifResultsPretty_NoIssues(t *testing.T) {
 	fd, err := os.Open("testdata/no-issues.json")
 	require.Nil(t, err)
@@ -125,7 +120,7 @@ func TestPresenterSarifResultsPretty_DefaultHideIgnored(t *testing.T) {
 	result, err := p.Render()
 
 	require.Nil(t, err)
-	require.NotContains(t, result, "Path: src/main.ts, line 58")
+	require.NotContains(t, result, "src/main.ts, line 58")
 }
 
 func TestPresenterSarifResultsPretty_IncludeIgnored(t *testing.T) {
@@ -149,7 +144,7 @@ func TestPresenterSarifResultsPretty_IncludeIgnored(t *testing.T) {
 
 	require.Nil(t, err)
 	require.Contains(t, result, "[ IGNORED ] [MEDIUM]")
-	require.Contains(t, result, "Path: src/main.ts, line 58")
+	require.Contains(t, result, "src/main.ts, line 58")
 	require.Contains(t, result, "Ignored Issues")
 	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
 	require.Contains(t, result, "To view ignored issues only, use the --only-ignores option.")
@@ -180,7 +175,7 @@ func TestPresenterSarifResultsPretty_OnlyIgnored(t *testing.T) {
 	require.Nil(t, err)
 	require.Contains(t, result, "Ignored Issues")
 	require.Contains(t, result, "! [ IGNORED ] [MEDIUM]")
-	require.Contains(t, result, "Path: src/main.ts, line 58")
+	require.Contains(t, result, "Path:       src/main.ts, line 58")
 	require.Contains(t, result, "Category:   Won't fix")
 	require.Contains(t, result, "Expiration: 15 days")
 	require.Contains(t, result, "Ignored on: February 23, 2024")

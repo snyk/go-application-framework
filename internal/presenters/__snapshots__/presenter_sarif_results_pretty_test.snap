@@ -230,8 +230,8 @@ Testing /path/to/project ...
 Ignored Issues
 
  ! [ IGNORED ] [MEDIUM] Cleartext Transmission of Sensitive Information
-   Path: src/main.ts, line 58
-   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+   Path:       src/main.ts, line 58
+   Info:       http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
 
    Expiration: 15 days
    Category:   Won't fix
@@ -289,8 +289,8 @@ Open Issues
 Ignored Issues
 
  ! [ IGNORED ] [MEDIUM] Cleartext Transmission of Sensitive Information
-   Path: src/main.ts, line 58
-   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+   Path:       src/main.ts, line 58
+   Info:       http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
 
    Expiration: 15 days
    Category:   Won't fix
