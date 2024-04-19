@@ -33,7 +33,7 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -60,7 +60,7 @@ func (a *snykApiClient) GetDefaultOrgId() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to retrieve org ID: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -92,7 +92,7 @@ func (a *snykApiClient) GetFeatureFlag(flagname string, orgId string) (bool, err
 	if err != nil {
 		return defaultResult, fmt.Errorf("unable to retrieve feature flag: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
