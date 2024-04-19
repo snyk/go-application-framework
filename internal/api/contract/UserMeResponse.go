@@ -6,6 +6,11 @@ type Orgs struct {
 	Group Group  `json:"group"`
 }
 
+type Group struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
 type UserMe struct {
 	Id       *string `json:"id"`
 	UserName *string `json:"username"`

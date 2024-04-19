@@ -5,11 +5,11 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
+	"io"
+	"net/http"
+	url2 "net/url"
 )
 
 type ApiClient interface {
@@ -25,7 +25,10 @@ type snykApiClient struct {
 }
 
 func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
-	url := a.url + "/v1/orgs"
+	apiVersion := "version=2024-03-12"
+	escapedSlug := url2.PathEscape(slugName)
+	url := fmt.Sprintf("%s/rest/orgs?%s&slug=%s", a.url, apiVersion, escapedSlug)
+
 	res, err := a.client.Get(url)
 	if err != nil {
 		return "", err
@@ -37,16 +40,15 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 		return "", err
 	}
 
-	var userOrgInfo contract.OrganizationsResponse
-	err = json.Unmarshal(body, &userOrgInfo)
+	var response contract.OrganizationsResponse
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return "", err
 	}
 
-	for _, org := range userOrgInfo.Organizations {
-		if org.Slug == slugName {
-			return org.ID, nil
-		}
+	organizations := response.Organizations
+	if len(organizations) == 1 {
+		return organizations[0].Id, nil
 	}
 
 	return "", fmt.Errorf("org ID not found for slug %v", slugName)
