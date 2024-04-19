@@ -2,10 +2,11 @@ package api_test
 
 import (
 	"encoding/json"
-	"github.com/pkg/errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
 
