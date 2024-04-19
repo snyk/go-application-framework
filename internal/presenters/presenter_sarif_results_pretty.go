@@ -32,6 +32,77 @@ type FindingsSummary struct {
 	Low    int
 }
 
+type TestMeta struct {
+	OrgName  string
+	TestPath string
+}
+
+type Presenter struct {
+	ShowIgnored bool
+	ShowOpen    bool
+	Input       sarif.SarifDocument
+	OrgName     string
+	TestPath    string
+}
+
+type PresenterOption func(*Presenter)
+
+func WithIgnored(showIgnored bool) PresenterOption {
+	return func(p *Presenter) {
+		p.ShowIgnored = showIgnored
+	}
+}
+
+func WithOpen(showOpen bool) PresenterOption {
+	return func(p *Presenter) {
+		p.ShowOpen = showOpen
+	}
+}
+
+func WithOrgName(orgName string) PresenterOption {
+	return func(p *Presenter) {
+		p.OrgName = orgName
+	}
+}
+
+func WithTestPath(testPath string) PresenterOption {
+	return func(p *Presenter) {
+		p.TestPath = testPath
+	}
+}
+
+func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *Presenter {
+	p := &Presenter{
+		ShowIgnored: false,
+		ShowOpen:    true,
+		Input:       sarifDocument,
+		OrgName:     "",
+		TestPath:    "",
+	}
+
+	for _, option := range options {
+		option(p)
+	}
+
+	return p
+}
+
+func (p *Presenter) Render() (string, error) {
+	findings := convertSarifToFindingsList(p.Input)
+	summary := sarif_utils.CreateCodeSummary(&p.Input)
+
+	str := strings.Join([]string{
+		"",
+		renderBold(fmt.Sprintf("Testing %s ...", p.TestPath)),
+		RenderFindings(SortFindings(findings, summary.SeverityOrderAsc), p.ShowIgnored, p.ShowOpen),
+		RenderSummary(summary, p.OrgName, p.TestPath),
+		getFinalTip(p.ShowIgnored, p.ShowOpen),
+		"",
+	}, "\n")
+
+	return str, nil
+}
+
 func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 	var findings []Finding
 	for _, run := range input.Runs {
@@ -113,27 +184,6 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 		}
 	}
 	return findings
-}
-
-type TestMeta struct {
-	OrgName  string
-	TestPath string
-}
-
-func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta, showIgnored bool, showOpen bool) (string, error) {
-	findings := convertSarifToFindingsList(input)
-	summary := sarif_utils.CreateCodeSummary(&input)
-
-	str := strings.Join([]string{
-		"",
-		renderBold(fmt.Sprintf("Testing %s ...", meta.TestPath)),
-		RenderFindings(SortFindings(findings, summary.SeverityOrderAsc), showIgnored, showOpen),
-		RenderSummary(summary, meta),
-		getFinalTip(showIgnored, showOpen),
-		"",
-	}, "\n")
-
-	return str, nil
 }
 
 func getIgnoredProperties(finding Finding, ignoredProperties string) string {

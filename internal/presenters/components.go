@@ -56,6 +56,8 @@ func RenderFinding(finding Finding) string {
 	if finding.Ignored {
 		titlePrefix = "! [ IGNORED ] "
 		ignoredProperties = getIgnoredProperties(finding, ignoredProperties)
+	} else {
+
 	}
 
 	return strings.Join([]string{
@@ -81,7 +83,7 @@ func RenderTip(str string) string {
 	return fmt.Sprintf("\n💡 Tip\n\n%s", str)
 }
 
-func RenderSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
+func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string) string {
 	var buff bytes.Buffer
 	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
 
@@ -129,8 +131,8 @@ func RenderSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
 		OpenIssueCountWithSeverities    string
 		IgnoredIssueCountWithSeverities string
 	}{
-		Org:                             meta.OrgName,
-		TestPath:                        meta.TestPath,
+		Org:                             orgName,
+		TestPath:                        testPath,
 		Type:                            testType,
 		TotalIssueCount:                 totalIssueCount,
 		IgnoreIssueCount:                ignoredIssueCount,
