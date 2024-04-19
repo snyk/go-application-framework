@@ -134,7 +134,7 @@ func TestPresenterSarifResultsPretty_OnlyIgnored(t *testing.T) {
 	require.Contains(t, result, "Ignored Issues")
 	require.Contains(t, result, "! [ IGNORED ] [MEDIUM]")
 	require.Contains(t, result, "Path: src/main.ts, line 58")
-	require.Contains(t, result, "Category: Won't fix")
+	require.Contains(t, result, "Category:   Won't fix")
 	require.Contains(t, result, "Expiration: 15 days")
 	require.Contains(t, result, "Ignored on: February 23, 2024")
 	require.Contains(t, result, "Ignored by: Neil M")

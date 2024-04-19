@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/snyk/code-client-go/sarif"
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
@@ -76,6 +77,28 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 					Label: "Category",
 					Value: strings.Replace(string(suppression.Properties.Category), "wont-fix", "Won't fix", 1),
 				})
+
+				// TODO: Verify date formatting
+				s, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
+
+				if err == nil {
+					ignoreProperties = append(ignoreProperties, IgnoreProperty{
+						Label: "Ignored on",
+						Value: s.Format("January 02, 2006"),
+					})
+				} else {
+					panic(err)
+				}
+
+				ignoreProperties = append(ignoreProperties, IgnoreProperty{
+					Label: "Ignored by",
+					Value: suppression.Properties.IgnoredBy.Name,
+				})
+
+				ignoreProperties = append(ignoreProperties, IgnoreProperty{
+					Label: "Reason",
+					Value: suppression.Justification,
+				})
 			}
 
 			findings = append(findings, Finding{
@@ -142,24 +165,32 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 
 	if showIgnored {
 		response += "\nIgnored Issues\n\n"
+
 		for _, finding := range findings {
 			if !finding.Ignored {
 				continue
 			}
 
 			ignoredProperties := ""
+			labelLength := 0
+
 			for _, property := range finding.IgnoreProperties {
-				ignoredProperties += fmt.Sprintf("   %s: %s\n", property.Label, property.Value)
+				if len(property.Label) > labelLength {
+					labelLength = len(property.Label) + 1
+				}
+			}
+
+			labelAndPropertyFormat := "  %-" + fmt.Sprintf("%d", labelLength) + "s %s\n"
+
+			for _, property := range finding.IgnoreProperties {
+				ignoredProperties += fmt.Sprintf(labelAndPropertyFormat, property.Label+":", property.Value)
 			}
 
 			response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s
 
-   %s
-   Ignored on: February 23, 2024
-   Ignored by: Neil M 
-   Reason:     False positive
+%s
 `, renderInSeverityColor(finding.Severity, fmt.Sprintf("! [ IGNORED ] [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message, ignoredProperties)
 		}
 
