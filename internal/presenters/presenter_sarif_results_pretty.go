@@ -90,7 +90,7 @@ Testing %s ...
 		meta.TestPath,
 		renderFindings(SortFindings(findings, summary.SeverityOrderAsc), showIgnored, showOpen),
 		renderSummary(summary, meta),
-		getTip(),
+		getFinalTip(showIgnored, showOpen),
 	)
 
 	return str, nil
@@ -101,32 +101,63 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 		return ""
 	}
 
-	response := "\nOpen Issues\n\n"
+	response := ""
 
-	for _, finding := range findings {
-		if finding.Ignored && !showIgnored {
-			continue
-		}
+	if showOpen {
+		response += "\nOpen Issues\n\n"
 
-		if !showOpen && !finding.Ignored {
-			continue
-		}
+		for _, finding := range findings {
+			if finding.Ignored {
+				continue
+			}
 
-		response += fmt.Sprintf(` %s %s
+			if !showOpen && !finding.Ignored {
+				continue
+			}
+
+			response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s
 
 `, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
+		}
+	}
+
+	if showIgnored {
+		response += "\nIgnored Issues\n\n"
+		for _, finding := range findings {
+			if !finding.Ignored {
+				continue
+			}
+
+			response += fmt.Sprintf(` %s %s
+   Path: %s, line %d
+   Info: %s
+
+`, renderInSeverityColor(finding.Severity, fmt.Sprintf("! [ IGNORED ] [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
+		}
+
+		response += renderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/")
 	}
 
 	return response
 }
 
-func getTip() string {
-	return `
-💡 Tip
+func getFinalTip(showIgnored bool, showOpen bool) string {
+	tip := "To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option."
+	if showIgnored {
+		tip = `To view ignored issues only, use the --only-ignores option.`
+	}
 
-To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.`
+	if showIgnored && !showOpen {
+		tip = `To view ignored and open issues, use the --include-ignores option.`
+	}
+
+	return renderTip(tip)
+}
+
+func renderTip(str string) string {
+	return fmt.Sprintf("\n💡 Tip\n\n%s", str)
 }
 
 func renderSummary(summary *json_schemas.TestSummary, meta TestMeta) string {

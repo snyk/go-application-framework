@@ -111,5 +111,29 @@ func TestPresenterSarifResultsPretty_IncludeIgnored(t *testing.T) {
 	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, true, true)
 
 	require.Nil(t, err)
+	require.Contains(t, result, "[ IGNORED ] [MEDIUM]")
 	require.Contains(t, result, "Path: src/main.ts, line 58")
+	require.Contains(t, result, "Ignored Issues")
+	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
+	require.Contains(t, result, "To view ignored issues only, use the --only-ignores option.")
+}
+
+func TestPresenterSarifResultsPretty_OnlyIgnored(t *testing.T) {
+	fd, err := os.Open("testdata/with-ignores.json")
+	require.Nil(t, err)
+
+	var input sarif.SarifDocument
+
+	err = json.NewDecoder(fd).Decode(&input)
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	result, err := presenters.PresenterSarifResultsPretty(input, testMeta, true, false)
+
+	require.Nil(t, err)
+	require.Contains(t, result, "[ IGNORED ] [MEDIUM]")
+	require.Contains(t, result, "Path: src/main.ts, line 58")
+	require.Contains(t, result, "Ignored Issues")
+	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
+	require.Contains(t, result, "To view ignored and open issues, use the --include-ignores option.")
 }
