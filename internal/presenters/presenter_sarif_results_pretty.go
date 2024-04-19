@@ -63,9 +63,15 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 			var ignoreProperties []IgnoreProperty
 
 			for _, suppression := range result.Suppressions {
+
+				expiration := ""
+				if suppression.Properties.Expiration != nil {
+					expiration = *suppression.Properties.Expiration
+				}
+
 				ignoreProperties = append(ignoreProperties, IgnoreProperty{
 					Label: "Expiration",
-					Value: fmt.Sprintf("%s", *suppression.Properties.Expiration),
+					Value: fmt.Sprintf("%s", expiration),
 				})
 
 				ignoreProperties = append(ignoreProperties, IgnoreProperty{
@@ -81,8 +87,6 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 						Label: "Ignored on",
 						Value: s.Format("January 02, 2006"),
 					})
-				} else {
-					panic(err)
 				}
 
 				ignoreProperties = append(ignoreProperties, IgnoreProperty{

@@ -224,6 +224,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should print human readable output for sarif data without ignored rules", func(t *testing.T) {
+		ignoreExpiry := "13 days"
 		input := sarif.SarifDocument{
 			Runs: []sarif.Run{
 				{
@@ -236,9 +237,18 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 					Results: []sarif.Result{
 						{Level: "error"},
 						{
-							Level:        "error",
-							Suppressions: make([]sarif.Suppression, 1),
-							RuleID:       "rule1",
+							Level: "error",
+							Suppressions: []sarif.Suppression{
+								{
+									Justification: "wont-fix",
+									Properties: sarif.SuppressionProperties{
+										Category:   "category",
+										Expiration: &ignoreExpiry,
+										IgnoredOn:  "ignoredOn",
+									},
+								},
+							},
+							RuleID: "rule1",
 						},
 					},
 					Tool: sarif.Tool{
