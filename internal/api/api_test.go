@@ -148,7 +148,10 @@ func newMockOrgResponse(t *testing.T) contract.OrganizationsResponse {
 }
 `
 	var response contract.OrganizationsResponse
-	_ = json.Unmarshal([]byte(orgJson), &response)
+	err := json.Unmarshal([]byte(orgJson), &response)
+	if err != nil {
+		t.Fatal("can't create mock response")
+	}
 	return response
 }
 
