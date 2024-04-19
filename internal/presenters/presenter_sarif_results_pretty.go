@@ -138,7 +138,6 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 			})
 
 			for _, suppression := range result.Suppressions {
-
 				expiration := ""
 				if suppression.Properties.Expiration != nil {
 					expiration = *suppression.Properties.Expiration
@@ -146,7 +145,7 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 
 				ignoreProperties = append(ignoreProperties, FindingProperty{
 					Label: "Expiration",
-					Value: fmt.Sprintf("%s", expiration),
+					Value: expiration,
 				})
 
 				ignoreProperties = append(ignoreProperties, FindingProperty{

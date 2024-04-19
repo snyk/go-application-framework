@@ -50,14 +50,13 @@ func RenderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 }
 
 func RenderFinding(finding Finding) string {
-	properties := "\n"
 	titlePrefix := "✗ "
 
 	if finding.Ignored {
 		titlePrefix = "! [ IGNORED ] "
 	}
 
-	properties = getFormattedProperties(finding.Properties)
+	properties := getFormattedProperties(finding.Properties)
 
 	return strings.Join([]string{
 		fmt.Sprintf(" %s %s",
