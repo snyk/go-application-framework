@@ -151,12 +151,7 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 			if finding.Ignored {
 				continue
 			}
-
-			response += fmt.Sprintf(` %s %s
-   Path: %s, line %d
-   Info: %s
-
-`, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
+			response += renderFinding(finding)
 		}
 	}
 
@@ -171,34 +166,51 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 			if !finding.Ignored {
 				continue
 			}
-
-			ignoredProperties := ""
-			labelLength := 0
-
-			for _, property := range finding.IgnoreProperties {
-				if len(property.Label) > labelLength {
-					labelLength = len(property.Label) + 1
-				}
-			}
-
-			labelAndPropertyFormat := "  %-" + fmt.Sprintf("%d", labelLength) + "s %s\n"
-
-			for _, property := range finding.IgnoreProperties {
-				ignoredProperties += fmt.Sprintf(labelAndPropertyFormat, property.Label+":", property.Value)
-			}
-
-			response += fmt.Sprintf(` %s %s
-   Path: %s, line %d
-   Info: %s
-
-%s
-`, renderInSeverityColor(finding.Severity, fmt.Sprintf("! [ IGNORED ] [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message, ignoredProperties)
+			response += renderFinding(finding)
 		}
 
 		response += renderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/")
 	}
 
 	return response
+}
+
+func renderFinding(finding Finding) string {
+	ignoredProperties := "\n"
+	titlePrefix := "✗ "
+
+	if finding.Ignored {
+		titlePrefix = "! [ IGNORED ] "
+		ignoredProperties = getIgnoredProperties(finding, ignoredProperties)
+	}
+
+	return strings.Join([]string{
+		fmt.Sprintf(" %s %s",
+			renderInSeverityColor(finding.Severity, fmt.Sprintf("%s[%s]", titlePrefix, strings.ToUpper(finding.Severity))),
+			renderBold(finding.Title),
+		),
+		fmt.Sprintf("   Path: %s, line %d", finding.Path, finding.Line),
+		fmt.Sprintf("   Info: %s", finding.Message),
+		ignoredProperties,
+	}, "\n")
+}
+
+func getIgnoredProperties(finding Finding, ignoredProperties string) string {
+	labelLength := 0
+
+	for _, property := range finding.IgnoreProperties {
+		if len(property.Label) > labelLength {
+			labelLength = len(property.Label) + 1
+		}
+	}
+
+	labelAndPropertyFormat := "   %-" + fmt.Sprintf("%d", labelLength) + "s %s\n"
+
+	for _, property := range finding.IgnoreProperties {
+		ignoredProperties += fmt.Sprintf(labelAndPropertyFormat, property.Label+":", property.Value)
+	}
+
+	return ignoredProperties
 }
 
 func getFinalTip(showIgnored bool, showOpen bool) string {
