@@ -15,13 +15,19 @@ import (
 )
 
 type Finding struct {
-	ID       string
-	Severity string
-	Title    string
-	Message  string
-	Path     string
-	Line     int
-	Ignored  bool
+	ID               string
+	Severity         string
+	Title            string
+	Message          string
+	Path             string
+	Line             int
+	Ignored          bool
+	IgnoreProperties []IgnoreProperty
+}
+
+type IgnoreProperty struct {
+	Label string
+	Value string
 }
 
 type FindingsSummary struct {
@@ -58,14 +64,29 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 
 			isIgnored := len(result.Suppressions) > 0
 
+			var ignoreProperties []IgnoreProperty
+
+			for _, suppression := range result.Suppressions {
+				ignoreProperties = append(ignoreProperties, IgnoreProperty{
+					Label: "Expiration",
+					Value: fmt.Sprintf("%s", *suppression.Properties.Expiration),
+				})
+
+				ignoreProperties = append(ignoreProperties, IgnoreProperty{
+					Label: "Category",
+					Value: strings.Replace(string(suppression.Properties.Category), "wont-fix", "Won't fix", 1),
+				})
+			}
+
 			findings = append(findings, Finding{
-				ID:       result.RuleID,
-				Severity: severity,
-				Title:    title,
-				Path:     location.PhysicalLocation.ArtifactLocation.URI,
-				Line:     location.PhysicalLocation.Region.StartLine,
-				Message:  result.Message.Text,
-				Ignored:  isIgnored,
+				ID:               result.RuleID,
+				Severity:         severity,
+				Title:            title,
+				Path:             location.PhysicalLocation.ArtifactLocation.URI,
+				Line:             location.PhysicalLocation.Region.StartLine,
+				Message:          result.Message.Text,
+				Ignored:          isIgnored,
+				IgnoreProperties: ignoreProperties,
 			})
 		}
 	}
@@ -126,11 +147,20 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 				continue
 			}
 
+			ignoredProperties := ""
+			for _, property := range finding.IgnoreProperties {
+				ignoredProperties += fmt.Sprintf("   %s: %s\n", property.Label, property.Value)
+			}
+
 			response += fmt.Sprintf(` %s %s
    Path: %s, line %d
    Info: %s
 
-`, renderInSeverityColor(finding.Severity, fmt.Sprintf("! [ IGNORED ] [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
+   %s
+   Ignored on: February 23, 2024
+   Ignored by: Neil M 
+   Reason:     False positive
+`, renderInSeverityColor(finding.Severity, fmt.Sprintf("! [ IGNORED ] [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message, ignoredProperties)
 		}
 
 		response += renderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/")

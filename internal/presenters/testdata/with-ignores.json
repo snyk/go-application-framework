@@ -673,7 +673,7 @@
                 "kind": "inSource",
                 "properties": {
                   "category": "wont-fix",
-                  "expiration": "13 days",
+                  "expiration": "15 days",
                   "ignoredOn": "2024-02-23T16:08:25Z",
                   "ignoredBy": {
                     "name": "Neil M",
