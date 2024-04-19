@@ -163,6 +163,10 @@ func renderFindings(findings []Finding, showIgnored bool, showOpen bool) string 
 		}
 	}
 
+	if showOpen && showIgnored {
+		response += renderDivider()
+	}
+
 	if showIgnored {
 		response += "\nIgnored Issues\n\n"
 
@@ -211,6 +215,10 @@ func getFinalTip(showIgnored bool, showOpen bool) string {
 	}
 
 	return renderTip(tip)
+}
+
+func renderDivider() string {
+	return "─────────────────────────────────────────────────────\n"
 }
 
 func renderTip(str string) string {

@@ -116,6 +116,8 @@ func TestPresenterSarifResultsPretty_IncludeIgnored(t *testing.T) {
 	require.Contains(t, result, "Ignored Issues")
 	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
 	require.Contains(t, result, "To view ignored issues only, use the --only-ignores option.")
+
+	snaps.MatchSnapshot(t, result)
 }
 
 func TestPresenterSarifResultsPretty_OnlyIgnored(t *testing.T) {

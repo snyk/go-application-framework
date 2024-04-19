@@ -261,3 +261,62 @@ To edit or remove the ignore please go to: https://app.snyk.io/
 To view ignored and open issues, use the --include-ignores option.
 
 ---
+
+[TestPresenterSarifResultsPretty_IncludeIgnored - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [LOW] Hardcoded Secret
+   Path: test/service-tests/service-utils/knex.service-spec.ts, line 72
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+ ✗ [LOW] Hardcoded Secret
+   Path: test/service-tests/service-utils/knex.service-spec.ts, line 76
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+ ✗ [MEDIUM] Cleartext Transmission of Sensitive Information
+   Path: src/main.ts, line 59
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+ ✗ [HIGH] Hardcoded Secret
+   Path: scripts/db/migrations/20230811153738_add_generated_grouping_columns_to_collections_table.ts, line 4
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+─────────────────────────────────────────────────────
+
+Ignored Issues
+
+ ! [ IGNORED ] [MEDIUM] Cleartext Transmission of Sensitive Information
+   Path: src/main.ts, line 58
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+  Expiration: 15 days
+  Category:   Won't fix
+  Ignored on: February 23, 2024
+  Ignored by: Neil M
+  Reason:     False positive
+
+
+💡 Tip
+
+Ignores are currently managed in the Snyk Web UI.
+To edit or remove the ignore please go to: https://app.snyk.io/
+╭─────────────────────────────────────────────────────╮
+│ Test Summary                                        │
+│                                                     │
+│   Organization:      test-org                       │
+│   Test type:         Static code analysis           │
+│   Project path:      /path/to/project               │
+│                                                     │
+│   Total issues:   5                                 │
+│   Ignored issues: 1 [ 0 HIGH  1 MEDIUM  0 LOW ]     │
+│   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]     │
+╰─────────────────────────────────────────────────────╯
+
+💡 Tip
+
+To view ignored issues only, use the --only-ignores option.
+
+---
