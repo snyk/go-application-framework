@@ -25,9 +25,7 @@ type snykApiClient struct {
 }
 
 func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
-	apiVersion := "version=2024-03-12"
-	escapedSlug := url2.PathEscape(slugName)
-	url := fmt.Sprintf("%s/rest/orgs?%s&slug=%s", a.url, apiVersion, escapedSlug)
+	url := GetOrgsApiURL(a.url, slugName)
 
 	res, err := a.client.Get(url)
 	if err != nil {
@@ -47,11 +45,19 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 	}
 
 	organizations := response.Organizations
-	if len(organizations) == 1 {
-		return organizations[0].Id, nil
+	for _, organization := range organizations {
+		if organization.Attributes.Slug == slugName {
+			return organization.Id, nil
+		}
 	}
-
 	return "", fmt.Errorf("org ID not found for slug %v", slugName)
+}
+
+func GetOrgsApiURL(baseURL, slugName string) string {
+	apiVersion := "version=2024-03-12"
+	escapedSlug := url2.PathEscape(slugName)
+	url := fmt.Sprintf("%s/rest/orgs?%s&slug=%s", baseURL, apiVersion, escapedSlug)
+	return url
 }
 
 func (a *snykApiClient) GetDefaultOrgId() (string, error) {

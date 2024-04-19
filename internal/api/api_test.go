@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"encoding/json"
+	"github.com/pkg/errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,12 +36,12 @@ func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	// Arrange
 	t.Parallel()
 	orgResponse := newMockOrgResponse(t)
-	server := setupSingleReponseServer(t, "/v1/orgs", orgResponse)
-	apiClient := api.NewApi(server.URL, http.DefaultClient)
 
 	for _, org := range orgResponse.Organizations {
-		expectedOrgId := org.Id
 		slugName := org.Attributes.Slug
+		expectedOrgId := org.Id
+		server := setupSingleReponseServer(t, api.GetOrgsApiURL("", slugName), orgResponse)
+		apiClient := api.NewApi(server.URL, http.DefaultClient)
 
 		// Act
 		orgId, err := apiClient.GetOrgIdFromSlug(slugName)
@@ -93,64 +94,42 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 
 func newMockOrgResponse(t *testing.T) contract.OrganizationsResponse {
 	t.Helper()
-	/*
-		return contract.OrganizationsResponse{
-				Organizations: []contract.Organization{
-					{
-						Name:  "defaultOrg",
-						ID:    "27ce75bf-5794-4bfd-9ae7-e779f465abdf",
-						Slug:  "default-org",
-						URL:   "https://api.snyk.io/org/default-org",
-						Group: nil,
-					},
-					{
-						Name: "secondOrg",
-						ID:   "ebb351b1-e883-4a07-9ebb-75a7d22b56a8",
-						Slug: "second-org",
-						URL:  "https://api.snyk.io/org/second-org",
-						Group: &contract.Group{
-							Name: "ABCD INC",
-							ID:   "58eec199-6ec0-4881-9d0d-9f62ebc6b6ab",
+	orgJson := `
+				{
+					"data": [
+						{
+							"id": "27ce75bf-5794-4bfd-9ae7-e779f465abdf",
+							"type": "org",
+							"attributes": {
+								"is_personal": true,
+								"name": "defaultOrg",
+								"slug": "default-org"
+							}
 						},
+						{
+							"id": "ebb351b1-e883-4a07-9ebb-75a7d22b56a8",
+							"type": "org",
+							"attributes": {
+								"is_personal": true,
+								"name": "secondOrg",
+								"slug": "second-org",
+								"groupId": "58eec199-6ec0-4881-9d0d-9f62ebc6b6ab"
+							}
+						}
+					],
+					"jsonapi": {
+						"version": "1.0"
 					},
-				},
-			}
-	*/
-	orgJson := `{
-  "data": [
-    {
-      "id": "27ce75bf-5794-4bfd-9ae7-e779f465abdf",
-      "type": "org",
-      "attributes": {
-        "is_personal": true,
-        "name": "defaultOrg",
-        "slug": "default-org"
-      },
-    },
-	{
-      "id": "ebb351b1-e883-4a07-9ebb-75a7d22b56a8",
-      "type": "org",
-      "attributes": {
-        "is_personal": true,
-        "name": "secondOrg",
-        "slug": "second-org"
-		"groupId": "58eec199-6ec0-4881-9d0d-9f62ebc6b6ab"
-      },
-    },
-  ],
-  "jsonapi": {
-    "version": "1.0"
-  },
-  "links": {
-    "self": "/rest/orgs?version=2024-04-11",
-    "first": "/rest/orgs?version=2024-04-11"
-  }
-}
-`
+					"links": {
+						"self": "/rest/orgs?version=2024-04-11",
+						"first": "/rest/orgs?version=2024-04-11"
+					}
+				}
+				`
 	var response contract.OrganizationsResponse
 	err := json.Unmarshal([]byte(orgJson), &response)
 	if err != nil {
-		t.Fatal("can't create mock response")
+		t.Fatal(errors.Wrap(err, "cannot create mock response"))
 	}
 	return response
 }
