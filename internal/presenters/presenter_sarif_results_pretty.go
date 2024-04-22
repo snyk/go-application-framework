@@ -117,9 +117,9 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 
 			isIgnored := len(result.Suppressions) > 0
 
-			var ignoreProperties []FindingProperty
+			var findingProperties []FindingProperty
 
-			ignoreProperties = append(ignoreProperties, FindingProperty{
+			findingProperties = append(findingProperties, FindingProperty{
 				Label: "Path",
 				Value: fmt.Sprintf("%s, line %d",
 					location.PhysicalLocation.ArtifactLocation.URI,
@@ -127,12 +127,12 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				),
 			})
 
-			ignoreProperties = append(ignoreProperties, FindingProperty{
+			findingProperties = append(findingProperties, FindingProperty{
 				Label: "Info",
 				Value: result.Message.Text,
 			})
 
-			ignoreProperties = append(ignoreProperties, FindingProperty{
+			findingProperties = append(findingProperties, FindingProperty{
 				Label: "",
 				Value: "",
 			})
@@ -143,12 +143,12 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 					expiration = *suppression.Properties.Expiration
 				}
 
-				ignoreProperties = append(ignoreProperties, FindingProperty{
+				findingProperties = append(findingProperties, FindingProperty{
 					Label: "Expiration",
 					Value: expiration,
 				})
 
-				ignoreProperties = append(ignoreProperties, FindingProperty{
+				findingProperties = append(findingProperties, FindingProperty{
 					Label: "Category",
 					Value: strings.Replace(string(suppression.Properties.Category), "wont-fix", "Won't fix", 1),
 				})
@@ -157,18 +157,18 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				s, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
 
 				if err == nil {
-					ignoreProperties = append(ignoreProperties, FindingProperty{
+					findingProperties = append(findingProperties, FindingProperty{
 						Label: "Ignored on",
 						Value: s.Format("January 02, 2006"),
 					})
 				}
 
-				ignoreProperties = append(ignoreProperties, FindingProperty{
+				findingProperties = append(findingProperties, FindingProperty{
 					Label: "Ignored by",
 					Value: suppression.Properties.IgnoredBy.Name,
 				})
 
-				ignoreProperties = append(ignoreProperties, FindingProperty{
+				findingProperties = append(findingProperties, FindingProperty{
 					Label: "Reason",
 					Value: suppression.Justification,
 				})
@@ -179,7 +179,7 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				Severity:   severity,
 				Title:      title,
 				Ignored:    isIgnored,
-				Properties: ignoreProperties,
+				Properties: findingProperties,
 			})
 		}
 	}
