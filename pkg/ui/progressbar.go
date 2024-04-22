@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -63,14 +63,17 @@ type ProgressBar interface {
 func newProgressBar(writer io.Writer) *consoleProgressBar {
 	p := &consoleProgressBar{writer: writer}
 	p.active.Store(true)
+	p.initialized = false
 	return p
 }
 
 type consoleProgressBar struct {
-	writer   io.Writer
-	title    string
-	position int
-	active   atomic.Bool
+	writer      io.Writer
+	title       string
+	state       int
+	progress    atomic.Pointer[float64]
+	active      atomic.Bool
+	initialized bool
 }
 
 func (p *consoleProgressBar) UpdateProgress(progress float64) error {
@@ -78,31 +81,54 @@ func (p *consoleProgressBar) UpdateProgress(progress float64) error {
 		return fmt.Errorf("progress not active")
 	}
 
-	position := 0
-	progressString := ""
-	if progress >= 0 {
-		progress = math.Max(0, math.Min(1, progress))
-		position = int(progress * barWidth)
-		progressString = fmt.Sprintf("%3.1f%% ", progress*100)
-	} else {
-		p.position++
-		position = p.position % barWidth
+	p.progress.Store(&progress)
+
+	if !p.initialized {
+		p.initialized = true
+		go p.update()
 	}
 
-	_, err := fmt.Fprint(p.writer, clearLine)
-	if err != nil {
-		return err
-	}
-	barCount := int(math.Max(0, float64(barWidth-position-1)))
-
-	progressBar := strings.Repeat(barCharacter, position) + currentPosition + strings.Repeat(" ", barCount)
-	_, err = fmt.Fprint(p.writer, "[", progressBar, "] ", progressString, p.title)
-	return err
+	return nil
 }
 
 func (p *consoleProgressBar) SetTitle(title string) { p.title = title }
 
 func (p *consoleProgressBar) Clear() error {
+	if !p.active.Load() {
+		return nil
+	}
 	p.active.Store(false)
 	return utils.ErrorOf(fmt.Fprint(p.writer, clearLine))
+}
+
+func (p *consoleProgressBar) update() {
+	for {
+		if !p.active.Load() {
+			break
+		}
+
+		progressString := " "
+		progress := *p.progress.Load()
+		if progress >= 0 {
+			progress := math.Max(0, math.Min(1, progress))
+			progressString = fmt.Sprintf("%3.1f%% ", progress*100)
+		}
+
+		p.state++
+		elementSet := []string{"-", "\\", "|", "/"}
+		progressElement := elementSet[p.state%len(elementSet)]
+
+		_, err := fmt.Fprint(p.writer, clearLine)
+		if err != nil {
+			break
+		}
+
+		_, err = fmt.Fprint(p.writer, progressElement, " ", progressString, p.title)
+		if err != nil {
+			break
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
+
 }
