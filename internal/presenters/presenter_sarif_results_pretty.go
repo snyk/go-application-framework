@@ -74,14 +74,20 @@ func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOpt
 }
 
 func (p *Presenter) Render() (string, error) {
-	findings := convertSarifToFindingsList(p.Input)
-	summary := sarif_utils.CreateCodeSummary(&p.Input)
+	summaryData := sarif_utils.CreateCodeSummary(&p.Input)
+	findings :=
+		SortFindings(convertSarifToFindingsList(p.Input), summaryData.SeverityOrderAsc)
+	summaryOutput, err := RenderSummary(summaryData, p.OrgName, p.TestPath)
+
+	if err != nil {
+		return "", err
+	}
 
 	str := strings.Join([]string{
 		"",
 		renderBold(fmt.Sprintf("Testing %s ...", p.TestPath)),
-		RenderFindings(SortFindings(findings, summary.SeverityOrderAsc), p.ShowIgnored, p.ShowOpen),
-		RenderSummary(summary, p.OrgName, p.TestPath),
+		RenderFindings(findings, p.ShowIgnored, p.ShowOpen),
+		summaryOutput,
 		getFinalTip(p.ShowIgnored, p.ShowOpen),
 		"",
 	}, "\n")
@@ -117,9 +123,9 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 
 			isIgnored := len(result.Suppressions) > 0
 
-			var findingProperties []FindingProperty
+			var properties []FindingProperty
 
-			findingProperties = append(findingProperties, FindingProperty{
+			properties = append(properties, FindingProperty{
 				Label: "Path",
 				Value: fmt.Sprintf("%s, line %d",
 					location.PhysicalLocation.ArtifactLocation.URI,
@@ -127,12 +133,12 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				),
 			})
 
-			findingProperties = append(findingProperties, FindingProperty{
+			properties = append(properties, FindingProperty{
 				Label: "Info",
 				Value: result.Message.Text,
 			})
 
-			findingProperties = append(findingProperties, FindingProperty{
+			properties = append(properties, FindingProperty{
 				Label: "",
 				Value: "",
 			})
@@ -143,12 +149,12 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 					expiration = *suppression.Properties.Expiration
 				}
 
-				findingProperties = append(findingProperties, FindingProperty{
+				properties = append(properties, FindingProperty{
 					Label: "Expiration",
 					Value: expiration,
 				})
 
-				findingProperties = append(findingProperties, FindingProperty{
+				properties = append(properties, FindingProperty{
 					Label: "Category",
 					Value: strings.Replace(string(suppression.Properties.Category), "wont-fix", "Won't fix", 1),
 				})
@@ -157,18 +163,18 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				s, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
 
 				if err == nil {
-					findingProperties = append(findingProperties, FindingProperty{
+					properties = append(properties, FindingProperty{
 						Label: "Ignored on",
 						Value: s.Format("January 02, 2006"),
 					})
 				}
 
-				findingProperties = append(findingProperties, FindingProperty{
+				properties = append(properties, FindingProperty{
 					Label: "Ignored by",
 					Value: suppression.Properties.IgnoredBy.Name,
 				})
 
-				findingProperties = append(findingProperties, FindingProperty{
+				properties = append(properties, FindingProperty{
 					Label: "Reason",
 					Value: suppression.Justification,
 				})
@@ -179,7 +185,7 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				Severity:   severity,
 				Title:      title,
 				Ignored:    isIgnored,
-				Properties: findingProperties,
+				Properties: properties,
 			})
 		}
 	}

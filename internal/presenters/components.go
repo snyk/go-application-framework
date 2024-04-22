@@ -102,7 +102,7 @@ func RenderTip(str string) string {
 	return fmt.Sprintf("\n💡 Tip\n\n%s", str)
 }
 
-func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string) string {
+func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string) (string, error) {
 	var buff bytes.Buffer
 	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
 
@@ -159,8 +159,8 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 		IgnoredIssueCountWithSeverities: ignoredIssueCountWithSeverities,
 	})
 	if err != nil {
-		return fmt.Sprintf("failed to execute summary template: %v", err)
+		return "", fmt.Errorf("failed to generete test summary from template: %w", err)
 	}
 
-	return boxStyle.Render(buff.String())
+	return boxStyle.Render(buff.String()), nil
 }
