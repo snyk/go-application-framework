@@ -224,75 +224,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should print human readable output for sarif data without ignored rules", func(t *testing.T) {
-		ignoreExpiry := "13 days"
-		input := sarif.SarifDocument{
-			Runs: []sarif.Run{
-				{
-					Results: []sarif.Result{
-						{Level: "error"},
-						{Level: "warning"},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{Level: "error"},
-						{
-							Level: "error",
-							Suppressions: []sarif.Suppression{
-								{
-									Justification: "wont-fix",
-									Properties: sarif.SuppressionProperties{
-										Category:   "category",
-										Expiration: &ignoreExpiry,
-										IgnoredOn:  "ignoredOn",
-									},
-								},
-							},
-							RuleID: "rule1",
-						},
-					},
-					Tool: sarif.Tool{
-						Driver: sarif.Driver{
-							Rules: []sarif.Rule{
-								{
-									ID:   "rule1",
-									Name: "Ignored rule",
-									ShortDescription: sarif.ShortDescription{
-										Text: "Ignored rule",
-									},
-									Help: sarif.Help{
-										Text: "Rule 1 help",
-									},
-									DefaultConfiguration: sarif.DefaultConfiguration{
-										Level: "error",
-									},
-									Properties: sarif.RuleProperties{
-										Tags: []string{"tag1", "tag2"},
-										ShortDescription: sarif.ShortDescription{
-											Text: "Rule 1 description",
-										},
-										Help: struct {
-											Markdown string `json:"markdown"`
-											Text     string `json:"text"`
-										}{Markdown: "", Text: ""},
-										Categories:         []string{},
-										ExampleCommitFixes: []sarif.ExampleCommitFix{},
-										Precision:          "",
-										RepoDatasetSize:    0,
-										Cwe:                []string{""},
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
-					},
-				},
-			},
-		}
+		input := getSarifInput()
 
 		rawSarif, err := json.Marshal(input)
 		assert.Nil(t, err)
@@ -316,95 +248,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should print human readable output for sarif data including ignored data", func(t *testing.T) {
-		input := sarif.SarifDocument{
-			Runs: []sarif.Run{
-				{
-					Results: []sarif.Result{
-						{Level: "error"},
-						{Level: "warning"},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{Level: "error",
-							RuleID: "openIssue",
-						},
-						{
-							Level:        "error",
-							Suppressions: make([]sarif.Suppression, 1),
-							RuleID:       "rule1",
-						},
-					},
-					Tool: sarif.Tool{
-						Driver: sarif.Driver{
-							Rules: []sarif.Rule{
-								{
-									ID:   "rule1",
-									Name: "Ignored rule",
-									ShortDescription: sarif.ShortDescription{
-										Text: "Ignored rule",
-									},
-									Help: sarif.Help{
-										Text: "Rule 1 help",
-									},
-									DefaultConfiguration: sarif.DefaultConfiguration{
-										Level: "error",
-									},
-									Properties: sarif.RuleProperties{
-										Tags: []string{"tag1", "tag2"},
-										ShortDescription: sarif.ShortDescription{
-											Text: "Rule 1 description",
-										},
-										Help: struct {
-											Markdown string `json:"markdown"`
-											Text     string `json:"text"`
-										}{Markdown: "", Text: ""},
-										Categories:         []string{},
-										ExampleCommitFixes: []sarif.ExampleCommitFix{},
-										Precision:          "",
-										RepoDatasetSize:    0,
-										Cwe:                []string{""},
-									},
-								},
-								{
-									ID:   "openIssue",
-									Name: "This rule is open",
-									ShortDescription: sarif.ShortDescription{
-										Text: "This rule is open",
-									},
-									Help: sarif.Help{
-										Text: "",
-									},
-									DefaultConfiguration: sarif.DefaultConfiguration{
-										Level: "error",
-									},
-									Properties: sarif.RuleProperties{
-										Tags: []string{"tag1", "tag2"},
-										ShortDescription: sarif.ShortDescription{
-											Text: "",
-										},
-										Help: struct {
-											Markdown string `json:"markdown"`
-											Text     string `json:"text"`
-										}{Markdown: "", Text: ""},
-										Categories:         []string{},
-										ExampleCommitFixes: []sarif.ExampleCommitFix{},
-										Precision:          "",
-										RepoDatasetSize:    0,
-										Cwe:                []string{""},
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
-					},
-				},
-			},
-		}
+		input := getSarifInput()
 
 		rawSarif, err := json.Marshal(input)
 		assert.Nil(t, err)
@@ -431,96 +275,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should print human readable output for sarif data only showing ignored data", func(t *testing.T) {
-		input := sarif.SarifDocument{
-			Runs: []sarif.Run{
-				{
-					Results: []sarif.Result{
-						{Level: "error"},
-						{Level: "warning"},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{
-							Level:  "error",
-							RuleID: "openIssue",
-						},
-						{
-							Level:        "error",
-							Suppressions: make([]sarif.Suppression, 1),
-							RuleID:       "rule1",
-						},
-					},
-					Tool: sarif.Tool{
-						Driver: sarif.Driver{
-							Rules: []sarif.Rule{
-								{
-									ID:   "rule1",
-									Name: "Ignored rule",
-									ShortDescription: sarif.ShortDescription{
-										Text: "Ignored rule",
-									},
-									Help: sarif.Help{
-										Text: "Rule 1 help",
-									},
-									DefaultConfiguration: sarif.DefaultConfiguration{
-										Level: "error",
-									},
-									Properties: sarif.RuleProperties{
-										Tags: []string{"tag1", "tag2"},
-										ShortDescription: sarif.ShortDescription{
-											Text: "Rule 1 description",
-										},
-										Help: struct {
-											Markdown string `json:"markdown"`
-											Text     string `json:"text"`
-										}{Markdown: "", Text: ""},
-										Categories:         []string{},
-										ExampleCommitFixes: []sarif.ExampleCommitFix{},
-										Precision:          "",
-										RepoDatasetSize:    0,
-										Cwe:                []string{""},
-									},
-								},
-								{
-									ID:   "openIssue",
-									Name: "This rule is open",
-									ShortDescription: sarif.ShortDescription{
-										Text: "This rule is open",
-									},
-									Help: sarif.Help{
-										Text: "",
-									},
-									DefaultConfiguration: sarif.DefaultConfiguration{
-										Level: "error",
-									},
-									Properties: sarif.RuleProperties{
-										Tags: []string{"tag1", "tag2"},
-										ShortDescription: sarif.ShortDescription{
-											Text: "",
-										},
-										Help: struct {
-											Markdown string `json:"markdown"`
-											Text     string `json:"text"`
-										}{Markdown: "", Text: ""},
-										Categories:         []string{},
-										ExampleCommitFixes: []sarif.ExampleCommitFix{},
-										Precision:          "",
-										RepoDatasetSize:    0,
-										Cwe:                []string{""},
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
-					},
-				},
-			},
-		}
+		input := getSarifInput()
 
 		rawSarif, err := json.Marshal(input)
 		assert.Nil(t, err)
@@ -545,4 +300,96 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
 	})
+}
+
+func getSarifInput() sarif.SarifDocument {
+	return sarif.SarifDocument{
+		Runs: []sarif.Run{
+			{
+				Results: []sarif.Result{
+					{Level: "error"},
+					{Level: "warning"},
+				},
+			},
+			{
+				Results: []sarif.Result{
+					{Level: "error",
+						RuleID: "openIssue",
+					},
+					{
+						Level:        "error",
+						Suppressions: make([]sarif.Suppression, 1),
+						RuleID:       "rule1",
+					},
+				},
+				Tool: sarif.Tool{
+					Driver: sarif.Driver{
+						Rules: []sarif.Rule{
+							{
+								ID:   "rule1",
+								Name: "Ignored rule",
+								ShortDescription: sarif.ShortDescription{
+									Text: "Ignored rule",
+								},
+								Help: sarif.Help{
+									Text: "Rule 1 help",
+								},
+								DefaultConfiguration: sarif.DefaultConfiguration{
+									Level: "error",
+								},
+								Properties: sarif.RuleProperties{
+									Tags: []string{"tag1", "tag2"},
+									ShortDescription: sarif.ShortDescription{
+										Text: "Rule 1 description",
+									},
+									Help: struct {
+										Markdown string `json:"markdown"`
+										Text     string `json:"text"`
+									}{Markdown: "", Text: ""},
+									Categories:         []string{},
+									ExampleCommitFixes: []sarif.ExampleCommitFix{},
+									Precision:          "",
+									RepoDatasetSize:    0,
+									Cwe:                []string{""},
+								},
+							},
+							{
+								ID:   "openIssue",
+								Name: "This rule is open",
+								ShortDescription: sarif.ShortDescription{
+									Text: "This rule is open",
+								},
+								Help: sarif.Help{
+									Text: "",
+								},
+								DefaultConfiguration: sarif.DefaultConfiguration{
+									Level: "error",
+								},
+								Properties: sarif.RuleProperties{
+									Tags: []string{"tag1", "tag2"},
+									ShortDescription: sarif.ShortDescription{
+										Text: "",
+									},
+									Help: struct {
+										Markdown string `json:"markdown"`
+										Text     string `json:"text"`
+									}{Markdown: "", Text: ""},
+									Categories:         []string{},
+									ExampleCommitFixes: []sarif.ExampleCommitFix{},
+									Precision:          "",
+									RepoDatasetSize:    0,
+									Cwe:                []string{""},
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				Results: []sarif.Result{
+					{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
+				},
+			},
+		},
+	}
 }
