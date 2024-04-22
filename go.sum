@@ -324,6 +324,10 @@ github.com/skeema/knownhosts v1.2.1 h1:SHWdIUa82uGZz+F+47k8SY4QhhI291cXCpopT1lK2
 github.com/skeema/knownhosts v1.2.1/go.mod h1:xYbVRSPxqBZFrdmDyMmsOs+uX1UZC3nTN3ThzgDxUwo=
 github.com/snyk/code-client-go v1.4.2 h1:Vy27Xr6CVAs0qKZlU8I/fxWWI6X2ppzan6IZnUJYmvg=
 github.com/snyk/code-client-go v1.4.2/go.mod h1:Kkr7pQc8ItsBZSYd6A1S4r4VHO6HNyTWZsqi18sAtwQ=
+github.com/snyk/code-client-go v1.4.4 h1:QQLHCwJUXLVWSINI+nBZiYqCtt5RuyWy5duk3nPAf5I=
+github.com/snyk/code-client-go v1.4.4/go.mod h1:Kkr7pQc8ItsBZSYd6A1S4r4VHO6HNyTWZsqi18sAtwQ=
+github.com/snyk/code-client-go v1.4.5 h1:r112huvRXv6gsHNUkeFLMbEz8dOLBv+v/hZDJfuPZaA=
+github.com/snyk/code-client-go v1.4.5/go.mod h1:Kkr7pQc8ItsBZSYd6A1S4r4VHO6HNyTWZsqi18sAtwQ=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/spf13/afero v1.9.2 h1:j49Hj62F0n+DaZ1dDCvhABaPNSGNkt32oRFxI33IEMw=
