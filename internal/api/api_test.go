@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
@@ -41,7 +42,9 @@ func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	for _, org := range orgResponse.Organizations {
 		slugName := org.Attributes.Slug
 		expectedOrgId := org.Id
-		server := setupSingleReponseServer(t, api.GetOrgsApiURL("", slugName), orgResponse)
+		u, err := api.OrgsApiURL("", slugName)
+		require.NoError(t, err)
+		server := setupSingleReponseServer(t, u.String(), orgResponse)
 		apiClient := api.NewApi(server.URL, http.DefaultClient)
 
 		// Act
