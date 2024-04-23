@@ -1,32 +1,98 @@
 package presenters
 
 import (
-	"bytes"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
-	"text/template"
+	"time"
 
 	"github.com/snyk/code-client-go/sarif"
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
-
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
 type Finding struct {
-	ID       string
-	Severity string
-	Title    string
-	Message  string
-	Path     string
-	Line     int
+	ID         string
+	Severity   string
+	Title      string
+	Ignored    bool
+	Properties []FindingProperty
 }
 
-type FindingsSummary struct {
-	High   int
-	Medium int
-	Low    int
+type FindingProperty struct {
+	Label string
+	Value string
+}
+
+type Presenter struct {
+	ShowIgnored bool
+	ShowOpen    bool
+	Input       sarif.SarifDocument
+	OrgName     string
+	TestPath    string
+}
+
+type PresenterOption func(*Presenter)
+
+func WithIgnored(showIgnored bool) PresenterOption {
+	return func(p *Presenter) {
+		p.ShowIgnored = showIgnored
+	}
+}
+
+func WithOpen(showOpen bool) PresenterOption {
+	return func(p *Presenter) {
+		p.ShowOpen = showOpen
+	}
+}
+
+func WithOrgName(orgName string) PresenterOption {
+	return func(p *Presenter) {
+		p.OrgName = orgName
+	}
+}
+
+func WithTestPath(testPath string) PresenterOption {
+	return func(p *Presenter) {
+		p.TestPath = testPath
+	}
+}
+
+func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *Presenter {
+	p := &Presenter{
+		ShowIgnored: false,
+		ShowOpen:    true,
+		Input:       sarifDocument,
+		OrgName:     "",
+		TestPath:    "",
+	}
+
+	for _, option := range options {
+		option(p)
+	}
+
+	return p
+}
+
+func (p *Presenter) Render() (string, error) {
+	summaryData := sarif_utils.CreateCodeSummary(&p.Input)
+	findings :=
+		SortFindings(convertSarifToFindingsList(p.Input), summaryData.SeverityOrderAsc)
+	summaryOutput, err := RenderSummary(summaryData, p.OrgName, p.TestPath)
+
+	if err != nil {
+		return "", err
+	}
+
+	str := strings.Join([]string{
+		"",
+		renderBold(fmt.Sprintf("Testing %s ...", p.TestPath)),
+		RenderFindings(findings, p.ShowIgnored, p.ShowOpen),
+		summaryOutput,
+		getFinalTip(p.ShowIgnored, p.ShowOpen),
+		"",
+	}, "\n")
+
+	return str, nil
 }
 
 func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
@@ -55,129 +121,88 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 				location = result.Locations[0]
 			}
 
+			isIgnored := len(result.Suppressions) > 0
+
+			var properties []FindingProperty
+
+			properties = append(properties, FindingProperty{
+				Label: "Path",
+				Value: fmt.Sprintf("%s, line %d",
+					location.PhysicalLocation.ArtifactLocation.URI,
+					location.PhysicalLocation.Region.StartLine,
+				),
+			})
+
+			properties = append(properties, FindingProperty{
+				Label: "Info",
+				Value: result.Message.Text,
+			})
+
+			properties = append(properties, FindingProperty{
+				Label: "",
+				Value: "",
+			})
+
+			for _, suppression := range result.Suppressions {
+				expiration := ""
+				if suppression.Properties.Expiration != nil {
+					expiration = *suppression.Properties.Expiration
+				}
+
+				properties = append(properties, FindingProperty{
+					Label: "Expiration",
+					Value: expiration,
+				})
+
+				properties = append(properties, FindingProperty{
+					Label: "Category",
+					Value: strings.Replace(string(suppression.Properties.Category), "wont-fix", "Won't fix", 1),
+				})
+
+				// TODO: Verify date formatting
+				s, err := time.Parse(time.RFC3339, suppression.Properties.IgnoredOn)
+
+				if err == nil {
+					properties = append(properties, FindingProperty{
+						Label: "Ignored on",
+						Value: s.Format("January 02, 2006"),
+					})
+				}
+
+				properties = append(properties, FindingProperty{
+					Label: "Ignored by",
+					Value: suppression.Properties.IgnoredBy.Name,
+				})
+
+				properties = append(properties, FindingProperty{
+					Label: "Reason",
+					Value: suppression.Justification,
+				})
+			}
+
 			findings = append(findings, Finding{
-				ID:       result.RuleID,
-				Severity: severity,
-				Title:    title,
-				Path:     location.PhysicalLocation.ArtifactLocation.URI,
-				Line:     location.PhysicalLocation.Region.StartLine,
-				Message:  result.Message.Text,
+				ID:         result.RuleID,
+				Severity:   severity,
+				Title:      title,
+				Ignored:    isIgnored,
+				Properties: properties,
 			})
 		}
 	}
 	return findings
 }
 
-type TestMeta struct {
-	OrgName  string
-	TestPath string
-}
-
-func PresenterSarifResultsPretty(input sarif.SarifDocument, meta TestMeta) (string, error) {
-	findings := convertSarifToFindingsList(input)
-	summary := sarif_utils.CreateCodeSummary(&input)
-
-	str := fmt.Sprintf(`
-Testing %s ...
-%s
-%s
-%s
-`,
-		meta.TestPath,
-		renderFindings(SortFindings(findings, summary.SeverityOrderAsc)),
-		renderSummary(summary, meta),
-		getTip(),
-	)
-
-	return str, nil
-}
-
-func renderFindings(findings []Finding) string {
-	if len(findings) == 0 {
-		return ""
+func getFinalTip(showIgnored bool, showOpen bool) string {
+	tip := "To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option."
+	if showIgnored {
+		tip = `To view ignored issues only, use the --only-ignores option.`
 	}
 
-	response := "\nOpen Issues\n\n"
-
-	for _, finding := range findings {
-		response += fmt.Sprintf(` %s %s
-   Path: %s, line %d
-   Info: %s
-
-`, renderInSeverityColor(finding.Severity, fmt.Sprintf("✗ [%s]", strings.ToUpper(finding.Severity))), renderBold(finding.Title), finding.Path, finding.Line, finding.Message)
+	if showIgnored && !showOpen {
+		tip = `To view ignored and open issues, use the --include-ignores option.`
 	}
 
-	return response
-}
-
-func getTip() string {
-	return `
-💡 Tip
-
-To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.`
-}
-
-func renderSummary(summary *json_schemas.TestSummary, meta TestMeta) string {
-	var buff bytes.Buffer
-	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
-
-  Organization:      {{ .Org }}
-  Test type:         {{ .Type }}
-  Project path:      {{ .TestPath }}
-
-  Total issues:   {{ .TotalIssueCount }}{{ if .TotalIssueCount }}
-  Ignored issues: {{ .IgnoredIssueCountWithSeverities }} 
-  Open issues:    {{ .OpenIssueCountWithSeverities }}{{ end }}`))
-
-	totalIssueCount := 0
-	openIssueCount := 0
-	ignoredIssueCount := 0
-	openIssueLabelledCount := ""
-	ignoredIssueLabelledCount := ""
-
-	slices.Reverse(summary.SeverityOrderAsc)
-
-	for _, severity := range summary.SeverityOrderAsc {
-		for _, result := range summary.Results {
-			if result.Severity == severity {
-				totalIssueCount += result.Total
-				openIssueCount += result.Open
-				ignoredIssueCount += result.Ignored
-				openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Open, strings.ToUpper(severity)))
-				ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Ignored, strings.ToUpper(severity)))
-			}
-		}
-	}
-
-	openIssueCountWithSeverities := fmt.Sprintf("%s [%s]", renderBold(strconv.Itoa(openIssueCount)), openIssueLabelledCount)
-	ignoredIssueCountWithSeverities := fmt.Sprintf("%s [%s]", renderBold(strconv.Itoa(ignoredIssueCount)), ignoredIssueLabelledCount)
-	testType := summary.Type
-	if testType == "sast" {
-		testType = "Static code analysis"
-	}
-
-	err := summaryTemplate.Execute(&buff, struct {
-		Org                             string
-		TestPath                        string
-		Type                            string
-		TotalIssueCount                 int
-		IgnoreIssueCount                int
-		OpenIssueCountWithSeverities    string
-		IgnoredIssueCountWithSeverities string
-	}{
-		Org:                             meta.OrgName,
-		TestPath:                        meta.TestPath,
-		Type:                            testType,
-		TotalIssueCount:                 totalIssueCount,
-		IgnoreIssueCount:                ignoredIssueCount,
-		OpenIssueCountWithSeverities:    openIssueCountWithSeverities,
-		IgnoredIssueCountWithSeverities: ignoredIssueCountWithSeverities,
-	})
-	if err != nil {
-		return fmt.Sprintf("failed to execute summary template: %v", err)
-	}
-
-	return boxStyle.Render(buff.String())
+	return RenderTip(tip)
 }
 
 func SortFindings(findings []Finding, order []string) []Finding {

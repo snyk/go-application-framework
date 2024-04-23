@@ -34,6 +34,8 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(OUTPUT_CONFIG_KEY_JSON_FILE, "", "Write json output to file")
 	outputConfig.Bool(OUTPUT_CONFIG_KEY_SARIF, false, "Print sarif output to console")
 	outputConfig.String(OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
+	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
+	outputConfig.Bool(configuration.FLAG_ONLY_IGNORES, false, "Hide open issues in the output")
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
@@ -150,17 +152,24 @@ func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, 
 }
 
 func humanReadanbleSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
+	includeOpenFindings := !config.GetBool(configuration.FLAG_ONLY_IGNORES)
+	includeIgnoredFindings := config.GetBool(configuration.FLAG_INCLUDE_IGNORES) || config.GetBool(configuration.FLAG_ONLY_IGNORES)
+
 	var sarif sarif.SarifDocument
 	err := json.Unmarshal(singleData, &sarif)
 	if err != nil {
 		debugLogger.Println(err)
 	}
 
-	meta := presenters.TestMeta{
-		OrgName:  config.GetString(configuration.ORGANIZATION),
-		TestPath: input[i].GetContentLocation(),
-	}
-	humanReadableResult, err := presenters.PresenterSarifResultsPretty(sarif, meta)
+	p := presenters.SarifTestResults(
+		sarif,
+		presenters.WithOrgName(config.GetString(configuration.ORGANIZATION)),
+		presenters.WithTestPath(input[i].GetContentLocation()),
+		presenters.WithIgnored(includeIgnoredFindings),
+		presenters.WithOpen(includeOpenFindings),
+	)
+
+	humanReadableResult, err := p.Render()
 	if err != nil {
 		debugLogger.Println(err)
 	}

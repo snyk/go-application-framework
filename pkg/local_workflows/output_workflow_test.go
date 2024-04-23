@@ -223,28 +223,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, []workflow.Data{}, output)
 	})
 
-	t.Run("should print human readable output for sarif data", func(t *testing.T) {
-		input := sarif.SarifDocument{
-			Runs: []sarif.Run{
-				{
-					Results: []sarif.Result{
-						{Level: "error"},
-						{Level: "warning"},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{Level: "error"},
-						{Level: "error", Suppressions: make([]sarif.Suppression, 1)},
-					},
-				},
-				{
-					Results: []sarif.Result{
-						{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
-					},
-				},
-			},
-		}
+	t.Run("should print human readable output for sarif data without ignored rules", func(t *testing.T) {
+		input := getSarifInput()
 
 		rawSarif, err := json.Marshal(input)
 		assert.Nil(t, err)
@@ -256,6 +236,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// mock assertions
 		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
 			assert.Contains(t, str, "Total issues:   5")
+			assert.NotContains(t, str, "Ignored rule")
 		}).Times(1)
 
 		// execute
@@ -265,4 +246,150 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
 	})
+
+	t.Run("should print human readable output for sarif data including ignored data", func(t *testing.T) {
+		input := getSarifInput()
+
+		rawSarif, err := json.Marshal(input)
+		assert.Nil(t, err)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
+		sarifData.SetContentLocation("/mypath")
+
+		// mock assertions
+		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
+			assert.Contains(t, str, "Total issues:   5")
+			assert.Contains(t, str, "Ignored rule")
+			assert.Contains(t, str, "This rule is open")
+		}).Times(1)
+
+		config.Set(configuration.FLAG_INCLUDE_IGNORES, true)
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+
+	t.Run("should print human readable output for sarif data only showing ignored data", func(t *testing.T) {
+		input := getSarifInput()
+
+		rawSarif, err := json.Marshal(input)
+		assert.Nil(t, err)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
+		sarifData.SetContentLocation("/mypath")
+
+		// mock assertions
+		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
+			assert.Contains(t, str, "Total issues:   5")
+			assert.Contains(t, str, "Ignored rule")
+			assert.NotContains(t, str, "This rule is open")
+		}).Times(1)
+
+		config.Set(configuration.FLAG_ONLY_IGNORES, true)
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+}
+
+func getSarifInput() sarif.SarifDocument {
+	return sarif.SarifDocument{
+		Runs: []sarif.Run{
+			{
+				Results: []sarif.Result{
+					{Level: "error"},
+					{Level: "warning"},
+				},
+			},
+			{
+				Results: []sarif.Result{
+					{Level: "error",
+						RuleID: "openIssue",
+					},
+					{
+						Level:        "error",
+						Suppressions: make([]sarif.Suppression, 1),
+						RuleID:       "rule1",
+					},
+				},
+				Tool: sarif.Tool{
+					Driver: sarif.Driver{
+						Rules: []sarif.Rule{
+							{
+								ID:   "rule1",
+								Name: "Ignored rule",
+								ShortDescription: sarif.ShortDescription{
+									Text: "Ignored rule",
+								},
+								Help: sarif.Help{
+									Text: "Rule 1 help",
+								},
+								DefaultConfiguration: sarif.DefaultConfiguration{
+									Level: "error",
+								},
+								Properties: sarif.RuleProperties{
+									Tags: []string{"tag1", "tag2"},
+									ShortDescription: sarif.ShortDescription{
+										Text: "Rule 1 description",
+									},
+									Help: struct {
+										Markdown string `json:"markdown"`
+										Text     string `json:"text"`
+									}{Markdown: "", Text: ""},
+									Categories:         []string{},
+									ExampleCommitFixes: []sarif.ExampleCommitFix{},
+									Precision:          "",
+									RepoDatasetSize:    0,
+									Cwe:                []string{""},
+								},
+							},
+							{
+								ID:   "openIssue",
+								Name: "This rule is open",
+								ShortDescription: sarif.ShortDescription{
+									Text: "This rule is open",
+								},
+								Help: sarif.Help{
+									Text: "",
+								},
+								DefaultConfiguration: sarif.DefaultConfiguration{
+									Level: "error",
+								},
+								Properties: sarif.RuleProperties{
+									Tags: []string{"tag1", "tag2"},
+									ShortDescription: sarif.ShortDescription{
+										Text: "",
+									},
+									Help: struct {
+										Markdown string `json:"markdown"`
+										Text     string `json:"text"`
+									}{Markdown: "", Text: ""},
+									Categories:         []string{},
+									ExampleCommitFixes: []sarif.ExampleCommitFix{},
+									Precision:          "",
+									RepoDatasetSize:    0,
+									Cwe:                []string{""},
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				Results: []sarif.Result{
+					{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
+				},
+			},
+		},
+	}
 }

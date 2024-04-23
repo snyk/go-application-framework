@@ -2,3 +2,7 @@
 52e404525dab2a3620df22892e4a11faa565fbf2:internal/presenters/testdata/4-high-5-medium.json:generic-api-key:1085
 52e404525dab2a3620df22892e4a11faa565fbf2:internal/presenters/testdata/4-high-5-medium.json:generic-api-key:1090
 52e404525dab2a3620df22892e4a11faa565fbf2:internal/presenters/testdata/4-high-5-medium.json:generic-api-key:1110
+9cab824f0ff3d537545ff7705817fe05ff0cad54:internal/presenters/testdata/with-ignores.json:generic-api-key:159
+9cab824f0ff3d537545ff7705817fe05ff0cad54:internal/presenters/testdata/with-ignores.json:generic-api-key:224
+9cab824f0ff3d537545ff7705817fe05ff0cad54:internal/presenters/testdata/with-ignores.json:generic-api-key:474
+9cab824f0ff3d537545ff7705817fe05ff0cad54:internal/presenters/testdata/with-ignores.json:generic-api-key:539
