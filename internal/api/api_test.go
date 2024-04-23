@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -19,10 +22,10 @@ func Test_GetDefaultOrgId_ReturnsCorrectOrgId(t *testing.T) {
 	selfResponse := newMockSelfResponse(t)
 	expectedOrgId := selfResponse.Data.Attributes.DefaultOrgContext
 	server := setupSingleReponseServer(t, "/rest/self?version="+constants.SNYK_API_VERSION, selfResponse)
-	api := api.NewApi(server.URL, http.DefaultClient)
+	client := api.NewApi(server.URL, http.DefaultClient)
 
 	// Act
-	orgId, err := api.GetDefaultOrgId()
+	orgId, err := client.GetDefaultOrgId()
 	if err != nil {
 		t.Error(err)
 	}
@@ -35,15 +38,17 @@ func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	// Arrange
 	t.Parallel()
 	orgResponse := newMockOrgResponse(t)
-	server := setupSingleReponseServer(t, "/v1/orgs", orgResponse)
-	api := api.NewApi(server.URL, http.DefaultClient)
 
 	for _, org := range orgResponse.Organizations {
-		expectedOrgId := org.ID
-		slugName := org.Slug
+		slugName := org.Attributes.Slug
+		expectedOrgId := org.Id
+		u, err := api.OrgsApiURL("", slugName)
+		require.NoError(t, err)
+		server := setupSingleReponseServer(t, u.String(), orgResponse)
+		apiClient := api.NewApi(server.URL, http.DefaultClient)
 
 		// Act
-		orgId, err := api.GetOrgIdFromSlug(slugName)
+		orgId, err := apiClient.GetOrgIdFromSlug(slugName)
 		if err != nil {
 			t.Error(err)
 		}
@@ -63,13 +68,13 @@ func Test_GetFeatureFlag_false(t *testing.T) {
 		Code: http.StatusForbidden,
 	}
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
-	api := api.NewApi(server.URL, http.DefaultClient)
+	client := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := api.GetFeatureFlag(featureFlagName, org)
+	actual, err := client.GetFeatureFlag(featureFlagName, org)
 	assert.NoError(t, err)
 	assert.False(t, actual)
 
-	actual, err = api.GetFeatureFlag("unknownFF", org)
+	actual, err = client.GetFeatureFlag("unknownFF", org)
 	assert.Error(t, err)
 	assert.False(t, actual)
 }
@@ -84,37 +89,53 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 		Code: http.StatusOK,
 	}
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
-	api := api.NewApi(server.URL, http.DefaultClient)
+	client := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := api.GetFeatureFlag(featureFlagName, org)
+	actual, err := client.GetFeatureFlag(featureFlagName, org)
 	assert.NoError(t, err)
 	assert.True(t, actual)
 }
 
 func newMockOrgResponse(t *testing.T) contract.OrganizationsResponse {
 	t.Helper()
-
-	return contract.OrganizationsResponse{
-		Organizations: []contract.Organization{
-			{
-				Name:  "defaultOrg",
-				ID:    "27ce75bf-5794-4bfd-9ae7-e779f465abdf",
-				Slug:  "default-org",
-				URL:   "https://api.snyk.io/org/default-org",
-				Group: nil,
-			},
-			{
-				Name: "secondOrg",
-				ID:   "ebb351b1-e883-4a07-9ebb-75a7d22b56a8",
-				Slug: "second-org",
-				URL:  "https://api.snyk.io/org/second-org",
-				Group: &contract.Group{
-					Name: "ABCD INC",
-					ID:   "58eec199-6ec0-4881-9d0d-9f62ebc6b6ab",
-				},
-			},
-		},
+	orgJson := `
+				{
+					"data": [
+						{
+							"id": "27ce75bf-5794-4bfd-9ae7-e779f465abdf",
+							"type": "org",
+							"attributes": {
+								"is_personal": true,
+								"name": "defaultOrg",
+								"slug": "default-org"
+							}
+						},
+						{
+							"id": "ebb351b1-e883-4a07-9ebb-75a7d22b56a8",
+							"type": "org",
+							"attributes": {
+								"is_personal": true,
+								"name": "secondOrg",
+								"slug": "second-org",
+								"groupId": "58eec199-6ec0-4881-9d0d-9f62ebc6b6ab"
+							}
+						}
+					],
+					"jsonapi": {
+						"version": "1.0"
+					},
+					"links": {
+						"self": "/rest/orgs?version=2024-04-11",
+						"first": "/rest/orgs?version=2024-04-11"
+					}
+				}
+				`
+	var response contract.OrganizationsResponse
+	err := json.Unmarshal([]byte(orgJson), &response)
+	if err != nil {
+		t.Fatal(errors.Wrap(err, "cannot create mock response"))
 	}
+	return response
 }
 
 func setupSingleReponseServer(t *testing.T, url string, response any) *httptest.Server {

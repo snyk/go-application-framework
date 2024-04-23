@@ -1,18 +1,35 @@
 package contract
 
-type Organization struct {
-	Name  string `json:"name"`
-	ID    string `json:"id"`
-	Slug  string `json:"slug"`
-	URL   string `json:"url"`
-	Group *Group `json:"group"`
+type OrgAttributes struct {
+	IsPersonal bool   `json:"is_personal"`
+	Name       string `json:"name"`
+	Slug       string `json:"slug"`
+	GroupId    string `json:"group_id,omitempty"`
 }
 
-type Group struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
+type OrgRelationships struct {
+	MemberRole struct {
+		Data struct {
+			Id   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"data"`
+	} `json:"member_role"`
+}
+
+type Organization struct {
+	Id            string           `json:"id"`
+	Type          string           `json:"type"`
+	Attributes    OrgAttributes    `json:"attributes"`
+	Relationships OrgRelationships `json:"relationships"`
 }
 
 type OrganizationsResponse struct {
-	Organizations []Organization `json:"orgs"`
+	Organizations []Organization `json:"data"`
+	Jsonapi       struct {
+		Version string `json:"version"`
+	} `json:"jsonapi"`
+	Links struct {
+		Self  string `json:"self"`
+		First string `json:"first"`
+	} `json:"links"`
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
@@ -25,11 +26,17 @@ type snykApiClient struct {
 }
 
 func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
-	url := a.url + "/v1/orgs"
-	res, err := a.client.Get(url)
+	u, err := OrgsApiURL(a.url, slugName)
 	if err != nil {
 		return "", err
 	}
+
+	res, err := a.client.Get(u.String())
+	if err != nil {
+		return "", err
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
@@ -37,27 +44,40 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 		return "", err
 	}
 
-	var userOrgInfo contract.OrganizationsResponse
-	err = json.Unmarshal(body, &userOrgInfo)
+	var response contract.OrganizationsResponse
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return "", err
 	}
 
-	for _, org := range userOrgInfo.Organizations {
-		if org.Slug == slugName {
-			return org.ID, nil
+	organizations := response.Organizations
+	for _, organization := range organizations {
+		if organization.Attributes.Slug == slugName {
+			return organization.Id, nil
 		}
 	}
-
 	return "", fmt.Errorf("org ID not found for slug %v", slugName)
 }
 
+func OrgsApiURL(baseURL, slugName string) (*url.URL, error) {
+	u, err := url.Parse(baseURL + "/rest/orgs")
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("version", "2024-03-12") // use a constant for the orgs API
+	q.Set("slug", slugName)
+	u.RawQuery = q.Encode()
+	return u, nil
+}
+
 func (a *snykApiClient) GetDefaultOrgId() (string, error) {
-	url := a.url + "/rest/self?version=" + constants.SNYK_API_VERSION
-	res, err := a.client.Get(url)
+	u := a.url + "/rest/self?version=" + constants.SNYK_API_VERSION
+	res, err := a.client.Get(u)
 	if err != nil {
 		return "", fmt.Errorf("unable to retrieve org ID: %w", err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
@@ -80,16 +100,17 @@ func (a *snykApiClient) GetDefaultOrgId() (string, error) {
 func (a *snykApiClient) GetFeatureFlag(flagname string, orgId string) (bool, error) {
 	const defaultResult = false
 
-	url := a.url + "/v1/cli-config/feature-flags/" + flagname + "?org=" + orgId
+	u := a.url + "/v1/cli-config/feature-flags/" + flagname + "?org=" + orgId
 
 	if len(orgId) <= 0 {
 		return defaultResult, fmt.Errorf("failed to lookup feature flag with orgiId not set")
 	}
 
-	res, err := a.client.Get(url)
+	res, err := a.client.Get(u)
 	if err != nil {
 		return defaultResult, fmt.Errorf("unable to retrieve feature flag: %w", err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
