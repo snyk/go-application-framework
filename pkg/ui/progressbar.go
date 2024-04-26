@@ -60,6 +60,12 @@ type ProgressBar interface {
 	Clear() error
 }
 
+type emptyProgressBar struct{}
+
+func (emptyProgressBar) UpdateProgress(float64) error { return nil }
+func (emptyProgressBar) SetTitle(string)              {}
+func (emptyProgressBar) Clear() error                 { return nil }
+
 func newProgressBar(writer io.Writer) *consoleProgressBar {
 	p := &consoleProgressBar{writer: writer}
 	p.active.Store(true)
