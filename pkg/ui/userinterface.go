@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+
+	"github.com/mattn/go-isatty"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -20,7 +23,20 @@ type UserInterface interface {
 
 func DefaultUi() UserInterface {
 	// Default Console UI should not have errors (this is tested in consoleui_test.go)
-	return utils.ValueOf(NewConsoleUiBuilder().Build())
+	defaultUi := &consoleUi{
+		writer:      os.Stdout,
+		errorWriter: os.Stdout,
+		reader:      bufio.NewReader(os.Stdin),
+	}
+
+	defaultUi.progressBarFactory = func() ProgressBar {
+		if isatty.IsTerminal(os.Stderr.Fd()) {
+			return newProgressBar(os.Stderr)
+		}
+		return emptyProgressBar{}
+	}
+
+	return defaultUi
 }
 
 type consoleUi struct {
