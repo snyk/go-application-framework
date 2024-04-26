@@ -338,14 +338,7 @@ func getSarifInput() sarif.SarifDocument {
 									Level: "error",
 								},
 								Properties: sarif.RuleProperties{
-									Tags: []string{"tag1", "tag2"},
-									ShortDescription: sarif.ShortDescription{
-										Text: "Rule 1 description",
-									},
-									Help: struct {
-										Markdown string `json:"markdown"`
-										Text     string `json:"text"`
-									}{Markdown: "", Text: ""},
+									Tags:               []string{"tag1", "tag2"},
 									Categories:         []string{},
 									ExampleCommitFixes: []sarif.ExampleCommitFix{},
 									Precision:          "",
@@ -366,14 +359,7 @@ func getSarifInput() sarif.SarifDocument {
 									Level: "error",
 								},
 								Properties: sarif.RuleProperties{
-									Tags: []string{"tag1", "tag2"},
-									ShortDescription: sarif.ShortDescription{
-										Text: "",
-									},
-									Help: struct {
-										Markdown string `json:"markdown"`
-										Text     string `json:"text"`
-									}{Markdown: "", Text: ""},
+									Tags:               []string{"tag1", "tag2"},
 									Categories:         []string{},
 									ExampleCommitFixes: []sarif.ExampleCommitFix{},
 									Precision:          "",
