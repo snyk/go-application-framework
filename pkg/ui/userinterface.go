@@ -22,17 +22,24 @@ type UserInterface interface {
 }
 
 func DefaultUi() UserInterface {
+	return newConsoleUi(os.Stdin, os.Stdout, os.Stderr)
+}
+
+func newConsoleUi(in io.Reader, out io.Writer, err io.Writer) UserInterface {
 	// Default Console UI should not have errors (this is tested in consoleui_test.go)
 	defaultUi := &consoleUi{
-		writer:      os.Stdout,
-		errorWriter: os.Stdout,
-		reader:      bufio.NewReader(os.Stdin),
+		writer:      out,
+		errorWriter: out,
+		reader:      bufio.NewReader(in),
 	}
 
 	defaultUi.progressBarFactory = func() ProgressBar {
-		if isatty.IsTerminal(os.Stderr.Fd()) {
-			return newProgressBar(os.Stderr)
+		if stderr, ok := err.(*os.File); ok {
+			if isatty.IsTerminal(stderr.Fd()) || isatty.IsCygwinTerminal(stderr.Fd()) {
+				return newProgressBar(err, SpinnerType, true)
+			}
 		}
+
 		return emptyProgressBar{}
 	}
 

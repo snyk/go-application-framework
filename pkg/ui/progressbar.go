@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -12,12 +13,16 @@ import (
 
 //go:generate $GOPATH/bin/mockgen -source=progressbar.go -destination ../mocks/progressbar.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/
 
+type ProgressType string
+
 const (
-	barCharacter     = "="
-	currentPosition  = ">"
-	barWidth         = 50
-	clearLine        = "\r\033[K"
-	InfiniteProgress = -1.0
+	barCharacter                  = "="
+	currentPosition               = ">"
+	barWidth                      = 50
+	clearLine                     = "\r\033[K"
+	InfiniteProgress              = -1.0 // use UpdateProgress(InfiniteProgress) to show progress without setting a percentage
+	SpinnerType      ProgressType = "spinner"
+	BarType          ProgressType = "bar"
 )
 
 // ProgressBar is an interface for interacting with some visual progress-bar.
@@ -66,20 +71,24 @@ func (emptyProgressBar) UpdateProgress(float64) error { return nil }
 func (emptyProgressBar) SetTitle(string)              {}
 func (emptyProgressBar) Clear() error                 { return nil }
 
-func newProgressBar(writer io.Writer) *consoleProgressBar {
+func newProgressBar(writer io.Writer, t ProgressType, animated bool) *consoleProgressBar {
 	p := &consoleProgressBar{writer: writer}
 	p.active.Store(true)
-	p.initialized = false
+	p.animationRunning = false
+	p.progressType = t
+	p.animated = animated
 	return p
 }
 
 type consoleProgressBar struct {
-	writer      io.Writer
-	title       string
-	state       int
-	progress    atomic.Pointer[float64]
-	active      atomic.Bool
-	initialized bool
+	writer           io.Writer
+	title            string
+	state            int
+	progress         atomic.Pointer[float64]
+	active           atomic.Bool
+	animationRunning bool
+	progressType     ProgressType
+	animated         bool
 }
 
 func (p *consoleProgressBar) UpdateProgress(progress float64) error {
@@ -89,9 +98,11 @@ func (p *consoleProgressBar) UpdateProgress(progress float64) error {
 
 	p.progress.Store(&progress)
 
-	if !p.initialized {
-		p.initialized = true
+	if !p.animationRunning && p.animated {
+		p.animationRunning = true
 		go p.update()
+	} else if !p.animated {
+		p.update()
 	}
 
 	return nil
@@ -108,32 +119,78 @@ func (p *consoleProgressBar) Clear() error {
 }
 
 func (p *consoleProgressBar) update() {
+	// wait a second before starting to render progress, this will avoid showing progress for short events
+	if !p.animated {
+		time.Sleep(1 * time.Second)
+	}
+
+	var err error
 	for {
 		if !p.active.Load() {
 			break
 		}
 
-		progressString := " "
+		var progressString string
 		progress := *p.progress.Load()
 		if progress >= 0 {
 			progress = math.Max(0, math.Min(1, progress))
-			progressString = fmt.Sprintf("%3.1f%% ", progress*100)
+			progressString = fmt.Sprintf("%3.0f%% ", progress*100)
+		}
+
+		if len(p.title) > 0 {
+			progressString += p.title
 		}
 
 		p.state++
-		elementSet := []string{"-", "\\", "|", "/"}
-		progressElement := elementSet[p.state%len(elementSet)]
 
-		_, err := fmt.Fprint(p.writer, clearLine)
-		if err != nil {
-			break
+		if p.progressType == SpinnerType {
+			err = p.renderSpinner(progressString)
+		} else if p.progressType == BarType {
+			err = p.renderBar(progressString)
+		} else {
+			err = p.renderText(progressString)
 		}
 
-		_, err = fmt.Fprint(p.writer, progressElement, " ", progressString, p.title)
-		if err != nil {
+		if err != nil || !p.animated {
 			break
 		}
 
 		time.Sleep(250 * time.Millisecond)
 	}
+}
+
+func (p *consoleProgressBar) renderSpinner(progressString string) error {
+	elementSet := []string{"-", "\\", "|", "/"}
+	progressElement := elementSet[p.state%len(elementSet)]
+	text := fmt.Sprint(progressElement, " ", progressString)
+	return p.renderText(text)
+}
+
+func (p *consoleProgressBar) renderBar(progressString string) error {
+	progress := *p.progress.Load()
+
+	// infinite bar, using state and wrapping around at the end
+	if progress < 0 {
+		progress = float64((p.state*2)%100) / 100
+	}
+
+	pos := int(math.Min(progress*barWidth, barWidth-1))
+	barCount := int(math.Max(0, float64(barWidth-pos-1)))
+	progressBar := strings.Repeat(barCharacter, pos) + currentPosition + strings.Repeat(" ", barCount)
+	text := fmt.Sprint("[", progressBar, "] ", progressString)
+	return p.renderText(text)
+}
+
+func (p *consoleProgressBar) renderText(progressString string) error {
+	_, err := fmt.Fprint(p.writer, clearLine)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprint(p.writer, progressString)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
