@@ -121,10 +121,13 @@ func Test_DefaultUi(t *testing.T) {
 
 	// the bar will not render since the writer is not a TTY
 	bar.SetTitle("Hello")
-	bar.UpdateProgress(InfiniteProgress)
-	bar.Clear()
+	err := bar.UpdateProgress(InfiniteProgress)
+	assert.NoError(t, err)
 
-	err := ui.Output("Hello")
+	err = bar.Clear()
+	assert.NoError(t, err)
+
+	err = ui.Output("Hello")
 	assert.NoError(t, err)
 
 	in, err := ui.Input("Enter your name")
