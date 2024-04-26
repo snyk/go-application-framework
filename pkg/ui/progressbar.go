@@ -110,7 +110,7 @@ func (p *consoleProgressBar) update() {
 		progressString := " "
 		progress := *p.progress.Load()
 		if progress >= 0 {
-			progress := math.Max(0, math.Min(1, progress))
+			progress = math.Max(0, math.Min(1, progress))
 			progressString = fmt.Sprintf("%3.1f%% ", progress*100)
 		}
 
@@ -130,5 +130,4 @@ func (p *consoleProgressBar) update() {
 
 		time.Sleep(250 * time.Millisecond)
 	}
-
 }
