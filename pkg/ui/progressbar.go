@@ -27,28 +27,30 @@ const (
 
 // ProgressBar is an interface for interacting with some visual progress-bar.
 // It is used to show the progress of some running task (or multiple).
-// Example:
+// Example (Infinite Progress without a value):
 //
-//	var pBar ProgressBar = ui.DefaultUi().NewProgressBar(os.Stdout)
+//	var pBar ProgressBar = ui.DefaultUi().NewProgressBar()
+//	defer pBar.Clear()
 //	pBar.SetTitle("Downloading...")
-//	for i := 0; i <= 100; i++ {
+//	_ = pBar.UpdateProgress(ui.InfiniteProgress)
+//
+// Example (with a value):
+//
+//	var pBar ProgressBar = ui.DefaultUi().NewProgressBar()
+//	defer pBar.Clear()
+//	pBar.SetTitle("Downloading...")
+//	for i := 0; i <= 50; i++ {
 //	    pBar.UpdateProgress(float64(i) / 100.0)
 //	    time.Sleep(time.Millisecond * 50)
 //	}
-//	pBar.Clear()
 //
-// Calling `Clear()` is not required, but the caret will remain at the end of the progress bar, so a linebreak is required.
-// Example:
-//
-//	var pBar ProgressBar = ui.DefaultUi().NewProgressBar(os.Stdout)
-//	pBar.SetTitle("Downloading...")
-//	for i := 0; i <= 100; i++ {
+//	pBar.SetTitle("Installing...")
+//	for i := 50; i <= 100; i++ {
 //	    pBar.UpdateProgress(float64(i) / 100.0)
 //	    time.Sleep(time.Millisecond * 50)
 //	}
-//	fmt.Println()
 //
-// The title can be changed in the middle of the progress bar, but it will not be visible until the next update.
+// The title can be changed in the middle of the progress bar.
 type ProgressBar interface {
 	// UpdateProgress updates the state of the progress bar.
 	// The argument `progress` should be a float64 between 0 and 1,
