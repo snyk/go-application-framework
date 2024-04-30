@@ -12,14 +12,13 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/stretchr/testify/assert"
 )
 
-const referenceUrl = constants.SNYK_API_SELF + constants.SNYK_API_VERSION
+const referenceUrl = "/rest/self?version=2024-04-22"
 
 func Test_WhoAmI_whoAmIWorkflowEntryPoint_requireExperimentalFlag(t *testing.T) {
 	// setup
