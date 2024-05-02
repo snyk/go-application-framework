@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	contract "github.com/snyk/go-application-framework/internal/api/contract"
 )
 
 // MockApiClient is a mock of ApiClient interface.
@@ -77,6 +78,36 @@ func (m *MockApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgIdFromSlug", reflect.TypeOf((*MockApiClient)(nil).GetOrgIdFromSlug), slugName)
+}
+
+// GetSelf mocks base method.
+func (m *MockApiClient) GetSelf() (contract.SelfResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSelf")
+	ret0, _ := ret[0].(contract.SelfResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSelf indicates an expected call of GetSelf.
+func (mr *MockApiClientMockRecorder) GetSelf() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSelf", reflect.TypeOf((*MockApiClient)(nil).GetSelf))
+}
+
+// GetUserMe mocks base method.
+func (m *MockApiClient) GetUserMe() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserMe")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserMe indicates an expected call of GetUserMe.
+func (mr *MockApiClientMockRecorder) GetUserMe() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMe", reflect.TypeOf((*MockApiClient)(nil).GetUserMe))
 }
 
 // Init mocks base method.

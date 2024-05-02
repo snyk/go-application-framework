@@ -2,12 +2,12 @@ package api_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
@@ -21,7 +21,7 @@ func Test_GetDefaultOrgId_ReturnsCorrectOrgId(t *testing.T) {
 	t.Parallel()
 	selfResponse := newMockSelfResponse(t)
 	expectedOrgId := selfResponse.Data.Attributes.DefaultOrgContext
-	server := setupSingleReponseServer(t, "/rest/self?version="+constants.SNYK_API_VERSION, selfResponse)
+	server := setupSingleReponseServer(t, "/rest/self?version="+constants.SNYK_DEFAULT_API_VERSION, selfResponse)
 	client := api.NewApi(server.URL, http.DefaultClient)
 
 	// Act
@@ -42,9 +42,9 @@ func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	for _, org := range orgResponse.Organizations {
 		slugName := org.Attributes.Slug
 		expectedOrgId := org.Id
-		u, err := api.OrgsApiURL("", slugName)
-		require.NoError(t, err)
-		server := setupSingleReponseServer(t, u.String(), orgResponse)
+		u := fmt.Sprintf("/rest/orgs?slug=%s&version=2024-03-12", slugName)
+
+		server := setupSingleReponseServer(t, u, orgResponse)
 		apiClient := api.NewApi(server.URL, http.DefaultClient)
 
 		// Act

@@ -18,6 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const referenceUrl = "/rest/self?version=2024-04-22"
+
 func Test_WhoAmI_whoAmIWorkflowEntryPoint_requireExperimentalFlag(t *testing.T) {
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
@@ -48,21 +50,27 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 	config := configuration.New()
 	config.Set("experimental", true)
 
+	// Snyk API payload mock response
 	payload := `{
-	"id": "88c4a3b3-ac23-4cbe-8c28-228ff614910b",
-	"username": "user.name@snyk.io",
-	"email": "user.email@snyk.io",
-	"orgs": [
-			{
-				"name": "Snyk AppSec",
-				"id": "4a3d29ab-6612-481b-83f2-aea6cf421ea5",
-				"group": {
-					"name": "snyk-sec-prod",
-					"id": "dd36a3c3-0e57-4702-81e6-a0e099e045a0"
-				}
-			}
-		]
-	}`
+		"Data": {
+		  "attributes": {
+			"avatar_url": "https://snyk.io/avatar.png",
+			"default_org_context": "18f054da-5e70-4000-8b3d-43783a372b01",
+			"email": "user.name@snyk.io",
+			"name": "user",
+			"username": "user.name@snyk.io"
+		  },
+		  "id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4121",
+		  "type": "principal"
+		}		
+	  }`
+
+	// JSON reference of what the user should receive when passing the json flag
+	jsonOutput := `{
+		"id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4121",
+		"username": "user.name@snyk.io",
+		"email": "user.name@snyk.io"
+		}`
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -71,7 +79,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
-		assert.Equal(t, "/v1/user/me", req.URL.String())
+		assert.Equal(t, referenceUrl, req.URL.String())
 		assert.Equal(t, "GET", req.Method)
 
 		return &http.Response{
@@ -113,7 +121,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		assert.Nil(t, err)
 
 		var expected interface{}
-		err = json.Unmarshal([]byte(payload), &expected)
+		err = json.Unmarshal([]byte(jsonOutput), &expected)
 		assert.Nil(t, err)
 
 		var actual interface{}
@@ -145,7 +153,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 		// setup
 		mockClient := newTestClient(func(req *http.Request) *http.Response {
 			// Test request parameters
-			assert.Equal(t, "/v1/user/me", req.URL.String())
+			assert.Equal(t, referenceUrl, req.URL.String())
 			assert.Equal(t, "GET", req.Method)
 
 			return &http.Response{
@@ -158,13 +166,12 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 		})
 		networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).Times(1)
 
-		expectedError := errors.New("error while fetching user: invalid API key (status 401)")
+		expectedError := errors.New("error fetching user data: error while fetching self data: API request failed (status: 401)")
 
 		// execute
 		_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
 
 		// assert
-		// assert.Nil(t, err)
 		assert.Equal(t, expectedError.Error(), err.Error())
 	})
 
@@ -172,7 +179,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 		// setup
 		mockClient := newTestClient(func(req *http.Request) *http.Response {
 			// Test request parameters
-			assert.Equal(t, "/v1/user/me", req.URL.String())
+			assert.Equal(t, referenceUrl, req.URL.String())
 			assert.Equal(t, "GET", req.Method)
 
 			return &http.Response{
@@ -185,7 +192,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 		})
 		networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).Times(1)
 
-		expectedError := errors.New("error while fetching user: request failed (status 500)")
+		expectedError := errors.New("error fetching user data: error while fetching self data: API request failed (status: 500)")
 
 		// execute
 		_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
@@ -223,7 +230,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
 
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
-		assert.Equal(t, "/v1/user/me", req.URL.String())
+		assert.Equal(t, referenceUrl, req.URL.String())
 		assert.Equal(t, "GET", req.Method)
 
 		return &http.Response{
@@ -242,7 +249,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	// setup
-	expectedError := errors.New("error while extracting user: missing property 'username'")
+	expectedError := errors.New("error fetching user data: error while extracting user: missing property 'username'")
 
 	// execute
 	_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
