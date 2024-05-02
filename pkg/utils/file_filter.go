@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -94,17 +95,22 @@ func buildGlobs(ignoreFiles []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		// .gitignore, .dcignore, etc. are just a list of ignore rules
-		parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
-		globs = append(globs, parsedRules...)
+
+		if filepath.Base(ignoreFile) == ".snyk" { // .snyk files are yaml files and should be parsed differently
+			parsedRules := parseDotSnykFile(content, filepath.Dir(ignoreFile))
+			globs = append(globs, parsedRules...)
+		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
+			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
+			globs = append(globs, parsedRules...)
+		}
 	}
 
 	return globs, nil
 }
 
-// parseIgnoreFile builds a list of glob patterns from a given ignore file
-func parseIgnoreFile(content []byte, filePath string) (ignores []string) {
-	ignores = []string{}
+// parseIgnoreFile builds a list of glob patterns from a given .gitignore style file
+func parseIgnoreFile(content []byte, filePath string) []string {
+	var ignores []string
 	lines := strings.Split(string(content), "\n")
 
 	for _, line := range lines {
@@ -115,6 +121,33 @@ func parseIgnoreFile(content []byte, filePath string) (ignores []string) {
 		ignores = append(ignores, globs...)
 	}
 	return ignores
+}
+
+// parseDotSnykFile builds a list of glob patterns from a given .snyk style file
+func parseDotSnykFile(content []byte, filePath string) []string {
+	type DotSnykRules struct {
+		Exclude struct {
+			Code   []string `yaml:"code"`
+			Global []string `yaml:"global"`
+		} `yaml:"exclude"`
+	}
+
+	var rules DotSnykRules
+	err := yaml.Unmarshal(content, &rules)
+	if err != nil {
+		fmt.Printf("parse .snyk failed: %v", err)
+		return nil
+	}
+
+	var globs []string
+	for _, codeRule := range rules.Exclude.Code {
+		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
+	}
+	for _, codeRule := range rules.Exclude.Global {
+		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
+	}
+
+	return globs
 }
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file

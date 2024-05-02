@@ -274,6 +274,29 @@ func testCases(t *testing.T) []fileFilterTestCase {
 			filesToFilter: []string{"a/file2.js"},
 			expectedFiles: []string{"file1.js", "a/file1.txt", ".dcignore", "a/.dcignore"},
 		},
+		{
+			name:      "Supports .snyk style exclude rules",
+			repoPath:  t.TempDir(),
+			ruleFiles: []string{".snyk"},
+			ruleFilesContent: map[string]string{
+				".snyk": `
+exclude:
+  code:
+    - path/to/code/ignore1
+    - path/to/code/ignore2
+  global:
+    - path/to/global/ignore1
+    - path/to/global/ignore2
+`,
+			},
+			filesToFilter: []string{
+				"path/to/code/ignore1/ignoredFile.java",
+				"path/to/code/ignore2/ignoredFile.java",
+				"path/to/global/ignore1/ignoredFile.java",
+				"path/to/global/ignore2/ignoredFile.java",
+			},
+			expectedFiles: []string{"path/to/code/notIgnored.java", ".snyk"},
+		},
 	}
 	return cases
 }
