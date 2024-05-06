@@ -4,7 +4,6 @@ go 1.21
 
 require (
 	github.com/charmbracelet/lipgloss v0.10.0
-	github.com/fatih/color v1.13.0
 	github.com/gkampitakis/go-snaps v0.5.3
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
@@ -23,6 +22,8 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/oauth2 v0.5.0 // TODO: this should be updated
 )
+
+require github.com/mattn/go-isatty v0.0.20
 
 require (
 	dario.cat/mergo v1.0.0 // indirect
@@ -66,7 +67,6 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/maruel/natural v1.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect

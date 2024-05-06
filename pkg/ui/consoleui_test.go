@@ -1,93 +1,142 @@
-package ui_test
+package ui
 
 import (
-	"bufio"
 	"bytes"
-	"errors"
-	"io"
-	"strings"
+	"fmt"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDefaultBuilder_NoError(t *testing.T) {
-	userInterface, err := ui.NewConsoleUiBuilder().Build()
-	assert.NotNil(t, userInterface)
+func Test_ProgressBar_Spinner(t *testing.T) {
+	var err error
+	writer := &bytes.Buffer{}
+
+	bar := newProgressBar(writer, SpinnerType, false)
+	bar.SetTitle("Hello")
+
+	err = bar.UpdateProgress(0)
 	assert.NoError(t, err)
+	err = bar.UpdateProgress(0.3)
+	assert.NoError(t, err)
+	err = bar.UpdateProgress(1.2)
+	assert.NoError(t, err)
+
+	err = bar.Clear()
+	assert.NoError(t, err)
+
+	err = bar.UpdateProgress(1.5)
+	assert.Error(t, err)
+
+	expected := "\r[K\\   0% Hello\r[K|  30% Hello\r[K/ 100% Hello\r\u001B[K"
+	assert.Equal(t, expected, writer.String())
 }
 
-func TestConsoleUi_Output(t *testing.T) {
-	buff := &bytes.Buffer{}
-	builder := ui.NewConsoleUiBuilder().WithOutputWriter(func(_ io.Writer) io.Writer {
-		return buff
-	})
+func Test_ProgressBar_Spinner_Infinite(t *testing.T) {
+	var err error
+	writer := &bytes.Buffer{}
 
-	userInterface, err := builder.Build()
+	bar := newProgressBar(writer, SpinnerType, false)
+	bar.SetTitle("Hello")
+
+	err = bar.UpdateProgress(InfiniteProgress)
+	assert.NoError(t, err)
+	err = bar.UpdateProgress(InfiniteProgress)
+	assert.NoError(t, err)
+	err = bar.UpdateProgress(InfiniteProgress)
 	assert.NoError(t, err)
 
-	msg := "Hello, World!"
-	err = userInterface.Output(msg)
+	err = bar.Clear()
 	assert.NoError(t, err)
-	assert.Equal(t, msg+"\n", buff.String())
+
+	err = bar.UpdateProgress(1.5)
+	assert.Error(t, err)
+
+	expected := "\r[K\\ Hello\r[K| Hello\r[K/ Hello\r\u001B[K"
+	assert.Equal(t, expected, writer.String())
 }
 
-func TestConsoleUi_OutputError(t *testing.T) {
-	buff := &bytes.Buffer{}
-	builder := ui.NewConsoleUiBuilder().WithErrorOutputWriter(func(_ io.Writer) io.Writer {
-		return buff
-	})
+func Test_ProgressBar_Bar(t *testing.T) {
+	var err error
+	writer := &bytes.Buffer{}
 
-	userInterface, err := builder.Build()
+	bar := newProgressBar(writer, BarType, false)
+	bar.SetTitle("Hello")
+
+	err = bar.UpdateProgress(0)
+	assert.NoError(t, err)
+	err = bar.UpdateProgress(0.3)
+	assert.NoError(t, err)
+	err = bar.UpdateProgress(1.2)
 	assert.NoError(t, err)
 
-	errMsg := "sample error"
-	err = userInterface.OutputError(errors.New(errMsg))
+	err = bar.Clear()
 	assert.NoError(t, err)
-	assert.Equal(t, "Error: "+errMsg+"\n", buff.String())
+
+	err = bar.UpdateProgress(1.5)
+	assert.Error(t, err)
+
+	expected := "\r\u001B[K[>                                                 ]   0% Hello\r\u001B[K[===============>                                  ]  30% Hello\r\u001B[K[=================================================>] 100% Hello\r\u001B[K"
+	assert.Equal(t, expected, writer.String())
 }
 
-func TestConsoleUi_Input(t *testing.T) {
-	inputMsg := "Sample Input\n"
-	inputBuffer := bytes.NewBufferString(inputMsg)
-	outputBuffer := &bytes.Buffer{}
-	builder := ui.NewConsoleUiBuilder().
-		WithInputReader(func(_ *bufio.Reader) *bufio.Reader {
-			return bufio.NewReader(inputBuffer)
-		}).
-		WithOutputWriter(func(_ io.Writer) io.Writer {
-			return outputBuffer
-		})
+func Test_ProgressBar_Unknown(t *testing.T) {
+	var err error
+	writer := &bytes.Buffer{}
 
-	userInterface, err := builder.Build()
+	bar := newProgressBar(writer, "Unknown", false)
+	bar.SetTitle("Hello")
+
+	err = bar.UpdateProgress(0)
+	assert.NoError(t, err)
+	err = bar.UpdateProgress(0.3)
+	assert.NoError(t, err)
+	err = bar.UpdateProgress(1.2)
 	assert.NoError(t, err)
 
-	prompt := "Enter something"
-	resp, err := userInterface.Input(prompt)
+	err = bar.Clear()
 	assert.NoError(t, err)
-	assert.Equal(t, strings.TrimSpace(inputMsg), resp)
-	assert.Equal(t, prompt+": ", outputBuffer.String())
+
+	err = bar.Clear()
+	assert.NoError(t, err)
+
+	err = bar.UpdateProgress(1.5)
+	assert.Error(t, err)
+
+	expected := "\r\u001B[K  0% Hello\r\u001B[K 30% Hello\r\u001B[K100% Hello\r\u001B[K"
+	assert.Equal(t, expected, writer.String())
 }
 
-var _ ui.ProgressBar = &fakeProgressBar{}
+func Test_DefaultUi(t *testing.T) {
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
 
-type fakeProgressBar struct{}
+	name := "Hans"
+	stdin.WriteString(name + "\n")
 
-func (f fakeProgressBar) UpdateProgress(_ float64) error { return nil }
-func (f fakeProgressBar) SetTitle(_ string)              {}
-func (f fakeProgressBar) Clear() error                   { return nil }
+	ui := newConsoleUi(stdin, stdout, stderr)
+	bar := ui.NewProgressBar()
+	assert.NotNil(t, bar)
 
-func TestNewProgressBar_ReturnsCorrectProgressBar(t *testing.T) {
-	customProgressBar := &fakeProgressBar{}
-	builder := ui.NewConsoleUiBuilder().
-		WithProgressBarGenerator(func() ui.ProgressBar {
-			return customProgressBar
-		})
-
-	userInterface, err := builder.Build()
+	// the bar will not render since the writer is not a TTY
+	bar.SetTitle("Hello")
+	err := bar.UpdateProgress(InfiniteProgress)
 	assert.NoError(t, err)
 
-	progressBar := userInterface.NewProgressBar()
-	assert.Equal(t, customProgressBar, progressBar)
+	err = bar.Clear()
+	assert.NoError(t, err)
+
+	err = ui.Output("Hello")
+	assert.NoError(t, err)
+
+	in, err := ui.Input("Enter your name")
+	assert.NoError(t, err)
+	assert.Equal(t, name, in)
+
+	err = ui.OutputError(fmt.Errorf("Error!"))
+	assert.NoError(t, err)
+
+	assert.Equal(t, "Hello\nEnter your name: Error: Error!\n", stdout.String())
+	assert.Equal(t, "", stderr.String())
 }
