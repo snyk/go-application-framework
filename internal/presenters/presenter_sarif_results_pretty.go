@@ -58,6 +58,12 @@ func WithTestPath(testPath string) PresenterOption {
 	}
 }
 
+func WithSeverityThershold(severityMinLevel string) PresenterOption {
+	return func(p *Presenter) {
+		p.SeverityMinLevel = severityMinLevel
+	}
+}
+
 func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *Presenter {
 	p := &Presenter{
 		ShowIgnored:      false,
@@ -65,7 +71,7 @@ func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOpt
 		Input:            sarifDocument,
 		OrgName:          "",
 		TestPath:         "",
-		SeverityMinLevel: "high",
+		SeverityMinLevel: "low",
 	}
 
 	for _, option := range options {

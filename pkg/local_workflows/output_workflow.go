@@ -36,6 +36,7 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.Bool(configuration.FLAG_ONLY_IGNORES, false, "Hide open issues in the output")
+	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
@@ -167,6 +168,7 @@ func humanReadableSarifOutput(config configuration.Configuration, input []workfl
 		presenters.WithTestPath(input[i].GetContentLocation()),
 		presenters.WithIgnored(includeIgnoredFindings),
 		presenters.WithOpen(includeOpenFindings),
+		presenters.WithSeverityThershold(config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)),
 	)
 
 	humanReadableResult, err := p.Render()

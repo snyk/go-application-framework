@@ -236,6 +236,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// mock assertions
 		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
 			assert.Contains(t, str, "Total issues:   5")
+			assert.Contains(t, str, "✗ [MEDIUM]")
 			assert.NotContains(t, str, "Ignored rule")
 		}).Times(1)
 
