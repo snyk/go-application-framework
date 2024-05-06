@@ -79,6 +79,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	}`
 
 	t.Run("should output to stdout by default for application/json", func(t *testing.T) {
+
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
@@ -292,6 +293,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		}).Times(1)
 
 		config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "high")
+		defer config.Set(configuration.FLAG_SEVERITY_THRESHOLD, nil)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
@@ -318,7 +320,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		}).Times(1)
 
 		config.Set(configuration.FLAG_ONLY_IGNORES, true)
-		config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "low")
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
