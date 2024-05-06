@@ -118,7 +118,7 @@ func handleContentTypeJson(config configuration.Configuration, input []workflow.
 	//  yes: use presenter
 	//  no: print json to cmd
 	if showToHuman && input[i].GetContentType() == content_type.SARIF_JSON {
-		humanReadanbleSarifOutput(config, input, i, outputDestination, debugLogger, singleData)
+		humanReadableSarifOutput(config, input, i, outputDestination, debugLogger, singleData)
 	} else {
 		// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
 		if !printJsonToCmd && !writeToFile {
@@ -151,7 +151,7 @@ func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, 
 	return nil
 }
 
-func humanReadanbleSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
+func humanReadableSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
 	includeOpenFindings := !config.GetBool(configuration.FLAG_ONLY_IGNORES)
 	includeIgnoredFindings := config.GetBool(configuration.FLAG_INCLUDE_IGNORES) || config.GetBool(configuration.FLAG_ONLY_IGNORES)
 
