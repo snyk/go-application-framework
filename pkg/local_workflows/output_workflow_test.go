@@ -79,7 +79,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	}`
 
 	t.Run("should output to stdout by default for application/json", func(t *testing.T) {
-
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
