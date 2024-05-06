@@ -97,7 +97,7 @@ func (p *Presenter) Render() (string, error) {
 	summaryData := sarif_utils.CreateCodeSummary(&p.Input)
 	findings :=
 		SortFindings(convertSarifToFindingsList(p.Input), summaryData.SeverityOrderAsc)
-	summaryOutput, err := RenderSummary(summaryData, p.OrgName, p.TestPath)
+	summaryOutput, err := RenderSummary(summaryData, p.OrgName, p.TestPath, p.SeverityMinLevel)
 
 	if err != nil {
 		return "", err

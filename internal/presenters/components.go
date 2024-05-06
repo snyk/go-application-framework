@@ -103,18 +103,15 @@ func RenderTip(str string) string {
 }
 
 func reverseSlice(original []string) []string {
-	// Create a copy of the slice using slice with no arguments
-	reversed := original[:len(original)] // Shallow copy
-
-	// Reverse the copied slice
-	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
-		reversed[i], reversed[j] = reversed[j], reversed[i]
+	reversed := make([]string, 0, len(original))
+	for i := len(original) - 1; i >= 0; i-- {
+		reversed = append(reversed, original[i])
 	}
 
 	return reversed
 }
 
-func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string) (string, error) {
+func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string, severityMinLevel string) (string, error) {
 	var buff bytes.Buffer
 	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
 
@@ -132,13 +129,18 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 	openIssueLabelledCount := ""
 	ignoredIssueLabelledCount := ""
 
-	slices.Reverse(summary.SeverityOrderAsc)
-
+	minLevelPointer := slices.Index(summary.SeverityOrderAsc, severityMinLevel)
 	reversedSlice := reverseSlice(summary.SeverityOrderAsc)
 
 	for _, severity := range reversedSlice {
 		for _, result := range summary.Results {
+			satisfyMinLevel := slices.Index(summary.SeverityOrderAsc, result.Severity) >= minLevelPointer
 			if result.Severity == severity {
+				if !satisfyMinLevel {
+					openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+					ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+					continue
+				}
 				totalIssueCount += result.Total
 				openIssueCount += result.Open
 				ignoredIssueCount += result.Ignored

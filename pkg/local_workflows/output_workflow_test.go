@@ -286,7 +286,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// mock assertions
 		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
-			assert.Contains(t, str, "Open issues:    3")
+			assert.Contains(t, str, "Open issues:    2")
+			assert.Contains(t, str, "0 MEDIUM")
 			assert.NotContains(t, str, "✗ [MEDIUM]")
 		}).Times(1)
 
@@ -317,6 +318,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		}).Times(1)
 
 		config.Set(configuration.FLAG_ONLY_IGNORES, true)
+		config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "low")
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
