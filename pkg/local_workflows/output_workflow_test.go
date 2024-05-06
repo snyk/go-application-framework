@@ -274,9 +274,33 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, []workflow.Data{}, output)
 	})
 
+	t.Run("should print human readable output excluding medium severity issues", func(t *testing.T) {
+		input := getSarifInput()
+		rawSarif, err := json.Marshal(input)
+		assert.Nil(t, err)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
+		sarifData.SetContentLocation("/mypath")
+
+		// mock assertions
+		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
+			assert.Contains(t, str, "Open issues:    3")
+			assert.NotContains(t, str, "✗ [MEDIUM]")
+		}).Times(1)
+
+		config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "high")
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+	})
+
 	t.Run("should print human readable output for sarif data only showing ignored data", func(t *testing.T) {
 		input := getSarifInput()
-
 		rawSarif, err := json.Marshal(input)
 		assert.Nil(t, err)
 

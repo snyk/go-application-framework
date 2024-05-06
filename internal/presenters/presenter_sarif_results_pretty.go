@@ -24,11 +24,12 @@ type FindingProperty struct {
 }
 
 type Presenter struct {
-	ShowIgnored bool
-	ShowOpen    bool
-	Input       sarif.SarifDocument
-	OrgName     string
-	TestPath    string
+	ShowIgnored      bool
+	ShowOpen         bool
+	Input            sarif.SarifDocument
+	OrgName          string
+	TestPath         string
+	SeverityMinLevel string
 }
 
 type PresenterOption func(*Presenter)
@@ -59,11 +60,12 @@ func WithTestPath(testPath string) PresenterOption {
 
 func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *Presenter {
 	p := &Presenter{
-		ShowIgnored: false,
-		ShowOpen:    true,
-		Input:       sarifDocument,
-		OrgName:     "",
-		TestPath:    "",
+		ShowIgnored:      false,
+		ShowOpen:         true,
+		Input:            sarifDocument,
+		OrgName:          "",
+		TestPath:         "",
+		SeverityMinLevel: "high",
 	}
 
 	for _, option := range options {
@@ -71,6 +73,18 @@ func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOpt
 	}
 
 	return p
+}
+
+func FilterFindingsBySeverity(findings []Finding, minLevel string, severityOrder []string) []Finding {
+	var filteredFindings []Finding
+	minLevelPointer := slices.Index(severityOrder, minLevel)
+	for _, finding := range findings {
+		level := slices.Index(severityOrder, finding.Severity)
+		if level >= minLevelPointer {
+			filteredFindings = append(filteredFindings, finding)
+		}
+	}
+	return filteredFindings
 }
 
 func (p *Presenter) Render() (string, error) {
@@ -82,6 +96,9 @@ func (p *Presenter) Render() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	// Filter findings based on severity
+	findings = FilterFindingsBySeverity(findings, p.SeverityMinLevel, summaryData.SeverityOrderAsc)
 
 	str := strings.Join([]string{
 		"",

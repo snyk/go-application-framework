@@ -102,6 +102,18 @@ func RenderTip(str string) string {
 	return fmt.Sprintf("\n💡 Tip\n\n%s", str)
 }
 
+func reverseSlice(original []string) []string {
+	// Create a copy of the slice using slice with no arguments
+	reversed := original[:len(original)] // Shallow copy
+
+	// Reverse the copied slice
+	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
+		reversed[i], reversed[j] = reversed[j], reversed[i]
+	}
+
+	return reversed
+}
+
 func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string) (string, error) {
 	var buff bytes.Buffer
 	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
@@ -122,7 +134,9 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 
 	slices.Reverse(summary.SeverityOrderAsc)
 
-	for _, severity := range summary.SeverityOrderAsc {
+	reversedSlice := reverseSlice(summary.SeverityOrderAsc)
+
+	for _, severity := range reversedSlice {
 		for _, result := range summary.Results {
 			if result.Severity == severity {
 				totalIssueCount += result.Total
