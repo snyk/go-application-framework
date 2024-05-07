@@ -56,6 +56,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
+			output = append(output, input[i])
 			continue
 		}
 
