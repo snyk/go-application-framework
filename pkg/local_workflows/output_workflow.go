@@ -50,7 +50,11 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 func filterSummaryOutput(config configuration.Configuration, input workflow.Data) (workflow.Data, error) {
 	// Parse the summary data
 	summary := json_schemas.NewTestSummary("")
-	err := json.Unmarshal(input.GetPayload().([]byte), &summary)
+	payload, ok := input.GetPayload().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
+	}
+	err := json.Unmarshal(payload, &summary)
 	if err != nil {
 		return input, err
 	}
