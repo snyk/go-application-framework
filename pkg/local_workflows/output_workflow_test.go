@@ -284,7 +284,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 
-		summaryPayload, _ := json.Marshal(json_schemas.TestSummary{
+		summaryPayload, err := json.Marshal(json_schemas.TestSummary{
 			Results: []json_schemas.TestSummaryResult{{
 				Severity: "critical",
 				Total:    99,
@@ -298,7 +298,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 			}},
 			Type: "sast",
 		})
-		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(summaryPayload))
+		assert.Nil(t, err)
+		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, summaryPayload)
 		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
 		sarifData.SetContentLocation("/mypath")
 
@@ -327,7 +328,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 			assert.NotEqual(t, "medium", result.Severity)
 		}
 		assert.Equal(t, 1, len(output))
-
 	})
 
 	t.Run("should print human readable output for sarif data only showing ignored data", func(t *testing.T) {
