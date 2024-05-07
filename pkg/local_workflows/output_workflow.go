@@ -3,9 +3,11 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
@@ -13,6 +15,7 @@ import (
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -44,6 +47,38 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	return err
 }
 
+func filterSummaryOutput(config configuration.Configuration, input workflow.Data) (workflow.Data, error) {
+	// Parse the summary data
+	summary := json_schemas.NewTestSummary("")
+	err := json.Unmarshal(input.GetPayload().([]byte), &summary)
+	if err != nil {
+		return input, err
+	}
+
+	minSeverity := config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)
+	minSeverityLevel := slices.Index(summary.SeverityOrderAsc, minSeverity)
+
+	// Filter out the results based on the configuration
+	var filteredResults []json_schemas.TestSummaryResult
+
+	for _, result := range summary.Results {
+		severityLevel := slices.Index(summary.SeverityOrderAsc, result.Severity)
+		if severityLevel >= minSeverityLevel {
+			filteredResults = append(filteredResults, result)
+		}
+	}
+
+	summary.Results = filteredResults
+
+	bytes, err := json.Marshal(summary)
+	if err != nil {
+		return input, err
+	}
+
+	workflowId := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, content_type.TEST_SUMMARY)
+	return workflow.NewData(workflowId, content_type.TEST_SUMMARY, bytes), nil
+}
+
 // outputWorkflowEntryPoint defines the output entry point
 // the entry point is called by the engine when the workflow is invoked
 func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
@@ -56,7 +91,12 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
-			output = append(output, input[i])
+			outputSummary, err := filterSummaryOutput(config, input[i])
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to filter test summary output")
+				output = append(output, input[i])
+			}
+			output = append(output, outputSummary)
 			continue
 		}
 
