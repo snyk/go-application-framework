@@ -88,6 +88,7 @@ func (a *snykApiClient) GetUserMe() (string, error) {
 	// according to API spec for get /self
 	// username is not a mandatory field, only name and email
 	// service accounts contain only name (name of the service account token) and org_context uuid
+	// spec: https://apidocs.snyk.io/?version=2024-04-29#get-/self
 	if selfData.Data.Attributes.Username != "" {
 		return selfData.Data.Attributes.Username, nil
 	}
@@ -96,11 +97,7 @@ func (a *snykApiClient) GetUserMe() (string, error) {
 		return selfData.Data.Attributes.Name, nil
 	}
 
-	if selfData.Data.Attributes.Email != "" {
-		return selfData.Data.Attributes.Email, nil
-	}
-
-	return "", fmt.Errorf("error while extracting user: missing properties username/name/email")
+	return "", fmt.Errorf("error while extracting user: missing properties username/name")
 }
 
 // GetFeatureFlag determines the state of a feature flag for the specified organization.

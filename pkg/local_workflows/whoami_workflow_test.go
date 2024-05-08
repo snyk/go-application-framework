@@ -249,7 +249,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	// setup
-	expectedError := errors.New("error fetching user data: error while extracting user: missing properties username/name/email")
+	expectedError := errors.New("error fetching user data: error while extracting user: missing properties username/name")
 
 	// execute
 	_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
