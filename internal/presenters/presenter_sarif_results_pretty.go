@@ -26,7 +26,6 @@ type FindingProperty struct {
 
 type Presenter struct {
 	ShowIgnored      bool
-	ShowOpen         bool
 	Input            sarif.SarifDocument
 	OrgName          string
 	TestPath         string
@@ -38,12 +37,6 @@ type PresenterOption func(*Presenter)
 func WithIgnored(showIgnored bool) PresenterOption {
 	return func(p *Presenter) {
 		p.ShowIgnored = showIgnored
-	}
-}
-
-func WithOpen(showOpen bool) PresenterOption {
-	return func(p *Presenter) {
-		p.ShowOpen = showOpen
 	}
 }
 
@@ -68,7 +61,6 @@ func WithSeverityThershold(severityMinLevel string) PresenterOption {
 func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *Presenter {
 	p := &Presenter{
 		ShowIgnored:      false,
-		ShowOpen:         true,
 		Input:            sarifDocument,
 		OrgName:          "",
 		TestPath:         "",
@@ -110,7 +102,7 @@ func (p *Presenter) Render() (string, error) {
 	str := strings.Join([]string{
 		"",
 		renderBold(fmt.Sprintf("Testing %s ...", p.TestPath)),
-		RenderFindings(findings, p.ShowIgnored, p.ShowOpen),
+		RenderFindings(findings, p.ShowIgnored),
 		summaryOutput,
 		getFinalTip(p.ShowIgnored),
 		"",

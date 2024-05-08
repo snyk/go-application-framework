@@ -37,7 +37,6 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.Bool(OUTPUT_CONFIG_KEY_SARIF, false, "Print sarif output to console")
 	outputConfig.String(OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
-	outputConfig.Bool(configuration.FLAG_ONLY_IGNORES, false, "Hide open issues in the output")
 	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
@@ -198,8 +197,7 @@ func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, 
 }
 
 func humanReadableSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
-	includeOpenFindings := !config.GetBool(configuration.FLAG_ONLY_IGNORES)
-	includeIgnoredFindings := config.GetBool(configuration.FLAG_INCLUDE_IGNORES) || config.GetBool(configuration.FLAG_ONLY_IGNORES)
+	includeIgnoredFindings := config.GetBool(configuration.FLAG_INCLUDE_IGNORES)
 
 	var sarif sarif.SarifDocument
 	err := json.Unmarshal(singleData, &sarif)
@@ -212,7 +210,6 @@ func humanReadableSarifOutput(config configuration.Configuration, input []workfl
 		presenters.WithOrgName(config.GetString(configuration.ORGANIZATION)),
 		presenters.WithTestPath(input[i].GetContentLocation()),
 		presenters.WithIgnored(includeIgnoredFindings),
-		presenters.WithOpen(includeOpenFindings),
 		presenters.WithSeverityThershold(config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)),
 	)
 

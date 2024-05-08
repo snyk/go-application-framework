@@ -11,29 +11,24 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
-func RenderFindings(findings []Finding, showIgnored bool, showOpen bool) string {
+func RenderFindings(findings []Finding, showIgnored bool) string {
 	if len(findings) == 0 {
 		return ""
 	}
 
 	response := ""
 
-	if showOpen {
-		response += RenderTitle("Open Issues")
+	response += RenderTitle("Open Issues")
 
-		for _, finding := range findings {
-			if finding.Ignored {
-				continue
-			}
-			response += RenderFinding(finding)
+	for _, finding := range findings {
+		if finding.Ignored {
+			continue
 		}
-	}
-
-	if showOpen && showIgnored {
-		response += RenderDivider()
+		response += RenderFinding(finding)
 	}
 
 	if showIgnored {
+		response += RenderDivider()
 		response += RenderTitle("Ignored Issues")
 
 		for _, finding := range findings {
