@@ -34,7 +34,8 @@ const (
 	FF_CODE_CONSISTENT_IGNORES string = "internal_snyk_code_ignores_enabled"
 
 	// flags
-	FLAG_EXPERIMENTAL    string = "experimental"
-	FLAG_INCLUDE_IGNORES string = "include-ignores"
-	FLAG_ONLY_IGNORES    string = "only-ignores"
+	FLAG_EXPERIMENTAL       string = "experimental"
+	FLAG_INCLUDE_IGNORES    string = "include-ignores"
+	FLAG_ONLY_IGNORES       string = "only-ignores"
+	FLAG_SEVERITY_THRESHOLD string = "severity-threshold"
 )

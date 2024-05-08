@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
@@ -13,6 +14,7 @@ import (
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -36,11 +38,49 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.String(OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.Bool(configuration.FLAG_ONLY_IGNORES, false, "Hide open issues in the output")
+	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
 
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
 
 	return err
+}
+
+func filterSummaryOutput(config configuration.Configuration, input workflow.Data) (workflow.Data, error) {
+	// Parse the summary data
+	summary := json_schemas.NewTestSummary("")
+	payload, ok := input.GetPayload().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
+	}
+	err := json.Unmarshal(payload, &summary)
+	if err != nil {
+		return input, err
+	}
+
+	minSeverity := config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)
+	filteredSeverityOrderAsc := presenters.FilterSeverityASC(summary.SeverityOrderAsc, minSeverity)
+
+	// Filter out the results based on the configuration
+	var filteredResults []json_schemas.TestSummaryResult
+
+	for _, severity := range filteredSeverityOrderAsc {
+		for _, result := range summary.Results {
+			if severity == result.Severity {
+				filteredResults = append(filteredResults, result)
+			}
+		}
+	}
+
+	summary.Results = filteredResults
+
+	bytes, err := json.Marshal(summary)
+	if err != nil {
+		return input, err
+	}
+
+	workflowId := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "FilterTestSummary")
+	return workflow.NewData(workflowId, content_type.TEST_SUMMARY, bytes), nil
 }
 
 // outputWorkflowEntryPoint defines the output entry point
@@ -55,6 +95,12 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
+			outputSummary, err := filterSummaryOutput(config, input[i])
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to filter test summary output")
+				output = append(output, input[i])
+			}
+			output = append(output, outputSummary)
 			continue
 		}
 
@@ -118,7 +164,7 @@ func handleContentTypeJson(config configuration.Configuration, input []workflow.
 	//  yes: use presenter
 	//  no: print json to cmd
 	if showToHuman && input[i].GetContentType() == content_type.SARIF_JSON {
-		humanReadanbleSarifOutput(config, input, i, outputDestination, debugLogger, singleData)
+		humanReadableSarifOutput(config, input, i, outputDestination, debugLogger, singleData)
 	} else {
 		// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
 		if !printJsonToCmd && !writeToFile {
@@ -151,7 +197,7 @@ func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, 
 	return nil
 }
 
-func humanReadanbleSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
+func humanReadableSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
 	includeOpenFindings := !config.GetBool(configuration.FLAG_ONLY_IGNORES)
 	includeIgnoredFindings := config.GetBool(configuration.FLAG_INCLUDE_IGNORES) || config.GetBool(configuration.FLAG_ONLY_IGNORES)
 
@@ -167,6 +213,7 @@ func humanReadanbleSarifOutput(config configuration.Configuration, input []workf
 		presenters.WithTestPath(input[i].GetContentLocation()),
 		presenters.WithIgnored(includeIgnoredFindings),
 		presenters.WithOpen(includeOpenFindings),
+		presenters.WithSeverityThershold(config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)),
 	)
 
 	humanReadableResult, err := p.Render()

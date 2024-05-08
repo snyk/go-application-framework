@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/snyk/code-client-go/sarif"
+
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 )
 
@@ -24,11 +25,12 @@ type FindingProperty struct {
 }
 
 type Presenter struct {
-	ShowIgnored bool
-	ShowOpen    bool
-	Input       sarif.SarifDocument
-	OrgName     string
-	TestPath    string
+	ShowIgnored      bool
+	ShowOpen         bool
+	Input            sarif.SarifDocument
+	OrgName          string
+	TestPath         string
+	SeverityMinLevel string
 }
 
 type PresenterOption func(*Presenter)
@@ -57,13 +59,20 @@ func WithTestPath(testPath string) PresenterOption {
 	}
 }
 
+func WithSeverityThershold(severityMinLevel string) PresenterOption {
+	return func(p *Presenter) {
+		p.SeverityMinLevel = severityMinLevel
+	}
+}
+
 func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *Presenter {
 	p := &Presenter{
-		ShowIgnored: false,
-		ShowOpen:    true,
-		Input:       sarifDocument,
-		OrgName:     "",
-		TestPath:    "",
+		ShowIgnored:      false,
+		ShowOpen:         true,
+		Input:            sarifDocument,
+		OrgName:          "",
+		TestPath:         "",
+		SeverityMinLevel: "low",
 	}
 
 	for _, option := range options {
@@ -73,15 +82,30 @@ func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOpt
 	return p
 }
 
+func FilterFindingsBySeverity(findings []Finding, minLevel string, severityOrder []string) []Finding {
+	var filteredFindings []Finding
+
+	filteredSeverityASC := FilterSeverityASC(severityOrder, minLevel)
+	for _, finding := range findings {
+		if slices.Contains(filteredSeverityASC, finding.Severity) {
+			filteredFindings = append(filteredFindings, finding)
+		}
+	}
+	return filteredFindings
+}
+
 func (p *Presenter) Render() (string, error) {
 	summaryData := sarif_utils.CreateCodeSummary(&p.Input)
 	findings :=
 		SortFindings(convertSarifToFindingsList(p.Input), summaryData.SeverityOrderAsc)
-	summaryOutput, err := RenderSummary(summaryData, p.OrgName, p.TestPath)
+	summaryOutput, err := RenderSummary(summaryData, p.OrgName, p.TestPath, p.SeverityMinLevel)
 
 	if err != nil {
 		return "", err
 	}
+
+	// Filter findings based on severity
+	findings = FilterFindingsBySeverity(findings, p.SeverityMinLevel, summaryData.SeverityOrderAsc)
 
 	str := strings.Join([]string{
 		"",

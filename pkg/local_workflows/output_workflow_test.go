@@ -2,11 +2,13 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/stretchr/testify/assert"
 
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
@@ -176,7 +178,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, "unsupported output type: hammer/head", err.Error())
 	})
 
-	t.Run("should reject test summary mimeType", func(t *testing.T) {
+	t.Run("should not output anything for test summary mimeType", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(payload))
 
@@ -188,10 +190,10 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, 1, len(output))
 	})
 
-	t.Run("should reject versioned test summary mimeType", func(t *testing.T) {
+	t.Run("should not output anything for versioned test summary mimeType", func(t *testing.T) {
 		versionedTestSummaryContentType := content_type.TEST_SUMMARY + "; version=2024-04-10"
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, versionedTestSummaryContentType, []byte(payload))
@@ -204,7 +206,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, 1, len(output))
 	})
 
 	t.Run("should reject test summary mimeType and display known mimeType", func(t *testing.T) {
@@ -220,7 +222,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, 1, len(output))
 	})
 
 	t.Run("should print human readable output for sarif data without ignored rules", func(t *testing.T) {
@@ -236,6 +238,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// mock assertions
 		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
 			assert.Contains(t, str, "Total issues:   5")
+			assert.Contains(t, str, "✗ [MEDIUM]")
 			assert.NotContains(t, str, "Ignored rule")
 		}).Times(1)
 
@@ -274,9 +277,61 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, []workflow.Data{}, output)
 	})
 
+	t.Run("should print human readable output excluding medium severity issues", func(t *testing.T) {
+		input := getSarifInput()
+		rawSarif, err := json.Marshal(input)
+		assert.Nil(t, err)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+
+		summaryPayload, err := json.Marshal(json_schemas.TestSummary{
+			Results: []json_schemas.TestSummaryResult{{
+				Severity: "critical",
+				Total:    99,
+				Open:     97,
+				Ignored:  2,
+			}, {
+				Severity: "medium",
+				Total:    99,
+				Open:     97,
+				Ignored:  2,
+			}},
+			Type: "sast",
+		})
+		assert.Nil(t, err)
+		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, summaryPayload)
+		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
+		sarifData.SetContentLocation("/mypath")
+
+		// mock assertions
+		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
+			assert.Contains(t, str, "Open issues:    2")
+			assert.Contains(t, str, "0 MEDIUM")
+			assert.NotContains(t, str, "✗ [MEDIUM]")
+		}).Times(1)
+
+		config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "high")
+		defer config.Set(configuration.FLAG_SEVERITY_THRESHOLD, nil)
+
+		// execute
+		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData, testSummaryData}, outputDestination)
+		assert.Nil(t, err)
+
+		// Parse output payload
+		summary := json_schemas.NewTestSummary("")
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &summary)
+		assert.Nil(t, err)
+
+		// assert
+		for _, result := range summary.Results {
+			fmt.Println(result.Severity)
+			assert.NotEqual(t, "medium", result.Severity)
+		}
+		assert.Equal(t, 1, len(output))
+	})
+
 	t.Run("should print human readable output for sarif data only showing ignored data", func(t *testing.T) {
 		input := getSarifInput()
-
 		rawSarif, err := json.Marshal(input)
 		assert.Nil(t, err)
 
