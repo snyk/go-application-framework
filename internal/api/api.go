@@ -85,11 +85,22 @@ func (a *snykApiClient) GetUserMe() (string, error) {
 		return "", fmt.Errorf("error while fetching self data: %w", err) // Prioritize error
 	}
 
-	if len(selfData.Data.Attributes.Username) == 0 {
-		return "", fmt.Errorf("error while extracting user: missing property 'username'")
+	// according to API spec for get /self
+	// username is not a mandatory field, only name and email
+	// service accounts contain only name (name of the service account token) and org_context uuid
+	if selfData.Data.Attributes.Username != "" {
+		return selfData.Data.Attributes.Username, nil
 	}
 
-	return selfData.Data.Attributes.Username, nil
+	if selfData.Data.Attributes.Name != "" {
+		return selfData.Data.Attributes.Name, nil
+	}
+
+	if selfData.Data.Attributes.Email != "" {
+		return selfData.Data.Attributes.Email, nil
+	}
+
+	return "", fmt.Errorf("error while extracting user: missing properties username/name/email")
 }
 
 // GetFeatureFlag determines the state of a feature flag for the specified organization.
