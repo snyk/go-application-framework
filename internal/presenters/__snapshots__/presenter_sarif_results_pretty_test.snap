@@ -32,7 +32,7 @@ Open Issues
 
 💡 Tip
 
-To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+To view ignored issues, use the --include-ignores option.
 
 ---
 
@@ -93,7 +93,7 @@ Open Issues
 
 💡 Tip
 
-To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+To view ignored issues, use the --include-ignores option.
 
 ---
 
@@ -113,7 +113,7 @@ Testing /path/to/project ...
 
 💡 Tip
 
-To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+To view ignored issues, use the --include-ignores option.
 
 ---
 
@@ -174,7 +174,7 @@ To view ignored issues, use the --include-ignores option. To view ignored issues
 
 💡 Tip
 
-To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+To view ignored issues, use the --include-ignores option.
 
 ---
 
@@ -219,7 +219,7 @@ Open Issues
 
 💡 Tip
 
-To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option.
+To view ignored issues, use the --include-ignores option.
 
 ---
 
@@ -315,8 +315,5 @@ To edit or remove the ignore please go to: https://app.snyk.io/
 │   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]     │
 ╰─────────────────────────────────────────────────────╯
 
-💡 Tip
-
-To view ignored issues only, use the --only-ignores option.
 
 ---

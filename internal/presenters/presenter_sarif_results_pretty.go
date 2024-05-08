@@ -112,7 +112,7 @@ func (p *Presenter) Render() (string, error) {
 		renderBold(fmt.Sprintf("Testing %s ...", p.TestPath)),
 		RenderFindings(findings, p.ShowIgnored, p.ShowOpen),
 		summaryOutput,
-		getFinalTip(p.ShowIgnored, p.ShowOpen),
+		getFinalTip(p.ShowIgnored),
 		"",
 	}, "\n")
 
@@ -216,14 +216,10 @@ func convertSarifToFindingsList(input sarif.SarifDocument) []Finding {
 	return findings
 }
 
-func getFinalTip(showIgnored bool, showOpen bool) string {
-	tip := "To view ignored issues, use the --include-ignores option. To view ignored issues only, use the --only-ignores option."
+func getFinalTip(showIgnored bool) string {
+	tip := "To view ignored issues, use the --include-ignores option."
 	if showIgnored {
-		tip = `To view ignored issues only, use the --only-ignores option.`
-	}
-
-	if showIgnored && !showOpen {
-		tip = `To view ignored and open issues, use the --include-ignores option.`
+		return ""
 	}
 
 	return RenderTip(tip)
