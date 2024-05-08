@@ -9,8 +9,10 @@ import (
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/muesli/termenv"
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/internal/presenters"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/presenters"
 )
 
 func TestPresenterSarifResultsPretty_NoIssues(t *testing.T) {
@@ -186,4 +188,26 @@ func TestPresenterSarifResultsPretty_OnlyIgnored(t *testing.T) {
 	require.Contains(t, result, "To view ignored and open issues, use the --include-ignores option.")
 
 	snaps.MatchSnapshot(t, result)
+}
+
+func TestFilterSeverityASC(t *testing.T) {
+	input := []string{"low", "medium", "high", "critical"}
+
+	t.Run("Threshold medium", func(t *testing.T) {
+		expected := []string{"medium", "high", "critical"}
+		actual := presenters.FilterSeverityASC(input, "medium")
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("Threshold critical", func(t *testing.T) {
+		expected := []string{"critical"}
+		actual := presenters.FilterSeverityASC(input, "critical")
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("Threshold unknown", func(t *testing.T) {
+		expected := input
+		actual := presenters.FilterSeverityASC(input, "unknown")
+		assert.Equal(t, expected, actual)
+	})
 }

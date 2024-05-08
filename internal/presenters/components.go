@@ -102,13 +102,12 @@ func RenderTip(str string) string {
 	return fmt.Sprintf("\n💡 Tip\n\n%s", str)
 }
 
-func reverseSlice(original []string) []string {
-	reversed := make([]string, 0, len(original))
-	for i := len(original) - 1; i >= 0; i-- {
-		reversed = append(reversed, original[i])
+func FilterSeverityASC(original []string, severityMinLevel string) []string {
+	minLevelPointer := slices.Index(original, severityMinLevel)
+	if minLevelPointer >= 0 {
+		return original[minLevelPointer:]
 	}
-
-	return reversed
+	return original
 }
 
 func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string, severityMinLevel string) (string, error) {
@@ -129,12 +128,13 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 	openIssueLabelledCount := ""
 	ignoredIssueLabelledCount := ""
 
-	minLevelPointer := slices.Index(summary.SeverityOrderAsc, severityMinLevel)
-	reversedSlice := reverseSlice(summary.SeverityOrderAsc)
+	filteredSeverityASC := FilterSeverityASC(summary.SeverityOrderAsc, severityMinLevel)
+	reversedSlice := slices.Clone(summary.SeverityOrderAsc)
+	slices.Reverse(reversedSlice)
 
 	for _, severity := range reversedSlice {
+		satisfyMinLevel := slices.Contains(filteredSeverityASC, severity)
 		for _, result := range summary.Results {
-			satisfyMinLevel := slices.Index(summary.SeverityOrderAsc, result.Severity) >= minLevelPointer
 			if result.Severity == severity {
 				if !satisfyMinLevel {
 					openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))

@@ -3,7 +3,6 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -60,15 +59,16 @@ func filterSummaryOutput(config configuration.Configuration, input workflow.Data
 	}
 
 	minSeverity := config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)
-	minSeverityLevel := slices.Index(summary.SeverityOrderAsc, minSeverity)
+	filteredSeverityOrderAsc := presenters.FilterSeverityASC(summary.SeverityOrderAsc, minSeverity)
 
 	// Filter out the results based on the configuration
 	var filteredResults []json_schemas.TestSummaryResult
 
-	for _, result := range summary.Results {
-		severityLevel := slices.Index(summary.SeverityOrderAsc, result.Severity)
-		if severityLevel >= minSeverityLevel {
-			filteredResults = append(filteredResults, result)
+	for _, severity := range filteredSeverityOrderAsc {
+		for _, result := range summary.Results {
+			if severity == result.Severity {
+				filteredResults = append(filteredResults, result)
+			}
 		}
 	}
 
@@ -79,7 +79,7 @@ func filterSummaryOutput(config configuration.Configuration, input workflow.Data
 		return input, err
 	}
 
-	workflowId := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, content_type.TEST_SUMMARY)
+	workflowId := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "FilterTestSummary")
 	return workflow.NewData(workflowId, content_type.TEST_SUMMARY, bytes), nil
 }
 

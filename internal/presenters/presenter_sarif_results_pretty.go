@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/snyk/code-client-go/sarif"
+
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 )
 
@@ -83,10 +84,10 @@ func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOpt
 
 func FilterFindingsBySeverity(findings []Finding, minLevel string, severityOrder []string) []Finding {
 	var filteredFindings []Finding
-	minLevelPointer := slices.Index(severityOrder, minLevel)
+
+	filteredSeverityASC := FilterSeverityASC(severityOrder, minLevel)
 	for _, finding := range findings {
-		level := slices.Index(severityOrder, finding.Severity)
-		if level >= minLevelPointer {
+		if slices.Contains(filteredSeverityASC, finding.Severity) {
 			filteredFindings = append(filteredFindings, finding)
 		}
 	}
