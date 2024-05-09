@@ -68,6 +68,7 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 			Id:       &selfRes.Data.Id,
 			UserName: &selfRes.Data.Attributes.Username,
 			Email:    &selfRes.Data.Attributes.Email,
+			Name:     &selfRes.Data.Attributes.Name,
 		}
 
 		// parse response
