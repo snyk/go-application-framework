@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +34,7 @@ func TestFileFilter_GetAllFiles(t *testing.T) {
 		tempFile2 := filepath.Join(tempDir, "test2.ts")
 		createFileInPath(t, tempFile2, []byte{})
 
-		fileFilter := NewFileFilter(tempDir)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualFiles := fileFilter.GetAllFiles()
 		expectedFiles := []string{tempFile1, tempFile2}
 
@@ -56,7 +57,7 @@ func TestFileFilter_GetRules(t *testing.T) {
 
 	t.Run("includes default rules", func(t *testing.T) {
 		// create fileFilter
-		fileFilter := NewFileFilter(tempDir)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules([]string{})
 		assert.NoError(t, err)
 
@@ -70,7 +71,7 @@ func TestFileFilter_GetRules(t *testing.T) {
 
 		// create fileFilter
 		ruleFiles := []string{".gitignore"}
-		fileFilter := NewFileFilter(tempDir)
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
 		actualRules, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
@@ -93,7 +94,7 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupTestFileSystem(t, testCase)
 
-			fileFilter := NewFileFilter(testCase.repoPath)
+			fileFilter := NewFileFilter(testCase.repoPath, &log.Logger)
 
 			files := fileFilter.GetAllFiles()
 
@@ -138,7 +139,7 @@ func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		fileFilter := NewFileFilter(rootDir)
+		fileFilter := NewFileFilter(rootDir, &log.Logger)
 
 		b.StartTimer()
 		files := fileFilter.GetAllFiles()

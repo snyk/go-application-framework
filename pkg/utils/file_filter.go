@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"fmt"
+	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
@@ -14,12 +14,14 @@ import (
 type FileFilter struct {
 	path         string
 	defaultRules []string
+	logger       *zerolog.Logger
 }
 
-func NewFileFilter(path string) *FileFilter {
+func NewFileFilter(path string, logger *zerolog.Logger) *FileFilter {
 	return &FileFilter{
 		path:         path,
 		defaultRules: []string{"**/.git/**"},
+		logger:       logger,
 	}
 }
 
@@ -35,7 +37,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 			return err
 		})
 		if err != nil {
-			fmt.Printf("walk dir failed: %v", err)
+			fw.logger.Error().Msgf("walk dir failed: %v", err)
 		}
 	}()
 
@@ -57,7 +59,7 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	}
 
 	// iterate ignore filesToFilter and extract glob patterns
-	globs, err := buildGlobs(ignoreFiles)
+	globs, err := fw.buildGlobs(ignoreFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +89,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
-func buildGlobs(ignoreFiles []string) ([]string, error) {
+func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
 		var content []byte
@@ -97,7 +99,7 @@ func buildGlobs(ignoreFiles []string) ([]string, error) {
 		}
 
 		if filepath.Base(ignoreFile) == ".snyk" { // .snyk files are yaml files and should be parsed differently
-			parsedRules := parseDotSnykFile(content, filepath.Dir(ignoreFile))
+			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile))
 			globs = append(globs, parsedRules...)
 		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
 			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
@@ -106,6 +108,33 @@ func buildGlobs(ignoreFiles []string) ([]string, error) {
 	}
 
 	return globs, nil
+}
+
+// parseDotSnykFile builds a list of glob patterns from a given .snyk style file
+func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string {
+	type DotSnykRules struct {
+		Exclude struct {
+			Code   []string `yaml:"code"`
+			Global []string `yaml:"global"`
+		} `yaml:"exclude"`
+	}
+
+	var rules DotSnykRules
+	err := yaml.Unmarshal(content, &rules)
+	if err != nil {
+		fw.logger.Error().Msgf("parse .snyk failed: %v", err)
+		return nil
+	}
+
+	var globs []string
+	for _, codeRule := range rules.Exclude.Code {
+		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
+	}
+	for _, codeRule := range rules.Exclude.Global {
+		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
+	}
+
+	return globs
 }
 
 // parseIgnoreFile builds a list of glob patterns from a given .gitignore style file
@@ -121,33 +150,6 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 		ignores = append(ignores, globs...)
 	}
 	return ignores
-}
-
-// parseDotSnykFile builds a list of glob patterns from a given .snyk style file
-func parseDotSnykFile(content []byte, filePath string) []string {
-	type DotSnykRules struct {
-		Exclude struct {
-			Code   []string `yaml:"code"`
-			Global []string `yaml:"global"`
-		} `yaml:"exclude"`
-	}
-
-	var rules DotSnykRules
-	err := yaml.Unmarshal(content, &rules)
-	if err != nil {
-		fmt.Printf("parse .snyk failed: %v", err)
-		return nil
-	}
-
-	var globs []string
-	for _, codeRule := range rules.Exclude.Code {
-		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
-	}
-	for _, codeRule := range rules.Exclude.Global {
-		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
-	}
-
-	return globs
 }
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
