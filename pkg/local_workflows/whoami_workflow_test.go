@@ -20,23 +20,107 @@ import (
 
 const referenceUrl = "/rest/self?version=2024-04-22"
 
-func Test_WhoAmI_whoAmIWorkflowEntryPoint_requireExperimentalFlag(t *testing.T) {
+// Snyk API payload mock responses
+const happyPayloadRegularUser string = `{
+	"jsonapi": {
+	  "version": "1.0"
+	},
+	"data": {
+	  "type": "user",
+	  "id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4122",
+	  "attributes": {
+		"name": "jane doe",
+		"default_org_context": "55a348e2-c3ad-4bbc-b40e-9b232d1f4121",
+		"username": "jane.doe@snyk.io",
+		"email": "jane.doe@snyk.io",
+		"avatar_url": "https://s.gravxyztar.com/avatar/jane.doe@snyk.io.png"
+	  }
+	},
+	"links": {
+	  "self": "/self?version=2024-04-22"
+	}
+  }`
+
+const happyPayloadServiceUser string = `{
+	"jsonapi": {
+	  "version": "1.0"
+	},
+	"data": {
+	  "type": "service_account",
+	  "id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4122",
+	  "attributes": {
+		"name": "development",
+		"default_org_context": "55a348e2-c3ad-4bbc-b40e-9b232d1f4121"
+	  }
+	},
+	"links": {
+	  "self": "/self?version=2024-04-22"
+	}
+  }`
+
+const missingFieldsPayload string = `{
+	"jsonapi": {
+		"version": "1.0"
+	  },
+	  "data": {
+		"type": "service_account",
+		"id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4122",
+		"attributes": {
+		  "default_org_context": "55a348e2-c3ad-4bbc-b40e-9b232d1f4121"
+		}
+	  },
+	  "links": {
+		"self": "/self?version=2024-04-22"
+	  }
+	}`
+
+func setupMockContext(t *testing.T, payload string, experimental bool, json bool, statusCode int, mockClient bool) *mocks.MockInvocationContext {
+	// This method is a helper
+	t.Helper()
+
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
-	config.Set("experimental", false)
+	config.Set("experimental", experimental)
+	config.Set("json", json)
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 
+	var httpClient *http.Client = http.DefaultClient
+
+	if mockClient {
+		httpClient = newTestClient(func(req *http.Request) *http.Response {
+			// Test request parameters
+			assert.Equal(t, referenceUrl, req.URL.String())
+			assert.Equal(t, "GET", req.Method)
+
+			return &http.Response{
+				StatusCode: statusCode,
+				// Send response to be tested
+				Body: io.NopCloser(bytes.NewBufferString(payload)),
+				// Must be set to non-nil value or it panics
+				Header: make(http.Header),
+			}
+		})
+	}
+
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config)
 	invocationContextMock.EXPECT().GetLogger().Return(logger)
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock)
-	networkAccessMock.EXPECT().GetHttpClient().Return(http.DefaultClient).AnyTimes()
+	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 
+	return invocationContextMock
+}
+
+func Test_WhoAmI_whoAmIWorkflowEntryPoint_requireExperimentalFlag(t *testing.T) {
+	// Setup test environment
+	invocationContextMock := setupMockContext(t, "", false, false, http.StatusOK, false)
+
+	// Assert - whoami is only available with --experiimental flag
 	expectedError := errors.New("set `--experimental` flag to enable whoAmI command")
 
 	// run test
@@ -44,62 +128,20 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_requireExperimentalFlag(t *testing.T) 
 	assert.Equal(t, expectedError.Error(), err.Error())
 }
 
-func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
-	// setup
-	logger := log.New(os.Stderr, "test", 0)
-	config := configuration.New()
-	config.Set("experimental", true)
-
-	// Snyk API payload mock response
-	payload := `{
-		"Data": {
-		  "attributes": {
-			"avatar_url": "https://snyk.io/avatar.png",
-			"default_org_context": "18f054da-5e70-4000-8b3d-43783a372b01",
-			"email": "user.name@snyk.io",
-			"name": "user",
-			"username": "user.name@snyk.io"
-		  },
-		  "id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4121",
-		  "type": "principal"
-		}		
-	  }`
-
+func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathRegularUser(t *testing.T) {
 	// JSON reference of what the user should receive when passing the json flag
 	jsonOutput := `{
-		"id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4121",
-		"username": "user.name@snyk.io",
-		"email": "user.name@snyk.io"
+		"id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4122",
+		"name":"jane doe",
+		"username": "jane.doe@snyk.io",
+		"email": "jane.doe@snyk.io"
 		}`
 
-	// setup mocks
-	ctrl := gomock.NewController(t)
-	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
-	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
-		// Test request parameters
-		assert.Equal(t, referenceUrl, req.URL.String())
-		assert.Equal(t, "GET", req.Method)
-
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			// Send response to be tested
-			Body: io.NopCloser(bytes.NewBufferString(payload)),
-			// Must be set to non-nil value or it panics
-			Header: make(http.Header),
-		}
-	})
-
-	// invocation context mocks
-	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
-	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
-
 	t.Run("returns user name", func(t *testing.T) {
-		// setup
-		expectedResponse := "user.name@snyk.io"
+		// Setup test environment
+		invocationContextMock := setupMockContext(t, happyPayloadRegularUser, true, false, http.StatusOK, true)
+		// Expected response is the username
+		expectedResponse := "jane.doe@snyk.io"
 
 		// execute
 		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
@@ -111,8 +153,8 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 	})
 
 	t.Run("json flag returns full json response", func(t *testing.T) {
-		// setup
-		config.Set("json", true)
+		// Setup test environment
+		invocationContextMock := setupMockContext(t, happyPayloadRegularUser, true, true, http.StatusOK, true)
 
 		// execute
 		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
@@ -128,44 +170,67 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPath(t *testing.T) {
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &actual)
 		assert.Nil(t, err)
 
+		// The output should be a dump of the data from the API in json format
+		assert.Equal(t, expected, actual)
+		assert.Equal(t, "application/json", output[0].GetContentType())
+	})
+}
+
+func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathServiceUser(t *testing.T) {
+	// JSON reference of what the user should receive when passing the json flag
+	jsonOutput := `{
+		"id": "55a348e2-c3ad-4bbc-b40e-9b232d1f4122",
+		"name": "development",
+		"username": "",
+		"email": ""
+		}`
+
+	t.Run("returns user name", func(t *testing.T) {
+		// Setup test environment
+		invocationContextMock := setupMockContext(t, happyPayloadServiceUser, true, false, http.StatusOK, true)
+
+		// For a service account returns the name given when creating the token
+		expectedResponse := "development"
+
+		// execute
+		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+
+		// assert
+		assert.Nil(t, err)
+		assert.Equal(t, expectedResponse, output[0].GetPayload())
+		assert.Equal(t, "text/plain", output[0].GetContentType())
+	})
+
+	t.Run("json flag returns full json response", func(t *testing.T) {
+		// Setup test environment
+		invocationContextMock := setupMockContext(t, happyPayloadServiceUser, true, true, http.StatusOK, true)
+
+		// execute
+		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
+
+		// assert
+		assert.Nil(t, err)
+
+		var expected interface{}
+		err = json.Unmarshal([]byte(jsonOutput), &expected)
+		assert.Nil(t, err)
+
+		var actual interface{}
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &actual)
+		assert.Nil(t, err)
+
+		// The output should be a dump of the data from the API in json format
 		assert.Equal(t, expected, actual)
 		assert.Equal(t, "application/json", output[0].GetContentType())
 	})
 }
 
 func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
-	// setup
-	logger := log.New(os.Stderr, "test", 0)
-	config := configuration.New()
-	config.Set("experimental", true)
-
-	// setup mocks
-	ctrl := gomock.NewController(t)
-	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
-	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-
-	// invocation context mocks
-	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
-
 	t.Run("handles unauthorized access", func(t *testing.T) {
-		// setup
-		mockClient := newTestClient(func(req *http.Request) *http.Response {
-			// Test request parameters
-			assert.Equal(t, referenceUrl, req.URL.String())
-			assert.Equal(t, "GET", req.Method)
+		// Setup test environment
+		invocationContextMock := setupMockContext(t, "", true, true, http.StatusUnauthorized, true)
 
-			return &http.Response{
-				StatusCode: http.StatusUnauthorized,
-				// Send response to be tested
-				Body: io.NopCloser(bytes.NewBufferString("")),
-				// Must be set to non-nil value or it panics
-				Header: make(http.Header),
-			}
-		})
-		networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).Times(1)
-
+		// Should throw this error when res is 401
 		expectedError := errors.New("error fetching user data: error while fetching self data: API request failed (status: 401)")
 
 		// execute
@@ -176,22 +241,10 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 	})
 
 	t.Run("handles unknown statusCode", func(t *testing.T) {
-		// setup
-		mockClient := newTestClient(func(req *http.Request) *http.Response {
-			// Test request parameters
-			assert.Equal(t, referenceUrl, req.URL.String())
-			assert.Equal(t, "GET", req.Method)
+		// Setup test environment
+		invocationContextMock := setupMockContext(t, "", true, true, http.StatusInternalServerError, true)
 
-			return &http.Response{
-				StatusCode: http.StatusInternalServerError,
-				// Send response to be tested
-				Body: io.NopCloser(bytes.NewBufferString("")),
-				// Must be set to non-nil value or it panics
-				Header: make(http.Header),
-			}
-		})
-		networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).Times(1)
-
+		// Should throw this error when res is 500
 		expectedError := errors.New("error fetching user data: error while fetching self data: API request failed (status: 500)")
 
 		// execute
@@ -203,52 +256,10 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 }
 
 func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
-	// setup
-	logger := log.New(os.Stderr, "test", 0)
-	config := configuration.New()
-	config.Set("experimental", true)
+	// Setup test environment
+	invocationContextMock := setupMockContext(t, missingFieldsPayload, true, true, http.StatusOK, true)
 
-	payloadMissingUserNameProperty := `{
-		"id": "88c4a3b3-ac23-4cbe-8c28-228ff614910b",
-		"email": "user.email@snyk.io",
-		"orgs": [
-				{
-					"name": "Snyk AppSec",
-					"id": "4a3d29ab-6612-481b-83f2-aea6cf421ea5",
-					"group": {
-						"name": "snyk-sec-prod",
-						"id": "dd36a3c3-0e57-4702-81e6-a0e099e045a0"
-					}
-				}
-			]
-		}`
-
-	// setup mocks
-	ctrl := gomock.NewController(t)
-	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
-	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
-		// Test request parameters
-		assert.Equal(t, referenceUrl, req.URL.String())
-		assert.Equal(t, "GET", req.Method)
-
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			// Send response to be tested
-			Body: io.NopCloser(bytes.NewBufferString(payloadMissingUserNameProperty)),
-			// Must be set to non-nil value or it panics
-			Header: make(http.Header),
-		}
-	})
-
-	// invocation context mocks
-	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
-	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
-
-	// setup
+	// Expected error, the response is missing all of the fields name/email/username
 	expectedError := errors.New("error fetching user data: error while extracting user: missing properties username/name")
 
 	// execute
