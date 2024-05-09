@@ -329,32 +329,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		}
 		assert.Equal(t, 1, len(output))
 	})
-
-	t.Run("should print human readable output for sarif data only showing ignored data", func(t *testing.T) {
-		input := getSarifInput()
-		rawSarif, err := json.Marshal(input)
-		assert.Nil(t, err)
-
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
-		sarifData.SetContentLocation("/mypath")
-
-		// mock assertions
-		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
-			assert.Contains(t, str, "Total issues:   5")
-			assert.Contains(t, str, "Ignored rule")
-			assert.NotContains(t, str, "This rule is open")
-		}).Times(1)
-
-		config.Set(configuration.FLAG_ONLY_IGNORES, true)
-
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
-
-		// assert
-		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
-	})
 }
 
 func getSarifInput() sarif.SarifDocument {

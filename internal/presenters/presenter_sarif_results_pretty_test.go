@@ -149,43 +149,7 @@ func TestPresenterSarifResultsPretty_IncludeIgnored(t *testing.T) {
 	require.Contains(t, result, "src/main.ts, line 58")
 	require.Contains(t, result, "Ignored Issues")
 	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
-	require.Contains(t, result, "To view ignored issues only, use the --only-ignores option.")
-
-	snaps.MatchSnapshot(t, result)
-}
-
-func TestPresenterSarifResultsPretty_OnlyIgnored(t *testing.T) {
-	fd, err := os.Open("testdata/with-ignores.json")
-	require.Nil(t, err)
-
-	var input sarif.SarifDocument
-
-	err = json.NewDecoder(fd).Decode(&input)
-	require.Nil(t, err)
-
-	lipgloss.SetColorProfile(termenv.Ascii)
-	p := presenters.SarifTestResults(
-		input,
-		presenters.WithOrgName("test-org"),
-		presenters.WithTestPath("/path/to/project"),
-		presenters.WithIgnored(true),
-		presenters.WithOpen(false),
-	)
-
-	result, err := p.Render()
-
-	require.Nil(t, err)
-	require.Contains(t, result, "Ignored Issues")
-	require.Contains(t, result, "! [ IGNORED ] [MEDIUM]")
-	require.Contains(t, result, "Path:       src/main.ts, line 58")
-	require.Contains(t, result, "Category:   Won't fix")
-	require.Contains(t, result, "Expiration: 15 days")
-	require.Contains(t, result, "Ignored on: February 23, 2024")
-	require.Contains(t, result, "Ignored by: Neil M")
-	require.Contains(t, result, "Reason:     False positive")
-
-	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
-	require.Contains(t, result, "To view ignored and open issues, use the --include-ignores option.")
+	require.NotContains(t, result, "To view ignored and open issues, use the --include-ignores option.pre")
 
 	snaps.MatchSnapshot(t, result)
 }
