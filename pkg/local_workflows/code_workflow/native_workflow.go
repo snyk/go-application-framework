@@ -10,15 +10,20 @@ import (
 	codeclient "github.com/snyk/code-client-go"
 	codeclienthttp "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/sarif"
-	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
+	"github.com/snyk/code-client-go/scan"
 
+	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error)
+const (
+	RemoteRepoUrlFlagname = "remote-repo-url"
+)
+
+type OptionalAnalysisFunctions func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error)
 
 func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...OptionalAnalysisFunctions) ([]workflow.Data, error) {
 	// get necessary objects from invocation context
@@ -35,7 +40,12 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		analyzeFnc = opts[0]
 	}
 
-	result, err := analyzeFnc(path, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config)
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+	if err != nil {
+		logger.Warn().Err(err)
+	}
+
+	result, err := analyzeFnc(target, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config)
 	if err != nil || result == nil {
 		return nil, err
 	}
@@ -55,7 +65,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 }
 
 // default function that uses the code-client-go library
-func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration) (*sarif.SarifResponse, error) {
+func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration) (*sarif.SarifResponse, error) {
 	var result *sarif.SarifResponse
 
 	interactionId, err := uuid.GenerateUUID()
@@ -65,7 +75,7 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 
 	logger.Debug().Msgf("Interaction ID: %s", interactionId)
 
-	files, err := getFilesForPath(path, logger)
+	files, err := getFilesForPath(target.GetPath(), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +94,8 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		httpClient,
 		codeclient.WithLogger(logger),
 	)
-	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, path, files, changedFiles)
+
+	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
 	return result, err
 }
 

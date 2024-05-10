@@ -27,7 +27,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	flagSet.String("commit-id", "", "The unique identifier of the commit to test.")
 	flagSet.String("target-name", "", "The name of the target to test.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
-	flagSet.String("remote-repo-url", "", "The URL of the remote repository to test.")
+	flagSet.String(code_workflow.RemoteRepoUrlFlagname, "", "The URL of the remote repository to test.")
 	flagSet.Bool(configuration.FLAG_EXPERIMENTAL, false, "Enable experimental code test command")
 
 	return flagSet
@@ -60,7 +60,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	if ignoresFeatureFlag && !reportEnabled {
 		logger.Debug().Msg("Implementation: Native")
 
-		unsupportedParameter := []string{"severity-threshold", "project-name", "project-id", "commit-id", "target-name", "target-file", "remote-repo-url"}
+		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name", "target-file"}
 		for _, v := range unsupportedParameter {
 			if config.IsSet(v) {
 				logger.Warn().Msgf("The parameter \"%s\" is not yet supported in this experimental implementation!", v)

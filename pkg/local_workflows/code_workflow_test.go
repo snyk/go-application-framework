@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/code-client-go/scan"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
@@ -159,7 +160,13 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 		},
 	}
 
+	expectedRepoUrl := "https://hello.world"
+	expectedPath := "/var/lib/something"
+
 	config := configuration.NewInMemory()
+	config.Set(code_workflow.RemoteRepoUrlFlagname, expectedRepoUrl)
+	config.Set(configuration.INPUT_DIRECTORY, expectedPath)
+
 	networkAccess := networking.NewNetworkAccess(config)
 
 	mockController := gomock.NewController(t)
@@ -169,7 +176,10 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
 
-	analysisFunc := func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error) {
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+		assert.Equal(t, expectedPath, target.GetPath())
+		assert.Equal(t, expectedRepoUrl, target.(*scan.RepositoryTarget).GetRepositoryUrl())
+
 		response := &sarif.SarifResponse{
 			Sarif: sarif.SarifDocument{
 				Runs: []sarif.Run{
@@ -237,7 +247,7 @@ func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
 	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
 
-	analysisFunc := func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error) {
+	analysisFunc := func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error) {
 		return nil, fmt.Errorf("something went wrong")
 	}
 
