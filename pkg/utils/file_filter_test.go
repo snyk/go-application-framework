@@ -86,6 +86,33 @@ func TestFileFilter_GetRules(t *testing.T) {
 
 		assert.ElementsMatch(t, expectedRules, actualRules)
 	})
+
+	t.Run("only gets ignore rules from valid files", func(t *testing.T) {
+		// adds ignore file to filesystem
+		ignoreFile := filepath.Join(tempDir, ".gitignore")
+		createFileInPath(t, ignoreFile, []byte("test1.ts\n"))
+
+		// adds a similarly named ignore file to filesystem
+		almostAnIgnoreFile := filepath.Join(tempDir, "almost.gitignore.go")
+		createFileInPath(t, almostAnIgnoreFile, []byte("package main\n import \"fmt\"\n func main() { fmt.Println(\"hello world\") }"))
+
+		// create fileFilter
+		ruleFiles := []string{".gitignore"}
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		actualRules, err := fileFilter.GetRules(ruleFiles)
+		assert.NoError(t, err)
+
+		// create expected rules
+		expectedRules := append(
+			[]string{
+				fmt.Sprintf("%s/**/test1.ts/**", tempDir), // apply ignore in subDirs
+				fmt.Sprintf("%s/**/test1.ts", tempDir),    // apply ignore in curDir
+			},
+			fileFilter.defaultRules...,
+		)
+
+		assert.ElementsMatch(t, expectedRules, actualRules)
+	})
 }
 
 func TestFileFilter_GetFilteredFiles(t *testing.T) {
