@@ -65,7 +65,7 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 
 	logger.Debug().Msgf("Interaction ID: %s", interactionId)
 
-	files, err := getFilesForPath(path)
+	files, err := getFilesForPath(path, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -89,9 +89,9 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 }
 
 // Return a channel that notifies each file in the path that doesn't match the filter rules
-func getFilesForPath(path string) (<-chan string, error) {
-	filter := utils.NewFileFilter(path)
-	rules, err := filter.GetRules([]string{".gitignore", ".dcignore"})
+func getFilesForPath(path string, logger *zerolog.Logger) (<-chan string, error) {
+	filter := utils.NewFileFilter(path, logger)
+	rules, err := filter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
 	if err != nil {
 		return nil, err
 	}
