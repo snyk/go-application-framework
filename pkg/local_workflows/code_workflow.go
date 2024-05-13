@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	codeWorkflowName     = "code.test"
-	sastEnabledConfigKey = "internal_sast_enabled"
+	codeWorkflowName         = "code.test"
+	ConfigurationSastEnabled = "internal_sast_enabled"
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -71,7 +71,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 		return err
 	}
 
-	engine.GetConfiguration().AddDefaultValue(sastEnabledConfigKey, getSastEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(ConfigurationSastEnabled, getSastEnabled(engine))
 
 	return err
 }
@@ -82,7 +82,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
-	sastEnabled := config.GetBool(sastEnabledConfigKey)
+	sastEnabled := config.GetBool(ConfigurationSastEnabled)
 	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	reportEnabled := config.GetBool("report")
 
