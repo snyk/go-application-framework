@@ -103,6 +103,8 @@ func TestPresenterSarifResultsPretty_MediumHighIssuesWithColor(t *testing.T) {
 	result, err := p.Render()
 
 	require.Nil(t, err)
+	require.NotContains(t, result, "You are currently viewing results with --severity-threshold=high applied")
+
 	snaps.MatchSnapshot(t, result)
 }
 
@@ -126,6 +128,11 @@ func TestPresenterSarifResultsPretty_SeverityThresholdHighIssues(t *testing.T) {
 	result, err := p.Render()
 
 	require.Nil(t, err)
+	require.Contains(t, result, "[ 0 HIGH ]")
+	require.Contains(t, result, "[ 4 HIGH ]")
+
+	require.Contains(t, result, "You are currently viewing results with --severity-threshold=high applied")
+
 	snaps.MatchSnapshot(t, result)
 }
 

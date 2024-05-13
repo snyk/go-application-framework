@@ -306,7 +306,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// mock assertions
 		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
 			assert.Contains(t, str, "Open issues:    2")
-			assert.Contains(t, str, "0 MEDIUM")
 			assert.NotContains(t, str, "✗ [MEDIUM]")
 		}).Times(1)
 

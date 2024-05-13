@@ -11,7 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
-func RenderFindings(findings []Finding, showIgnored bool) string {
+func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApplied bool) string {
 	if len(findings) == 0 {
 		return ""
 	}
@@ -25,6 +25,10 @@ func RenderFindings(findings []Finding, showIgnored bool) string {
 			continue
 		}
 		response += RenderFinding(finding)
+	}
+
+	if isSeverityThresholdApplied {
+		response += RenderTip("You are currently viewing results with --severity-threshold=high applied.\nTo view all issues, remove the --severity-threshold flag\n")
 	}
 
 	if showIgnored {
@@ -107,10 +111,16 @@ func RenderTip(str string) string {
 }
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
+	if severityMinLevel == "" {
+		return original
+	}
+
 	minLevelPointer := slices.Index(original, severityMinLevel)
+
 	if minLevelPointer >= 0 {
 		return original[minLevelPointer:]
 	}
+
 	return original
 }
 
@@ -141,8 +151,6 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 		for _, result := range summary.Results {
 			if result.Severity == severity {
 				if !satisfyMinLevel {
-					openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
-					ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
 					continue
 				}
 				totalIssueCount += result.Total
