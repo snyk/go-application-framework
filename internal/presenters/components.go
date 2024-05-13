@@ -107,7 +107,7 @@ func FilterSeverityASC(original []string, severityMinLevel string) []string {
 
 func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string, severityMinLevel string) (string, error) {
 	var buff bytes.Buffer
-	var summaryTemplate = template.Must(template.New("summary").Parse(`Test Summary
+	var summaryTemplate = template.Must(template.New("summary").Parse(`{{ .SummaryTitle }}
 
   Organization:      {{ .Org }}
   Test type:         {{ .Type }}
@@ -153,6 +153,7 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 	}
 
 	err := summaryTemplate.Execute(&buff, struct {
+		SummaryTitle                    string
 		Org                             string
 		TestPath                        string
 		Type                            string
@@ -161,6 +162,7 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 		OpenIssueCountWithSeverities    string
 		IgnoredIssueCountWithSeverities string
 	}{
+		SummaryTitle:                    renderBold("Test Summary"),
 		Org:                             orgName,
 		TestPath:                        testPath,
 		Type:                            testType,
