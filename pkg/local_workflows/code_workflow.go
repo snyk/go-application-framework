@@ -1,15 +1,18 @@
 package localworkflows
 
 import (
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 const (
-	codeWorkflowName = "code.test"
+	codeWorkflowName     = "code.test"
+	sastEnabledConfigKey = "internal_sast_enabled"
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -36,11 +39,40 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
+func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		if existingValue == nil {
+			apiClient := api.NewApiInstance()
+			client := engine.GetNetworkAccess().GetHttpClient()
+			url := engine.GetConfiguration().GetString(configuration.API_URL)
+			org := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+			apiClient.Init(url, client)
+			response, err := apiClient.GetSastSettings(org)
+			if err != nil {
+				engine.GetLogger().Err(err).Msg("Failed to access settings.")
+				return false
+			}
+
+			return response.SastEnabled
+		} else {
+			return existingValue
+		}
+	}
+	return callback
+}
+
 // InitCodeWorkflow initializes the code workflow before registering it with the engine.
 func InitCodeWorkflow(engine workflow.Engine) error {
 	// register workflow with engine
 	flags := GetCodeFlagSet()
 	_, err := engine.Register(WORKFLOWID_CODE, workflow.ConfigurationOptionsFromFlagset(flags), codeWorkflowEntryPoint)
+
+	if err != nil {
+		return err
+	}
+
+	engine.GetConfiguration().AddDefaultValue(sastEnabledConfigKey, getSastEnabled(engine))
+
 	return err
 }
 
@@ -50,12 +82,25 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
+	sastEnabled := config.GetBool(sastEnabledConfigKey)
 	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	reportEnabled := config.GetBool("report")
 
 	logger.Debug().Msg("code workflow start")
+	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
 	logger.Debug().Msgf("Consistent Ignores: %v", ignoresFeatureFlag)
-	logger.Debug().Msgf("Report enabled: %v", reportEnabled)
+	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
+
+	if !sastEnabled {
+		err = snyk_errors.Error{
+			ID:             "Snyk-CLI-0001",
+			Title:          "Snyk Code is not supported",
+			Classification: "ACTIONABLE",
+			Level:          "warning",
+			Detail:         "Snyk Code is not supported for org " + config.GetString(configuration.ORGANIZATION) + ": enable in Settings > Snyk Code",
+		}
+		return result, err
+	}
 
 	if ignoresFeatureFlag && !reportEnabled {
 		logger.Debug().Msg("Implementation: Native")
