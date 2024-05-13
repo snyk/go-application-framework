@@ -155,17 +155,17 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 				totalIssueCount += result.Total
 				openIssueCount += result.Open
 				ignoredIssueCount += result.Ignored
-				openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Open, strings.ToUpper(severity)))
-				ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Ignored, strings.ToUpper(severity)))
+				openIssueLabelledCount += severityCount(severity, result.Open)
+				ignoredIssueLabelledCount += severityCount(severity, result.Ignored)
 			}
 		}
 
 		if !strings.Contains(openIssueLabelledCount, strings.ToUpper(severity)) && severityMinLevel == "" {
-			openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+			openIssueLabelledCount += severityCount(severity, 0)
 		}
 
 		if !strings.Contains(ignoredIssueLabelledCount, strings.ToUpper(severity)) && severityMinLevel == "" {
-			ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+			ignoredIssueLabelledCount += severityCount(severity, 0)
 		}
 	}
 
@@ -200,4 +200,8 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 	}
 
 	return boxStyle.Render(buff.String()), nil
+}
+
+func severityCount(severity string, count int) string {
+	return renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", count, strings.ToUpper(severity)))
 }
