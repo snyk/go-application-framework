@@ -31,11 +31,20 @@ func RenderFindings(findings []Finding, showIgnored bool) string {
 		response += RenderDivider()
 		response += RenderTitle("Ignored Issues")
 
+		ignoredFindings := ""
+
 		for _, finding := range findings {
 			if !finding.Ignored {
 				continue
 			}
-			response += RenderFinding(finding)
+			ignoredFindings += RenderFinding(finding)
+		}
+
+		fmt.Printf("ignored findings: %s", ignoredFindings)
+		if ignoredFindings == "" {
+			response += renderBold("  There are no ignored issues\n")
+		} else {
+			response += ignoredFindings
 		}
 
 		response += RenderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/") + "\n"
