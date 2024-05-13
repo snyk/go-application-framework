@@ -70,14 +70,24 @@ func (ui *consoleUi) OutputError(err error) error {
 	if errors.As(err, &snykError) {
 		mainPattern := "%-8s %s"
 		titlePattern := "%s (%s)"
-		utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, strings.ToUpper(snykError.Level), fmt.Sprintf(titlePattern, snykError.Title, snykError.ID))))
+
+		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, strings.ToUpper(snykError.Level), fmt.Sprintf(titlePattern, snykError.Title, snykError.ID))))
+		if uiError != nil {
+			return uiError
+		}
 
 		if len(snykError.Detail) > 0 {
-			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Info:", snykError.Detail)))
+			uiError = utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Info:", snykError.Detail)))
+			if uiError != nil {
+				return uiError
+			}
 		}
 
 		for _, l := range snykError.Links {
-			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Help:", l)))
+			uiError = utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Help:", l)))
+			if uiError != nil {
+				return uiError
+			}
 		}
 
 		return nil

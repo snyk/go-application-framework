@@ -174,6 +174,8 @@ func (a *snykApiClient) GetSastSettings(orgId string) (contract.SastResponse, er
 	if err != nil {
 		return defaultResult, fmt.Errorf("unable to retrieve settings: %w", err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
