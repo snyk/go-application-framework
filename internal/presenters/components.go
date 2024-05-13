@@ -11,7 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
-func RenderFindings(findings []Finding, showIgnored bool) string {
+func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApplied bool) string {
 	if len(findings) == 0 {
 		return ""
 	}
@@ -27,6 +27,10 @@ func RenderFindings(findings []Finding, showIgnored bool) string {
 		response += RenderFinding(finding)
 	}
 
+	if isSeverityThresholdApplied {
+		response += RenderTip("You are currently viewing results with --severity-threshold=high applied.\nTo view all issues, remove the --severity-threshold flag\n")
+	}
+
 	if showIgnored {
 		response += RenderDivider()
 		response += RenderTitle("Ignored Issues")
@@ -40,7 +44,6 @@ func RenderFindings(findings []Finding, showIgnored bool) string {
 			ignoredFindings += RenderFinding(finding)
 		}
 
-		fmt.Printf("ignored findings: %s", ignoredFindings)
 		if ignoredFindings == "" {
 			response += renderBold("  There are no ignored issues\n")
 		} else {
@@ -107,10 +110,16 @@ func RenderTip(str string) string {
 }
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
+	if severityMinLevel == "" {
+		return original
+	}
+
 	minLevelPointer := slices.Index(original, severityMinLevel)
+
 	if minLevelPointer >= 0 {
 		return original[minLevelPointer:]
 	}
+
 	return original
 }
 
@@ -141,24 +150,22 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 		for _, result := range summary.Results {
 			if result.Severity == severity {
 				if !satisfyMinLevel {
-					openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
-					ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
 					continue
 				}
 				totalIssueCount += result.Total
 				openIssueCount += result.Open
 				ignoredIssueCount += result.Ignored
-				openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Open, strings.ToUpper(severity)))
-				ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Ignored, strings.ToUpper(severity)))
+				openIssueLabelledCount += severityCount(severity, result.Open)
+				ignoredIssueLabelledCount += severityCount(severity, result.Ignored)
 			}
 		}
 
-		if !strings.Contains(openIssueLabelledCount, strings.ToUpper(severity)) {
-			openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+		if !strings.Contains(openIssueLabelledCount, strings.ToUpper(severity)) && severityMinLevel == "" {
+			openIssueLabelledCount += severityCount(severity, 0)
 		}
 
-		if !strings.Contains(ignoredIssueLabelledCount, strings.ToUpper(severity)) {
-			ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+		if !strings.Contains(ignoredIssueLabelledCount, strings.ToUpper(severity)) && severityMinLevel == "" {
+			ignoredIssueLabelledCount += severityCount(severity, 0)
 		}
 	}
 
@@ -193,4 +200,8 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 	}
 
 	return boxStyle.Render(buff.String()), nil
+}
+
+func severityCount(severity string, count int) string {
+	return renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", count, strings.ToUpper(severity)))
 }

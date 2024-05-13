@@ -64,7 +64,7 @@ func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOpt
 		Input:            sarifDocument,
 		OrgName:          "",
 		TestPath:         "",
-		SeverityMinLevel: "low",
+		SeverityMinLevel: "",
 	}
 
 	for _, option := range options {
@@ -102,7 +102,7 @@ func (p *Presenter) Render() (string, error) {
 	str := strings.Join([]string{
 		"",
 		renderBold(fmt.Sprintf("Testing %s ...", p.TestPath)),
-		RenderFindings(findings, p.ShowIgnored),
+		RenderFindings(findings, p.ShowIgnored, len(p.SeverityMinLevel) > 0),
 		summaryOutput,
 		getFinalTip(p.ShowIgnored),
 		"",
