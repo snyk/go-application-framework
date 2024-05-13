@@ -317,3 +317,47 @@ To edit or remove the ignore please go to: https://app.snyk.io/
 
 
 ---
+
+[TestPresenterSarifResultsPretty_IncludeIgnoredEmpty - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [LOW] Use of Hardcoded Credentials
+   Path: pkg/analytics/analytics_test.go, line 248
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] Use of Hardcoded Credentials
+   Path: internal/api/api_test.go, line 159
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] Use of Password Hash With Insufficient Computational Effort
+   Path: pkg/analytics/analytics.go, line 230
+   Info: The SHA1 hash (used in crypto.sha1.New) is insecure. Consider changing it to a secure hash algorithm
+
+─────────────────────────────────────────────────────
+
+Ignored Issues
+
+  There are no ignored issues
+                             
+💡 Tip
+
+Ignores are currently managed in the Snyk Web UI.
+To edit or remove the ignore please go to: https://app.snyk.io/
+
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   3                          │
+│   Ignored issues: 0 [ 0 LOW ]                │
+│   Open issues:    3 [ 3 LOW ]                │
+╰──────────────────────────────────────────────╯
+
+
+---
