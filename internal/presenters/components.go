@@ -44,7 +44,6 @@ func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApp
 			ignoredFindings += RenderFinding(finding)
 		}
 
-		fmt.Printf("ignored findings: %s", ignoredFindings)
 		if ignoredFindings == "" {
 			response += renderBold("  There are no ignored issues\n")
 		} else {
