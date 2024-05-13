@@ -51,8 +51,9 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	// iterate filesToFilter channel and find ignore filesToFilter
 	var ignoreFiles = make([]string, 0)
 	for file := range files {
+		fileName := filepath.Base(file)
 		for _, ruleFile := range ruleFiles {
-			if strings.Contains(file, ruleFile) {
+			if fileName == ruleFile {
 				ignoreFiles = append(ignoreFiles, file)
 			}
 		}
