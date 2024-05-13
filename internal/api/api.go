@@ -20,6 +20,7 @@ type ApiClient interface {
 	GetFeatureFlag(flagname string, origId string) (bool, error)
 	GetUserMe() (string, error)
 	GetSelf() (contract.SelfResponse, error)
+	GetSastSettings(orgId string) (contract.SastResponse, error)
 }
 
 type snykApiClient struct {
@@ -162,6 +163,28 @@ func (a *snykApiClient) GetSelf() (contract.SelfResponse, error) {
 	}
 
 	return selfData, nil
+}
+
+func (a *snykApiClient) GetSastSettings(orgId string) (contract.SastResponse, error) {
+	var response contract.SastResponse
+	var defaultResult contract.SastResponse
+
+	endpoint := a.url + "/v1/cli-config/settings/sast?org=" + url.QueryEscape(orgId)
+	res, err := a.client.Get(endpoint)
+	if err != nil {
+		return defaultResult, fmt.Errorf("unable to retrieve settings: %w", err)
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return defaultResult, fmt.Errorf("unable to retrieve settings: %w", err)
+	}
+
+	if err = json.Unmarshal(body, &response); err != nil {
+		return defaultResult, fmt.Errorf("unable to retrieve settings (status: %d): %w", res.StatusCode, err)
+	}
+
+	return response, err
 }
 
 // clientGet performs an HTTP GET request to the Snyk API, handling query parameters,
