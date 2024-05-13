@@ -2,12 +2,14 @@ package ui
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/mattn/go-isatty"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -58,6 +60,30 @@ func (ui *consoleUi) Output(output string) error {
 }
 
 func (ui *consoleUi) OutputError(err error) error {
+	// nothing needs to be done if err is nil
+	if err == nil {
+		return nil
+	}
+
+	// for simplistic handling of error catalog errors
+	var snykError snyk_errors.Error
+	if errors.As(err, &snykError) {
+		mainPattern := "%-8s %s"
+		titlePattern := "%s (%s)"
+		utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, strings.ToUpper(snykError.Level), fmt.Sprintf(titlePattern, snykError.Title, snykError.ID))))
+
+		if len(snykError.Detail) > 0 {
+			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "", snykError.Detail)))
+		}
+
+		for _, l := range snykError.Links {
+			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "", l)))
+		}
+
+		return nil
+	}
+
+	// Default handling for all other errors
 	return utils.ErrorOf(fmt.Fprintln(ui.errorWriter, "Error: "+err.Error()))
 }
 
