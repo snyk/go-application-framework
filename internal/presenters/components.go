@@ -160,11 +160,11 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 			}
 		}
 
-		if !strings.Contains(openIssueLabelledCount, strings.ToUpper(severity)) {
+		if !strings.Contains(openIssueLabelledCount, strings.ToUpper(severity)) && severityMinLevel == "" {
 			openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
 		}
 
-		if !strings.Contains(ignoredIssueLabelledCount, strings.ToUpper(severity)) {
+		if !strings.Contains(ignoredIssueLabelledCount, strings.ToUpper(severity)) && severityMinLevel == "" {
 			ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
 		}
 	}

@@ -362,3 +362,49 @@ To edit or remove the ignore please go to: https://app.snyk.io/
 
 
 ---
+
+[TestPresenterSarifResultsPretty_SeverityThresholdHighIssues - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [HIGH] Hardcoded Secret
+   Path: app.js, line 60
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 31
+   Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 108
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 136
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+
+💡 Tip
+
+   You are currently viewing results with --severity-threshold=high applied.
+To view all issues, remove the --severity-threshold flag
+
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   4                          │
+│   Ignored issues: 0 [ 0 HIGH ]               │
+│   Open issues:    4 [ 4 HIGH ]               │
+╰──────────────────────────────────────────────╯
+
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+
+---
