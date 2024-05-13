@@ -143,6 +143,14 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 				ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", result.Ignored, strings.ToUpper(severity)))
 			}
 		}
+
+		if !strings.Contains(openIssueLabelledCount, strings.ToUpper(severity)) {
+			openIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+		}
+
+		if !strings.Contains(ignoredIssueLabelledCount, strings.ToUpper(severity)) {
+			ignoredIssueLabelledCount += renderInSeverityColor(severity, fmt.Sprintf(" %d %s ", 0, strings.ToUpper(severity)))
+		}
 	}
 
 	openIssueCountWithSeverities := fmt.Sprintf("%s [%s]", renderBold(strconv.Itoa(openIssueCount)), openIssueLabelledCount)

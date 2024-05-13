@@ -78,6 +78,9 @@ func TestPresenterSarifResultsPretty_MediumHighIssues(t *testing.T) {
 	result, err := p.Render()
 
 	require.Nil(t, err)
+
+	require.Contains(t, result, "[ 0 HIGH  0 MEDIUM  0 LOW ]")
+	require.Contains(t, result, "[ 4 HIGH  5 MEDIUM  0 LOW ]")
 	snaps.MatchSnapshot(t, result)
 }
 
