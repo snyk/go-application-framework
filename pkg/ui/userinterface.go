@@ -73,11 +73,11 @@ func (ui *consoleUi) OutputError(err error) error {
 		utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, strings.ToUpper(snykError.Level), fmt.Sprintf(titlePattern, snykError.Title, snykError.ID))))
 
 		if len(snykError.Detail) > 0 {
-			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "", snykError.Detail)))
+			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Info:", snykError.Detail)))
 		}
 
 		for _, l := range snykError.Links {
-			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "", l)))
+			utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Help:", l)))
 		}
 
 		return nil
