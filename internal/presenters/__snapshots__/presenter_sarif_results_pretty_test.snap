@@ -161,7 +161,7 @@ To view ignored issues, use the --include-ignores option.
 
 
 ╭──────────────────────────────────────────────╮
-│ Test Summary                                 │
+│ [1mTest Summary[0m                                 │
 │                                              │
 │   Organization:      test-org                │
 │   Test type:         Static code analysis    │
