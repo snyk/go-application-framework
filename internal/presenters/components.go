@@ -94,7 +94,7 @@ func getFormattedProperties(properties []FindingProperty) string {
 }
 
 func RenderTip(str string) string {
-	return fmt.Sprintf("\n💡 Tip\n\n%s", str)
+	return fmt.Sprintf("\n💡 Tip\n\n   %s", str)
 }
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
