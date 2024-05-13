@@ -80,6 +80,21 @@ func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgIdFromSlug", reflect.TypeOf((*MockApiClient)(nil).GetOrgIdFromSlug), slugName)
 }
 
+// GetSastSettings mocks base method.
+func (m *MockApiClient) GetSastSettings(orgId string) (contract.SastResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSastSettings", orgId)
+	ret0, _ := ret[0].(contract.SastResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSastSettings indicates an expected call of GetSastSettings.
+func (mr *MockApiClientMockRecorder) GetSastSettings(orgId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSastSettings", reflect.TypeOf((*MockApiClient)(nil).GetSastSettings), orgId)
+}
+
 // GetSelf mocks base method.
 func (m *MockApiClient) GetSelf() (contract.SelfResponse, error) {
 	m.ctrl.T.Helper()
