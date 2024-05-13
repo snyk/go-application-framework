@@ -106,6 +106,29 @@ func TestPresenterSarifResultsPretty_MediumHighIssuesWithColor(t *testing.T) {
 	snaps.MatchSnapshot(t, result)
 }
 
+func TestPresenterSarifResultsPretty_SeverityThresholdHighIssues(t *testing.T) {
+	fd, err := os.Open("testdata/4-high-5-medium.json")
+	require.Nil(t, err)
+
+	var input sarif.SarifDocument
+
+	err = json.NewDecoder(fd).Decode(&input)
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := presenters.SarifTestResults(
+		input,
+		presenters.WithOrgName("test-org"),
+		presenters.WithTestPath("/path/to/project"),
+		presenters.WithSeverityThershold("high"),
+	)
+
+	result, err := p.Render()
+
+	require.Nil(t, err)
+	snaps.MatchSnapshot(t, result)
+}
+
 func TestPresenterSarifResultsPretty_DefaultHideIgnored(t *testing.T) {
 	fd, err := os.Open("testdata/with-ignores.json")
 	require.Nil(t, err)

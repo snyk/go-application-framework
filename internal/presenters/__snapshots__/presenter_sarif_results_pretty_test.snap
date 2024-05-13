@@ -318,6 +318,7 @@ To edit or remove the ignore please go to: https://app.snyk.io/
 
 ---
 
+<<<<<<< HEAD
 [TestPresenterSarifResultsPretty_IncludeIgnoredEmpty - 1]
 
 Testing /path/to/project ...
@@ -344,20 +345,20 @@ Ignored Issues
                              
 💡 Tip
 
-Ignores are currently managed in the Snyk Web UI.
+   Ignores are currently managed in the Snyk Web UI.
 To edit or remove the ignore please go to: https://app.snyk.io/
 
-╭──────────────────────────────────────────────╮
-│ Test Summary                                 │
-│                                              │
-│   Organization:      test-org                │
-│   Test type:         Static code analysis    │
-│   Project path:      /path/to/project        │
-│                                              │
-│   Total issues:   3                          │
-│   Ignored issues: 0 [ 0 LOW ]                │
-│   Open issues:    3 [ 3 LOW ]                │
-╰──────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────╮
+│ Test Summary                                        │
+│                                                     │
+│   Organization:      test-org                       │
+│   Test type:         Static code analysis           │
+│   Project path:      /path/to/project               │
+│                                                     │
+│   Total issues:   3                                 │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
+│   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]     │
+╰─────────────────────────────────────────────────────╯
 
 
 ---
