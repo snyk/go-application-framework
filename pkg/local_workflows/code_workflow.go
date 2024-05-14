@@ -41,22 +41,22 @@ var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWor
 
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
-		if existingValue == nil {
-			apiClient := api.NewApiInstance()
-			client := engine.GetNetworkAccess().GetHttpClient()
-			url := engine.GetConfiguration().GetString(configuration.API_URL)
-			org := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-			apiClient.Init(url, client)
-			response, err := apiClient.GetSastSettings(org)
-			if err != nil {
-				engine.GetLogger().Err(err).Msg("Failed to access settings.")
-				return false
-			}
-
-			return response.SastEnabled
-		} else {
+		if existingValue != nil {
 			return existingValue
 		}
+
+		apiClient := api.NewApiInstance()
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := engine.GetConfiguration().GetString(configuration.API_URL)
+		org := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+		apiClient.Init(url, client)
+		response, err := apiClient.GetSastSettings(org)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return false
+		}
+
+		return response.SastEnabled
 	}
 	return callback
 }
