@@ -2,12 +2,14 @@ package ui
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/mattn/go-isatty"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -58,7 +60,46 @@ func (ui *consoleUi) Output(output string) error {
 }
 
 func (ui *consoleUi) OutputError(err error) error {
-	return utils.ErrorOf(fmt.Fprintln(ui.errorWriter, "Error: "+err.Error()))
+	// nothing needs to be done if err is nil
+	if err == nil {
+		return nil
+	}
+
+	// for simplistic handling of error catalog errors
+	var snykError snyk_errors.Error
+	if errors.As(err, &snykError) {
+		mainPattern := "%-8s %s"
+		titlePattern := "%s (%s)"
+
+		title := snykError.Title
+		if len(snykError.ID) > 0 {
+			title = fmt.Sprintf(titlePattern, snykError.Title, snykError.ErrorCode)
+		}
+
+		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, " "+strings.ToUpper(snykError.Level), title)))
+		if uiError != nil {
+			return uiError
+		}
+
+		if len(snykError.Detail) > 0 {
+			uiError = utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Info:", snykError.Detail)))
+			if uiError != nil {
+				return uiError
+			}
+		}
+
+		for _, l := range snykError.Links {
+			uiError = utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, "Help:", l)))
+			if uiError != nil {
+				return uiError
+			}
+		}
+
+		return nil
+	}
+
+	// Default handling for all other errors
+	return utils.ErrorOf(fmt.Fprintln(ui.errorWriter, err.Error()))
 }
 
 func (ui *consoleUi) NewProgressBar() ProgressBar {
