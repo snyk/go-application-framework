@@ -73,7 +73,7 @@ func (ui *consoleUi) OutputError(err error) error {
 
 		title := snykError.Title
 		if len(snykError.ID) > 0 {
-			title = fmt.Sprintf(titlePattern, snykError.Title, snykError.ID)
+			title = fmt.Sprintf(titlePattern, snykError.Title, snykError.ErrorCode)
 		}
 
 		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, " "+strings.ToUpper(snykError.Level), title)))
@@ -99,7 +99,7 @@ func (ui *consoleUi) OutputError(err error) error {
 	}
 
 	// Default handling for all other errors
-	return utils.ErrorOf(fmt.Fprintln(ui.errorWriter, "Error: "+err.Error()))
+	return utils.ErrorOf(fmt.Fprintln(ui.errorWriter, err.Error()))
 }
 
 func (ui *consoleUi) NewProgressBar() ProgressBar {

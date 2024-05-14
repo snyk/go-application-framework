@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -137,6 +138,35 @@ func Test_DefaultUi(t *testing.T) {
 	err = ui.OutputError(fmt.Errorf("Error!"))
 	assert.NoError(t, err)
 
-	assert.Equal(t, "Hello\nEnter your name: Error: Error!\n", stdout.String())
+	assert.Equal(t, "Hello\nEnter your name: Error!\n", stdout.String())
 	assert.Equal(t, "", stderr.String())
+}
+
+func Test_OutputError(t *testing.T) {
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	ui := newConsoleUi(stdin, stdout, stderr)
+
+	t.Run("Default error", func(t *testing.T) {
+		err := fmt.Errorf("hello error world")
+		uiError := ui.OutputError(err)
+		assert.NoError(t, uiError)
+		assert.Equal(t, err.Error()+"\n", stdout.String())
+		stdout.Reset()
+	})
+
+	t.Run("Error Catalog error", func(t *testing.T) {
+		err := snyk.NewBadRequestError("something")
+		uiError := ui.OutputError(err)
+		assert.NoError(t, uiError)
+		assert.Equal(t, " ERROR   Client request cannot be processed (SNYK-0003)\nInfo:    something\n", stdout.String())
+		stdout.Reset()
+	})
+
+	t.Run("Nil error", func(t *testing.T) {
+		uiError := ui.OutputError(nil)
+		assert.NoError(t, uiError)
+		assert.Empty(t, stdout.String())
+	})
 }
