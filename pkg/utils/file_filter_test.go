@@ -45,6 +45,17 @@ func TestFileFilter_GetAllFiles(t *testing.T) {
 		}
 		assert.Equal(t, len(expectedFiles), actualFilesChanLen)
 	})
+
+	t.Run("handles empty path", func(t *testing.T) {
+		fileFilter := NewFileFilter("", &log.Logger)
+		actualFiles := fileFilter.GetAllFiles()
+
+		var actualFilesChanLen int
+		for range actualFiles {
+			actualFilesChanLen++
+		}
+		assert.Equal(t, 0, actualFilesChanLen)
+	})
 }
 
 func TestFileFilter_GetRules(t *testing.T) {
