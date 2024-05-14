@@ -93,11 +93,11 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 
 	if !sastEnabled {
 		err = snyk_errors.Error{
-			ID:             "Snyk-CLI-0001",
 			Title:          "Snyk Code is not supported",
 			Classification: "ACTIONABLE",
 			Level:          "warning",
 			Detail:         "Snyk Code is not supported for org " + config.GetString(configuration.ORGANIZATION) + ": enable in Settings > Snyk Code",
+			Links:          []string{"https://docs.snyk.io/scan-using-snyk/snyk-code/configure-snyk-code#enable-snyk-code-in-snyk-web-ui\n"},
 		}
 		return result, err
 	}
