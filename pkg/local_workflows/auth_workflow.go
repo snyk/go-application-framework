@@ -39,7 +39,7 @@ func InitAuth(engine workflow.Engine) error {
 		return nil // Use legacy CLI for authentication for now, until OAuth is ready
 	}
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
-	config.String(authTypeParameter, "", authTypeDescription)
+	config.String(authTypeParameter, authTypeOAuth, authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
