@@ -71,7 +71,12 @@ func (ui *consoleUi) OutputError(err error) error {
 		mainPattern := "%-8s %s"
 		titlePattern := "%s (%s)"
 
-		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, strings.ToUpper(snykError.Level), fmt.Sprintf(titlePattern, snykError.Title, snykError.ID))))
+		title := snykError.Title
+		if len(snykError.ID) > 0 {
+			title = fmt.Sprintf(titlePattern, snykError.Title, snykError.ID)
+		}
+
+		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, fmt.Sprintf(mainPattern, " "+strings.ToUpper(snykError.Level), title)))
 		if uiError != nil {
 			return uiError
 		}
