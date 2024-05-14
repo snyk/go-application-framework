@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -36,11 +37,8 @@ var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflo
 
 // InitAuth initializes the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
-	if !engine.GetConfiguration().GetBool(configuration.FF_OAUTH_AUTH_FLOW_ENABLED) {
-		return nil // Use legacy CLI for authentication for now, until OAuth is ready
-	}
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
-	config.String(authTypeParameter, authTypeOAuth, authTypeDescription)
+	config.String(authTypeParameter, "", authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
@@ -58,27 +56,33 @@ func OpenBrowser(authUrl string) {
 func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (_ []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetLogger()
+	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
 
-	customEndpoint := config.GetString(configuration.API_URL)
-	isOAuthSelected := config.GetString(authTypeParameter) == authTypeOAuth
+	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
+		config,
+		auth.WithHttpClient(httpClient),
+		auth.WithOpenBrowserFunc(OpenBrowser),
+		auth.WithShutdownServerFunc(auth.ShutdownServer),
+	)
+
+	err = entryPointDI(config, logger, engine, authenticator)
+	return nil, err
+}
+
+func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
 
 	// testing if an API token was specified, UNNAMED_PARAMETER in the CLI is the positional argument
 	token := config.GetString(configuration.UNNAMED_PARAMETER)
 	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
 		isTokenSelected = true
-		isOAuthSelected = false
 	}
 
-	var oauthEnabled bool
-	if isOAuthSelected {
-		oauthEnabled = true
-	} else if isTokenSelected {
+	oauthEnabled := true
+	if isTokenSelected {
 		oauthEnabled = false
-	} else {
-		oauthEnabled = auth.IsKnownOAuthEndpoint(customEndpoint)
 	}
 
 	logger.Println("OAuth enabled:", oauthEnabled)
@@ -87,16 +91,9 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		headless := config.GetBool(headlessFlag)
 		logger.Println("Headless:", headless)
 
-		httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
-		authenticator := auth.NewOAuth2AuthenticatorWithOpts(
-			config,
-			auth.WithHttpClient(httpClient),
-			auth.WithOpenBrowserFunc(OpenBrowser),
-			auth.WithShutdownServerFunc(auth.ShutdownServer),
-		)
 		err = authenticator.Authenticate()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		fmt.Println(auth.AUTHENTICATED_MESSAGE)
@@ -107,9 +104,9 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 
 		_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 		if legacyCLIError != nil {
-			return nil, legacyCLIError
+			return legacyCLIError
 		}
 	}
 
-	return nil, err
+	return err
 }
