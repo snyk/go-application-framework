@@ -74,7 +74,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
 
-	// testing if an API token was specified, UNNAMED_PARAMETER in the CLI is the positional argument
+	// testing if an API token was specified
 	token := config.GetString(configuration.UNNAMED_PARAMETER)
 	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
 		isTokenSelected = true
