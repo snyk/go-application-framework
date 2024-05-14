@@ -1,12 +1,13 @@
 package utils
 
 import (
-	"github.com/rs/zerolog"
-	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"gopkg.in/yaml.v3"
 
 	gitignore "github.com/sabhiram/go-gitignore"
 )
@@ -31,9 +32,14 @@ func (fw *FileFilter) GetAllFiles() chan string {
 	go func() {
 		defer close(filesCh)
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
-			if !d.IsDir() && err == nil {
+			if err != nil {
+				return err
+			}
+
+			if !d.IsDir() {
 				filesCh <- path
 			}
+
 			return err
 		})
 		if err != nil {
