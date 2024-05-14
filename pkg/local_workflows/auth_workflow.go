@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -63,6 +64,14 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	customEndpoint := config.GetString(configuration.API_URL)
 	isOAuthSelected := config.GetString(authTypeParameter) == authTypeOAuth
 	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
+
+	// testing if an API token was specified, UNNAMED_PARAMETER in the CLI is the positional argument
+	token := config.GetString(configuration.UNNAMED_PARAMETER)
+	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
+		isTokenSelected = true
+		isOAuthSelected = false
+	}
+
 	var oauthEnabled bool
 	if isOAuthSelected {
 		oauthEnabled = true
