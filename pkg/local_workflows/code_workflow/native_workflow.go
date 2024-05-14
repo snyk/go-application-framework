@@ -11,6 +11,7 @@ import (
 	codeclienthttp "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -95,7 +96,21 @@ func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Clie
 		codeclient.WithLogger(logger),
 	)
 
-	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
+	var bundleHash string
+	result, bundleHash, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
+	if bundleHash == "" {
+		logger.Warn().Msg("Bundle hash is empty")
+		return result, snyk_errors.Error{
+			ID:             "Snyk-CLI-0002",
+			Title:          "No Supported Projects Detected",
+			Classification: "ACTIONABLE",
+			Level:          "warning",
+			Detail:         "We found 0 supported files\nPlease see our documentation for Snyk Code language and framework support\n",
+			Links: []string{
+				"https://docs.snyk.io/products/snyk-code/snyk-code-language-and-framework-support",
+			},
+		}
+	}
 	return result, err
 }
 

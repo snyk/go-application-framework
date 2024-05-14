@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
@@ -239,6 +240,36 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 			assert.Fail(t, "unexpected data")
 		}
 	}
+}
+
+func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
+	config := configuration.NewInMemory()
+	networkAccess := networking.NewNetworkAccess(config)
+
+	mockController := gomock.NewController(t)
+	invocationContext := mocks.NewMockInvocationContext(mockController)
+	invocationContext.EXPECT().GetConfiguration().Return(config)
+	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
+	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
+	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+
+	analysisFunc := func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error) {
+		return nil, snyk_errors.Error{
+			ID:             "Snyk-CLI-0002",
+			Title:          "No Supported Projects Detected",
+			Classification: "ACTIONABLE",
+			Level:          "warning",
+			Detail:         "We found 0 supported files\nPlease see our documentation for Snyk Code language and framework support\n",
+			Links: []string{
+				"https://docs.snyk.io/products/snyk-code/snyk-code-language-and-framework-support",
+			},
+		}
+	}
+
+	rs, err := code_workflow.EntryPointNative(invocationContext, analysisFunc)
+	assert.Error(t, err)
+	assert.EqualError(t, err, "No Supported Projects Detected")
+	assert.Nil(t, rs)
 }
 
 func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
