@@ -60,6 +60,17 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
+	
+	isCiEnv := invocationCtx.GetAnalytics().IsCiEnvironment()
+	if isCiEnv {
+		err = fmt.Errorf("Snyk is missing auth token in order to run inside CI. You must include your API token as an environment value: `SNYK_TOKEN=12345678`")
+		uiError := invocationCtx.GetUserInterface().OutputError(err)
+		if uiError != nil {
+			logger.Err(uiError).Msg("Failed to display error message.")
+		}
+
+		return nil, nil
+	}
 
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
