@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"os/user"
 	"regexp"
 	"runtime"
@@ -18,9 +17,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-uuid"
+	utils2 "github.com/snyk/go-application-framework/internal/utils"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 // Analytics is an interface for managing analytics.
@@ -98,28 +97,6 @@ type dataOutput struct {
 }
 
 var (
-	// ciEnvironments is a list of environment variables that indicate a CI environment.
-	// it is used to determine if the command is running in a CI environment.
-	// if it is, the x-is-ci header is set to true.
-	ciEnvironments = []string{
-		"SNYK_CI",
-		"CI",
-		"CONTINUOUS_INTEGRATION",
-		"BUILD_ID",
-		"BUILD_NUMBER",
-		"TEAMCITY_VERSION",
-		"TRAVIS",
-		"CIRCLECI",
-		"JENKINS_URL",
-		"HUDSON_URL",
-		"bamboo.buildKey",
-		"PHPCI",
-		"GOCD_SERVER_HOST",
-		"BUILDKITE",
-		"TF_BUILD",
-		"SYSTEM_TEAMFOUNDATIONSERVERURI", // for Azure DevOps Pipelines
-	}
-
 	// sensitiveFieldNames is a list of field names that should be sanitized.
 	// data sanitization is used to prevent sensitive data from being sent to the analytics server.
 	sensitiveFieldNames = []string{
@@ -200,17 +177,7 @@ func (a *AnalyticsImpl) SetClient(clientFunc func() *http.Client) {
 
 // IsCiEnvironment returns true if the command is running in a CI environment.
 func (a *AnalyticsImpl) IsCiEnvironment() bool {
-	result := false
-
-	envMap := utils.ToKeyValueMap(os.Environ(), "=")
-	for i := range ciEnvironments {
-		if _, ok := envMap[ciEnvironments[i]]; ok {
-			result = true
-			break
-		}
-	}
-
-	return result
+	return utils2.IsCiEnvironment()
 }
 
 // GetOutputData returns the analyticsOutput data.
