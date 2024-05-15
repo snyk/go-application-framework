@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -73,24 +74,22 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 }
 
 func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
-	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
+	authType := config.GetString(authTypeParameter)
+	if len(authType) == 0 {
+		authType = authTypeOAuth
+	}
 
 	// testing if an API token was specified
 	token := config.GetString(ConfigurationNewAuthenticationToken)
 	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
-		isTokenSelected = true
+		authType = authTypeToken
 	}
 
-	oauthEnabled := true
-	if isTokenSelected {
-		oauthEnabled = false
-	}
+	logger.Printf("Authentication Type: %s", authType)
 
-	logger.Println("OAuth enabled:", oauthEnabled)
-
-	if oauthEnabled { // OAUTH flow
+	if strings.EqualFold(authType, authTypeOAuth) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)
-		logger.Println("Headless:", headless)
+		logger.Printf("Headless: %v", headless)
 
 		err = authenticator.Authenticate()
 		if err != nil {
