@@ -34,6 +34,7 @@ If you can't wait use this url:
 
 // define a new workflow identifier for this workflow
 var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflowNameAuth)
+var ConfigurationNewAuthenticationToken = "internal_new_snyk_token"
 
 // InitAuth initializes the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
@@ -75,7 +76,7 @@ func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, en
 	isTokenSelected := config.GetString(authTypeParameter) == authTypeToken
 
 	// testing if an API token was specified
-	token := config.GetString(configuration.UNNAMED_PARAMETER)
+	token := config.GetString(ConfigurationNewAuthenticationToken)
 	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
 		isTokenSelected = true
 	}

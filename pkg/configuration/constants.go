@@ -22,7 +22,6 @@ const (
 	RAW_CMD_ARGS                    string = "internal_raw_cmd_args"
 	WEB_APP_URL                     string = "internal_snyk_app"
 	INPUT_DIRECTORY                 string = "targetDirectory"
-	UNNAMED_PARAMETER               string = INPUT_DIRECTORY                       //UNNAMED_PARAMETER in the CLI is the positional argument
 	ADD_TRUSTED_CA_FILE             string = "internal_additional_trusted_ca_file" // pem file location containing additional CAs to trust
 	FIPS_ENABLED                    string = "gofips"
 	WORKING_DIRECTORY               string = "internal_working_dir"

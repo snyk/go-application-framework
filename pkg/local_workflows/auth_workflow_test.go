@@ -72,7 +72,7 @@ func Test_auth_token(t *testing.T) {
 
 	t.Run("automatically switch to token when API token is given", func(t *testing.T) {
 		config.Set(authTypeParameter, nil)
-		config.Set(configuration.UNNAMED_PARAMETER, "00000000-0000-0000-0000-000000000000")
+		config.Set(ConfigurationNewAuthenticationToken, "00000000-0000-0000-0000-000000000000")
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
 		err = entryPointDI(config, &logger, engine, authenticator)
 		assert.NoError(t, err)
