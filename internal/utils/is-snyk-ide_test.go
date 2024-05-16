@@ -9,7 +9,7 @@ import (
 func TestIsSnykIde(t *testing.T) {
 	testset := map[string]bool{
 		"something":     false,
-		"VS_CODE":       true,
+		"Vs_coDE":       true,
 		"JETBRAINS_IDE": true,
 	}
 	for k, expected := range testset {
