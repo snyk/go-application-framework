@@ -345,3 +345,11 @@ func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, co
 
 	return []byte(contentStr), nil
 }
+
+func DetermineStage(isCiEnvironment bool) string {
+	if isCiEnvironment {
+		return "cicd"
+	}
+
+	return "dev"
+}
