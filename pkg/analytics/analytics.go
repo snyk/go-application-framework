@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-uuid"
+
 	utils2 "github.com/snyk/go-application-framework/internal/utils"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -38,6 +39,8 @@ type Analytics interface {
 	GetOutputData() *analyticsOutput
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
+	SetInstrumentation(c InstrumentationCollector)
+	GetInstrumentation() InstrumentationCollector
 }
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
@@ -55,6 +58,7 @@ type AnalyticsImpl struct {
 	integrationVersion string
 	os                 string
 	command            string
+	instrumentor       InstrumentationCollector
 
 	userCurrent func() (*user.User, error)
 }
@@ -129,6 +133,10 @@ func New() Analytics {
 // SetCmdArguments sets the command arguments.
 func (a *AnalyticsImpl) SetCmdArguments(args []string) {
 	a.args = args
+
+	if a.instrumentor != nil {
+		a.instrumentor.SetCmdArguments(args)
+	}
 }
 
 // SetOrg sets the organization.
@@ -163,6 +171,10 @@ func (a *AnalyticsImpl) SetOperatingSystem(os string) {
 // AddError adds an error to the error list.
 func (a *AnalyticsImpl) AddError(err error) {
 	a.errorList = append(a.errorList, err)
+
+	if a.instrumentor != nil {
+		a.instrumentor.AddError(err)
+	}
 }
 
 // AddHeader adds a header to the request.
@@ -290,6 +302,14 @@ func (a *AnalyticsImpl) Send() (*http.Response, error) {
 
 func (a *AnalyticsImpl) isEnabled() bool {
 	return !api.IsFedramp(a.apiUrl)
+}
+
+func (a *AnalyticsImpl) SetInstrumentation(c InstrumentationCollector) {
+	a.instrumentor = c
+}
+
+func (a *AnalyticsImpl) GetInstrumentation() InstrumentationCollector {
+	return a.instrumentor
 }
 
 var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname // breaking API change
