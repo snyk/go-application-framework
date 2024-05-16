@@ -35,66 +35,67 @@ func NewInstrumentationCollector() InstrumentationCollector {
 	return &InstrumentationCollectorImpl{}
 }
 
-type InstrumentationCollectorImpl struct{}
-
-func (InstrumentationCollectorImpl) SetCmdArguments(args []string) {
-	//TODO implement me
-	panic("implement me")
+type InstrumentationCollectorImpl struct {
+	args                []string
+	userAgent           networking.UserAgentInfo
+	interactionId       string
+	timestamp           time.Time
+	stage               string
+	instrumentationType string
+	category            []string // TODO: switch to using enum?
+	status              Status
+	testSummary         json_schemas.TestSummary
+	targetId            string // TODO: switch to using purl lib?
+	instrumentationErr  error
+	extension           map[string]string
 }
 
-func (InstrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetCmdArguments(args []string) {
+	ic.args = args
 }
 
-func (InstrumentationCollectorImpl) SetInteractionId(id string) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
+	ic.userAgent = ua
 }
 
-func (InstrumentationCollectorImpl) SetTimestamp(t time.Time) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetInteractionId(id string) {
+	ic.interactionId = id
 }
 
-func (InstrumentationCollectorImpl) SetStage(s string) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetTimestamp(t time.Time) {
+	ic.timestamp = t
 }
 
-func (InstrumentationCollectorImpl) SetType(t string) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetStage(s string) {
+	ic.stage = s
 }
 
-func (InstrumentationCollectorImpl) SetCategory(c []string) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetType(t string) {
+	ic.instrumentationType = t
 }
 
-func (InstrumentationCollectorImpl) SetStatus(s Status) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetCategory(c []string) {
+	ic.category = c
 }
 
-func (InstrumentationCollectorImpl) SetTestSummary(s json_schemas.TestSummary) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetStatus(s Status) {
+	ic.status = s
 }
 
-func (InstrumentationCollectorImpl) SetTargetId(t string) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetTestSummary(s json_schemas.TestSummary) {
+	ic.testSummary = s
 }
 
-func (InstrumentationCollectorImpl) AddError(err error) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) SetTargetId(t string) {
+	ic.targetId = t
 }
 
-func (InstrumentationCollectorImpl) AddExtension(key string, value string) {
-	//TODO implement me
-	panic("implement me")
+func (ic *InstrumentationCollectorImpl) AddError(err error) {
+	ic.instrumentationErr = err
+}
+
+func (ic *InstrumentationCollectorImpl) AddExtension(key string, value string) {
+	ic.extension[key] = value
 }
 
 //func getV2Instrumentation(c InstrumentationCollector) []byte
