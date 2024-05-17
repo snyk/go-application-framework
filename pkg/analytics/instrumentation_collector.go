@@ -3,8 +3,9 @@ package analytics
 import (
 	"errors"
 	"fmt"
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"time"
+
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	api "github.com/snyk/go-application-framework/pkg/analytics/2024-03-07"
 
@@ -195,7 +196,7 @@ func toInteractionStage(s *string) *api.InteractionStage {
 }
 
 func toInteractionErrors(errors []error) *[]api.InteractionError {
-	var interactionErrors []api.InteractionError
+	interactionErrors := []api.InteractionError{}
 	for _, e := range errors {
 		if interactionError := toInteractionError(e); interactionError != nil {
 			interactionErrors = append(interactionErrors, *interactionError)
