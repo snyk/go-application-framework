@@ -44,7 +44,7 @@ func TestCategorizeCliArgs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Execute the function under test
-			categories := ParseCliArgs(tc.args, KNOWN_COMMANDS, ALLOWED_FLAGS, PRODUCTS)
+			categories := ParseCliArgs(tc.args, KNOWN_COMMANDS, ALLOWED_FLAGS)
 
 			// Assertions
 			assert.Equal(t, tc.expectedOutput, categories)

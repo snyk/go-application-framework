@@ -38,7 +38,7 @@ import (
 //
 // Returns:
 //   - A slice of strings containing the categorized arguments.
-func ParseCliArgs(args []string, knownCommands []string, flagsAllowList []string, knownProducts []string) []string {
+func ParseCliArgs(args []string, knownCommands []string, flagsAllowList []string) []string {
 	commands := []string{}
 	flags := []string{}
 	result := []string{}
@@ -75,7 +75,6 @@ func ParseCliArgs(args []string, knownCommands []string, flagsAllowList []string
 	return result
 }
 
-var PRODUCTS = []string{"code", "iac", "container", "sbom"}
 var KNOWN_COMMANDS = []string{"test", "code", "monitor", "iac", "rules", "describe", "sbom", "container", "debug"}
 var ALLOWED_FLAGS = []string{
 	"print-dep-paths",
