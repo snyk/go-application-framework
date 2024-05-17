@@ -160,38 +160,3 @@ type ScanDoneEvent struct {
 		} `json:"attributes"`
 	} `json:"data"`
 }
-
-type AnalyticsV2Request struct {
-	Data struct {
-		Type       string `json:"type"`
-		Attributes struct {
-			Interaction AnalyticsV2Interaction `json:"interaction"`
-			Runtime     AnalyticsV2Runtime     `json:"runtime,omitempty"`
-		}
-	}
-}
-
-type AnalyticsV2Interaction struct {
-	ID          string        `json:"id"`
-	TimestampMs int           `json:"timestamp_ms"`
-	Stage       string        `json:"stage,omitempty"`
-	Type        string        `json:"type"`
-	Categories  []string      `json:"categories,omitempty"`
-	Status      string        `json:"status"`
-	Results     []interface{} `json:"results,omitempty"`
-	Target      struct {
-		ID string `json:"id"`
-	}
-	Errors    []AnalyticsV2InteractionError `json:"errors,omitempty"`
-	Extension []interface{}                 `json:"extension,omitempty"`
-}
-
-type AnalyticsV2Runtime struct {
-	Runtime struct {
-	}
-}
-
-type AnalyticsV2InteractionError struct {
-	ID   string `json:"id"`
-	Code int    `json:"code,omitempty"`
-}
