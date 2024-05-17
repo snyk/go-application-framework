@@ -353,3 +353,7 @@ func DetermineStage(isCiEnvironment bool) string {
 
 	return "dev"
 }
+
+func AssembleUrnFromUUID(uuid string) string {
+	return fmt.Sprintf("urn:snyk:interaction:%s", uuid)
+}
