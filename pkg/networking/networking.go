@@ -52,6 +52,15 @@ type networkImpl struct {
 	logger       *zerolog.Logger
 }
 
+func LogRequest(r *http.Request, logger *zerolog.Logger) {
+	if logger.GetLevel() != zerolog.TraceLevel { // Only log if trace level is enabled
+		return
+	}
+
+	logger.WithLevel(zerolog.TraceLevel).Msgf("> request [%p]: %s %s", r, r.Method, r.URL.String())
+	logger.WithLevel(zerolog.TraceLevel).Msgf("> request [%p]: header: %v", r, r.Header)
+}
+
 // defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
 type defaultHeadersRoundTripper struct {
 	encapsulatedRoundTripper http.RoundTripper
@@ -65,8 +74,7 @@ func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, respon
 		return
 	}
 
-	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request [%p]: %s %s", request, request.Method, request.URL.String())
-	rt.networkAccess.logger.WithLevel(loglevel).Msgf("> request [%p]: header: %v", request, request.Header)
+	LogRequest(request, rt.networkAccess.logger)
 
 	if response != nil {
 		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: %d %s", request, response.StatusCode, response.Status)
