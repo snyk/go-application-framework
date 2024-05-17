@@ -128,6 +128,8 @@ func New() Analytics {
 	a.clientFunc = func() *http.Client { return &http.Client{} }
 	a.os = runtime.GOOS
 	a.instrumentor = NewInstrumentationCollector()
+	a.instrumentor.SetTimestamp(a.created)
+	a.instrumentor.SetStage(DetermineStage(utils2.IsCiEnvironment()))
 	return a
 }
 
@@ -136,7 +138,8 @@ func (a *AnalyticsImpl) SetCmdArguments(args []string) {
 	a.args = args
 
 	if a.instrumentor != nil {
-		a.instrumentor.SetCmdArguments(args)
+		cat := ParseCliArgs(args, KNOWN_COMMANDS, ALLOWED_FLAGS)
+		a.instrumentor.SetCategory(cat)
 	}
 }
 
@@ -163,6 +166,14 @@ func (a *AnalyticsImpl) SetIntegration(name string, version string) {
 
 func (a *AnalyticsImpl) SetCommand(command string) {
 	a.command = command
+
+	if a.instrumentor != nil {
+		cmdsplit := strings.Split(command, " ")
+		cmdsplit = append(cmdsplit, KNOWN_COMMANDS...)
+		cat := ParseCliArgs(a.args, cmdsplit, ALLOWED_FLAGS)
+		a.instrumentor.SetCategory(cat)
+	}
+
 }
 
 func (a *AnalyticsImpl) SetOperatingSystem(os string) {
