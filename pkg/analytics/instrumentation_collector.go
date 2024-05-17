@@ -103,17 +103,21 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value string) {
 	ic.extension[key] = value
 }
 
-func GetV2InstrumentationObject(collector InstrumentationCollector) api.AnalyticsRequestBody {
-	return collector.(*instrumentationCollectorImpl).GetV2InstrumentationObject()
+func GetV2InstrumentationObject(collector InstrumentationCollector) *api.AnalyticsRequestBody {
+	t, ok := collector.(*instrumentationCollectorImpl)
+	if ok {
+		return t.GetV2InstrumentationObject()
+	}
+	return nil
 }
 
-func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() *api.AnalyticsRequestBody {
 	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
 		Attributes: ic.getV2Attributes(),
 	}
 
-	return api.AnalyticsRequestBody{
+	return &api.AnalyticsRequestBody{
 		Data: d,
 	}
 }
@@ -130,7 +134,7 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 		Id:          ic.interactionId,
 		Results:     toInteractionResults(&ic.testSummary),
 		Stage:       toInteractionStage(&ic.stage),
-		Target:      api.Target{ic.targetId},
+		Target:      api.Target{Id: ic.targetId},
 		TimestampMs: ic.timestamp.UnixMilli(),
 		Type:        ic.instrumentationType,
 		Categories:  &ic.category,
@@ -138,7 +142,6 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	}
 }
 
-// TODO: validate these runtime <> userAgent mappings are correct
 func (ic *instrumentationCollectorImpl) getV2Runtime() *api.Runtime {
 	return &api.Runtime{
 		Application: &api.Application{
@@ -163,15 +166,12 @@ func (ic *instrumentationCollectorImpl) getV2Runtime() *api.Runtime {
 	}
 }
 
-// TODO: validate this is correctly implemented
 func toInteractionResults(testSummary *json_schemas.TestSummary) *[]map[string]interface{} {
 	r := []map[string]interface{}{}
 	for _, result := range testSummary.Results {
 		r = append(r, map[string]interface{}{
-			"severity": result.Severity,
-			"total":    result.Total,
-			"open":     result.Open,
-			"ignored":  result.Ignored,
+			"name":  result.Severity,
+			"count": result.Total,
 		})
 	}
 	return &r
