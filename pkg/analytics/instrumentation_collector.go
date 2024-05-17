@@ -1,8 +1,9 @@
 package analytics
 
 import (
-	v20240307 "github.com/snyk/go-application-framework/pkg/analytics/2024-03-07"
 	"time"
+
+	api "github.com/snyk/go-application-framework/pkg/analytics/2024-03-07"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -99,30 +100,34 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value string) {
 	ic.extension[key] = value
 }
 
-func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() v20240307.AnalyticsRequestBody {
-	d := v20240307.AnalyticsData{
+func GetV2InstrumentationObject(collector InstrumentationCollector) api.AnalyticsRequestBody {
+	return collector.(*instrumentationCollectorImpl).GetV2InstrumentationObject()
+}
+
+func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() api.AnalyticsRequestBody {
+	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
 		Attributes: ic.getV2Attributes(),
 	}
 
-	return v20240307.AnalyticsRequestBody{
+	return api.AnalyticsRequestBody{
 		Data: d,
 	}
 }
 
-func (ic *instrumentationCollectorImpl) getV2Attributes() v20240307.AnalyticsAttributes {
-	return v20240307.AnalyticsAttributes{
+func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {
+	return api.AnalyticsAttributes{
 		Interaction: ic.getV2Interaction(),
 		Runtime:     ic.getV2Runtime(),
 	}
 }
 
-func (ic *instrumentationCollectorImpl) getV2Interaction() v20240307.Interaction {
-	return v20240307.Interaction{
+func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
+	return api.Interaction{
 		Id:          ic.interactionId,
 		Results:     toInteractionResults(&ic.testSummary),
 		Stage:       toInteractionStage(&ic.stage),
-		Target:      v20240307.Target{ic.targetId},
+		Target:      api.Target{ic.targetId},
 		TimestampMs: ic.timestamp.UnixMilli(),
 		Type:        ic.instrumentationType,
 		Categories:  &ic.category,
@@ -131,24 +136,24 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() v20240307.Interaction
 }
 
 // TODO: validate these runtime <> userAgent mappings are correct
-func (ic *instrumentationCollectorImpl) getV2Runtime() *v20240307.Runtime {
-	return &v20240307.Runtime{
-		Application: &v20240307.Application{
+func (ic *instrumentationCollectorImpl) getV2Runtime() *api.Runtime {
+	return &api.Runtime{
+		Application: &api.Application{
 			Name:    ic.userAgent.App,
 			Version: ic.userAgent.AppVersion,
 		},
-		Environment: &v20240307.Environment{
+		Environment: &api.Environment{
 			Name:    ic.userAgent.IntegrationEnvironment,
 			Version: ic.userAgent.IntegrationEnvironmentVersion,
 		},
-		Integration: &v20240307.Integration{
+		Integration: &api.Integration{
 			Name:    ic.userAgent.Integration,
 			Version: ic.userAgent.IntegrationVersion,
 		},
-		Performance: &v20240307.Performance{
+		Performance: &api.Performance{
 			DurationMs: ic.duration.Milliseconds(),
 		},
-		Platform: &v20240307.Platform{
+		Platform: &api.Platform{
 			Arch: ic.userAgent.Arch,
 			Os:   ic.userAgent.OS,
 		},
@@ -169,18 +174,18 @@ func toInteractionResults(testSummary *json_schemas.TestSummary) *[]map[string]i
 	return &r
 }
 
-func toInteractionStage(s *string) *v20240307.InteractionStage {
-	var is v20240307.InteractionStage
+func toInteractionStage(s *string) *api.InteractionStage {
+	var is api.InteractionStage
 
 	switch stage := s; *stage {
 	case "cicd":
-		is = v20240307.Cicd
+		is = api.Cicd
 	case "dev":
-		is = v20240307.Dev
+		is = api.Dev
 	case "prchecks":
-		is = v20240307.Prchecks
+		is = api.Prchecks
 	default:
-		is = v20240307.Unknown
+		is = api.Unknown
 	}
 
 	return &is
