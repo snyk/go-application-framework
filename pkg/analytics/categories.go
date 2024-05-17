@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// ParseCliArgs categorizes command-line arguments into a structured slice.
+// DetermineCategoryFromArgs categorizes command-line arguments into a structured slice.
 //
 // This function receives the entire os.Args slice (including the program name at index 0)
 // and processes the arguments to determine the product, commands, and flags.
@@ -28,7 +28,7 @@ import (
 //	args := []string{"cli", "scan", "--debug", "--"}
 //	knownCommands := []string{"scan", "build"}
 //	flagsAllowList := []string{"debug", "verbose"}
-//	result := ParseCliArgs(args, knownCommands, flagsAllowList)
+//	result := DetermineCategoryFromArgs(args, knownCommands, flagsAllowList)
 //	// result: ["scan", "debug"]
 //
 // Parameters:
@@ -38,7 +38,7 @@ import (
 //
 // Returns:
 //   - A slice of strings containing the categorized arguments.
-func ParseCliArgs(args []string, knownCommands []string, flagsAllowList []string) []string {
+func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllowList []string) []string {
 	commands := []string{}
 	flags := []string{}
 	result := []string{}
