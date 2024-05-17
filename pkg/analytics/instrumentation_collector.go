@@ -18,6 +18,7 @@ type InstrumentationCollector interface {
 	SetUserAgent(ua networking.UserAgentInfo)
 	SetInteractionId(id string)
 	SetTimestamp(t time.Time)
+	SetDuration(duration time.Duration)
 	SetStage(s string)
 	SetType(t string)
 	SetCategory(c []string)
@@ -38,6 +39,7 @@ type instrumentationCollectorImpl struct {
 	userAgent           networking.UserAgentInfo
 	interactionId       string
 	timestamp           time.Time
+	duration            time.Duration
 	stage               string
 	instrumentationType string
 	category            []string // TODO: switch to using enum?
@@ -58,6 +60,10 @@ func (ic *instrumentationCollectorImpl) SetInteractionId(id string) {
 
 func (ic *instrumentationCollectorImpl) SetTimestamp(t time.Time) {
 	ic.timestamp = t
+}
+
+func (ic *instrumentationCollectorImpl) SetDuration(d time.Duration) {
+	ic.duration = d
 }
 
 func (ic *instrumentationCollectorImpl) SetStage(s string) {
@@ -93,6 +99,6 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value string) {
 }
 
 // TODO: this should return a payload(?) that matches the V2 instrumentation schema of the analytics service
-//func GetV2Instrumentation(c InstrumentationCollector) json_schemas.AnalyticsV2Request {
+//func GetV2InstrumentationObject(c InstrumentationCollector) json_schemas.AnalyticsV2Request {
 //
 //}
