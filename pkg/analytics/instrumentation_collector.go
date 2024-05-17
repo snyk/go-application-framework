@@ -29,13 +29,13 @@ type InstrumentationCollector interface {
 	AddExtension(key string, value string)
 }
 
-var _ InstrumentationCollector = (*InstrumentationCollectorImpl)(nil)
+var _ InstrumentationCollector = (*instrumentationCollectorImpl)(nil)
 
 func NewInstrumentationCollector() InstrumentationCollector {
-	return &InstrumentationCollectorImpl{}
+	return &instrumentationCollectorImpl{}
 }
 
-type InstrumentationCollectorImpl struct {
+type instrumentationCollectorImpl struct {
 	args                []string
 	userAgent           networking.UserAgentInfo
 	interactionId       string
@@ -50,52 +50,55 @@ type InstrumentationCollectorImpl struct {
 	extension           map[string]string
 }
 
-func (ic *InstrumentationCollectorImpl) SetCmdArguments(args []string) {
+func (ic *instrumentationCollectorImpl) SetCmdArguments(args []string) {
 	ic.args = args
 }
 
-func (ic *InstrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
+func (ic *instrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
 	ic.userAgent = ua
 }
 
-func (ic *InstrumentationCollectorImpl) SetInteractionId(id string) {
+func (ic *instrumentationCollectorImpl) SetInteractionId(id string) {
 	ic.interactionId = id
 }
 
-func (ic *InstrumentationCollectorImpl) SetTimestamp(t time.Time) {
+func (ic *instrumentationCollectorImpl) SetTimestamp(t time.Time) {
 	ic.timestamp = t
 }
 
-func (ic *InstrumentationCollectorImpl) SetStage(s string) {
+func (ic *instrumentationCollectorImpl) SetStage(s string) {
 	ic.stage = s
 }
 
-func (ic *InstrumentationCollectorImpl) SetType(t string) {
+func (ic *instrumentationCollectorImpl) SetType(t string) {
 	ic.instrumentationType = t
 }
 
-func (ic *InstrumentationCollectorImpl) SetCategory(c []string) {
+func (ic *instrumentationCollectorImpl) SetCategory(c []string) {
 	ic.category = c
 }
 
-func (ic *InstrumentationCollectorImpl) SetStatus(s Status) {
+func (ic *instrumentationCollectorImpl) SetStatus(s Status) {
 	ic.status = s
 }
 
-func (ic *InstrumentationCollectorImpl) SetTestSummary(s json_schemas.TestSummary) {
+func (ic *instrumentationCollectorImpl) SetTestSummary(s json_schemas.TestSummary) {
 	ic.testSummary = s
 }
 
-func (ic *InstrumentationCollectorImpl) SetTargetId(t string) {
+func (ic *instrumentationCollectorImpl) SetTargetId(t string) {
 	ic.targetId = t
 }
 
-func (ic *InstrumentationCollectorImpl) AddError(err error) {
+func (ic *instrumentationCollectorImpl) AddError(err error) {
 	ic.instrumentationErr = err
 }
 
-func (ic *InstrumentationCollectorImpl) AddExtension(key string, value string) {
+func (ic *instrumentationCollectorImpl) AddExtension(key string, value string) {
 	ic.extension[key] = value
 }
 
-//func getV2Instrumentation(c InstrumentationCollector) []byte
+// TODO: this should return a payload(?) that matches the V2 instrumentation schema of the analytics service
+//func GetV2Instrumentation(c InstrumentationCollector) json_schemas.AnalyticsV2Request {
+//
+//}
