@@ -99,7 +99,6 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value string) {
 	ic.extension[key] = value
 }
 
-// TODO: this should return a payload(?) that matches the V2 instrumentation schema of the analytics service
 func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() v20240307.AnalyticsRequestBody {
 	d := v20240307.AnalyticsData{
 		Type:       ic.instrumentationType,
@@ -156,6 +155,7 @@ func (ic *instrumentationCollectorImpl) getV2Runtime() *v20240307.Runtime {
 	}
 }
 
+// TODO: validate this is correctly implemented
 func toInteractionResults(testSummary *json_schemas.TestSummary) *[]map[string]interface{} {
 	r := []map[string]interface{}{}
 	for _, result := range testSummary.Results {
