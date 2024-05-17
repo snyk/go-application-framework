@@ -1,6 +1,9 @@
 package analytics
 
 import (
+	"errors"
+	"fmt"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"time"
 
 	api "github.com/snyk/go-application-framework/pkg/analytics/2024-03-07"
@@ -48,7 +51,7 @@ type instrumentationCollectorImpl struct {
 	status              Status
 	testSummary         json_schemas.TestSummary
 	targetId            string // TODO: switch to using purl lib?
-	instrumentationErr  error
+	instrumentationErr  []error
 	extension           map[string]interface{}
 }
 
@@ -93,7 +96,7 @@ func (ic *instrumentationCollectorImpl) SetTargetId(t string) {
 }
 
 func (ic *instrumentationCollectorImpl) AddError(err error) {
-	ic.instrumentationErr = err
+	ic.instrumentationErr = append(ic.instrumentationErr, err)
 }
 
 func (ic *instrumentationCollectorImpl) AddExtension(key string, value string) {
@@ -131,7 +134,7 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 		TimestampMs: ic.timestamp.UnixMilli(),
 		Type:        ic.instrumentationType,
 		Categories:  &ic.category,
-		Errors:      nil, // TODO: implement this
+		Errors:      toInteractionErrors(ic.instrumentationErr),
 	}
 }
 
@@ -189,4 +192,28 @@ func toInteractionStage(s *string) *api.InteractionStage {
 	}
 
 	return &is
+}
+
+func toInteractionErrors(errors []error) *[]api.InteractionError {
+	var interactionErrors []api.InteractionError
+	for _, e := range errors {
+		if interactionError := toInteractionError(e); interactionError != nil {
+			interactionErrors = append(interactionErrors, *interactionError)
+		}
+	}
+
+	return &interactionErrors
+}
+
+func toInteractionError(e error) *api.InteractionError {
+	errorCatalogError := snyk_errors.Error{}
+	var interactionError api.InteractionError
+
+	if errors.As(e, &errorCatalogError) {
+		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
+		interactionError.Id = errorCatalogError.ErrorCode
+		interactionError.Code = &interactionErrorCode
+	}
+
+	return &interactionError
 }
