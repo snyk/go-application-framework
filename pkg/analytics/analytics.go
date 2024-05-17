@@ -134,10 +134,7 @@ func New() Analytics {
 // SetCmdArguments sets the command arguments.
 func (a *AnalyticsImpl) SetCmdArguments(args []string) {
 	a.args = args
-
-	if a.instrumentor != nil {
-		a.instrumentor.SetCategory(DetermineCategoryFromArgs(args, KNOWN_COMMANDS, ALLOWED_FLAGS))
-	}
+	a.updateCategory()
 }
 
 // SetOrg sets the organization.
@@ -163,14 +160,7 @@ func (a *AnalyticsImpl) SetIntegration(name string, version string) {
 
 func (a *AnalyticsImpl) SetCommand(command string) {
 	a.command = command
-
-	if a.instrumentor != nil {
-		cmdsplit := strings.Split(command, " ")
-		cmdsplit = append(cmdsplit, KNOWN_COMMANDS...)
-		cat := DetermineCategoryFromArgs(a.args, cmdsplit, ALLOWED_FLAGS)
-		a.instrumentor.SetCategory(cat)
-	}
-
+	a.updateCategory()
 }
 
 func (a *AnalyticsImpl) SetOperatingSystem(os string) {
@@ -315,6 +305,14 @@ func (a *AnalyticsImpl) isEnabled() bool {
 
 func (a *AnalyticsImpl) GetInstrumentation() InstrumentationCollector {
 	return a.instrumentor
+}
+
+func (a *AnalyticsImpl) updateCategory() {
+	if a.instrumentor != nil {
+		knownCommands := strings.Split(a.command, " ")
+		knownCommands = append(knownCommands, KNOWN_COMMANDS...)
+		a.instrumentor.SetCategory(DetermineCategoryFromArgs(a.args, knownCommands, ALLOWED_FLAGS))
+	}
 }
 
 var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname // breaking API change
