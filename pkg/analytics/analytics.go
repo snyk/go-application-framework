@@ -127,7 +127,7 @@ func New() Analytics {
 	a.created = time.Now()
 	a.clientFunc = func() *http.Client { return &http.Client{} }
 	a.os = runtime.GOOS
-	a.instrumentor = &InstrumentationCollectorImpl{}
+	a.instrumentor = NewInstrumentationCollector()
 	return a
 }
 
