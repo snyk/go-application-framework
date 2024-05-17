@@ -15,7 +15,6 @@ const (
 type Status string
 
 type InstrumentationCollector interface {
-	SetCmdArguments(args []string)
 	SetUserAgent(ua networking.UserAgentInfo)
 	SetInteractionId(id string)
 	SetTimestamp(t time.Time)
@@ -36,7 +35,6 @@ func NewInstrumentationCollector() InstrumentationCollector {
 }
 
 type instrumentationCollectorImpl struct {
-	args                []string
 	userAgent           networking.UserAgentInfo
 	interactionId       string
 	timestamp           time.Time
@@ -48,10 +46,6 @@ type instrumentationCollectorImpl struct {
 	targetId            string // TODO: switch to using purl lib?
 	instrumentationErr  error
 	extension           map[string]string
-}
-
-func (ic *instrumentationCollectorImpl) SetCmdArguments(args []string) {
-	ic.args = args
 }
 
 func (ic *instrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
