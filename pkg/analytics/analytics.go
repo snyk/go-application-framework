@@ -212,7 +212,7 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	io.WriteString(shasum, uuid)
 	output.Id = fmt.Sprintf("%x", shasum.Sum(nil))
 
-	output.Args = a.args
+	output.Args = a.args[1:]
 
 	if len(a.command) > 0 {
 		output.Command = a.command
