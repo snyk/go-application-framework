@@ -18,9 +18,8 @@ import (
 
 	"github.com/hashicorp/go-uuid"
 
-	utils2 "github.com/snyk/go-application-framework/internal/utils"
-
 	"github.com/snyk/go-application-framework/internal/api"
+	utils2 "github.com/snyk/go-application-framework/internal/utils"
 )
 
 // Analytics is an interface for managing analytics.
@@ -39,7 +38,6 @@ type Analytics interface {
 	GetOutputData() *analyticsOutput
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
-	SetInstrumentation(c InstrumentationCollector)
 	GetInstrumentation() InstrumentationCollector
 }
 
@@ -138,8 +136,7 @@ func (a *AnalyticsImpl) SetCmdArguments(args []string) {
 	a.args = args
 
 	if a.instrumentor != nil {
-		cat := ParseCliArgs(args, KNOWN_COMMANDS, ALLOWED_FLAGS)
-		a.instrumentor.SetCategory(cat)
+		a.instrumentor.SetCategory(DetermineCategoryFromArgs(args, KNOWN_COMMANDS, ALLOWED_FLAGS))
 	}
 }
 
@@ -170,7 +167,7 @@ func (a *AnalyticsImpl) SetCommand(command string) {
 	if a.instrumentor != nil {
 		cmdsplit := strings.Split(command, " ")
 		cmdsplit = append(cmdsplit, KNOWN_COMMANDS...)
-		cat := ParseCliArgs(a.args, cmdsplit, ALLOWED_FLAGS)
+		cat := DetermineCategoryFromArgs(a.args, cmdsplit, ALLOWED_FLAGS)
 		a.instrumentor.SetCategory(cat)
 	}
 
@@ -314,10 +311,6 @@ func (a *AnalyticsImpl) Send() (*http.Response, error) {
 
 func (a *AnalyticsImpl) isEnabled() bool {
 	return !api.IsFedramp(a.apiUrl)
-}
-
-func (a *AnalyticsImpl) SetInstrumentation(c InstrumentationCollector) {
-	a.instrumentor = c
 }
 
 func (a *AnalyticsImpl) GetInstrumentation() InstrumentationCollector {
