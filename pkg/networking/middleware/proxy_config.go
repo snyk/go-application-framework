@@ -6,7 +6,7 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 )
 

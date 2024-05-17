@@ -4,12 +4,12 @@ import (
 	"log"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 func NewInvocationContext(
