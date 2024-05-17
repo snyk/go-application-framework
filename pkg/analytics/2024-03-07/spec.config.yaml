@@ -1,0 +1,5 @@
+package: v20240307
+generate:
+  models: true
+  client: true
+output: client.gen.go
