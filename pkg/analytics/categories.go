@@ -39,10 +39,14 @@ import (
 // Returns:
 //   - A slice of strings containing the categorized arguments.
 func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllowList []string) []string {
-	commands := []string{}
-	flags := []string{}
 	result := []string{}
 
+	if len(args) == 0 {
+		return result
+	}
+
+	commands := []string{}
+	flags := []string{}
 	productFallback := "oss"
 
 	// Separate parsing of commands and flags to ensure correct ordering in the category vector
