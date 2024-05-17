@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -73,16 +74,25 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	return nil, err
 }
 
-func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
-	authType := config.GetString(authTypeParameter)
-	if len(authType) == 0 {
-		authType = authTypeOAuth
-	}
-
+func autoDetectAuthType(config configuration.Configuration) string {
 	// testing if an API token was specified
 	token := config.GetString(ConfigurationNewAuthenticationToken)
 	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
-		authType = authTypeToken
+		return authTypeToken
+	}
+
+	integration := config.GetString(configuration.INTEGRATION_NAME)
+	if utils.IsSnykIde(integration) {
+		return authTypeToken
+	}
+
+	return authTypeOAuth
+}
+
+func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+	authType := config.GetString(authTypeParameter)
+	if len(authType) == 0 {
+		authType = autoDetectAuthType(config)
 	}
 
 	logger.Printf("Authentication Type: %s", authType)

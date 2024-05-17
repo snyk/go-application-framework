@@ -78,3 +78,28 @@ func Test_auth_token(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func Test_autodetectAuth(t *testing.T) {
+	t.Run("oauth by default", func(t *testing.T) {
+		expected := authTypeOAuth
+		config := configuration.NewInMemory()
+		actual := autoDetectAuthType(config)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("token for IDEs", func(t *testing.T) {
+		expected := authTypeToken
+		config := configuration.NewInMemory()
+		config.Set(configuration.INTEGRATION_NAME, "VS_CODE")
+		actual := autoDetectAuthType(config)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("token for given API token", func(t *testing.T) {
+		expected := authTypeToken
+		config := configuration.NewInMemory()
+		config.Set(ConfigurationNewAuthenticationToken, "00000000-0000-0000-0000-000000000000")
+		actual := autoDetectAuthType(config)
+		assert.Equal(t, expected, actual)
+	})
+}
