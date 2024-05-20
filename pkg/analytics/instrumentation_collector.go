@@ -213,7 +213,7 @@ func toInteractionErrors(errors []error) *[]api.InteractionError {
 
 func toInteractionError(e error) *api.InteractionError {
 	errorCatalogError := snyk_errors.Error{}
-	var interactionError *api.InteractionError
+	interactionError := api.InteractionError{}
 
 	if errors.As(e, &errorCatalogError) {
 		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
@@ -221,5 +221,5 @@ func toInteractionError(e error) *api.InteractionError {
 		interactionError.Code = &interactionErrorCode
 	}
 
-	return interactionError
+	return &interactionError
 }
