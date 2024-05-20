@@ -1,7 +1,7 @@
 package analytics
 
 import (
-	api "github.com/snyk/go-application-framework/pkg/analytics/2024-03-07"
+	api "github.com/snyk/go-application-framework/internal/clients"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/stretchr/testify/assert"
@@ -31,18 +31,18 @@ func Test_InstrumentationCollector(t *testing.T) {
 	mockTestSummary := json_schemas.NewTestSummary("sast")
 	mockTargetId := "targetID"
 
-	t.Run("it should construct a V2 instrumentation object", func(t *testing.T) {
-		ic.SetUserAgent(mockUserAgent)
-		ic.SetInteractionId(mockInteractionId)
-		ic.SetTimestamp(mockTimestamp)
-		ic.SetDuration(mockDuration)
-		ic.SetStage(mockStage)
-		ic.SetType(mockInstrumentationType)
-		ic.SetCategory(mockCategory)
-		ic.SetStatus(mockStatus)
-		ic.SetTestSummary(*mockTestSummary)
-		ic.SetTargetId(mockTargetId)
+	ic.SetUserAgent(mockUserAgent)
+	ic.SetInteractionId(mockInteractionId)
+	ic.SetTimestamp(mockTimestamp)
+	ic.SetDuration(mockDuration)
+	ic.SetStage(mockStage)
+	ic.SetType(mockInstrumentationType)
+	ic.SetCategory(mockCategory)
+	ic.SetStatus(mockStatus)
+	ic.SetTestSummary(*mockTestSummary)
+	ic.SetTargetId(mockTargetId)
 
+	t.Run("it should construct a V2 instrumentation object", func(t *testing.T) {
 		expectedV2InstrumentationObject := api.AnalyticsRequestBody{
 			Data: api.AnalyticsData{
 				Type: mockInstrumentationType,
@@ -87,6 +87,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
 	})
+
+	//t.Run("it should collect interaction errors", func(t *testing.T) {
+	//	mockError := errors.New("mock error")
+	//	ic.AddError(mockError)
+	//
+	//})
 }
 
 func newTestInstrumentation(t *testing.T) InstrumentationCollector {
