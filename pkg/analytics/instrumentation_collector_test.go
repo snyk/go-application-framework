@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"fmt"
 	api "github.com/snyk/go-application-framework/internal/clients"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -88,11 +89,30 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
 	})
 
-	//t.Run("it should collect interaction errors", func(t *testing.T) {
-	//	mockError := errors.New("mock error")
-	//	ic.AddError(mockError)
-	//
-	//})
+	t.Run("it should collect interaction errors", func(t *testing.T) {
+		mockError := fmt.Errorf("oops")
+		ic.AddError(mockError)
+
+		expectedV2InstrumentationObject := api.AnalyticsRequestBody{
+			Data: api.AnalyticsData{
+				Type: mockInstrumentationType,
+				Attributes: api.AnalyticsAttributes{
+					Interaction: api.Interaction{
+						Errors:      toInteractionErrors([]error{mockError}),
+						Id:          mockInteractionId,
+						Status:      string(mockStatus),
+						Target:      api.Target{Id: mockTargetId},
+						TimestampMs: mockTimestamp.UnixMilli(),
+						Type:        mockInstrumentationType,
+					},
+				},
+			},
+		}
+
+		actualV2InstrumentationObject := GetV2InstrumentationObject(ic)
+
+		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
+	})
 }
 
 func newTestInstrumentation(t *testing.T) InstrumentationCollector {
