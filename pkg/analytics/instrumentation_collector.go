@@ -140,6 +140,7 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 		Type:        ic.instrumentationType,
 		Categories:  &ic.category,
 		Errors:      toInteractionErrors(ic.instrumentationErr),
+		Status:      string(ic.status),
 	}
 }
 
