@@ -32,7 +32,7 @@ type InstrumentationCollector interface {
 	SetTestSummary(s json_schemas.TestSummary)
 	SetTargetId(t string) // maybe use package-url library and types
 	AddError(err error)
-	AddExtension(key string, value string)
+	AddExtension(key string, value interface{})
 }
 
 var _ InstrumentationCollector = (*instrumentationCollectorImpl)(nil)
@@ -100,7 +100,10 @@ func (ic *instrumentationCollectorImpl) AddError(err error) {
 	ic.instrumentationErr = append(ic.instrumentationErr, err)
 }
 
-func (ic *instrumentationCollectorImpl) AddExtension(key string, value string) {
+func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) {
+	if ic.extension == nil {
+		ic.extension = make(map[string]interface{})
+	}
 	ic.extension[key] = value
 }
 
@@ -132,15 +135,16 @@ func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttribute
 
 func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	return api.Interaction{
+		Categories:  &ic.category,
+		Errors:      toInteractionErrors(ic.instrumentationErr),
+		Extension:   &ic.extension,
 		Id:          ic.interactionId,
 		Results:     toInteractionResults(&ic.testSummary),
 		Stage:       toInteractionStage(&ic.stage),
+		Status:      string(ic.status),
 		Target:      api.Target{Id: ic.targetId},
 		TimestampMs: ic.timestamp.UnixMilli(),
 		Type:        ic.instrumentationType,
-		Categories:  &ic.category,
-		Errors:      toInteractionErrors(ic.instrumentationErr),
-		Status:      string(ic.status),
 	}
 }
 

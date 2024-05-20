@@ -31,6 +31,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 	mockStatus := Success
 	mockTestSummary := json_schemas.NewTestSummary("sast")
 	mockTargetId := "targetID"
+	mockExtension := map[string]interface{}{"strings": "hello world"}
 
 	ic.SetUserAgent(mockUserAgent)
 	ic.SetInteractionId(mockInteractionId)
@@ -42,48 +43,50 @@ func Test_InstrumentationCollector(t *testing.T) {
 	ic.SetStatus(mockStatus)
 	ic.SetTestSummary(*mockTestSummary)
 	ic.SetTargetId(mockTargetId)
+	ic.AddExtension("strings", "hello world")
 
-	t.Run("it should construct a V2 instrumentation object", func(t *testing.T) {
-		expectedV2InstrumentationObject := api.AnalyticsRequestBody{
-			Data: api.AnalyticsData{
-				Type: mockInstrumentationType,
-				Attributes: api.AnalyticsAttributes{
-					Interaction: api.Interaction{
-						Categories:  &mockCategory,
-						Errors:      &[]api.InteractionError{},
-						Id:          mockInteractionId,
-						Results:     toInteractionResults(mockTestSummary),
-						Stage:       toInteractionStage(&mockStage),
-						Status:      string(mockStatus),
-						Target:      api.Target{Id: mockTargetId},
-						TimestampMs: mockTimestamp.UnixMilli(),
-						Type:        mockInstrumentationType,
+	expectedV2InstrumentationObject := api.AnalyticsRequestBody{
+		Data: api.AnalyticsData{
+			Type: mockInstrumentationType,
+			Attributes: api.AnalyticsAttributes{
+				Interaction: api.Interaction{
+					Categories:  &mockCategory,
+					Errors:      &[]api.InteractionError{},
+					Extension:   &mockExtension,
+					Id:          mockInteractionId,
+					Results:     toInteractionResults(mockTestSummary),
+					Stage:       toInteractionStage(&mockStage),
+					Status:      string(mockStatus),
+					Target:      api.Target{Id: mockTargetId},
+					TimestampMs: mockTimestamp.UnixMilli(),
+					Type:        mockInstrumentationType,
+				},
+				Runtime: &api.Runtime{
+					Application: &api.Application{
+						Name:    mockUserAgent.App,
+						Version: mockUserAgent.AppVersion,
 					},
-					Runtime: &api.Runtime{
-						Application: &api.Application{
-							Name:    mockUserAgent.App,
-							Version: mockUserAgent.AppVersion,
-						},
-						Environment: &api.Environment{
-							Name:    mockUserAgent.IntegrationEnvironment,
-							Version: mockUserAgent.IntegrationEnvironmentVersion,
-						},
-						Integration: &api.Integration{
-							Name:    mockUserAgent.Integration,
-							Version: mockUserAgent.IntegrationVersion,
-						},
-						Performance: &api.Performance{
-							DurationMs: mockDuration.Milliseconds(),
-						},
-						Platform: &api.Platform{
-							Arch: mockUserAgent.Arch,
-							Os:   mockUserAgent.OS,
-						},
+					Environment: &api.Environment{
+						Name:    mockUserAgent.IntegrationEnvironment,
+						Version: mockUserAgent.IntegrationEnvironmentVersion,
+					},
+					Integration: &api.Integration{
+						Name:    mockUserAgent.Integration,
+						Version: mockUserAgent.IntegrationVersion,
+					},
+					Performance: &api.Performance{
+						DurationMs: mockDuration.Milliseconds(),
+					},
+					Platform: &api.Platform{
+						Arch: mockUserAgent.Arch,
+						Os:   mockUserAgent.OS,
 					},
 				},
 			},
-		}
+		},
+	}
 
+	t.Run("it should construct a V2 instrumentation object", func(t *testing.T) {
 		actualV2InstrumentationObject := GetV2InstrumentationObject(ic)
 
 		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
@@ -93,21 +96,24 @@ func Test_InstrumentationCollector(t *testing.T) {
 		mockError := fmt.Errorf("oops")
 		ic.AddError(mockError)
 
-		expectedV2InstrumentationObject := api.AnalyticsRequestBody{
-			Data: api.AnalyticsData{
-				Type: mockInstrumentationType,
-				Attributes: api.AnalyticsAttributes{
-					Interaction: api.Interaction{
-						Errors:      toInteractionErrors([]error{mockError}),
-						Id:          mockInteractionId,
-						Status:      string(mockStatus),
-						Target:      api.Target{Id: mockTargetId},
-						TimestampMs: mockTimestamp.UnixMilli(),
-						Type:        mockInstrumentationType,
-					},
-				},
-			},
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Errors = toInteractionErrors([]error{mockError})
+
+		actualV2InstrumentationObject := GetV2InstrumentationObject(ic)
+
+		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
+	})
+
+	t.Run("it should support all interaction extension types", func(t *testing.T) {
+		ic.AddExtension("integers", 123)
+		ic.AddExtension("booleans", true)
+
+		mockExtension = map[string]interface{}{
+			"strings":  "hello world",
+			"integers": 123,
+			"booleans": true,
 		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
 
 		actualV2InstrumentationObject := GetV2InstrumentationObject(ic)
 
