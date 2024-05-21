@@ -7,7 +7,7 @@ import (
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
-	api "github.com/snyk/go-application-framework/pkg/analytics/clients"
+	api "github.com/snyk/go-application-framework/internal/api/clients"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
