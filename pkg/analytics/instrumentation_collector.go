@@ -107,30 +107,43 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface
 	ic.extension[key] = value
 }
 
-func GetV2InstrumentationObject(collector InstrumentationCollector) *api.AnalyticsRequestBody {
+func GetV2InstrumentationObject(collector InstrumentationCollector) (*api.AnalyticsRequestBody, error) {
+	var e error
 	t, ok := collector.(*instrumentationCollectorImpl)
 	if ok {
 		return t.GetV2InstrumentationObject()
 	}
-	return nil
+	return nil, e
 }
 
-func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() *api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() (*api.AnalyticsRequestBody, error) {
+	a, err := ic.getV2Attributes()
+
+	if err != nil {
+		return nil, err
+	}
+
 	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
-		Attributes: ic.getV2Attributes(),
+		Attributes: a,
 	}
 
 	return &api.AnalyticsRequestBody{
 		Data: d,
-	}
+	}, nil
 }
 
-func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {
+func (ic *instrumentationCollectorImpl) getV2Attributes() (api.AnalyticsAttributes, error) {
+	r, err := ic.getV2Runtime()
+
+	if err != nil {
+		return api.AnalyticsAttributes{}, err
+	}
+
 	return api.AnalyticsAttributes{
 		Interaction: ic.getV2Interaction(),
-		Runtime:     ic.getV2Runtime(),
-	}
+		Runtime:     r,
+	}, nil
 }
 
 func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
@@ -148,7 +161,12 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	}
 }
 
-func (ic *instrumentationCollectorImpl) getV2Runtime() *api.Runtime {
+func (ic *instrumentationCollectorImpl) getV2Runtime() (*api.Runtime, error) {
+	hasUserAgentAppData := len(ic.userAgent.App) > 0 || len(ic.userAgent.AppVersion) > 0
+	if !hasUserAgentAppData {
+		return nil, errors.New("no user agent application data")
+	}
+
 	return &api.Runtime{
 		Application: &api.Application{
 			Name:    ic.userAgent.App,
@@ -169,7 +187,7 @@ func (ic *instrumentationCollectorImpl) getV2Runtime() *api.Runtime {
 			Arch: ic.userAgent.Arch,
 			Os:   ic.userAgent.OS,
 		},
-	}
+	}, nil
 }
 
 func toInteractionResults(testSummary *json_schemas.TestSummary) *[]map[string]interface{} {

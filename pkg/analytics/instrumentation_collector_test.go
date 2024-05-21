@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"errors"
 	"fmt"
 	api "github.com/snyk/go-application-framework/pkg/analytics/clients"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -87,9 +88,10 @@ func Test_InstrumentationCollector(t *testing.T) {
 	}
 
 	t.Run("it should construct a V2 instrumentation object", func(t *testing.T) {
-		actualV2InstrumentationObject := GetV2InstrumentationObject(ic)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 
-		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
 	})
 
 	t.Run("it should collect interaction errors", func(t *testing.T) {
@@ -98,9 +100,10 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Errors = toInteractionErrors([]error{mockError})
 
-		actualV2InstrumentationObject := GetV2InstrumentationObject(ic)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 
-		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
 	})
 
 	t.Run("it should support all interaction extension types", func(t *testing.T) {
@@ -115,9 +118,21 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
 
-		actualV2InstrumentationObject := GetV2InstrumentationObject(ic)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 
-		assert.Equal(t, &expectedV2InstrumentationObject, actualV2InstrumentationObject)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+	})
+
+	t.Run("it should return error when runtime application data is missing", func(t *testing.T) {
+		mockUserAgent = networking.UserAgentInfo{}
+		ic.SetUserAgent(mockUserAgent)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+
+		expectedErr := errors.New("no user agent application data")
+
+		assert.Nil(t, actualV2InstrumentationObject)
+		assert.Error(t, expectedErr, err)
 	})
 }
 
