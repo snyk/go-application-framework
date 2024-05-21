@@ -2,7 +2,7 @@ package analytics
 
 import (
 	"fmt"
-	api "github.com/snyk/go-application-framework/internal/clients"
+	api "github.com/snyk/go-application-framework/pkg/analytics/clients"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/stretchr/testify/assert"

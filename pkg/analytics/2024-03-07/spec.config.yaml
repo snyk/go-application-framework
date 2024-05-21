@@ -2,4 +2,4 @@ package: v20240307
 generate:
   models: true
   client: true
-output: ../../../internal/clients/analytics_v20240307.go
+output: ../../../pkg/analytics/clients/analytics_v20240307.go
