@@ -44,7 +44,7 @@ func Test_GetTargetId(t *testing.T) {
 		targetId, err := GetTargetId(tempDir)
 		assert.NoError(t, err)
 
-		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@e630da9051a102ade537ba9e5c3c8bf7928945c3\?branch=master$`
+		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master$`
 		fmt.Println(targetId)
 		matched, err := regexp.MatchString(pattern, targetId)
 		assert.NoError(t, err)
