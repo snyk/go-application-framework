@@ -127,7 +127,6 @@ func New() Analytics {
 	a.os = runtime.GOOS
 	a.instrumentor = NewInstrumentationCollector()
 	a.instrumentor.SetTimestamp(a.created)
-	a.instrumentor.SetStage(DetermineStage(utils2.IsCiEnvironment()))
 	return a
 }
 
@@ -357,16 +356,4 @@ func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, co
 	}
 
 	return []byte(contentStr), nil
-}
-
-func DetermineStage(isCiEnvironment bool) string {
-	if isCiEnvironment {
-		return "cicd"
-	}
-
-	return "dev"
-}
-
-func AssembleUrnFromUUID(uuid string) string {
-	return fmt.Sprintf("urn:snyk:interaction:%s", uuid)
 }

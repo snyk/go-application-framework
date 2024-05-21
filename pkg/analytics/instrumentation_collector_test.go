@@ -3,12 +3,14 @@ package analytics
 import (
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+
 	api "github.com/snyk/go-application-framework/internal/api/clients"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
-	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func Test_InstrumentationCollector(t *testing.T) {

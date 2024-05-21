@@ -1,4 +1,4 @@
-package analytics
+package instrumentation
 
 import (
 	"testing"
@@ -20,8 +20,8 @@ func TestCategorizeCliArgs(t *testing.T) {
 		{"Code test", []string{"snyk", "code", "test"}, []string{"code", "test"}, nil},
 		{"IAC describe", []string{"snyk", "iac", "describe"}, []string{"iac", "describe"}, nil},
 		{"IAC rules test", []string{"snyk", "iac", "rules", "test"}, []string{"iac", "rules", "test"}, nil},
-		{"OSS sbom", []string{"snyk", "sbom"}, []string{"sbom"}, nil},
-		{"Container sbom with all-projects flag", []string{"snyk", "container", "sbom", "--all-projects"}, []string{"container", "sbom", "all-projects"}, nil},
+		{"OSS config", []string{"snyk", "config"}, []string{"config"}, nil},
+		{"Container config with all-projects flag", []string{"snyk", "container", "config", "--all-projects"}, []string{"container", "config", "all-projects"}, nil},
 		{"Command with debug flag", []string{"snyk", "test", "--debug"}, []string{"oss", "test", "debug"}, nil},
 
 		// Real-World Example with Mixed Input

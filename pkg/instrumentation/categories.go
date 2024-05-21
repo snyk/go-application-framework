@@ -1,4 +1,4 @@
-package analytics
+package instrumentation
 
 import (
 	"slices"
@@ -79,7 +79,7 @@ func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 	return result
 }
 
-var KNOWN_COMMANDS = []string{"test", "code", "monitor", "iac", "rules", "describe", "container", "debug"}
+var KNOWN_COMMANDS = []string{"test", "code", "monitor", "iac", "rules", "describe", "container", "debug", "config"}
 var KNOWN_FLAGS = []string{
 	"print-dep-paths",
 	"print-deps",

@@ -1,17 +1,17 @@
 package instrumentation
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/spf13/pflag"
 
-	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 func GetKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
-	knownCommands := analytics.KNOWN_COMMANDS
-	knownFlags := analytics.KNOWN_FLAGS
+	knownCommands := KNOWN_COMMANDS
+	knownFlags := KNOWN_FLAGS
 
 	workflowIDs := engine.GetWorkflows()
 	for _, id := range workflowIDs {
@@ -33,4 +33,16 @@ func GetKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
 	}
 
 	return knownCommands, knownFlags
+}
+
+func DetermineStage(isCiEnvironment bool) string {
+	if isCiEnvironment {
+		return "cicd"
+	}
+
+	return "dev"
+}
+
+func AssembleUrnFromUUID(uuid string) string {
+	return fmt.Sprintf("urn:snyk:interaction:%s", uuid)
 }
