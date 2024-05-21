@@ -50,6 +50,20 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, matched)
 	})
+
+	t.Run("handles a git directory with a file location", func(t *testing.T) {
+		expectedRepoUrl := "https://github.com/snyk-fixtures/shallow-goof-locked.git"
+		tempDir, _ := clone(t, expectedRepoUrl, "")
+
+		targetId, err := GetTargetId(tempDir + "/package.json")
+		assert.NoError(t, err)
+
+		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master#package.json$`
+		fmt.Println(targetId)
+		matched, err := regexp.MatchString(pattern, targetId)
+		assert.NoError(t, err)
+		assert.True(t, matched)
+	})
 }
 
 func clone(t *testing.T, repoUrl string, repoDir string) (string, *git.Repository) {

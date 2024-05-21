@@ -46,7 +46,11 @@ func GetTargetId(path string) (string, error) {
 		branchName = ref.Name().Short()
 	}
 
-	return "pkg:" + formattedString + "@" + ref.Hash().String() + "?branch=" + branchName, nil
+	if len(filepath.Ext(path)) > 0 {
+		location = "#" + filepath.Base(path)
+	}
+
+	return "pkg:" + formattedString + "@" + ref.Hash().String() + "?branch=" + branchName + location, nil
 }
 
 func generateSHA256(path string) string {
