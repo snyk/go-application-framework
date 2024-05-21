@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,5 +36,31 @@ func Test_GetTargetId(t *testing.T) {
 		assert.True(t, matched)
 	})
 
-	t.Run("")
+	t.Run("handles a directory which has a .git file at the root", func(t *testing.T) {
+
+		expectedRepoUrl := "https://github.com/snyk-fixtures/shallow-goof-locked.git"
+		tempDir, _ := clone(t, expectedRepoUrl, "")
+
+		targetId, err := GetTargetId(tempDir)
+		assert.NoError(t, err)
+
+		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@e630da9051a102ade537ba9e5c3c8bf7928945c3\?branch=master$`
+		fmt.Println(targetId)
+		matched, err := regexp.MatchString(pattern, targetId)
+		assert.NoError(t, err)
+		assert.True(t, matched)
+	})
+}
+
+func clone(t *testing.T, repoUrl string, repoDir string) (string, *git.Repository) {
+	t.Helper()
+
+	if repoDir == "" {
+		repoDir = t.TempDir()
+	}
+	repo, err := git.PlainClone(repoDir, false, &git.CloneOptions{URL: repoUrl})
+	assert.NoError(t, err)
+	assert.NotNil(t, repo)
+
+	return repoDir, repo
 }
