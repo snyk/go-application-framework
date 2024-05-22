@@ -2,7 +2,6 @@ package utils
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -44,7 +43,6 @@ func Test_GetTargetId(t *testing.T) {
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#filecontaining\%40specialcharacters123\%24.ts$`
 
-		fmt.Println(targetId)
 		matched, err := regexp.MatchString(pattern, targetId)
 		assert.NoError(t, err)
 		assert.True(t, matched)
@@ -56,7 +54,6 @@ func Test_GetTargetId(t *testing.T) {
 		targetId := GetTargetId(tempDir)
 
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master$`
-		fmt.Println(targetId)
 		matched, err := regexp.MatchString(pattern, targetId)
 		assert.NoError(t, err)
 		assert.True(t, matched)
@@ -73,7 +70,6 @@ func Test_GetTargetId(t *testing.T) {
 		targetId := GetTargetId(tempDir)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001$`
-		fmt.Println(targetId)
 		matched, err := regexp.MatchString(pattern, targetId)
 		assert.NoError(t, err)
 		assert.True(t, matched)
@@ -91,7 +87,6 @@ func Test_GetTargetId(t *testing.T) {
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#package.json$`
 		matched, err := regexp.MatchString(pattern, targetId)
 
-		fmt.Println(targetId)
 		assert.NoError(t, err)
 		assert.True(t, matched)
 	})
@@ -119,7 +114,6 @@ func Test_GetTargetId(t *testing.T) {
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master#package.json$`
 		matched, err := regexp.MatchString(pattern, targetId)
 
-		fmt.Println(targetId)
 		assert.NoError(t, err)
 		assert.True(t, matched)
 	})
