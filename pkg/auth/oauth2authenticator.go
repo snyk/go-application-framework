@@ -309,9 +309,11 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			details := html.EscapeString(r.URL.Query().Get("error_description"))
 			_, _ = fmt.Fprintf(w, "Failed to authenticate. (%s)\n%s", responseError, details)
 		} else {
+			appUrl := o.config.GetString(configuration.WEB_APP_URL)
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
-			_, _ = fmt.Fprint(w, AUTHENTICATED_MESSAGE)
+			w.Header().Add("Location", appUrl+"/authenticated?type=oauth")
+			w.WriteHeader(http.StatusMovedPermanently)
 		}
 
 		go o.shutdownServerFunc(srv)
