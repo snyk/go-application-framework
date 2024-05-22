@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -21,7 +22,7 @@ func GetTargetId(path string) (string, error) {
 	if err != nil {
 		if len(filepath.Ext(path)) > 0 {
 			folderName = filepath.Base(filepath.Dir(path))
-			location = "#" + filepath.Base(path)
+			location = "#" + url.QueryEscape(filepath.Base(path))
 		}
 
 		return "pkg:filesystem/" + generateSHA256(path) + "/" + folderName + location, nil
