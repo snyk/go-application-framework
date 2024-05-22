@@ -79,7 +79,28 @@ func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 	return result
 }
 
-var KNOWN_COMMANDS = []string{"test", "code", "monitor", "iac", "rules", "describe", "container", "debug", "config"}
+var KNOWN_COMMANDS = []string{
+	"test",
+	"code",
+	"monitor",
+	"iac",
+	"rules",
+	"describe",
+	"container",
+	"debug",
+	"config",
+	"auth",
+	"ignore",
+	"log4shell",
+	"policy",
+	"fix",
+	"apps",
+	"capture",
+	"init",
+	"push",
+	"update-exclude-policy",
+}
+
 var KNOWN_FLAGS = []string{
 	"print-dep-paths",
 	"print-deps",
