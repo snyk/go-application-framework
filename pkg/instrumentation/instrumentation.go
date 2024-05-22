@@ -2,6 +2,7 @@ package instrumentation
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -28,7 +29,9 @@ func GetKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
 		// add flags to knownFlags
 		flagset := workflow.FlagsetFromConfigurationOptions(wfl.GetConfigurationOptions())
 		flagset.VisitAll(func(flag *pflag.Flag) {
-			knownFlags = append(knownFlags, flag.Name)
+			if !slices.Contains(knownFlags, flag.Name) {
+				knownFlags = append(knownFlags, flag.Name)
+			}
 		})
 	}
 
