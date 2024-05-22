@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/snyk/go-application-framework/internal/api/clients"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/networking"
-	"github.com/snyk/go-application-framework/pkg/utils"
 	"net/http"
 	"time"
 
@@ -29,6 +26,7 @@ var (
 const (
 	reportAnalyticsWorkflowName      = "analytics.report"
 	reportAnalyticsInputDataFlagName = "inputData"
+	reportAnalyticsAPIVersion        = "2024-03-07-experimental"
 )
 
 // InitReportAnalyticsWorkflow initializes the reportAnalytics workflow before registering it with the engine.
@@ -56,7 +54,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetLogger()
-	instrumentationCollector := invocationCtx.GetAnalytics().GetInstrumentation()
 
 	logger.Println(reportAnalyticsWorkflowName + " workflow start")
 
@@ -64,7 +61,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
-	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=2024-03-07-experimental", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION))
+	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION), reportAnalyticsAPIVersion)
 
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
@@ -109,13 +106,21 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			}
 
 			// convert analytics payload to instrumentation payload
-			err := instrumentScanDoneEvent(invocationCtx, &instrumentationCollector, input)
+			instrumentationData, err := instrumentScanDoneEvent(invocationCtx, input)
 			if err != nil {
 				return nil, err
 			}
+
+			// send converted analytics payload to analytics v2 endpoint
+			err = callEndpoint(invocationCtx, instrumentationData, url)
+			if err != nil {
+				err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, err)
+				return nil, err
+			}
+			return nil, nil
 		}
 
-		// TODO: send instrumentation payload to V2 analytics endpoint
+		// send to V2 analytics endpoint
 		callErr := callEndpoint(invocationCtx, input, url)
 		if callErr != nil {
 			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
@@ -124,68 +129,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	}
 	logger.Println(reportAnalyticsWorkflowName + " workflow end")
 	return nil, nil
-}
-
-func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, ic *analytics.InstrumentationCollector, input workflow.Data) error {
-	collector := *ic
-	logger := invocationCtx.GetLogger()
-
-	var scanDoneEvent json_schemas.ScanDoneEvent
-	d := input.GetPayload().([]byte)
-
-	err := json.Unmarshal(d, &scanDoneEvent)
-	if err != nil {
-		logger.Printf("Error unmarshalling json: %v\n", err)
-		return err
-	}
-
-	// required v2 analytics parameters
-	userAgent := networking.UserAgentInfo{
-		App:                           scanDoneEvent.Data.Attributes.Application,
-		AppVersion:                    scanDoneEvent.Data.Attributes.ApplicationVersion,
-		Integration:                   scanDoneEvent.Data.Attributes.IntegrationName,
-		IntegrationEnvironmentVersion: scanDoneEvent.Data.Attributes.IntegrationEnvironmentVersion,
-		OS:                            scanDoneEvent.Data.Attributes.Os,
-		Arch:                          scanDoneEvent.Data.Attributes.Arch,
-	}
-	collector.SetUserAgent(userAgent)
-	collector.SetType(scanDoneEvent.Data.Type)
-	collector.SetTimestamp(scanDoneEvent.Data.Attributes.TimestampFinished)
-	durationMs, err := time.ParseDuration(scanDoneEvent.Data.Attributes.DurationMs)
-	if err != nil {
-		logger.Printf("Error parsing durationMs: %v\n", err)
-	}
-	collector.SetDuration(durationMs)
-	// TODO: figure out what the scan event statuses are and map to v2 analytics event accordingly
-	collector.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
-	// TODO: figure out what this is in the scan done event - should be in urn format
-	//collector.SetInteractionId()
-	// TODO: figure out what this is in the scan done event - should be in purl format
-	//collector.SetTargetId()
-
-	// optional v2 analytics parameters
-	collector.SetCategory([]string{scanDoneEvent.Data.Attributes.ScanType})
-	// stage does not exist in scan done event
-	// collector.SetStage()
-	// errors do not exist in scan done event
-	//collector.AddError()
-	// extension does not exist in scan done event
-	//collector.AddExtension()
-	// TODO: figure out what this is in the scan done event - maybe UniqueIssueCount?
-	//collector.SetTestSummary()
-
-	return nil
-}
-
-func toStatus(status string) analytics.Status {
-	if status == "success" {
-		return analytics.Success
-	}
-	return analytics.Failure
-}
-
-func instrumentAnalyticsV2Event(invocationCtx workflow.InvocationContext, ic *analytics.InstrumentationCollector, input workflow.Data) error {
-	return nil
 }
 
 func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
@@ -200,7 +143,6 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 	req.Header.Set("Content-Type", input.GetContentType())
 
 	// Send the request
-
 	resp, err := invocationCtx.GetNetworkAccess().GetHttpClient().Do(req)
 	if err != nil {
 		logger.Printf("Error sending request: %v\n", err)
@@ -215,39 +157,75 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 	return nil
 }
 
-func callEndpoint2(invocationCtx workflow.InvocationContext, ic *analytics.InstrumentationCollector) error {
+func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) (workflow.Data, error) {
 	logger := invocationCtx.GetLogger()
+	a := invocationCtx.GetAnalytics()
+	ic := a.GetInstrumentation()
 
-	// create request
-	req := createInstrumentationRequest(invocationCtx, ic)
+	var scanDoneEvent json_schemas.ScanDoneEvent
+	d := input.GetPayload().([]byte)
 
-	// send request
-	response, err := invocationCtx.GetNetworkAccess().GetHttpClient().Do(req)
+	err := json.Unmarshal(d, &scanDoneEvent)
 	if err != nil {
-		logger.Printf("Error sending request: %v\n", err)
+		logger.Printf("Error unmarshalling json: %v\n", err)
+		return nil, err
 	}
-	defer response.Body.Close()
-	logger.Printf("analytics v2 response: %v\n", response)
 
-	return nil
+	// TODO: a.GetInstrumentation() should have prefilled most of this data, check which ones we can delete
+	// required v2 analytics parameters
+	userAgent := networking.UserAgentInfo{
+		App:                           scanDoneEvent.Data.Attributes.Application,
+		AppVersion:                    scanDoneEvent.Data.Attributes.ApplicationVersion,
+		Integration:                   scanDoneEvent.Data.Attributes.IntegrationName,
+		IntegrationEnvironmentVersion: scanDoneEvent.Data.Attributes.IntegrationEnvironmentVersion,
+		OS:                            scanDoneEvent.Data.Attributes.Os,
+		Arch:                          scanDoneEvent.Data.Attributes.Arch,
+	}
+	ic.SetUserAgent(userAgent)
+	ic.SetType(scanDoneEvent.Data.Type)
+	ic.SetTimestamp(scanDoneEvent.Data.Attributes.TimestampFinished)
+	durationMs, err := time.ParseDuration(scanDoneEvent.Data.Attributes.DurationMs)
+	if err != nil {
+		logger.Printf("Error parsing durationMs: %v\n", err)
+	}
+	ic.SetDuration(durationMs)
+	// TODO: figure out what the scan event statuses are and map to v2 analytics event accordingly
+	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
+	// TODO: figure out what this is in the scan done event - should be in urn format
+	//ic.SetInteractionId()
+	// TODO: figure out what this is in the scan done event - should be in purl format
+	//ic.SetTargetId()
+
+	// optional v2 analytics parameters
+	// hardcode test
+	ic.SetCategory([]string{scanDoneEvent.Data.Attributes.ScanType, "test"})
+	// stage does not exist in scan done event
+	// ic.SetStage()
+	// errors do not exist in scan done event
+	//ic.AddError()
+	// extension does not exist in scan done event
+	//ic.AddExtension()
+	// TODO: figure out what this is in the scan done event - maybe UniqueIssueCount?
+	//ic.SetTestSummary()
+
+	instrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
+	if err != nil {
+		logger.Printf("Error creating analytics object: %v\n", err)
+		return nil, err
+	}
+
+	data, err := json.Marshal(instrumentationObject)
+	if err != nil {
+		logger.Printf("Error marshalling json: %v\n", err)
+		return nil, err
+	}
+
+	return workflow.NewData(WORKFLOWID_REPORT_ANALYTICS, "application/json", data), nil
 }
 
-func createInstrumentationRequest(invocationCtx workflow.InvocationContext, ic *analytics.InstrumentationCollector) *http.Request {
-	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetLogger()
-
-	instrumentationCollector := *ic
-	d, err := analytics.GetV2InstrumentationObject(instrumentationCollector)
-	if err != nil {
-		logger.Printf("Error getting v2 instrumentation object: %v\n", err)
-		return nil
+func toStatus(status string) analytics.Status {
+	if status == "success" {
+		return analytics.Success
 	}
-
-	request, err := clients.NewCreateAnalyticsRequest(config.GetString(configuration.API_URL), utils.ValueOf(uuid.Parse(config.GetString(configuration.ORGANIZATION))), &clients.CreateAnalyticsParams{Version: "2024-03-07-experimental"}, *d)
-	if err != nil {
-		logger.Printf("Error creating request: %v\n", err)
-		return nil
-	}
-
-	return request
+	return analytics.Failure
 }
