@@ -19,7 +19,6 @@ package logging
 import (
 	"bytes"
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -100,7 +99,7 @@ func TestScrubFunction(t *testing.T) {
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
 
-		actual := scrub([]byte(input), dict, map[string]*regexp.Regexp{})
+		actual := scrub([]byte(input), compileRegularExpressions(dict))
 		assert.Equal(t, expected, string(actual))
 	})
 
@@ -109,7 +108,7 @@ func TestScrubFunction(t *testing.T) {
 		expected := "abc http:***host.com asdf \nabc https:***host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), dict, map[string]*regexp.Regexp{})
+		actual := scrub([]byte(input), compileRegularExpressions(dict))
 		assert.Equal(t, expected, string(actual))
 	})
 
@@ -118,7 +117,7 @@ func TestScrubFunction(t *testing.T) {
 		expected := "abc http://host.com asdf \nabc https:***host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), dict, map[string]*regexp.Regexp{})
+		actual := scrub([]byte(input), compileRegularExpressions(dict))
 		assert.Equal(t, expected, string(actual))
 	})
 }
