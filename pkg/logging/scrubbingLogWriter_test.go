@@ -112,11 +112,21 @@ func TestScrubFunction(t *testing.T) {
 		actual := scrub([]byte(input), dict, map[string]*regexp.Regexp{})
 		assert.Equal(t, expected, string(actual))
 	})
+
+	t.Run("dont scrub urls without creds", func(t *testing.T) {
+		input := "abc http://host.com asdf \nabc https://a:b@host.com asdf"
+		expected := "abc http://host.com asdf \nabc https:***host.com asdf"
+		dict := addMandatoryMasking(ScrubbingDict{})
+
+		actual := scrub([]byte(input), dict, map[string]*regexp.Regexp{})
+		assert.Equal(t, expected, string(actual))
+	})
 }
 
 func TestAddDefaults(t *testing.T) {
 	dict := ScrubbingDict{}
 	dict = addMandatoryMasking(dict)
 
-	assert.True(t, dict["//.*:.*@"], "should mask http basic auth")
+	_, found := dict["//.*:.*@"]
+	assert.True(t, found, "should mask http basic auth")
 }
