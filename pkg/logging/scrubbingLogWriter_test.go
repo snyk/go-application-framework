@@ -19,6 +19,7 @@ package logging
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -94,10 +95,28 @@ func TestScrubbingIoWriter(t *testing.T) {
 }
 
 func TestScrubFunction(t *testing.T) {
-	dict := ScrubbingDict{"secret": true, "": true, "special": false, "be disclosed": true}
-	input := "This is my secret message, which might not be special but definitely should not be disclosed."
-	expected := "This is my *** message, which might not be *** but definitely should not ***."
+	t.Run("scrub everything in dict", func(t *testing.T) {
+		dict := ScrubbingDict{"secret": true, "": true, "special": false, "be disclosed": true}
+		input := "This is my secret message, which might not be special but definitely should not be disclosed."
+		expected := "This is my *** message, which might not be *** but definitely should not ***."
 
-	actual := scrub([]byte(input), dict)
-	assert.Equal(t, expected, string(actual))
+		actual := scrub([]byte(input), dict, map[string]*regexp.Regexp{})
+		assert.Equal(t, expected, string(actual))
+	})
+
+	t.Run("scrub regex", func(t *testing.T) {
+		input := "abc http://a:b@host.com asdf \nabc https://a:b@host.com asdf"
+		expected := "abc http:***host.com asdf \nabc https:***host.com asdf"
+		dict := addMandatoryMasking(ScrubbingDict{})
+
+		actual := scrub([]byte(input), dict, map[string]*regexp.Regexp{})
+		assert.Equal(t, expected, string(actual))
+	})
+}
+
+func TestAddDefaults(t *testing.T) {
+	dict := ScrubbingDict{}
+	dict = addMandatoryMasking(dict)
+
+	assert.True(t, dict["//.*:.*@"], "should mask http basic auth")
 }
