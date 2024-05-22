@@ -18,7 +18,7 @@ package logging
 
 import (
 	"io"
-	"strings"
+	"regexp"
 
 	"github.com/rs/zerolog"
 
@@ -30,45 +30,62 @@ const redactMask string = "***"
 type ScrubbingDict map[string]bool
 
 type scrubbingLevelWriter struct {
-	writer    zerolog.LevelWriter
-	scrubDict map[string]bool
+	writer     zerolog.LevelWriter
+	scrubDict  ScrubbingDict
+	regexCache map[string]*regexp.Regexp
 }
 
 type scrubbingIoWriter struct {
-	writer    io.Writer
-	scrubDict map[string]bool
+	writer     io.Writer
+	scrubDict  ScrubbingDict
+	regexCache map[string]*regexp.Regexp
 }
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
-	dict := ScrubbingDict{}
-
+	dict := getDefaultDict()
 	dict[config.GetString(configuration.AUTHENTICATION_TOKEN)] = true
+	return dict
+}
 
+func getDefaultDict() ScrubbingDict {
+	dict := ScrubbingDict{}
+	addMandatoryMasking(dict)
 	return dict
 }
 
 func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
-	_, err := w.writer.WriteLevel(level, scrub(p, w.scrubDict))
+	_, err := w.writer.WriteLevel(level, scrub(p, w.scrubDict, w.regexCache))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
 func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zerolog.LevelWriter {
 	return &scrubbingLevelWriter{
-		writer:    writer,
-		scrubDict: scrubDict,
+		writer:     writer,
+		scrubDict:  addMandatoryMasking(scrubDict),
+		regexCache: make(map[string]*regexp.Regexp),
 	}
 }
 
+func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
+	dict["//.*:.*@"] = true
+	return dict
+}
+
 func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
-	_, err := w.writer.Write(scrub(p, w.scrubDict))
+	_, err := w.writer.Write(scrub(p, w.scrubDict, w.regexCache))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
-func scrub(p []byte, scrubDict ScrubbingDict) []byte {
+func scrub(p []byte, scrubDict ScrubbingDict, regexCache map[string]*regexp.Regexp) []byte {
 	s := string(p)
 	for term := range scrubDict {
 		if len(term) > 0 {
-			s = strings.Replace(s, term, redactMask, -1)
+			re := regexCache[term]
+			if re == nil {
+				re = regexp.MustCompile(term)
+				regexCache[term] = re
+			}
+			s = re.ReplaceAllLiteralString(s, redactMask)
 		}
 	}
 	return []byte(s)
@@ -76,13 +93,14 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 
 func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
 	return &scrubbingIoWriter{
-		writer:    writer,
-		scrubDict: scrubDict,
+		writer:     writer,
+		scrubDict:  addMandatoryMasking(scrubDict),
+		regexCache: make(map[string]*regexp.Regexp),
 	}
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
-	_, err = w.writer.Write(scrub(p, w.scrubDict))
+	_, err = w.writer.Write(scrub(p, w.scrubDict, w.regexCache))
 	if err != nil {
 		// in case of an error of the underlying writer, we return zero bytes written,
 		// since it is difficult to map back to the unredacted length.
