@@ -108,12 +108,11 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface
 }
 
 func GetV2InstrumentationObject(collector InstrumentationCollector) (*api.AnalyticsRequestBody, error) {
-	var e error
 	t, ok := collector.(*instrumentationCollectorImpl)
 	if ok {
 		return t.GetV2InstrumentationObject()
 	}
-	return nil, e
+	return nil, fmt.Errorf("failed to convert collector")
 }
 
 func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() (*api.AnalyticsRequestBody, error) {
