@@ -56,38 +56,35 @@ import (
 // Returns:
 // A string representing the target id
 func GetTargetId(path string) string {
-	folderName := filepath.Base(path)
-	location := getLocation(path)
-
 	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 
 	if err != nil {
-		return getFileSystemId(path, folderName, location)
+		return getFileSystemId(path)
 	}
 
 	remote, err := repo.Remote("origin")
 	if err != nil {
-		return getFileSystemId(path, folderName, location)
+		return getFileSystemId(path)
 	}
 
 	// based on the docs, the first URL is being used to fetch, so this is the one we use
 	repoUrl := remote.Config().URLs[0]
 
 	if repoUrl == "" {
-		return getFileSystemId(path, folderName, location)
+		return getFileSystemId(path)
 	}
 
 	formattedString, err := formatRepoURL(repoUrl)
 	if err != nil {
-		return getFileSystemId(path, folderName, location)
+		return getFileSystemId(path)
 	}
 
 	// ... retrieves the branch pointed by HEAD
 	ref, err := repo.Head()
 	if err != nil {
-		return getFileSystemId(path, folderName, location)
+		return getFileSystemId(path)
 	}
 
 	branchName := ""
@@ -96,7 +93,7 @@ func GetTargetId(path string) string {
 		branchName = ref.Name().Short()
 	}
 
-	return "pkg:" + formattedString + "@" + ref.Hash().String() + "?branch=" + branchName + location
+	return "pkg:" + formattedString + "@" + ref.Hash().String() + "?branch=" + branchName + getLocation(path)
 }
 
 func formatRepoURL(repoUrl string) (string, error) {
@@ -133,11 +130,12 @@ func getLocation(path string) string {
 	return ""
 }
 
-func getFileSystemId(path string, folderName string, location string) string {
+func getFileSystemId(path string) string {
+	folderName := filepath.Base(path)
 	if len(filepath.Ext(path)) > 0 {
 		folderName = filepath.Base(filepath.Dir(path))
 	}
-	return "pkg:filesystem/" + generateSHA256(path) + "/" + folderName + location
+	return "pkg:filesystem/" + generateSHA256(path) + "/" + folderName + getLocation(path)
 }
 
 func generateSHA256(path string) string {
