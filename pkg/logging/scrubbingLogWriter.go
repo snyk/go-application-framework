@@ -54,16 +54,29 @@ func getDefaultDict() ScrubbingDict {
 }
 
 func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
-	_, err := w.writer.WriteLevel(level, scrub(p, w.scrubDict, w.regexCache))
+	_, err := w.writer.WriteLevel(level, scrub(p, w.regexCache))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
 func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zerolog.LevelWriter {
-	return &scrubbingLevelWriter{
+	dict := addMandatoryMasking(scrubDict)
+	regexCache := compileRegularExpressions(dict)
+	levelWriter := scrubbingLevelWriter{
 		writer:     writer,
-		scrubDict:  addMandatoryMasking(scrubDict),
-		regexCache: make(map[string]*regexp.Regexp),
+		scrubDict:  dict,
+		regexCache: regexCache,
 	}
+	return &levelWriter
+}
+
+func compileRegularExpressions(dict ScrubbingDict) map[string]*regexp.Regexp {
+	regexCache := make(map[string]*regexp.Regexp)
+	for term := range dict {
+		if term != "" {
+			regexCache[term] = regexp.MustCompile(term)
+		}
+	}
+	return regexCache
 }
 
 func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
@@ -72,35 +85,30 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 }
 
 func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
-	_, err := w.writer.Write(scrub(p, w.scrubDict, w.regexCache))
+	_, err := w.writer.Write(scrub(p, w.regexCache))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
-func scrub(p []byte, scrubDict ScrubbingDict, regexCache map[string]*regexp.Regexp) []byte {
+func scrub(p []byte, regexCache map[string]*regexp.Regexp) []byte {
 	s := string(p)
-	for term := range scrubDict {
-		if len(term) > 0 {
-			re := regexCache[term]
-			if re == nil {
-				re = regexp.MustCompile(term)
-				regexCache[term] = re
-			}
-			s = re.ReplaceAllLiteralString(s, redactMask)
-		}
+	for _, re := range regexCache {
+		s = re.ReplaceAllLiteralString(s, redactMask)
 	}
 	return []byte(s)
 }
 
 func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
+	dict := addMandatoryMasking(scrubDict)
+	regexCache := compileRegularExpressions(dict)
 	return &scrubbingIoWriter{
 		writer:     writer,
 		scrubDict:  addMandatoryMasking(scrubDict),
-		regexCache: make(map[string]*regexp.Regexp),
+		regexCache: regexCache,
 	}
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
-	_, err = w.writer.Write(scrub(p, w.scrubDict, w.regexCache))
+	_, err = w.writer.Write(scrub(p, w.regexCache))
 	if err != nil {
 		// in case of an error of the underlying writer, we return zero bytes written,
 		// since it is difficult to map back to the unredacted length.
