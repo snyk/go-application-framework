@@ -45,13 +45,17 @@ func Test_GetKnownCommandsAndFlags_Extension(t *testing.T) {
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
 
-	engine.Register(workflow.NewWorkflowIdentifier(command1), workflow.ConfigurationOptionsFromFlagset(flags), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+	entry, err := engine.Register(workflow.NewWorkflowIdentifier(command1), workflow.ConfigurationOptionsFromFlagset(flags), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		return nil, nil
 	})
+	assert.NotNil(t, entry)
+	assert.NoError(t, err)
 
-	engine.Register(workflow.NewWorkflowIdentifier(command2), workflow.ConfigurationOptionsFromFlagset(flags), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+	entry, err = engine.Register(workflow.NewWorkflowIdentifier(command2), workflow.ConfigurationOptionsFromFlagset(flags), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		return nil, nil
 	})
+	assert.NotNil(t, entry)
+	assert.NoError(t, err)
 
 	actualCommands, actualFlags := GetKnownCommandsAndFlags(engine)
 	assert.Equal(t, expectedCommands, actualCommands)
