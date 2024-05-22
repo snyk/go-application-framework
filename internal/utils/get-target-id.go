@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -28,13 +29,16 @@ func GetTargetId(path string) string {
 	}
 
 	// based on the docs, the first URL is being used to fetch, so this is the one we use
-	repoUrl := sanitiseCredentials(remote.Config().URLs[0])
+	repoUrl := remote.Config().URLs[0]
 
 	if repoUrl == "" {
 		return getFileSystemId(path, folderName, location)
 	}
 
-	formattedString := strings.Replace(strings.Replace(strings.Replace(strings.Replace(repoUrl, ":", "/", -1), ".git", "", -1), "@", "/", -1), "https///", "git/", -1)
+	formattedString, err := formatRepoURL(repoUrl)
+	if err != nil {
+		return getFileSystemId(path, folderName, location)
+	}
 
 	// ... retrieves the branch pointed by HEAD
 	ref, err := repo.Head()
@@ -49,6 +53,32 @@ func GetTargetId(path string) string {
 	}
 
 	return "pkg:" + formattedString + "@" + ref.Hash().String() + "?branch=" + branchName + location
+}
+
+func formatRepoURL(repoUrl string) (string, error) {
+	u, err := url.Parse(repoUrl)
+	if err != nil {
+		return "", fmt.Errorf("error parsing URL: %w", err)
+	}
+
+	// Adjust the scheme
+	if u.Scheme == "https" {
+		u.Scheme = "git"
+	}
+
+	// Remove the user info if present
+	if u.User != nil {
+		u.User = nil
+	}
+
+	// Adjust the host and path
+	hostPath := strings.Replace(u.Host+u.Path, ":", "/", 1)
+	hostPath = strings.TrimSuffix(hostPath, ".git")
+
+	// Reassemble the URL
+	formattedString := u.Scheme + "/" + hostPath
+
+	return formattedString, nil
 }
 
 func getLocation(path string) string {
@@ -69,16 +99,4 @@ func getFileSystemId(path string, folderName string, location string) string {
 func generateSHA256(path string) string {
 	hash := sha256.Sum256([]byte(path))
 	return hex.EncodeToString(hash[:])
-}
-
-func sanitiseCredentials(rawUrl string) string {
-	parsedURL, err := url.Parse(rawUrl)
-	if err != nil {
-		return rawUrl
-	}
-
-	parsedURL.User = nil
-	strippedUrl := parsedURL.String()
-
-	return strippedUrl
 }
