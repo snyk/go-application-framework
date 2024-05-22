@@ -3,7 +3,6 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -11,35 +10,37 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
-func GetTargetId(path string) (string, error) {
+func GetTargetId(path string) string {
 	folderName := filepath.Base(path)
-	location := ""
+	location := getLocation(path)
 
 	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 
 	if err != nil {
-		if len(filepath.Ext(path)) > 0 {
-			folderName = filepath.Base(filepath.Dir(path))
-			location = "#" + url.QueryEscape(filepath.Base(path))
-		}
-
-		return "pkg:filesystem/" + generateSHA256(path) + "/" + folderName + location, nil
+		return getFileSystemId(path, folderName, location)
 	}
 
 	remote, err := repo.Remote("origin")
 	if err != nil {
-		return "", fmt.Errorf("get remote: %w", err)
+		return getFileSystemId(path, folderName, location)
 	}
 
 	// based on the docs, the first URL is being used to fetch, so this is the one we use
-	repoUrl := remote.Config().URLs[0]
+	repoUrl := sanitiseCredentials(remote.Config().URLs[0])
+
+	if repoUrl == "" {
+		return getFileSystemId(path, folderName, location)
+	}
 
 	formattedString := strings.Replace(strings.Replace(strings.Replace(strings.Replace(repoUrl, ":", "/", -1), ".git", "", -1), "@", "/", -1), "https///", "git/", -1)
 
 	// ... retrieves the branch pointed by HEAD
-	ref, _ := repo.Head()
+	ref, err := repo.Head()
+	if err != nil {
+		return getFileSystemId(path, folderName, location)
+	}
 
 	branchName := ""
 
@@ -47,14 +48,37 @@ func GetTargetId(path string) (string, error) {
 		branchName = ref.Name().Short()
 	}
 
+	return "pkg:" + formattedString + "@" + ref.Hash().String() + "?branch=" + branchName + location
+}
+
+func getLocation(path string) string {
 	if len(filepath.Ext(path)) > 0 {
-		location = "#" + filepath.Base(path)
+		return "#" + url.QueryEscape(filepath.Base(path))
 	}
 
-	return "pkg:" + formattedString + "@" + ref.Hash().String() + "?branch=" + branchName + location, nil
+	return ""
+}
+
+func getFileSystemId(path string, folderName string, location string) string {
+	if len(filepath.Ext(path)) > 0 {
+		folderName = filepath.Base(filepath.Dir(path))
+	}
+	return "pkg:filesystem/" + generateSHA256(path) + "/" + folderName + location
 }
 
 func generateSHA256(path string) string {
 	hash := sha256.Sum256([]byte(path))
 	return hex.EncodeToString(hash[:])
+}
+
+func sanitiseCredentials(rawUrl string) string {
+	parsedURL, err := url.Parse(rawUrl)
+	if err != nil {
+		return rawUrl
+	}
+
+	parsedURL.User = nil
+	strippedUrl := parsedURL.String()
+
+	return strippedUrl
 }
