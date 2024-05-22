@@ -77,6 +77,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]bool{
 		"token":    true,
 		"password": true,
+		"":         true,
 	}
 
 	pattern := "%s for my account, including my %s"

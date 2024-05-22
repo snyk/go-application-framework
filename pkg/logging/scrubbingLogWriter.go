@@ -72,7 +72,9 @@ func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zer
 func compileRegularExpressions(dict ScrubbingDict) map[string]*regexp.Regexp {
 	regexCache := make(map[string]*regexp.Regexp)
 	for term := range dict {
-		regexCache[term] = regexp.MustCompile(term)
+		if term != "" {
+			regexCache[term] = regexp.MustCompile(term)
+		}
 	}
 	return regexCache
 }
@@ -89,13 +91,8 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 
 func scrub(p []byte, regexCache map[string]*regexp.Regexp) []byte {
 	s := string(p)
-	for term, re := range regexCache {
-		if len(term) > 0 {
-			if re == nil {
-				continue
-			}
-			s = re.ReplaceAllLiteralString(s, redactMask)
-		}
+	for _, re := range regexCache {
+		s = re.ReplaceAllLiteralString(s, redactMask)
 	}
 	return []byte(s)
 }
