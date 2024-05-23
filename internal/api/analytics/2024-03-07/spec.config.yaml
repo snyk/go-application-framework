@@ -1,0 +1,4 @@
+package: v20240307
+generate:
+  models: true
+output: ../../clients/analytics_v20240307.go
