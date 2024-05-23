@@ -74,6 +74,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		inputData = append(inputData, data)
 	}
 
+	var err error
 	for i, input := range inputData {
 		logger.Printf(fmt.Sprintf("processing element %d", i))
 		payload, ok := input.GetPayload().([]byte)
@@ -83,41 +84,37 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 		documentLoader := gojsonschema.NewBytesLoader(payload)
 
-		// check if payload is an analytics v2 event
+		// check if payload is an analyticsV2 event
+		logger.Print("validating analyticsV2Event")
 		result, validationErr := gojsonschema.Validate(analyticsV2SchemaLoader, documentLoader)
 
 		if validationErr != nil {
-			err := fmt.Errorf("error validating input at index %d: %w", i, validationErr)
+			err := fmt.Errorf("analyticsV2Event error validating input at index %d: %w", i, validationErr)
 			return nil, err
 		}
 
 		if !result.Valid() {
+			logger.Print("analyticsV2Event validation failed")
+			logger.Print("validating scanDoneEvent")
+
 			// check if payload is a scanDone event (v1 analytics)
 			result, validationErr = gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
 
 			if validationErr != nil {
-				err := fmt.Errorf("error validating input at index %d: %w", i, validationErr)
+				err := fmt.Errorf("scanDoneEvent error validating input at index %d: %w", i, validationErr)
 				return nil, err
 			}
 
 			if !result.Valid() {
-				err := fmt.Errorf("validation failed for input at index %d: %v", i, result.Errors())
+				err := fmt.Errorf("scanDoneEvent at index: %d failed validation with errors: %v", i, result.Errors())
 				return nil, err
 			}
 
-			// convert analytics payload to instrumentation payload
-			instrumentationData, err := instrumentScanDoneEvent(invocationCtx, input)
+			// convert scanDoneEvent payload to AnalyticsV2 payload
+			input, err = instrumentScanDoneEvent(invocationCtx, input)
 			if err != nil {
 				return nil, err
 			}
-
-			// send converted analytics payload to analytics v2 endpoint
-			err = callEndpoint(invocationCtx, instrumentationData, url)
-			if err != nil {
-				err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, err)
-				return nil, err
-			}
-			return nil, nil
 		}
 
 		// send to V2 analytics endpoint
@@ -132,21 +129,17 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 }
 
 func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
-	logger := invocationCtx.GetLogger()
-
 	// Create a request
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(input.GetPayload().([]byte)))
 	if err != nil {
-		logger.Printf("Error creating request: %v\n", err)
-		return err
+		return fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", input.GetContentType())
 
 	// Send the request
 	resp, err := invocationCtx.GetNetworkAccess().GetHttpClient().Do(req)
 	if err != nil {
-		logger.Printf("Error sending request: %v\n", err)
-		return err
+		return fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -163,7 +156,10 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic := a.GetInstrumentation()
 
 	var scanDoneEvent json_schemas.ScanDoneEvent
-	d := input.GetPayload().([]byte)
+	d, ok := input.GetPayload().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
+	}
 
 	err := json.Unmarshal(d, &scanDoneEvent)
 	if err != nil {
@@ -171,12 +167,13 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 		return nil, err
 	}
 
-	// TODO: a.GetInstrumentation() should have prefilled most of this data, check which ones we can delete
 	// required v2 analytics parameters
 	userAgent := networking.UserAgentInfo{
 		App:                           scanDoneEvent.Data.Attributes.Application,
 		AppVersion:                    scanDoneEvent.Data.Attributes.ApplicationVersion,
 		Integration:                   scanDoneEvent.Data.Attributes.IntegrationName,
+		IntegrationVersion:            scanDoneEvent.Data.Attributes.IntegrationVersion,
+		IntegrationEnvironment:        scanDoneEvent.Data.Attributes.IntegrationEnvironment,
 		IntegrationEnvironmentVersion: scanDoneEvent.Data.Attributes.IntegrationEnvironmentVersion,
 		OS:                            scanDoneEvent.Data.Attributes.Os,
 		Arch:                          scanDoneEvent.Data.Attributes.Arch,
@@ -190,19 +187,11 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	}
 	ic.SetDuration(durationMs)
 	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
-	// interactionID && TargetID are already set
 
 	// optional v2 analytics parameters
-	// hardcode test
 	ic.SetCategory([]string{scanDoneEvent.Data.Attributes.ScanType, "test"})
-	// stage does not exist in scan done event
 	ic.SetStage("dev")
-	// errors do not exist in scan done event
-	//ic.AddError()
-	// extension does not exist in scan done event
-	//ic.AddExtension()
-	// TODO: figure out what this is in the scan done event - maybe UniqueIssueCount?
-	//ic.SetTestSummary()
+	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 
 	instrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
 	if err != nil {
@@ -212,11 +201,39 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 
 	data, err := json.Marshal(instrumentationObject)
 	if err != nil {
-		logger.Printf("Error marshalling json: %v\n", err)
+		logger.Printf("Error marshaling json: %v\n", err)
 		return nil, err
 	}
 
 	return workflow.NewData(WORKFLOWID_REPORT_ANALYTICS, "application/json", data), nil
+}
+
+func toTestSummary(uic json_schemas.UniqueIssueCount, t string) json_schemas.TestSummary {
+	testSummary := json_schemas.TestSummary{
+		Results: []json_schemas.TestSummaryResult{{
+			Severity: "critical",
+			Total:    uic.Critical,
+			Open:     0,
+			Ignored:  0,
+		}, {
+			Severity: "high",
+			Total:    uic.High,
+			Open:     0,
+			Ignored:  0,
+		}, {
+			Severity: "medium",
+			Total:    uic.Medium,
+			Open:     0,
+			Ignored:  0,
+		}, {
+			Severity: "low",
+			Total:    uic.Low,
+			Open:     0,
+			Ignored:  0,
+		}},
+		Type: t,
+	}
+	return testSummary
 }
 
 func toStatus(status string) analytics.Status {

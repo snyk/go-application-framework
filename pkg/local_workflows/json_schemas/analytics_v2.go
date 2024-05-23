@@ -256,7 +256,7 @@ const AnalyticsV2EventSchema = `{
     },
     "ErrorLink": {
       "type": "object",
-      "description": "A link that leads to further details about this particular occurrance of the problem.",
+      "description": "A link that leads to further details about this particular occurrence of the problem.",
       "properties": {
         "about": {
           "$ref": "#/schemas/LinkProperty"
