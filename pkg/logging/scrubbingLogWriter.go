@@ -93,7 +93,7 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
 	addTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), 0, dict)
 	token, err := auth.GetOAuthToken(config)
-	if err != nil {
+	if err != nil || token == nil {
 		return dict
 	}
 	addTermToDict(token.AccessToken, 0, dict)
