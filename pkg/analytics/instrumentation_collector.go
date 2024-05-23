@@ -110,17 +110,13 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface
 func GetV2InstrumentationObject(collector InstrumentationCollector) (*api.AnalyticsRequestBody, error) {
 	t, ok := collector.(*instrumentationCollectorImpl)
 	if ok {
-		return t.GetV2InstrumentationObject()
+		return t.GetV2InstrumentationObject(), nil
 	}
 	return nil, fmt.Errorf("failed to convert collector")
 }
 
-func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() (*api.AnalyticsRequestBody, error) {
-	a, err := ic.getV2Attributes()
-
-	if err != nil {
-		return nil, err
-	}
+func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() *api.AnalyticsRequestBody {
+	a := ic.getV2Attributes()
 
 	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
@@ -129,20 +125,16 @@ func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() (*api.Analy
 
 	return &api.AnalyticsRequestBody{
 		Data: d,
-	}, nil
+	}
 }
 
-func (ic *instrumentationCollectorImpl) getV2Attributes() (api.AnalyticsAttributes, error) {
-	r, err := ic.getV2Runtime()
-
-	if err != nil {
-		return api.AnalyticsAttributes{}, err
-	}
+func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {
+	r := ic.getV2Runtime()
 
 	return api.AnalyticsAttributes{
 		Interaction: ic.getV2Interaction(),
 		Runtime:     r,
-	}, nil
+	}
 }
 
 func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
@@ -161,7 +153,7 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	}
 }
 
-func (ic *instrumentationCollectorImpl) getV2Runtime() (*api.Runtime, error) {
+func (ic *instrumentationCollectorImpl) getV2Runtime() *api.Runtime {
 	var r api.Runtime
 
 	if len(ic.userAgent.App) > 0 {
@@ -195,7 +187,7 @@ func (ic *instrumentationCollectorImpl) getV2Runtime() (*api.Runtime, error) {
 		}
 	}
 
-	return &r, nil
+	return &r
 }
 
 func toInteractionResults(testSummary *json_schemas.TestSummary) *[]map[string]interface{} {
