@@ -314,7 +314,11 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			details := html.EscapeString(r.URL.Query().Get("error_description"))
 
 			tmpl := template.New("")
-			tmpl.Parse(errorResponsePage)
+			tmpl, tmplError := tmpl.Parse(errorResponsePage)
+			if tmplError != nil {
+				return
+			}
+
 			data := struct {
 				Reason      string
 				Description string
@@ -323,8 +327,10 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 				Description: details,
 			}
 
-			err = tmpl.Execute(w, data)
-
+			tmplError = tmpl.Execute(w, data)
+			if tmplError != nil {
+				return
+			}
 		} else {
 			appUrl := o.config.GetString(configuration.WEB_APP_URL)
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
