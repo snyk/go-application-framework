@@ -1,11 +1,11 @@
-package analytics
+package instrumentation
 
 import (
 	"slices"
 	"strings"
 )
 
-// ParseCliArgs categorizes command-line arguments into a structured slice.
+// DetermineCategoryFromArgs categorizes command-line arguments into a structured slice.
 //
 // This function receives the entire os.Args slice (including the program name at index 0)
 // and processes the arguments to determine the product, commands, and flags.
@@ -28,7 +28,7 @@ import (
 //	args := []string{"cli", "scan", "--debug", "--"}
 //	knownCommands := []string{"scan", "build"}
 //	flagsAllowList := []string{"debug", "verbose"}
-//	result := ParseCliArgs(args, knownCommands, flagsAllowList)
+//	result := DetermineCategoryFromArgs(args, knownCommands, flagsAllowList)
 //	// result: ["scan", "debug"]
 //
 // Parameters:
@@ -38,11 +38,15 @@ import (
 //
 // Returns:
 //   - A slice of strings containing the categorized arguments.
-func ParseCliArgs(args []string, knownCommands []string, flagsAllowList []string, knownProducts []string) []string {
-	commands := []string{}
-	flags := []string{}
+func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllowList []string) []string {
 	result := []string{}
 
+	if len(args) == 0 {
+		return result
+	}
+
+	commands := []string{}
+	flags := []string{}
 	productFallback := "oss"
 
 	// Separate parsing of commands and flags to ensure correct ordering in the category vector
@@ -75,9 +79,29 @@ func ParseCliArgs(args []string, knownCommands []string, flagsAllowList []string
 	return result
 }
 
-var PRODUCTS = []string{"code", "iac", "container", "sbom"}
-var KNOWN_COMMANDS = []string{"test", "code", "monitor", "iac", "rules", "describe", "sbom", "container", "debug"}
-var ALLOWED_FLAGS = []string{
+var KNOWN_COMMANDS = []string{
+	"test",
+	"code",
+	"monitor",
+	"iac",
+	"rules",
+	"describe",
+	"container",
+	"debug",
+	"config",
+	"auth",
+	"ignore",
+	"log4shell",
+	"policy",
+	"fix",
+	"apps",
+	"capture",
+	"init",
+	"push",
+	"update-exclude-policy",
+}
+
+var KNOWN_FLAGS = []string{
 	"print-dep-paths",
 	"print-deps",
 	"max-depth",

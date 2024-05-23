@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-uuid"
-	utils2 "github.com/snyk/go-application-framework/internal/utils"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	utils2 "github.com/snyk/go-application-framework/internal/utils"
 )
 
 // Analytics is an interface for managing analytics.
@@ -38,6 +38,7 @@ type Analytics interface {
 	GetOutputData() *analyticsOutput
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
+	GetInstrumentation() InstrumentationCollector
 }
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
@@ -55,6 +56,7 @@ type AnalyticsImpl struct {
 	integrationVersion string
 	os                 string
 	command            string
+	instrumentor       InstrumentationCollector
 
 	userCurrent func() (*user.User, error)
 }
@@ -123,6 +125,8 @@ func New() Analytics {
 	a.created = time.Now()
 	a.clientFunc = func() *http.Client { return &http.Client{} }
 	a.os = runtime.GOOS
+	a.instrumentor = NewInstrumentationCollector()
+	a.instrumentor.SetTimestamp(a.created)
 	return a
 }
 
@@ -163,6 +167,10 @@ func (a *AnalyticsImpl) SetOperatingSystem(os string) {
 // AddError adds an error to the error list.
 func (a *AnalyticsImpl) AddError(err error) {
 	a.errorList = append(a.errorList, err)
+
+	if a.instrumentor != nil {
+		a.instrumentor.AddError(err)
+	}
 }
 
 // AddHeader adds a header to the request.
@@ -201,7 +209,7 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	io.WriteString(shasum, uuid)
 	output.Id = fmt.Sprintf("%x", shasum.Sum(nil))
 
-	output.Args = a.args
+	output.Args = a.args[1:]
 
 	if len(a.command) > 0 {
 		output.Command = a.command
@@ -292,6 +300,10 @@ func (a *AnalyticsImpl) isEnabled() bool {
 	return !api.IsFedramp(a.apiUrl)
 }
 
+func (a *AnalyticsImpl) GetInstrumentation() InstrumentationCollector {
+	return a.instrumentor
+}
+
 var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname // breaking API change
 
 // This method sanitizes the given content by searching for key-value mappings. It thereby replaces all keys defined in keysToFilter by the replacement string
@@ -344,16 +356,4 @@ func SanitizeStaticValues(valuesToSanitize []string, replacementValue string, co
 	}
 
 	return []byte(contentStr), nil
-}
-
-func DetermineStage(isCiEnvironment bool) string {
-	if isCiEnvironment {
-		return "cicd"
-	}
-
-	return "dev"
-}
-
-func AssembleUrnFromUUID(uuid string) string {
-	return fmt.Sprintf("urn:snyk:interaction:%s", uuid)
 }
