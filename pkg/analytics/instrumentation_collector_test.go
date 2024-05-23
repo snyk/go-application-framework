@@ -21,6 +21,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 	mockTimestamp := time.Now()
 	mockStage := "cicd"
 	mockInstrumentationType := "analytics"
+	mockInteractionType := "Scan done"
 	mockCategory := []string{"code", "test"}
 	mockStatus := Success
 	mockTestSummary := json_schemas.NewTestSummary("sast")
@@ -31,6 +32,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 	ic.SetTimestamp(mockTimestamp)
 	ic.SetStage(mockStage)
 	ic.SetType(mockInstrumentationType)
+	ic.SetInteractionType(mockInteractionType)
 	ic.SetCategory(mockCategory)
 	ic.SetStatus(mockStatus)
 	ic.SetTestSummary(*mockTestSummary)
@@ -52,7 +54,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 					Status:      string(mockStatus),
 					Target:      api.Target{Id: mockTargetId},
 					TimestampMs: mockTimestamp.UnixMilli(),
-					Type:        mockInstrumentationType,
+					Type:        mockInteractionType,
 				},
 				Runtime: &api.Runtime{},
 			},

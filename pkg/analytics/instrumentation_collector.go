@@ -27,6 +27,7 @@ type InstrumentationCollector interface {
 	SetDuration(duration time.Duration)
 	SetStage(s string)
 	SetType(t string)
+	SetInteractionType(t string)
 	SetCategory(c []string)
 	SetStatus(s Status)
 	SetTestSummary(s json_schemas.TestSummary)
@@ -48,6 +49,7 @@ type instrumentationCollectorImpl struct {
 	duration            time.Duration
 	stage               string
 	instrumentationType string
+	interactionType     string
 	category            []string
 	status              Status
 	testSummary         json_schemas.TestSummary
@@ -78,6 +80,10 @@ func (ic *instrumentationCollectorImpl) SetStage(s string) {
 
 func (ic *instrumentationCollectorImpl) SetType(t string) {
 	ic.instrumentationType = t
+}
+
+func (ic *instrumentationCollectorImpl) SetInteractionType(t string) {
+	ic.interactionType = t
 }
 
 func (ic *instrumentationCollectorImpl) SetCategory(c []string) {
@@ -149,7 +155,7 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 		Status:      string(ic.status),
 		Target:      api.Target{Id: ic.targetId},
 		TimestampMs: ic.timestamp.UnixMilli(),
-		Type:        ic.instrumentationType,
+		Type:        ic.interactionType,
 	}
 }
 
