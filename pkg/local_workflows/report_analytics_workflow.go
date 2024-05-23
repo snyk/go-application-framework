@@ -189,18 +189,14 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 		logger.Printf("Error parsing durationMs: %v\n", err)
 	}
 	ic.SetDuration(durationMs)
-	// TODO: figure out what the scan event statuses are and map to v2 analytics event accordingly
 	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
-	// TODO: figure out what this is in the scan done event - should be in urn format
-	//ic.SetInteractionId()
-	// TODO: figure out what this is in the scan done event - should be in purl format
-	//ic.SetTargetId()
+	// interactionID && TargetID are already set
 
 	// optional v2 analytics parameters
 	// hardcode test
 	ic.SetCategory([]string{scanDoneEvent.Data.Attributes.ScanType, "test"})
 	// stage does not exist in scan done event
-	// ic.SetStage()
+	ic.SetStage("dev")
 	// errors do not exist in scan done event
 	//ic.AddError()
 	// extension does not exist in scan done event
