@@ -10,6 +10,6 @@ b0ba7f6ed181c23a5c6532cf6f124b731d390f86:internal/presenters/testdata/with-ignor
 b0ba7f6ed181c23a5c6532cf6f124b731d390f86:internal/presenters/testdata/with-ignores.json:generic-api-key:224
 b0ba7f6ed181c23a5c6532cf6f124b731d390f86:internal/presenters/testdata/with-ignores.json:generic-api-key:474
 b0ba7f6ed181c23a5c6532cf6f124b731d390f86:internal/presenters/testdata/with-ignores.json:generic-api-key:539
-4cd0d075e4e65fe2b29b527df83d27ae067e69dd:pkg/logging/scrubbingLogWriter_test.go:github-fine-grained-pat:197
-4cd0d075e4e65fe2b29b527df83d27ae067e69dd:pkg/logging/scrubbingLogWriter_test.go:github-pat:192
-e6a21a9749fa5f78cb4b02d1c6039fc23c326ef5:pkg/logging/scrubbingLogWriter_test.go:snyk-api-token:214
+237c7f05ec087733fa7929ee9fa3db2bd56bdba4:pkg/logging/scrubbingLogWriter_test.go:github-fine-grained-pat:188
+237c7f05ec087733fa7929ee9fa3db2bd56bdba4:pkg/logging/scrubbingLogWriter_test.go:github-pat:183
+237c7f05ec087733fa7929ee9fa3db2bd56bdba4:pkg/logging/scrubbingLogWriter_test.go:snyk-api-token:208
