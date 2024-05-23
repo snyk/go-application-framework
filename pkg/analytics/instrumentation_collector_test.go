@@ -1,7 +1,7 @@
 package analytics
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -16,10 +16,7 @@ import (
 func Test_InstrumentationCollector(t *testing.T) {
 	ic := newTestInstrumentation(t)
 
-	mockUserAgent := networking.UserAgentInfo{
-		App:        "snyk-ls",
-		AppVersion: "v20240515.190857",
-	}
+	mockUserAgent := networking.UserAgentInfo{}
 	mockInteractionId := "interactionID"
 	mockTimestamp := time.Now()
 	mockStage := "cicd"
@@ -30,7 +27,6 @@ func Test_InstrumentationCollector(t *testing.T) {
 	mockTargetId := "targetID"
 	mockExtension := map[string]interface{}{"strings": "hello world"}
 
-	ic.SetUserAgent(mockUserAgent)
 	ic.SetInteractionId(mockInteractionId)
 	ic.SetTimestamp(mockTimestamp)
 	ic.SetStage(mockStage)
@@ -58,12 +54,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 					TimestampMs: mockTimestamp.UnixMilli(),
 					Type:        mockInstrumentationType,
 				},
-				Runtime: &api.Runtime{
-					Application: &api.Application{
-						Name:    mockUserAgent.App,
-						Version: mockUserAgent.AppVersion,
-					},
-				},
+				Runtime: &api.Runtime{},
 			},
 		},
 	}
@@ -72,7 +63,33 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)
 
-		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it sets the userAgent application data", func(t *testing.T) {
+		mockUserAgent.App = "snyk-ls"
+		mockUserAgent.AppVersion = "v20240515.190857"
+
+		expectedV2InstrumentationObject.Data.Attributes.Runtime.Application = &api.Application{
+			Name:    mockUserAgent.App,
+			Version: mockUserAgent.AppVersion,
+		}
+
+		ic.SetUserAgent(mockUserAgent)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent environment data", func(t *testing.T) {
@@ -88,7 +105,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)
 
-		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent integration data", func(t *testing.T) {
@@ -104,7 +126,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)
 
-		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent platform data", func(t *testing.T) {
@@ -120,7 +147,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)
 
-		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent performance data", func(t *testing.T) {
@@ -134,7 +166,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)
 
-		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it should collect interaction errors", func(t *testing.T) {
@@ -146,7 +183,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)
 
-		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it should support all interaction extension types", func(t *testing.T) {
@@ -163,19 +205,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
 
-		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
-	})
-
-	t.Run("it should return error when runtime application data is missing", func(t *testing.T) {
-		mockUserAgent = networking.UserAgentInfo{}
-		ic.SetUserAgent(mockUserAgent)
-		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
-
-		expectedErr := errors.New("no user agent application data")
-
-		assert.Nil(t, actualV2InstrumentationObject)
-		assert.Error(t, expectedErr, err)
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 }
 

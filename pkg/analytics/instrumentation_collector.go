@@ -162,35 +162,27 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 }
 
 func (ic *instrumentationCollectorImpl) getV2Runtime() (*api.Runtime, error) {
-	hasUserAgentAppData := len(ic.userAgent.App) > 0 || len(ic.userAgent.AppVersion) > 0
-	if !hasUserAgentAppData {
-		return nil, errors.New("no user agent application data")
-	}
+	var r api.Runtime
 
-	r := api.Runtime{
-		Application: &api.Application{
+	if len(ic.userAgent.App) > 0 {
+		r.Application = &api.Application{
 			Name:    ic.userAgent.App,
 			Version: ic.userAgent.AppVersion,
-		},
+		}
 	}
-
-	// check for optional Runtime params
-	hasUaEnvData := len(ic.userAgent.IntegrationEnvironment) > 0 || len(ic.userAgent.IntegrationEnvironmentVersion) > 0
-	if hasUaEnvData {
+	if len(ic.userAgent.IntegrationEnvironment) > 0 {
 		r.Environment = &api.Environment{
 			Name:    ic.userAgent.IntegrationEnvironment,
 			Version: ic.userAgent.IntegrationEnvironmentVersion,
 		}
 	}
-	hasUaIntegrationData := len(ic.userAgent.Integration) > 0 || len(ic.userAgent.IntegrationVersion) > 0
-	if hasUaIntegrationData {
+	if len(ic.userAgent.Integration) > 0 {
 		r.Integration = &api.Integration{
 			Name:    ic.userAgent.Integration,
 			Version: ic.userAgent.IntegrationVersion,
 		}
 	}
-	hasUaPerfData := ic.duration.Milliseconds() > 0
-	if hasUaPerfData {
+	if ic.duration.Milliseconds() > 0 {
 		r.Performance = &api.Performance{
 			DurationMs: ic.duration.Milliseconds(),
 		}
