@@ -48,10 +48,10 @@ type instrumentationCollectorImpl struct {
 	duration            time.Duration
 	stage               string
 	instrumentationType string
-	category            []string // TODO: switch to using enum?
+	category            []string
 	status              Status
 	testSummary         json_schemas.TestSummary
-	targetId            string // TODO: switch to using purl lib?
+	targetId            string
 	instrumentationErr  []error
 	extension           map[string]interface{}
 }
@@ -146,13 +146,14 @@ func (ic *instrumentationCollectorImpl) getV2Attributes() (api.AnalyticsAttribut
 }
 
 func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
+	stage := toInteractionStage(ic.stage)
 	return api.Interaction{
 		Categories:  &ic.category,
 		Errors:      toInteractionErrors(ic.instrumentationErr),
 		Extension:   &ic.extension,
 		Id:          ic.interactionId,
 		Results:     toInteractionResults(&ic.testSummary),
-		Stage:       toInteractionStage(&ic.stage),
+		Stage:       &stage,
 		Status:      string(ic.status),
 		Target:      api.Target{Id: ic.targetId},
 		TimestampMs: ic.timestamp.UnixMilli(),
@@ -166,27 +167,43 @@ func (ic *instrumentationCollectorImpl) getV2Runtime() (*api.Runtime, error) {
 		return nil, errors.New("no user agent application data")
 	}
 
-	return &api.Runtime{
+	r := api.Runtime{
 		Application: &api.Application{
 			Name:    ic.userAgent.App,
 			Version: ic.userAgent.AppVersion,
 		},
-		Environment: &api.Environment{
+	}
+
+	// check for optional Runtime params
+	hasUaEnvData := len(ic.userAgent.IntegrationEnvironment) > 0 || len(ic.userAgent.IntegrationEnvironmentVersion) > 0
+	if hasUaEnvData {
+		r.Environment = &api.Environment{
 			Name:    ic.userAgent.IntegrationEnvironment,
 			Version: ic.userAgent.IntegrationEnvironmentVersion,
-		},
-		Integration: &api.Integration{
+		}
+	}
+	hasUaIntegrationData := len(ic.userAgent.Integration) > 0 || len(ic.userAgent.IntegrationVersion) > 0
+	if hasUaIntegrationData {
+		r.Integration = &api.Integration{
 			Name:    ic.userAgent.Integration,
 			Version: ic.userAgent.IntegrationVersion,
-		},
-		Performance: &api.Performance{
+		}
+	}
+	hasUaPerfData := ic.duration.Milliseconds() > 0
+	if hasUaPerfData {
+		r.Performance = &api.Performance{
 			DurationMs: ic.duration.Milliseconds(),
-		},
-		Platform: &api.Platform{
+		}
+	}
+	hasUaPlatformData := len(ic.userAgent.Arch) > 0 || len(ic.userAgent.OS) > 0
+	if hasUaPlatformData {
+		r.Platform = &api.Platform{
 			Arch: ic.userAgent.Arch,
 			Os:   ic.userAgent.OS,
-		},
-	}, nil
+		}
+	}
+
+	return &r, nil
 }
 
 func toInteractionResults(testSummary *json_schemas.TestSummary) *[]map[string]interface{} {
@@ -200,21 +217,8 @@ func toInteractionResults(testSummary *json_schemas.TestSummary) *[]map[string]i
 	return &r
 }
 
-func toInteractionStage(s *string) *api.InteractionStage {
-	var is api.InteractionStage
-
-	switch stage := s; *stage {
-	case "cicd":
-		is = api.Cicd
-	case "dev":
-		is = api.Dev
-	case "prchecks":
-		is = api.Prchecks
-	default:
-		is = api.Unknown
-	}
-
-	return &is
+func toInteractionStage(s string) api.InteractionStage {
+	return api.InteractionStage(s)
 }
 
 func toInteractionErrors(errors []error) *[]api.InteractionError {

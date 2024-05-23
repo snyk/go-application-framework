@@ -17,17 +17,11 @@ func Test_InstrumentationCollector(t *testing.T) {
 	ic := newTestInstrumentation(t)
 
 	mockUserAgent := networking.UserAgentInfo{
-		App:                           "snyk-ls",
-		AppVersion:                    "v20240515.190857",
-		Integration:                   "VSCode",
-		IntegrationVersion:            "v2.70",
-		IntegrationEnvironmentVersion: "1.89",
-		OS:                            "macos",
-		Arch:                          "arm64",
+		App:        "snyk-ls",
+		AppVersion: "v20240515.190857",
 	}
 	mockInteractionId := "interactionID"
 	mockTimestamp := time.Now()
-	mockDuration := time.Duration(1000)
 	mockStage := "cicd"
 	mockInstrumentationType := "analytics"
 	mockCategory := []string{"code", "test"}
@@ -39,7 +33,6 @@ func Test_InstrumentationCollector(t *testing.T) {
 	ic.SetUserAgent(mockUserAgent)
 	ic.SetInteractionId(mockInteractionId)
 	ic.SetTimestamp(mockTimestamp)
-	ic.SetDuration(mockDuration)
 	ic.SetStage(mockStage)
 	ic.SetType(mockInstrumentationType)
 	ic.SetCategory(mockCategory)
@@ -48,6 +41,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 	ic.SetTargetId(mockTargetId)
 	ic.AddExtension("strings", "hello world")
 
+	stage := toInteractionStage(mockStage)
 	expectedV2InstrumentationObject := api.AnalyticsRequestBody{
 		Data: api.AnalyticsData{
 			Type: mockInstrumentationType,
@@ -58,7 +52,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 					Extension:   &mockExtension,
 					Id:          mockInteractionId,
 					Results:     toInteractionResults(mockTestSummary),
-					Stage:       toInteractionStage(&mockStage),
+					Stage:       &stage,
 					Status:      string(mockStatus),
 					Target:      api.Target{Id: mockTargetId},
 					TimestampMs: mockTimestamp.UnixMilli(),
@@ -69,21 +63,6 @@ func Test_InstrumentationCollector(t *testing.T) {
 						Name:    mockUserAgent.App,
 						Version: mockUserAgent.AppVersion,
 					},
-					Environment: &api.Environment{
-						Name:    mockUserAgent.IntegrationEnvironment,
-						Version: mockUserAgent.IntegrationEnvironmentVersion,
-					},
-					Integration: &api.Integration{
-						Name:    mockUserAgent.Integration,
-						Version: mockUserAgent.IntegrationVersion,
-					},
-					Performance: &api.Performance{
-						DurationMs: mockDuration.Milliseconds(),
-					},
-					Platform: &api.Platform{
-						Arch: mockUserAgent.Arch,
-						Os:   mockUserAgent.OS,
-					},
 				},
 			},
 		},
@@ -91,8 +70,70 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 	t.Run("it should construct a V2 instrumentation object", func(t *testing.T) {
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
 
-		assert.Nil(t, err)
+		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+	})
+
+	t.Run("it sets the userAgent environment data", func(t *testing.T) {
+		mockUserAgent.IntegrationEnvironment = "VScode"
+		mockUserAgent.IntegrationEnvironmentVersion = "1.89"
+
+		expectedV2InstrumentationObject.Data.Attributes.Runtime.Environment = &api.Environment{
+			Name:    mockUserAgent.IntegrationEnvironment,
+			Version: mockUserAgent.IntegrationEnvironmentVersion,
+		}
+
+		ic.SetUserAgent(mockUserAgent)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+
+		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+	})
+
+	t.Run("it sets the userAgent integration data", func(t *testing.T) {
+		mockUserAgent.Integration = "Snyk Security plugin for VSCode"
+		mockUserAgent.IntegrationVersion = "v2.70"
+
+		expectedV2InstrumentationObject.Data.Attributes.Runtime.Integration = &api.Integration{
+			Name:    mockUserAgent.Integration,
+			Version: mockUserAgent.IntegrationVersion,
+		}
+
+		ic.SetUserAgent(mockUserAgent)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+
+		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+	})
+
+	t.Run("it sets the userAgent platform data", func(t *testing.T) {
+		mockUserAgent.OS = "macos"
+		mockUserAgent.Arch = "arm64"
+
+		expectedV2InstrumentationObject.Data.Attributes.Runtime.Platform = &api.Platform{
+			Os:   mockUserAgent.OS,
+			Arch: mockUserAgent.Arch,
+		}
+
+		ic.SetUserAgent(mockUserAgent)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+
+		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
+	})
+
+	t.Run("it sets the userAgent performance data", func(t *testing.T) {
+		mockDuration := 10 * time.Millisecond
+
+		expectedV2InstrumentationObject.Data.Attributes.Runtime.Performance = &api.Performance{
+			DurationMs: mockDuration.Milliseconds(),
+		}
+
+		ic.SetDuration(mockDuration)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+
 		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
 	})
 
@@ -103,8 +144,8 @@ func Test_InstrumentationCollector(t *testing.T) {
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Errors = toInteractionErrors([]error{mockError})
 
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
 
-		assert.Nil(t, err)
 		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
 	})
 
@@ -121,8 +162,8 @@ func Test_InstrumentationCollector(t *testing.T) {
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
 
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
 
-		assert.Nil(t, err)
 		assert.Equal(t, expectedV2InstrumentationObject, *actualV2InstrumentationObject)
 	})
 
