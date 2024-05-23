@@ -24,6 +24,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -91,6 +92,12 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
 	addTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), 0, dict)
+	token, err := auth.GetOAuthToken(config)
+	if err != nil {
+		return dict
+	}
+	addTermToDict(token.AccessToken, 0, dict)
+	addTermToDict(token.RefreshToken, 0, dict)
 	return dict
 }
 
