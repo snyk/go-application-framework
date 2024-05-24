@@ -188,7 +188,6 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	if err != nil {
 		logger.Printf("Error parsing duration: %v\n", err)
 	}
-	// TODO: duration is wrong
 	ic.SetDuration(duration)
 	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
 
@@ -228,7 +227,6 @@ func toTestSummary(uic json_schemas.UniqueIssueCount, t string) json_schemas.Tes
 	return testSummary
 }
 
-// TODO: investigate this (output is wrong)
 func toStatus(status string) analytics.Status {
 	if status == "success" {
 		return analytics.Success
