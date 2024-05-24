@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/snyk/go-application-framework/pkg/analytics"
-	"github.com/snyk/go-application-framework/pkg/networking"
-	"net/http"
-	"time"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/xeipuuv/gojsonschema"
+	"net/http"
+	"strings"
+	"time"
 )
 
 var (
@@ -154,6 +155,7 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) error {
 	logger := invocationCtx.GetLogger()
 	a := invocationCtx.GetAnalytics()
+	engine := invocationCtx.GetEngine()
 	ic := a.GetInstrumentation()
 
 	var scanDoneEvent json_schemas.ScanDoneEvent
@@ -193,7 +195,8 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
 
 	// optional v2 analytics parameters
-	ic.SetCategory([]string{scanDoneEvent.Data.Attributes.ScanType, "test"})
+	categories := instrumentation.SetupCategories(scanDoneEvent.Data.Attributes.ScanType, engine)
+	ic.SetCategory(categories)
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 
@@ -228,10 +231,8 @@ func toTestSummary(uic json_schemas.UniqueIssueCount, t string) json_schemas.Tes
 	return testSummary
 }
 
-// TODO: investigate this (output is wrong)
-func toStatus(status string) analytics.Status {
-	if status == "success" {
-		return analytics.Success
-	}
-	return analytics.Failure
+func toStatus(s string) analytics.Status {
+	sLC := strings.ToLower(s)
+	// ScanDoneEvent does not enumerate valid statuses, so this is a best guess
+	return analytics.Status(sLC)
 }

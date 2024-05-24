@@ -1,6 +1,7 @@
 package instrumentation
 
 import (
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"slices"
 	"strings"
 )
@@ -184,4 +185,13 @@ var KNOWN_FLAGS = []string{
 	"var-file",
 	"vuln-endpoint",
 	"yarn-workspaces",
+}
+
+func SetupCategories(data string, engine workflow.Engine) []string {
+	args := []string{data, "test"}
+	// TODO: this comes from snyk-ls, not sure what the gaf implementation is
+	//args = append(args, c.CliSettings().AdditionalOssParameters...)
+	knownCommands, knownFlags := GetKnownCommandsAndFlags(engine)
+	categories := DetermineCategoryFromArgs(args, knownCommands, knownFlags)
+	return categories
 }
