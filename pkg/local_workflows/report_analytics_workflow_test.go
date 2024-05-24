@@ -34,8 +34,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	requestPayload := testGetAnalyticsV2PayloadString()
-	expectedPayload := requestPayload
-	mockClient := testGetMockHTTPClient(t, orgId, requestPayload, expectedPayload)
+	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -64,8 +63,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsA
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	requestPayload := testGetScanDonePayloadString()
-	expectedPayload := testGetConvertedScanDonePayloadString()
-	mockClient := testGetMockHTTPClient(t, orgId, requestPayload, expectedPayload)
+	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
 
 	//invocation context mocks
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
@@ -177,7 +175,6 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
 	requestPayload := testGetScanDonePayloadString()
-	expectedPayload := testGetConvertedScanDonePayloadString()
 	config.Set("inputData", requestPayload)
 	orgId := "orgId"
 	a := analytics.New()
@@ -190,7 +187,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
-	mockClient := testGetMockHTTPClient(t, orgId, requestPayload, expectedPayload)
+	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -311,17 +308,13 @@ func testGetScanDonePayloadString() string {
 	}`
 }
 
-func testGetConvertedScanDonePayloadString() string {
-	return "{\"data\":{\"attributes\":{\"interaction\":{\"categories\":[\"Snyk Open Source\",\"test\"],\"errors\":[],\"extension\":null,\"id\":\"\",\"results\":[{\"count\":15,\"name\":\"critical\"},{\"count\":10,\"name\":\"high\"},{\"count\":1,\"name\":\"medium\"},{\"count\":2,\"name\":\"low\"}],\"stage\":\"dev\",\"status\":\"failure\",\"target\":{\"id\":\"\"},\"timestamp_ms\":1693569600000,\"type\":\"Scan done\"},\"runtime\":{\"application\":{\"name\":\"snyk-cli\",\"version\":\"1.1233.0\"},\"environment\":{\"name\":\"Pycharm\",\"version\":\"2023.1\"},\"integration\":{\"name\":\"IntelliJ\",\"version\":\"2.5.5\"},\"performance\":{\"duration_ms\":1000},\"platform\":{\"arch\":\"ARM64\",\"os\":\"macOS\"}}},\"type\":\"analytics\"}}"
-}
-
 func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 	engine := mocks.NewMockEngine(ctrl)
 	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes().Return(&workflow.EntryImpl{}, nil)
 	return InitReportAnalyticsWorkflow(engine)
 }
 
-func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string, expectedPayload string) *http.Client {
+func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
 	t.Helper()
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
@@ -331,7 +324,7 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string, ex
 		body, err := io.ReadAll(req.Body)
 
 		require.NoError(t, err)
-		require.Equal(t, strings.TrimSpace(expectedPayload), string(body))
+		require.Equal(t, strings.TrimSpace(requestPayload), string(body))
 
 		return &http.Response{
 			StatusCode: http.StatusCreated,
