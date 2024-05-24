@@ -29,6 +29,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
+	engineMock := mocks.NewMockEngine(ctrl)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
@@ -39,6 +40,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
@@ -60,6 +62,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsA
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	engineMock := mocks.NewMockEngine(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	requestPayload := testGetScanDonePayloadString()
@@ -69,6 +72,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsA
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).Times(1)
 	invocationContextMock.EXPECT().GetAnalytics().Return(a).Times(1)
+	invocationContextMock.EXPECT().GetEngine().Return(engineMock).Times(1)
+	engineMock.EXPECT().GetWorkflows().Times(1)
 
 	//do not send to the api
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).Times(0)
@@ -184,6 +189,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
+	engineMock := mocks.NewMockEngine(ctrl)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
@@ -194,6 +200,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetAnalytics().Return(a).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
+	engineMock.EXPECT().GetWorkflows().AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{})
