@@ -89,8 +89,8 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		result, validationErr := gojsonschema.Validate(analyticsV2SchemaLoader, documentLoader)
 
 		if validationErr != nil {
-			err := fmt.Errorf("analyticsV2Event error validating input at index %d: %w", i, validationErr)
-			return nil, err
+			e := fmt.Errorf("analyticsV2Event error validating input at index %d: %w", i, validationErr)
+			return nil, e
 		}
 
 		if !result.Valid() {
@@ -101,13 +101,13 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			result, validationErr = gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
 
 			if validationErr != nil {
-				err := fmt.Errorf("scanDoneEvent error validating input at index %d: %w", i, validationErr)
-				return nil, err
+				e := fmt.Errorf("scanDoneEvent error validating input at index %d: %w", i, validationErr)
+				return nil, e
 			}
 
 			if !result.Valid() {
-				err := fmt.Errorf("scanDoneEvent at index: %d failed validation with errors: %v", i, result.Errors())
-				return nil, err
+				e := fmt.Errorf("scanDoneEvent at index: %d failed validation with errors: %v", i, result.Errors())
+				return nil, e
 			}
 
 			// convert scanDoneEvent payload to AnalyticsV2 payload
@@ -180,12 +180,13 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	}
 	ic.SetUserAgent(userAgent)
 	ic.SetType(scanDoneEvent.Data.Type)
+	ic.SetInteractionType(scanDoneEvent.Data.Attributes.EventType)
 	ic.SetTimestamp(scanDoneEvent.Data.Attributes.TimestampFinished)
-	durationMs, err := time.ParseDuration(scanDoneEvent.Data.Attributes.DurationMs)
+	duration, err := time.ParseDuration(scanDoneEvent.Data.Attributes.DurationMs + "ms")
 	if err != nil {
-		logger.Printf("Error parsing durationMs: %v\n", err)
+		logger.Printf("Error parsing duration: %v\n", err)
 	}
-	ic.SetDuration(durationMs)
+	ic.SetDuration(duration)
 	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
 
 	// optional v2 analytics parameters
@@ -205,7 +206,13 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 		return nil, err
 	}
 
-	return workflow.NewData(WORKFLOWID_REPORT_ANALYTICS, "application/json", data), nil
+	workflowData := workflow.NewData(
+		workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, "reportAnalytics"),
+		"application/json",
+		data,
+	)
+
+	return workflowData, nil
 }
 
 func toTestSummary(uic json_schemas.UniqueIssueCount, t string) json_schemas.TestSummary {
