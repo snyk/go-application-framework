@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -59,19 +60,23 @@ func TestScrubbingWriter_Write(t *testing.T) {
 }
 
 func TestScrubbingWriter_WriteLevel(t *testing.T) {
-	s := []byte("password")
-
 	config := configuration.NewInMemory()
 	config.Set(configuration.AUTHENTICATION_TOKEN, "password")
+	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "bearertoken")
+	config.Set(auth.PARAMETER_CLIENT_ID, "oauthclientid")
+	config.Set(auth.PARAMETER_CLIENT_SECRET, "oauthclientsecret")
 
 	mockWriter := &mockWriter{}
 	writer := NewScrubbingWriter(mockWriter, GetScrubDictFromConfig(config))
 
-	n, err := writer.WriteLevel(zerolog.InfoLevel, s)
+	s := "These are the secrets: password, bearertoken, oauthclientid, oauthclientsecret"
+	expected := "These are the secrets: ***, ***, ***, ***"
+
+	n, err := writer.WriteLevel(zerolog.InfoLevel, []byte(s))
 	assert.Nil(t, err)
 	assert.Equal(t, len(s), n)
 
-	require.Equal(t, "***", string(mockWriter.written), "password should be scrubbed")
+	require.Equal(t, expected, string(mockWriter.written), "password should be scrubbed")
 }
 
 func TestScrubbingIoWriter(t *testing.T) {
