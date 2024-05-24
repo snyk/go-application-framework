@@ -15,48 +15,40 @@ import (
 func Test_GetTargetId(t *testing.T) {
 	t.Run("handles a filesystem directory path", func(t *testing.T) {
 		tempDir := t.TempDir()
-		targetId := GetTargetId(tempDir)
-
-		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001$`
-
-		matched, err := regexp.MatchString(pattern, targetId)
+		targetId, err := GetTargetId(tempDir, WithSubPath("myfile.go"))
 		assert.NoError(t, err)
-		assert.True(t, matched)
+
+		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#myfile.go$`
+		assert.Regexp(t, pattern, string(targetId))
 	})
 
 	t.Run("handles a file directory path", func(t *testing.T) {
 		tempDir := t.TempDir()
 		tempFile1 := filepath.Join(tempDir, "test1.ts")
-		targetId := GetTargetId(tempFile1)
+		targetId, err := GetTargetId(tempFile1, WithSubPath("test1.ts"))
+		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#test1.ts$`
-
-		matched, err := regexp.MatchString(pattern, targetId)
-		assert.NoError(t, err)
-		assert.True(t, matched)
+		assert.Regexp(t, pattern, string(targetId))
 	})
 
 	t.Run("handles paths with special characters", func(t *testing.T) {
 		tempDir := t.TempDir()
-		specialCharFile := filepath.Join(tempDir, "filecontaining@specialcharacters123$.ts")
-		targetId := GetTargetId(specialCharFile)
-
-		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#filecontaining\%40specialcharacters123\%24.ts$`
-
-		matched, err := regexp.MatchString(pattern, targetId)
+		targetId, err := GetTargetId(tempDir, WithSubPath("filecontaining>specialcharacters123<.ts"))
 		assert.NoError(t, err)
-		assert.True(t, matched)
+
+		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#filecontaining\%3Especialcharacters123\%3C.ts$`
+		assert.Regexp(t, pattern, string(targetId))
 	})
 
 	t.Run("handles a directory which has a .git file at the root", func(t *testing.T) {
 		tempDir := clone(t)
 
-		targetId := GetTargetId(tempDir)
+		targetId, err := GetTargetId(tempDir)
+		assert.NoError(t, err)
 
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master$`
-		matched, err := regexp.MatchString(pattern, targetId)
-		assert.NoError(t, err)
-		assert.True(t, matched)
+		assert.Regexp(t, pattern, string(targetId))
 	})
 
 	t.Run("fails back to filesystem due to invalid repo", func(t *testing.T) {
@@ -67,10 +59,11 @@ func Test_GetTargetId(t *testing.T) {
 		err := os.Remove(headFile)
 		assert.NoError(t, err)
 
-		targetId := GetTargetId(tempDir)
+		targetId, err := GetTargetId(tempDir)
+		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001$`
-		matched, err := regexp.MatchString(pattern, targetId)
+		matched, err := regexp.MatchString(pattern, string(targetId))
 		assert.NoError(t, err)
 		assert.True(t, matched)
 	})
@@ -82,24 +75,21 @@ func Test_GetTargetId(t *testing.T) {
 		err := updateFile(t, tempDir+"/.git/config", "https://github.com/snyk-fixtures/shallow-goof-locked.git", "")
 		assert.NoError(t, err)
 
-		targetId := GetTargetId(tempDir + "/package.json")
+		targetId, err := GetTargetId(tempDir, WithSubPath("package.json"))
+		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#package.json$`
-		matched, err := regexp.MatchString(pattern, targetId)
-
-		assert.NoError(t, err)
-		assert.True(t, matched)
+		assert.Regexp(t, pattern, string(targetId))
 	})
 
 	t.Run("handles a git directory with a file location", func(t *testing.T) {
 		tempDir := clone(t)
 
-		targetId := GetTargetId(tempDir + "/package.json")
+		targetId, err := GetTargetId(tempDir, WithSubPath("package.json"))
+		assert.NoError(t, err)
 
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master#package.json$`
-		matched, err := regexp.MatchString(pattern, targetId)
-		assert.NoError(t, err)
-		assert.True(t, matched)
+		assert.Regexp(t, pattern, string(targetId))
 	})
 
 	t.Run("sanitize git url if it contains credentials", func(t *testing.T) {
@@ -109,13 +99,11 @@ func Test_GetTargetId(t *testing.T) {
 		err := updateFile(t, tempDir+"/.git/config", "https://github.com/snyk-fixtures/shallow-goof-locked.git", "https://username:password@github.com/snyk-fixtures/shallow-goof-locked.git")
 		assert.NoError(t, err)
 
-		targetId := GetTargetId(tempDir + "/package.json")
+		targetId, err := GetTargetId(tempDir, WithSubPath("package.json"))
+		assert.NoError(t, err)
 
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master#package.json$`
-		matched, err := regexp.MatchString(pattern, targetId)
-
-		assert.NoError(t, err)
-		assert.True(t, matched)
+		assert.Regexp(t, pattern, string(targetId))
 	})
 }
 
