@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -125,50 +126,51 @@ func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, e
 }
 
 func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
+	const charGroup = "a-zA-Z0-9-_:."
 	s := `(http(s)?://)((.+?):(.+?))@(\S+)`
 	dict[s] = scrubStruct{
 		groupToRedact: 3,
 		regex:         regexp.MustCompile(s),
 	}
-	s = `([t|T]oken )([0-9a-z\-_:.]+)`
+	s = fmt.Sprintf(`([t|T]oken )([%s]+)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = `([b|B]earer )([0-9a-z\-_:.]+)`
+	s = fmt.Sprintf(`([b|B]earer )([%s]+)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = "(gh[ps])_([a-zA-Z0-9]{36})"
+	s = fmt.Sprintf("(gh[ps])_([%s]+)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = "(github_pat_)([a-zA-Z0-9]{22}_[a-zA-Z0-9]{59})"
+	s = fmt.Sprintf("(github_pat_)([%s]+)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 	// github
-	s = "(access_token=)(.*)&"
+	s = fmt.Sprintf("(access_token=)([%s]+)&", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = "(refresh_token=)(.*)&"
+	s = fmt.Sprintf("(refresh_token=)([%s]+)&", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = `("token":)"(.*)"`
+	s = fmt.Sprintf(`("token":)"([%s]+)"`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = `(SNYK_TOKEN)=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`
+	s = fmt.Sprintf(`(SNYK_TOKEN)=([%s]+)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
