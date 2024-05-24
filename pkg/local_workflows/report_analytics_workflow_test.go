@@ -47,7 +47,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	require.NoError(t, err)
 }
 
-func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsAndReportToApi(t *testing.T) {
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsAndNotReportToApi(t *testing.T) {
 	// setup
 	logger := log.New(os.Stderr, "test", 0)
 	config := configuration.New()
@@ -68,11 +68,13 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsA
 	mockClient := testGetMockHTTPClient(t, orgId, requestPayload, expectedPayload)
 
 	//invocation context mocks
-	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
-	invocationContextMock.EXPECT().GetAnalytics().Return(a).AnyTimes()
-	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).Times(1)
+	invocationContextMock.EXPECT().GetAnalytics().Return(a).Times(1)
+
+	//do not send to the api
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).Times(0)
+	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).Times(0)
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
 	require.NoError(t, err)
@@ -323,7 +325,7 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string, ex
 	t.Helper()
 	mockClient := newTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
-		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2024-03-07-experimental", req.URL.String())
+		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2024-03-07~experimental", req.URL.String())
 		require.Equal(t, "POST", req.Method)
 		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 		body, err := io.ReadAll(req.Body)
