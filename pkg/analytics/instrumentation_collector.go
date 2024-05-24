@@ -39,7 +39,9 @@ type InstrumentationCollector interface {
 var _ InstrumentationCollector = (*instrumentationCollectorImpl)(nil)
 
 func NewInstrumentationCollector() InstrumentationCollector {
-	return &instrumentationCollectorImpl{}
+	return &instrumentationCollectorImpl{
+		extension: make(map[string]interface{}),
+	}
 }
 
 type instrumentationCollectorImpl struct {
@@ -107,9 +109,6 @@ func (ic *instrumentationCollectorImpl) AddError(err error) {
 }
 
 func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) {
-	if ic.extension == nil {
-		ic.extension = make(map[string]interface{})
-	}
 	ic.extension[key] = value
 }
 
