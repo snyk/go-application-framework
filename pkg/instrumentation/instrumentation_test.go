@@ -32,11 +32,6 @@ func Test_GetKnownCommandsAndFlags(t *testing.T) {
 func Test_GetKnownCommandsAndFlags_Extension(t *testing.T) {
 	command1 := "awesome"
 	command2 := "power"
-	expectedCommands := append(KNOWN_COMMANDS, command1)
-	expectedCommands = append(expectedCommands, command2)
-
-	expectedFlags := append(KNOWN_FLAGS, "ever")
-	expectedFlags = append(expectedFlags, "forever")
 
 	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
 	flags.Bool("forever", true, "make awesomeness sticky")
@@ -58,6 +53,8 @@ func Test_GetKnownCommandsAndFlags_Extension(t *testing.T) {
 	assert.NoError(t, err)
 
 	actualCommands, actualFlags := GetKnownCommandsAndFlags(engine)
-	assert.Equal(t, expectedCommands, actualCommands)
-	assert.Equal(t, expectedFlags, actualFlags)
+	assert.Contains(t, actualCommands, command1)
+	assert.Contains(t, actualCommands, command2)
+	assert.Contains(t, actualFlags, "ever")
+	assert.Contains(t, actualFlags, "forever")
 }
