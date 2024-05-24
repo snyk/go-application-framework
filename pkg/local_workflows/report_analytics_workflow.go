@@ -111,10 +111,11 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			}
 
 			// convert scanDoneEvent payload to AnalyticsV2 payload
-			input, err = instrumentScanDoneEvent(invocationCtx, input)
+			err = instrumentScanDoneEvent(invocationCtx, input)
 			if err != nil {
 				return nil, err
 			}
+			return nil, nil
 		}
 
 		// send to V2 analytics endpoint
@@ -150,7 +151,7 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 	return nil
 }
 
-func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) (workflow.Data, error) {
+func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) error {
 	logger := invocationCtx.GetLogger()
 	a := invocationCtx.GetAnalytics()
 	ic := a.GetInstrumentation()
@@ -158,13 +159,13 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	var scanDoneEvent json_schemas.ScanDoneEvent
 	d, ok := input.GetPayload().([]byte)
 	if !ok {
-		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
+		return fmt.Errorf("invalid payload type: %T", input.GetPayload())
 	}
 
 	err := json.Unmarshal(d, &scanDoneEvent)
 	if err != nil {
 		logger.Printf("Error unmarshalling json: %v\n", err)
-		return nil, err
+		return err
 	}
 
 	// required v2 analytics parameters
@@ -196,25 +197,7 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 
-	instrumentationObject, err := analytics.GetV2InstrumentationObject(ic)
-	if err != nil {
-		logger.Printf("Error creating analytics object: %v\n", err)
-		return nil, err
-	}
-
-	data, err := json.Marshal(instrumentationObject)
-	if err != nil {
-		logger.Printf("Error marshaling json: %v\n", err)
-		return nil, err
-	}
-
-	workflowData := workflow.NewData(
-		workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, "reportAnalytics"),
-		"application/json",
-		data,
-	)
-
-	return workflowData, nil
+	return nil
 }
 
 func toTestSummary(uic json_schemas.UniqueIssueCount, t string) json_schemas.TestSummary {
