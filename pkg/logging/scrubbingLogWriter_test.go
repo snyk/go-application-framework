@@ -170,18 +170,18 @@ func TestAddDefaults(t *testing.T) {
 		},
 		{
 			name:     "token header with uuid",
-			input:    "Token 01234567-0123-0123-0123-012345678901",
-			expected: "Token ***",
+			input:    "Token 01234567-0123-0123-0123-012345678901\" asdf",
+			expected: "Token ***\" asdf",
 		},
 		{
 			name:     "bearer header with uuid",
-			input:    "bearer snyk_01234567-0123-0123-0123-012345678901.123",
-			expected: "bearer ***",
+			input:    "bearer snyk_01234567-0123-0123-0123-012345678901.123\" asdf",
+			expected: "bearer ***\" asdf",
 		},
 		{
 			name:     "Token header with uuid",
-			input:    "Token 01234567-0123-0123-0123-012345678901",
-			expected: "Token ***",
+			input:    "Token 01234567-0123-0123-0123-012345678901\" asdf",
+			expected: "Token ***\" asdf",
 		},
 		{
 			name:     "github pat (classic)",
