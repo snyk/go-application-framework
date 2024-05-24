@@ -26,7 +26,7 @@ var (
 const (
 	reportAnalyticsWorkflowName      = "analytics.report"
 	reportAnalyticsInputDataFlagName = "inputData"
-	reportAnalyticsAPIVersion        = "2024-03-07-experimental"
+	reportAnalyticsAPIVersion        = "2024-03-07~experimental"
 )
 
 // InitReportAnalyticsWorkflow initializes the reportAnalytics workflow before registering it with the engine.
@@ -180,12 +180,14 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	}
 	ic.SetUserAgent(userAgent)
 	ic.SetType(scanDoneEvent.Data.Type)
+	// TODO: eventType needs to be converted correctly (Knut knows)
 	ic.SetInteractionType(scanDoneEvent.Data.Attributes.EventType)
 	ic.SetTimestamp(scanDoneEvent.Data.Attributes.TimestampFinished)
 	duration, err := time.ParseDuration(scanDoneEvent.Data.Attributes.DurationMs + "ms")
 	if err != nil {
 		logger.Printf("Error parsing duration: %v\n", err)
 	}
+	// TODO: duration is wrong
 	ic.SetDuration(duration)
 	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
 
@@ -243,6 +245,7 @@ func toTestSummary(uic json_schemas.UniqueIssueCount, t string) json_schemas.Tes
 	return testSummary
 }
 
+// TODO: investigate this (output is wrong)
 func toStatus(status string) analytics.Status {
 	if status == "success" {
 		return analytics.Success
