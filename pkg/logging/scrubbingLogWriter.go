@@ -130,11 +130,17 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		groupToRedact: 3,
 		regex:         regexp.MustCompile(s),
 	}
-	s = `([t|T]oken )([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`
+	s = `([t|T]oken )([0-9a-z\-_:.]+)`
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+	s = `([b|B]earer )([0-9a-z\-_:.]+)`
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
 	s = "(gh[ps])_([a-zA-Z0-9]{36})"
 	dict[s] = scrubStruct{
 		groupToRedact: 2,

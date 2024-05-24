@@ -174,6 +174,11 @@ func TestAddDefaults(t *testing.T) {
 			expected: "Token ***",
 		},
 		{
+			name:     "bearer header with uuid",
+			input:    "bearer snyk_01234567-0123-0123-0123-012345678901.123",
+			expected: "bearer ***",
+		},
+		{
 			name:     "Token header with uuid",
 			input:    "Token 01234567-0123-0123-0123-012345678901",
 			expected: "Token ***",
