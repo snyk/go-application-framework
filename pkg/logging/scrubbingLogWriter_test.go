@@ -19,6 +19,7 @@ package logging
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -74,10 +75,9 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 }
 
 func TestScrubbingIoWriter(t *testing.T) {
-	scrubDict := map[string]bool{
-		"token":    true,
-		"password": true,
-		"":         true,
+	scrubDict := map[string]scrubStruct{
+		"token":    {0, regexp.MustCompile("token")},
+		"password": {0, regexp.MustCompile("password")},
 	}
 
 	pattern := "%s for my account, including my %s"
@@ -89,44 +89,135 @@ func TestScrubbingIoWriter(t *testing.T) {
 
 	// invoke method under test
 	n, err := writer.Write([]byte(patternWithSecret))
-	assert.Nil(t, err)
-	assert.Equal(t, len(patternWithSecret), n)
+	require.NoError(t, err)
+	require.Equal(t, len(patternWithSecret), n)
+	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
+
+	// now remove term token from dict and test again
+	bufioWriter = bytes.NewBufferString("")
+	writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
+
+	writer.(ScrubbingLogWriter).RemoveTerm("token")
+	writer.(ScrubbingLogWriter).RemoveTerm("password")
+
+	n, err = writer.Write([]byte(patternWithSecret))
+	require.NoError(t, err)
+	require.Equal(t, len(patternWithSecret), n)
+	require.Equal(t, patternWithSecret, bufioWriter.String())
+
+	// now re-add
+	bufioWriter = bytes.NewBufferString("")
+	writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
+	writer.(ScrubbingLogWriter).AddTerm("token", 0)
+	writer.(ScrubbingLogWriter).AddTerm("password", 0)
+
+	n, err = writer.Write([]byte(patternWithSecret))
+	require.NoError(t, err)
+	require.Equal(t, len(patternWithSecret), n)
 	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
 }
 
 func TestScrubFunction(t *testing.T) {
 	t.Run("scrub everything in dict", func(t *testing.T) {
-		dict := ScrubbingDict{"secret": true, "": true, "special": false, "be disclosed": true}
+		dict := ScrubbingDict{
+			"secret":       {0, regexp.MustCompile("secret")},
+			"special":      {0, regexp.MustCompile("special")},
+			"be disclosed": {0, regexp.MustCompile("be disclosed")},
+		}
 		input := "This is my secret message, which might not be special but definitely should not be disclosed."
 		expected := "This is my *** message, which might not be *** but definitely should not ***."
 
-		actual := scrub([]byte(input), compileRegularExpressions(dict))
+		actual := scrub([]byte(input), dict)
 		assert.Equal(t, expected, string(actual))
 	})
 
 	t.Run("scrub regex", func(t *testing.T) {
 		input := "abc http://a:b@host.com asdf \nabc https://a:b@host.com asdf"
-		expected := "abc http:***host.com asdf \nabc https:***host.com asdf"
+		expected := "abc http://***@host.com asdf \nabc https://***@host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), compileRegularExpressions(dict))
+		actual := scrub([]byte(input), dict)
 		assert.Equal(t, expected, string(actual))
 	})
 
 	t.Run("dont scrub urls without creds", func(t *testing.T) {
 		input := "abc http://host.com asdf \nabc https://a:b@host.com asdf"
-		expected := "abc http://host.com asdf \nabc https:***host.com asdf"
+		expected := "abc http://host.com asdf \nabc https://***@host.com asdf"
 		dict := addMandatoryMasking(ScrubbingDict{})
 
-		actual := scrub([]byte(input), compileRegularExpressions(dict))
+		actual := scrub([]byte(input), dict)
 		assert.Equal(t, expected, string(actual))
 	})
 }
 
 func TestAddDefaults(t *testing.T) {
-	dict := ScrubbingDict{}
-	dict = addMandatoryMasking(dict)
+	dict := addMandatoryMasking(ScrubbingDict{})
 
-	_, found := dict["//.*:.*@"]
-	assert.True(t, found, "should mask http basic auth")
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "non-masked",
+			input:    "asdf",
+			expected: "asdf",
+		},
+		{
+			name:     "http basic auth",
+			input:    "http://a:b@host.com something else https://c:d@host.com asdf",
+			expected: "http://***@host.com something else https://***@host.com asdf",
+		},
+		{
+			name:     "token header with uuid",
+			input:    "Token 01234567-0123-0123-0123-012345678901\" asdf",
+			expected: "Token ***\" asdf",
+		},
+		{
+			name:     "bearer header with uuid",
+			input:    "bearer snyk_01234567-0123-0123-0123-012345678901.123\" asdf",
+			expected: "bearer ***\" asdf",
+		},
+		{
+			name:     "Token header with uuid",
+			input:    "Token 01234567-0123-0123-0123-012345678901\" asdf",
+			expected: "Token ***\" asdf",
+		},
+		{
+			name:     "github pat (classic)",
+			input:    "GITHUB_PRIVATE_TOKEN=ghp_012345678901234567890123456789012345",
+			expected: "GITHUB_PRIVATE_TOKEN=ghp_***",
+		},
+		{
+			name:     "github pat (fine-grained)",
+			input:    "GITHUB_PRIVATE_TOKEN=github_pat_0123456789012345678901_01234567890123456789012345678901234567890123456789012345678",
+			expected: "GITHUB_PRIVATE_TOKEN=github_pat_***",
+		},
+		{
+			name:     "oauth access token",
+			input:    "access_token=asdlfkj&expire",
+			expected: "access_token=***&expire",
+		},
+		{
+			name:     "oauth refresh token",
+			input:    "refresh_token=asdlfkj&expire",
+			expected: "refresh_token=***&expire",
+		},
+		{
+			name:     "token in json",
+			input:    `"token":"asdf"`,
+			expected: `"token":"***"`,
+		},
+		{
+			name:     "SNYK_TOKEN",
+			input:    "SNYK_TOKEN=01234567-0123-0123-0123-012345678901",
+			expected: "SNYK_TOKEN=***",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := scrub([]byte(test.input), dict)
+			assert.Equal(t, test.expected, string(actual))
+		})
+	}
 }

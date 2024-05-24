@@ -17,33 +17,88 @@
 package logging
 
 import (
+	"fmt"
 	"io"
 	"regexp"
+	"strings"
+	"sync"
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 const redactMask string = "***"
 
-type ScrubbingDict map[string]bool
+type ScrubbingLogWriter interface {
+	AddTerm(term string, matchGroup int)
+	RemoveTerm(term string)
+}
+
+type scrubStruct struct {
+	groupToRedact int
+	regex         *regexp.Regexp
+}
+
+type ScrubbingDict map[string]scrubStruct
 
 type scrubbingLevelWriter struct {
-	writer     zerolog.LevelWriter
-	scrubDict  ScrubbingDict
-	regexCache map[string]*regexp.Regexp
+	m         sync.Mutex
+	writer    zerolog.LevelWriter
+	scrubDict ScrubbingDict
 }
 
 type scrubbingIoWriter struct {
-	writer     io.Writer
-	scrubDict  ScrubbingDict
-	regexCache map[string]*regexp.Regexp
+	m         sync.Mutex
+	writer    io.Writer
+	scrubDict ScrubbingDict
+}
+
+func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zerolog.LevelWriter {
+	dict := addMandatoryMasking(scrubDict)
+	levelWriter := scrubbingLevelWriter{
+		writer:    writer,
+		scrubDict: dict,
+	}
+	return &levelWriter
+}
+
+func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
+	dict := addMandatoryMasking(scrubDict)
+	return &scrubbingIoWriter{
+		writer:    writer,
+		scrubDict: dict,
+	}
+}
+
+func (w *scrubbingIoWriter) AddTerm(term string, matchGroup int) {
+	w.m.Lock()
+	defer w.m.Unlock()
+	addTermToDict(term, matchGroup, w.scrubDict)
+}
+
+func addTermToDict(term string, matchGroup int, dict ScrubbingDict) {
+	if term != "" {
+		dict[term] = scrubStruct{matchGroup, regexp.MustCompile(term)}
+	}
+}
+
+func (w *scrubbingIoWriter) RemoveTerm(term string) {
+	w.m.Lock()
+	defer w.m.Unlock()
+	delete(w.scrubDict, term)
 }
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
-	dict[config.GetString(configuration.AUTHENTICATION_TOKEN)] = true
+	addTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), 0, dict)
+	token, err := auth.GetOAuthToken(config)
+	if err != nil || token == nil {
+		return dict
+	}
+	addTermToDict(token.AccessToken, 0, dict)
+	addTermToDict(token.RefreshToken, 0, dict)
 	return dict
 }
 
@@ -53,62 +108,94 @@ func getDefaultDict() ScrubbingDict {
 	return dict
 }
 
+func (w *scrubbingLevelWriter) AddTerm(term string, matchGroup int) {
+	w.m.Lock()
+	defer w.m.Unlock()
+	addTermToDict(term, matchGroup, w.scrubDict)
+}
+
+func (w *scrubbingLevelWriter) RemoveTerm(term string) {
+	w.m.Lock()
+	defer w.m.Unlock()
+	delete(w.scrubDict, term)
+}
+
 func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
-	_, err := w.writer.WriteLevel(level, scrub(p, w.regexCache))
+	_, err := w.writer.WriteLevel(level, scrub(p, w.scrubDict))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
-func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zerolog.LevelWriter {
-	dict := addMandatoryMasking(scrubDict)
-	regexCache := compileRegularExpressions(dict)
-	levelWriter := scrubbingLevelWriter{
-		writer:     writer,
-		scrubDict:  dict,
-		regexCache: regexCache,
-	}
-	return &levelWriter
-}
-
-func compileRegularExpressions(dict ScrubbingDict) map[string]*regexp.Regexp {
-	regexCache := make(map[string]*regexp.Regexp)
-	for term := range dict {
-		if term != "" {
-			regexCache[term] = regexp.MustCompile(term)
-		}
-	}
-	return regexCache
-}
-
 func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
-	dict["//.*:.*@"] = true
+	const charGroup = "a-zA-Z0-9-_:."
+	s := `(http(s)?://)((.+?):(.+?))@(\S+)`
+	dict[s] = scrubStruct{
+		groupToRedact: 3,
+		regex:         regexp.MustCompile(s),
+	}
+	s = fmt.Sprintf(`([t|T]oken )([%s]+)`, charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+	s = fmt.Sprintf(`([b|B]earer )([%s]+)`, charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	s = fmt.Sprintf("(gh[ps])_([%s]+)", charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+	s = fmt.Sprintf("(github_pat_)([%s]+)", charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+	// github
+	s = fmt.Sprintf("(access_token=)([%s]+)&", charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+	s = fmt.Sprintf("(refresh_token=)([%s]+)&", charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+	s = fmt.Sprintf(`("token":)"([%s]+)"`, charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	s = fmt.Sprintf(`(SNYK_TOKEN)=([%s]+)`, charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
 	return dict
 }
 
 func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
-	_, err := w.writer.Write(scrub(p, w.regexCache))
+	_, err := w.writer.Write(scrub(p, w.scrubDict))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
 
-func scrub(p []byte, regexCache map[string]*regexp.Regexp) []byte {
+func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	s := string(p)
-	for _, re := range regexCache {
-		s = re.ReplaceAllLiteralString(s, redactMask)
+	for _, entry := range scrubDict {
+		matches := entry.regex.FindAllStringSubmatch(s, -1)
+		for _, match := range matches {
+			s = strings.Replace(s, match[entry.groupToRedact], redactMask, -1)
+		}
 	}
 	return []byte(s)
 }
 
-func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
-	dict := addMandatoryMasking(scrubDict)
-	regexCache := compileRegularExpressions(dict)
-	return &scrubbingIoWriter{
-		writer:     writer,
-		scrubDict:  addMandatoryMasking(scrubDict),
-		regexCache: regexCache,
-	}
-}
-
 func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
-	_, err = w.writer.Write(scrub(p, w.regexCache))
+	_, err = w.writer.Write(scrub(p, w.scrubDict))
 	if err != nil {
 		// in case of an error of the underlying writer, we return zero bytes written,
 		// since it is difficult to map back to the unredacted length.
