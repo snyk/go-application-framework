@@ -98,6 +98,9 @@ func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, en
 	logger.Printf("Authentication Type: %s", authType)
 
 	if strings.EqualFold(authType, authTypeOAuth) { // OAUTH flow
+		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)
+		config.Unset(configuration.AUTHENTICATION_TOKEN)
+
 		headless := config.GetBool(headlessFlag)
 		logger.Printf("Headless: %v", headless)
 
@@ -108,9 +111,12 @@ func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, en
 
 		fmt.Println(auth.AUTHENTICATED_MESSAGE)
 	} else { // LEGACY flow
+		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
+		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 		config.Set(configuration.WORKFLOW_USE_STDIO, true)
-		config.Set(configuration.AUTHENTICATION_TOKEN, "") // unset token to avoid using it during authentication
+		config.Set(configuration.AUTHENTICATION_TOKEN, "") // clear token to avoid using it during authentication
 
 		_, legacyCLIError := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("legacycli"), config)
 		if legacyCLIError != nil {

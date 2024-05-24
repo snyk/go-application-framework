@@ -18,6 +18,10 @@ func (e *EmptyStorage) Set(_ string, _ any) error {
 	return nil
 }
 
+// keyDeleted is a marker value which, when set, causes a key to be deleted from
+// stored configuration.
+var keyDeleted = struct{}{}
+
 type JsonStorage struct {
 	path string
 }
@@ -47,7 +51,13 @@ func (s *JsonStorage) Set(key string, value any) error {
 		return err
 	}
 
-	config[key] = value
+	if _, ok := value.(struct{}); ok {
+		// See implementation of Configuration.Unset; when marker value is set,
+		// key is deleted from config before writing.
+		delete(config, key)
+	} else {
+		config[key] = value
+	}
 	configJson, err := json.Marshal(config)
 	if err != nil {
 		return err

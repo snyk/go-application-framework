@@ -373,4 +373,28 @@ func Test_DefaultValuehandling(t *testing.T) {
 		assert.Equal(t, expected, actual)
 		assert.True(t, wasSet)
 	})
+
+	t.Run("set and unset", func(t *testing.T) {
+		fakehome := t.TempDir()
+		t.Setenv("HOME", fakehome)
+		configPath := filepath.Join(fakehome, ".config", "configstore", TEST_FILENAME_JSON)
+
+		assert.NoError(t, prepareConfigstore(`{"foo":"bar","baz":"quux"}`))
+		config := NewFromFiles(TEST_FILENAME)
+		config.SetStorage(NewJsonStorage(configPath))
+		config.AddAlternativeKeys("foo", []string{"foof", "floof"})
+
+		assert.Equal(t, "bar", config.Get("foo"))
+		assert.Equal(t, "quux", config.Get("baz"))
+
+		config.Unset("foo")
+
+		contents, err := os.ReadFile(configPath)
+		assert.NoError(t, err)
+		assert.JSONEq(t, `{"baz":"quux"}`, string(contents))
+
+		config = NewFromFiles(TEST_FILENAME)
+		assert.Equal(t, nil, config.Get("foo"))
+		assert.Equal(t, "quux", config.Get("baz"))
+	})
 }
