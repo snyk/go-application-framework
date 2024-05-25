@@ -11,17 +11,12 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
-type TargetId string
-type TargetIdOptions func(id TargetId) (TargetId, error)
+type TargetIdOptions func(id *url.URL) (*url.URL, error)
 
 func WithSubPath(subpath string) TargetIdOptions {
-	result := func(id TargetId) (TargetId, error) {
-		t, err := url.Parse(string(id))
-		if err != nil {
-			return "", err
-		}
-		t.Fragment = subpath
-		return TargetId(t.String()), nil
+	result := func(id *url.URL) (*url.URL, error) {
+		id.Fragment = subpath
+		return id, nil
 	}
 	return result
 }
@@ -70,7 +65,7 @@ func WithSubPath(subpath string) TargetIdOptions {
 //
 // Returns:
 // A string representing the target id
-func GetTargetId(path string, options ...TargetIdOptions) (TargetId, error) {
+func GetTargetId(path string, options ...TargetIdOptions) (string, error) {
 	targetId, err := gitBaseId(path)
 	if err != nil {
 		targetId = filesystemBaseId(path)
@@ -83,7 +78,15 @@ func GetTargetId(path string, options ...TargetIdOptions) (TargetId, error) {
 		}
 	}
 
-	return targetId, nil
+	return targetId.String(), nil
+}
+
+func emptyTargetId() *url.URL {
+	t := &url.URL{
+		Scheme:   "pkg",
+		OmitHost: true,
+	}
+	return t
 }
 
 func gitBaseIdFromRemote(repoUrl string) (string, error) {
@@ -91,7 +94,7 @@ func gitBaseIdFromRemote(repoUrl string) (string, error) {
 		formattedString := strings.Replace(repoUrl, "@", "/", -1)
 		formattedString = strings.Replace(formattedString, ":", "/", -1)
 		formattedString = strings.Replace(formattedString, ".git", "", -1)
-		return "pkg:" + formattedString, nil
+		return formattedString, nil
 	}
 
 	u, err := url.Parse(repoUrl)
@@ -112,49 +115,51 @@ func gitBaseIdFromRemote(repoUrl string) (string, error) {
 
 		// Reassemble the URL
 		formattedString := u.Scheme + "/" + hostPath
-		return "pkg:" + formattedString, nil
+		return formattedString, nil
 	}
 
 	return "", fmt.Errorf("unknown repoUrl format %s", repoUrl)
 }
 
-func filesystemBaseId(path string) TargetId {
+func filesystemBaseId(path string) *url.URL {
 	folderName := filepath.Base(path)
 	if len(filepath.Ext(path)) > 0 {
 		folderName = filepath.Base(filepath.Dir(path))
 	}
-	return TargetId("pkg:filesystem/" + generateSHA256(path) + "/" + folderName)
+	t := emptyTargetId()
+	t.Path = "filesystem/" + generateSHA256(path) + "/" + folderName
+	return t
 }
 
-func gitBaseId(path string) (TargetId, error) {
+func gitBaseId(path string) (*url.URL, error) {
 	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	remote, err := repo.Remote("origin")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// based on the docs, the first URL is being used to fetch, so this is the one we use
 	repoUrl := remote.Config().URLs[0]
 	if repoUrl == "" {
-		return "", fmt.Errorf("no remote url found")
+		return nil, fmt.Errorf("no remote url found")
 	}
 
 	formattedString, err := gitBaseIdFromRemote(repoUrl)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// ... retrieves the branch pointed by HEAD
 	ref, err := repo.Head()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	branchName := ""
@@ -163,7 +168,10 @@ func gitBaseId(path string) (TargetId, error) {
 		branchName = ref.Name().Short()
 	}
 
-	return TargetId(formattedString + "@" + ref.Hash().String() + "?branch=" + branchName), nil
+	result := emptyTargetId()
+	result.Path = formattedString + "@" + ref.Hash().String()
+	result.RawQuery += "branch=" + branchName
+	return result, nil
 }
 
 func generateSHA256(path string) string {

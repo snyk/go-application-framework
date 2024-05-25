@@ -19,7 +19,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#myfile.go$`
-		assert.Regexp(t, pattern, string(targetId))
+		assert.Regexp(t, pattern, targetId)
 	})
 
 	t.Run("handles a file directory path", func(t *testing.T) {
@@ -29,7 +29,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#test1.ts$`
-		assert.Regexp(t, pattern, string(targetId))
+		assert.Regexp(t, pattern, targetId)
 	})
 
 	t.Run("handles paths with special characters", func(t *testing.T) {
@@ -38,7 +38,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#filecontaining\%3Especialcharacters123\%3C.ts$`
-		assert.Regexp(t, pattern, string(targetId))
+		assert.Regexp(t, pattern, targetId)
 	})
 
 	t.Run("handles a directory which has a .git file at the root", func(t *testing.T) {
@@ -48,7 +48,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master$`
-		assert.Regexp(t, pattern, string(targetId))
+		assert.Regexp(t, pattern, targetId)
 	})
 
 	t.Run("fails back to filesystem due to invalid repo", func(t *testing.T) {
@@ -63,7 +63,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001$`
-		matched, err := regexp.MatchString(pattern, string(targetId))
+		matched, err := regexp.MatchString(pattern, targetId)
 		assert.NoError(t, err)
 		assert.True(t, matched)
 	})
@@ -79,7 +79,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:filesystem/[a-fA-F0-9]{64}/001#package.json$`
-		assert.Regexp(t, pattern, string(targetId))
+		assert.Regexp(t, pattern, targetId)
 	})
 
 	t.Run("handles a git directory with a file location", func(t *testing.T) {
@@ -89,7 +89,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master#package.json$`
-		assert.Regexp(t, pattern, string(targetId))
+		assert.Regexp(t, pattern, targetId)
 	})
 
 	t.Run("sanitize git url if it contains credentials", func(t *testing.T) {
@@ -103,7 +103,7 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master#package.json$`
-		assert.Regexp(t, pattern, string(targetId))
+		assert.Regexp(t, pattern, targetId)
 	})
 }
 
