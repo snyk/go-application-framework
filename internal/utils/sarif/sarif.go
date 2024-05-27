@@ -9,6 +9,8 @@ const (
 	summaryType = "sast"
 )
 
+type CodeSummaryOptions func(s *json_schemas.TestSummary) *json_schemas.TestSummary
+
 // Convert Sarif Level to internal Severity
 func SarifLevelToSeverity(level string) string {
 	var severity string
@@ -25,14 +27,26 @@ func SarifLevelToSeverity(level string) string {
 	return severity
 }
 
+func WithCoverage(coverage []sarif.SarifCoverage) CodeSummaryOptions {
+	res := func(s *json_schemas.TestSummary) *json_schemas.TestSummary {
+		for _, v := range coverage {
+			s.Artifacts = s.Artifacts + v.Files
+		}
+		return s
+	}
+	return res
+}
+
 // Iterate through the sarif data and create a summary out of it.
-func CreateCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
+func CreateCodeSummary(input *sarif.SarifDocument, options ...CodeSummaryOptions) *json_schemas.TestSummary {
 	if input == nil {
 		return nil
 	}
 
 	summary := json_schemas.NewTestSummary(summaryType)
 	resultMap := map[string]*json_schemas.TestSummaryResult{}
+
+	summary.Artifacts = 0
 	summary.SeverityOrderAsc = []string{"low", "medium", "high"}
 
 	for _, run := range input.Runs {
@@ -59,6 +73,10 @@ func CreateCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
 		local := *v
 		local.Severity = k
 		summary.Results = append(summary.Results, local)
+	}
+
+	for _, opt := range options {
+		summary = opt(summary)
 	}
 
 	return summary

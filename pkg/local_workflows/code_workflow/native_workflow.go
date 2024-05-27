@@ -55,7 +55,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	summary := sarif2.CreateCodeSummary(&result.Sarif)
+	summary := sarif2.CreateCodeSummary(&result.Sarif, sarif2.WithCoverage(result.Coverage))
 	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
 	if err != nil {
 		return nil, err

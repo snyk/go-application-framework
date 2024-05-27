@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"testing"
@@ -157,12 +158,14 @@ func Test_Code_legacyImplementation_experimentalFlagAndReport(t *testing.T) {
 }
 
 func Test_Code_nativeImplementation_happyPath(t *testing.T) {
+	numberOfArtefacts := rand.IntN(100)
 	expectedSummary := json_schemas.TestSummary{
 		Results: []json_schemas.TestSummaryResult{
 			{Severity: "high", Total: 3, Open: 2, Ignored: 1},
 			{Severity: "medium", Total: 1, Open: 1},
 			{Severity: "low", Total: 1, Open: 0, Ignored: 1},
 		},
+		Artifacts: numberOfArtefacts,
 	}
 
 	expectedRepoUrl := "https://hello.world"
@@ -207,6 +210,13 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 					},
 				},
 			},
+			Coverage: []sarif.SarifCoverage{
+				{
+					Files:       numberOfArtefacts,
+					IsSupported: true,
+					Lang:        "javascript",
+				},
+			},
 		}
 		return response, nil
 	}
@@ -232,6 +242,7 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 				}
 			}
 			assert.Equal(t, len(expectedSummary.Results), count)
+			assert.Equal(t, expectedSummary.Artifacts, actualSummary.Artifacts)
 		} else if v.GetContentType() == content_type.SARIF_JSON {
 			_, ok := v.GetPayload().([]byte)
 			assert.True(t, ok)
