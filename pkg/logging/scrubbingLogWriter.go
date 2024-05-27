@@ -129,51 +129,51 @@ func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, e
 }
 
 func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
-	const charGroup = "a-zA-Z0-9-_:."
+	const charGroup = "[a-zA-Z0-9-_:.]{6,}"
 	s := `(http(s)?://)((.+?):(.+?))@(\S+)`
 	dict[s] = scrubStruct{
 		groupToRedact: 3,
 		regex:         regexp.MustCompile(s),
 	}
-	s = fmt.Sprintf(`([t|T]oken )([%s]+)`, charGroup)
+	s = fmt.Sprintf(`([t|T]oken )(%s)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = fmt.Sprintf(`([b|B]earer )([%s]+)`, charGroup)
+	s = fmt.Sprintf(`([b|B]earer )(%s)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf("(gh[ps])_([%s]+)", charGroup)
+	s = fmt.Sprintf("(gh[ps])_(%s)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = fmt.Sprintf("(github_pat_)([%s]+)", charGroup)
+	s = fmt.Sprintf("(github_pat_)(%s)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 	// github
-	s = fmt.Sprintf("(access_token=)([%s]+)&", charGroup)
+	s = fmt.Sprintf("(access_token=)(%s)&", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = fmt.Sprintf("(refresh_token=)([%s]+)&", charGroup)
+	s = fmt.Sprintf("(refresh_token=)(%s)&", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = fmt.Sprintf(`("token":)"([%s]+)"`, charGroup)
+	s = fmt.Sprintf(`("token":)"(%s)"`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = fmt.Sprintf(`(SNYK_TOKEN)=([%s]+)`, charGroup)
+	s = fmt.Sprintf(`(SNYK_TOKEN)=(%s)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
