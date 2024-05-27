@@ -141,6 +141,20 @@ func Test_GetTargetId(t *testing.T) {
 		assert.Error(t, err)
 		assert.Empty(t, actual)
 	})
+
+	t.Run("Use absolute and relative directories", func(t *testing.T) {
+		relativeDir := "./"
+		absoluteDir, err := os.Getwd()
+		assert.NoError(t, err)
+
+		actualRelative, err := filesystemBaseId(relativeDir)
+		assert.NoError(t, err)
+
+		actualAbsolute, err := filesystemBaseId(absoluteDir)
+		assert.NoError(t, err)
+
+		assert.Equal(t, actualAbsolute, actualRelative)
+	})
 }
 
 func clone(t *testing.T) string {
