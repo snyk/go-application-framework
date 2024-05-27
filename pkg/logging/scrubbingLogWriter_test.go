@@ -200,17 +200,17 @@ func TestAddDefaults(t *testing.T) {
 		},
 		{
 			name:     "oauth access token",
-			input:    "access_token=asdlfkj&expire",
+			input:    "access_token=alittlesecret&expire",
 			expected: "access_token=***&expire",
 		},
 		{
 			name:     "oauth refresh token",
-			input:    "refresh_token=asdlfkj&expire",
+			input:    "refresh_token=alittlesecret&expire",
 			expected: "refresh_token=***&expire",
 		},
 		{
 			name:     "token in json",
-			input:    `"token":"asdf"`,
+			input:    `"token":"alittlesecret"`,
 			expected: `"token":"***"`,
 		},
 		{
