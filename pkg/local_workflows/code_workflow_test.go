@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
@@ -305,4 +306,5 @@ func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 
 	dataErrors := rs[1].GetErrorList()
 	assert.Equal(t, len(dataErrors), 1)
+	assert.Equal(t, dataErrors[0].ErrorCode, code.NewUnsupportedProjectError("").ErrorCode)
 }

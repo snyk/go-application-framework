@@ -26,7 +26,7 @@ require (
 require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/runtime v1.1.1
-	github.com/snyk/error-catalog-golang-public v0.0.0-20240425141803-2516e42296c3
+	github.com/snyk/error-catalog-golang-public v0.0.0-20240527112826-2b77438d25f1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

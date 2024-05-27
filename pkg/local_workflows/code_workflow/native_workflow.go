@@ -11,8 +11,7 @@ import (
 	codeclienthttp "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
-
+	"github.com/snyk/error-catalog-golang-public/code"
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -64,20 +63,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 
 	// Check summary
 	if summary.Artifacts == 0 {
-		summaryData.AddError(snyk_errors.Error{
-			ID:             "",
-			Type:           "",
-			Title:          "",
-			StatusCode:     0,
-			ErrorCode:      "",
-			Level:          "",
-			Links:          nil,
-			Detail:         "",
-			Meta:           nil,
-			Cause:          nil,
-			Classification: "",
-			Logs:           nil,
-		})
+		summaryData.AddError(code.NewUnsupportedProjectError("Snyk was unable to find supported files."))
 	}
 
 	return []workflow.Data{sarifData, summaryData}, nil
