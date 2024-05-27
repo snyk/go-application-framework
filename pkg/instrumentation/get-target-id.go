@@ -11,6 +11,13 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
+const (
+	FilesystemTargetId   TargetIdType = 0x02 // require filesystem type target id otherwise fail
+	GitTargetId          TargetIdType = 0x01 // require git type target id otherwise fail
+	AutoDetectedTargetId TargetIdType = 0xff // automatically detect the target id type, trying git first and falling back to filesystem
+)
+
+type TargetIdType int
 type TargetIdOptions func(id *url.URL) (*url.URL, error)
 
 func WithSubPath(subpath string) TargetIdOptions {
@@ -62,15 +69,31 @@ func WithSubPath(subpath string) TargetIdOptions {
 //
 // Parameters:
 // - path: The file system path to generate the target id for.
+// - idType: one of the available TargetIdType
+// - options: optional values to assign to the target id
 //
 // Returns:
 // A string representing the target id
-func GetTargetId(path string, options ...TargetIdOptions) (string, error) {
-	targetId, err := gitBaseId(path)
-	if err != nil {
-		targetId = filesystemBaseId(path)
+func GetTargetId(path string, idType TargetIdType, options ...TargetIdOptions) (string, error) {
+	var targetId *url.URL
+	var err error
+
+	// create git type id
+	if idType&GitTargetId != 0 {
+		targetId, err = gitBaseId(path)
 	}
 
+	// create filesystem type id
+	if idType&FilesystemTargetId != 0 && targetId == nil {
+		targetId = filesystemBaseId(path)
+		err = nil
+	}
+
+	if targetId == nil {
+		return "", fmt.Errorf("target id couldn't be determined %w", err)
+	}
+
+	// apply options
 	for _, opt := range options {
 		targetId, err = opt(targetId)
 		if err != nil {
@@ -100,14 +123,8 @@ func gitBaseIdFromRemote(repoUrl string) (string, error) {
 	u, err := url.Parse(repoUrl)
 	if err == nil {
 		// Adjust the scheme
-		if u.Scheme == "https" {
-			u.Scheme = "git"
-		}
-
-		// Remove the user info if present
-		if u.User != nil {
-			u.User = nil
-		}
+		u.Scheme = "git"
+		u.User = nil
 
 		// Adjust the host and path
 		hostPath := strings.Replace(u.Host+u.Path, ":", "/", 1)
