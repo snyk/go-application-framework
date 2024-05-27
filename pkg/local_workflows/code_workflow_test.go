@@ -3,7 +3,7 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand/v2"
+	"math/rand"
 	"net/http"
 	"os"
 	"testing"
@@ -158,7 +158,7 @@ func Test_Code_legacyImplementation_experimentalFlagAndReport(t *testing.T) {
 }
 
 func Test_Code_nativeImplementation_happyPath(t *testing.T) {
-	numberOfArtefacts := rand.IntN(100)
+	numberOfArtefacts := rand.Int()
 	expectedSummary := json_schemas.TestSummary{
 		Results: []json_schemas.TestSummaryResult{
 			{Severity: "high", Total: 3, Open: 2, Ignored: 1},
