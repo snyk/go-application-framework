@@ -61,7 +61,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	// Check summary
+	// Check for empty summary
 	if summary.Artifacts == 0 {
 		summaryData.AddError(code.NewUnsupportedProjectError("Snyk was unable to find supported files."))
 	}
