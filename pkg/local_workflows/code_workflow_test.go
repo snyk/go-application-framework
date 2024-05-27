@@ -271,3 +271,38 @@ func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, rs)
 }
+
+func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
+	config := configuration.NewInMemory()
+	networkAccess := networking.NewNetworkAccess(config)
+
+	mockController := gomock.NewController(t)
+	invocationContext := mocks.NewMockInvocationContext(mockController)
+	invocationContext.EXPECT().GetConfiguration().Return(config)
+	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
+	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
+	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+		response := &sarif.SarifResponse{
+			Sarif: sarif.SarifDocument{
+				Runs: []sarif.Run{},
+			},
+			Coverage: []sarif.SarifCoverage{
+				{
+					Files:       0,
+					IsSupported: true,
+					Lang:        "javascript",
+				},
+			},
+		}
+		return response, nil
+	}
+
+	rs, err := code_workflow.EntryPointNative(invocationContext, analysisFunc)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rs), 2)
+
+	dataErrors := rs[1].GetErrorList()
+	assert.Equal(t, len(dataErrors), 1)
+}

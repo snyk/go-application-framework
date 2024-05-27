@@ -11,6 +11,7 @@ import (
 	codeclienthttp "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -59,6 +60,24 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check summary
+	if summary.Artifacts == 0 {
+		summaryData.AddError(snyk_errors.Error{
+			ID:             "",
+			Type:           "",
+			Title:          "",
+			StatusCode:     0,
+			ErrorCode:      "",
+			Level:          "",
+			Links:          nil,
+			Detail:         "",
+			Meta:           nil,
+			Cause:          nil,
+			Classification: "",
+			Logs:           nil,
+		})
 	}
 
 	return []workflow.Data{sarifData, summaryData}, nil
