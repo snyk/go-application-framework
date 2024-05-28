@@ -29,6 +29,7 @@ type InstrumentationCollector interface {
 	SetType(t string)
 	SetInteractionType(t string)
 	SetCategory(c []string)
+	GetCategory() []string
 	SetStatus(s Status)
 	SetTestSummary(s json_schemas.TestSummary)
 	SetTargetId(t string) // maybe use package-url library and types
@@ -90,6 +91,10 @@ func (ic *instrumentationCollectorImpl) SetInteractionType(t string) {
 
 func (ic *instrumentationCollectorImpl) SetCategory(c []string) {
 	ic.category = c
+}
+
+func (ic *instrumentationCollectorImpl) GetCategory() []string {
+	return ic.category
 }
 
 func (ic *instrumentationCollectorImpl) SetStatus(s Status) {
