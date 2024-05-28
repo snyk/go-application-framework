@@ -197,6 +197,19 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 							{Level: "error"},
 							{Level: "warning"},
 						},
+						Properties: sarif.RunProperties{
+							Coverage: []struct {
+								Files       int    `json:"files"`
+								IsSupported bool   `json:"isSupported"`
+								Lang        string `json:"lang"`
+								Type        string `json:"type"`
+							}{{
+								Files:       numberOfArtefacts,
+								IsSupported: true,
+								Lang:        "",
+								Type:        "",
+							}},
+						},
 					},
 					{
 						Results: []sarif.Result{
@@ -209,13 +222,6 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 							{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
 						},
 					},
-				},
-			},
-			Coverage: []sarif.SarifCoverage{
-				{
-					Files:       numberOfArtefacts,
-					IsSupported: true,
-					Lang:        "javascript",
 				},
 			},
 		}
@@ -287,13 +293,22 @@ func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
 		response := &sarif.SarifResponse{
 			Sarif: sarif.SarifDocument{
-				Runs: []sarif.Run{},
-			},
-			Coverage: []sarif.SarifCoverage{
-				{
-					Files:       0,
-					IsSupported: true,
-					Lang:        "javascript",
+				Runs: []sarif.Run{
+					{
+						Properties: sarif.RunProperties{
+							Coverage: []struct {
+								Files       int    `json:"files"`
+								IsSupported bool   `json:"isSupported"`
+								Lang        string `json:"lang"`
+								Type        string `json:"type"`
+							}{{
+								Files:       0,
+								IsSupported: false,
+								Lang:        "",
+								Type:        "",
+							}},
+						},
+					},
 				},
 			},
 		}
