@@ -11,6 +11,8 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func Test_GetTargetId(t *testing.T) {
@@ -51,7 +53,7 @@ func Test_GetTargetId(t *testing.T) {
 		pattern := `^pkg:git/github\.com/snyk-fixtures/shallow-goof-locked@[a-fA-F0-9]{40}\?branch=master$`
 		assert.Regexp(t, pattern, targetId)
 
-		targetId, err = GetTargetId(tempDir, FilesystemTargetId)
+		targetId, err = GetTargetId(tempDir, FilesystemTargetId, WithConfiguredRepository(configuration.NewInMemory()))
 		assert.NoError(t, err)
 
 		pattern = `^pkg:filesystem/[a-fA-F0-9]{64}/001$`
@@ -154,6 +156,28 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.Equal(t, actualAbsolute, actualRelative)
+	})
+
+	t.Run("configured valid repo url", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(RemoteRepoUrlFlagname, "https://github.com/snyk/cli.git")
+
+		tempDir := clone(t)
+		targetId, err := GetTargetId(tempDir, AutoDetectedTargetId, WithLineNumber(23), WithSubPath("package.json"), WithConfiguredRepository(config))
+		assert.NoError(t, err)
+
+		pattern := `^pkg:git/github\.com/snyk/cli@unknown\?branch=unknown&line=23#package.json$`
+		assert.Regexp(t, pattern, targetId)
+	})
+
+	t.Run("configured broken repo url", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(RemoteRepoUrlFlagname, "broken :23")
+
+		tempDir := clone(t)
+		targetId, err := GetTargetId(tempDir, AutoDetectedTargetId, WithLineNumber(23), WithSubPath("package.json"), WithConfiguredRepository(config))
+		assert.Error(t, err)
+		assert.Empty(t, targetId)
 	})
 }
 
