@@ -86,7 +86,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		documentLoader := gojsonschema.NewBytesLoader(payload)
 
 		// check if payload is an analyticsV2 event
-		logger.Print("validating analyticsV2Event")
+		logger.Print("validating against schema: analyticsV2Event")
 		result, validationErr := gojsonschema.Validate(analyticsV2SchemaLoader, documentLoader)
 
 		if validationErr != nil {
@@ -95,8 +95,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 
 		if !result.Valid() {
-			logger.Print("analyticsV2Event validation failed")
-			logger.Print("validating scanDoneEvent")
+			logger.Print("validating against schema: scanDoneEvent")
 
 			// check if payload is a scanDone event (v1 analytics)
 			result, validationErr = gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
@@ -199,6 +198,7 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetCategory(categories)
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
+	ic.AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
 
 	return nil
 }
