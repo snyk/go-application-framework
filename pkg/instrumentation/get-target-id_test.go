@@ -11,6 +11,8 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func Test_GetTargetId(t *testing.T) {
@@ -154,6 +156,19 @@ func Test_GetTargetId(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.Equal(t, actualAbsolute, actualRelative)
+	})
+
+	t.Run("configured repo url", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(RemoteRepoUrlFlagname, "https://github.com/snyk/cli.git")
+
+		tempDir := clone(t)
+		targetId, err := GetTargetId(tempDir, AutoDetectedTargetId, WithLineNumber(23), WithSubPath("package.json"), WithConfiguredRepository(config))
+		assert.NoError(t, err)
+
+		pattern := `^pkg:git/github\.com/snyk/cli@unknown\?branch=unknown&line=23#package.json$`
+		assert.Regexp(t, pattern, targetId)
+
 	})
 }
 

@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 const (
@@ -17,12 +19,42 @@ const (
 	AutoDetectedTargetId TargetIdType = 0xff // automatically detect the target id type, trying git first and falling back to filesystem
 )
 
+const (
+	RemoteRepoUrlFlagname = "remote-repo-url"
+)
+
 type TargetIdType int
 type TargetIdOptions func(id *url.URL) (*url.URL, error)
 
 func WithSubPath(subpath string) TargetIdOptions {
 	result := func(id *url.URL) (*url.URL, error) {
 		id.Fragment = subpath
+		return id, nil
+	}
+	return result
+}
+
+func WithConfiguredRepository(config configuration.Configuration) TargetIdOptions {
+	result := func(id *url.URL) (*url.URL, error) {
+		remoteUrl := config.GetString(RemoteRepoUrlFlagname)
+		if len(remoteUrl) > 0 {
+			const unknownValue = "unknown"
+			err := gitUpdateId(remoteUrl, unknownValue, unknownValue, id)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return id, nil
+	}
+	return result
+}
+
+func WithLineNumber(line int) TargetIdOptions {
+	result := func(id *url.URL) (*url.URL, error) {
+		q := id.Query()
+		q.Add("line", fmt.Sprintf("%d", line))
+		id.RawQuery = q.Encode()
 		return id, nil
 	}
 	return result
@@ -172,11 +204,6 @@ func gitBaseId(path string) (*url.URL, error) {
 		return nil, fmt.Errorf("no remote url found")
 	}
 
-	formattedString, err := gitBaseIdFromRemote(repoUrl)
-	if err != nil {
-		return nil, err
-	}
-
 	// ... retrieves the branch pointed by HEAD
 	ref, err := repo.Head()
 	if err != nil {
@@ -190,9 +217,29 @@ func gitBaseId(path string) (*url.URL, error) {
 	}
 
 	result := emptyTargetId()
-	result.Path = formattedString + "@" + ref.Hash().String()
-	result.RawQuery += "branch=" + branchName
+	hash := ref.Hash().String()
+
+	err = gitUpdateId(repoUrl, hash, branchName, result)
+	if err != nil {
+		return nil, err
+	}
+
 	return result, nil
+}
+
+func gitUpdateId(repoUrl string, hash string, branchName string, result *url.URL) error {
+	formattedString, err := gitBaseIdFromRemote(repoUrl)
+	if err != nil {
+		return err
+	}
+
+	result.Path = formattedString + "@" + hash
+
+	q := result.Query()
+	q.Set("branch", branchName)
+	result.RawQuery = q.Encode()
+
+	return nil
 }
 
 func generateSHA256(path string) string {
