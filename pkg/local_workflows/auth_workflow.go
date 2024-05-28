@@ -9,9 +9,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
-	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	pgk_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -82,7 +82,7 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	}
 
 	integration := config.GetString(configuration.INTEGRATION_NAME)
-	if utils.IsSnykIde(integration) {
+	if pgk_utils.IsSnykIde(integration) {
 		return authTypeToken
 	}
 
