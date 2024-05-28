@@ -214,6 +214,11 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
+
+	t.Run("it should get the category vector", func(t *testing.T) {
+		actualCategory := ic.GetCategory()
+		assert.Equal(t, mockCategory, actualCategory)
+	})
 }
 
 func newTestInstrumentation(t *testing.T) InstrumentationCollector {
