@@ -85,8 +85,7 @@ func GetTargetId(path string, idType TargetIdType, options ...TargetIdOptions) (
 
 	// create filesystem type id
 	if idType&FilesystemTargetId != 0 && targetId == nil {
-		targetId = filesystemBaseId(path)
-		err = nil
+		targetId, err = filesystemBaseId(path)
 	}
 
 	if targetId == nil {
@@ -138,14 +137,19 @@ func gitBaseIdFromRemote(repoUrl string) (string, error) {
 	return "", fmt.Errorf("unknown repoUrl format %s", repoUrl)
 }
 
-func filesystemBaseId(path string) *url.URL {
+func filesystemBaseId(path string) (*url.URL, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
 	folderName := filepath.Base(path)
 	if len(filepath.Ext(path)) > 0 {
 		folderName = filepath.Base(filepath.Dir(path))
 	}
 	t := emptyTargetId()
 	t.Path = "filesystem/" + generateSHA256(path) + "/" + folderName
-	return t
+	return t, nil
 }
 
 func gitBaseId(path string) (*url.URL, error) {
