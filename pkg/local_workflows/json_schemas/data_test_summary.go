@@ -67,6 +67,7 @@ type TestSummary struct {
 func NewTestSummary(t string) *TestSummary {
 	return &TestSummary{
 		Type:             t,
+		Artifacts:        0,
 		SeverityOrderAsc: []string{"low", "medium", "high", "critical"},
 	}
 }

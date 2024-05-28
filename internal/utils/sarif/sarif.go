@@ -34,7 +34,6 @@ func CreateCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
 	summary := json_schemas.NewTestSummary(summaryType)
 	resultMap := map[string]*json_schemas.TestSummaryResult{}
 
-	summary.Artifacts = 0
 	summary.SeverityOrderAsc = []string{"low", "medium", "high"}
 
 	for _, run := range input.Runs {
