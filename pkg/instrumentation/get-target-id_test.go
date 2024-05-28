@@ -168,7 +168,6 @@ func Test_GetTargetId(t *testing.T) {
 
 		pattern := `^pkg:git/github\.com/snyk/cli@unknown\?branch=unknown&line=23#package.json$`
 		assert.Regexp(t, pattern, targetId)
-
 	})
 }
 
