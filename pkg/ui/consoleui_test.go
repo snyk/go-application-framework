@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/gkampitakis/go-snaps/snaps"
+	"github.com/muesli/termenv"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
 )
@@ -157,10 +160,14 @@ func Test_OutputError(t *testing.T) {
 	})
 
 	t.Run("Error Catalog error", func(t *testing.T) {
-		err := snyk.NewBadRequestError("something")
+		err := snyk.NewBadRequestError("If you carry on like this you will ensure the wrath of OWASP, the God of Code Injection.")
+		err.Links = []string{"http://example.com/docs"}
+
+		lipgloss.SetColorProfile(termenv.TrueColor)
 		uiError := ui.OutputError(err)
 		assert.NoError(t, uiError)
-		assert.Equal(t, " ERROR   Client request cannot be processed (SNYK-0003)\nInfo:    something\n", stdout.String())
+		assert.Contains(t, stdout.String(), "ERROR")
+		snaps.MatchSnapshot(t, stdout.String())
 		stdout.Reset()
 	})
 

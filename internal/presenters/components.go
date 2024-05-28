@@ -8,8 +8,25 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
+
+func RenderError(err snyk_errors.Error) string {
+	level := fmt.Sprintf("%-6s", strings.ToUpper(err.Level))
+	infoLabel := lipgloss.NewStyle().Width(8).Render("Info:")
+	infoValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(err.Detail)
+
+	helpLabel := lipgloss.NewStyle().Width(8).Render("Help:")
+	helpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(strings.Join(err.Links, "\n"))
+
+	backgroundHighlight := lipgloss.NewStyle().PaddingLeft(1).Background(lipgloss.Color("red")).PaddingRight(1)
+
+	return "" + backgroundHighlight.Render(level) + " " + backgroundHighlight.Render(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode) + "\n" +
+		lipgloss.JoinHorizontal(lipgloss.Top, infoLabel, infoValue) + "\n" +
+		lipgloss.JoinHorizontal(lipgloss.Top, helpLabel, helpValue)
+}
 
 func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApplied bool) string {
 	if len(findings) == 0 {

@@ -1,0 +1,8 @@
+
+[Test_OutputError/Error_Catalog_error - 1]
+ ERROR    Client request cannot be processed  (SNYK-0003)
+Info:    If you carry on like this you will ensure the wrath of OWASP, the God of Code  
+         Injection.                                                                     
+Help:    http://example.com/docs                                                        
+
+---
