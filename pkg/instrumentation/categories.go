@@ -1,7 +1,6 @@
 package instrumentation
 
 import (
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"slices"
 	"strings"
 )
@@ -187,11 +186,17 @@ var KNOWN_FLAGS = []string{
 	"yarn-workspaces",
 }
 
-func SetupCategories(data string, engine workflow.Engine) []string {
-	args := []string{data, "test"}
-	// TODO: this comes from snyk-ls, not sure what the gaf implementation is
-	//args = append(args, c.CliSettings().AdditionalOssParameters...)
-	knownCommands, knownFlags := GetKnownCommandsAndFlags(engine)
-	categories := DetermineCategoryFromArgs(args, knownCommands, knownFlags)
-	return categories
+func ToProductCodename(product string) string {
+	switch product {
+	case "Snyk Open Source":
+		return "oss"
+	case "Snyk Code":
+		return "code"
+	case "Snyk IAC", "Snyk IaC":
+		return "iac"
+	case "Snyk Container":
+		return "container"
+	default:
+		return ""
+	}
 }

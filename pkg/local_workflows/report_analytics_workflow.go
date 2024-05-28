@@ -155,7 +155,6 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) error {
 	logger := invocationCtx.GetLogger()
 	a := invocationCtx.GetAnalytics()
-	engine := invocationCtx.GetEngine()
 	ic := a.GetInstrumentation()
 
 	var scanDoneEvent json_schemas.ScanDoneEvent
@@ -183,19 +182,20 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	}
 	ic.SetUserAgent(userAgent)
 	ic.SetType(scanDoneEvent.Data.Type)
-	// TODO: eventType needs to be converted correctly (Knut knows)
 	ic.SetInteractionType(scanDoneEvent.Data.Attributes.EventType)
 	ic.SetTimestamp(scanDoneEvent.Data.Attributes.TimestampFinished)
 	duration, err := time.ParseDuration(scanDoneEvent.Data.Attributes.DurationMs + "ms")
 	if err != nil {
 		logger.Printf("Error parsing duration: %v\n", err)
 	}
-	// TODO: duration is wrong
 	ic.SetDuration(duration)
 	ic.SetStatus(toStatus(scanDoneEvent.Data.Attributes.Status))
 
 	// optional v2 analytics parameters
-	categories := instrumentation.SetupCategories(scanDoneEvent.Data.Attributes.ScanType, engine)
+	categories := []string{
+		instrumentation.ToProductCodename(scanDoneEvent.Data.Attributes.ScanType),
+		"test",
+	}
 	ic.SetCategory(categories)
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))

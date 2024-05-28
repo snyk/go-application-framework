@@ -62,7 +62,6 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsA
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	engineMock := mocks.NewMockEngine(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
 	requestPayload := testGetScanDonePayloadString()
@@ -72,8 +71,6 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldConvertScanDoneEventsA
 	invocationContextMock.EXPECT().GetLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).Times(1)
 	invocationContextMock.EXPECT().GetAnalytics().Return(a).Times(1)
-	invocationContextMock.EXPECT().GetEngine().Return(engineMock).Times(1)
-	engineMock.EXPECT().GetWorkflows().Times(1)
 
 	//do not send to the api
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).Times(0)
