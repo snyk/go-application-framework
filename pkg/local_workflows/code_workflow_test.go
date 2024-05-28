@@ -279,6 +279,30 @@ func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
 	assert.Nil(t, rs)
 }
 
+func Test_Code_nativeImplementation_analysisNil(t *testing.T) {
+	config := configuration.NewInMemory()
+	networkAccess := networking.NewNetworkAccess(config)
+
+	mockController := gomock.NewController(t)
+	invocationContext := mocks.NewMockInvocationContext(mockController)
+	invocationContext.EXPECT().GetConfiguration().Return(config)
+	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
+	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
+	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+		return nil, nil //nolint:nilnil // whilst this fails linting it does represent a potential outcome state
+	}
+
+	rs, err := code_workflow.EntryPointNative(invocationContext, analysisFunc)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rs), 1)
+
+	dataErrors := rs[0].GetErrorList()
+	assert.Equal(t, len(dataErrors), 1)
+	assert.Equal(t, dataErrors[0].ErrorCode, code.NewUnsupportedProjectError("").ErrorCode)
+}
+
 func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 	config := configuration.NewInMemory()
 	networkAccess := networking.NewNetworkAccess(config)

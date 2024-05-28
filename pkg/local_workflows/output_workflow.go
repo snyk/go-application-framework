@@ -79,7 +79,7 @@ func filterSummaryOutput(config configuration.Configuration, input workflow.Data
 	}
 
 	workflowId := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "FilterTestSummary")
-	return workflow.NewData(workflowId, content_type.TEST_SUMMARY, bytes), nil
+	return workflow.NewDataFromInput(input, workflowId, content_type.TEST_SUMMARY, bytes), nil
 }
 
 // outputWorkflowEntryPoint defines the output entry point

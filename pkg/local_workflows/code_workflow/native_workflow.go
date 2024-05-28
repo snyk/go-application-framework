@@ -15,6 +15,7 @@ import (
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -46,8 +47,20 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	}
 
 	result, err := analyzeFnc(target, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config)
-	if err != nil || result == nil {
+
+	if err != nil {
 		return nil, err
+	}
+
+	if result == nil {
+		summary := json_schemas.NewTestSummary("sast")
+		summaryData, summaryDataErr := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
+		if summaryDataErr != nil {
+			return nil, summaryDataErr
+		}
+
+		summaryData.AddError(code.NewUnsupportedProjectError(""))
+		return []workflow.Data{summaryData}, nil
 	}
 
 	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)

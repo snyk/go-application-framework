@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/stretchr/testify/assert"
 
@@ -300,6 +301,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		})
 		assert.Nil(t, err)
 		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, summaryPayload)
+		testSummaryData.AddError(code.NewUnsupportedProjectError(""))
 		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
 		sarifData.SetContentLocation("/mypath")
 
@@ -320,6 +322,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		summary := json_schemas.NewTestSummary("")
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &summary)
 		assert.Nil(t, err)
+		assert.Equal(t, len(output[0].GetErrorList()), 1)
 
 		// assert
 		for _, result := range summary.Results {
