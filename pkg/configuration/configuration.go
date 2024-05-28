@@ -27,6 +27,7 @@ type Configuration interface {
 
 	Set(key string, value interface{})
 	Get(key string) interface{}
+	Unset(key string)
 	IsSet(key string) bool
 	GetString(key string) string
 	GetStringSlice(key string) []string
@@ -244,6 +245,28 @@ func (ev *extendedViper) IsSet(key string) bool {
 		}
 	}
 	return isSet
+}
+
+// Unset removes a key and its alternatives from configuration when stored.
+func (ev *extendedViper) Unset(key string) {
+	// See https://github.com/spf13/viper/pull/519 for why this method will
+	// probably never land in upstream viper. The author's reason for not doing
+	// so seems to be, because removing a key is a persistence concern, which is
+	// muddled in the viper API.
+	//
+	// Fair point but here is a pragmatic workaround.
+
+	// If we're unsetting a key, we're intending to persist it.
+	ev.PersistInStorage(key)
+
+	// An empty struct marks the key for deletion in JsonStorage.
+	ev.Set(key, keyDeleted)
+
+	// Do the same for all this key's alternatives
+	for _, otherKey := range ev.GetAlternativeKeys(key) {
+		ev.PersistInStorage(otherKey)
+		ev.Set(otherKey, keyDeleted)
+	}
 }
 
 // Get returns a configuration value.
