@@ -50,13 +50,13 @@ func RenderError(err snyk_errors.Error) string {
 
 	if len(err.Links) > 0 {
 		helpLabel := lipgloss.NewStyle().Width(8).Render("Help:")
-		helpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(strings.Join(err.Links, "\n"))
+		helpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Render(strings.Join(err.Links, "\n"))
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top, helpLabel, helpValue))
 	}
 
 	title := renderBold(strings.TrimSpace(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode))
 
-	return backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
+	return "\n" + backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
 		strings.Join(body, "\n")
 }
 
@@ -66,7 +66,6 @@ func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApp
 	}
 
 	response := ""
-
 	response += RenderTitle("Open Issues")
 
 	for _, finding := range findings {
