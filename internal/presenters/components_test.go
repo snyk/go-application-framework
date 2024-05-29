@@ -14,7 +14,7 @@ import (
 func Test_RenderError(t *testing.T) {
 	for _, severity := range []string{"warn", "error", "fatal"} {
 		t.Run(
-			fmt.Sprintf("colours for severity %s", severity), func(t *testing.T) {
+			fmt.Sprintf("colors for severity %s", severity), func(t *testing.T) {
 				err := snyk.NewTooManyRequestsError("")
 				err.Level = severity
 				lipgloss.SetColorProfile(termenv.TrueColor)
@@ -25,7 +25,6 @@ func Test_RenderError(t *testing.T) {
 				lipgloss.SetHasDarkBackground(true)
 				outputDark := RenderError(err)
 				snaps.MatchSnapshot(t, outputDark)
-
 			})
 	}
 
@@ -39,7 +38,6 @@ func Test_RenderError(t *testing.T) {
 	})
 
 	t.Run("with links", func(t *testing.T) {
-
 		lipgloss.SetColorProfile(termenv.TrueColor)
 		lipgloss.SetHasDarkBackground(false)
 		output := RenderError(snyk.NewServerError("An error"))

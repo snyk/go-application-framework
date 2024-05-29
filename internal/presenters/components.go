@@ -24,7 +24,6 @@ func errorLevelToStyle(errLevel string) lipgloss.Style {
 		style.
 			Background(lipgloss.AdaptiveColor{Light: "11", Dark: "3"}).
 			Foreground(lipgloss.Color("0"))
-
 	}
 
 	return style
@@ -59,7 +58,6 @@ func RenderError(err snyk_errors.Error) string {
 
 	return "" + backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
 		strings.Join(body, "\n")
-
 }
 
 func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApplied bool) string {
