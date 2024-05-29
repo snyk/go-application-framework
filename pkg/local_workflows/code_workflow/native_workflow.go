@@ -12,10 +12,10 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/error-catalog-golang-public/code"
+
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -32,6 +32,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	logger := invocationCtx.GetEnhancedLogger()
 	id := invocationCtx.GetWorkflowIdentifier()
 
+	output := []workflow.Data{}
 	path := config.GetString(configuration.INPUT_DIRECTORY)
 
 	logger.Debug().Msgf("Path: %s", path)
@@ -53,19 +54,14 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	}
 
 	if result == nil {
-		summary := json_schemas.NewTestSummary("sast")
-		summaryData, summaryDataErr := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
-		if summaryDataErr != nil {
-			return nil, summaryDataErr
+		result = &sarif.SarifResponse{}
+	} else {
+		sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
+		if err != nil {
+			return nil, err
 		}
 
-		summaryData.AddError(code.NewUnsupportedProjectError(""))
-		return []workflow.Data{summaryData}, nil
-	}
-
-	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
-	if err != nil {
-		return nil, err
+		output = append(output, sarifData)
 	}
 
 	summary := sarif2.CreateCodeSummary(&result.Sarif)
@@ -74,7 +70,13 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	return []workflow.Data{sarifData, summaryData}, nil
+	// Check for empty summary
+	if summary.Artifacts == 0 {
+		summaryData.AddError(code.NewUnsupportedProjectError("Snyk was unable to find supported files."))
+	}
+	output = append(output, summaryData)
+
+	return output, nil
 }
 
 // default function that uses the code-client-go library
