@@ -27,7 +27,9 @@ type InstrumentationCollector interface {
 	SetDuration(duration time.Duration)
 	SetStage(s string)
 	SetType(t string)
+	SetInteractionType(t string)
 	SetCategory(c []string)
+	GetCategory() []string
 	SetStatus(s Status)
 	SetTestSummary(s json_schemas.TestSummary)
 	SetTargetId(t string) // maybe use package-url library and types
@@ -38,7 +40,9 @@ type InstrumentationCollector interface {
 var _ InstrumentationCollector = (*instrumentationCollectorImpl)(nil)
 
 func NewInstrumentationCollector() InstrumentationCollector {
-	return &instrumentationCollectorImpl{}
+	return &instrumentationCollectorImpl{
+		extension: make(map[string]interface{}),
+	}
 }
 
 type instrumentationCollectorImpl struct {
@@ -48,6 +52,7 @@ type instrumentationCollectorImpl struct {
 	duration            time.Duration
 	stage               string
 	instrumentationType string
+	interactionType     string
 	category            []string
 	status              Status
 	testSummary         json_schemas.TestSummary
@@ -80,8 +85,16 @@ func (ic *instrumentationCollectorImpl) SetType(t string) {
 	ic.instrumentationType = t
 }
 
+func (ic *instrumentationCollectorImpl) SetInteractionType(t string) {
+	ic.interactionType = t
+}
+
 func (ic *instrumentationCollectorImpl) SetCategory(c []string) {
 	ic.category = c
+}
+
+func (ic *instrumentationCollectorImpl) GetCategory() []string {
+	return ic.category
 }
 
 func (ic *instrumentationCollectorImpl) SetStatus(s Status) {
@@ -101,9 +114,6 @@ func (ic *instrumentationCollectorImpl) AddError(err error) {
 }
 
 func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) {
-	if ic.extension == nil {
-		ic.extension = make(map[string]interface{})
-	}
 	ic.extension[key] = value
 }
 
@@ -149,7 +159,7 @@ func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 		Status:      string(ic.status),
 		Target:      api.Target{Id: ic.targetId},
 		TimestampMs: ic.timestamp.UnixMilli(),
-		Type:        ic.instrumentationType,
+		Type:        ic.interactionType,
 	}
 }
 

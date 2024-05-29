@@ -185,3 +185,18 @@ var KNOWN_FLAGS = []string{
 	"vuln-endpoint",
 	"yarn-workspaces",
 }
+
+func ToProductCodename(product string) string {
+	switch product {
+	case "Snyk Open Source":
+		return "oss"
+	case "Snyk Code":
+		return "code"
+	case "Snyk IAC", "Snyk IaC":
+		return "iac"
+	case "Snyk Container":
+		return "container"
+	default:
+		return ""
+	}
+}
