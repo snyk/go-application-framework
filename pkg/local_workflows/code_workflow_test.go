@@ -159,14 +159,14 @@ func Test_Code_legacyImplementation_experimentalFlagAndReport(t *testing.T) {
 }
 
 func Test_Code_nativeImplementation_happyPath(t *testing.T) {
-	numberOfArtefacts := rand.Int()
+	numberOfArtifacts := rand.Int()
 	expectedSummary := json_schemas.TestSummary{
 		Results: []json_schemas.TestSummaryResult{
 			{Severity: "high", Total: 3, Open: 2, Ignored: 1},
 			{Severity: "medium", Total: 1, Open: 1},
 			{Severity: "low", Total: 1, Open: 0, Ignored: 1},
 		},
-		Artifacts: numberOfArtefacts,
+		Artifacts: numberOfArtifacts,
 	}
 
 	expectedRepoUrl := "https://hello.world"
@@ -204,7 +204,7 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 								Lang        string `json:"lang"`
 								Type        string `json:"type"`
 							}{{
-								Files:       numberOfArtefacts,
+								Files:       numberOfArtifacts,
 								IsSupported: true,
 								Lang:        "",
 								Type:        "",
