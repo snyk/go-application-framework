@@ -56,9 +56,9 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	if result == nil {
 		result = &sarif.SarifResponse{}
 	} else {
-		sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
-		if err != nil {
-			return nil, err
+		sarifData, sarifError := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
+		if sarifError != nil {
+			return nil, sarifError
 		}
 
 		output = append(output, sarifData)
