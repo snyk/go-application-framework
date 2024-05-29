@@ -33,6 +33,7 @@ func CreateCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
 
 	summary := json_schemas.NewTestSummary(summaryType)
 	resultMap := map[string]*json_schemas.TestSummaryResult{}
+
 	summary.SeverityOrderAsc = []string{"low", "medium", "high"}
 
 	for _, run := range input.Runs {
@@ -50,6 +51,12 @@ func CreateCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
 				resultMap[severity].Ignored++
 			} else {
 				resultMap[severity].Open++
+			}
+		}
+
+		for _, coverage := range run.Properties.Coverage {
+			if coverage.IsSupported {
+				summary.Artifacts += coverage.Files
 			}
 		}
 	}

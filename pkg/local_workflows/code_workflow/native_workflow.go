@@ -11,6 +11,7 @@ import (
 	codeclienthttp "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/error-catalog-golang-public/code"
 
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -31,6 +32,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	logger := invocationCtx.GetEnhancedLogger()
 	id := invocationCtx.GetWorkflowIdentifier()
 
+	output := []workflow.Data{}
 	path := config.GetString(configuration.INPUT_DIRECTORY)
 
 	logger.Debug().Msgf("Path: %s", path)
@@ -46,13 +48,20 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	}
 
 	result, err := analyzeFnc(target, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config)
-	if err != nil || result == nil {
+
+	if err != nil {
 		return nil, err
 	}
 
-	sarifData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
-	if err != nil {
-		return nil, err
+	if result == nil {
+		result = &sarif.SarifResponse{}
+	} else {
+		sarifData, sarifError := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
+		if sarifError != nil {
+			return nil, sarifError
+		}
+
+		output = append(output, sarifData)
 	}
 
 	summary := sarif2.CreateCodeSummary(&result.Sarif)
@@ -61,7 +70,13 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		return nil, err
 	}
 
-	return []workflow.Data{sarifData, summaryData}, nil
+	// Check for empty summary
+	if summary.Artifacts == 0 {
+		summaryData.AddError(code.NewUnsupportedProjectError("Snyk was unable to find supported files."))
+	}
+	output = append(output, summaryData)
+
+	return output, nil
 }
 
 // default function that uses the code-client-go library

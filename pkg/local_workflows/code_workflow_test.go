@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
@@ -157,12 +159,14 @@ func Test_Code_legacyImplementation_experimentalFlagAndReport(t *testing.T) {
 }
 
 func Test_Code_nativeImplementation_happyPath(t *testing.T) {
+	numberOfArtifacts := rand.Int()
 	expectedSummary := json_schemas.TestSummary{
 		Results: []json_schemas.TestSummaryResult{
 			{Severity: "high", Total: 3, Open: 2, Ignored: 1},
 			{Severity: "medium", Total: 1, Open: 1},
 			{Severity: "low", Total: 1, Open: 0, Ignored: 1},
 		},
+		Artifacts: numberOfArtifacts,
 	}
 
 	expectedRepoUrl := "https://hello.world"
@@ -192,6 +196,19 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 						Results: []sarif.Result{
 							{Level: "error"},
 							{Level: "warning"},
+						},
+						Properties: sarif.RunProperties{
+							Coverage: []struct {
+								Files       int    `json:"files"`
+								IsSupported bool   `json:"isSupported"`
+								Lang        string `json:"lang"`
+								Type        string `json:"type"`
+							}{{
+								Files:       numberOfArtifacts,
+								IsSupported: true,
+								Lang:        "",
+								Type:        "",
+							}},
 						},
 					},
 					{
@@ -232,6 +249,7 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 				}
 			}
 			assert.Equal(t, len(expectedSummary.Results), count)
+			assert.Equal(t, expectedSummary.Artifacts, actualSummary.Artifacts)
 		} else if v.GetContentType() == content_type.SARIF_JSON {
 			_, ok := v.GetPayload().([]byte)
 			assert.True(t, ok)
@@ -259,4 +277,73 @@ func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
 	rs, err := code_workflow.EntryPointNative(invocationContext, analysisFunc)
 	assert.Error(t, err)
 	assert.Nil(t, rs)
+}
+
+func Test_Code_nativeImplementation_analysisNil(t *testing.T) {
+	config := configuration.NewInMemory()
+	networkAccess := networking.NewNetworkAccess(config)
+
+	mockController := gomock.NewController(t)
+	invocationContext := mocks.NewMockInvocationContext(mockController)
+	invocationContext.EXPECT().GetConfiguration().Return(config)
+	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
+	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
+	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+		return nil, nil //nolint:nilnil // whilst this fails linting it does represent a potential outcome state
+	}
+
+	rs, err := code_workflow.EntryPointNative(invocationContext, analysisFunc)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rs), 1)
+
+	dataErrors := rs[0].GetErrorList()
+	assert.Equal(t, len(dataErrors), 1)
+	assert.Equal(t, dataErrors[0].ErrorCode, code.NewUnsupportedProjectError("").ErrorCode)
+}
+
+func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
+	config := configuration.NewInMemory()
+	networkAccess := networking.NewNetworkAccess(config)
+
+	mockController := gomock.NewController(t)
+	invocationContext := mocks.NewMockInvocationContext(mockController)
+	invocationContext.EXPECT().GetConfiguration().Return(config)
+	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
+	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
+	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+		response := &sarif.SarifResponse{
+			Sarif: sarif.SarifDocument{
+				Runs: []sarif.Run{
+					{
+						Properties: sarif.RunProperties{
+							Coverage: []struct {
+								Files       int    `json:"files"`
+								IsSupported bool   `json:"isSupported"`
+								Lang        string `json:"lang"`
+								Type        string `json:"type"`
+							}{{
+								Files:       0,
+								IsSupported: false,
+								Lang:        "",
+								Type:        "",
+							}},
+						},
+					},
+				},
+			},
+		}
+		return response, nil
+	}
+
+	rs, err := code_workflow.EntryPointNative(invocationContext, analysisFunc)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rs), 2)
+
+	dataErrors := rs[1].GetErrorList()
+	assert.Equal(t, len(dataErrors), 1)
+	assert.Equal(t, dataErrors[0].ErrorCode, code.NewUnsupportedProjectError("").ErrorCode)
 }

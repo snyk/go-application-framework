@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -32,6 +33,8 @@ type Data interface {
 	GetContentType() string
 	GetContentLocation() string
 	SetContentLocation(string)
+	AddError(err snyk_errors.Error)
+	GetErrorList() []snyk_errors.Error
 }
 
 // InvocationContext is an interface that wraps various context information that is passed to a workflow when it is invoked.

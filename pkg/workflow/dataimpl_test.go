@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,6 +15,13 @@ func Test_NewDataFromInput(t *testing.T) {
 
 	input := NewData(NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata"), expectedContentType, []byte{})
 	input.SetContentLocation(expectedContentLocation)
+	input.AddError(snyk_errors.Error{
+		Title:          "Generic but helpful error message",
+		Classification: "ACTIONABLE",
+		Level:          "warning",
+		Detail:         "Error code detail",
+		Links:          []string{"https://docs.snyk.io/\n"},
+	})
 
 	output := NewDataFromInput(input, NewTypeIdentifier(NewWorkflowIdentifier("yourcommand"), "yourdata"), expectedContentType2, []byte{})
 
@@ -29,6 +37,7 @@ func Test_NewDataFromInput(t *testing.T) {
 
 	assert.Equal(t, expectedContentType, input.GetContentType())
 	assert.Equal(t, expectedContentType2, output.GetContentType())
+	assert.Equal(t, input.GetErrorList(), output.GetErrorList())
 
 	fmt.Println(input)
 	fmt.Println(output)

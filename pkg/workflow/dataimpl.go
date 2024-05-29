@@ -3,7 +3,10 @@ package workflow
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
+
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
 
 // DataImpl is the default implementation of the Data interface.
@@ -11,6 +14,7 @@ type DataImpl struct {
 	identifier Identifier
 	header     http.Header
 	payload    interface{}
+	errors     []snyk_errors.Error
 }
 
 const (
@@ -19,6 +23,8 @@ const (
 )
 
 // NewDataFromInput creates a new data instance from the given input data.
+//
+// It will preserve the headers, metadata and errors
 func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string, payload interface{}) Data {
 	if len(typeIdentifier.Path) <= 0 {
 		panic("Given identifier is not a type identifier")
@@ -31,6 +37,8 @@ func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string,
 		Content_type_key: {contentType},
 	}
 
+	var errors []snyk_errors.Error
+
 	if input != nil {
 		// derive fragment from input data if available
 		dataIdentifier.Fragment = input.GetIdentifier().Fragment
@@ -39,6 +47,8 @@ func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string,
 		if loc, err := input.GetMetaData(Content_location_key); err == nil {
 			header.Add(Content_location_key, loc)
 		}
+
+		errors = slices.Clone(input.GetErrorList())
 	} else {
 		// generate time based fragment
 		dataIdentifier.Fragment = fmt.Sprintf("%d", time.Now().Nanosecond())
@@ -48,6 +58,7 @@ func NewDataFromInput(input Data, typeIdentifier Identifier, contentType string,
 		identifier: &dataIdentifier,
 		header:     header,
 		payload:    payload,
+		errors:     errors,
 	}
 
 	return output
@@ -114,4 +125,12 @@ func (d *DataImpl) SetContentLocation(location string) {
 // String returns a string representation of the given data instance.
 func (d *DataImpl) String() string {
 	return fmt.Sprintf("{DataImpl, id: \"%s\", content-type: \"%s\"}", d.identifier.String(), d.GetContentType())
+}
+
+func (d *DataImpl) GetErrorList() []snyk_errors.Error {
+	return d.errors
+}
+
+func (d *DataImpl) AddError(err snyk_errors.Error) {
+	d.errors = append(d.errors, err)
 }
