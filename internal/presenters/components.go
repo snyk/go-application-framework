@@ -22,7 +22,7 @@ func errorLevelToStyle(errLevel string) lipgloss.Style {
 
 	if errLevel == "warn" {
 		style.
-			Background(lipgloss.AdaptiveColor{Light: "11", Dark: "3"}).
+			Background(lipgloss.Color("3")).
 			Foreground(lipgloss.Color("0"))
 	}
 
@@ -56,7 +56,7 @@ func RenderError(err snyk_errors.Error) string {
 
 	title := renderBold(strings.TrimSpace(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode))
 
-	return "" + backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
+	return backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
 		strings.Join(body, "\n")
 }
 
