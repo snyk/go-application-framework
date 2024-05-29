@@ -13,19 +13,53 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
+func errorLevelToStyle(errLevel string) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		PaddingLeft(1).
+		PaddingRight(1).
+		Background(lipgloss.Color("1")).
+		Foreground(lipgloss.Color("15"))
+
+	if errLevel == "warn" {
+		style.
+			Background(lipgloss.AdaptiveColor{Light: "11", Dark: "3"}).
+			Foreground(lipgloss.Color("0"))
+
+	}
+
+	return style
+}
+
 func RenderError(err snyk_errors.Error) string {
-	level := fmt.Sprintf("%-6s", strings.ToUpper(err.Level))
-	infoLabel := lipgloss.NewStyle().Width(8).Render("Info:")
-	infoValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(err.Detail)
+	level := strings.ToUpper(err.Level)
 
-	helpLabel := lipgloss.NewStyle().Width(8).Render("Help:")
-	helpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(strings.Join(err.Links, "\n"))
+	backgroundHighlight := errorLevelToStyle(err.Level)
 
-	backgroundHighlight := lipgloss.NewStyle().PaddingLeft(1).Background(lipgloss.Color("red")).PaddingRight(1)
+	var body []string
 
-	return "" + backgroundHighlight.Render(level) + " " + backgroundHighlight.Render(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode) + "\n" +
-		lipgloss.JoinHorizontal(lipgloss.Top, infoLabel, infoValue) + "\n" +
-		lipgloss.JoinHorizontal(lipgloss.Top, helpLabel, helpValue)
+	if len(err.Detail) > 0 {
+		infoLabel := lipgloss.NewStyle().Width(8).Render("Info:")
+		infoValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(err.Detail)
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top, infoLabel, infoValue))
+	}
+
+	if err.StatusCode > 0 {
+		httpLabel := lipgloss.NewStyle().Width(8).Render("HTTP:")
+		httpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(strconv.Itoa(err.StatusCode))
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top, httpLabel, httpValue))
+	}
+
+	if len(err.Links) > 0 {
+		helpLabel := lipgloss.NewStyle().Width(8).Render("Help:")
+		helpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(strings.Join(err.Links, "\n"))
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top, helpLabel, helpValue))
+	}
+
+	title := renderBold(strings.TrimSpace(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode))
+
+	return "" + backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
+		strings.Join(body, "\n")
+
 }
 
 func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApplied bool) string {
