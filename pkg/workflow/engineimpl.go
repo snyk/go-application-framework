@@ -272,8 +272,9 @@ func (e *EngineImpl) GetAnalytics() analytics.Analytics {
 // GetNetworkAccess returns the network access object.
 func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
 	if e.networkAccess == nil {
+		logger := e.logger.With().Str("ext", "networking").Logger()
 		e.networkAccess = networking.NewNetworkAccess(e.config)
-		e.networkAccess.SetLogger(e.logger)
+		e.networkAccess.SetLogger(&logger)
 	}
 
 	return e.networkAccess
