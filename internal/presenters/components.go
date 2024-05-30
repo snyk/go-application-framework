@@ -158,7 +158,9 @@ func getFormattedProperties(properties []FindingProperty) string {
 }
 
 func RenderTip(str string) string {
-	return fmt.Sprintf("\n💡 Tip\n\n   %s", str)
+	body := lipgloss.NewStyle().
+		PaddingLeft(3)
+	return fmt.Sprintf("\n💡 Tip\n\n%s", body.Render(str))
 }
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
