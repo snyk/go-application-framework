@@ -22,6 +22,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -184,8 +185,9 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
 	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
 		assert.Equal(t, expectedPath, target.GetPath())
 		assert.Equal(t, expectedRepoUrl, target.(*scan.RepositoryTarget).GetRepositoryUrl())
 
@@ -269,8 +271,9 @@ func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
 	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
 	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error) {
+	analysisFunc := func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error) {
 		return nil, fmt.Errorf("something went wrong")
 	}
 
@@ -289,8 +292,9 @@ func Test_Code_nativeImplementation_analysisNil(t *testing.T) {
 	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
 	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
 		return nil, nil //nolint:nilnil // whilst this fails linting it does represent a potential outcome state
 	}
 
@@ -313,8 +317,9 @@ func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 	invocationContext.EXPECT().GetNetworkAccess().Return(networkAccess)
 	invocationContext.EXPECT().GetEnhancedLogger().Return(&zerolog.Logger{})
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
+	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration) (*sarif.SarifResponse, error) {
+	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
 		response := &sarif.SarifResponse{
 			Sarif: sarif.SarifDocument{
 				Runs: []sarif.Run{
