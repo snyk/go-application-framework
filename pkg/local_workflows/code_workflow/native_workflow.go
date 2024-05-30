@@ -16,6 +16,7 @@ import (
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -24,7 +25,45 @@ const (
 	RemoteRepoUrlFlagname = "remote-repo-url"
 )
 
-type OptionalAnalysisFunctions func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration) (*sarif.SarifResponse, error)
+type OptionalAnalysisFunctions func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
+
+type ProgressTrackerFactory struct {
+	userInterface ui.UserInterface
+	logger        *zerolog.Logger
+}
+
+func (p ProgressTrackerFactory) GenerateTracker() scan.Tracker {
+	return &ProgressTrackerAdapter{
+		bar:    p.userInterface.NewProgressBar(),
+		logger: p.logger,
+	}
+}
+
+type ProgressTrackerAdapter struct {
+	bar    ui.ProgressBar
+	logger *zerolog.Logger
+}
+
+func (p ProgressTrackerAdapter) Begin(title, message string) {
+	if len(message) > 0 {
+		p.bar.SetTitle(title + " - " + message)
+	} else {
+		p.bar.SetTitle(title)
+	}
+
+	err := p.bar.UpdateProgress(ui.InfiniteProgress)
+	if err != nil {
+		p.logger.Err(err).Msg("Failed to update progress")
+	}
+}
+
+func (p ProgressTrackerAdapter) End(message string) {
+	p.bar.SetTitle(message)
+	err := p.bar.Clear()
+	if err != nil {
+		p.logger.Err(err).Msg("Failed to clear progress")
+	}
+}
 
 func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...OptionalAnalysisFunctions) ([]workflow.Data, error) {
 	// get necessary objects from invocation context
@@ -47,7 +86,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		logger.Warn().Err(err)
 	}
 
-	result, err := analyzeFnc(target, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config)
+	result, err := analyzeFnc(target, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface())
 
 	if err != nil {
 		return nil, err
@@ -80,7 +119,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 }
 
 // default function that uses the code-client-go library
-func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration) (*sarif.SarifResponse, error) {
+func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, error) {
 	var result *sarif.SarifResponse
 
 	interactionId, err := uuid.GenerateUUID()
@@ -104,10 +143,17 @@ func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Clie
 	codeScannerConfig := &codeClientConfig{
 		localConfiguration: config,
 	}
+
+	progressFactory := ProgressTrackerFactory{
+		userInterface: userInterface,
+		logger:        logger,
+	}
+
 	codeScanner := codeclient.NewCodeScanner(
 		codeScannerConfig,
 		httpClient,
 		codeclient.WithLogger(logger),
+		codeclient.WithTrackerFactory(progressFactory),
 	)
 
 	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
