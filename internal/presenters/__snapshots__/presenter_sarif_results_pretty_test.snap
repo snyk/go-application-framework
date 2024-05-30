@@ -300,8 +300,8 @@ Ignored Issues
 
 💡 Tip
 
-   Ignores are currently managed in the Snyk Web UI.
-To edit or remove the ignore please go to: https://app.snyk.io/
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
 
 ╭─────────────────────────────────────────────────────╮
 │ Test Summary                                        │
@@ -345,8 +345,8 @@ Ignored Issues
                              
 💡 Tip
 
-   Ignores are currently managed in the Snyk Web UI.
-To edit or remove the ignore please go to: https://app.snyk.io/
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
 
 ╭─────────────────────────────────────────────────────╮
 │ Test Summary                                        │
@@ -389,8 +389,8 @@ Open Issues
 💡 Tip
 
    You are currently viewing results with --severity-threshold=high applied.
-To view all issues, remove the --severity-threshold flag
-
+   To view all issues, remove the --severity-threshold flag                 
+                                                                            
 ╭──────────────────────────────────────────────╮
 │ Test Summary                                 │
 │                                              │
