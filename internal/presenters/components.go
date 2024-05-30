@@ -30,28 +30,32 @@ func errorLevelToStyle(errLevel string) lipgloss.Style {
 }
 
 func RenderError(err snyk_errors.Error) string {
-	level := strings.ToUpper(err.Level)
-
-	backgroundHighlight := errorLevelToStyle(err.Level)
-
 	var body []string
 
+	level := strings.ToUpper(err.Level)
+	backgroundHighlight := errorLevelToStyle(err.Level)
+	label := lipgloss.NewStyle().Width(8)
+	value := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
+
 	if len(err.Detail) > 0 {
-		infoLabel := lipgloss.NewStyle().Width(8).Render("Info:")
-		infoValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(err.Detail)
-		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top, infoLabel, infoValue))
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Info:"),
+			value.Width(80).Render(err.Detail),
+		))
 	}
 
 	if err.StatusCode > 0 {
-		httpLabel := lipgloss.NewStyle().Width(8).Render("HTTP:")
-		httpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Width(80).Render(strconv.Itoa(err.StatusCode))
-		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top, httpLabel, httpValue))
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("HTTP:"),
+			value.Render(strconv.Itoa(err.StatusCode)),
+		))
 	}
 
 	if len(err.Links) > 0 {
-		helpLabel := lipgloss.NewStyle().Width(8).Render("Help:")
-		helpValue := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).Render(strings.Join(err.Links, "\n"))
-		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top, helpLabel, helpValue))
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Help:"),
+			value.Render(strings.Join(err.Links, "\n")),
+		))
 	}
 
 	title := renderBold(strings.TrimSpace(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode))
