@@ -8,8 +8,61 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
+
+func errorLevelToStyle(errLevel string) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		PaddingLeft(1).
+		PaddingRight(1).
+		Background(lipgloss.Color("1")).
+		Foreground(lipgloss.Color("15"))
+
+	if errLevel == "warn" {
+		style.
+			Background(lipgloss.Color("3")).
+			Foreground(lipgloss.Color("0"))
+	}
+
+	return style
+}
+
+func RenderError(err snyk_errors.Error) string {
+	var body []string
+
+	level := strings.ToUpper(err.Level)
+	backgroundHighlight := errorLevelToStyle(err.Level)
+	label := lipgloss.NewStyle().Width(8)
+	value := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
+
+	if len(err.Detail) > 0 {
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Info:"),
+			value.Width(80).Render(err.Detail),
+		))
+	}
+
+	if err.StatusCode > 0 {
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("HTTP:"),
+			value.Render(strconv.Itoa(err.StatusCode)),
+		))
+	}
+
+	if len(err.Links) > 0 {
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Help:"),
+			value.Render(strings.Join(err.Links, "\n")),
+		))
+	}
+
+	title := renderBold(strings.TrimSpace(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode))
+
+	return "\n" + backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
+		strings.Join(body, "\n")
+}
 
 func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApplied bool) string {
 	if len(findings) == 0 {
@@ -17,7 +70,6 @@ func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApp
 	}
 
 	response := ""
-
 	response += RenderTitle("Open Issues")
 
 	for _, finding := range findings {
