@@ -102,7 +102,7 @@ func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApp
 			response += ignoredFindings
 		}
 
-		response += RenderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/") + "\n"
+		response += RenderTip("Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: "+RenderLink("https://app.snyk.io/")) + "\n"
 	}
 
 	return response
@@ -124,6 +124,12 @@ func RenderFinding(finding Finding) string {
 		),
 		properties,
 	}, "\n")
+}
+
+func RenderLink(str string) string {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("12")).
+		Render(str)
 }
 
 func RenderDivider() string {
@@ -158,7 +164,9 @@ func getFormattedProperties(properties []FindingProperty) string {
 }
 
 func RenderTip(str string) string {
-	return fmt.Sprintf("\n💡 Tip\n\n   %s", str)
+	body := lipgloss.NewStyle().
+		PaddingLeft(3)
+	return fmt.Sprintf("\n💡 Tip\n\n%s", body.Render(str))
 }
 
 func FilterSeverityASC(original []string, severityMinLevel string) []string {
