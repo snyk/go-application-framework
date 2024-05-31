@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	codeWorkflowName         = "code.test"
-	ConfigurationSastEnabled = "internal_sast_enabled"
+	codeWorkflowName                    = "code.test"
+	ConfigurationSastEnabled            = "internal_sast_enabled"
+	ConfigurationSastLocalEngineEnabled = "internal_sast_local_engine_enabled"
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -38,6 +39,28 @@ func GetCodeFlagSet() *pflag.FlagSet {
 
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
+
+func getSastLocalEngineEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		if existingValue != nil {
+			return existingValue
+		}
+
+		apiClient := api.NewApiInstance()
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := engine.GetConfiguration().GetString(configuration.API_URL)
+		org := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+		apiClient.Init(url, client)
+		response, err := apiClient.GetSastSettings(org)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return false
+		}
+
+		return response.LocalCodeEngine.Enabled
+	}
+	return callback
+}
 
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
@@ -72,6 +95,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 	}
 
 	engine.GetConfiguration().AddDefaultValue(ConfigurationSastEnabled, getSastEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(ConfigurationSastLocalEngineEnabled, getSastLocalEngineEnabled(engine))
 
 	return err
 }
@@ -83,13 +107,15 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	sastEnabled := config.GetBool(ConfigurationSastEnabled)
+	sastLocalEngineEnabled := config.GetBool(ConfigurationSastLocalEngineEnabled)
 	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	reportEnabled := config.GetBool("report")
 
 	logger.Debug().Msg("code workflow start")
-	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
-	logger.Debug().Msgf("Consistent Ignores: %v", ignoresFeatureFlag)
-	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
+	logger.Debug().Msgf("SAST Enabled:         %v", sastEnabled)
+	logger.Debug().Msgf("Local Engine enabled: %v", sastLocalEngineEnabled)
+	logger.Debug().Msgf("Consistent Ignores:   %v", ignoresFeatureFlag)
+	logger.Debug().Msgf("Report enabled:       %v", reportEnabled)
 
 	if !sastEnabled {
 		err = snyk_errors.Error{
@@ -102,7 +128,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		return result, err
 	}
 
-	if ignoresFeatureFlag && !reportEnabled {
+	if ignoresFeatureFlag && !reportEnabled && !sastLocalEngineEnabled {
 		logger.Debug().Msg("Implementation: Native")
 
 		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name", "target-file"}
