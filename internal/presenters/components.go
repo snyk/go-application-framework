@@ -109,16 +109,19 @@ func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApp
 }
 
 func RenderFinding(finding Finding) string {
-	titlePrefix := "✗ "
+	titlePrefix := " ✗ "
+	ignorePrefix := ""
 
 	if finding.Ignored {
-		titlePrefix = "! [ IGNORED ] "
+		titlePrefix = ""
+		ignorePrefix = " ! [ IGNORED ] "
 	}
 
 	properties := getFormattedProperties(finding.Properties)
 
 	return strings.Join([]string{
-		fmt.Sprintf(" %s %s",
+		fmt.Sprintf("%s%s %s",
+			ignorePrefix,
 			renderInSeverityColor(finding.Severity, fmt.Sprintf("%s[%s]", titlePrefix, strings.ToUpper(finding.Severity))),
 			renderBold(finding.Title),
 		),

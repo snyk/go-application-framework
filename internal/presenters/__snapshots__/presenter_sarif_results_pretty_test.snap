@@ -123,39 +123,39 @@ Testing /path/to/project ...
 
 [1mOpen Issues[0m
 
- [93m✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
+[93m ✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
    Path: app.js, line 63
    Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
 
- [93m✗ [MEDIUM][0m [1mInformation Exposure[0m
+[93m ✗ [MEDIUM][0m [1mInformation Exposure[0m
    Path: app.js, line 23
    Info: Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.
 
- [93m✗ [MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
+[93m ✗ [MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
    Path: routes/index.js, line 69
    Info: This endpoint handler performs a system command execution and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.
 
- [93m✗ [MEDIUM][0m [1mCross-Site Request Forgery (CSRF)[0m
+[93m ✗ [MEDIUM][0m [1mCross-Site Request Forgery (CSRF)[0m
    Path: app.js, line 23
    Info: CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.
 
- [93m✗ [MEDIUM][0m [1mUse of Hardcoded Credentials[0m
+[93m ✗ [MEDIUM][0m [1mUse of Hardcoded Credentials[0m
    Path: db.js, line 30
    Info: Do not hardcode passwords in code. Found hardcoded password used in password.
 
- [91m✗ [HIGH][0m [1mHardcoded Secret[0m
+[91m ✗ [HIGH][0m [1mHardcoded Secret[0m
    Path: app.js, line 60
    Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
 
- [91m✗ [HIGH][0m [1mNoSQL Injection[0m
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
    Path: routes/index.js, line 31
    Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
- [91m✗ [HIGH][0m [1mNoSQL Injection[0m
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
    Path: routes/index.js, line 108
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
- [91m✗ [HIGH][0m [1mNoSQL Injection[0m
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
    Path: routes/index.js, line 136
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
@@ -415,39 +415,39 @@ Open Issues
 
 [1mOpen Issues[0m
 
- [93m✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
+[93m ✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
    Path: app.js, line 63
    Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
 
- [93m✗ [MEDIUM][0m [1mInformation Exposure[0m
+[93m ✗ [MEDIUM][0m [1mInformation Exposure[0m
    Path: app.js, line 23
    Info: Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.
 
- [93m✗ [MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
+[93m ✗ [MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
    Path: routes/index.js, line 69
    Info: This endpoint handler performs a system command execution and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.
 
- [93m✗ [MEDIUM][0m [1mCross-Site Request Forgery (CSRF)[0m
+[93m ✗ [MEDIUM][0m [1mCross-Site Request Forgery (CSRF)[0m
    Path: app.js, line 23
    Info: CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.
 
- [93m✗ [MEDIUM][0m [1mUse of Hardcoded Credentials[0m
+[93m ✗ [MEDIUM][0m [1mUse of Hardcoded Credentials[0m
    Path: db.js, line 30
    Info: Do not hardcode passwords in code. Found hardcoded password used in password.
 
- [91m✗ [HIGH][0m [1mHardcoded Secret[0m
+[91m ✗ [HIGH][0m [1mHardcoded Secret[0m
    Path: app.js, line 60
    Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
 
- [91m✗ [HIGH][0m [1mNoSQL Injection[0m
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
    Path: routes/index.js, line 31
    Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
- [91m✗ [HIGH][0m [1mNoSQL Injection[0m
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
    Path: routes/index.js, line 108
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
- [91m✗ [HIGH][0m [1mNoSQL Injection[0m
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
    Path: routes/index.js, line 136
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
