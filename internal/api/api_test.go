@@ -34,6 +34,27 @@ func Test_GetDefaultOrgId_ReturnsCorrectOrgId(t *testing.T) {
 	assert.Equal(t, expectedOrgId, orgId)
 }
 
+func Test_GetSlugFromOrgId_ReturnsCorrectSlug(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	slugResponse := newMockOrgSlugResponse(t)
+	orgID := slugResponse.Data.Id
+	expectedSlug := slugResponse.Data.Attributes.Slug
+	u := fmt.Sprintf("/rest/orgs/%s?version=2024-03-12", orgID)
+
+	server := setupSingleReponseServer(t, u, slugResponse)
+	client := api.NewApi(server.URL, http.DefaultClient)
+
+	// Act
+	actualSlug, err := client.GetSlugFromOrgId(orgID)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Assert
+	assert.Equal(t, expectedSlug, actualSlug)
+}
+
 func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	// Arrange
 	t.Parallel()
@@ -94,6 +115,38 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 	actual, err := client.GetFeatureFlag(featureFlagName, org)
 	assert.NoError(t, err)
 	assert.True(t, actual)
+}
+
+func newMockOrgSlugResponse(t *testing.T) contract.GetOrganizationResponse {
+	t.Helper()
+	slugJson := `
+				{
+				  "data": {
+					"id": "be9221c6-5f63-4339-a07e-43d38b3ecb8b",
+					"type": "org",
+					"attributes": {
+					  "group_id": "b2374863-df81-46ba-85e2-d76b2b8dac4f",
+					  "is_personal": false,
+					  "name": "platform_hammerhead_testing",
+					  "slug": "platform_hammerhead_testing",
+					  "created_at": "2023-06-09T10:37:07Z",
+					  "updated_at": "2024-03-22T10:46:32Z"
+					}
+				  },
+				  "jsonapi": {
+					"version": "1.0"
+				  },
+				  "links": {
+					"self": "/rest/orgs/be9221c6-5f63-4339-a07e-43d38b3ecb8b?version=2023-05-29"
+				  }
+				}
+				`
+	var response contract.GetOrganizationResponse
+	err := json.Unmarshal([]byte(slugJson), &response)
+	if err != nil {
+		t.Fatal(errors.Wrap(err, "cannot create mock response"))
+	}
+	return response
 }
 
 func newMockOrgResponse(t *testing.T) contract.OrganizationsResponse {
