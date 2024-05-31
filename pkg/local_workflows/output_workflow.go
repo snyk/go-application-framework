@@ -207,7 +207,7 @@ func humanReadableSarifOutput(config configuration.Configuration, input []workfl
 
 	p := presenters.SarifTestResults(
 		sarif,
-		presenters.WithOrgName(config.GetString(configuration.ORGANIZATION)),
+		presenters.WithOrgName(config.GetString(configuration.ORGANIZATION_SLUG)),
 		presenters.WithTestPath(input[i].GetContentLocation()),
 		presenters.WithIgnored(includeIgnoredFindings),
 		presenters.WithSeverityThershold(config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)),

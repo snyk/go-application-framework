@@ -76,6 +76,7 @@ func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
+	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return("someDefaultOrgSlug", nil).Times(1)
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -97,6 +98,7 @@ func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).Times(1)
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
+	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(orgName, nil).Times(1)
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
