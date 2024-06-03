@@ -67,7 +67,6 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			_, err := uuid.Parse(orgId)
 			isSlugName := err != nil
 			if isSlugName {
-				config.Set("ORGANIZATION_SLUG", existingString)
 				orgId, err = apiClient.GetOrgIdFromSlug(existingString)
 				if err != nil {
 					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
@@ -83,12 +82,6 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
-
-		slugName, err := apiClient.GetSlugFromOrgId(orgId)
-		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
-		}
-		config.Set("ORGANIZATION_SLUG", slugName)
 
 		return orgId
 	}
