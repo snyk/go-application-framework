@@ -40,7 +40,9 @@ func Test_RenderError(t *testing.T) {
 	t.Run("with links", func(t *testing.T) {
 		lipgloss.SetColorProfile(termenv.TrueColor)
 		lipgloss.SetHasDarkBackground(false)
-		output := RenderError(snyk.NewServerError("An error"))
+		err := snyk.NewServerError("An error")
+		err.Links = append(err.Links, "https://docs.snyk.io/getting-started/supported-languages-frameworks-and-feature-availability-overview#code-analysis-snyk-code")
+		output := RenderError(err)
 
 		assert.Contains(t, output, "Help:")
 		snaps.MatchSnapshot(t, output)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
@@ -40,7 +41,7 @@ func RenderError(err snyk_errors.Error) string {
 	if len(err.Detail) > 0 {
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
 			label.Render("Info:"),
-			value.Width(80).Render(err.Detail),
+			value.Copy().Width(80).Render(err.Detail),
 		))
 	}
 
