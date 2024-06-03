@@ -62,14 +62,14 @@ func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 			flagName := strings.TrimLeft(flagParts[0], "-")
 
 			if slices.Contains(flagsAllowList, flagName) {
-				flags = append(flags, flagName)
+				flags = append(flags, strings.ToLower(flagName))
 			}
 		} else if slices.Contains(knownCommands, arg) {
 			if len(commands) == 0 && arg == "test" {
 				result = append(commands, productFallback)
 			}
 
-			commands = append(commands, arg)
+			commands = append(commands, strings.ToLower(arg))
 		}
 	}
 
