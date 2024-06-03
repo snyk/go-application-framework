@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
 
 	api "github.com/snyk/go-application-framework/internal/api/clients"
@@ -180,7 +181,11 @@ func Test_InstrumentationCollector(t *testing.T) {
 		mockError := fmt.Errorf("oops")
 		ic.AddError(mockError)
 
-		expectedV2InstrumentationObject.Data.Attributes.Interaction.Errors = toInteractionErrors([]error{mockError})
+		snykError := snyk.NewBadRequestError("")
+		ic.AddError(snykError)
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Errors = toInteractionErrors([]error{mockError, snykError})
+		assert.Equal(t, 1, len(*expectedV2InstrumentationObject.Data.Attributes.Interaction.Errors))
 
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
 		assert.NoError(t, err)

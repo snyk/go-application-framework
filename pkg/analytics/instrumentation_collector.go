@@ -25,6 +25,7 @@ type InstrumentationCollector interface {
 	SetInteractionId(id string)
 	SetTimestamp(t time.Time)
 	SetDuration(duration time.Duration)
+	GetDuration() time.Duration
 	SetStage(s string)
 	SetType(t string)
 	SetInteractionType(t string)
@@ -75,6 +76,9 @@ func (ic *instrumentationCollectorImpl) SetTimestamp(t time.Time) {
 
 func (ic *instrumentationCollectorImpl) SetDuration(d time.Duration) {
 	ic.duration = d
+}
+func (ic *instrumentationCollectorImpl) GetDuration() time.Duration {
+	return ic.duration
 }
 
 func (ic *instrumentationCollectorImpl) SetStage(s string) {
@@ -228,13 +232,14 @@ func toInteractionErrors(errors []error) *[]api.InteractionError {
 
 func toInteractionError(e error) *api.InteractionError {
 	errorCatalogError := snyk_errors.Error{}
-	interactionError := api.InteractionError{}
+	var interactionError *api.InteractionError
 
 	if errors.As(e, &errorCatalogError) {
+		interactionError = &api.InteractionError{}
 		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
 		interactionError.Id = errorCatalogError.ErrorCode
 		interactionError.Code = &interactionErrorCode
 	}
 
-	return &interactionError
+	return interactionError
 }
