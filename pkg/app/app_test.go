@@ -64,7 +64,7 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	config.Set(configuration.ORGANIZATION, orgName)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
-	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	actualOrgSlug := config.GetString(configuration.INTERNAL_ORGANIZATION_SLUG)
 	assert.Equal(t, orgId, actualOrgId)
 	assert.Equal(t, orgName, actualOrgSlug)
 }
@@ -87,7 +87,7 @@ func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
-	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	actualOrgSlug := config.GetString(configuration.INTERNAL_ORGANIZATION_SLUG)
 	assert.Equal(t, defaultOrgId, actualOrgId)
 	assert.Equal(t, defaultOrgSlug, actualOrgSlug)
 }
@@ -113,7 +113,7 @@ func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
 	config.Set(configuration.ORGANIZATION, orgName)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
-	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	actualOrgSlug := config.GetString(configuration.INTERNAL_ORGANIZATION_SLUG)
 	assert.Equal(t, defaultOrgId, actualOrgId)
 	assert.Equal(t, orgName, actualOrgSlug)
 }

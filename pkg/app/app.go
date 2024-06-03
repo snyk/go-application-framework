@@ -43,12 +43,14 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient.Init(url, client)
-		orgId := config.Get(configuration.ORGANIZATION)
-		slugName, err := apiClient.GetSlugFromOrgId(orgId.(string))
+		orgId := config.GetString(configuration.ORGANIZATION)
+		slugName, err := apiClient.GetSlugFromOrgId(orgId)
 		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
+			logger.Print("Failed to determine default value for \"INTERNAL_ORGANIZATION_SLUG\":", err)
 		}
-
+		if len(slugName) == 0 {
+			return existingValue
+		}
 		return slugName
 	}
 	return callback
@@ -65,7 +67,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			_, err := uuid.Parse(orgId)
 			isSlugName := err != nil
 			if isSlugName {
-				config.Set("ORGANIZATION_SLUG", existingString)
+				config.Set("INTERNAL_ORGANIZATION_SLUG", existingString)
 				orgId, err = apiClient.GetOrgIdFromSlug(existingString)
 				if err != nil {
 					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
@@ -86,7 +88,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
-		config.Set("ORGANIZATION_SLUG", slugName)
+		config.Set("INTERNAL_ORGANIZATION_SLUG", slugName)
 
 		return orgId
 	}
@@ -157,7 +159,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, apiClient, logger))
-	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, apiClient, logger))
+	config.AddDefaultValue(configuration.INTERNAL_ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, apiClient, logger))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
 		if existingValue == nil {
