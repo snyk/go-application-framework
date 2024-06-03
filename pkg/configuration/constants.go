@@ -13,6 +13,7 @@ const (
 	INTEGRATION_ENVIRONMENT_VERSION string = "snyk_integration_environment_version"
 	ANALYTICS_DISABLED              string = "snyk_disable_analytics"
 	ORGANIZATION                    string = "org"
+	ORGANIZATION_SLUG               string = "internal_org_slug"
 	DEBUG                           string = "debug"
 	DEBUG_FORMAT                    string = "debug_format"
 	INSECURE_HTTPS                  string = "insecure"

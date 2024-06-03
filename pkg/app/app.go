@@ -38,6 +38,24 @@ func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config confi
 	return callback
 }
 
+func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient.Init(url, client)
+		orgId := config.GetString(configuration.ORGANIZATION)
+		if len(orgId) == 0 {
+			return existingValue
+		}
+		slugName, err := apiClient.GetSlugFromOrgId(orgId)
+		if err != nil {
+			logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
+		}
+		return slugName
+	}
+	return callback
+}
+
 func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		client := engine.GetNetworkAccess().GetHttpClient()
@@ -49,6 +67,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			_, err := uuid.Parse(orgId)
 			isSlugName := err != nil
 			if isSlugName {
+				config.Set("ORGANIZATION_SLUG", existingString)
 				orgId, err = apiClient.GetOrgIdFromSlug(existingString)
 				if err != nil {
 					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
@@ -64,6 +83,12 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
+
+		slugName, err := apiClient.GetSlugFromOrgId(orgId)
+		if err != nil {
+			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+		}
+		config.Set("ORGANIZATION_SLUG", slugName)
 
 		return orgId
 	}
@@ -134,6 +159,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, apiClient, logger))
+	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, apiClient, logger))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
 		if existingValue == nil {

@@ -110,6 +110,21 @@ func (mr *MockApiClientMockRecorder) GetSelf() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSelf", reflect.TypeOf((*MockApiClient)(nil).GetSelf))
 }
 
+// GetSlugFromOrgId mocks base method.
+func (m *MockApiClient) GetSlugFromOrgId(orgID string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSlugFromOrgId", orgID)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSlugFromOrgId indicates an expected call of GetSlugFromOrgId.
+func (mr *MockApiClientMockRecorder) GetSlugFromOrgId(orgID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlugFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetSlugFromOrgId), orgID)
+}
+
 // GetUserMe mocks base method.
 func (m *MockApiClient) GetUserMe() (string, error) {
 	m.ctrl.T.Helper()

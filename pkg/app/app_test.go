@@ -53,8 +53,9 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	// mock assertion
-	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
-	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).Times(1)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(orgId).Return(orgName, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -63,29 +64,35 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 	config.Set(configuration.ORGANIZATION, orgName)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
+	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
 	assert.Equal(t, orgId, actualOrgId)
+	assert.Equal(t, orgName, actualOrgSlug)
 }
 
-func Test_initConfiguration_useDefaultOrgId(t *testing.T) {
+func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 	defaultOrgId := "someDefaultOrgId"
+	defaultOrgSlug := "someDefaultOrgSlug"
 
 	// setup mock
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	// mock assertion
-	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
-	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(defaultOrgSlug, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
 	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
+	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
 	assert.Equal(t, defaultOrgId, actualOrgId)
+	assert.Equal(t, defaultOrgSlug, actualOrgSlug)
 }
 
-func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.T) {
+func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
 	orgName := "someOrgName"
 	defaultOrgId := "someDefaultOrgId"
 
@@ -94,9 +101,10 @@ func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	// mock assertion
-	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
-	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).Times(1)
-	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).Times(1)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(orgName, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -105,7 +113,9 @@ func Test_initConfiguration_useDefaultOrgIdWhenGetOrgIdFromSlugFails(t *testing.
 	config.Set(configuration.ORGANIZATION, orgName)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
+	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
 	assert.Equal(t, defaultOrgId, actualOrgId)
+	assert.Equal(t, orgName, actualOrgSlug)
 }
 
 func Test_initConfiguration_uuidOrgId(t *testing.T) {

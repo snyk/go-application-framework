@@ -16,6 +16,7 @@ import (
 type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)
 	GetOrgIdFromSlug(slugName string) (string, error)
+	GetSlugFromOrgId(orgID string) (string, error)
 	Init(url string, client *http.Client)
 	GetFeatureFlag(flagname string, origId string) (bool, error)
 	GetUserMe() (string, error)
@@ -23,9 +24,38 @@ type ApiClient interface {
 	GetSastSettings(orgId string) (contract.SastResponse, error)
 }
 
+var _ ApiClient = (*snykApiClient)(nil)
+
 type snykApiClient struct {
 	url    string
 	client *http.Client
+}
+
+// GetSlugFromOrgId retrieves the organization slug associated with a given Snyk organization ID.
+//
+// Parameters:
+//   - orgID (string): The UUID of the organization.
+//
+// Returns:
+//   - The organization slug as a string.
+//   - An error object (if the organization is not found, or if API request or response
+//     parsing errors occur).
+func (a *snykApiClient) GetSlugFromOrgId(orgID string) (string, error) {
+	endpoint := "/rest/orgs/" + orgID
+	version := "2024-03-12"
+
+	body, err := clientGet(a, endpoint, &version)
+	if err != nil {
+		return "", err
+	}
+
+	var response contract.GetOrganizationResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+
+	return response.Data.Attributes.Slug, nil
 }
 
 // GetOrgIdFromSlug retrieves the organization ID associated with a given Snyk organization slug.
