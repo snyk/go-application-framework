@@ -25,6 +25,7 @@ type InstrumentationCollector interface {
 	SetInteractionId(id string)
 	SetTimestamp(t time.Time)
 	SetDuration(duration time.Duration)
+	GetDuration() time.Duration
 	SetStage(s string)
 	SetType(t string)
 	SetInteractionType(t string)
@@ -75,6 +76,9 @@ func (ic *instrumentationCollectorImpl) SetTimestamp(t time.Time) {
 
 func (ic *instrumentationCollectorImpl) SetDuration(d time.Duration) {
 	ic.duration = d
+}
+func (ic *instrumentationCollectorImpl) GetDuration() time.Duration {
+	return ic.duration
 }
 
 func (ic *instrumentationCollectorImpl) SetStage(s string) {
