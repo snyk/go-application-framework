@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
+	"html/template"
 	"math/big"
 	"net"
 	"net/http"
@@ -45,6 +47,9 @@ var _ Authenticator = (*oAuth2Authenticator)(nil)
 
 var acceptedCallbackPorts = []int{8080, 18081, 28082, 38083, 48084}
 var globalRefreshMutex sync.Mutex
+
+//go:embed errorresponse.html
+var errorResponsePage string
 
 type oAuth2Authenticator struct {
 	httpClient         *http.Client
@@ -307,11 +312,31 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
 			details := html.EscapeString(r.URL.Query().Get("error_description"))
-			_, _ = fmt.Fprintf(w, "Failed to authenticate. (%s)\n%s", responseError, details)
+
+			tmpl := template.New("")
+			tmpl, tmplError := tmpl.Parse(errorResponsePage)
+			if tmplError != nil {
+				return
+			}
+
+			data := struct {
+				Reason      string
+				Description string
+			}{
+				Reason:      responseError,
+				Description: details,
+			}
+
+			tmplError = tmpl.Execute(w, data)
+			if tmplError != nil {
+				return
+			}
 		} else {
+			appUrl := o.config.GetString(configuration.WEB_APP_URL)
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
-			_, _ = fmt.Fprint(w, AUTHENTICATED_MESSAGE)
+			w.Header().Add("Location", appUrl+"/authenticated?type=oauth")
+			w.WriteHeader(http.StatusMovedPermanently)
 		}
 
 		go o.shutdownServerFunc(srv)

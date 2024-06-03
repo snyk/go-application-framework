@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication failed!</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f9f8fa;
+        }
+        .container {
+            text-align: center;
+            padding: 2em;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        .title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 0.5em;
+        }
+        .description {
+            font-size: 1em;
+            line-height: 2em;
+        }
+        .error {
+            font-size: 0.7em;
+            line-height: 2em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="title">Authentication failed!</div>
+    <div class="description">{{ .Description }}</div>
+    <div class="error">Error: {{ .Reason }}</div>
+</div>
+</body>
+</html>
