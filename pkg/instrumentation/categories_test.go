@@ -51,3 +51,12 @@ func TestCategorizeCliArgs(t *testing.T) {
 		})
 	}
 }
+
+func Test_DetermineCategoryFromArgs_casing(t *testing.T) {
+	args := []string{"application", "Test", "--My-name"}
+	commands := []string{"Test"}
+	flags := []string{"My-name"}
+	expected := []string{"test", "my-name"}
+	actual := DetermineCategoryFromArgs(args, commands, flags)
+	assert.Equal(t, expected, actual)
+}
