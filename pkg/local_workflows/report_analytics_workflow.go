@@ -122,6 +122,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			// convert scanDoneEvent payload to AnalyticsV2 payload
 			input, err = instrumentScanDoneEvent(invocationCtx, input)
 			if err != nil {
+				logger.Printf("Error converting v1 -> v2: %v\n", err)
 				return nil, err
 			}
 		}
@@ -162,7 +163,7 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 }
 
 func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) (workflow.Data, error) {
-	logger := invocationCtx.GetLogger()
+	logger := invocationCtx.GetEnhancedLogger()
 	config := invocationCtx.GetConfiguration()
 
 	ic := analytics.NewInstrumentationCollector()
@@ -184,7 +185,6 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 
 	err := json.Unmarshal(d, &scanDoneEvent)
 	if err != nil {
-		logger.Printf("Error unmarshalling json: %v\n", err)
 		return nil, err
 	}
 
