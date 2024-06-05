@@ -17,7 +17,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
-	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -225,7 +224,10 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 		return nil, err
 	}
 
-	v2InstrumentationData := utils.ValueOf(json.Marshal(data))
+	v2InstrumentationData, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
 
 	inputData := workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, "v2"),
