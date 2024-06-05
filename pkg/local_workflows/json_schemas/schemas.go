@@ -159,6 +159,7 @@ type ScanDoneEvent struct {
 			UniqueIssueCount              UniqueIssueCount `json:"unique_issue_count"`
 			DurationMs                    string           `json:"duration_ms"`
 			TimestampFinished             time.Time        `json:"timestamp_finished"`
+			Path                          string           `json:"path,omitempty"`
 		} `json:"attributes"`
 	} `json:"data"`
 }
