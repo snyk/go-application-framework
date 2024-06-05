@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -195,8 +196,8 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 		IntegrationVersion:            scanDoneEvent.Data.Attributes.IntegrationVersion,
 		IntegrationEnvironment:        scanDoneEvent.Data.Attributes.IntegrationEnvironment,
 		IntegrationEnvironmentVersion: scanDoneEvent.Data.Attributes.IntegrationEnvironmentVersion,
-		OS:                            scanDoneEvent.Data.Attributes.Os,
-		Arch:                          scanDoneEvent.Data.Attributes.Arch,
+		OS:                            runtime.GOOS,
+		Arch:                          runtime.GOARCH,
 	}
 	ic.SetUserAgent(userAgent)
 	ic.SetType(scanDoneEvent.Data.Type)
