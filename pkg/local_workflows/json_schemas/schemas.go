@@ -20,6 +20,10 @@ const ScanDoneEventSchema = `{
           "type": "string",
           "description": "The type of data (\"analytics\")."
         },
+		"path": {
+          "type": "string",
+          "description": "Path to the scanned folder."
+        },
         "attributes": {
           "type": "object",
           "required": [
