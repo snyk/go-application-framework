@@ -157,7 +157,6 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 
 	config.Set(configuration.ORGANIZATION, orgId)
 	config.Set(experimentalFlag, true)
-	config.Set(configuration.INPUT_DIRECTORY, "/my/file")
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -283,6 +282,7 @@ func testGetScanDonePayloadString() string {
 		"data": {
 			"type": "analytics",
 			"attributes": {
+				"path": "/my/file",
 				"device_id": "unique-uuid",
 				"application": "snyk-cli",
 				"application_version": "1.1233.0",
