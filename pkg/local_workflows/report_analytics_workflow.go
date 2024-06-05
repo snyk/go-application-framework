@@ -4,17 +4,21 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/spf13/pflag"
+	"github.com/xeipuuv/gojsonschema"
+
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
-	"github.com/xeipuuv/gojsonschema"
-	"net/http"
-	"strings"
-	"time"
 )
 
 var (
@@ -54,9 +58,9 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputData []workflow.Data) ([]workflow.Data, error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetLogger()
+	logger := invocationCtx.GetEnhancedLogger()
 
-	logger.Println(reportAnalyticsWorkflowName + " workflow start")
+	logger.Printf(reportAnalyticsWorkflowName + " workflow start")
 
 	if !config.GetBool(configuration.FLAG_EXPERIMENTAL) {
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
@@ -77,16 +81,17 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 	var err error
 	for i, input := range inputData {
-		logger.Printf(fmt.Sprintf("processing element %d", i))
+		logger.Printf("[%d] Processing element", i)
+
 		payload, ok := input.GetPayload().([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
 		}
 
+		version := 2
 		documentLoader := gojsonschema.NewBytesLoader(payload)
 
 		// check if payload is an analyticsV2 event
-		logger.Print("validating against schema: analyticsV2Event")
 		result, validationErr := gojsonschema.Validate(analyticsV2SchemaLoader, documentLoader)
 
 		if validationErr != nil {
@@ -95,8 +100,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 
 		if !result.Valid() {
-			logger.Print("validating against schema: scanDoneEvent")
-
 			// check if payload is a scanDone event (v1 analytics)
 			result, validationErr = gojsonschema.Validate(scanDoneSchemaLoader, documentLoader)
 
@@ -110,13 +113,21 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 				return nil, e
 			}
 
+			version = 1
+		}
+
+		logger.Printf("[%d] Schema Version: %d", i, version)
+
+		if version == 1 {
 			// convert scanDoneEvent payload to AnalyticsV2 payload
-			err = instrumentScanDoneEvent(invocationCtx, input)
+			input, err = instrumentScanDoneEvent(invocationCtx, input)
 			if err != nil {
+				logger.Printf("Error converting v1 -> v2: %v\n", err)
 				return nil, err
 			}
-			return nil, nil
 		}
+
+		logger.Printf("[%d] Data: %s", i, input.GetPayload())
 
 		// send to V2 analytics endpoint
 		callErr := callEndpoint(invocationCtx, input, url)
@@ -125,7 +136,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			return nil, err
 		}
 	}
-	logger.Println(reportAnalyticsWorkflowName + " workflow end")
+	logger.Printf(reportAnalyticsWorkflowName + " workflow end")
 	return nil, nil
 }
 
@@ -151,21 +162,30 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 	return nil
 }
 
-func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) error {
-	logger := invocationCtx.GetLogger()
-	a := invocationCtx.GetAnalytics()
-	ic := a.GetInstrumentation()
+func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input workflow.Data) (workflow.Data, error) {
+	logger := invocationCtx.GetEnhancedLogger()
+	config := invocationCtx.GetConfiguration()
+
+	ic := analytics.NewInstrumentationCollector()
+	ic.SetInteractionId(instrumentation.AssembleUrnFromUUID(uuid.NewString()))
 
 	var scanDoneEvent json_schemas.ScanDoneEvent
 	d, ok := input.GetPayload().([]byte)
 	if !ok {
-		return fmt.Errorf("invalid payload type: %T", input.GetPayload())
+		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
 	}
 
 	err := json.Unmarshal(d, &scanDoneEvent)
 	if err != nil {
-		logger.Printf("Error unmarshalling json: %v\n", err)
-		return err
+		return nil, err
+	}
+
+	if len(scanDoneEvent.Data.Attributes.Path) > 0 {
+		targetId, targetIdError := instrumentation.GetTargetId(scanDoneEvent.Data.Attributes.Path, instrumentation.AutoDetectedTargetId, instrumentation.WithConfiguredRepository(config))
+		if targetIdError != nil {
+			logger.Printf("Failed to derive target id, %v", targetIdError)
+		}
+		ic.SetTargetId(targetId)
 	}
 
 	// required v2 analytics parameters
@@ -176,8 +196,8 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 		IntegrationVersion:            scanDoneEvent.Data.Attributes.IntegrationVersion,
 		IntegrationEnvironment:        scanDoneEvent.Data.Attributes.IntegrationEnvironment,
 		IntegrationEnvironmentVersion: scanDoneEvent.Data.Attributes.IntegrationEnvironmentVersion,
-		OS:                            scanDoneEvent.Data.Attributes.Os,
-		Arch:                          scanDoneEvent.Data.Attributes.Arch,
+		OS:                            runtime.GOOS,
+		Arch:                          runtime.GOARCH,
 	}
 	ic.SetUserAgent(userAgent)
 	ic.SetType(scanDoneEvent.Data.Type)
@@ -200,7 +220,23 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 	ic.AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
 
-	return nil
+	data, err := analytics.GetV2InstrumentationObject(ic)
+	if err != nil {
+		return nil, err
+	}
+
+	v2InstrumentationData, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	inputData := workflow.NewData(
+		workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, "v2"),
+		"application/json",
+		v2InstrumentationData,
+	)
+
+	return inputData, nil
 }
 
 func toTestSummary(uic json_schemas.UniqueIssueCount, t string) json_schemas.TestSummary {
