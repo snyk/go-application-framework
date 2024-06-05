@@ -168,14 +168,6 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic := analytics.NewInstrumentationCollector()
 	ic.SetInteractionId(instrumentation.AssembleUrnFromUUID(uuid.NewString()))
 
-	if config.IsSet(configuration.INPUT_DIRECTORY) {
-		targetId, targetIdError := instrumentation.GetTargetId(config.GetString(configuration.INPUT_DIRECTORY), instrumentation.AutoDetectedTargetId, instrumentation.WithConfiguredRepository(config))
-		if targetIdError != nil {
-			logger.Printf("Failed to derive target id, %v", targetIdError)
-		}
-		ic.SetTargetId(targetId)
-	}
-
 	var scanDoneEvent json_schemas.ScanDoneEvent
 	d, ok := input.GetPayload().([]byte)
 	if !ok {
@@ -185,6 +177,14 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	err := json.Unmarshal(d, &scanDoneEvent)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(scanDoneEvent.Data.Attributes.Path) > 0 {
+		targetId, targetIdError := instrumentation.GetTargetId(scanDoneEvent.Data.Attributes.Path, instrumentation.AutoDetectedTargetId, instrumentation.WithConfiguredRepository(config))
+		if targetIdError != nil {
+			logger.Printf("Failed to derive target id, %v", targetIdError)
+		}
+		ic.SetTargetId(targetId)
 	}
 
 	// required v2 analytics parameters
