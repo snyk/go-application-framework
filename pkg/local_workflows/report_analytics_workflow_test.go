@@ -2,9 +2,11 @@ package localworkflows
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
+	"runtime"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -211,7 +213,7 @@ func testPayload(payload string) workflow.Data {
 }
 
 func testGetAnalyticsV2PayloadString() string {
-	return `{
+	return fmt.Sprintf(`{
   "data": {
     "attributes": {
       "interaction": {
@@ -267,14 +269,14 @@ func testGetAnalyticsV2PayloadString() string {
           "duration_ms": 1000
         },
         "platform": {
-          "arch": "ARM64",
-          "os": "macOS"
+          "arch": "%s",
+          "os": "%s"
         }
       }
     },
     "type": "analytics"
   }
-}`
+}`, runtime.GOARCH, runtime.GOOS)
 }
 
 func testGetScanDonePayloadString() string {
