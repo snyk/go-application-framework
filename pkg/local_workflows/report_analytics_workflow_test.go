@@ -323,6 +323,7 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *h
 		require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 		body, err := io.ReadAll(req.Body)
 
+		// used to replace whitespaces and uuids before comparing payloads
 		expression := regexp.MustCompile(`\s|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
 		require.NoError(t, err)
