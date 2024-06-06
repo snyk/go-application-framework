@@ -10,9 +10,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func GetKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
+func getKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
 	knownCommands := KNOWN_COMMANDS
-	knownFlags := KNOWN_FLAGS
+	knownFlags := known_flags
 
 	workflowIDs := engine.GetWorkflows()
 	for _, id := range workflowIDs {

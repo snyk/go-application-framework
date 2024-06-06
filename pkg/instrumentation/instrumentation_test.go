@@ -24,9 +24,9 @@ func Test_DetermineStage(t *testing.T) {
 func Test_GetKnownCommandsAndFlags(t *testing.T) {
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
-	actualCommands, actualFlags := GetKnownCommandsAndFlags(engine)
+	actualCommands, actualFlags := getKnownCommandsAndFlags(engine)
 	assert.Equal(t, KNOWN_COMMANDS, actualCommands)
-	assert.Equal(t, KNOWN_FLAGS, actualFlags)
+	assert.Equal(t, known_flags, actualFlags)
 }
 
 func Test_GetKnownCommandsAndFlags_Extension(t *testing.T) {
@@ -52,7 +52,7 @@ func Test_GetKnownCommandsAndFlags_Extension(t *testing.T) {
 	assert.NotNil(t, entry)
 	assert.NoError(t, err)
 
-	actualCommands, actualFlags := GetKnownCommandsAndFlags(engine)
+	actualCommands, actualFlags := getKnownCommandsAndFlags(engine)
 	assert.Contains(t, actualCommands, command1)
 	assert.Contains(t, actualCommands, command2)
 	assert.Contains(t, actualFlags, "ever")

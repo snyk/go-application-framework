@@ -3,6 +3,8 @@ package instrumentation
 import (
 	"slices"
 	"strings"
+
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // DetermineCategoryFromArgs categorizes command-line arguments into a structured slice.
@@ -28,7 +30,7 @@ import (
 //	args := []string{"cli", "scan", "--debug", "--"}
 //	knownCommands := []string{"scan", "build"}
 //	flagsAllowList := []string{"debug", "verbose"}
-//	result := DetermineCategoryFromArgs(args, knownCommands, flagsAllowList)
+//	result := determineCategoryFromArgs(args, knownCommands, flagsAllowList)
 //	// result: ["scan", "debug"]
 //
 // Parameters:
@@ -38,7 +40,7 @@ import (
 //
 // Returns:
 //   - A slice of strings containing the categorized arguments.
-func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllowList []string) []string {
+func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllowList []string) []string {
 	result := []string{}
 
 	if len(args) == 0 {
@@ -51,7 +53,7 @@ func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 
 	// Separate parsing of commands and flags to ensure correct ordering in the category vector
 	// regardless of how they are provided in the command line.
-	for _, arg := range args[1:] {
+	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
 			if arg == "--" {
 				break
@@ -79,7 +81,13 @@ func DetermineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 	return result
 }
 
+func DetermineCategory(args []string, engine workflow.Engine) []string {
+	knownCommands, knownFlags := getKnownCommandsAndFlags(engine)
+	return determineCategoryFromArgs(args, knownCommands, knownFlags)
+}
+
 var KNOWN_COMMANDS = []string{
+	"oss",
 	"test",
 	"code",
 	"monitor",
@@ -101,7 +109,7 @@ var KNOWN_COMMANDS = []string{
 	"update-exclude-policy",
 }
 
-var KNOWN_FLAGS = []string{
+var known_flags = []string{
 	"print-dep-paths",
 	"print-deps",
 	"max-depth",
