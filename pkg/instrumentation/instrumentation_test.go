@@ -25,8 +25,8 @@ func Test_GetKnownCommandsAndFlags(t *testing.T) {
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
 	actualCommands, actualFlags := GetKnownCommandsAndFlags(engine)
-	assert.Equal(t, KNOWN_COMMANDS, actualCommands)
-	assert.Equal(t, KNOWN_FLAGS, actualFlags)
+	assert.Equal(t, known_commands, actualCommands)
+	assert.Equal(t, known_flags, actualFlags)
 }
 
 func Test_GetKnownCommandsAndFlags_Extension(t *testing.T) {
