@@ -86,7 +86,7 @@ func DetermineCategory(args []string, engine workflow.Engine) []string {
 	return determineCategoryFromArgs(args, knownCommands, knownFlags)
 }
 
-var known_commands = []string{
+var KNOWN_COMMANDS = []string{
 	"oss",
 	"test",
 	"code",

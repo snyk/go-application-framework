@@ -44,7 +44,7 @@ func TestCategorizeCliArgs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Execute the function under test
-			categories := determineCategoryFromArgs(tc.args, known_commands, known_flags)
+			categories := determineCategoryFromArgs(tc.args, KNOWN_COMMANDS, known_flags)
 
 			// Assertions
 			assert.Equal(t, tc.expectedOutput, categories)

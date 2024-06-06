@@ -11,7 +11,7 @@ import (
 )
 
 func GetKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
-	knownCommands := known_commands
+	knownCommands := KNOWN_COMMANDS
 	knownFlags := known_flags
 
 	workflowIDs := engine.GetWorkflows()
