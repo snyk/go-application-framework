@@ -190,8 +190,8 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 
 	// required v2 analytics parameters
 	userAgent := networking.UserAgentInfo{
-		App:                           scanDoneEvent.Data.Attributes.Application,
-		AppVersion:                    scanDoneEvent.Data.Attributes.ApplicationVersion,
+		App:                           invocationCtx.GetRuntimeInfo().GetName(),
+		AppVersion:                    invocationCtx.GetRuntimeInfo().GetVersion(),
 		Integration:                   scanDoneEvent.Data.Attributes.IntegrationName,
 		IntegrationVersion:            scanDoneEvent.Data.Attributes.IntegrationVersion,
 		IntegrationEnvironment:        scanDoneEvent.Data.Attributes.IntegrationEnvironment,
