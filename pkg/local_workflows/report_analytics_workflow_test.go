@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 
 	"github.com/stretchr/testify/require"
 
@@ -174,6 +175,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	invocationContextMock.EXPECT().GetAnalytics().Return(a).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
 	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1233.0"))).AnyTimes()
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
@@ -286,8 +288,8 @@ func testGetScanDonePayloadString() string {
 			"attributes": {
 				"path": "/my/file",
 				"device_id": "unique-uuid",
-				"application": "snyk-cli",
-				"application_version": "1.1233.0",
+				"application": "Pycharm",
+				"application_version": "2023.1",
 				"os": "macOS",
 				"arch": "ARM64",
 				"integration_name": "IntelliJ",
