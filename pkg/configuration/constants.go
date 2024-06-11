@@ -27,7 +27,8 @@ const (
 	FIPS_ENABLED                    string = "gofips"
 	WORKING_DIRECTORY               string = "internal_working_dir"
 	IS_FEDRAMP                      string = "internal_is_fedramp"
-	UNKNOWN_ARGS                    string = "internal_unknown_arguments" // arguments unknown to the current application but maybe relevant for delegated application calls
+	UNKNOWN_ARGS                    string = "internal_unknown_arguments"        // arguments unknown to the current application but maybe relevant for delegated application calls
+	PREVIEW_FEATURES_ENABLED        string = "internal_preview_features_enabled" // boolean indicates if preview features shall be enabled
 	TIMEOUT                         string = "snyk_timeout_secs"
 
 	// feature flags

@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -122,6 +123,29 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
+func defaultPreviewFeaturesEnabled(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		if existingValue != nil {
+			return existingValue
+		}
+
+		ri := engine.GetRuntimeInfo()
+		if ri == nil {
+			return false
+		}
+
+		version := ri.GetVersion()
+
+		if strings.Contains(version, "-preview") || strings.Contains(version, "-dev") {
+			logger.Warn().Msg("Using a preview feature!")
+			return true
+		}
+
+		return false
+	}
+	return callback
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
 	if logger == nil {
@@ -172,6 +196,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, apiClient, logger))
+	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine, logger))
 }
 
 // CreateAppEngine creates a new workflow engine.
