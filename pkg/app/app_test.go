@@ -228,7 +228,7 @@ func Test_initConfiguration_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 	assert.False(t, consistentIgnores)
 }
 
-func Test_initConfiguration_IS_UNSTABLE_VERSION(t *testing.T) {
+func Test_initConfiguration_PREVIEW_FEATURES_ENABLED(t *testing.T) {
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
 

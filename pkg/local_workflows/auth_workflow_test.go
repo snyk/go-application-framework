@@ -81,7 +81,7 @@ func Test_auth_token(t *testing.T) {
 }
 
 func Test_autodetectAuth(t *testing.T) {
-	t.Run("in unstable versions, oauth by default", func(t *testing.T) {
+	t.Run("in preview versions, oauth by default", func(t *testing.T) {
 		expected := authTypeOAuth
 		config := configuration.NewInMemory()
 		config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
