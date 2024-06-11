@@ -130,6 +130,10 @@ func defaultIsUnstable(engine workflow.Engine) configuration.DefaultValueFunctio
 		}
 
 		ri := engine.GetRuntimeInfo()
+		if ri == nil {
+			return false
+		}
+
 		version := ri.GetVersion()
 
 		if strings.Contains(version, "-preview") || strings.Contains(version, "-dev") {
