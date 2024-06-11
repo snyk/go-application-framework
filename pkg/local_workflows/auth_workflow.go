@@ -86,7 +86,11 @@ func autoDetectAuthType(config configuration.Configuration) string {
 		return authTypeToken
 	}
 
-	return authTypeOAuth
+	if config.GetBool(configuration.IS_UNSTABLE_VERSION) {
+		return authTypeOAuth
+	}
+
+	return authTypeToken
 }
 
 func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {

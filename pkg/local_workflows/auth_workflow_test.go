@@ -80,9 +80,18 @@ func Test_auth_token(t *testing.T) {
 }
 
 func Test_autodetectAuth(t *testing.T) {
-	t.Run("oauth by default", func(t *testing.T) {
+	t.Run("in unstable versions, oauth by default", func(t *testing.T) {
 		expected := authTypeOAuth
 		config := configuration.NewInMemory()
+		config.Set(configuration.IS_UNSTABLE_VERSION, true)
+		actual := autoDetectAuthType(config)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("in stable versions, token by default", func(t *testing.T) {
+		expected := authTypeToken
+		config := configuration.NewInMemory()
+		config.Set(configuration.IS_UNSTABLE_VERSION, false)
 		actual := autoDetectAuthType(config)
 		assert.Equal(t, expected, actual)
 	})
