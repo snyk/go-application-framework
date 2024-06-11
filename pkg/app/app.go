@@ -123,7 +123,7 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
-func defaultIsUnstable(engine workflow.Engine) configuration.DefaultValueFunction {
+func defaultPreviewFeaturesEnabled(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		if existingValue != nil {
 			return existingValue
@@ -137,6 +137,7 @@ func defaultIsUnstable(engine workflow.Engine) configuration.DefaultValueFunctio
 		version := ri.GetVersion()
 
 		if strings.Contains(version, "-preview") || strings.Contains(version, "-dev") {
+			logger.Warn().Msg("Using a preview feature!")
 			return true
 		}
 
@@ -195,7 +196,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, apiClient, logger))
-	config.AddDefaultValue(configuration.IS_UNSTABLE_VERSION, defaultIsUnstable(engine))
+	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine, logger))
 }
 
 // CreateAppEngine creates a new workflow engine.

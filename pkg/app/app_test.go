@@ -240,22 +240,22 @@ func Test_initConfiguration_IS_UNSTABLE_VERSION(t *testing.T) {
 	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
 
 	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-preview.456")))
-	actual := config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	actual := config.GetBool(configuration.PREVIEW_FEATURES_ENABLED)
 	assert.True(t, actual)
 
 	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-dev.456")))
-	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	actual = config.GetBool(configuration.PREVIEW_FEATURES_ENABLED)
 	assert.True(t, actual)
 
 	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-rc.456")))
-	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	actual = config.GetBool(configuration.PREVIEW_FEATURES_ENABLED)
 	assert.False(t, actual)
 
 	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3")))
-	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	actual = config.GetBool(configuration.PREVIEW_FEATURES_ENABLED)
 	assert.False(t, actual)
 
-	config.Set(configuration.IS_UNSTABLE_VERSION, true)
-	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
+	actual = config.GetBool(configuration.PREVIEW_FEATURES_ENABLED)
 	assert.True(t, actual)
 }

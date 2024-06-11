@@ -86,7 +86,7 @@ func autoDetectAuthType(config configuration.Configuration) string {
 		return authTypeToken
 	}
 
-	if config.GetBool(configuration.IS_UNSTABLE_VERSION) {
+	if config.GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
 		return authTypeOAuth
 	}
 
