@@ -28,6 +28,7 @@ const (
 	WORKING_DIRECTORY               string = "internal_working_dir"
 	IS_FEDRAMP                      string = "internal_is_fedramp"
 	UNKNOWN_ARGS                    string = "internal_unknown_arguments" // arguments unknown to the current application but maybe relevant for delegated application calls
+	IS_UNSTABLE_VERSION             string = "internal_unstable_version"  // boolean indicates if the application version is considered unstable or not
 	TIMEOUT                         string = "snyk_timeout_secs"
 
 	// feature flags

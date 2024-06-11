@@ -227,3 +227,35 @@ func Test_initConfiguration_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 	consistentIgnores = config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	assert.False(t, consistentIgnores)
 }
+
+func Test_initConfiguration_IS_UNSTABLE_VERSION(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := workflow.NewWorkFlowEngine(config)
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+
+	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
+
+	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-preview.456")))
+	actual := config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	assert.True(t, actual)
+
+	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-dev.456")))
+	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	assert.True(t, actual)
+
+	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-rc.456")))
+	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	assert.False(t, actual)
+
+	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3")))
+	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	assert.False(t, actual)
+
+	config.Set(configuration.IS_UNSTABLE_VERSION, true)
+	actual = config.GetBool(configuration.IS_UNSTABLE_VERSION)
+	assert.True(t, actual)
+}

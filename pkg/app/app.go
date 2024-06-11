@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -122,6 +123,24 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
+func defaultIsUnstable(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		if existingValue != nil {
+			return existingValue
+		}
+
+		ri := engine.GetRuntimeInfo()
+		version := ri.GetVersion()
+
+		if strings.Contains(version, "-preview") || strings.Contains(version, "-dev") {
+			return true
+		}
+
+		return false
+	}
+	return callback
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
 	if logger == nil {
@@ -172,6 +191,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, apiClient, logger))
+	config.AddDefaultValue(configuration.IS_UNSTABLE_VERSION, defaultIsUnstable(engine))
 }
 
 // CreateAppEngine creates a new workflow engine.
