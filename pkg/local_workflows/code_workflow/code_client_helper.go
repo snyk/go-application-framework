@@ -30,16 +30,9 @@ func (c *codeClientConfig) SnykApi() string {
 }
 
 func (c *codeClientConfig) SnykCodeAnalysisTimeout() time.Duration {
-	var snykCodeTimeout time.Duration
-	var err error
-	env := c.localConfiguration.GetString(configuration.TIMEOUT)
-	if env == "" {
-		snykCodeTimeout = defaultSnykCodeTimeout
-	} else {
-		snykCodeTimeout, err = time.ParseDuration(env)
-		if err != nil {
-			snykCodeTimeout = defaultSnykCodeTimeout
-		}
+	if !c.localConfiguration.IsSet(configuration.TIMEOUT) {
+		return defaultSnykCodeTimeout
 	}
-	return snykCodeTimeout
+	timeoutInSeconds := c.localConfiguration.GetInt(configuration.TIMEOUT)
+	return time.Duration(timeoutInSeconds) * time.Second
 }
