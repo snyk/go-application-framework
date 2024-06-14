@@ -2,9 +2,12 @@ package code_workflow
 
 import (
 	"strings"
+	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+var defaultSnykCodeTimeout = 12 * time.Hour
 
 type codeClientConfig struct {
 	localConfiguration configuration.Configuration
@@ -24,4 +27,19 @@ func (c *codeClientConfig) SnykCodeApi() string {
 
 func (c *codeClientConfig) SnykApi() string {
 	return c.localConfiguration.GetString(configuration.API_URL)
+}
+
+func (c *codeClientConfig) SnykCodeAnalysisTimeout() time.Duration {
+	var snykCodeTimeout time.Duration
+	var err error
+	env := c.localConfiguration.GetString(configuration.TIMEOUT)
+	if env == "" {
+		snykCodeTimeout = defaultSnykCodeTimeout
+	} else {
+		snykCodeTimeout, err = time.ParseDuration(env)
+		if err != nil {
+			snykCodeTimeout = defaultSnykCodeTimeout
+		}
+	}
+	return snykCodeTimeout
 }
