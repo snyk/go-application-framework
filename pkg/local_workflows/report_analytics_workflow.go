@@ -132,8 +132,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		// send to V2 analytics endpoint
 		callErr := callEndpoint(invocationCtx, input, url)
 		if callErr != nil {
-			err := fmt.Errorf("error calling endpoint for input at index %d: %w", i, callErr)
-			return nil, err
+			logger.Printf("error calling endpoint for input at index %d: %v", i, callErr)
 		}
 	}
 	logger.Printf(reportAnalyticsWorkflowName + " workflow end")
