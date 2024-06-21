@@ -1,0 +1,14 @@
+emit:
+  - "@typespec/json-schema"
+  - "../../dist/lib/gotypes"
+options:
+  "@typespec/json-schema":
+    emitAllModels: true
+    emitAllRefs: true
+    file-type: "json"
+    emitter-output-dir: "{project-root}"
+    bundleId: "presentation.schema.json"
+  "../../dist/lib/gotypes":
+    emitAllModels: true
+    emitAllRefs: true
+    emitter-output-dir: "{project-root}"
