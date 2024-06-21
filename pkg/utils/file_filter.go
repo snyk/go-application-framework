@@ -1,15 +1,17 @@
 package utils
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/rs/zerolog"
-	"gopkg.in/yaml.v3"
-
 	gitignore "github.com/sabhiram/go-gitignore"
+	"golang.org/x/sync/semaphore"
+	"gopkg.in/yaml.v3"
 )
 
 type FileFilter struct {
@@ -80,15 +82,32 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 	// create pattern matcher used to match filesToFilter to glob patterns
 	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
-
 	go func() {
+		ctx := context.Background()
+		maxThreads := int64(runtime.NumCPU())
+		availableThreads := semaphore.NewWeighted(maxThreads)
+
 		defer close(filteredFilesCh)
+
 		// iterate the filesToFilter channel
 		for file := range filesCh {
-			// filesToFilter that do not match the glob pattern are filtered
-			if !globPatternMatcher.MatchesPath(file) {
-				filteredFilesCh <- file
+			err := availableThreads.Acquire(ctx, 1)
+			if err != nil {
+				fw.logger.Err(err).Msg("failed to limit threads")
 			}
+			go func(f string) {
+				defer availableThreads.Release(1)
+				// filesToFilter that do not match the glob pattern are filtered
+				if !globPatternMatcher.MatchesPath(f) {
+					filteredFilesCh <- f
+				}
+			}(file)
+		}
+
+		// wait until the last thread is done
+		err := availableThreads.Acquire(ctx, maxThreads)
+		if err != nil {
+			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
 	}()
 
