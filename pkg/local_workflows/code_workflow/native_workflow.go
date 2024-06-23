@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	RemoteRepoUrlFlagname = "remote-repo-url"
+	RemoteRepoUrlFlagname       = "remote-repo-url"
+	ConfigurationCategoryFilter = "sarif-category-filter"
 )
 
 type OptionalAnalysisFunctions func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
@@ -95,6 +96,9 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	if result == nil {
 		result = &sarif.SarifResponse{}
 	} else {
+		categoryFilter := config.GetStringSlice(ConfigurationCategoryFilter)
+		filterSarifResultsByCategory(result, categoryFilter)
+
 		sarifData, sarifError := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
 		if sarifError != nil {
 			return nil, sarifError
