@@ -277,3 +277,15 @@ func (mr *MockConfigurationMockRecorder) SetStorage(storage interface{}) *gomock
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStorage", reflect.TypeOf((*MockConfiguration)(nil).SetStorage), storage)
 }
+
+// Unset mocks base method.
+func (m *MockConfiguration) Unset(key string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Unset", key)
+}
+
+// Unset indicates an expected call of Unset.
+func (mr *MockConfigurationMockRecorder) Unset(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unset", reflect.TypeOf((*MockConfiguration)(nil).Unset), key)
+}

@@ -1,0 +1,242 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "presentation.schema.json",
+    "$defs": {
+        "TestResult": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "TestResult.json",
+            "type": "object",
+            "properties": {
+                "outcome": {
+                    "$ref": "TestOutcome.json"
+                },
+                "exitCode": {
+                    "type": "integer"
+                },
+                "findings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "Finding.json"
+                    }
+                }
+            },
+            "required": [
+                "outcome",
+                "exitCode",
+                "findings"
+            ],
+            "description": "TestResult represents the top-level result from a Snyk security test. This\nincludes the overall outcome and enriched findings."
+        },
+        "TestOutcome": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "TestOutcome.json",
+            "type": "string",
+            "enum": [
+                "Pass",
+                "Fail",
+                "Error"
+            ],
+            "description": "TestOutcome represents how the security test should be interpreted and acted\nupon. Did the test pass or fail according to findings, ignores and policy?\nDid an error interfere with the test making the results indeterminate?"
+        },
+        "Finding": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "Finding.json",
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "FindingID.json"
+                },
+                "scanType": {
+                    "$ref": "ScanType.json"
+                },
+                "location": {
+                    "$ref": "SourceFileLocation.json"
+                },
+                "vulnerabilities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "Vulnerability.json"
+                    }
+                },
+                "remediations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "Remediation.json"
+                    }
+                },
+                "severity": {
+                    "$ref": "Severity.json"
+                },
+                "ignore": {
+                    "$ref": "Ignore.json"
+                }
+            },
+            "required": [
+                "id",
+                "scanType",
+                "location",
+                "vulnerabilities",
+                "remediations",
+                "severity",
+                "ignore"
+            ],
+            "description": "Finding represents an individual security vulnerability found by Snyk when\nscanning an asset, enriched with risk context and policy decisions."
+        },
+        "FindingID": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "FindingID.json",
+            "type": "string",
+            "description": "FindingID uniquely identifies a Finding. It should be considered a stable\nprimary key for a particular security finding on a particular asset."
+        },
+        "ScanType": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "ScanType.json",
+            "type": "string",
+            "enum": [
+                "OpenSource",
+                "Container",
+                "Code",
+                "IaC"
+            ],
+            "description": "ScanType represents one of the security scan types supported by Snyk."
+        },
+        "SourceFileLocation": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "SourceFileLocation.json",
+            "anyOf": [
+                {
+                    "$ref": "SourceFilePath.json"
+                },
+                {
+                    "$ref": "SourceFileLine.json"
+                },
+                {
+                    "$ref": "SourceFileRange.json"
+                }
+            ],
+            "description": "SourceFileLocation represents a source file location within an asset where a\nFinding was discovered."
+        },
+        "SourceFilePath": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "SourceFilePath.json",
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "path"
+            ],
+            "description": "SourceFilePath represents an entire source file as the location of a Finding."
+        },
+        "SourceFileLine": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "SourceFileLine.json",
+            "type": "object",
+            "properties": {
+                "line": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "line"
+            ],
+            "allOf": [
+                {
+                    "$ref": "SourceFilePath.json"
+                }
+            ],
+            "description": "SourceFileLine represents a single line within a source code file as the\nlocation of a Finding. Lines being delimited by newlines and/or carriage\nreturns in a text file."
+        },
+        "SourceFileRange": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "SourceFileRange.json",
+            "type": "object",
+            "properties": {
+                "startLine": {
+                    "type": "integer"
+                },
+                "startColumn": {
+                    "type": "integer"
+                },
+                "endLine": {
+                    "type": "integer"
+                },
+                "endColumn": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "startLine",
+                "endLine"
+            ],
+            "allOf": [
+                {
+                    "$ref": "SourceFilePath.json"
+                }
+            ],
+            "description": "SourceFileRange represents a range of lines or characters within a source\ncode text file as the location of a Finding."
+        },
+        "Vulnerability": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "Vulnerability.json",
+            "type": "object",
+            "properties": {},
+            "description": "Vulnerability represents details about the security weakness of a Finding."
+        },
+        "Remediation": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "Remediation.json",
+            "type": "object",
+            "properties": {},
+            "description": "Remediation contains information about how to resolve or remediate the\nvulnerability of a Finding."
+        },
+        "Severity": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "Severity.json",
+            "type": "object",
+            "properties": {
+                "level": {
+                    "$ref": "SeverityLevel.json"
+                },
+                "originalLevel": {
+                    "$ref": "SeverityLevel.json"
+                }
+            },
+            "required": [
+                "level"
+            ],
+            "description": "Severity represents the overall impact of a security Finding."
+        },
+        "SeverityLevel": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "SeverityLevel.json",
+            "type": "string",
+            "enum": [
+                "Critical",
+                "High",
+                "Medium",
+                "Low"
+            ],
+            "description": "SeverityLevel enumerates the levels of impact severity."
+        },
+        "Ignore": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "Ignore.json",
+            "type": "object",
+            "properties": {
+                "ignored": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ignored"
+            ],
+            "description": "Ignore represents the application of a directive to ignore a particular\nFinding. This directive may have come from a developer or application\nsecurity authority indicating the finding is a false positive or irrelevant\nto the application's threat model."
+        }
+    }
+}

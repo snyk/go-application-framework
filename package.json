@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p . && tsp compile ./pkg/presentation",
+    "clean": "rm -f ./pkg/presentation/*.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.7",
+    "@typespec/compiler": "^0.57.0",
+    "@typespec/json-schema": "^0.57.0",
+    "typescript": "^5.5.2"
+  }
+}

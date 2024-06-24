@@ -26,6 +26,7 @@ build:
 clean:
 	@echo "Cleaning up..."
 	@GOOS=$(GOOS) GOARCH=$(GOARCH) go clean -testcache
+	npm run clean
 
 .PHONY: test
 test:
@@ -40,9 +41,25 @@ testv:
 .PHONY: generate
 generate:
 	@go generate ./...
+	npm run build
+
+.PHONY: tools
+tools: $(GO_BIN)/golangci-lint $(GO_BIN)/mockgen $(GO_BIN)/oapi-codegen typespec-tools
 
 $(GO_BIN)/golangci-lint:
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
+
+$(GO_BIN)/mockgen:
+	GOBIN=$(GO_BIN) go install github.com/golang/mock/mockgen@latest
+
+$(GO_BIN)/oapi-codegen:
+	GOBIN=$(GO_BIN) go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest
+
+.PHONY: typespec-tools
+typespec-tools: node_modules/.bin/typespec
+
+node_modules/.bin/typespec:
+	npm clean-install
 
 .PHONY: help
 help:
