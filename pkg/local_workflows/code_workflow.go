@@ -72,7 +72,6 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 	}
 
 	engine.GetConfiguration().AddDefaultValue(ConfigurationSastEnabled, getSastEnabled(engine))
-	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationCategoryFilter, configuration.StandardDefaultValueFunction([]string{"security"}))
 
 	return err
 }
