@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -183,7 +184,7 @@ func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		fileFilter := NewFileFilter(rootDir, &log.Logger)
+		fileFilter := NewFileFilter(rootDir, &log.Logger, WithThreadNumber(runtime.NumCPU()))
 
 		b.StartTimer()
 		globs, err := fileFilter.GetRules(ruleFiles)

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,14 +19,38 @@ type FileFilter struct {
 	path         string
 	defaultRules []string
 	logger       *zerolog.Logger
+	max_threads  int64
 }
 
-func NewFileFilter(path string, logger *zerolog.Logger) *FileFilter {
-	return &FileFilter{
+type FileFilterOption func(*FileFilter) error
+
+func WithThreadNumber(maxThreadCount int) FileFilterOption {
+	return func(filter *FileFilter) error {
+		if maxThreadCount > 0 {
+			filter.max_threads = int64(maxThreadCount)
+			return nil
+		}
+
+		return fmt.Errorf("max thread count must be greater than 0")
+	}
+}
+
+func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
+	filter := &FileFilter{
 		path:         path,
 		defaultRules: []string{"**/.git/**"},
 		logger:       logger,
+		max_threads:  int64(runtime.NumCPU()),
 	}
+
+	for _, option := range options {
+		err := option(filter)
+		if err != nil {
+			logger.Err(err).Msg("failed to apply option for FileFilter")
+		}
+	}
+
+	return filter
 }
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
@@ -33,6 +58,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
+
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -84,8 +110,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 	go func() {
 		ctx := context.Background()
-		maxThreads := int64(runtime.NumCPU())
-		availableThreads := semaphore.NewWeighted(maxThreads)
+		availableThreads := semaphore.NewWeighted(fw.max_threads)
 
 		defer close(filteredFilesCh)
 
@@ -105,7 +130,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		}
 
 		// wait until the last thread is done
-		err := availableThreads.Acquire(ctx, maxThreads)
+		err := availableThreads.Acquire(ctx, fw.max_threads)
 		if err != nil {
 			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
