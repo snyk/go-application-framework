@@ -1,29 +1,56 @@
 package utils
 
 import (
+	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/rs/zerolog"
-	"gopkg.in/yaml.v3"
-
 	gitignore "github.com/sabhiram/go-gitignore"
+	"golang.org/x/sync/semaphore"
+	"gopkg.in/yaml.v3"
 )
 
 type FileFilter struct {
 	path         string
 	defaultRules []string
 	logger       *zerolog.Logger
+	max_threads  int64
 }
 
-func NewFileFilter(path string, logger *zerolog.Logger) *FileFilter {
-	return &FileFilter{
+type FileFilterOption func(*FileFilter) error
+
+func WithThreadNumber(maxThreadCount int) FileFilterOption {
+	return func(filter *FileFilter) error {
+		if maxThreadCount > 0 {
+			filter.max_threads = int64(maxThreadCount)
+			return nil
+		}
+
+		return fmt.Errorf("max thread count must be greater than 0")
+	}
+}
+
+func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
+	filter := &FileFilter{
 		path:         path,
 		defaultRules: []string{"**/.git/**"},
 		logger:       logger,
+		max_threads:  int64(runtime.NumCPU()),
 	}
+
+	for _, option := range options {
+		err := option(filter)
+		if err != nil {
+			logger.Err(err).Msg("failed to apply option for FileFilter")
+		}
+	}
+
+	return filter
 }
 
 // GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
@@ -31,6 +58,7 @@ func (fw *FileFilter) GetAllFiles() chan string {
 	var filesCh = make(chan string)
 	go func() {
 		defer close(filesCh)
+
 		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -80,15 +108,31 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 	// create pattern matcher used to match filesToFilter to glob patterns
 	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
-
 	go func() {
+		ctx := context.Background()
+		availableThreads := semaphore.NewWeighted(fw.max_threads)
+
 		defer close(filteredFilesCh)
+
 		// iterate the filesToFilter channel
 		for file := range filesCh {
-			// filesToFilter that do not match the glob pattern are filtered
-			if !globPatternMatcher.MatchesPath(file) {
-				filteredFilesCh <- file
+			err := availableThreads.Acquire(ctx, 1)
+			if err != nil {
+				fw.logger.Err(err).Msg("failed to limit threads")
 			}
+			go func(f string) {
+				defer availableThreads.Release(1)
+				// filesToFilter that do not match the glob pattern are filtered
+				if !globPatternMatcher.MatchesPath(f) {
+					filteredFilesCh <- f
+				}
+			}(file)
+		}
+
+		// wait until the last thread is done
+		err := availableThreads.Acquire(ctx, fw.max_threads)
+		if err != nil {
+			fw.logger.Err(err).Msg("failed to wait for all threads")
 		}
 	}()
 

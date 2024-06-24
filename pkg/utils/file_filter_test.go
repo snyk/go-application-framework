@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -172,18 +173,23 @@ func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 	// create ignore file in root dir ignoring any file with name 'test1.ts'
 	ignoreFile := filepath.Join(rootDir, ".gitignore")
 	ruleFiles := []string{".gitignore"}
-	createFileInPath(b, ignoreFile, []byte("folder_1\n"))
+
+	gitIgnoreContent := ""
+	for i := 1; i < folderDepth; i++ {
+		gitIgnoreContent += fmt.Sprintf("folder_%d\n", i)
+	}
+
+	createFileInPath(b, ignoreFile, []byte(gitIgnoreContent))
 	b.Log("Created ignore file")
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		fileFilter := NewFileFilter(rootDir, &log.Logger)
+		fileFilter := NewFileFilter(rootDir, &log.Logger, WithThreadNumber(runtime.NumCPU()))
 
 		b.StartTimer()
-		files := fileFilter.GetAllFiles()
 		globs, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(b, err)
-		filteredFiles := fileFilter.GetFilteredFiles(files, globs)
+		filteredFiles := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs)
 		b.StopTimer()
 
 		var actualFilteredFilesLen int
@@ -191,7 +197,7 @@ func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 			actualFilteredFilesLen++
 		}
 
-		assert.Equal(b, filesPerFolder*(folderDepth-1), actualFilteredFilesLen)
+		assert.Equal(b, filesPerFolder+1, actualFilteredFilesLen) // +1 is the gitignore file
 	}
 }
 

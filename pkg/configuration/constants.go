@@ -30,6 +30,7 @@ const (
 	UNKNOWN_ARGS                    string = "internal_unknown_arguments"        // arguments unknown to the current application but maybe relevant for delegated application calls
 	PREVIEW_FEATURES_ENABLED        string = "internal_preview_features_enabled" // boolean indicates if preview features shall be enabled
 	TIMEOUT                         string = "snyk_timeout_secs"
+	MAX_THREADS                     string = "internal_max_thread_count"
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
