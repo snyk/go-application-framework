@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	RemoteRepoUrlFlagname = "remote-repo-url"
+	RemoteRepoUrlFlagname     = "remote-repo-url"
+	ConfigurationTestFLowName = "internal_code_test_flow_name"
 )
 
 type OptionalAnalysisFunctions func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
@@ -122,6 +123,8 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, error) {
 	var result *sarif.SarifResponse
 
+	testFlowName := config.GetString(ConfigurationTestFLowName)
+
 	interactionId, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, err
@@ -154,6 +157,7 @@ func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Clie
 		httpClient,
 		codeclient.WithLogger(logger),
 		codeclient.WithTrackerFactory(progressFactory),
+		codeclient.WithFlow(testFlowName),
 	)
 
 	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)

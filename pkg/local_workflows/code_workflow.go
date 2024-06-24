@@ -72,6 +72,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 	}
 
 	engine.GetConfiguration().AddDefaultValue(ConfigurationSastEnabled, getSastEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
 
 	return err
 }
