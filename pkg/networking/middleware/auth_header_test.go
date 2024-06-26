@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -103,4 +104,22 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 
 	err = middleware.AddAuthenticationHeader(authenticator, config, request3)
 	assert.NoError(t, err)
+}
+
+func TestAuthenticationError_Is(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	config := configuration.New()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+
+	url, err := url.Parse("https://app.snyk.io/rest/endpoint1")
+	assert.NoError(t, err)
+	request := &http.Request{
+		URL: url,
+	}
+
+	authenticator := mocks.NewMockAuthenticator(ctrl)
+	authenticator.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(fmt.Errorf("nope"))
+	err = middleware.AddAuthenticationHeader(authenticator, config, request)
+	assert.ErrorIs(t, err, middleware.ErrAuthenticationFailed)
+	assert.ErrorContains(t, err, "nope")
 }
