@@ -1,6 +1,8 @@
 package middleware_test
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -8,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -103,4 +106,31 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 
 	err = middleware.AddAuthenticationHeader(authenticator, config, request3)
 	assert.NoError(t, err)
+}
+
+func TestAuthenticationError_Is(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	config := configuration.New()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+
+	url, err := url.Parse("https://app.snyk.io/rest/endpoint1")
+	assert.NoError(t, err)
+	request := &http.Request{
+		URL: url,
+	}
+
+	authenticator := mocks.NewMockAuthenticator(ctrl)
+	authenticator.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(fmt.Errorf("nope"))
+	err = middleware.AddAuthenticationHeader(authenticator, config, request)
+	assert.True(t, middleware.IsAuthenticationErr(err))
+	// Error catalog message shown
+	assert.ErrorContains(t, err, "Authentication error")
+	// Wrapped underlying error from trying to add the header
+	assert.ErrorContains(t, errors.Unwrap(err), "nope")
+}
+
+func TestWrappedAuthenticationErr(t *testing.T) {
+	// Test whether a wrapped unauth error is still matched.
+	err := fmt.Errorf("%w: nope", snyk.NewUnauthorisedError("not allowed"))
+	assert.True(t, middleware.IsAuthenticationErr(err))
 }

@@ -1,9 +1,13 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -82,6 +86,26 @@ func ShouldRequireAuthentication(
 	return false, nil
 }
 
+// unauthErr is used to test for the unauthorized error code.
+var unauthErr = snyk.NewUnauthorisedError("")
+
+// IsAuthenticationErr returns whether the error represents an error
+// catalog error indicating unauthorized.
+func IsAuthenticationErr(err error) bool {
+	for err != nil {
+		if snykErr, ok := err.(snyk_errors.Error); ok {
+			return unauthErr.ErrorCode == snykErr.ErrorCode
+		}
+		err = errors.Unwrap(err)
+	}
+	return false
+}
+
+// AddAuthenticationHeader determines whether a request needs authentication,
+// negotiates authorization and sets request headers if necessary.
+//
+// If this fails due to an authentication error, the resulting error will match
+// ErrAuthenticationFailed.
 func AddAuthenticationHeader(
 	authenticator auth.Authenticator,
 	config configuration.Configuration,
@@ -98,5 +122,8 @@ func AddAuthenticationHeader(
 	}
 
 	err = authenticator.AddAuthenticationHeader(request)
-	return err
+	if err != nil {
+		return snyk.NewUnauthorisedError("Authentication failed", snyk_errors.WithCause(err))
+	}
+	return nil
 }
