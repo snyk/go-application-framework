@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/snyk/go-application-framework/internal/utils"
 )
+
+//go:generate $GOPATH/bin/mockgen -source=storage.go -destination ../mocks/config_storage.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
 
 type Storage interface {
 	Set(key string, value any) error
@@ -23,13 +26,44 @@ func (e *EmptyStorage) Set(_ string, _ any) error {
 var keyDeleted = struct{}{}
 
 type JsonStorage struct {
-	path string
+	path   string
+	config Configuration
 }
 
-func NewJsonStorage(path string) *JsonStorage {
-	return &JsonStorage{
+type JsonOption func(*JsonStorage)
+
+func WithConfiguration(c Configuration) JsonOption {
+	return func(storage *JsonStorage) {
+		storage.config = c
+	}
+}
+
+func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
+	storage := &JsonStorage{
 		path: path,
 	}
+
+	for _, opt := range options {
+		opt(storage)
+	}
+
+	return storage
+}
+
+func (s *JsonStorage) getNonEnvVarKey(key string) string {
+	if s.config == nil {
+		return ""
+	}
+
+	keys := []string{key}
+	keys = append(keys, s.config.GetAlternativeKeys(key)...)
+	for _, k := range keys {
+		if !strings.HasPrefix(strings.ToLower(k), "snyk_") {
+			return k
+		}
+	}
+
+	return ""
 }
 
 func (s *JsonStorage) Set(key string, value any) error {
@@ -49,6 +83,10 @@ func (s *JsonStorage) Set(key string, value any) error {
 	err = json.Unmarshal(fileBytes, &config)
 	if err != nil {
 		return err
+	}
+
+	if tmpKey := s.getNonEnvVarKey(key); len(tmpKey) > 0 {
+		key = tmpKey
 	}
 
 	if _, ok := value.(struct{}); ok {

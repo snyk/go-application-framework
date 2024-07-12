@@ -146,7 +146,7 @@ func createViperDefaultConfig() *extendedViper {
 
 func readConfigFilesIntoViper(files []string, config *extendedViper) {
 	configPath := determineBasePath()
-	config.storage = createFileStorage(configPath)
+	config.storage = config.createFileStorage(configPath)
 
 	// prepare config files
 	for _, file := range files {
@@ -446,7 +446,7 @@ func (ev *extendedViper) GetStorage() Storage {
 
 // createFileStorage creates attempts to create a JSON file storage in the configPath.
 // If it fails, a dummy storage is returned.
-func createFileStorage(configPath string) Storage {
+func (ev *extendedViper) createFileStorage(configPath string) Storage {
 	file := path.Join(configPath, "snyk.json")
-	return NewJsonStorage(file)
+	return NewJsonStorage(file, WithConfiguration(ev))
 }
