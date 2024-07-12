@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
@@ -81,28 +82,25 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 
 	envAlias := config.GetString(environmentAlias)
 	currentUrl := config.GetString(configuration.API_URL)
-	envUrl, err := determineUrlFromAlias(envAlias)
+	newEnvUrl, err := determineUrlFromAlias(envAlias)
 
 	logger.Print("Alias: ", envAlias)
-	logger.Print("Current: ", currentUrl)
-	logger.Print("New: ", envUrl)
+	logger.Print("Previous Environment: ", currentUrl)
+	logger.Print("New Environment: ", newEnvUrl)
 
 	if err != nil {
 		logger.Err(err).Msg("No Url could be derived from the given alias!")
 
 		// todo replace with error catalog error
-		err = snyk_errors.Error{
-			ErrorCode: "CLI-0001",
-			Title:     "Failed to set environment!",
-			Level:     "Critical",
-			Cause:     err,
-		}
+		tmp := snyk.NewNotImplementedError("The defined environment could not be used. All configuration remains unchanged.", snyk_errors.WithCause(err))
+		tmp.Title = "Failed to set environment"
+		tmp.ErrorCode = "CLI-00001"
 
-		return result, err
+		return result, tmp
 	}
 
-	if config.GetString(configuration.API_URL) == envUrl {
-		uiErr := ui.Output(fmt.Sprintf("You are already using environment \"%s\".", envUrl))
+	if currentUrl == newEnvUrl {
+		uiErr := ui.Output(fmt.Sprintf("You are already using environment \"%s\".", newEnvUrl))
 		if uiErr != nil {
 			logger.Print(uiErr)
 		}
@@ -114,13 +112,13 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
-	uiErr := ui.Output(fmt.Sprintf("You are now using the new environment \"%s\".", envUrl))
+	uiErr := ui.Output(fmt.Sprintf("You are now using the environment \"%s\".", newEnvUrl))
 	if uiErr != nil {
 		logger.Print(uiErr)
 	}
 
 	config.PersistInStorage(configuration.API_URL)
-	config.Set(configuration.API_URL, envUrl)
+	config.Set(configuration.API_URL, newEnvUrl)
 
 	return result, err
 }
