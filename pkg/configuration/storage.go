@@ -50,6 +50,10 @@ func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	return storage
 }
 
+// This function deals with the fact that not every key can or shall be written to the config. Keys that belong to
+// Environment Variables need to be matched to their alternative names in the config.
+// For example "SNYK_TOKEN" in the config file would be "api"
+// The logic should in the future be moved closer to the configuration as it might be needed there as well.
 func (s *JsonStorage) getNonEnvVarKey(key string) string {
 	if s.config == nil {
 		return ""
