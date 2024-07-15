@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -20,9 +21,13 @@ func Test_ConfigEnvironment_determineUrlFromAlias(t *testing.T) {
 	assert.NoError(t, envErr)
 	assert.NotEmpty(t, envUrl)
 
-	envUrl, envErr = determineUrlFromAlias("https://api.my.url.com")
+	nonCanonicalizedUrl := "https://app.my.url.com/api"
+	canonicalizedUrl, err := api.GetCanonicalApiUrlFromString(nonCanonicalizedUrl)
+	envUrl, envErr = determineUrlFromAlias(nonCanonicalizedUrl)
+	assert.NoError(t, err)
 	assert.NoError(t, envErr)
 	assert.NotEmpty(t, envUrl)
+	assert.Equal(t, canonicalizedUrl, envUrl)
 
 	envUrl, envErr = determineUrlFromAlias("eu")
 	assert.NoError(t, envErr)

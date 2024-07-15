@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -46,14 +47,13 @@ func determineUrlFromAlias(alias string) (string, error) {
 	// lookup alias
 	lookedUpUrl, aliasFound := knownAliases[strings.ToUpper(alias)]
 	if aliasFound {
-		envUrl, err = url.Parse(lookedUpUrl)
-		return envUrl.String(), err
+		return lookedUpUrl, nil
 	}
 
 	// is alias an url already?
 	envUrl, err = url.Parse(alias)
 	if err == nil && slices.Contains(supportedUrlSchemes, envUrl.Scheme) {
-		return envUrl.String(), nil
+		return api.GetCanonicalApiUrl(*envUrl)
 	}
 
 	// check dns name
