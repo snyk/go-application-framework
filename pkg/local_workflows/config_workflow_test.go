@@ -21,13 +21,18 @@ func Test_ConfigEnvironment_determineUrlFromAlias(t *testing.T) {
 	assert.NoError(t, envErr)
 	assert.NotEmpty(t, envUrl)
 
-	nonCanonicalizedUrl := "https://app.my.url.com/api"
+	nonCanonicalizedUrl := "https://app.snyk.io/api"
 	canonicalizedUrl, err := api.GetCanonicalApiUrlFromString(nonCanonicalizedUrl)
 	envUrl, envErr = determineUrlFromAlias(nonCanonicalizedUrl)
 	assert.NoError(t, err)
 	assert.NoError(t, envErr)
 	assert.NotEmpty(t, envUrl)
 	assert.Equal(t, canonicalizedUrl, envUrl)
+
+	nonCanonicalizedUrl = "https://app.random.io/api"
+	envUrl, envErr = determineUrlFromAlias(nonCanonicalizedUrl)
+	assert.Error(t, envErr)
+	assert.Empty(t, envUrl)
 
 	envUrl, envErr = determineUrlFromAlias("eu")
 	assert.NoError(t, envErr)

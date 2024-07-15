@@ -34,34 +34,44 @@ func InitConfigWorkflow(engine workflow.Engine) error {
 }
 
 func determineUrlFromAlias(alias string) (string, error) {
+	if len(alias) == 0 {
+		return "", fmt.Errorf("environment alias must not be empty")
+	}
+
+	var urlString string
 	var envUrl *url.URL
 	var err error
 
 	dnsPattern := "https://api.%s.snyk.io"
 	supportedUrlSchemes := []string{"http", "https"}
 	knownAliases := map[string]string{
-		"DEFAULT":    "https://api.snyk.io",
-		"SNYK-US-01": "https://api.us1.snyk.io",
+		"default":    "https://api.snyk.io",
+		"snyk-us-01": "https://api.us1.snyk.io",
 	}
 
-	// lookup alias
-	lookedUpUrl, aliasFound := knownAliases[strings.ToUpper(alias)]
+	// lookup if alias can be directly mapped to a URL
+	urlString, aliasFound := knownAliases[strings.ToLower(alias)]
 	if aliasFound {
-		return lookedUpUrl, nil
+		return urlString, nil
 	}
 
-	// is alias an url already?
+	// test if the alias is already an url?
 	envUrl, err = url.Parse(alias)
 	if err == nil && slices.Contains(supportedUrlSchemes, envUrl.Scheme) {
-		return api.GetCanonicalApiUrl(*envUrl)
+		urlString, err = api.GetCanonicalApiUrl(*envUrl)
+		if err != nil {
+			return "", err
+		}
+	} else { // attempt to use the alias with a dns name pattern as is
+		urlString = fmt.Sprintf(dnsPattern, alias)
 	}
 
-	// check dns name
-	envUrl, err = url.Parse(fmt.Sprintf(dnsPattern, alias))
+	envUrl, err = url.Parse(urlString)
 	if err != nil {
 		return "", err
 	}
 
+	// test if the url is can be looked up
 	addr, err := net.LookupHost(envUrl.Host)
 	if err != nil {
 		return "", err
@@ -71,7 +81,7 @@ func determineUrlFromAlias(alias string) (string, error) {
 		return envUrl.String(), nil
 	}
 
-	return "", fmt.Errorf("failed to derive url")
+	return "", fmt.Errorf("failed to derive evironment url")
 }
 
 func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (result []workflow.Data, err error) {
@@ -91,7 +101,8 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	if err != nil {
 		logger.Err(err).Msg("No Url could be derived from the given alias!")
 
-		tmp := cli_error.NewConfigEnvironmentFailedError("The specified environment cannot be used. As a result, the configuration remains unchanged. Provide the correct specifications for the environment and try again.")
+		pattern := "The specified environment cannot be used. As a result, the configuration remains unchanged. Provide the correct specifications for the environment and try again.\n\n(%s)"
+		tmp := cli_error.NewConfigEnvironmentFailedError(fmt.Sprintf(pattern, err.Error()))
 		tmp.StatusCode = 0
 		return result, tmp
 	}
