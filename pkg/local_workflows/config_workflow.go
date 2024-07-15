@@ -7,8 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/snyk/error-catalog-golang-public/snyk"
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	cli_error "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -41,6 +40,7 @@ func determineUrlFromAlias(alias string) (string, error) {
 	dnsPattern := "https://api.%s.snyk.io"
 	supportedUrlSchemes := []string{"http", "https"}
 	knownAliases := map[string]string{
+		"DEFAULT":    "https://api.snyk.io",
 		"SNYK-US-01": "https://api.us1.snyk.io",
 	}
 
@@ -91,11 +91,8 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	if err != nil {
 		logger.Err(err).Msg("No Url could be derived from the given alias!")
 
-		// todo replace with error catalog error
-		tmp := snyk.NewNotImplementedError("The defined environment could not be used. All configuration remains unchanged.", snyk_errors.WithCause(err))
-		tmp.Title = "Failed to set environment"
-		tmp.ErrorCode = "CLI-00001"
-
+		tmp := cli_error.NewConfigEnvironmentFailedError("The specified environment cannot be used. As a result, the configuration remains unchanged. Provide the correct specifications for the environment and try again.")
+		tmp.StatusCode = 0
 		return result, tmp
 	}
 
