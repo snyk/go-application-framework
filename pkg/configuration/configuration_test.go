@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -397,4 +398,44 @@ func Test_DefaultValuehandling(t *testing.T) {
 		assert.Equal(t, nil, config.Get("foo"))
 		assert.Equal(t, "quux", config.Get("baz"))
 	})
+}
+
+func Test_ConfigurationGet_GetAllKeysThatContainValues(t *testing.T) {
+	// prepare values
+	t.Setenv(strings.ToUpper(API_URL), "something")
+	flagset := pflag.NewFlagSet("test set", pflag.ExitOnError)
+	flagset.String("token", "nothing", "")
+	flagset.Bool("debug", false, "")
+	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "endpoint": "https://api.snyk.io"}`))
+
+	// prepare configuration under test
+	config := NewFromFiles(TEST_FILENAME)
+	err := config.AddFlagSet(flagset)
+	assert.NoError(t, err)
+
+	config.AddAlternativeKeys(API_URL, []string{"endpoint"})
+	config.AddAlternativeKeys(AUTHENTICATION_TOKEN, []string{"api", "token"})
+
+	config.Set(API_URL, "dasjlda")
+	config.Set("token", "secret")
+	config.Set("debug", true)
+
+	// run method under test
+	apiUrlKeys := config.GetAllKeysThatContainValues(API_URL)
+	tokenKeys := config.GetAllKeysThatContainValues(AUTHENTICATION_TOKEN)
+	debugKeys := config.GetAllKeysThatContainValues(DEBUG)
+
+	expectedApiUrlKeys := []string{"snyk_api", "endpoint"}
+	expectedTokenKeys := []string{"api", "token"}
+	expectedDebugKeys := []string{"debug"}
+
+	assert.Equal(t, expectedApiUrlKeys, apiUrlKeys)
+	assert.Equal(t, expectedTokenKeys, tokenKeys)
+	assert.Equal(t, expectedDebugKeys, debugKeys)
+}
+
+func Test_Configuration_GetKeyType(t *testing.T) {
+	config := NewInMemory()
+	assert.Equal(t, EnvVarKeyType, config.GetKeyType("snyk_something"))
+	assert.Equal(t, UnspecifiedKeyType, config.GetKeyType("app"))
 }

@@ -116,6 +116,20 @@ func (mr *MockConfigurationMockRecorder) Get(key interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockConfiguration)(nil).Get), key)
 }
 
+// GetAllKeysThatContainValues mocks base method.
+func (m *MockConfiguration) GetAllKeysThatContainValues(key string) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllKeysThatContainValues", key)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetAllKeysThatContainValues indicates an expected call of GetAllKeysThatContainValues.
+func (mr *MockConfigurationMockRecorder) GetAllKeysThatContainValues(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllKeysThatContainValues", reflect.TypeOf((*MockConfiguration)(nil).GetAllKeysThatContainValues), key)
+}
+
 // GetAlternativeKeys mocks base method.
 func (m *MockConfiguration) GetAlternativeKeys(key string) []string {
 	m.ctrl.T.Helper()
@@ -170,6 +184,20 @@ func (m *MockConfiguration) GetInt(key string) int {
 func (mr *MockConfigurationMockRecorder) GetInt(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInt", reflect.TypeOf((*MockConfiguration)(nil).GetInt), key)
+}
+
+// GetKeyType mocks base method.
+func (m *MockConfiguration) GetKeyType(key string) configuration.KeyType {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetKeyType", key)
+	ret0, _ := ret[0].(configuration.KeyType)
+	return ret0
+}
+
+// GetKeyType indicates an expected call of GetKeyType.
+func (mr *MockConfigurationMockRecorder) GetKeyType(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKeyType", reflect.TypeOf((*MockConfiguration)(nil).GetKeyType), key)
 }
 
 // GetStorage mocks base method.
@@ -276,4 +304,16 @@ func (m *MockConfiguration) SetStorage(storage configuration.Storage) {
 func (mr *MockConfigurationMockRecorder) SetStorage(storage interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStorage", reflect.TypeOf((*MockConfiguration)(nil).SetStorage), storage)
+}
+
+// Unset mocks base method.
+func (m *MockConfiguration) Unset(key string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Unset", key)
+}
+
+// Unset indicates an expected call of Unset.
+func (mr *MockConfigurationMockRecorder) Unset(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unset", reflect.TypeOf((*MockConfiguration)(nil).Unset), key)
 }

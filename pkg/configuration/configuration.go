@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,9 +18,14 @@ import (
 type DefaultValueFunction func(existingValue interface{}) interface{}
 
 type configType string
+type KeyType int
 
 const inMemory configType = "in-memory"
 const jsonFile configType = "json"
+const (
+	EnvVarKeyType      KeyType = iota
+	UnspecifiedKeyType KeyType = iota
+)
 
 // Configuration is an interface for managing configuration values.
 type Configuration interface {
@@ -41,6 +47,8 @@ type Configuration interface {
 	AddDefaultValue(key string, defaultValue DefaultValueFunction)
 	AddAlternativeKeys(key string, altKeys []string)
 	GetAlternativeKeys(key string) []string
+	GetAllKeysThatContainValues(key string) []string
+	GetKeyType(key string) KeyType
 
 	// PersistInStorage ensures that when Set is called with the given key, it will be persisted in the config file.
 	PersistInStorage(key string)
@@ -449,4 +457,36 @@ func (ev *extendedViper) GetStorage() Storage {
 func (ev *extendedViper) createFileStorage(configPath string) Storage {
 	file := path.Join(configPath, "snyk.json")
 	return NewJsonStorage(file, WithConfiguration(ev))
+}
+
+// GetAllKeysThatContainValues() returns a list of all keys, including alternative keys, that are set for the given key.
+// This can be used to identify in which way a certain has been set. If the result size is greater 1, this means
+// that one value is specified multiple times.
+func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
+	allKeys := ev.AllKeys()
+	alternativeKeys := []string{key}
+	alternativeKeys = append(alternativeKeys, ev.GetAlternativeKeys(key)...)
+
+	foundKeys := []string{}
+	for _, ak := range alternativeKeys {
+		if ev.GetKeyType(ak) == EnvVarKeyType {
+			if _, ok := os.LookupEnv(strings.ToUpper(ak)); ok {
+				foundKeys = append(foundKeys, ak)
+			}
+		} else if slices.Contains(allKeys, ak) {
+			if ev.viper.IsSet(ak) {
+				foundKeys = append(foundKeys, ak)
+			}
+		}
+	}
+
+	return foundKeys
+}
+
+func (ev *extendedViper) GetKeyType(key string) KeyType {
+	if strings.HasPrefix(strings.ToLower(key), "snyk_") {
+		return EnvVarKeyType
+	}
+
+	return UnspecifiedKeyType
 }
