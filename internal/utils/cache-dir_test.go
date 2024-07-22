@@ -72,7 +72,6 @@ func Test_SnykCacheDir(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, expectedDir, cacheDir)
 	})
-
 }
 
 func Test_FullPathInSnykCacheDir_returnsFullPath(t *testing.T) {
