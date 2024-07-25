@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/snyk/go-application-framework/internal/utils"
 )
@@ -62,7 +61,7 @@ func (s *JsonStorage) getNonEnvVarKey(key string) string {
 	keys := []string{key}
 	keys = append(keys, s.config.GetAlternativeKeys(key)...)
 	for _, k := range keys {
-		if !strings.HasPrefix(strings.ToLower(k), "snyk_") {
+		if s.config.GetKeyType(k) != EnvVarKeyType {
 			return k
 		}
 	}

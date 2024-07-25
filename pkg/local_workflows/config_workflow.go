@@ -19,6 +19,7 @@ import (
 const (
 	configEnvWorkflowName = "config.environment"
 	environmentAlias      = "internal_environment_name"
+	noCheckFlag           = "no-check"
 )
 
 var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIdentifier(configEnvWorkflowName)
@@ -29,6 +30,7 @@ func InitConfigWorkflow(engine workflow.Engine) error {
 
 	// register workflow with engine
 	flags := pflag.NewFlagSet(codeWorkflowName, pflag.ExitOnError)
+	flags.Bool(noCheckFlag, false, "use to disable sanity checks")
 	_, err := engine.Register(WORKFLOWID_CONFIG_ENVIRONMENT, workflow.ConfigurationOptionsFromFlagset(flags), configEnvironmentWorkflowEntryPoint)
 	return err
 }
@@ -84,12 +86,35 @@ func determineUrlFromAlias(alias string) (string, error) {
 	return "", fmt.Errorf("failed to derive evironment url")
 }
 
+func sanityCheck(config configuration.Configuration) error {
+	keys := []string{configuration.API_URL, configuration.AUTHENTICATION_TOKEN, configuration.AUTHENTICATION_BEARER_TOKEN, configuration.ORGANIZATION}
+	envVars := []string{}
+
+	for _, key := range keys {
+		keysSpecified := config.GetAllKeysThatContainValues(key)
+		for _, specifiedKey := range keysSpecified {
+			if config.GetKeyType(specifiedKey) == configuration.EnvVarKeyType {
+				envVars = append(envVars, strings.ToUpper(specifiedKey))
+			}
+		}
+	}
+
+	if len(envVars) > 0 {
+		tmp := cli_error.NewConfigEnvironmentConsistencyIssueError(fmt.Sprintf("The following existing configuration values might cause unexpected behavior! (%v)", strings.Join(envVars, ", ")))
+		tmp.StatusCode = 0
+		return tmp
+	}
+
+	return nil
+}
+
 func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (result []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
-	ui := invocationCtx.GetUserInterface()
+	userInterface := invocationCtx.GetUserInterface()
 
+	failOnCheck := !config.GetBool(noCheckFlag)
 	envAlias := config.GetString(environmentAlias)
 	currentUrl := config.GetString(configuration.API_URL)
 	newEnvUrl, err := determineUrlFromAlias(envAlias)
@@ -97,6 +122,14 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	logger.Print("Alias: ", envAlias)
 	logger.Print("Previous Environment: ", currentUrl)
 	logger.Print("New Environment: ", newEnvUrl)
+	logger.Print("Fail on Sanity Check: ", failOnCheck)
+
+	if failOnCheck {
+		localError := sanityCheck(config)
+		if localError != nil {
+			return nil, localError
+		}
+	}
 
 	if err != nil {
 		logger.Err(err).Msg("No Url could be derived from the given alias!")
@@ -108,7 +141,7 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	}
 
 	if currentUrl == newEnvUrl {
-		uiErr := ui.Output(fmt.Sprintf("You are already using environment \"%s\".", newEnvUrl))
+		uiErr := userInterface.Output(fmt.Sprintf("You are already using environment \"%s\".", newEnvUrl))
 		if uiErr != nil {
 			logger.Print(uiErr)
 		}
@@ -120,7 +153,7 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
-	uiErr := ui.Output(fmt.Sprintf("You are now using the environment \"%s\".", newEnvUrl))
+	uiErr := userInterface.Output(fmt.Sprintf("You are now using the environment \"%s\".", newEnvUrl))
 	if uiErr != nil {
 		logger.Print(uiErr)
 	}
