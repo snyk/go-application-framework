@@ -460,7 +460,7 @@ func (ev *extendedViper) createFileStorage(configPath string) Storage {
 }
 
 // GetAllKeysThatContainValues() returns a list of all keys, including alternative keys, that are set for the given key.
-// This can be used to identify in which way a certain has been set. If the result size is greater 1, this means
+// This can be used to identify in which way a certain key has been set. If the result size is greater 1, this means
 // that one value is specified multiple times.
 func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 	allKeys := ev.AllKeys()
