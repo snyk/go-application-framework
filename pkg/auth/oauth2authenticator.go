@@ -419,7 +419,6 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 	defer globalRefreshMutex.Unlock()
 	// if the current token is invalid
 	if !o.token.Valid() {
-
 		// check if the token in the config is invalid as well
 		token, err := GetOAuthToken(o.config)
 		if err != nil {
