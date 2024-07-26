@@ -171,7 +171,7 @@ func RefreshToken(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2
 	return tokenSource.Token()
 }
 
-func refreshTokenClientCredentials(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+func refreshTokenClientCredentials(ctx context.Context, oauthConfig *oauth2.Config, _ *oauth2.Token) (*oauth2.Token, error) {
 	conf := getOAuthConfigurationClientCredentials(oauthConfig)
 	tokenSource := conf.TokenSource(ctx)
 	return tokenSource.Token()
@@ -415,11 +415,10 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
 	}
 
+	globalRefreshMutex.Lock()
+	defer globalRefreshMutex.Unlock()
 	// if the current token is invalid
 	if !o.token.Valid() {
-		globalRefreshMutex.Lock()
-		defer globalRefreshMutex.Unlock()
-
 		// check if the token in the config is invalid as well
 		token, err := GetOAuthToken(o.config)
 		if err != nil {
