@@ -69,13 +69,6 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 	if response != nil {
 		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: %d %s", response.Request, response.StatusCode, response.Status)
 		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: header: %v", response.Request, response.Header)
-
-		// read body for error code
-		if response.StatusCode < 200 || 299 < response.StatusCode {
-			if bodyBytes, bodyErr := io.ReadAll(response.Body); bodyErr == nil {
-				logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: body: %v", response.Request, string(bodyBytes))
-			}
-		}
 	}
 }
 
