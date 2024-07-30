@@ -61,6 +61,24 @@ func LogRequest(r *http.Request, logger *zerolog.Logger) {
 	logger.WithLevel(zerolog.TraceLevel).Msgf("> request [%p]: header: %v", r, r.Header)
 }
 
+func LogResponse(response *http.Response, logger *zerolog.Logger) {
+	if logger.GetLevel() != zerolog.TraceLevel { // Only log if trace level is enabled
+		return
+	}
+
+	if response != nil {
+		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: %d %s", response.Request, response.StatusCode, response.Status)
+		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: header: %v", response.Request, response.Header)
+
+		// read body for error code
+		if response.StatusCode < 200 || 299 < response.StatusCode {
+			if bodyBytes, bodyErr := io.ReadAll(response.Body); bodyErr == nil {
+				logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: body: %v", response.Request, string(bodyBytes))
+			}
+		}
+	}
+}
+
 // defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
 type defaultHeadersRoundTripper struct {
 	encapsulatedRoundTripper http.RoundTripper
@@ -75,18 +93,7 @@ func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, respon
 	}
 
 	LogRequest(request, rt.networkAccess.logger)
-
-	if response != nil {
-		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: %d %s", request, response.StatusCode, response.Status)
-		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: header: %v", request, response.Header)
-
-		// read body for error code
-		if response.StatusCode < 200 || 299 < response.StatusCode {
-			if bodyBytes, bodyErr := io.ReadAll(response.Body); bodyErr == nil {
-				rt.networkAccess.logger.WithLevel(loglevel).Msgf("< response [%p]: body: %v", request, string(bodyBytes))
-			}
-		}
-	}
+	LogResponse(response, rt.networkAccess.logger)
 
 	if err != nil {
 		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< error: %s", err.Error())
