@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	zerolog "github.com/rs/zerolog"
+	snyk_errors "github.com/snyk/error-catalog-golang-public/snyk_errors"
 	analytics "github.com/snyk/go-application-framework/pkg/analytics"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
@@ -41,6 +42,18 @@ func (m *MockData) EXPECT() *MockDataMockRecorder {
 	return m.recorder
 }
 
+// AddError mocks base method.
+func (m *MockData) AddError(err snyk_errors.Error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddError", err)
+}
+
+// AddError indicates an expected call of AddError.
+func (mr *MockDataMockRecorder) AddError(err interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddError", reflect.TypeOf((*MockData)(nil).AddError), err)
+}
+
 // GetContentLocation mocks base method.
 func (m *MockData) GetContentLocation() string {
 	m.ctrl.T.Helper()
@@ -67,6 +80,20 @@ func (m *MockData) GetContentType() string {
 func (mr *MockDataMockRecorder) GetContentType() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContentType", reflect.TypeOf((*MockData)(nil).GetContentType))
+}
+
+// GetErrorList mocks base method.
+func (m *MockData) GetErrorList() []snyk_errors.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetErrorList")
+	ret0, _ := ret[0].([]snyk_errors.Error)
+	return ret0
+}
+
+// GetErrorList indicates an expected call of GetErrorList.
+func (mr *MockDataMockRecorder) GetErrorList() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetErrorList", reflect.TypeOf((*MockData)(nil).GetErrorList))
 }
 
 // GetIdentifier mocks base method.

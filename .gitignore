@@ -44,3 +44,9 @@ Thumbs.db
 .DS_Store
 ._*
 webidentity.json
+
+#################################
+# JS ecosystem (used for tools) #
+#################################
+/node_modules/
+/dist/
