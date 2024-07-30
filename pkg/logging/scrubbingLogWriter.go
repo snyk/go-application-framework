@@ -44,13 +44,13 @@ type scrubStruct struct {
 type ScrubbingDict map[string]scrubStruct
 
 type scrubbingLevelWriter struct {
-	m         sync.Mutex
+	m         sync.RWMutex
 	writer    zerolog.LevelWriter
 	scrubDict ScrubbingDict
 }
 
 type scrubbingIoWriter struct {
-	m         sync.Mutex
+	m         sync.RWMutex
 	writer    io.Writer
 	scrubDict ScrubbingDict
 }
@@ -73,6 +73,7 @@ func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
 }
 
 func (w *scrubbingIoWriter) AddTerm(term string, matchGroup int) {
+	// lock for dict readers and writers
 	w.m.Lock()
 	defer w.m.Unlock()
 	addTermToDict(term, matchGroup, w.scrubDict)
@@ -85,6 +86,7 @@ func addTermToDict(term string, matchGroup int, dict ScrubbingDict) {
 }
 
 func (w *scrubbingIoWriter) RemoveTerm(term string) {
+	// lock for dict readers and writers
 	w.m.Lock()
 	defer w.m.Unlock()
 	delete(w.scrubDict, term)
@@ -112,18 +114,23 @@ func getDefaultDict() ScrubbingDict {
 }
 
 func (w *scrubbingLevelWriter) AddTerm(term string, matchGroup int) {
+	// lock for dict readers and writers
 	w.m.Lock()
 	defer w.m.Unlock()
 	addTermToDict(term, matchGroup, w.scrubDict)
 }
 
 func (w *scrubbingLevelWriter) RemoveTerm(term string) {
+	// lock for dict readers and writers
 	w.m.Lock()
 	defer w.m.Unlock()
 	delete(w.scrubDict, term)
 }
 
 func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
+	// lock for dict changes, but allow unlimited readers
+	w.m.RLock()
+	defer w.m.RUnlock()
 	_, err := w.writer.WriteLevel(level, scrub(p, w.scrubDict))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
@@ -182,6 +189,9 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 }
 
 func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
+	// lock for dict changes, but allow unlimited readers
+	w.m.RLock()
+	defer w.m.RUnlock()
 	_, err := w.writer.Write(scrub(p, w.scrubDict))
 	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }
@@ -198,6 +208,9 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 }
 
 func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
+	// lock for dict changes, but allow unlimited readers
+	w.m.RLock()
+	defer w.m.RUnlock()
 	_, err = w.writer.Write(scrub(p, w.scrubDict))
 	if err != nil {
 		// in case of an error of the underlying writer, we return zero bytes written,
