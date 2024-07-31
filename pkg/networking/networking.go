@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"bytes"
 	"crypto/x509"
 	"io"
 	"net/http"
@@ -67,13 +68,18 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 	}
 
 	if response != nil {
-		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: %d %s", response.Request, response.StatusCode, response.Status)
+		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: %s", response.Request, response.Status)
 		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: header: %v", response.Request, response.Header)
 
 		// read body for error code
-		if response.StatusCode < 200 || 299 < response.StatusCode {
-			if bodyBytes, bodyErr := io.ReadAll(response.Body); bodyErr == nil {
+		if response.StatusCode >= 400 {
+			bodyBytes, bodyErr := io.ReadAll(response.Body)
+			if bodyErr == nil {
+				response.Body.Close()
+				response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: body: %v", response.Request, string(bodyBytes))
+			} else {
+				logger.WithLevel(zerolog.TraceLevel).Err(bodyErr).Msgf("< response [%p]: Failed to read response body", response.Request)
 			}
 		}
 	}
