@@ -458,7 +458,7 @@ func TestNetworkImpl_Clone(t *testing.T) {
 
 func TestNetworkImpl_LogResponse_happyPath(t *testing.T) {
 	logBuffer := bytes.NewBuffer([]byte{})
-	logger := zerolog.New(logBuffer).Level(zerolog.TraceLevel)
+	logger := zerolog.New(logBuffer).Level(zerolog.DebugLevel)
 
 	expectedBody := "hello world"
 	request := &http.Request{}
