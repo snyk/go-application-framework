@@ -53,23 +53,25 @@ type networkImpl struct {
 	logger       *zerolog.Logger
 }
 
+const defaultNetworkLogLevel = zerolog.DebugLevel
+
 func LogRequest(r *http.Request, logger *zerolog.Logger) {
-	if logger.GetLevel() != zerolog.TraceLevel { // Only log if trace level is enabled
+	if logger.GetLevel() > defaultNetworkLogLevel { // Don't log if logger level is above the threshold
 		return
 	}
 
-	logger.WithLevel(zerolog.TraceLevel).Msgf("> request [%p]: %s %s", r, r.Method, r.URL.String())
-	logger.WithLevel(zerolog.TraceLevel).Msgf("> request [%p]: header: %v", r, r.Header)
+	logger.WithLevel(defaultNetworkLogLevel).Msgf("> request [%p]: %s %s", r, r.Method, r.URL.String())
+	logger.WithLevel(defaultNetworkLogLevel).Msgf("> request [%p]: header: %v", r, r.Header)
 }
 
 func LogResponse(response *http.Response, logger *zerolog.Logger) {
-	if logger.GetLevel() != zerolog.TraceLevel { // Only log if trace level is enabled
+	if logger.GetLevel() > defaultNetworkLogLevel { // Don't log if logger level is above the threshold
 		return
 	}
 
 	if response != nil {
-		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: %s", response.Request, response.Status)
-		logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: header: %v", response.Request, response.Header)
+		logger.WithLevel(defaultNetworkLogLevel).Msgf("< response [%p]: %s", response.Request, response.Status)
+		logger.WithLevel(defaultNetworkLogLevel).Msgf("< response [%p]: header: %v", response.Request, response.Header)
 
 		// read body for error code
 		if response.StatusCode >= 400 {
@@ -77,9 +79,9 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 			if bodyErr == nil {
 				response.Body.Close()
 				response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-				logger.WithLevel(zerolog.TraceLevel).Msgf("< response [%p]: body: %v", response.Request, string(bodyBytes))
+				logger.WithLevel(defaultNetworkLogLevel).Msgf("< response [%p]: body: %v", response.Request, string(bodyBytes))
 			} else {
-				logger.WithLevel(zerolog.TraceLevel).Err(bodyErr).Msgf("< response [%p]: Failed to read response body", response.Request)
+				logger.WithLevel(defaultNetworkLogLevel).Err(bodyErr).Msgf("< response [%p]: Failed to read response body", response.Request)
 			}
 		}
 	}
@@ -92,7 +94,7 @@ type defaultHeadersRoundTripper struct {
 }
 
 func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, response *http.Response, err error) {
-	loglevel := zerolog.TraceLevel
+	loglevel := defaultNetworkLogLevel
 
 	if rt.networkAccess == nil || rt.networkAccess.logger == nil || rt.networkAccess.logger.GetLevel() != loglevel {
 		return

@@ -31,6 +31,7 @@ const (
 	PREVIEW_FEATURES_ENABLED        string = "internal_preview_features_enabled" // boolean indicates if preview features shall be enabled
 	TIMEOUT                         string = "snyk_timeout_secs"
 	MAX_THREADS                     string = "internal_max_thread_count"
+	LOG_LEVEL                       string = "snyk_log_level" // string that defines the log level based on zerolog levels (trace,debug,info,...)
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"

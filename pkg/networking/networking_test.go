@@ -458,7 +458,7 @@ func TestNetworkImpl_Clone(t *testing.T) {
 
 func TestNetworkImpl_LogResponse_happyPath(t *testing.T) {
 	logBuffer := bytes.NewBuffer([]byte{})
-	logger := zerolog.New(logBuffer).Level(zerolog.TraceLevel)
+	logger := zerolog.New(logBuffer).Level(zerolog.DebugLevel)
 
 	expectedBody := "hello world"
 	request := &http.Request{}
@@ -499,7 +499,7 @@ func TestNetworkImpl_LogResponse_nolog(t *testing.T) {
 
 	t.Run("non trace level logger", func(t *testing.T) {
 		response := &http.Response{}
-		nonTraceLogger := logger.Level(zerolog.DebugLevel)
+		nonTraceLogger := logger.Level(zerolog.InfoLevel)
 
 		// invoke method under test
 		LogResponse(response, &nonTraceLogger)
