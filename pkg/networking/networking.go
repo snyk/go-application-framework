@@ -56,7 +56,7 @@ type networkImpl struct {
 const defaultNetworkLogLevel = zerolog.DebugLevel
 
 func LogRequest(r *http.Request, logger *zerolog.Logger) {
-	if logger.GetLevel() > defaultNetworkLogLevel { // Only log if trace level is enabled
+	if logger.GetLevel() > defaultNetworkLogLevel { // Don't log if logger level is above the threshold
 		return
 	}
 
@@ -65,7 +65,7 @@ func LogRequest(r *http.Request, logger *zerolog.Logger) {
 }
 
 func LogResponse(response *http.Response, logger *zerolog.Logger) {
-	if logger.GetLevel() > defaultNetworkLogLevel { // Only log if trace level is enabled
+	if logger.GetLevel() > defaultNetworkLogLevel { // Don't log if logger level is above the threshold
 		return
 	}
 
