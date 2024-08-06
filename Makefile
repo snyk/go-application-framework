@@ -3,7 +3,7 @@ GOOS = $(shell go env GOOS)
 GOARCH = $(shell go env GOARCH)
 
 GO_BIN := $(shell pwd)/.bin
-OVERRIDE_GOCI_LINT_V := v1.55.2
+OVERRIDE_GOCI_LINT_V := v1.59.1
 SHELL := env PATH=$(GO_BIN):$(PATH) $(SHELL)
 
 .PHONY: format
@@ -40,6 +40,11 @@ testv:
 .PHONY: generate
 generate:
 	@go generate ./...
+
+.PHONY: tools
+tools: $(GO_BIN)/golangci-lint
+	GOBIN=$(GO_BIN) go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@v1.16.2
+	GOBIN=$(GO_BIN) go install github.com/golang/mock/mockgen@v1.6.0
 
 $(GO_BIN)/golangci-lint:
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}

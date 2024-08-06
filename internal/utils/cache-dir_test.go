@@ -28,7 +28,7 @@ func (m *mockCacheDirOSUtil) MkdirAll(path string, perm os.FileMode) error {
 }
 
 func (m *mockCacheDirOSUtil) Stat(_ string) (os.FileInfo, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil // its a mock
 }
 
 func (m *mockCacheDirOSUtil) TempDir() string {
