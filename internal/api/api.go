@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
@@ -29,6 +30,7 @@ var _ ApiClient = (*snykApiClient)(nil)
 type snykApiClient struct {
 	url    string
 	client *http.Client
+	mutex  sync.RWMutex
 }
 
 // GetSlugFromOrgId retrieves the organization slug associated with a given Snyk organization ID.
@@ -305,6 +307,8 @@ func BuildUrl(a *snykApiClient, endpoint string, queryParams ...string) (*url.UR
 }
 
 func (a *snykApiClient) Init(url string, client *http.Client) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 	a.url = url
 	a.client = client
 }
