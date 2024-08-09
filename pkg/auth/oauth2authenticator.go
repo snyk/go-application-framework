@@ -409,21 +409,32 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 		return fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
-	ctx := context.Background()
+	ctx := request.Context()
 
 	if o.httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
 	}
 
+	// Also ensure this in-process across goroutines.
 	globalRefreshMutex.Lock()
 	defer globalRefreshMutex.Unlock()
+
 	// if the current token is invalid
 	if !o.token.Valid() {
+		// Ensure oauth token refresh is atomic and does not operate on a stale
+		// token across concurrent processes.
+		cleanup, err := o.syncTokenRefresh(ctx)
+		defer cleanup()
+		if err != nil {
+			return err
+		}
+
 		// check if the token in the config is invalid as well
 		token, err := GetOAuthToken(o.config)
 		if err != nil {
 			return err
 		}
+
 		if !token.Valid() {
 			// use TokenSource to refresh the token
 			validToken, err := o.tokenRefresherFunc(ctx, o.oauthConfig, o.token)
@@ -449,4 +460,47 @@ func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) err
 	}
 
 	return nil
+}
+
+const syncTokenRefreshRetryDelay = time.Millisecond * 100
+
+// syncTokenRefresh ensures that an oauth token refresh and configuration file
+// update is atomic when there are multiple concurrent processes which might
+// attempt to refresh.
+//
+// This function also ensures that the token is up to date before refreshing.
+//
+// The returned cleanup function must be called, even if an error occurred.
+func (o *oAuth2Authenticator) syncTokenRefresh(ctx context.Context) (func(), error) {
+	cleanup := func() {}
+	if storage := o.config.GetStorage(); storage != nil {
+		// Lock configuration storage and refresh, to avoid oAuth2Authenticator
+		// racing with itself on concurrently rotating client & refresh tokens.
+		err := storage.Lock(ctx, syncTokenRefreshRetryDelay)
+		if err != nil {
+			return cleanup, err
+		}
+		cleanup = func() {
+			_ = storage.Unlock() //nolint:errcheck // unlock errors are ignored, pending future GAF observability improvements
+		}
+
+		// Even if we obtained the lock, it's also possible that our
+		// configuration has gone stale since originally read, by another
+		// process refreshing before the above lock was reached.
+		//
+		// To avoid this, unconditionally refresh the configuation from its
+		// storage and re-parse the oauth token stored within.
+		if err = storage.Refresh(o.config, CONFIG_KEY_OAUTH_TOKEN); err != nil {
+			return cleanup, err
+		}
+		o.token, err = GetOAuthToken(o.config)
+		if err != nil {
+			return cleanup, err
+		}
+		if o.token == nil {
+			return cleanup, fmt.Errorf("oauth token must not be nil to authorize")
+		}
+	}
+
+	return cleanup, nil
 }

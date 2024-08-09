@@ -32,7 +32,6 @@ linters-settings:
   gosimple:
     checks: ['all']
   govet:
-    check-shadowing: true
     enable-all: true
     disable:
       - fieldalignment

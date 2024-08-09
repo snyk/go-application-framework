@@ -1,12 +1,14 @@
 package configuration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -438,4 +440,96 @@ func Test_Configuration_GetKeyType(t *testing.T) {
 	config := NewInMemory()
 	assert.Equal(t, EnvVarKeyType, config.GetKeyType("snyk_something"))
 	assert.Equal(t, UnspecifiedKeyType, config.GetKeyType("app"))
+}
+
+func Test_JsonStorage_Locking(t *testing.T) {
+	outerConfig := NewFromFiles(TEST_FILENAME)
+	outerConfig.PersistInStorage("n")
+	outerConfig.Set("n", float64(0))
+	N := 100
+	ch := make(chan struct{}, N)
+	ctx := context.Background()
+	for range N {
+		go func() {
+			defer func() { ch <- struct{}{} }()
+
+			config := NewFromFiles(TEST_FILENAME)
+			config.PersistInStorage("n")
+			storage := config.GetStorage()
+			assert.NotNil(t, storage)
+
+			err := storage.Lock(ctx, time.Millisecond)
+			assert.NoError(t, err)
+			defer func() {
+				unlockErr := storage.Unlock()
+				assert.NoError(t, unlockErr)
+			}()
+
+			err = storage.Refresh(config, "n")
+			assert.NoError(t, err)
+			config.Set("n", config.GetFloat64("n")+1)
+		}()
+	}
+	for range N {
+		<-ch
+	}
+	// Before refresh, we still have the initial value.
+	assert.Equal(t, float64(0), outerConfig.GetFloat64("n"))
+	err := outerConfig.GetStorage().Refresh(outerConfig, "n")
+	assert.NoError(t, err)
+	// After refresh, we get the sum from all the concurrent goroutines.
+	assert.Equal(t, float64(N), outerConfig.GetFloat64("n"))
+}
+
+func Test_JsonStorage_Locking_Interrupted(t *testing.T) {
+	outerConfig := NewFromFiles(TEST_FILENAME)
+	outerConfig.PersistInStorage("n")
+	outerConfig.Set("n", float64(0))
+	N := 100
+	ch := make(chan struct{}, N)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for range N {
+		go func() {
+			defer func() { ch <- struct{}{} }()
+
+			config := NewFromFiles(TEST_FILENAME)
+			config.PersistInStorage("n")
+			storage := config.GetStorage()
+			assert.NotNil(t, storage)
+
+			err := storage.Lock(ctx, time.Millisecond)
+			if err != nil {
+				assert.ErrorIs(t, err, context.Canceled)
+				return
+			} else {
+				assert.NoError(t, err)
+			}
+			defer func() {
+				unlockErr := storage.Unlock()
+				assert.NoError(t, unlockErr)
+			}()
+
+			err = storage.Refresh(config, "n")
+			assert.NoError(t, err)
+			n := config.GetFloat64("n")
+			if n == 50 {
+				// Locking will fail after 50 increments.
+				// All subsequent attempts will fail to lock.
+				cancel()
+				return
+			}
+			config.Set("n", config.GetFloat64("n")+1)
+		}()
+	}
+	for range N {
+		<-ch
+	}
+	// Before refresh, we still have the initial value.
+	assert.Equal(t, float64(0), outerConfig.GetFloat64("n"))
+	err := outerConfig.GetStorage().Refresh(outerConfig, "n")
+	assert.NoError(t, err)
+	// After refresh, we get the sum from all the concurrent goroutines prior
+	// to the context getting canceled.
+	assert.Equal(t, float64(50), outerConfig.GetFloat64("n"))
 }

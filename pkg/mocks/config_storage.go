@@ -5,9 +5,12 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
+	time "time"
 
 	gomock "github.com/golang/mock/gomock"
+	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 // MockStorage is a mock of Storage interface.
@@ -33,6 +36,34 @@ func (m *MockStorage) EXPECT() *MockStorageMockRecorder {
 	return m.recorder
 }
 
+// Lock mocks base method.
+func (m *MockStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Lock", ctx, retryDelay)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Lock indicates an expected call of Lock.
+func (mr *MockStorageMockRecorder) Lock(ctx, retryDelay interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockStorage)(nil).Lock), ctx, retryDelay)
+}
+
+// Refresh mocks base method.
+func (m *MockStorage) Refresh(config configuration.Configuration, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Refresh", config, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Refresh indicates an expected call of Refresh.
+func (mr *MockStorageMockRecorder) Refresh(config, key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockStorage)(nil).Refresh), config, key)
+}
+
 // Set mocks base method.
 func (m *MockStorage) Set(key string, value any) error {
 	m.ctrl.T.Helper()
@@ -45,4 +76,18 @@ func (m *MockStorage) Set(key string, value any) error {
 func (mr *MockStorageMockRecorder) Set(key, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockStorage)(nil).Set), key, value)
+}
+
+// Unlock mocks base method.
+func (m *MockStorage) Unlock() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Unlock")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Unlock indicates an expected call of Unlock.
+func (mr *MockStorageMockRecorder) Unlock() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*MockStorage)(nil).Unlock))
 }
