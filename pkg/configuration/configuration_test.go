@@ -450,7 +450,7 @@ func Test_JsonStorage_Locking(t *testing.T) {
 	N := 100
 	ch := make(chan struct{}, N)
 	ctx := context.Background()
-	for range N {
+	for i := 0; i < N; i++ {
 		go func() {
 			defer func() { ch <- struct{}{} }()
 
@@ -471,7 +471,7 @@ func Test_JsonStorage_Locking(t *testing.T) {
 			config.Set("n", config.GetFloat64("n")+1)
 		}()
 	}
-	for range N {
+	for i := 0; i < N; i++ {
 		<-ch
 	}
 	// Before refresh, we still have the initial value.
@@ -490,7 +490,7 @@ func Test_JsonStorage_Locking_Interrupted(t *testing.T) {
 	ch := make(chan struct{}, N)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	for range N {
+	for i := 0; i < N; i++ {
 		go func() {
 			defer func() { ch <- struct{}{} }()
 
@@ -523,7 +523,7 @@ func Test_JsonStorage_Locking_Interrupted(t *testing.T) {
 			config.Set("n", config.GetFloat64("n")+1)
 		}()
 	}
-	for range N {
+	for i := 0; i < N; i++ {
 		<-ch
 	}
 	// Before refresh, we still have the initial value.
