@@ -28,7 +28,13 @@ jobs:
     steps:
       - checkout
       - run:
+          command: |
+            C:\msys64\usr\bin\bash -lc "pacman -Syu --noconfirm"
+            C:\msys64\usr\bin\bash -lc "pacman -S --noconfirm make"
+          shell: powershell
+      - run:
           name: Run unit tests
+          shell: bash
           command: make test
 
   build:
