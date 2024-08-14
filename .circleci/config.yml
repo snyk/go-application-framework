@@ -2,6 +2,8 @@ version: 2.1
 
 orbs:
   prodsec: snyk/prodsec-orb@1
+  win: circleci/windows@5.0
+
 
 base_image: &base_image
   resource_class: small
@@ -17,6 +19,18 @@ jobs:
       - run:
           name: Run unit tests
           command: make test
+
+  windows_test:
+    executor:
+      name: win/server-2022
+      version: "current"
+
+    steps:
+      - checkout
+      - run:
+          name: Run unit tests
+          command: make test
+
   build:
     <<: *base_image
     steps:
@@ -49,7 +63,10 @@ workflows:
           context: devex_cli
       - unit_test:
           name: Unit tests
+      - windows_test:
+          name: Windows tests
       - build:
           name: Build
           requires:
             - Unit tests
+            - Windows tests
