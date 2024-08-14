@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+
 	"github.com/snyk/go-application-framework/internal/utils"
 )
 
@@ -59,7 +60,7 @@ func WithConfiguration(c Configuration) JsonOption {
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
 		path:     path,
-		fileLock: flock.New(path),
+		fileLock: flock.New(path + ".lock"),
 	}
 
 	for _, opt := range options {
