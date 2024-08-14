@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -90,28 +91,28 @@ func determineBasePath() string {
 		return "."
 	}
 
-	result := path.Join(homedir, ".config", "configstore")
+	result := filepath.Join(homedir, ".config", "configstore")
 	return result
 }
 
 // CreateConfigurationFile creates a configuration file with the given name.
 func CreateConfigurationFile(filename string) (string, error) {
 	configPath := determineBasePath()
-	filepath := path.Join(configPath, filename)
+	p := filepath.Join(configPath, filename)
 
-	folder := path.Dir(filepath)
+	folder := filepath.Dir(p)
 	err := os.MkdirAll(folder, 0755)
 	if err != nil {
 		return "", err
 	}
 
 	// create empty file
-	err = os.WriteFile(filepath, []byte{}, 0755)
+	err = os.WriteFile(p, []byte{}, 0755)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath, err
+	return p, err
 }
 
 // New creates a new snyk configuration file.
@@ -377,9 +378,9 @@ func (ev *extendedViper) GetFloat64(key string) float64 {
 // GetUrl returns a configuration value as url.URL.
 func (ev *extendedViper) GetUrl(key string) *url.URL {
 	urlString := ev.GetString(key)
-	url, err := url.Parse(urlString)
+	u, err := url.Parse(urlString)
 	if err == nil {
-		return url
+		return u
 	} else {
 		return nil
 	}

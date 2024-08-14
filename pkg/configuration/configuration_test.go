@@ -380,6 +380,7 @@ func Test_DefaultValuehandling(t *testing.T) {
 	t.Run("set and unset", func(t *testing.T) {
 		fakehome := t.TempDir()
 		t.Setenv("HOME", fakehome)
+		t.Setenv("USERPROFILE", fakehome)
 		configPath := filepath.Join(fakehome, ".config", "configstore", TEST_FILENAME_JSON)
 
 		assert.NoError(t, prepareConfigstore(`{"foo":"bar","baz":"quux"}`))
