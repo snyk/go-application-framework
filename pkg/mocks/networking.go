@@ -38,6 +38,18 @@ func (m *MockNetworkAccess) EXPECT() *MockNetworkAccessMockRecorder {
 	return m.recorder
 }
 
+// AddDynamicHeaderField mocks base method.
+func (m *MockNetworkAccess) AddDynamicHeaderField(key string, f networking.DynamicHeaderFunc) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddDynamicHeaderField", key, f)
+}
+
+// AddDynamicHeaderField indicates an expected call of AddDynamicHeaderField.
+func (mr *MockNetworkAccessMockRecorder) AddDynamicHeaderField(key, f interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDynamicHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).AddDynamicHeaderField), key, f)
+}
+
 // AddHeaderField mocks base method.
 func (m *MockNetworkAccess) AddHeaderField(key, value string) {
 	m.ctrl.T.Helper()

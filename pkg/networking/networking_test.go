@@ -266,14 +266,22 @@ func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 		"Secret-Header": {"secret-value"},
 		"Authorization": {"Bearer MyToken"},
 		"Session-Token": {"Bearer MyToken"},
+		"Request-Id":    {"my-request"},
 	}
+
+	replaceableHeader := "I was here first"
 
 	config := getConfig()
 	config.Set(configuration.AUTHENTICATION_BEARER_TOKEN, "MyToken")
 	net := NewNetworkAccess(config)
 	net.AddHeaderField("secret-header", "secret-value")
+	net.AddDynamicHeaderField("request-id", func(values []string) []string {
+		assert.Equal(t, []string{replaceableHeader}, values)
+		return []string{"my-request"}
+	})
 
 	request, err := http.NewRequest(http.MethodGet, "https://api.snyk.io", nil)
+	request.Header.Add("request-id", replaceableHeader)
 	assert.NoError(t, err)
 	err = net.AddHeaders(request)
 	assert.NoError(t, err)
