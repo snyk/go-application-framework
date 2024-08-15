@@ -166,7 +166,6 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 // addDefaultHeader adds the default headers request.
 func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	// add/replace request headers by dynamic headers
-	n.logger.Debug().Msg("Adding dynamic headers")
 	for k, determineHeader := range n.dynamicHeaders {
 		existingValues := request.Header.Values(k)
 		newValues := determineHeader(existingValues)
