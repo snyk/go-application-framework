@@ -31,6 +31,8 @@ type NetworkAccess interface {
 	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key, value string)
+	// AddDynamicHeaderField adds a dynamic header field to the request.
+	AddDynamicHeaderField(key string, f func() string)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
@@ -46,11 +48,12 @@ type NetworkAccess interface {
 
 // networkImpl is the default implementation of the NetworkAccess interface.
 type networkImpl struct {
-	config       configuration.Configuration
-	staticHeader http.Header
-	proxy        func(req *http.Request) (*url.URL, error)
-	caPool       *x509.CertPool
-	logger       *zerolog.Logger
+	config         configuration.Configuration
+	staticHeader   http.Header
+	dynamicHeaders map[string]func() string
+	proxy          func(req *http.Request) (*url.URL, error)
+	caPool         *x509.CertPool
+	logger         *zerolog.Logger
 }
 
 const defaultNetworkLogLevel = zerolog.DebugLevel
@@ -148,6 +151,14 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
 }
 
+func (n *networkImpl) AddDynamicHeaderField(key string, f func() string) {
+	if n.dynamicHeaders == nil {
+		n.logger.Debug().Msg("Creating dynamic headers map")
+		n.dynamicHeaders = make(map[string]func() string)
+	}
+	n.dynamicHeaders[key] = f
+}
+
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
 	return middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
@@ -155,6 +166,16 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 
 // addDefaultHeader adds the default headers request.
 func (n *networkImpl) addDefaultHeader(request *http.Request) {
+	// add/replace request headers by dynamic headers
+	n.logger.Debug().Msg("Adding dynamic headers")
+	for k, f := range n.dynamicHeaders {
+		if request.Header.Get(k) == "" {
+			n.logger.Debug().Msgf("Adding dynamic header %s", k)
+			request.Header.Add(k, f())
+		} else {
+			n.logger.Debug().Msgf("Skipping dynamic header %s, already set as %s", k, request.Header.Get(k))
+		}
+	}
 	// add/replace request headers by default headers
 	for k, v := range n.staticHeader {
 		request.Header.Del(k)
