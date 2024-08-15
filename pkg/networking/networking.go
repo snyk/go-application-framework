@@ -261,10 +261,15 @@ func (n *networkImpl) GetConfiguration() configuration.Configuration {
 
 func (n *networkImpl) Clone() NetworkAccess {
 	clone := &networkImpl{
-		config:       n.config.Clone(),
-		logger:       n.logger,
-		staticHeader: n.staticHeader.Clone(),
-		proxy:        n.proxy,
+		config:         n.config.Clone(),
+		logger:         n.logger,
+		staticHeader:   n.staticHeader.Clone(),
+		dynamicHeaders: map[string]DynamicHeaderFunc{},
+		proxy:          n.proxy,
+	}
+
+	for key, dynHeaderFuncs := range n.dynamicHeaders {
+		clone.dynamicHeaders[key] = dynHeaderFuncs
 	}
 
 	if n.caPool != nil {
