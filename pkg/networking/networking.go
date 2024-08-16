@@ -31,6 +31,8 @@ type NetworkAccess interface {
 	GetUnauthorizedHttpClient() *http.Client
 	// AddHeaderField adds a header field to the default header.
 	AddHeaderField(key, value string)
+	// AddDynamicHeaderField adds a dynamic header field to the request.
+	AddDynamicHeaderField(key string, f DynamicHeaderFunc)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// GetAuthenticator returns the authenticator.
@@ -44,13 +46,16 @@ type NetworkAccess interface {
 	Clone() NetworkAccess
 }
 
+type DynamicHeaderFunc func([]string) []string
+
 // networkImpl is the default implementation of the NetworkAccess interface.
 type networkImpl struct {
-	config       configuration.Configuration
-	staticHeader http.Header
-	proxy        func(req *http.Request) (*url.URL, error)
-	caPool       *x509.CertPool
-	logger       *zerolog.Logger
+	config         configuration.Configuration
+	staticHeader   http.Header
+	dynamicHeaders map[string]DynamicHeaderFunc
+	proxy          func(req *http.Request) (*url.URL, error)
+	caPool         *x509.CertPool
+	logger         *zerolog.Logger
 }
 
 const defaultNetworkLogLevel = zerolog.DebugLevel
@@ -125,10 +130,11 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	logger := zerolog.New(io.Discard)
 
 	n := &networkImpl{
-		config:       config,
-		staticHeader: http.Header{},
-		logger:       &logger,
-		proxy:        http.ProxyFromEnvironment,
+		config:         config,
+		staticHeader:   http.Header{},
+		logger:         &logger,
+		proxy:          http.ProxyFromEnvironment,
+		dynamicHeaders: map[string]DynamicHeaderFunc{},
 	}
 
 	extraCaCertFile := config.GetString(configuration.ADD_TRUSTED_CA_FILE)
@@ -144,8 +150,17 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	return n
 }
 
+// AddHeaderField enables to set static header field values to requests. Existing values will be replaced.
+// For more flexibility, see AddDynamicHeaderField().
 func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
+}
+
+// AddDynamicHeaderField enables to define functions that will be invoked when a header field is added to a request.
+// The function receives a string slice of existing values and should return the final values associated to the header field.
+// This function extends the possibilities that AddHeaderField() offers for static header fields.
+func (n *networkImpl) AddDynamicHeaderField(key string, f DynamicHeaderFunc) {
+	n.dynamicHeaders[key] = f
 }
 
 func (n *networkImpl) AddHeaders(request *http.Request) error {
@@ -155,6 +170,16 @@ func (n *networkImpl) AddHeaders(request *http.Request) error {
 
 // addDefaultHeader adds the default headers request.
 func (n *networkImpl) addDefaultHeader(request *http.Request) {
+	// add/replace request headers by dynamic headers
+	for k, determineHeader := range n.dynamicHeaders {
+		existingValues := request.Header.Values(k)
+		newValues := determineHeader(existingValues)
+		request.Header.Del(k)
+		for _, nv := range newValues {
+			request.Header.Add(k, nv)
+		}
+	}
+
 	// add/replace request headers by default headers
 	for k, v := range n.staticHeader {
 		request.Header.Del(k)
@@ -240,10 +265,15 @@ func (n *networkImpl) GetConfiguration() configuration.Configuration {
 
 func (n *networkImpl) Clone() NetworkAccess {
 	clone := &networkImpl{
-		config:       n.config.Clone(),
-		logger:       n.logger,
-		staticHeader: n.staticHeader.Clone(),
-		proxy:        n.proxy,
+		config:         n.config.Clone(),
+		logger:         n.logger,
+		staticHeader:   n.staticHeader.Clone(),
+		dynamicHeaders: map[string]DynamicHeaderFunc{},
+		proxy:          n.proxy,
+	}
+
+	for key, dynHeaderFuncs := range n.dynamicHeaders {
+		clone.dynamicHeaders[key] = dynHeaderFuncs
 	}
 
 	if n.caPool != nil {
