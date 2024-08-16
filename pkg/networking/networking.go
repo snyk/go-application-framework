@@ -150,10 +150,15 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 	return n
 }
 
+// AddHeaderField enables to set static header field values to requests. Existing values will be replaced.
+// For more flexibility, see AddDynamicHeaderField().
 func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
 }
 
+// AddDynamicHeaderField enables to define functions that will be invoked when a header field is added to a request.
+// The function receives a string slice of existing values and should return the final values associated to the header field.
+// This function extends the possibilities that AddHeaderField() offers for static header fields.
 func (n *networkImpl) AddDynamicHeaderField(key string, f DynamicHeaderFunc) {
 	n.dynamicHeaders[key] = f
 }
