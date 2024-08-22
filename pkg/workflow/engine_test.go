@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
@@ -201,4 +202,40 @@ func Test_Engine_ClonedNetworkAccess(t *testing.T) {
 	// ensure that the config value in the original config wasn't changed
 	actual := config.GetInt(valueName)
 	assert.Equal(t, expected, actual)
+}
+
+func Test_EngineInvocationConcurrent(t *testing.T) {
+	configuration := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(configuration)
+
+	flagset := pflag.NewFlagSet("1", pflag.ExitOnError)
+	callback := func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return nil, nil
+	}
+
+	workflowId := NewWorkflowIdentifier("test")
+	_, err := engine.Register(workflowId, ConfigurationOptionsFromFlagset(flagset), callback)
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	N := 10
+	stop := make(chan struct{}, N)
+	for range N {
+		go func() {
+			_, invokeErr := engine.Invoke(workflowId)
+			assert.NoError(t, invokeErr)
+			stop <- struct{}{}
+		}()
+	}
+
+	for range N {
+		select {
+		case <-stop:
+		case <-time.After(time.Second):
+			assert.FailNow(t, "timeout reached")
+			return
+		}
+	}
 }
