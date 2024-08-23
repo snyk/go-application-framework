@@ -199,10 +199,11 @@ func gitBaseId(path string) (*url.URL, error) {
 	}
 
 	// based on the docs, the first URL is being used to fetch, so this is the one we use
-	repoUrl := remote.Config().URLs[0]
-	if repoUrl == "" {
+	remoteConfig := remote.Config()
+	if remoteConfig == nil || len(remoteConfig.URLs) == 0 || remoteConfig.URLs[0] == "" {
 		return nil, fmt.Errorf("no remote url found")
 	}
+	repoUrl := remoteConfig.URLs[0]
 
 	// ... retrieves the branch pointed by HEAD
 	ref, err := repo.Head()
