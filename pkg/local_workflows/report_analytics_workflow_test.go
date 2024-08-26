@@ -152,9 +152,8 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	// setup
 	logger := zerolog.New(io.Discard)
 	config := configuration.New()
-	requestPayload := testGetScanDonePayloadString()
 	expectedPayload := testGetAnalyticsV2PayloadString()
-	config.Set("inputData", requestPayload)
+	config.Set("inputData", expectedPayload)
 	orgId := "orgId"
 	a := analytics.New()
 

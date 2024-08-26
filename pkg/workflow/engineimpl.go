@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
@@ -25,10 +26,12 @@ type EngineImpl struct {
 	analytics            analytics.Analytics
 	networkAccess        networking.NetworkAccess
 	initialized          bool
-	invocationCounter    int
 	logger               *zerolog.Logger
 	ui                   ui.UserInterface
 	runtimeInfo          runtimeinfo.RuntimeInfo
+
+	mu                sync.Mutex
+	invocationCounter int
 }
 
 var _ Engine = (*EngineImpl)(nil)
@@ -109,7 +112,10 @@ func NewDefaultWorkFlowEngine() Engine {
 func (e *EngineImpl) Init() error {
 	var err error
 
+	e.mu.Lock()
 	e.invocationCounter = 0
+	e.mu.Unlock()
+
 	_ = e.GetNetworkAccess()
 
 	for i := range e.extensionInitializer {
@@ -236,10 +242,13 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 	if ok {
 		callback := workflow.GetEntryPoint()
 		if callback != nil {
+			e.mu.Lock()
 			e.invocationCounter++
 
 			// prepare logger
 			prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
+			e.mu.Unlock()
+
 			zlogger := e.logger.With().Str("ext", prefix).Logger()
 
 			// prepare configuration

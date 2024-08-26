@@ -2,23 +2,37 @@ version: 2.1
 
 orbs:
   prodsec: snyk/prodsec-orb@1
+  win: circleci/windows@5.0
 
-executors:
-  linux:
-    machine:
-      image: ubuntu-2204:2023.10.1
+
+base_image: &base_image
+  resource_class: small
+  docker:
+    - image: cimg/go:1.22
 
 # Define the jobs we want to run for this project
 jobs:
   unit_test:
-    executor: linux
+    <<: *base_image
     steps:
       - checkout
       - run:
           name: Run unit tests
           command: make test
+
+  windows_test:
+    executor:
+      name: win/server-2022
+      version: "current"
+
+    steps:
+      - checkout
+      - run:
+          name: Run unit tests
+          command: go test ./...
+
   build:
-    executor: linux
+    <<: *base_image
     steps:
       - checkout
       - run:
@@ -29,9 +43,7 @@ jobs:
           command: make build
 
   security-scans:
-    resource_class: small
-    docker:
-      - image: cimg/go:1.22
+    <<: *base_image
     steps:
       - checkout
       - prodsec/security_scans:
@@ -51,7 +63,10 @@ workflows:
           context: devex_cli
       - unit_test:
           name: Unit tests
+      - windows_test:
+          name: Windows tests
       - build:
           name: Build
           requires:
             - Unit tests
+            - Windows tests

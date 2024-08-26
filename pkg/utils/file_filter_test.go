@@ -90,8 +90,8 @@ func TestFileFilter_GetRules(t *testing.T) {
 		// create expected rules
 		expectedRules := append(
 			[]string{
-				fmt.Sprintf("%s/**/test1.ts/**", tempDir), // apply ignore in subDirs
-				fmt.Sprintf("%s/**/test1.ts", tempDir),    // apply ignore in curDir
+				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)), // apply ignore in subDirs
+				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),    // apply ignore in curDir
 			},
 			fileFilter.defaultRules...,
 		)
@@ -117,8 +117,8 @@ func TestFileFilter_GetRules(t *testing.T) {
 		// create expected rules
 		expectedRules := append(
 			[]string{
-				fmt.Sprintf("%s/**/test1.ts/**", tempDir), // apply ignore in subDirs
-				fmt.Sprintf("%s/**/test1.ts", tempDir),    // apply ignore in curDir
+				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)), // apply ignore in subDirs
+				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),    // apply ignore in curDir
 			},
 			fileFilter.defaultRules...,
 		)

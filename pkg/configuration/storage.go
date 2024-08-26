@@ -1,9 +1,13 @@
 package configuration
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/gofrs/flock"
 
 	"github.com/snyk/go-application-framework/internal/utils"
 )
@@ -12,11 +16,26 @@ import (
 
 type Storage interface {
 	Set(key string, value any) error
+	Refresh(config Configuration, key string) error
+	Lock(ctx context.Context, retryDelay time.Duration) error
+	Unlock() error
 }
 
 type EmptyStorage struct{}
 
-func (e *EmptyStorage) Set(_ string, _ any) error {
+func (*EmptyStorage) Set(string, any) error {
+	return nil
+}
+
+func (*EmptyStorage) Refresh(Configuration, string) error {
+	return nil
+}
+
+func (*EmptyStorage) Lock(context.Context, time.Duration) error {
+	return nil
+}
+
+func (*EmptyStorage) Unlock() error {
 	return nil
 }
 
@@ -25,8 +44,9 @@ func (e *EmptyStorage) Set(_ string, _ any) error {
 var keyDeleted = struct{}{}
 
 type JsonStorage struct {
-	path   string
-	config Configuration
+	path     string
+	config   Configuration
+	fileLock *flock.Flock
 }
 
 type JsonOption func(*JsonStorage)
@@ -39,7 +59,8 @@ func WithConfiguration(c Configuration) JsonOption {
 
 func NewJsonStorage(path string, options ...JsonOption) *JsonStorage {
 	storage := &JsonStorage{
-		path: path,
+		path:     path,
+		fileLock: flock.New(path + ".lock"),
 	}
 
 	for _, opt := range options {
@@ -106,4 +127,29 @@ func (s *JsonStorage) Set(key string, value any) error {
 	err = os.WriteFile(s.path, configJson, utils.FILEPERM_666)
 
 	return err
+}
+
+func (s *JsonStorage) Refresh(config Configuration, key string) error {
+	contents, err := os.ReadFile(s.path)
+	if err != nil {
+		return err
+	}
+	doc := map[string]interface{}{}
+	err = json.Unmarshal(contents, &doc)
+	if err != nil {
+		return err
+	}
+	if value, ok := doc[key]; ok {
+		config.Set(key, value)
+	}
+	return nil
+}
+
+func (s *JsonStorage) Lock(ctx context.Context, retryDelay time.Duration) error {
+	_, err := s.fileLock.TryLockContext(ctx, retryDelay)
+	return err
+}
+
+func (s *JsonStorage) Unlock() error {
+	return s.fileLock.Unlock()
 }

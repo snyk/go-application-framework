@@ -196,7 +196,7 @@ func updateFile(t *testing.T, filePath, target, replacement string) error {
 	t.Helper()
 	file, err := os.Open(filePath)
 	assert.NoError(t, err)
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	var updatedLines []string

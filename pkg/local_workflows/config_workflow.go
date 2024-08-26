@@ -47,8 +47,12 @@ func determineUrlFromAlias(alias string) (string, error) {
 	dnsPattern := "https://api.%s.snyk.io"
 	supportedUrlSchemes := []string{"http", "https"}
 	knownAliases := map[string]string{
-		"default":    "https://api.snyk.io",
-		"snyk-us-01": "https://api.us1.snyk.io",
+		"default":     "https://api.snyk.io",
+		"snyk-us-01":  "https://api.snyk.io",
+		"snyk-us-02":  "https://api.us.snyk.io",
+		"snyk-au-01":  "https://api.au.snyk.io",
+		"snyk-eu-01":  "https://api.eu.snyk.io",
+		"snyk-gov-01": "https://api.snykgov.io",
 	}
 
 	// lookup if alias can be directly mapped to a URL
@@ -100,7 +104,7 @@ func sanityCheck(config configuration.Configuration) error {
 	}
 
 	if len(envVars) > 0 {
-		tmp := cli_error.NewConfigEnvironmentConsistencyIssueError(fmt.Sprintf("The following existing configuration values might cause unexpected behavior! (%v)", strings.Join(envVars, ", ")))
+		tmp := cli_error.NewConfigEnvironmentConsistencyIssueError(fmt.Sprintf("The following existing configuration values might cause unexpected behavior: `%v`", strings.Join(envVars, "`, `")))
 		tmp.StatusCode = 0
 		return tmp
 	}

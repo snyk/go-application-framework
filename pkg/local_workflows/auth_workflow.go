@@ -86,11 +86,7 @@ func autoDetectAuthType(config configuration.Configuration) string {
 		return authTypeToken
 	}
 
-	if config.GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
-		return authTypeOAuth
-	}
-
-	return authTypeToken
+	return authTypeOAuth
 }
 
 func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
