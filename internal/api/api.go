@@ -5,11 +5,13 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/go-application-framework/internal/api/contract"
-	"github.com/snyk/go-application-framework/internal/constants"
+
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/snyk/go-application-framework/internal/api/contract"
+	"github.com/snyk/go-application-framework/internal/constants"
 )
 
 type ApiClient interface {

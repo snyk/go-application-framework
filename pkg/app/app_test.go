@@ -3,7 +3,6 @@ package app
 import (
 	"errors"
 	"fmt"
-	"github.com/snyk/go-application-framework/internal/api"
 	"net/http"
 	"testing"
 
@@ -11,6 +10,7 @@ import (
 	zlog "github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
