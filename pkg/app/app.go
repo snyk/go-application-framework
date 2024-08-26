@@ -3,6 +3,7 @@ package app
 import (
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -20,14 +21,14 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		if existingValue == nil {
 			flagname := "snykCodeConsistentIgnores"
 			client := engine.GetNetworkAccess().GetHttpClient()
 			url := config.GetString(configuration.API_URL)
 			org := config.GetString(configuration.ORGANIZATION)
-			apiClient.Init(url, client)
+			apiClient := apiClientFactory(url, client)
 			result, err := apiClient.GetFeatureFlag(flagname, org)
 			if err != nil {
 				logger.Printf("Failed to determine feature flag \"%s\" for org \"%s\": %s", flagname, org, err)
@@ -40,11 +41,11 @@ func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config confi
 	return callback
 }
 
-func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
-		apiClient.Init(url, client)
+		apiClient := apiClientFactory(url, client)
 		orgId := config.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
 			return existingValue
@@ -58,11 +59,11 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	return callback
 }
 
-func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
-		apiClient.Init(url, client)
+		apiClient := apiClientFactory(url, client)
 		existingString, ok := existingValue.(string)
 		if existingValue != nil && ok && len(existingString) > 0 {
 			orgId := existingString
@@ -148,9 +149,14 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine, logger *zerolog.Logge
 }
 
 // initConfiguration initializes the configuration with initial values.
-func initConfiguration(engine workflow.Engine, config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) {
+func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
 	if logger == nil {
 		logger = &zlog.Logger
+	}
+	if apiClientFactory == nil {
+		apiClientFactory = func(url string, client *http.Client) api.ApiClient {
+			return api.NewApi(url, client)
+		}
 	}
 
 	dir, err := utils.SnykCacheDir()
@@ -177,8 +183,8 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		return appUrl
 	})
 
-	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, apiClient, logger))
-	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, apiClient, logger))
+	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
 		if existingValue == nil {
@@ -197,7 +203,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
-	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, apiClient, logger))
+	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine, logger))
 }
 
@@ -216,7 +222,7 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 
 	config := engine.GetConfiguration()
 	if config != nil {
-		initConfiguration(engine, config, api.NewApiInstance(), engine.GetLogger())
+		initConfiguration(engine, config, engine.GetLogger(), nil)
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)

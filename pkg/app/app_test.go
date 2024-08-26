@@ -3,12 +3,14 @@ package app
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -59,7 +61,10 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
-	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -84,7 +89,10 @@ func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
-	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
@@ -108,7 +116,10 @@ func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
-	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
 
 	config.Set(configuration.ORGANIZATION, orgName)
 
@@ -125,13 +136,12 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
-	// mock assertion
-	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).Times(1)
-
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
-	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
-
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
 	config.Set(configuration.ORGANIZATION, orgId)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
@@ -176,7 +186,10 @@ func Test_initConfiguration_snykgov(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	config := configuration.NewInMemory()
-	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(workflow.NewWorkFlowEngine(config), config, &zlog.Logger, apiClientFactory)
 
 	config.Set(configuration.API_URL, endpoint)
 
@@ -195,7 +208,10 @@ func Test_initConfiguration_NOT_snykgov(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	config := configuration.NewInMemory()
-	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(workflow.NewWorkFlowEngine(config), config, &zlog.Logger, apiClientFactory)
 
 	config.Set(configuration.API_URL, endpoint)
 
@@ -216,7 +232,10 @@ func Test_initConfiguration_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(false, nil).Times(1)
 	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(false, fmt.Errorf("error")).Times(1)
 
-	initConfiguration(workflow.NewWorkFlowEngine(config), config, mockApiClient, &zlog.Logger)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(workflow.NewWorkFlowEngine(config), config, &zlog.Logger, apiClientFactory)
 
 	consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	assert.True(t, consistentIgnores)
@@ -235,11 +254,14 @@ func Test_initConfiguration_PREVIEW_FEATURES_ENABLED(t *testing.T) {
 	// setup mock
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
-	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
 
-	initConfiguration(engine, config, mockApiClient, &zlog.Logger)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
 
 	engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-preview.456")))
+
 	actual := config.GetBool(configuration.PREVIEW_FEATURES_ENABLED)
 	assert.True(t, actual)
 
