@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,10 +23,10 @@ import (
 )
 
 var (
-	WORKFLOWID_REPORT_ANALYTICS workflow.Identifier = workflow.NewWorkflowIdentifier(reportAnalyticsWorkflowName)
-
-	scanDoneSchemaLoader    gojsonschema.JSONLoader
-	analyticsV2SchemaLoader gojsonschema.JSONLoader
+	WORKFLOWID_REPORT_ANALYTICS  workflow.Identifier = workflow.NewWorkflowIdentifier(reportAnalyticsWorkflowName)
+	scanDoneSchemaLoader         gojsonschema.JSONLoader
+	analyticsV2SchemaLoader      gojsonschema.JSONLoader
+	reportAnalyticsWorkflowMutex sync.RWMutex = sync.RWMutex{}
 )
 
 const (
@@ -36,6 +37,8 @@ const (
 
 // InitReportAnalyticsWorkflow initializes the reportAnalytics workflow before registering it with the engine.
 func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
+	reportAnalyticsWorkflowMutex.Lock()
+	defer reportAnalyticsWorkflowMutex.Unlock()
 	// initialize workflow configuration
 	params := pflag.NewFlagSet(reportAnalyticsWorkflowName, pflag.ExitOnError)
 	params.StringP(reportAnalyticsInputDataFlagName, "i", "", "Input data containing scan done event")
@@ -56,6 +59,9 @@ func InitReportAnalyticsWorkflow(engine workflow.Engine) error {
 
 // reportAnalyticsEntrypoint is the entry point for the reportAnalytics workflow.
 func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputData []workflow.Data) ([]workflow.Data, error) {
+	reportAnalyticsWorkflowMutex.RLock()
+	defer reportAnalyticsWorkflowMutex.RUnlock()
+
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
