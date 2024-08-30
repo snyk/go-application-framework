@@ -115,10 +115,9 @@ _findings: list.Sort(list.Concat([ for run in input.runs {
                 severity: {
                     let _ruleLevel = _rules[result.ruleId].defaultConfiguration.level
                     value: [
-                        if _ruleLevel == "error" { "critical" },
-                        if _ruleLevel == "warning" { "high" },
-                        if _ruleLevel == "note" { "medium" },
-                        if _ruleLevel == "info" { "low" },
+                        if _ruleLevel == "error" { "high" },
+                        if _ruleLevel == "warning" { "medium" },
+                        if _ruleLevel == "note" { "low" },
                         "none"
                     ][0]
                 }
