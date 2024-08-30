@@ -14,4 +14,5 @@ import (
 //go:embed convert
 //go:embed cue.mod
 //go:embed schemas
-var embeddedFilesystem embed.FS
+//go:embed templates
+var EmbeddedFilesystem embed.FS

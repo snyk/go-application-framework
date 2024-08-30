@@ -1,9 +1,16 @@
 package localworkflows
 
 import (
+	"bytes"
+	"cuelang.org/go/cue"
 	"encoding/json"
 	"fmt"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/cue_utils"
+	"io"
+	"os"
 	"strings"
+	"text/template"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -133,19 +140,101 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 func handleContentTypeCue(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
 	var singleDataAsString string
-	singleData, typeCastSuccessful := input[i].GetPayload().([]byte)
+	singleData, typeCastSuccessful := input[i].GetPayload().(*cue.Value)
 	if !typeCastSuccessful {
-		singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
-		if !typeCastSuccessful {
-			return fmt.Errorf("unsupported output type: cue")
-		}
-	} else {
-		singleDataAsString = string(singleData)
+		return fmt.Errorf("unsupported output type: cue")
 	}
+	//if !typeCastSuccessful {
+	//	singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
+	//	if !typeCastSuccessful {
+	//		return fmt.Errorf("unsupported output type: cue")
+	//	}
+	//} else {
+	//	singleDataAsString = string(singleData)
+	//}
 
 	fmt.Println("Juhu cue!")
-	fmt.Print(singleDataAsString)
+	//fmt.Print(singleDataAsString)
+	err := render(singleData)
+	if err != nil {
+		return fmt.Errorf("failed to render output '%s': %v", singleDataAsString, err)
+	}
 	return nil
+}
+
+func render(data *cue.Value) error {
+	// We're rendering the output with a template
+	tmplFile, err := cue_utils.EmbeddedFilesystem.ReadFile("templates/cli-text.tmpl")
+	if err != nil {
+		return err
+	}
+	tmpl := template.Must(template.New("init").Parse(""))
+	addTemplateFuncs(tmpl)
+	tmpl, err = tmpl.Parse(string(tmplFile))
+	if err != nil {
+		return err
+	}
+	tmpl = tmpl.Lookup("main")
+
+	// Decode to a document object model that doesn't require any code
+	// generation at all.
+	//
+	// Forgiving of missing values are tolerated but will show as <NIL>.
+	// Ugly but easier to find and fix than a panic, should be easy to
+	// correlate to the part of the template where the lookup missed.
+	//
+	// Templates would be "written to the schema spec" which is easy to
+	// provide in JSON Schema or Cue formats. This enables non-experts to
+	// work on the CLI output format, including Solutions/Field and
+	// customers.
+	//
+	// Even though the document object model itself is not strongly typed,
+	// Cue can enforce schema constraints by validating the transformation
+	// output.
+	//
+	var result interface{}
+	var outw io.Writer
+	outw = os.Stdout
+
+	err = data.Decode(&result)
+	if err != nil {
+		return fmt.Errorf("failed to decode output: %w", err)
+	}
+
+	// result is a map[string]interace{}
+	//log.Printf("Cue is using a %T for the document object model", result)
+
+	err = tmpl.Execute(outw, &result)
+	if err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return nil
+}
+
+func addTemplateFuncs(t *template.Template) {
+	var funcs = template.FuncMap{
+		"capitalize": func(s string) string {
+			return strings.ToUpper(s)
+		},
+		"templateWithSeverity": func(name string, severity string, data any) (string, error) {
+			style := lipgloss.NewStyle().Bold(true)
+			switch severity {
+			case "critical":
+				style = style.Foreground(lipgloss.Color("#cc33cc"))
+			case "high":
+				style = style.Foreground(lipgloss.Color("#cc3333"))
+			case "medium":
+				style = style.Foreground(lipgloss.Color("#cccc33"))
+			}
+			buf := bytes.NewBuffer(nil)
+			if err := t.ExecuteTemplate(buf, name, data); err != nil {
+				return "", err
+			}
+			return style.Render(buf.String()), nil
+		},
+	}
+	t.Funcs(funcs)
 }
 
 func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outputDestination iUtils.OutputDestination) error {

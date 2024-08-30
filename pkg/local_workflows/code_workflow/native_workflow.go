@@ -2,11 +2,9 @@ package code_workflow
 
 import (
 	"context"
+	"cuelang.org/go/cue/cuecontext"
 	"encoding/json"
 	"fmt"
-	"net/http"
-
-	"cuelang.org/go/cue/cuecontext"
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
 	codeclient "github.com/snyk/code-client-go"
@@ -14,6 +12,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/error-catalog-golang-public/code"
+	"net/http"
 
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -144,12 +143,12 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 			return nil, applyError
 		}
 
-		cliOutputBytes, jsonError := cliOutput.MarshalJSON()
-		if jsonError != nil {
-			return nil, applyError
-		}
+		//cliOutputBytes, jsonError := cliOutput.MarshalJSON()
+		//if jsonError != nil {
+		//	return nil, applyError
+		//}
 
-		cueDataObject := workflow.NewData(workflow.NewTypeIdentifier(id, "cuedata"), "application/cuedata", cliOutputBytes)
+		cueDataObject := workflow.NewData(workflow.NewTypeIdentifier(id, "cuedata"), "application/cuedata", &cliOutput)
 		output = append(output, cueDataObject)
 	}
 

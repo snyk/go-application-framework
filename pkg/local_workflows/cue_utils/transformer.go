@@ -23,14 +23,14 @@ type Transformer struct {
 func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 	var devnull bytes.Buffer
 	overlay := map[string]load.Source{}
-	err := fs.WalkDir(embeddedFilesystem, ".", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(EmbeddedFilesystem, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		contents, err := embeddedFilesystem.ReadFile(path)
+		contents, err := EmbeddedFilesystem.ReadFile(path)
 		if err != nil {
 			return err
 		}

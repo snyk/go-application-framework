@@ -1,0 +1,49 @@
+{{- define "details" }}
+{{- range $finding := .findings }}
+  {{- $location := index $finding.locations 0 }}
+  {{ templateWithSeverity "findingHeader" $finding.rating.severity.value $finding }}
+  {{- if $location.source_location }}
+  Path: {{ $location.source_location.filepath }}, line {{ $location.source_location.original_start_line }}
+  Info: {{ $finding.message.text }}
+  {{- end }}
+  {{- if $location.dependency_path }}
+  Path: {{ $finding.component.name }}
+  Via: {{ template "dependency_path" $location.dependency_path }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+{{- define "dependency_path" }}
+{{- range $i, $pkg := (slice . 1) }}
+{{- if gt $i 0 }} → {{ end }}{{ $pkg.package_name }}@{{ $pkg.package_version }}
+{{- end }}
+{{- end }}
+
+{{- define "findingHeader" }}
+  ✗ [{{ template "severity" .rating }}] {{ .message.header }}
+{{- end }}
+
+{{- define "fingerprint" }}
+{{- .value }}
+{{- end }}
+
+{{- define "severity" }}
+{{- capitalize (printf "%v" .severity.value) }}
+{{- end }}
+
+{{- define "header" }}
+WOOF WOOF WOOF
+{{- end }}
+
+{{- define "summary" }}
+
+FOOW FOOW FOOW
+{{ end }}
+
+{{- define "main" }}
+{{- template "header"  . }}
+{{- template "details" . }}
+{{- template "summary" . }}
+{{- end }}
+
+{{- template "main" . }}
