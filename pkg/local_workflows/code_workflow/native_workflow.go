@@ -3,8 +3,10 @@ package code_workflow
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
 	codeclient "github.com/snyk/code-client-go"
@@ -16,9 +18,12 @@ import (
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	cueutil "github.com/snyk/go-application-framework/pkg/local_workflows/cue_utils"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	cuejson "cuelang.org/go/pkg/encoding/json"
 )
 
 const (
@@ -74,8 +79,10 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 
 	output := []workflow.Data{}
 	path := config.GetString(configuration.INPUT_DIRECTORY)
+	cuelangIsEnabled := config.GetBool("INTERNAL_SNYK_CUELANG_ENABLED")
 
 	logger.Debug().Msgf("Path: %s", path)
+	logger.Debug().Msgf("Using Cuelang: %v", cuelangIsEnabled)
 
 	analyzeFnc := defaultAnalyzeFunction
 	if len(opts) == 1 {
@@ -100,8 +107,50 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		if sarifError != nil {
 			return nil, sarifError
 		}
+		if !cuelangIsEnabled {
+			output = append(output, sarifData)
+		}
+	}
 
-		output = append(output, sarifData)
+	if cuelangIsEnabled {
+		inputContents, errJson := json.Marshal(result.Sarif)
+		if errJson != nil {
+			return nil, errJson
+		}
+
+		input, errUnJson := cuejson.Unmarshal(inputContents)
+		if errUnJson != nil {
+			return nil, fmt.Errorf("failed to unmarshal input: %w", err)
+		}
+
+		ctx := cuecontext.New()
+		sarif2apiTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToTestApiFromSarif)
+		if transformerError != nil {
+			return nil, transformerError
+		}
+
+		api2cliTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToCliFromTestApi)
+		if transformerError != nil {
+			return nil, transformerError
+		}
+
+		apiOutput, applyError := sarif2apiTransformer.Apply(input)
+		if applyError != nil {
+			return nil, applyError
+		}
+
+		cliOutput, applyError := api2cliTransformer.ApplyValue(apiOutput)
+		if applyError != nil {
+			return nil, applyError
+		}
+
+		cliOutputBytes, jsonError := cliOutput.MarshalJSON()
+		if jsonError != nil {
+			return nil, applyError
+		}
+
+		cueDataObject := workflow.NewData(workflow.NewTypeIdentifier(id, "cuedata"), "application/cuedata", cliOutputBytes)
+		output = append(output, cueDataObject)
 	}
 
 	summary := sarif2.CreateCodeSummary(&result.Sarif)

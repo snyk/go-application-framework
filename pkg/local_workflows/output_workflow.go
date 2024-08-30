@@ -115,6 +115,11 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			if err != nil {
 				return output, err
 			}
+		} else if strings.EqualFold(mimeType, "application/cuedata") {
+			err := handleContentTypeCue(config, input, i, outputDestination, debugLogger)
+			if err != nil {
+				return output, err
+			}
 		} else { // handle text/pain and unknown the same way
 			err := handleContentTypeOthers(input, i, mimeType, outputDestination)
 			if err != nil {
@@ -124,6 +129,23 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	}
 
 	return output, nil
+}
+
+func handleContentTypeCue(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
+	var singleDataAsString string
+	singleData, typeCastSuccessful := input[i].GetPayload().([]byte)
+	if !typeCastSuccessful {
+		singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
+		if !typeCastSuccessful {
+			return fmt.Errorf("unsupported output type: cue")
+		}
+	} else {
+		singleDataAsString = string(singleData)
+	}
+
+	fmt.Println("Juhu cue!")
+	fmt.Print(singleDataAsString)
+	return nil
 }
 
 func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outputDestination iUtils.OutputDestination) error {
