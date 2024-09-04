@@ -53,6 +53,8 @@ func findingsModelTransformationWorkflowEntryPoint(invocationCtx workflow.Invoca
 				result = append(result, partialResult...)
 			}
 		}
+	} else {
+		result = inputs
 	}
 
 	return result, err

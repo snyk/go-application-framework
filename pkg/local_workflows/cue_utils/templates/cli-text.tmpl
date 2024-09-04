@@ -1,5 +1,7 @@
 {{- define "details" }}
-{{- range $finding := .findings }}
+{{- range $current_severity := $.severity_order }}
+{{- range $finding := $.findings }}
+  {{- if eq $finding.rating.severity.value $current_severity }}
   {{- $location := index $finding.locations 0 }}
   {{ templateWithSeverity "findingHeader" $finding.rating.severity.value $finding }}
   {{- if $location.source_location }}
@@ -10,8 +12,10 @@
   Path: {{ $finding.component.name }}
   Via: {{ template "dependency_path" $location.dependency_path }}
   {{- end }}
+  {{- end }}
 {{- end }}
 {{- end }}
+{{- end}}
 
 {{- define "dependency_path" }}
 {{- range $i, $pkg := (slice . 1) }}
@@ -37,6 +41,17 @@ WOOF WOOF WOOF
 
 {{- define "summary" }}
 
+  ╭─────────────────────────────────────────────────────╮
+  │ Test Summary                                        │
+  │                                                     │
+  │   Organization:      ide-consistent-ignores-test    │
+  │   Test type:         Static code analysis           │
+  │   Project path:      ../nodejs-goof                 │
+  │                                                     │
+  │   Total issues:   9                                 │
+  │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
+  │   Open issues:    9 [ 2 HIGH  5 MEDIUM  2 LOW ]     │
+  ╰─────────────────────────────────────────────────────╯
 FOOW FOOW FOOW
 {{ end }}
 
