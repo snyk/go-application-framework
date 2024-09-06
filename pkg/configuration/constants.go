@@ -18,7 +18,7 @@ const (
 	DEBUG_FORMAT                    string = "debug_format"
 	INSECURE_HTTPS                  string = "insecure"
 	PROXY_AUTHENTICATION_MECHANISM  string = "proxy_auth"
-	TEMP_DIR_PATH                   string = "snyk_tmp_dir_path"
+	TEMP_DIR_PATH                   string = "snyk_tmp_path"
 	CACHE_PATH                      string = "snyk_cache_path"
 	WORKFLOW_USE_STDIO              string = "internal_wflstdio"
 	RAW_CMD_ARGS                    string = "internal_raw_cmd_args"

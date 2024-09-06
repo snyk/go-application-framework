@@ -311,4 +311,13 @@ func Test_initConfiguration_DEFAULT_TEMP_DIRECTORY(t *testing.T) {
 		actual := config.GetString(configuration.TEMP_DIR_PATH)
 		assert.Equal(t, expected, actual)
 	})
+
+	t.Run("Custom temp path is set in config", func(t *testing.T) {
+		customTempPath := "/custom/tmp/path"
+		config.Set(configuration.TEMP_DIR_PATH, customTempPath)
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-preview.456")))
+		expected := customTempPath
+		actual := config.GetString(configuration.TEMP_DIR_PATH)
+		assert.Equal(t, expected, actual)
+	})
 }
