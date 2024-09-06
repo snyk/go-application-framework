@@ -126,7 +126,7 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
-func defaultTempDirectory(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		if existingValue != nil {
 			return existingValue
@@ -137,7 +137,11 @@ func defaultTempDirectory(engine workflow.Engine, logger *zerolog.Logger) config
 		}
 
 		version := ri.GetVersion()
-		tmpDir := pkg_utils.GetTemporaryDirectory(os.TempDir(), version)
+		if len(version) == 0 {
+			version = "0.0.0"
+		}
+
+		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
 		err := pkg_utils.CreateAllDirectories(tmpDir, version)
 		if err != nil {
 			logger.Err(err)
@@ -195,7 +199,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(logger))
-	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, logger))
+	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {
 		canonicalApiUrl := config.GetString(configuration.API_URL)
