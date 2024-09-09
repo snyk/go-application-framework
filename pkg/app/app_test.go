@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -280,4 +281,43 @@ func Test_initConfiguration_PREVIEW_FEATURES_ENABLED(t *testing.T) {
 	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
 	actual = config.GetBool(configuration.PREVIEW_FEATURES_ENABLED)
 	assert.True(t, actual)
+}
+
+func Test_initConfiguration_DEFAULT_TEMP_DIRECTORY(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := workflow.NewWorkFlowEngine(config)
+
+	//	setup mock
+	mockCachePath := "someuser/caches"
+	config.Set(configuration.CACHE_PATH, mockCachePath)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	t.Run("version is not set", func(t *testing.T) {
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("")))
+		expected := fmt.Sprint(mockCachePath, "/0.0.0", "/tmp/pid", os.Getpid())
+		actual := config.GetString(configuration.TEMP_DIR_PATH)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("Version is set", func(t *testing.T) {
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-preview.456")))
+		expected := fmt.Sprint(mockCachePath, "/1.2.3-preview.456", "/tmp/pid", os.Getpid())
+		actual := config.GetString(configuration.TEMP_DIR_PATH)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("Custom temp path is set in config", func(t *testing.T) {
+		customTempPath := "/custom/tmp/path"
+		config.Set(configuration.TEMP_DIR_PATH, customTempPath)
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("1.2.3-preview.456")))
+		expected := customTempPath
+		actual := config.GetString(configuration.TEMP_DIR_PATH)
+		assert.Equal(t, expected, actual)
+	})
 }

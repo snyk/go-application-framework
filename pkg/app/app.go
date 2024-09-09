@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -125,6 +126,29 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
+func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) interface{} {
+		if existingValue != nil {
+			return existingValue
+		}
+
+		version := "0.0.0"
+		ri := engine.GetRuntimeInfo()
+		if ri != nil && len(ri.GetVersion()) > 0 {
+			version = ri.GetVersion()
+		}
+
+		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
+		err := pkg_utils.CreateAllDirectories(tmpDir, version)
+		if err != nil {
+			logger.Err(err)
+		}
+
+		return tmpDir
+	}
+	return callback
+}
+
 func defaultPreviewFeaturesEnabled(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		if existingValue != nil {
@@ -170,8 +194,8 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.CACHE_PATH, configuration.StandardDefaultValueFunction(dir))
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
-
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(logger))
+	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {
 		canonicalApiUrl := config.GetString(configuration.API_URL)
