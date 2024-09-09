@@ -5,10 +5,10 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	cueutil "github.com/snyk/go-application-framework/internal/cue_utils"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
-	cueutil "github.com/snyk/go-application-framework/pkg/local_workflows/cue_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 

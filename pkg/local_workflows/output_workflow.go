@@ -2,15 +2,16 @@ package localworkflows
 
 import (
 	"bytes"
-	"cuelang.org/go/cue"
 	"encoding/json"
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/cue_utils"
 	"io"
 	"os"
 	"strings"
 	"text/template"
+
+	"cuelang.org/go/cue"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/snyk/go-application-framework/internal/cue_utils"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
