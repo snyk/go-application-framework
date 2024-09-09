@@ -160,6 +160,9 @@ linters:
 
 issues:
   exclude-rules:
+    - linters:
+        - staticcheck
+      text: "SA1019"
     - path: _test\.go
       linters:
         - bodyclose
