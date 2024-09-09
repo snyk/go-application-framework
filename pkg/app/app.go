@@ -131,21 +131,17 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 		if existingValue != nil {
 			return existingValue
 		}
-		ri := engine.GetRuntimeInfo()
-		if ri == nil {
-			return false
-		}
 
-		version := ri.GetVersion()
-		if len(version) == 0 {
-			version = "0.0.0"
+		version := "0.0.0"
+		ri := engine.GetRuntimeInfo()
+		if ri != nil && len(ri.GetVersion()) > 0 {
+			version = ri.GetVersion()
 		}
 
 		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
 		err := pkg_utils.CreateAllDirectories(tmpDir, version)
 		if err != nil {
 			logger.Err(err)
-			return false
 		}
 
 		return tmpDir
