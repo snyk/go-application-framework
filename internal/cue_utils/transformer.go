@@ -34,13 +34,13 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 		if err != nil {
 			return err
 		}
-		overlay["/"+path] = load.FromBytes(contents)
+		overlay["//"+path] = load.FromBytes(contents)
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load module source: %w", err)
 	}
-	insts := load.Instances([]string{"/" + name}, &load.Config{
+	insts := load.Instances([]string{"//" + name}, &load.Config{
 		Stdin:   &devnull,
 		Overlay: overlay,
 	})
