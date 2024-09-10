@@ -46,9 +46,9 @@ func findingsModelTransformationWorkflowEntryPoint(invocationCtx workflow.Invoca
 	if cuelangIsEnabled {
 		for _, singleInput := range inputs {
 			if singleInput.GetContentType() == content_type.SARIF_JSON {
-				partialResult, sarifError := transformSarifData(singleInput, inputs)
+				partialResult, sarifError := transformSarifData(singleInput)
 				if sarifError != nil {
-					return result, err
+					return result, sarifError
 				}
 				result = append(result, partialResult...)
 			}
@@ -60,9 +60,11 @@ func findingsModelTransformationWorkflowEntryPoint(invocationCtx workflow.Invoca
 	return result, err
 }
 
-func transformSarifData(singleData workflow.Data, allInputs []workflow.Data) (result []workflow.Data, err error) {
-	jsonData := singleData.GetPayload().([]byte)
-
+func transformSarifData(singleData workflow.Data) (result []workflow.Data, err error) {
+	jsonData, ok := singleData.GetPayload().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid payload type: %T", singleData.GetPayload())
+	}
 	input, errUnJson := cuejson.Unmarshal(jsonData)
 	if errUnJson != nil {
 		return nil, fmt.Errorf("failed to unmarshal input: %w", err)
@@ -88,11 +90,6 @@ func transformSarifData(singleData workflow.Data, allInputs []workflow.Data) (re
 	if applyError != nil {
 		return nil, applyError
 	}
-
-	//cliOutputBytes, jsonError := cliOutput.MarshalJSON()
-	//if jsonError != nil {
-	//	return nil, applyError
-	//}
 
 	cueDataObject := workflow.NewDataFromInput(singleData, workflow.NewTypeIdentifier(WORKFLOWID_FINDINGS_MODDEL_TRANSFORMATION, "cuedata"), "application/cuedata", &cliOutput)
 	result = append(result, cueDataObject)
