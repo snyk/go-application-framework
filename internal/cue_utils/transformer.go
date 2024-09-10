@@ -14,7 +14,7 @@ const (
 	ToTestApiFromCliTestManaged = "convert/to_testapi/from_cli_test_managed.cue"
 	ToTestApiFromSarif          = "convert/to_testapi/from_sarif.cue"
 	ToCliFromTestApi            = "convert/to_cli/from_testapi.cue"
-	pathPrefix                  = "//" // Required for cross platform support
+	pathPrefix                  = "//" // Required for cross-platform support
 )
 
 type Transformer struct {
@@ -26,7 +26,7 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 	overlay := map[string]load.Source{}
 	err := fs.WalkDir(EmbeddedFilesystem, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err //nolint:nilerr
+			return err
 		}
 		if !d.Type().IsRegular() {
 			return nil
