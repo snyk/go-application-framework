@@ -1,3 +1,6 @@
+// Package cueutils provides a library for data transformation using the Cue language.
+// Cue is a powerful and expressive data description language well-suited for defining
+// complex transformations on structured data formats.
 package cueutils
 
 import (
