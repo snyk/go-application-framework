@@ -50,6 +50,34 @@ info: {
 	...
 }
 
+// Content address whence source code can be obtained for
+// scanning.
+#ContentAddress: #LegacyDeepcodeBundleAddress | #WorkspaceV1Address
+
+// Test input obtained from a source code image, addressed by its
+// content digest.
+#ContentAddressInput: {
+	type!: "content-address"
+	spec!: #ContentAddressSpec
+	...
+}
+
+// Content address specification, which defines the target address
+// to test, or a
+// pair of addresses to test for a differential test.
+#ContentAddressSpec: {
+	// Target content to be scanned for this security test.
+	target!: #ContentAddress
+
+	// Base content for a differential test. When provided,
+	// FindingAttributes.delta will be set with respect to the base in
+	// results.
+	//
+	// Otherwise FindingAttributes.delta is left unset.
+	base?: #ContentAddress
+	...
+}
+
 // CreateExcludeRule defines individual rules for exclusion of
 // files during a test.
 // Currently it supports either bare strings as recursive globs,
@@ -60,6 +88,9 @@ info: {
 
 // Attributes provided when creating a new test.
 #CreateTestAttributes: {
+	// Test inputs; what will be tested.
+	input!: #TestInput
+
 	// Test context; pertinent information important to associate with
 	// the outcome
 	// of the test and its further processing, but is not directly
@@ -96,6 +127,27 @@ info: {
 	// Indicate at which point in the SDLC lifecycle the test was
 	// executed.
 	sdlc_stage!: "dev" | "cicd" | "prcheck" | "recurring"
+
+	// Git SCM URL associated with the content, if known.
+	//
+	// This allows providing the Git SCM URL as context in cases where
+	// the input
+	// is not directly imported from a Git SCM repository.
+	//
+	// For example, a developer working in an IDE on source code which
+	// was cloned
+	// from, and will be proposed for merging back into, an SCM
+	// repository.
+	git_scm_url?: string
+
+	// Git SCM branch associated with the content, if known.
+	//
+	// This allows providing the Git SCM branch as context in cases
+	// where the input
+	// is not directly imported from a Git SCM repository.
+	//
+	// For example, a developer working in an IDE on a feature branch.
+	git_scm_branch?: string
 	...
 }
 
@@ -198,7 +250,7 @@ info: {
 		//
 		// Could be sourced from
 		// `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
-		header!: strings.MaxRunes(200)
+		header!: strings.MaxRunes(50)
 
 		// Full text description of the finding rule.
 		//
@@ -208,12 +260,12 @@ info: {
 		// Markdown description of the finding rule.
 		//
 		// Mapped from `sarif.Runs.Results.Message.Markdown`.
-		markdown?: strings.MaxRunes(2000)
+		markdown!: strings.MaxRunes(2000)
 
 		// Arguments to the finding rule.
 		//
 		// Mapped from `sarif.Runs.Results.Message.Arguments`.
-		arguments?: list.MaxItems(20) & [...string]
+		arguments!: list.MaxItems(20) & [...string]
 		...
 	}
 	rating?:      #FindingRating
@@ -280,7 +332,7 @@ info: {
 
 // The severity and risk rating of the vulnerability
 #FindingRating: {
-	risk?: #FindingRisk
+	risk!: #FindingRisk
 
 	// A value which may be modified by enrichment stages.
 	severity!: {
@@ -483,7 +535,62 @@ info: {
 	counts!: #FindingCounts
 	...
 }
-#Fingerprint:       #CodeSastFingerprintV0 | #CodeSastFingerprintV1 | #ScaProblemFingerprint
+#Fingerprint: #CodeSastFingerprintV0 | #CodeSastFingerprintV1 | #ScaProblemFingerprint
+
+// Git commit SHA.
+#GitCommit: strings.MinRunes(40) & =~"[0-9a-f]+"
+
+// Test input obtained from a Git SCM.
+#GitSCMInput: {
+	type!: "git-scm"
+	spec!: #GitScmImportSpec
+	...
+}
+
+// Git SCM import specification, which defines how to import
+// content from a Git
+// SCM repository location into a workspace for testing, or a set
+// of workspaces
+// for differential testing.
+#GitScmImportSpec: {
+	// Git SCM repository URL.
+	remote_url!: string
+
+	// branch is optional. If not provided, the default branch is
+	// used.
+	branch?: string
+
+	// base is optional. If provided, it is used in supplying
+	// differential test data.
+	base?: #GitCommit
+
+	// target is optional. If not provided the current HEAD of the
+	// selected branch is used.
+	//
+	// If target is provided and branch is not, no branch metadata is
+	// associated with the test.
+	// If target is provided and branch is, but target is not an
+	// ancestor of branch, the wrong
+	// branch will be associated with a test. It is the caller's
+	// responsibility to ensure this is correct.
+	target?: #GitCommit
+
+	// Components that should be excluded when importing the SCM
+	// contents into a Workspace.
+	exlude?: [...#ExcludeRule]
+	...
+}
+
+// Legacy Deepcode API bundle.
+//
+// This is provided provisionally for compatibility purposes.
+#LegacyDeepcodeBundleAddress: {
+	scheme!: "deepcode-bundle"
+
+	// Legacy Deepcode bundle ID is a sha256 sum (64 hex digits).
+	bundle_id!: =~"[0-9a-f]{64}"
+	...
+}
 #LinkProperty:      #SchemaMap["io.snyk.api.common.LinkString"] | #SchemaMap["io.snyk.api.common.LinkObject"]
 #ObjectExcludeRule: #FileObjectExcludeRule | #OtherObjectExcludeRule
 
@@ -608,8 +715,7 @@ info: {
 // Suggestions are indications given to the user that might help
 // with
 // mitigating the finding.
-#Suggestion: #SuggestedPackageUpgrade | #SuggestionOther
-#SuggestionOther: {
+#Suggestion: #SuggestedPackageUpgrade | {
 	type!: "other"
 	{[!~"^(type)$"]: _}
 }
@@ -632,8 +738,51 @@ info: {
 	// version of
 	// the API used for retrieval.
 	sdlc_stage!: "dev" | "cicd" | "prcheck" | "recurring" | "other"
+
+	// Git SCM URL associated with the content, if known.
+	//
+	// This allows providing the Git SCM URL as context in cases where
+	// the input
+	// is not directly imported from a Git SCM repository.
+	//
+	// For example, a developer working in an IDE on source code which
+	// was cloned
+	// from, and will be proposed for merging back into, an SCM
+	// repository.
+	git_scm_url?: string
+
+	// Git SCM branch associated with the content, if known.
+	//
+	// This allows providing the Git SCM branch as context in cases
+	// where the input
+	// is not directly imported from a Git SCM repository.
+	//
+	// For example, a developer working in an IDE on a feature branch.
+	git_scm_branch?: string
 	...
 }
+
+// An error that occurred during a Test.
+#TestError: {
+	// Error code, references Snyk error catalog.
+	code!: string
+
+	// Descriptive reason for the error.
+	reason?: string
+
+	// Links to error detail information.
+	links?: #SchemaMap["io.snyk.api.common.ErrorLink"]
+
+	// Free-form metadata associated with the error.
+	meta?: #SchemaMap["io.snyk.api.common.Meta"]
+	...
+}
+#TestExecStatus: "pending" | "running" | "done"
+
+// TestInput defines what will be tested.
+//
+// Another term for this might be "test coordinates".
+#TestInput: #GitSCMInput | #ContentAddressInput
 
 // TestOptions defines options which determine how the Test is
 // conducted.
@@ -711,18 +860,6 @@ info: {
 		// before unmarshaling into this type.
 		state!: #TestState
 
-		// Overall outcome of the security test: pass or fail.
-		//
-		// This outcome may indicate failure early even while the test is
-		// still
-		// running to completion.
-		outcome!: #TestOutcome
-
-		// Summary of all the findings discovered by all the security
-		// scans conducted
-		// for this test.
-		summary!: #FindingsSummary
-
 		// Test context; pertinent information important to associate with
 		// the outcome
 		// of the test and its further processing, but is not directly
@@ -750,6 +887,18 @@ info: {
 		// effective
 		// options resolved and applied to the execution of the test.
 		options?: #TestOptions
+
+		// Overall outcome of the security test: pass or fail.
+		//
+		// This outcome may indicate failure early even while the test is
+		// still
+		// running to completion.
+		outcome!: #TestOutcome
+
+		// Summary of all the findings discovered by all the security
+		// scans conducted
+		// for this test.
+		summary!: #FindingsSummary
 		...
 	}
 	relationships!: #TestRelationships
@@ -759,6 +908,11 @@ info: {
 // The state of a Test execution. Does not include the pass or
 // fail.
 #TestState: {
+	// Test execution status.
+	status!: #TestExecStatus
+
+	// Errors that occurred during the test execution.
+	errors?: #TestError
 	...
 }
 #VulnerabilityFactRiskFactor: {
@@ -771,6 +925,17 @@ info: {
 	factor!: "vulnerability-instance-fact"
 	name!:   string
 	value!:  bool
+	...
+}
+
+// Workspace v1 content storage address.
+//
+// TODO: Update this as needed.
+#WorkspaceV1Address: {
+	scheme!: "workspace-v1"
+
+	// Workspace v1 is a sha256 sum (64 hex digits).
+	workspace_id!: =~"[0-9a-f]{64}"
 	...
 }
 #SchemaMap: {
