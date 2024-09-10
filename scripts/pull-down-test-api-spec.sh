@@ -24,4 +24,4 @@ cp $API_SPEC_PATH/tsp-output/go/typespec_gen.go ./internal/dragonfly/dragonfly.g
 sed -i "" 's/package\ presentation/package\ dragonfly/g' internal/dragonfly/dragonfly.go
 
 cd ./internal/cue_utils
-go generate
+make generate
