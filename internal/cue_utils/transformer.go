@@ -25,7 +25,7 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 	overlay := map[string]load.Source{}
 	err := fs.WalkDir(EmbeddedFilesystem, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err //nolint:nilerr
 		}
 		if !d.Type().IsRegular() {
 			return nil
