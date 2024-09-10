@@ -1,0 +1,470 @@
+openapi: 3.0.0
+info:
+  title: CLI Managed Open Source Test
+  version: CLI
+tags:
+  - name: Legacy Test
+paths:
+  /:
+    post:
+      operationId: test
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+      tags:
+        - Legacy Test
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+components:
+  schemas:
+    CvssDetail:
+      type: object
+      properties:
+        assigner:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        cvssV3Vector:
+          type: string
+        cvssV3BaseScore:
+          type: number
+          format: double
+        modificationTime:
+          $ref: '#/components/schemas/rfc3339Microseconds'
+      additionalProperties: {}
+    CvssSource:
+      type: object
+      required:
+        - modificationTime
+      properties:
+        type:
+          type: string
+        vector:
+          type: string
+        assigner:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        baseScore:
+          type: number
+          format: double
+        cvssVersion:
+          type: string
+        modificationTime:
+          $ref: '#/components/schemas/rfc3339Microseconds'
+      additionalProperties: {}
+    EpssDetails:
+      type: object
+      properties:
+        percentile:
+          type: string
+        probability:
+          type: string
+        modelVersion:
+          type: string
+      additionalProperties: {}
+    ExploitDetails:
+      type: object
+      properties:
+        sources:
+          type: array
+          items: {}
+        maturityLevels:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaturityLevel'
+      additionalProperties: {}
+    Filtered:
+      type: object
+      properties:
+        ignore:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vulnerability'
+        patch:
+          type: array
+          items: {}
+    IgnoreSettings:
+      type: object
+      required:
+        - adminOnly
+        - reasonRequired
+        - disregardFilesystemIgnores
+      properties:
+        adminOnly:
+          type: boolean
+        reasonRequired:
+          type: boolean
+        disregardFilesystemIgnores:
+          type: boolean
+      additionalProperties: {}
+    LicenseSeverity:
+      type: object
+      required:
+        - licenseType
+        - severity
+        - instructions
+      properties:
+        licenseType:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        instructions:
+          type: string
+      additionalProperties: {}
+    LicensesPolicy:
+      type: object
+      required:
+        - severities
+        - orgLicenseRules
+      properties:
+        severities:
+          type: object
+          additionalProperties: {}
+        orgLicenseRules:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/LicenseSeverity'
+      additionalProperties: {}
+    MaturityLevel:
+      type: object
+      properties:
+        type:
+          type: string
+        level:
+          type: string
+        format:
+          type: string
+      additionalProperties: {}
+    Patch:
+      type: object
+      properties:
+        id:
+          type: string
+        urls:
+          type: array
+          items:
+            type: string
+        version:
+          type: string
+        comments:
+          type: array
+          items:
+            type: string
+        modificationTime:
+          $ref: '#/components/schemas/rfc3339Microseconds'
+      additionalProperties: {}
+    PatchObject:
+      type: object
+      required:
+        - patched
+      properties:
+        patched:
+          type: string
+      additionalProperties: {}
+    PatchRemediation:
+      type: object
+      required:
+        - paths
+      properties:
+        paths:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              $ref: '#/components/schemas/PatchObject'
+      additionalProperties: {}
+    Remediation:
+      type: object
+      properties:
+        unresolved:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vulnerability'
+        upgrade:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/UpgradePackage'
+        patch:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PatchRemediation'
+        ignore:
+          type: object
+          additionalProperties: {}
+        pin:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/UpgradePackage'
+      additionalProperties: {}
+    Result:
+      type: object
+      required:
+        - vulnerabilities
+        - ok
+        - dependencyCount
+        - org
+        - policy
+        - isPrivate
+        - licensesPolicy
+        - packageManager
+        - projectId
+        - ignoreSettings
+        - summary
+        - remediation
+        - filesystemPolicy
+        - filtered
+        - uniqueCount
+        - projectName
+        - foundProjectCount
+        - displayTargetFile
+        - hasUnknownVersions
+        - path
+      properties:
+        vulnerabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vulnerability'
+        ok:
+          type: boolean
+        dependencyCount:
+          type: integer
+        org:
+          type: string
+        policy:
+          type: string
+        isPrivate:
+          type: boolean
+          enum:
+            - true
+        licensesPolicy:
+          $ref: '#/components/schemas/LicensesPolicy'
+        packageManager:
+          type: string
+        projectId:
+          type: string
+          format: uuid
+        ignoreSettings:
+          $ref: '#/components/schemas/IgnoreSettings'
+        summary:
+          type: string
+        remediation:
+          $ref: '#/components/schemas/Remediation'
+        filesystemPolicy:
+          type: boolean
+        filtered:
+          $ref: '#/components/schemas/Filtered'
+        uniqueCount:
+          type: integer
+        projectName:
+          type: string
+        foundProjectCount:
+          type: integer
+        displayTargetFile:
+          type: string
+        hasUnknownVersions:
+          type: boolean
+        path:
+          type: string
+      additionalProperties: {}
+    Severity:
+      type: string
+      enum:
+        - none
+        - low
+        - medium
+        - high
+        - critical
+    UpgradePackage:
+      type: object
+      properties:
+        upgradeTo:
+          type: string
+        upgrades:
+          type: array
+          items:
+            type: string
+        vulns:
+          type: array
+          items:
+            type: string
+        isTransitive:
+          type: boolean
+      additionalProperties: {}
+    VulnIdentifiers:
+      type: object
+      properties:
+        CVE:
+          type: array
+          items:
+            type: string
+        CWE:
+          type: array
+          items:
+            type: string
+      additionalProperties: {}
+    VulnReference:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+        title:
+          type: string
+      additionalProperties: {}
+    Vulnerability:
+      type: object
+      required:
+        - id
+        - title
+        - semver
+        - fixedIn
+        - language
+        - severity
+        - cvssScore
+        - moduleName
+        - description
+        - packageName
+        - packageManager
+        - severityWithCritical
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        CVSSv3:
+          type: string
+        credit:
+          type: array
+          items:
+            type: string
+        semver:
+          type: object
+          properties:
+            vulnerable:
+              type: array
+              items:
+                type: string
+              description: Ranges of vulnerable versions
+          required:
+            - vulnerable
+        exploit:
+          type: string
+        fixedIn:
+          type: array
+          items:
+            type: string
+          description: |-
+            List of versions in which the vulnerability is fixed.
+
+            TODO: can this be a range too?
+        patches:
+          type: array
+          items:
+            anyOf:
+              - type: string
+              - $ref: '#/components/schemas/Patch'
+        insights:
+          type: object
+          additionalProperties: {}
+        language:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        cvssScore:
+          type: number
+          format: double
+        functions:
+          type: array
+          items: {}
+        malicious:
+          type: boolean
+        isDisputed:
+          type: boolean
+        moduleName:
+          type: string
+        references:
+          type: array
+          items:
+            $ref: '#/components/schemas/VulnReference'
+        cvssDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/CvssDetail'
+        cvssSources:
+          type: array
+          items:
+            $ref: '#/components/schemas/CvssSource'
+        description:
+          type: string
+        epssDetails:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/EpssDetails'
+          nullable: true
+        identifiers:
+          $ref: '#/components/schemas/VulnIdentifiers'
+        packageName:
+          type: string
+        proprietary:
+          type: boolean
+        creationTime:
+          $ref: '#/components/schemas/rfc3339Microseconds'
+        functions_new:
+          type: array
+          items: {}
+        alternativeIds:
+          type: array
+          items: {}
+        disclosureTime:
+          $ref: '#/components/schemas/rfc3339Microseconds'
+        exploitDetails:
+          $ref: '#/components/schemas/ExploitDetails'
+        packageManager:
+          type: string
+        publicationTime:
+          $ref: '#/components/schemas/rfc3339Microseconds'
+        severityBasedOn:
+          type: string
+        modificationTime:
+          $ref: '#/components/schemas/rfc3339Microseconds'
+        socialTrendAlert:
+          type: boolean
+        severityWithCritical:
+          $ref: '#/components/schemas/Severity'
+        from:
+          type: array
+          items:
+            type: string
+        upgradePath:
+          type: array
+          items:
+            anyOf:
+              - type: boolean
+              - type: string
+        isUpgradable:
+          type: boolean
+        isPatchable:
+          type: boolean
+        isPinnable:
+          type: boolean
+        isRuntime:
+          type: boolean
+        name:
+          type: string
+        version:
+          type: string
+      additionalProperties: {}
+    rfc3339Microseconds:
+      type: string
+      example: 2024-03-11T09:53:59.174248Z
+      description: An RFC3339 timestamp with up to microsecond resolution in UTC.
+servers:
+  - url: /cli
+    description: CLI
+    variables: {}
