@@ -1,4 +1,4 @@
-package cue_utils
+package cueutils
 
 import (
 	"bytes"
