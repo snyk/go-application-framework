@@ -1,6 +1,7 @@
 package cueutils
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -22,6 +23,20 @@ func TestNewTransformer_ValidTransformToTestApiFromCliTestManaged(t *testing.T) 
 	input := loadJsonFile(t, "cli-json-test-npm.json")
 	_, applyError := transformer.Apply(input)
 	assert.NoError(t, applyError)
+}
+
+func TestNewTransformer_ValidTransformToTestApiFromCliTestManaged_Malformed(t *testing.T) {
+	ctx := cuecontext.New()
+
+	transformer, err := NewTransformer(ctx, ToTestApiFromCliTestManaged)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, transformer, "Expected a non-nil transformer")
+
+	input := loadJsonFile(t, "cli-json-test-npm.malformed.json")
+	n, applyError := transformer.Apply(input)
+	assert.Error(t, applyError)
+	fmt.Print(n)
 }
 
 func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
