@@ -8,25 +8,20 @@ import (
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewTransformer_ValidTransformToTestApiFromCliTestManaged(t *testing.T) {
 	ctx := cuecontext.New()
 
 	transformer, err := NewTransformer(ctx, ToTestApiFromCliTestManaged)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
 
-	if transformer == nil {
-		t.Error("Expected a non-nil transformer")
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, transformer, "Expected a non-nil transformer")
 
 	input := loadJsonFile(t, "cli-json-test-npm.json")
 	_, applyError := transformer.Apply(input)
-	if applyError == nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, applyError)
 }
 
 func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
@@ -36,36 +31,26 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	if transformer == nil {
-		t.Error("Expected a non-nil transformer")
-	}
+	assert.NotNil(t, transformer, "Expected a non-nil transformer")
 
 	input := loadJsonFile(t, "sarif-juice-shop.json")
 	_, applyError := transformer.Apply(input)
-	if applyError == nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, applyError)
 }
 
 func TestNewTransformer_ValidTransformToCliFromTestApi(t *testing.T) {
 	ctx := cuecontext.New()
 	transformer, err := NewTransformer(ctx, ToCliFromTestApi)
 
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 
-	if transformer == nil {
-		t.Error("Expected a non-nil transformer")
-	}
+	assert.NotNil(t, transformer, "Expected a non-nil transformer")
 }
 
 func TestNewTransformer_InvalidTransform(t *testing.T) {
 	ctx := cuecontext.New()
 	_, err := NewTransformer(ctx, "invalid_transform.cue")
-	if err == nil {
-		t.Error("Expected an error for invalid transform")
-	}
+	assert.Error(t, err)
 }
 
 func loadJsonFile(t *testing.T, filename string) ast.Expr {
@@ -77,19 +62,13 @@ func loadJsonFile(t *testing.T, filename string) ast.Expr {
 	}
 	defer func(jsonFile *os.File) {
 		jsonErr := jsonFile.Close()
-		if jsonErr != nil {
-			t.Errorf("Failed to close json")
-		}
+		assert.NoError(t, jsonErr)
 	}(jsonFile)
 	byteValue, jsonReadAllErr := io.ReadAll(jsonFile)
-	if jsonReadAllErr != nil {
-		t.Errorf("Unexpected error reading JSON file %v", jsonReadAllErr)
-	}
+	assert.NoError(t, jsonReadAllErr)
 
 	input, errUnJson := cuejson.Unmarshal(byteValue)
 
-	if errUnJson != nil {
-		t.Errorf("Unexpected error parsing JSON: %v", err)
-	}
+	assert.NoError(t, errUnJson)
 	return input
 }

@@ -92,7 +92,7 @@ _findings: list.Sort([ for vuln in input.vulnerabilities {
             scan_type: "sca"
         }
         message: {
-            header: "\(vuln.title) in \(vuln.name)@\(vuln.version) [https://security.snyk.io/vuln/\(vuln.id)]"
+            header: "\(vuln.title)"
             let _descLen = len(strings.Runes(vuln.description))
             text: strings.SliceRunes(vuln.description, 0, [
                 if _descLen < 2000 { _descLen },
