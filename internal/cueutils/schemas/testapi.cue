@@ -664,6 +664,12 @@ info: {
 // might expect to find in the finding.
 #ScanType: "sca" | "sast" | "other"
 
+// SuggestedOther that aren't yet defined in this API version.
+#SuggestedOther: {
+	type!: "other"
+	{[!~"^(type)$"]: _}
+}
+
 // SuggestedPackageUpgrade provides some basic information on how
 // to mitigate an
 // SCA finding in a managed package ecosystem with an upgrade.
@@ -715,10 +721,7 @@ info: {
 // Suggestions are indications given to the user that might help
 // with
 // mitigating the finding.
-#Suggestion: #SuggestedPackageUpgrade | {
-	type!: "other"
-	{[!~"^(type)$"]: _}
-}
+#Suggestion: #SuggestedPackageUpgrade | #SuggestedOther
 
 // Reasons for why a Finding can be suppressed from a Test result.
 // This MAY NOT be required at all, given the presentation

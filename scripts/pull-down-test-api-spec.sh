@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 
 API_SPEC_PATH=../dragonfly
-# Navigate to repo
+API_SPEC_BRANCH=${API_SPEC_BRANCH:-main}
+
+# Check if the directory exists
+if [[ ! -d "$API_SPEC_PATH" ]]; then
+  # Create the directory if it doesn't exist
+  git clone git@github.com:snyk/dragonfly.git $API_SPEC_PATH
+fi
+
 cd $API_SPEC_PATH
-git checkout main
+git checkout $API_SPEC_BRANCH
 git pull
 
 # Update dependencies
@@ -15,13 +22,6 @@ npm run build
 cd -
 
 # Vendor OpenAPI build artefacts for use in cue
-cp -r $API_SPEC_PATH/tsp-output/@typespec/openapi3/ ./internal/cue_utils/source/openapi
-# Import types for go
-cp $API_SPEC_PATH/tsp-output/go/typespec_gen.go ./internal/dragonfly/dragonfly.go
+cp -r $API_SPEC_PATH/tsp-output/@typespec/openapi3/ ./internal/cueutils/source/openapi/rest
 
-# Rename imported go types
-# In the future the package name will be configurable
-sed -i "" 's/package\ presentation/package\ dragonfly/g' internal/dragonfly/dragonfly.go
-
-cd ./internal/cue_utils
 make generate

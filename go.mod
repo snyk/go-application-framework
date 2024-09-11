@@ -30,6 +30,7 @@ require (
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/gofrs/flock v0.12.1
 	github.com/mattn/go-isatty v0.0.20
+	github.com/oapi-codegen/oapi-codegen/v2 v2.3.0
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20240809094525-c48d19c27edb
 	golang.org/x/sync v0.8.0
