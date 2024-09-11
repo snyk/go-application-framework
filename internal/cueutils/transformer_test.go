@@ -43,8 +43,11 @@ func TestNewTransformer_ValidTransformToCliFromTestApi(t *testing.T) {
 	transformer, err := NewTransformer(ctx, ToCliFromTestApi)
 
 	assert.NoError(t, err)
-
 	assert.NotNil(t, transformer, "Expected a non-nil transformer")
+
+	input := loadJsonFile(t, "v1-test-dep-graph-test-npm.json")
+	_, applyError := transformer.Apply(input)
+	assert.NoError(t, applyError)
 }
 
 func TestNewTransformer_InvalidTransform(t *testing.T) {
