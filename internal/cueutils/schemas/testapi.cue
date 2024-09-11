@@ -250,7 +250,7 @@ info: {
 		//
 		// Could be sourced from
 		// `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
-		header!: strings.MaxRunes(50)
+		header!: strings.MaxRunes(100)
 
 		// Full text description of the finding rule.
 		//
