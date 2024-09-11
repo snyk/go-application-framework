@@ -1444,6 +1444,17 @@ components:
       description: |-
         Security scan type. The scan type determines what types of attributes one
         might expect to find in the finding.
+    SuggestedOther:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - other
+      additionalProperties: {}
+      description: SuggestedOther that aren't yet defined in this API version.
     SuggestedPackageUpgrade:
       type: object
       required:
@@ -1497,19 +1508,12 @@ components:
     Suggestion:
       oneOf:
         - $ref: '#/components/schemas/SuggestedPackageUpgrade'
-        - type: object
-          properties:
-            type:
-              type: string
-              enum:
-                - other
-          required:
-            - type
-          additionalProperties: {}
+        - $ref: '#/components/schemas/SuggestedOther'
       discriminator:
         propertyName: type
         mapping:
           package-upgrade: '#/components/schemas/SuggestedPackageUpgrade'
+          other: '#/components/schemas/SuggestedOther'
       description: |-
         Suggestions are indications given to the user that might help with
         mitigating the finding.
