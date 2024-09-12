@@ -34,6 +34,7 @@ const (
 	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
 	PARAMETER_CLIENT_ID     string        = "client-id"
 	PARAMETER_CLIENT_SECRET string        = "client-secret"
+	AUTH_STYLE              string        = "authStyle"
 )
 
 type GrantType int
@@ -85,12 +86,21 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	tokenUrl := apiUrl + "/oauth2/token"
 	authUrl := appUrl + "/oauth2/authorize"
 
+	oAuthStyle := oauth2.AuthStyleAutoDetect
+	configAuthStyle := config.Get(AUTH_STYLE)
+	if configAuthStyle != nil {
+		if convertedAuthStyleFromConfig, ok := configAuthStyle.(oauth2.AuthStyle); ok {
+			oAuthStyle = convertedAuthStyleFromConfig
+		}
+	}
+
 	conf := &oauth2.Config{
 		ClientID: OAUTH_CLIENT_ID,
 		Endpoint: oauth2.Endpoint{
-			TokenURL:  tokenUrl,
-			AuthURL:   authUrl,
-			AuthStyle: oauth2.AuthStyleInParams,
+			TokenURL: tokenUrl,
+			AuthURL:  authUrl,
+			//AuthStyle: oauth2.AuthStyleInParams,
+			AuthStyle: oAuthStyle,
 		},
 	}
 
