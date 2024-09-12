@@ -51,8 +51,10 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 
 	input := loadJsonFile(t, "sarif-juice-shop.json")
 	transformed, applyError := transformer.Apply(input)
-	assert.IsType(t, &LocalFinding{}, transformed)
 	assert.NoError(t, applyError)
+
+	assert.IsType(t, &LocalFinding{}, transformed)
+	assert.Len(t, transformed.Findings, 278)
 }
 
 func TestNewTransformer_InvalidTransform(t *testing.T) {
