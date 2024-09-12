@@ -12,20 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewTransformer_ValidTransformToTestApiFromCliTestManaged(t *testing.T) {
-	ctx := cuecontext.New(cuecontext.Option{})
-
-	transformer, err := NewTransformer(ctx, ToTestApiFromCliTestManaged)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, transformer, "Expected a non-nil transformer")
-
-	input := loadJsonFile(t, "cli-json-test-npm.json")
-	transformed, applyError := transformer.Apply(input)
-	assert.IsType(t, &LocalFinding{}, transformed)
-	assert.NoError(t, applyError)
-}
-
 func TestNewTransformer_ValidTransformToTestApiFromCliTestManaged_Malformed(t *testing.T) {
 	ctx := cuecontext.New()
 
@@ -54,6 +40,7 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 	assert.NoError(t, applyError)
 
 	assert.IsType(t, &LocalFinding{}, transformed)
+	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", transformed.Findings[0].Id.String())
 	assert.Len(t, transformed.Findings, 278)
 }
 

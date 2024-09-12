@@ -55,7 +55,9 @@ output: test: {
     id: context.test.id
     type: "tests"
     attributes: {
-        state: {}
+        state: {
+        	status: "done"
+        }
         outcome: result: [
             if len(_findings) == 0 { "pass" },
             "fail",
@@ -112,7 +114,7 @@ _findings: list.Sort(list.Concat([ for run in input.runs {
                 arguments: result.message.arguments
             }
             rating: {
-                severity: {
+            		severity: {
                     let _ruleLevel = _rules[result.ruleId].defaultConfiguration.level
                     value: [
                         if _ruleLevel == "error" { "high" },

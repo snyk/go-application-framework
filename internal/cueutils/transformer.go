@@ -75,6 +75,7 @@ func (t *Transformer) Apply(input ast.Expr) (*LocalFinding, error) {
 	codec := gocodec.New(t.inst.Context(), &gocodec.Config{})
 	var localFinding LocalFinding
 
+	// Gate with validation before encoding?
 	encodeErr := codec.Encode(withOutput, &localFinding)
 
 	if encodeErr != nil {
