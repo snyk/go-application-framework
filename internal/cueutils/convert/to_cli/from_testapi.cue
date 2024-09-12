@@ -13,5 +13,4 @@ output: {
     findings: [ for finding in input.findings { finding.attributes } ]
     summary: input.test.attributes.summary
     outcome: input.test.attributes.outcome
-    severity_order: ["high", "medium", "low"]
 }
