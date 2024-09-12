@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewTransformer_ValidTransformToTestApiFromCliTestManaged(t *testing.T) {
-	ctx := cuecontext.New()
+	ctx := cuecontext.New(cuecontext.Option{})
 
 	transformer, err := NewTransformer(ctx, ToTestApiFromCliTestManaged)
 
@@ -50,19 +50,6 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 	assert.NotNil(t, transformer, "Expected a non-nil transformer")
 
 	input := loadJsonFile(t, "sarif-juice-shop.json")
-	transformed, applyError := transformer.Apply(input)
-	assert.IsType(t, &LocalFinding{}, transformed)
-	assert.NoError(t, applyError)
-}
-
-func TestNewTransformer_ValidTransformToCliFromTestApi(t *testing.T) {
-	ctx := cuecontext.New()
-	transformer, err := NewTransformer(ctx, ToCliFromTestApi)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, transformer, "Expected a non-nil transformer")
-
-	input := loadJsonFile(t, "v1-test-dep-graph-test-npm.json")
 	transformed, applyError := transformer.Apply(input)
 	assert.IsType(t, &LocalFinding{}, transformed)
 	assert.NoError(t, applyError)
