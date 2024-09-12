@@ -88,8 +88,9 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	conf := &oauth2.Config{
 		ClientID: OAUTH_CLIENT_ID,
 		Endpoint: oauth2.Endpoint{
-			TokenURL: tokenUrl,
-			AuthURL:  authUrl,
+			TokenURL:  tokenUrl,
+			AuthURL:   authUrl,
+			AuthStyle: oauth2.AuthStyleInParams,
 		},
 	}
 
