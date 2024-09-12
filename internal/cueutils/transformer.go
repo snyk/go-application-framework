@@ -11,6 +11,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/load"
+	"cuelang.org/go/encoding/gocode/gocodec"
 )
 
 const (
@@ -59,16 +60,28 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 	return &Transformer{inst: inst}, nil
 }
 
-func (t *Transformer) Apply(input ast.Expr) (cue.Value, error) {
+func (t *Transformer) Apply(input ast.Expr) (*LocalFinding, error) {
 	withInput := t.inst.FillPath(cue.ParsePath("input"), input)
 	if err := withInput.Err(); err != nil {
-		return withInput, fmt.Errorf("failed to set input: %w", err)
+		return nil, fmt.Errorf("failed to set input: %w", err)
 	}
 	withOutput := withInput.LookupPath(cue.ParsePath("output"))
+
 	if err := withOutput.Err(); err != nil {
-		return withOutput, fmt.Errorf("failed to get output: %w", err)
+		return nil, fmt.Errorf("failed to get output: %w", err)
 	}
-	return withOutput, nil
+
+	// Convert from Cue.Value to relevant go type
+	codec := gocodec.New(t.inst.Context(), &gocodec.Config{})
+	var localFinding LocalFinding
+
+	encodeErr := codec.Encode(withOutput, &localFinding)
+
+	if encodeErr != nil {
+		return nil, fmt.Errorf("failed to convert to type: %v", encodeErr)
+	}
+
+	return &localFinding, nil
 }
 
 func (t *Transformer) ApplyValue(v cue.Value) (cue.Value, error) {

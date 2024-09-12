@@ -9,6 +9,8 @@ input: {
     findings: [...testapi.#FindingResource]
 }
 
+// This should align with
+// LocalFinding definition
 output: {
     findings: [ for finding in input.findings { finding.attributes } ]
     summary: input.test.attributes.summary
