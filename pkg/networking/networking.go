@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -96,12 +97,11 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 type defaultHeadersRoundTripper struct {
 	encapsulatedRoundTripper http.RoundTripper
 	networkAccess            *networkImpl
+	logLevel                 zerolog.Level
 }
 
 func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, response *http.Response, err error) {
-	loglevel := defaultNetworkLogLevel
-
-	if rt.networkAccess == nil || rt.networkAccess.logger == nil || rt.networkAccess.logger.GetLevel() != loglevel {
+	if rt.networkAccess == nil || rt.networkAccess.logger == nil || rt.networkAccess.logger.GetLevel() != rt.logLevel {
 		return
 	}
 
@@ -109,7 +109,7 @@ func (rt *defaultHeadersRoundTripper) logRoundTrip(request *http.Request, respon
 	LogResponse(response, rt.networkAccess.logger)
 
 	if err != nil {
-		rt.networkAccess.logger.WithLevel(loglevel).Msgf("< error: %s", err.Error())
+		rt.networkAccess.logger.WithLevel(rt.logLevel).Msgf("< error: %s", err.Error())
 	}
 }
 
@@ -122,6 +122,10 @@ func (rt *defaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Re
 	rt.logRoundTrip(newRequest, response, err)
 
 	return response, err
+}
+
+func (rt *defaultHeadersRoundTripper) SetLogLevel(level zerolog.Level) {
+	rt.logLevel = level
 }
 
 // NewNetworkAccess returns a networkImpl instance.
@@ -195,6 +199,7 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
 		encapsulatedRoundTripper: n.configureRoundTripper(transport),
+		logLevel:                 defaultNetworkLogLevel,
 	}
 	return &rt
 }
