@@ -892,7 +892,6 @@ components:
     FindingRating:
       type: object
       required:
-        - risk
         - severity
         - severity_method
       properties:

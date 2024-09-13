@@ -496,8 +496,8 @@ type FindingLocation struct {
 // FindingRating The severity and risk rating of the vulnerability
 type FindingRating struct {
 	// Justification Optional reason for rating the vulnerability like this
-	Justification *string     `json:"justification,omitempty"`
-	Risk          FindingRisk `json:"risk"`
+	Justification *string      `json:"justification,omitempty"`
+	Risk          *FindingRisk `json:"risk,omitempty"`
 
 	// Severity A value which may be modified by enrichment stages.
 	Severity struct {

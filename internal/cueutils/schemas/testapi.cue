@@ -332,7 +332,7 @@ info: {
 
 // The severity and risk rating of the vulnerability
 #FindingRating: {
-	risk!: #FindingRisk
+	risk?: #FindingRisk
 
 	// A value which may be modified by enrichment stages.
 	severity!: {
