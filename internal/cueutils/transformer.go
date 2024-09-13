@@ -79,7 +79,7 @@ func (t *Transformer) Apply(input ast.Expr) (*LocalFinding, error) {
 	encodeErr := codec.Encode(withOutput, &localFinding)
 
 	if encodeErr != nil {
-		return nil, fmt.Errorf("failed to convert to type: %v", encodeErr)
+		return nil, fmt.Errorf("failed to convert to type: %w", encodeErr)
 	}
 
 	return &localFinding, nil
