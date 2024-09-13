@@ -12,7 +12,7 @@ import (
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/load"
 	"cuelang.org/go/encoding/gocode/gocodec"
-	"github.com/snyk/go-application-framework/internal/restapimodels"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
 const (
@@ -61,7 +61,7 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 	return &Transformer{inst: inst}, nil
 }
 
-func (t *Transformer) Apply(input ast.Expr) (*restapimodels.LocalFinding, error) {
+func (t *Transformer) Apply(input ast.Expr) (*local_models.LocalFinding, error) {
 	withInput := t.inst.FillPath(cue.ParsePath("input"), input)
 	if err := withInput.Err(); err != nil {
 		return nil, fmt.Errorf("failed to set input: %w", err)
@@ -74,7 +74,7 @@ func (t *Transformer) Apply(input ast.Expr) (*restapimodels.LocalFinding, error)
 
 	// Convert from Cue.Value to relevant go type
 	codec := gocodec.New(t.inst.Context(), &gocodec.Config{})
-	var localFinding restapimodels.LocalFinding
+	var localFinding local_models.LocalFinding
 
 	// Gate with validation before encoding?
 	encodeErr := codec.Encode(withOutput, &localFinding)

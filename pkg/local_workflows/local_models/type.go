@@ -1,4 +1,4 @@
-package restapimodels
+package local_models
 
 // TODO: This schema should be imported from Dragonfly
 type LocalFinding struct {

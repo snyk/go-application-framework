@@ -9,7 +9,7 @@ import (
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
-	"github.com/snyk/go-application-framework/internal/restapimodels"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,7 +40,7 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 	transformed, err := transformer.Apply(input)
 	assert.NoError(t, err)
 
-	assert.IsType(t, &restapimodels.LocalFinding{}, transformed)
+	assert.IsType(t, &local_models.LocalFinding{}, transformed)
 	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", transformed.Findings[0].Id.String())
 	assert.Len(t, transformed.Findings, 278)
 }
