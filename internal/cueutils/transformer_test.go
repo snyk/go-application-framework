@@ -21,8 +21,8 @@ func TestNewTransformer_ValidTransformToTestApiFromCliTestManaged_Malformed(t *t
 	assert.NotNil(t, transformer, "Expected a non-nil transformer")
 
 	input := loadJsonFile(t, "cli-json-test-npm.malformed.json")
-	n, applyError := transformer.Apply(input)
-	assert.Error(t, applyError)
+	n, err := transformer.Apply(input)
+	assert.Error(t, err)
 	fmt.Print(n)
 }
 
@@ -36,8 +36,8 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 	assert.NotNil(t, transformer, "Expected a non-nil transformer")
 
 	input := loadJsonFile(t, "sarif-juice-shop.json")
-	transformed, applyError := transformer.Apply(input)
-	assert.NoError(t, applyError)
+	transformed, err := transformer.Apply(input)
+	assert.NoError(t, err)
 
 	assert.IsType(t, &LocalFinding{}, transformed)
 	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", transformed.Findings[0].Id.String())
