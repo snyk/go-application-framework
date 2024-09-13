@@ -19,6 +19,7 @@ output: {
     findings: [...testapi.#FindingResource]
 }
 
+// TODO: Inject from runtime context
 context: {
     org: id: "f640a238-ee99-44d4-8d49-42ec6af96bc6"
     test: id: "12d77614-e02d-44d7-bb52-3a1b179d5890"
