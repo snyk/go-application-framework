@@ -26,15 +26,14 @@ import (
 
 const (
 	//nolint:gosec // not a token value, but a configuration key
-	CONFIG_KEY_OAUTH_TOKEN  string        = "INTERNAL_OAUTH_TOKEN_STORAGE"
-	OAUTH_CLIENT_ID         string        = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
-	CALLBACK_HOSTNAME       string        = "127.0.0.1"
-	CALLBACK_PATH           string        = "/authorization-code/callback"
-	TIMEOUT_SECONDS         time.Duration = 120 * time.Second
-	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
-	PARAMETER_CLIENT_ID     string        = "client-id"
-	PARAMETER_CLIENT_SECRET string        = "client-secret"
-	AUTH_STYLE              string        = "authStyle"
+	CONFIG_KEY_OAUTH_TOKEN  string = "INTERNAL_OAUTH_TOKEN_STORAGE"
+	OAUTH_CLIENT_ID         string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
+	CALLBACK_HOSTNAME       string = "127.0.0.1"
+	CALLBACK_PATH           string = "/authorization-code/callback"
+	TIMEOUT_SECONDS                = 120 * time.Second
+	AUTHENTICATED_MESSAGE          = "Your account has been authenticated."
+	PARAMETER_CLIENT_ID     string = "client-id"
+	PARAMETER_CLIENT_SECRET string = "client-secret"
 )
 
 type GrantType int
@@ -86,20 +85,12 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 	tokenUrl := apiUrl + "/oauth2/token"
 	authUrl := appUrl + "/oauth2/authorize"
 
-	oAuthStyle := oauth2.AuthStyleAutoDetect
-	configAuthStyle := config.Get(AUTH_STYLE)
-	if configAuthStyle != nil {
-		if convertedAuthStyleFromConfig, ok := configAuthStyle.(oauth2.AuthStyle); ok {
-			oAuthStyle = convertedAuthStyleFromConfig
-		}
-	}
-
 	conf := &oauth2.Config{
 		ClientID: OAUTH_CLIENT_ID,
 		Endpoint: oauth2.Endpoint{
 			TokenURL:  tokenUrl,
 			AuthURL:   authUrl,
-			AuthStyle: oAuthStyle,
+			AuthStyle: oauth2.AuthStyleInParams,
 		},
 	}
 
