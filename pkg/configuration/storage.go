@@ -98,7 +98,7 @@ func (s *JsonStorage) Set(key string, value any) error {
 	}
 
 	fileBytes, err := os.ReadFile(s.path)
-	if err != nil {
+	if len(fileBytes) == 0 || err != nil {
 		const emptyJson = "{}"
 		fileBytes = []byte(emptyJson)
 	}
