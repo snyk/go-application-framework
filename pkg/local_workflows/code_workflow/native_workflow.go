@@ -96,7 +96,13 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	if result == nil {
 		result = &sarif.SarifResponse{}
 	} else {
-		sarifData, sarifError := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "sarif"), &result.Sarif, content_type.SARIF_JSON, path)
+		sarifData, sarifError := createCodeWorkflowData(
+			workflow.NewTypeIdentifier(id, "sarif"),
+			config,
+			&result.Sarif,
+			content_type.SARIF_JSON,
+			path,
+			logger)
 		if sarifError != nil {
 			return nil, sarifError
 		}
@@ -105,7 +111,13 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	}
 
 	summary := sarif2.CreateCodeSummary(&result.Sarif)
-	summaryData, err := createCodeWorkflowData(workflow.NewTypeIdentifier(id, "summary"), summary, content_type.TEST_SUMMARY, path)
+	summaryData, err := createCodeWorkflowData(
+		workflow.NewTypeIdentifier(id, "summary"),
+		config,
+		summary,
+		content_type.TEST_SUMMARY,
+		path,
+		logger)
 	if err != nil {
 		return nil, err
 	}
@@ -177,16 +189,19 @@ func getFilesForPath(path string, logger *zerolog.Logger, max_threads int) (<-ch
 }
 
 // Create new Workflow data out of the given object and content type
-func createCodeWorkflowData(id workflow.Identifier, obj any, contentType string, path string) (workflow.Data, error) {
+func createCodeWorkflowData(id workflow.Identifier, config configuration.Configuration, obj any, contentType string, path string, logger *zerolog.Logger) (workflow.Data, error) {
 	bytes, err := json.Marshal(obj)
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Debug().Msgf("payload memory threshold: %v", config.Get(configuration.IN_MEMORY_THRESHOLD_BYTES))
 	data := workflow.NewData(
 		id,
 		contentType,
 		bytes,
+		workflow.WithConfiguration(config),
+		workflow.WithLogger(logger),
 	)
 
 	data.SetContentLocation(path)

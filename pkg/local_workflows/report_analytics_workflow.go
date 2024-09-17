@@ -81,6 +81,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName),
 			"application/json",
 			[]byte(commandLineInput),
+			workflow.WithLogger(logger),
 		)
 		inputData = append(inputData, data)
 	}
@@ -240,6 +241,7 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 		workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, "v2"),
 		"application/json",
 		v2InstrumentationData,
+		workflow.WithLogger(logger),
 	)
 
 	return inputData, nil
