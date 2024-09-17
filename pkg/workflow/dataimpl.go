@@ -109,11 +109,14 @@ func newDataWith(opts ...Option) Data {
 		logger: &zerolog.Logger{},
 	}
 
-	// configure and initialize default value for memory threshold. Needed for cases when we call
-	// NewData() without WithConfiguration() AND we do not configure IN…MEMORY_THRESHOLD_BYTES
+	// configure and initialize default value for memory threshold and temp dir path.
+	// Needed for cases when we call NewData() without WithConfiguration()
+	// AND we do not configure IN…MEMORY_THRESHOLD_BYTES or TEMP_DIR_PATH
 	c := configuration.NewInMemory()
 	c.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
+	c.AddDefaultValue(configuration.TEMP_DIR_PATH, configuration.StandardDefaultValueFunction(os.TempDir()))
 	WithConfiguration(c)(output)
+
 	for _, opt := range opts {
 		opt(output)
 	}
