@@ -281,7 +281,7 @@ func setPayloadLocation(id Identifier, inMemoryThreshold int, tempDirPath string
 	}
 
 	logger.Trace().Msg("payload is larger than threshold, writing it to disk")
-	filePath, err := writeDataToDisk(id, tempDirPath, bytes, logger)
+	filePath, err := writeDataToDisk(fmt.Sprintf("workflow.%s", id.Path), tempDirPath, bytes, logger)
 	if err != nil {
 		return payloadLocation
 	}
@@ -290,8 +290,8 @@ func setPayloadLocation(id Identifier, inMemoryThreshold int, tempDirPath string
 	return payloadLocation
 }
 
-func writeDataToDisk(id Identifier, path string, data []byte, logger *zerolog.Logger) (filePath string, err error) {
-	filepath, err := os.CreateTemp(path, fmt.Sprintf("workflow.%s.", id.Path))
+func writeDataToDisk(filename string, path string, data []byte, logger *zerolog.Logger) (filePath string, err error) {
+	filepath, err := os.CreateTemp(path, fmt.Sprintf("%s.*", filename))
 	if err != nil {
 		logger.Error().Msgf("Error creating temp file: %v", err)
 		return "", err

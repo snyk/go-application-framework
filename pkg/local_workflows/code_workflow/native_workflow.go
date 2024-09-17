@@ -195,7 +195,6 @@ func createCodeWorkflowData(id workflow.Identifier, config configuration.Configu
 		return nil, err
 	}
 
-	logger.Debug().Msgf("payload memory threshold: %v", config.Get(configuration.IN_MEMORY_THRESHOLD_BYTES))
 	data := workflow.NewData(
 		id,
 		contentType,
