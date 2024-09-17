@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/rs/zerolog"
 	"io"
-	"log"
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -79,7 +78,7 @@ func setupMockContext(t *testing.T, payload string, experimental bool, json bool
 	t.Helper()
 
 	// setup
-	logger := log.New(os.Stderr, "test", 0)
+	logger := zerolog.Logger{}
 	config := configuration.New()
 	config.Set("experimental", experimental)
 	config.Set("json", json)
@@ -109,7 +108,7 @@ func setupMockContext(t *testing.T, payload string, experimental bool, json bool
 
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config)
-	invocationContextMock.EXPECT().GetLogger().Return(logger)
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger)
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock)
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 

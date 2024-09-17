@@ -3,7 +3,7 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
-
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -40,7 +40,7 @@ func InitWhoAmIWorkflow(engine workflow.Engine) error {
 func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
-	logger := invocationCtx.GetLogger()
+	logger := invocationCtx.GetEnhancedLogger()
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	var a = api.NewApi(url, httpClient)
@@ -73,22 +73,23 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 
 		// parse response
 		userMeJSONBytes, err := json.Marshal(userMeJSON)
-		userMeData := createWorkflowData(userMeJSONBytes, "application/json")
+		userMeData := createWorkflowData(userMeJSONBytes, "application/json", logger)
 
 		// return userme data
 		return []workflow.Data{userMeData}, err
 	}
 
-	userData := createWorkflowData(userMe, "text/plain")
+	userData := createWorkflowData(userMe, "text/plain", logger)
 	return []workflow.Data{userData}, nil
 }
 
 // createWorkflowData creates a new workflow.Data object
-func createWorkflowData(data interface{}, contentType string) workflow.Data {
+func createWorkflowData(data interface{}, contentType string, logger *zerolog.Logger) workflow.Data {
 	return workflow.NewData(
 		// use new type identifier when creating new data
 		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, whoAmIworkflowName),
 		contentType,
 		data,
+		workflow.WithLogger(logger),
 	)
 }

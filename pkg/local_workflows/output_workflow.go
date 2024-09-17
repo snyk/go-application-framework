@@ -45,7 +45,7 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	return err
 }
 
-func filterSummaryOutput(config configuration.Configuration, input workflow.Data) (workflow.Data, error) {
+func filterSummaryOutput(config configuration.Configuration, input workflow.Data, logger *zerolog.Logger) (workflow.Data, error) {
 	// Parse the summary data
 	summary := json_schemas.NewTestSummary("")
 	payload, ok := input.GetPayload().([]byte)
@@ -79,7 +79,14 @@ func filterSummaryOutput(config configuration.Configuration, input workflow.Data
 	}
 
 	workflowId := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "FilterTestSummary")
-	return workflow.NewDataFromInput(input, workflowId, content_type.TEST_SUMMARY, bytes), nil
+	output := workflow.NewDataFromInput(
+		input,
+		workflowId,
+		content_type.TEST_SUMMARY,
+		bytes,
+		workflow.WithLogger(logger))
+
+	return output, nil
 }
 
 // outputWorkflowEntryPoint defines the output entry point
@@ -94,7 +101,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
-			outputSummary, err := filterSummaryOutput(config, input[i])
+			outputSummary, err := filterSummaryOutput(config, input[i], debugLogger)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to filter test summary output")
 				output = append(output, input[i])
