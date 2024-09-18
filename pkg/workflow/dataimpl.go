@@ -8,7 +8,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/rs/zerolog"
@@ -110,19 +109,16 @@ func newDataWith(opts ...Option) Data {
 		logger: &zerolog.Logger{},
 	}
 
-	// configure and initialize default value for memory threshold and temp dir path.
-	// Needed for cases when we call NewData() without WithConfiguration()
-	// AND we do not configure IN…MEMORY_THRESHOLD_BYTES or TEMP_DIR_PATH
+	// Configure and initialize default value for memory threshold. We default to -1 AKA this feature is disabled.
+	// Needed for cases when we call NewData() without WithConfiguration() OR we do not configure IN…MEMORY_THRESHOLD_BYTES
+	// If we do not disable by default, we will get inconsistencies with things like the temp dir in workflows that do not use WithConfiguration()
 	c := configuration.NewInMemory()
-	c.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	c.AddDefaultValue(configuration.TEMP_DIR_PATH, configuration.StandardDefaultValueFunction(os.TempDir()))
-	WithConfiguration(c)(output)
+	c.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, -1)
+	opts = append([]Option{WithConfiguration(c)}, opts...)
 
 	for _, opt := range opts {
 		opt(output)
 	}
-
-	logger := *output.logger
 
 	// validate DataImpl
 	if len(output.identifier.Path) <= 0 {
@@ -131,10 +127,10 @@ func newDataWith(opts ...Option) Data {
 
 	// update DataImpl values
 	output.identifier.Scheme = "did"
-	output.payloadLocation = setPayloadLocation(output.identifier, output.inMemoryThreshold, output.tempDirPath, output.payload, &logger)
+	output.payloadLocation = setPayloadLocation(output.identifier, output.inMemoryThreshold, output.tempDirPath, output.payload, output.logger)
 
 	if output.payloadLocation.Type == OnDisk {
-		logger.Debug().Msg("payload is on disk, nil payload in memory for cleanup")
+		output.logger.Debug().Msg("payload is on disk, nil payload in memory for cleanup")
 		output.payload = nil
 	}
 
