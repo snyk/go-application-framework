@@ -269,6 +269,11 @@ func setPayloadLocation(id Identifier, inMemoryThreshold int, tempDirPath string
 		Type:   InMemory,
 	}
 
+	if inMemoryThreshold < 0 {
+		logger.Trace().Msg("memory threshold feature disabled, keeping payload in memory")
+		return payloadLocation
+	}
+
 	logger.Trace().Msg("checking if payload is []byte")
 	bytes, ok := payload.([]byte)
 	if !ok {
@@ -279,8 +284,8 @@ func setPayloadLocation(id Identifier, inMemoryThreshold int, tempDirPath string
 	payloadSize := len(bytes)
 	logger.Trace().Msgf("payload is []byte, comparing payload size (%d bytes) to threshold (%d bytes)", payloadSize, inMemoryThreshold)
 
-	if payloadSize <= inMemoryThreshold || inMemoryThreshold < 0 {
-		logger.Trace().Msg("payload is lower than threshold or this feature is disabled, keeping it in memory")
+	if payloadSize <= inMemoryThreshold {
+		logger.Trace().Msg("payload is lower than threshold, keeping it in memory")
 		return payloadLocation
 	}
 
