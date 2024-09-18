@@ -3,12 +3,13 @@ package workflow
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/snyk/go-application-framework/internal/constants"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"net/http"
 	"os"
 	"slices"
 	"time"
+
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -209,7 +210,7 @@ func (d *DataImpl) GetPayload() interface{} {
 	payload := d.payload
 	d.logger.Trace().Msg("checking payload location")
 	if d.payloadLocation.Type == OnDisk {
-		d.logger.Debug().Msgf("payload location for: %s is on disk, reading from disk", d.identifier.String())
+		d.logger.Debug().Msgf("payload location for: %s is on disk, reading from disk: %s", d.identifier.String(), d.payloadLocation.Path)
 		// read file
 		payloadFromFile, err := os.ReadFile(d.payloadLocation.Path)
 		if err != nil {
@@ -300,21 +301,21 @@ func writeDataToDisk(filename string, path string, data []byte, logger *zerolog.
 		return "", err
 	}
 
-	logger.Trace().Msgf("Setting file permissions for file: %v", filepath)
+	logger.Trace().Msgf("Setting file permissions for file: %s", filepath.Name())
 	err = filepath.Chmod(0755)
 	if err != nil {
 		logger.Error().Msgf("Error setting permissions on temp file: %v", err)
 		return "", err
 	}
 
-	logger.Trace().Msgf("Writing payload to file: %v", filepath)
+	logger.Trace().Msgf("Writing payload to file: %s", filepath.Name())
 	_, err = filepath.Write(data)
 	if err != nil {
 		logger.Error().Msgf("Error writing to file: %v", err)
 		return "", err
 	}
 
-	logger.Trace().Msgf("Payload written to file: %v", filepath)
+	logger.Trace().Msgf("Payload written to file: %s", filepath.Name())
 	err = filepath.Close()
 	if err != nil {
 		logger.Error().Msgf("Error closing file: %v", err)
