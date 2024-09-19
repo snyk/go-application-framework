@@ -11,8 +11,6 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/load"
-	"cuelang.org/go/encoding/gocode/gocodec"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
 const (
@@ -61,29 +59,18 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 	return &Transformer{inst: inst}, nil
 }
 
-func (t *Transformer) Apply(input ast.Expr) (*local_models.LocalFinding, error) {
+func (t *Transformer) Apply(input ast.Expr) (cue.Value, error) {
 	withInput := t.inst.FillPath(cue.ParsePath("input"), input)
 	if err := withInput.Err(); err != nil {
-		return nil, fmt.Errorf("failed to set input: %w", err)
+		return withInput, fmt.Errorf("failed to set input: %w", err)
 	}
 	withOutput := withInput.LookupPath(cue.ParsePath("output"))
 
 	if err := withOutput.Err(); err != nil {
-		return nil, fmt.Errorf("failed to get output: %w", err)
+		return withOutput, fmt.Errorf("failed to get output: %w", err)
 	}
 
-	// Convert from Cue.Value to relevant go type
-	codec := gocodec.New(t.inst.Context(), &gocodec.Config{})
-	var localFinding local_models.LocalFinding
-
-	// Gate with validation before encoding?
-	encodeErr := codec.Encode(withOutput, &localFinding)
-
-	if encodeErr != nil {
-		return nil, fmt.Errorf("failed to convert to type: %w", encodeErr)
-	}
-
-	return &localFinding, nil
+	return withOutput, nil
 }
 
 func (t *Transformer) ApplyValue(v cue.Value) (cue.Value, error) {
