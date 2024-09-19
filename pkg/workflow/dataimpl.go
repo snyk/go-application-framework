@@ -3,12 +3,12 @@ package workflow
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/snyk/go-application-framework/internal/constants"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"net/http"
 	"os"
 	"slices"
 	"time"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -109,19 +109,16 @@ func newDataWith(opts ...Option) Data {
 		logger: &zerolog.Logger{},
 	}
 
-	// configure and initialize default value for memory threshold and temp dir path.
-	// Needed for cases when we call NewData() without WithConfiguration()
-	// AND we do not configure IN…MEMORY_THRESHOLD_BYTES or TEMP_DIR_PATH
+	// Configure and initialize default value for memory threshold. We default to -1 AKA this feature is disabled.
+	// Needed for cases when we call NewData() without WithConfiguration() OR we do not configure IN…MEMORY_THRESHOLD_BYTES
+	// If we do not disable by default, we will get inconsistencies with things like the temp dir in workflows that do not use WithConfiguration()
 	c := configuration.NewInMemory()
-	c.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	c.AddDefaultValue(configuration.TEMP_DIR_PATH, configuration.StandardDefaultValueFunction(os.TempDir()))
-	WithConfiguration(c)(output)
+	c.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, -1)
+	opts = append([]Option{WithConfiguration(c)}, opts...)
 
 	for _, opt := range opts {
 		opt(output)
 	}
-
-	logger := *output.logger
 
 	// validate DataImpl
 	if len(output.identifier.Path) <= 0 {
@@ -130,10 +127,10 @@ func newDataWith(opts ...Option) Data {
 
 	// update DataImpl values
 	output.identifier.Scheme = "did"
-	output.payloadLocation = setPayloadLocation(output.identifier, output.inMemoryThreshold, output.tempDirPath, output.payload, &logger)
+	output.payloadLocation = setPayloadLocation(output.identifier, output.inMemoryThreshold, output.tempDirPath, output.payload, output.logger)
 
 	if output.payloadLocation.Type == OnDisk {
-		logger.Debug().Msg("payload is on disk, nil payload in memory for cleanup")
+		output.logger.Debug().Msg("payload is on disk, nil payload in memory for cleanup")
 		output.payload = nil
 	}
 
@@ -209,7 +206,7 @@ func (d *DataImpl) GetPayload() interface{} {
 	payload := d.payload
 	d.logger.Trace().Msg("checking payload location")
 	if d.payloadLocation.Type == OnDisk {
-		d.logger.Debug().Msgf("payload location for: %s is on disk, reading from disk", d.identifier.String())
+		d.logger.Debug().Msgf("payload location for: %s is on disk, reading from disk: %s", d.identifier.String(), d.payloadLocation.Path)
 		// read file
 		payloadFromFile, err := os.ReadFile(d.payloadLocation.Path)
 		if err != nil {
@@ -268,6 +265,11 @@ func setPayloadLocation(id Identifier, inMemoryThreshold int, tempDirPath string
 		Type:   InMemory,
 	}
 
+	if inMemoryThreshold < 0 {
+		logger.Trace().Msg("memory threshold feature disabled, keeping payload in memory")
+		return payloadLocation
+	}
+
 	logger.Trace().Msg("checking if payload is []byte")
 	bytes, ok := payload.([]byte)
 	if !ok {
@@ -278,8 +280,8 @@ func setPayloadLocation(id Identifier, inMemoryThreshold int, tempDirPath string
 	payloadSize := len(bytes)
 	logger.Trace().Msgf("payload is []byte, comparing payload size (%d bytes) to threshold (%d bytes)", payloadSize, inMemoryThreshold)
 
-	if payloadSize <= inMemoryThreshold || inMemoryThreshold < 0 {
-		logger.Trace().Msg("payload is lower than threshold or this feature is disabled, keeping it in memory")
+	if payloadSize <= inMemoryThreshold {
+		logger.Trace().Msg("payload is lower than threshold, keeping it in memory")
 		return payloadLocation
 	}
 
@@ -300,21 +302,21 @@ func writeDataToDisk(filename string, path string, data []byte, logger *zerolog.
 		return "", err
 	}
 
-	logger.Trace().Msgf("Setting file permissions for file: %v", filepath)
+	logger.Trace().Msgf("Setting file permissions for file: %s", filepath.Name())
 	err = filepath.Chmod(0755)
 	if err != nil {
 		logger.Error().Msgf("Error setting permissions on temp file: %v", err)
 		return "", err
 	}
 
-	logger.Trace().Msgf("Writing payload to file: %v", filepath)
+	logger.Trace().Msgf("Writing payload to file: %s", filepath.Name())
 	_, err = filepath.Write(data)
 	if err != nil {
 		logger.Error().Msgf("Error writing to file: %v", err)
 		return "", err
 	}
 
-	logger.Trace().Msgf("Payload written to file: %v", filepath)
+	logger.Trace().Msgf("Payload written to file: %s", filepath.Name())
 	err = filepath.Close()
 	if err != nil {
 		logger.Error().Msgf("Error closing file: %v", err)
