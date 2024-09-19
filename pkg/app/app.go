@@ -128,14 +128,22 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 
 func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
-		if existingValue != nil {
-			return existingValue
-		}
-
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
 		if ri != nil && len(ri.GetVersion()) > 0 {
 			version = ri.GetVersion()
+		}
+
+		if existingValue != nil {
+			existingString, ok := existingValue.(string)
+			if ok {
+				err := pkg_utils.CreateAllDirectories(existingString, version)
+				if err != nil {
+					logger.Err(err)
+				}
+			}
+
+			return existingValue
 		}
 
 		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
