@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -21,10 +22,13 @@ const (
 
 var WORKFLOWID_DATATRANSFORMATION = workflow.NewWorkflowIdentifier(DataTransformationWorkflowName)
 
-// TODO: Setup init method and include in local_workflows.initMethods
-//func InitDataTransformationWorkflow(enginsche workflow.Engine) error {
-//
-//}
+func InitDataTransformationWorkflow(engine workflow.Engine) error {
+	flags := pflag.NewFlagSet(DataTransformationWorkflowName, pflag.ExitOnError)
+	_, err := engine.Register(WORKFLOWID_DATATRANSFORMATION, workflow.ConfigurationOptionsFromFlagset(flags), dataTransformationEntryPoint)
+
+	engine.GetConfiguration().AddDefaultValue(configuration.FF_TRANSFORMATION_WORKFLOW, configuration.StandardDefaultValueFunction(false))
+	return err
+}
 
 func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
 	config := invocationCtx.GetConfiguration()
