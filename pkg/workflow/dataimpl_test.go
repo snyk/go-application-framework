@@ -49,12 +49,12 @@ func Test_NewDataFromInput(t *testing.T) {
 }
 
 func Test_NewData(t *testing.T) {
-	expectedConfig := configuration.NewInMemory()
-	expectedConfig.Set("IN_MEMORY_THRESHOLD_BYTES", 10)
-	expectedLogger := zerolog.Logger{}
-	expectedContentType := "application/json"
-
 	t.Run("with options", func(t *testing.T) {
+		expectedConfig := configuration.NewInMemory()
+		expectedConfig.Set("IN_MEMORY_THRESHOLD_BYTES", 10)
+		expectedLogger := zerolog.Logger{}
+		expectedContentType := "application/json"
+
 		input := NewData(
 			NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata"),
 			expectedContentType,
@@ -67,7 +67,11 @@ func Test_NewData(t *testing.T) {
 	})
 
 	t.Run("with writing to disk disabled", func(t *testing.T) {
+		expectedConfig := configuration.NewInMemory()
 		expectedConfig.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, -1)
+		expectedLogger := zerolog.Logger{}
+		expectedContentType := "application/json"
+
 		expectedIdentifier := NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata")
 		data := NewData(
 			expectedIdentifier,
@@ -85,6 +89,10 @@ func Test_NewData(t *testing.T) {
 	})
 
 	t.Run("with user provided temp directory and threshold", func(t *testing.T) {
+		expectedConfig := configuration.NewInMemory()
+		expectedLogger := zerolog.Logger{}
+		expectedContentType := "application/json"
+
 		expectedTempDir := path.Join(os.TempDir(), "dataImpl_test")
 		err := os.Mkdir(expectedTempDir, 0755)
 
@@ -125,5 +133,58 @@ func Test_NewData(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(actualFiles))
 		assert.Contains(t, actualFiles[0].Name(), expectedFileName)
+	})
+
+	t.Run("when configuration is not provided, filesystem cache is not used", func(t *testing.T) {
+		expectedConfig := configuration.NewInMemory()
+		expectedLogger := zerolog.Logger{}
+		expectedContentType := "application/json"
+
+		expectedTempDir := path.Join(os.TempDir(), "dataImpl_test")
+		err := os.Mkdir(expectedTempDir, 0755)
+
+		// cleanup temp dir and files
+		defer func(path string) {
+			err = os.RemoveAll(path)
+			if err != nil {
+				fmt.Println("failed to remove temp dir: ", err)
+			}
+		}(expectedTempDir)
+		assert.NoError(t, err)
+
+		expectedConfig.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 1)
+		expectedConfig.Set(configuration.TEMP_DIR_PATH, expectedTempDir)
+		expectedIdentifier := NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata")
+
+		dataWithConfig := NewData(
+			expectedIdentifier,
+			expectedContentType,
+			[]byte("put some data in here so that it is bigger than the expectedThreshold"),
+			WithConfiguration(expectedConfig),
+			WithLogger(&expectedLogger),
+			WithInputData(nil))
+
+		// assert that payload location is on disk
+		actualPayloadLocationWithConfig := reflect.ValueOf(dataWithConfig).Elem().FieldByName("payloadLocation").FieldByName("Type")
+		assert.Equal(t, int64(OnDisk), actualPayloadLocationWithConfig.Int())
+
+		// assert that payload location path is empty
+		actualPayloadLocationPathWithConfig := reflect.ValueOf(dataWithConfig).Elem().FieldByName("payloadLocation").FieldByName("Path")
+		assert.Contains(t, actualPayloadLocationPathWithConfig.String(), expectedTempDir)
+
+		dataNoConfig := NewData(
+			expectedIdentifier,
+			expectedContentType,
+			[]byte("put some data in here so that it is bigger than the expectedThreshold"),
+			WithLogger(&expectedLogger),
+			WithInputData(nil))
+
+		// assert that payload location is in memory
+		actualPayloadLocationNoConfig := reflect.ValueOf(dataNoConfig).Elem().FieldByName("payloadLocation").FieldByName("Type")
+		assert.Equal(t, int64(InMemory), actualPayloadLocationNoConfig.Int())
+
+		// assert that payload location path is empty
+		actualPayloadLocationPathNoConfig := reflect.ValueOf(dataNoConfig).Elem().FieldByName("payloadLocation").FieldByName("Path")
+		assert.Equal(t, "", actualPayloadLocationPathNoConfig.String())
 	})
 }
