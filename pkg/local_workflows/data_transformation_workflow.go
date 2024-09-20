@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue/cuecontext"
-	"cuelang.org/go/encoding/gocode/gocodec"
 	cuejson "cuelang.org/go/pkg/encoding/json"
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -68,8 +67,8 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 
 func transformSarifData(singleData workflow.Data) (result local_models.LocalFinding, err error) {
 	var localFinding local_models.LocalFinding
-	jsonData, failedToLoad := singleData.GetPayload().([]byte)
-	if !failedToLoad {
+	jsonData, ok := singleData.GetPayload().([]byte)
+	if !ok {
 		return localFinding, err
 	}
 
@@ -99,11 +98,8 @@ func transformSarifData(singleData workflow.Data) (result local_models.LocalFind
 		return localFinding, applyError
 	}
 
-	// Convert from Cue.Value to relevant go type
-	codec := gocodec.New(ctx, &gocodec.Config{})
-
 	// Gate with validation before encoding?
-	encodeErr := codec.Encode(cliOutput, &localFinding)
+	encodeErr := cliOutput.Decode(&localFinding)
 
 	if encodeErr != nil {
 		return localFinding, fmt.Errorf("failed to convert to type: %w", encodeErr)

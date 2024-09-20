@@ -140,7 +140,7 @@ func Test_DataTransformation_withSarifData(t *testing.T) {
 	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 	assert.Len(t, localFinding.Findings, 278)
 	// TODO: Validate passed prop
-	// assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
+	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
 }
 
 func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
