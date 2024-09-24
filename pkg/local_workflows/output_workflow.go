@@ -100,6 +100,10 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	for i := range input {
 		mimeType := input[i].GetContentType()
 
+		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
+			continue
+		}
+
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
 			outputSummary, err := filterSummaryOutput(config, input[i], debugLogger)
 			if err != nil {
