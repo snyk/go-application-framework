@@ -11,6 +11,7 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/encoding/gocode/gocodec"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 )
 
