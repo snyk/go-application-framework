@@ -69,26 +69,25 @@ func getTestSarifBytes(t *testing.T) sarif.SarifDocument {
 	t.Helper()
 
 	sarifDoc := sarif.SarifDocument{
-		Runs: []sarif.Run{
-			{
-				Results: []sarif.Result{
-					{Level: "error"},
-					{Level: "warning"},
-				},
-				Properties: sarif.RunProperties{
-					Coverage: []struct {
-						Files       int    `json:"files"`
-						IsSupported bool   `json:"isSupported"`
-						Lang        string `json:"lang"`
-						Type        string `json:"type"`
-					}{{
-						Files:       2,
-						IsSupported: true,
-						Lang:        "",
-						Type:        "",
-					}},
-				},
+		Runs: []sarif.Run{{
+			Results: []sarif.Result{
+				{Level: "error"},
+				{Level: "warning"},
 			},
+			Properties: sarif.RunProperties{
+				Coverage: []struct {
+					Files       int    `json:"files"`
+					IsSupported bool   `json:"isSupported"`
+					Lang        string `json:"lang"`
+					Type        string `json:"type"`
+				}{{
+					Files:       2,
+					IsSupported: true,
+					Lang:        "",
+					Type:        "",
+				}},
+			},
+		},
 			{
 				Results: []sarif.Result{
 					{Level: "error"},
@@ -99,8 +98,7 @@ func getTestSarifBytes(t *testing.T) sarif.SarifDocument {
 				Results: []sarif.Result{
 					{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
 				},
-			},
-		},
+			}},
 	}
 
 	return sarifDoc
