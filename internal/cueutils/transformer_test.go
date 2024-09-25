@@ -9,7 +9,9 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/cuecontext"
+	"cuelang.org/go/encoding/gocode/gocodec"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,6 +43,14 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.IsType(t, cue.Value{}, transformed)
+
+	codec := gocodec.New(ctx, &gocodec.Config{})
+	var localFinding local_models.LocalFinding
+
+	encodeErr := codec.Encode(transformed, &localFinding)
+	assert.NoError(t, encodeErr)
+
+	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 }
 
 func TestNewTransformer_InvalidTransform(t *testing.T) {
