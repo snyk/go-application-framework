@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -47,6 +48,7 @@ type JsonStorage struct {
 	path     string
 	config   Configuration
 	fileLock *flock.Flock
+	mutex    sync.Mutex
 }
 
 type JsonOption func(*JsonStorage)
@@ -91,6 +93,8 @@ func (s *JsonStorage) getNonEnvVarKey(key string) string {
 }
 
 func (s *JsonStorage) Set(key string, value any) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	// Check if path to file exists
 	err := os.MkdirAll(filepath.Dir(s.path), utils.FILEPERM_755)
 	if err != nil {
