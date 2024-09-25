@@ -212,10 +212,9 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
 
 	ev.viper.Set(key, value)
-
-	ev.mutex.Unlock()
 
 	if ev.storage != nil && ev.persistedKeys[key] {
 		//nolint:errcheck // breaking api change needed to fix this
