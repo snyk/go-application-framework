@@ -64,8 +64,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	return output, nil
 }
 
-func transformSarifData(singleData workflow.Data) (result local_models.LocalFinding, err error) {
-	var localFinding local_models.LocalFinding
+func transformSarifData(singleData workflow.Data) (localFinding local_models.LocalFinding, err error) {
 	jsonData, ok := singleData.GetPayload().([]byte)
 	if !ok {
 		return localFinding, err
