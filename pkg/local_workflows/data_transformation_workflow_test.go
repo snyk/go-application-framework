@@ -114,7 +114,7 @@ func skipWindows(t *testing.T) {
 
 func Test_DataTransformation_withSarifData(t *testing.T) {
 	skipWindows(t)
-	
+
 	invocationContext := setupMockContext2(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
@@ -148,7 +148,6 @@ func Test_DataTransformation_withSarifData(t *testing.T) {
 	assert.NoError(t, err)
 	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 	assert.Len(t, localFinding.Findings, 278)
-	// TODO: Validate passed prop
 	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
 }
 
@@ -193,4 +192,52 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 	byteValue, jsonReadAllErr := io.ReadAll(jsonFile)
 	assert.NoError(t, jsonReadAllErr)
 	return byteValue
+}
+
+func Test_DataTransformation_withSummaryData(t *testing.T) {
+	invocationContext := setupMockContext2(t, true)
+	logger := zerolog.Logger{}
+	input := []workflow.Data{
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.SARIF_JSON,
+			loadJsonFile(t, "sarif-juice-shop.json"),
+			workflow.WithLogger(&logger)),
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.TEST_SUMMARY,
+			loadJsonFile(t, "juice-shop-summary.json"),
+			workflow.WithLogger(&logger)),
+	}
+
+	output, err := dataTransformationEntryPoint(invocationContext, input)
+	assert.Nil(t, err)
+	assert.Len(t, output, 3)
+
+	var transformedOutput workflow.Data
+
+	// Output contains formatted finding response
+	for _, data := range output {
+		mimeType := data.GetContentType()
+
+		if strings.EqualFold(mimeType, content_type.LOCAL_FINDING_MODEL) {
+			transformedOutput = data
+		}
+	}
+
+	var localFinding = local_models.LocalFinding{}
+	p, ok := transformedOutput.GetPayload().([]byte)
+
+	assert.True(t, ok)
+
+	err = json.Unmarshal(p, &localFinding)
+	assert.NoError(t, err)
+	assert.IsType(t, local_models.LocalFinding{}, localFinding)
+	assert.Len(t, localFinding.Findings, 278)
+	// TODO: Figure out what this is supposed to be
+	assert.Equal(t, uint32(4), localFinding.Summary.Counts.Count)
+	assert.Equal(t, uint32(1), localFinding.Summary.Counts.CountBy["severity"]["high"])
+	assert.Equal(t, uint32(1), localFinding.Summary.Counts.CountBy["severity"]["medium"])
+	assert.Equal(t, uint32(1), localFinding.Summary.Counts.CountBy["severity"]["low"])
+
 }
