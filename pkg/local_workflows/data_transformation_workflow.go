@@ -41,24 +41,37 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return output, nil
 	}
 
+	// For data payload we need to collect 2 input objects
+	// 1. The Sarif JSON
+	var sarifData workflow.Data
+	var testSummaryData workflow.Data
+
 	for _, data := range input {
 		if strings.HasPrefix(data.GetContentType(), content_type.SARIF_JSON) {
 			// process input
-			d, err := transformSarifData(data)
-			if err != nil {
-				return output, err
-			}
-
-			bytes, err := json.Marshal(d)
-			if err != nil {
-				return output, err
-			}
-
-			output = append(input, workflow.NewData(
-				workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
-				content_type.LOCAL_FINDING_MODEL,
-				bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger)))
+			sarifData = data
 		}
+
+		if strings.HasPrefix(data.GetContentType(), content_type.TEST_SUMMARY) {
+			testSummaryData = data
+		}
+	}
+
+	if sarifData != nil {
+		d, err := transformSarifData(sarifData)
+		if err != nil {
+			return output, err
+		}
+
+		bytes, err := json.Marshal(d)
+		if err != nil {
+			return output, err
+		}
+
+		output = append(input, workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.LOCAL_FINDING_MODEL,
+			bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger)))
 	}
 
 	return output, nil

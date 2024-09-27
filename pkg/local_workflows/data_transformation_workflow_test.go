@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -111,46 +112,6 @@ func skipWindows(t *testing.T) {
 	}
 }
 
-func Test_DataTransformation_withSarifData(t *testing.T) {
-	skipWindows(t)
-
-	invocationContext := setupMockContext2(t, true)
-	logger := zerolog.Logger{}
-	input := []workflow.Data{
-		workflow.NewData(
-			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
-			content_type.SARIF_JSON,
-			loadJsonFile(t, "sarif-juice-shop.json"),
-			workflow.WithLogger(&logger)),
-	}
-	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.Nil(t, err)
-	assert.Len(t, output, 2)
-
-	var transformedOutput workflow.Data
-
-	// Output contains formatted finding response
-	for _, data := range output {
-		mimeType := data.GetContentType()
-
-		if strings.EqualFold(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			transformedOutput = data
-		}
-	}
-
-	var localFinding = local_models.LocalFinding{}
-	p, ok := transformedOutput.GetPayload().([]byte)
-
-	assert.True(t, ok)
-
-	err = json.Unmarshal(p, &localFinding)
-	assert.NoError(t, err)
-	assert.IsType(t, local_models.LocalFinding{}, localFinding)
-	assert.Len(t, localFinding.Findings, 278)
-	// TODO: Validate passed prop
-	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
-}
-
 func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 	invocationContext := setupMockContext2(t, true)
 	logger := zerolog.Logger{}
@@ -192,4 +153,71 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 	byteValue, jsonReadAllErr := io.ReadAll(jsonFile)
 	assert.NoError(t, jsonReadAllErr)
 	return byteValue
+}
+
+func Test_DataTransformation_withSarifData(t *testing.T) {
+	skipWindows(t)
+
+	invocationContext := setupMockContext2(t, true)
+	logger := zerolog.Logger{}
+	input := []workflow.Data{
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.SARIF_JSON,
+			loadJsonFile(t, "sarif-juice-shop.json"),
+			workflow.WithLogger(&logger)),
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.TEST_SUMMARY,
+			getTestSummary(t),
+			workflow.WithLogger(&logger),
+		),
+	}
+	output, err := dataTransformationEntryPoint(invocationContext, input)
+	assert.Nil(t, err)
+	assert.Len(t, output, 2)
+
+	var transformedOutput workflow.Data
+
+	// Output contains formatted finding response
+	for _, data := range output {
+		mimeType := data.GetContentType()
+
+		if strings.EqualFold(mimeType, content_type.LOCAL_FINDING_MODEL) {
+			transformedOutput = data
+		}
+	}
+
+	var localFinding = local_models.LocalFinding{}
+	p, ok := transformedOutput.GetPayload().([]byte)
+
+	assert.True(t, ok)
+
+	err = json.Unmarshal(p, &localFinding)
+	assert.NoError(t, err)
+	assert.IsType(t, local_models.LocalFinding{}, localFinding)
+	assert.Len(t, localFinding.Findings, 278)
+	// TODO: Validate passed prop
+	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
+	assert.Equal(t, "sast", localFinding.Summary.Type)
+}
+
+func getTestSummary(t *testing.T) (summaryPayload []byte) {
+	t.Helper()
+	summaryPayload, err := json.Marshal(json_schemas.TestSummary{
+		Results: []json_schemas.TestSummaryResult{{
+			Severity: "critical",
+			Total:    99,
+			Open:     97,
+			Ignored:  2,
+		}, {
+			Severity: "medium",
+			Total:    99,
+			Open:     97,
+			Ignored:  2,
+		}},
+		Type: "sast",
+	})
+	assert.Nil(t, err)
+	return
 }
