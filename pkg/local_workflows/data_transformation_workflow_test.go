@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -160,7 +161,7 @@ func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 			workflow.WithLogger(&logger)),
 	}
 	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.NoError(t, err)
+	assert.Equal(t, err, fmt.Errorf("no sarif data found"))
 	assert.Len(t, output, 1)
 
 	var transformedOutput workflow.Data

@@ -69,6 +69,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	}
 
 	var findingsModel local_models.LocalFinding
+	var sarif_found bool = false
 	var summary json_schemas.TestSummary
 
 	for _, data := range input {
@@ -78,6 +79,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 			if err != nil {
 				return output, err
 			}
+			sarif_found = true
 		}
 
 		if strings.HasPrefix(data.GetContentType(), content_type.TEST_SUMMARY) {
@@ -88,7 +90,11 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 			}
 		}
 	}
-
+	if !sarif_found {
+		err = fmt.Errorf("no sarif data found")
+		logger.Err(err).Msg(err.Error())
+		return output, err
+	}
 	// Inject Summary into findingsModel
 	// This is a temporary solution to inject the summary into the findings model
 	// This will be done in cue in the future
