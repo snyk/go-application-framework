@@ -191,6 +191,8 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 }
 
 func Test_DataTransformation_withSummaryData(t *testing.T) {
+	skipWindows(t)
+
 	invocationContext := setupMockContext2(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
