@@ -10,6 +10,7 @@ import (
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
@@ -41,25 +42,50 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return output, nil
 	}
 
+	var findingsModel local_models.LocalFinding
+	var summary json_schemas.TestSummary
+	var sarifInput workflow.Data
+	var summaryInput workflow.Data
+
 	for _, data := range input {
 		if strings.HasPrefix(data.GetContentType(), content_type.SARIF_JSON) {
-			// process input
-			d, err := transformSarifData(data)
-			if err != nil {
-				return output, err
-			}
+			sarifInput = data
+		}
 
-			bytes, err := json.Marshal(d)
-			if err != nil {
-				return output, err
-			}
-
-			output = append(input, workflow.NewData(
-				workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
-				content_type.LOCAL_FINDING_MODEL,
-				bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger)))
+		if strings.HasPrefix(data.GetContentType(), content_type.TEST_SUMMARY) {
+			summaryInput = data
 		}
 	}
+	if sarifInput == nil || summaryInput == nil {
+		logger.Trace().Msg("incomplete input data for transformation")
+		return output, nil
+	}
+	findingsModel, err = transformSarifData(sarifInput)
+	if err != nil {
+		logger.Err(err).Msg(err.Error())
+		return output, err
+	}
+	summary_bytes, ok := summaryInput.GetPayload().([]byte)
+	if !ok {
+		logger.Err(nil).Msg("summary payload is not a byte array")
+		return output, nil
+	}
+	err = json.Unmarshal(summary_bytes, &summary)
+	if err != nil {
+		logger.Err(err).Msg("Failed to unmarshal test summary")
+		return output, err
+	}
+
+	findingsModel.Summary = summary
+	bytes, err := json.Marshal(findingsModel)
+	if err != nil {
+		return output, err
+	}
+
+	output = append(input, workflow.NewData(
+		workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+		content_type.LOCAL_FINDING_MODEL,
+		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger)))
 
 	return output, nil
 }

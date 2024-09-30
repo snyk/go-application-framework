@@ -38,7 +38,7 @@ func setupMockTransformationContext(t *testing.T, fflagEnabled bool) *mocks.Mock
 	return invocationContextMock
 }
 
-func Test_DataTransformation_appendsTransformedInput(t *testing.T) {
+func Test_DataTransformation_with_incomplete_data(t *testing.T) {
 	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
@@ -48,7 +48,7 @@ func Test_DataTransformation_appendsTransformedInput(t *testing.T) {
 	}
 	output, err := dataTransformationEntryPoint(invocationContext, input)
 	assert.NoError(t, err)
-	assert.Len(t, output, 2)
+	assert.Len(t, output, 1)
 }
 
 func Test_DataTransformation_onlyWithTransformationWorkflowEnabled(t *testing.T) {
@@ -110,46 +110,6 @@ func skipWindows(t *testing.T) {
 	}
 }
 
-func Test_DataTransformation_withSarifData(t *testing.T) {
-	skipWindows(t)
-
-	invocationContext := setupMockTransformationContext(t, true)
-	logger := zerolog.Logger{}
-	input := []workflow.Data{
-		workflow.NewData(
-			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
-			content_type.SARIF_JSON,
-			loadJsonFile(t, "sarif-juice-shop.json"),
-			workflow.WithLogger(&logger)),
-	}
-	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.NoError(t, err)
-	assert.Len(t, output, 2)
-
-	var transformedOutput workflow.Data
-
-	// Output contains formatted finding response
-	for _, data := range output {
-		mimeType := data.GetContentType()
-
-		if strings.EqualFold(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			transformedOutput = data
-		}
-	}
-
-	var localFinding = local_models.LocalFinding{}
-	p, ok := transformedOutput.GetPayload().([]byte)
-
-	assert.True(t, ok)
-
-	err = json.Unmarshal(p, &localFinding)
-	assert.NoError(t, err)
-	assert.IsType(t, local_models.LocalFinding{}, localFinding)
-	assert.Len(t, localFinding.Findings, 278)
-	// TODO: Validate passed prop
-	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
-}
-
 func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
@@ -189,4 +149,60 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 	byteValue, err := io.ReadAll(jsonFile)
 	assert.NoError(t, err)
 	return byteValue
+}
+
+func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
+	skipWindows(t)
+
+	invocationContext := setupMockTransformationContext(t, true)
+	logger := zerolog.Logger{}
+	input := []workflow.Data{
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.SARIF_JSON,
+			loadJsonFile(t, "sarif-juice-shop.json"),
+			workflow.WithLogger(&logger)),
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.TEST_SUMMARY,
+			loadJsonFile(t, "juice-shop-summary.json"),
+			workflow.WithLogger(&logger)),
+	}
+
+	output, err := dataTransformationEntryPoint(invocationContext, input)
+	assert.Nil(t, err)
+	assert.Len(t, output, 3)
+
+	var transformedOutput workflow.Data
+
+	// Output contains formatted finding response
+	for _, data := range output {
+		mimeType := data.GetContentType()
+
+		if strings.EqualFold(mimeType, content_type.LOCAL_FINDING_MODEL) {
+			transformedOutput = data
+		}
+	}
+
+	var localFinding = local_models.LocalFinding{}
+	p, ok := transformedOutput.GetPayload().([]byte)
+
+	assert.True(t, ok)
+
+	err = json.Unmarshal(p, &localFinding)
+	assert.NoError(t, err)
+
+	// Assert against local finding transformation
+	assert.IsType(t, local_models.LocalFinding{}, localFinding)
+	assert.Len(t, localFinding.Findings, 278)
+	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
+
+	// Assert Summary
+	assert.Equal(t, 4, localFinding.Summary.Artifacts)
+	assert.Equal(t, 10, localFinding.Summary.Results[0].Total)
+	assert.Equal(t, "high", localFinding.Summary.Results[0].Severity)
+	assert.Equal(t, 4, localFinding.Summary.Artifacts)
+	assert.Equal(t, 5, localFinding.Summary.Results[1].Total)
+	assert.Equal(t, "medium", localFinding.Summary.Results[1].Severity)
+	assert.Equal(t, "sast", localFinding.Summary.Type)
 }
