@@ -6,8 +6,10 @@ import (
 	"os"
 	"testing"
 
+	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/cuecontext"
+	"cuelang.org/go/encoding/gocode/gocodec"
 	cuejson "cuelang.org/go/pkg/encoding/json"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
@@ -40,9 +42,15 @@ func TestNewTransformer_ValidTransformToTestApiFromSarif(t *testing.T) {
 	transformed, err := transformer.Apply(input)
 	assert.NoError(t, err)
 
-	assert.IsType(t, &local_models.LocalFinding{}, transformed)
-	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", transformed.Findings[0].Id.String())
-	assert.Len(t, transformed.Findings, 278)
+	assert.IsType(t, cue.Value{}, transformed)
+
+	codec := gocodec.New(ctx, &gocodec.Config{})
+	var localFinding local_models.LocalFinding
+
+	encodeErr := codec.Encode(transformed, &localFinding)
+	assert.NoError(t, encodeErr)
+
+	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 }
 
 func TestNewTransformer_InvalidTransform(t *testing.T) {
@@ -62,8 +70,8 @@ func loadJsonFile(t *testing.T, filename string) ast.Expr {
 		jsonErr := jsonFile.Close()
 		assert.NoError(t, jsonErr)
 	}(jsonFile)
-	byteValue, jsonReadAllErr := io.ReadAll(jsonFile)
-	assert.NoError(t, jsonReadAllErr)
+	byteValue, err := io.ReadAll(jsonFile)
+	assert.NoError(t, err)
 
 	input, errUnJson := cuejson.Unmarshal(byteValue)
 

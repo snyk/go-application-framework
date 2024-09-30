@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/rs/zerolog"
 	"io"
 	"net/http"
 	"testing"
+
+	"github.com/rs/zerolog"
 
 	"github.com/golang/mock/gomock"
 
