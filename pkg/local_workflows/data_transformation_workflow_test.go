@@ -19,8 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupMockContext2(t *testing.T, fflagEnabled bool) *mocks.MockInvocationContext {
-	// This method is a helper
+func setupMockTransformationContext(t *testing.T, fflagEnabled bool) *mocks.MockInvocationContext {
 	t.Helper()
 
 	// setup
@@ -40,7 +39,7 @@ func setupMockContext2(t *testing.T, fflagEnabled bool) *mocks.MockInvocationCon
 }
 
 func Test_DataTransformation_appendsTransformedInput(t *testing.T) {
-	invocationContext := setupMockContext2(t, true)
+	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
 		workflow.NewData(
@@ -48,12 +47,12 @@ func Test_DataTransformation_appendsTransformedInput(t *testing.T) {
 			content_type.SARIF_JSON, nil, workflow.WithLogger(&logger)),
 	}
 	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Len(t, output, 2)
 }
 
 func Test_DataTransformation_onlyWithTransformationWorkflowEnabled(t *testing.T) {
-	invocationContext := setupMockContext2(t, false)
+	invocationContext := setupMockTransformationContext(t, false)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
 		workflow.NewData(
@@ -61,7 +60,7 @@ func Test_DataTransformation_onlyWithTransformationWorkflowEnabled(t *testing.T)
 			"application/json", nil, workflow.WithLogger(&logger)),
 	}
 	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Len(t, output, 1)
 }
 
@@ -114,7 +113,7 @@ func skipWindows(t *testing.T) {
 func Test_DataTransformation_withSarifData(t *testing.T) {
 	skipWindows(t)
 
-	invocationContext := setupMockContext2(t, true)
+	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
 		workflow.NewData(
@@ -124,7 +123,7 @@ func Test_DataTransformation_withSarifData(t *testing.T) {
 			workflow.WithLogger(&logger)),
 	}
 	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Len(t, output, 2)
 
 	var transformedOutput workflow.Data
@@ -152,7 +151,7 @@ func Test_DataTransformation_withSarifData(t *testing.T) {
 }
 
 func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
-	invocationContext := setupMockContext2(t, true)
+	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
 		workflow.NewData(
@@ -162,7 +161,7 @@ func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 			workflow.WithLogger(&logger)),
 	}
 	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Len(t, output, 1)
 
 	var transformedOutput workflow.Data
@@ -182,9 +181,7 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 	t.Helper()
 
 	jsonFile, err := os.Open("./testdata/" + filename)
-	if err != nil {
-		t.Errorf("Failed to load json")
-	}
+	assert.NoError(t, err, "failed to load json")
 	defer func(jsonFile *os.File) {
 		jsonErr := jsonFile.Close()
 		assert.NoError(t, jsonErr)
