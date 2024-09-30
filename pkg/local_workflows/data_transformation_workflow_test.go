@@ -186,7 +186,7 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 		jsonErr := jsonFile.Close()
 		assert.NoError(t, jsonErr)
 	}(jsonFile)
-	byteValue, jsonReadAllErr := io.ReadAll(jsonFile)
-	assert.NoError(t, jsonReadAllErr)
+	byteValue, err := io.ReadAll(jsonFile)
+	assert.NoError(t, err)
 	return byteValue
 }
