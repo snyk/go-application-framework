@@ -43,34 +43,35 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	}
 
 	var findingsModel local_models.LocalFinding
-	var sarif_found bool = false
 	var summary json_schemas.TestSummary
+	var sarifInput workflow.Data
+	var summaryInput workflow.Data
 
 	for _, data := range input {
 		if strings.HasPrefix(data.GetContentType(), content_type.SARIF_JSON) {
-			// process input
-			findingsModel, err = transformSarifData(data)
-			if err != nil {
-				return output, err
-			}
-			sarif_found = true
+			sarifInput = data
 		}
 
 		if strings.HasPrefix(data.GetContentType(), content_type.TEST_SUMMARY) {
-			err = json.Unmarshal(data.GetPayload().([]byte), &summary)
-			if err != nil {
-				logger.Err(err).Msg("Failed to unmarshal test summary")
-				return output, err
-			}
+			summaryInput = data
 		}
 	}
-	// TODO: change this to no transformable data found
-	if !sarif_found {
-		logger.Trace().Msg("no SARIF data found")
+	if sarifInput == nil || summaryInput == nil {
+		logger.Trace().Msg("incomplete input data for transformation")
 		return output, nil
 	}
-	findingsModel.Summary = summary
+	findingsModel, err = transformSarifData(sarifInput)
+	if err != nil {
+		logger.Err(err).Msg(err.Error())
+		return output, err
+	}
+	err = json.Unmarshal(summaryInput.GetPayload().([]byte), &summary)
+	if err != nil {
+		logger.Err(err).Msg("Failed to unmarshal test summary")
+		return output, err
+	}
 
+	findingsModel.Summary = summary
 	bytes, err := json.Marshal(findingsModel)
 	if err != nil {
 		return output, err
