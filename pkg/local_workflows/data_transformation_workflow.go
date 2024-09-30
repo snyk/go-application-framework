@@ -65,7 +65,12 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		logger.Err(err).Msg(err.Error())
 		return output, err
 	}
-	err = json.Unmarshal(summaryInput.GetPayload().([]byte), &summary)
+	summary_bytes, ok := summaryInput.GetPayload().([]byte)
+	if !ok {
+		logger.Err(nil).Msg("summary payload is not a byte array")
+		return output, nil
+	}
+	err = json.Unmarshal(summary_bytes, &summary)
 	if err != nil {
 		logger.Err(err).Msg("Failed to unmarshal test summary")
 		return output, err
