@@ -43,17 +43,7 @@ func filter[T any](ss []T, test func(T) bool) (ret []T) {
 	return
 }
 func insertSummary(summary json_schemas.TestSummary, localFinding *local_models.LocalFinding) {
-	localFinding.Summary.Counts = local_models.IoSnykApiCommonCollectionCounts{
-		Count: uint32(summary.Artifacts),
-		CountBy: map[string]map[string]uint32{
-			"severity": {
-				"high":   uint32(len(filter(summary.Results, testSeverity("high")))),
-				"medium": uint32(len(filter(summary.Results, testSeverity("medium")))),
-				"low":    uint32(len(filter(summary.Results, testSeverity("low")))),
-			},
-		},
-	}
-
+	localFinding.Summary = summary
 }
 
 func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {

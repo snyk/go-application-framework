@@ -194,7 +194,7 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 func Test_DataTransformation_withSummaryData(t *testing.T) {
 	skipWindows(t)
 
-	invocationContext := setupMockContext2(t, true)
+	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
 		workflow.NewData(
@@ -234,9 +234,7 @@ func Test_DataTransformation_withSummaryData(t *testing.T) {
 	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 	assert.Len(t, localFinding.Findings, 278)
 	// TODO: Figure out what this is supposed to be
-	assert.Equal(t, uint32(4), localFinding.Summary.Counts.Count)
-	assert.Equal(t, uint32(1), localFinding.Summary.Counts.CountBy["severity"]["high"])
-	assert.Equal(t, uint32(1), localFinding.Summary.Counts.CountBy["severity"]["medium"])
-	assert.Equal(t, uint32(1), localFinding.Summary.Counts.CountBy["severity"]["low"])
-
+	assert.Equal(t, 4, localFinding.Summary.Artifacts)
+	assert.Equal(t, 10, localFinding.Summary.Results[0].Total)
+	assert.Equal(t, "high", localFinding.Summary.Results[0].Severity)
 }
