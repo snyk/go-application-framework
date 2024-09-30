@@ -2,7 +2,6 @@ package localworkflows
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -161,7 +160,7 @@ func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 			workflow.WithLogger(&logger)),
 	}
 	output, err := dataTransformationEntryPoint(invocationContext, input)
-	assert.Equal(t, err, fmt.Errorf("no sarif data found"))
+	assert.NoError(t, err)
 	assert.Len(t, output, 1)
 
 	var transformedOutput workflow.Data
@@ -233,8 +232,12 @@ func Test_DataTransformation_withSummaryData(t *testing.T) {
 	assert.NoError(t, err)
 	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 	assert.Len(t, localFinding.Findings, 278)
-	// TODO: Figure out what this is supposed to be
+	// Assert Summary
 	assert.Equal(t, 4, localFinding.Summary.Artifacts)
 	assert.Equal(t, 10, localFinding.Summary.Results[0].Total)
 	assert.Equal(t, "high", localFinding.Summary.Results[0].Severity)
+	assert.Equal(t, 4, localFinding.Summary.Artifacts)
+	assert.Equal(t, 5, localFinding.Summary.Results[1].Total)
+	assert.Equal(t, "medium", localFinding.Summary.Results[1].Severity)
+	assert.Equal(t, "sast", localFinding.Summary.Type)
 }

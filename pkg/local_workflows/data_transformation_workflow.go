@@ -29,22 +29,6 @@ func InitDataTransformationWorkflow(engine workflow.Engine) error {
 	engine.GetConfiguration().AddDefaultValue(configuration.FF_TRANSFORMATION_WORKFLOW, configuration.StandardDefaultValueFunction(false))
 	return err
 }
-func testSeverity(severity string) func(json_schemas.TestSummaryResult) bool {
-	return func(s json_schemas.TestSummaryResult) bool {
-		return s.Severity == severity
-	}
-}
-func filter[T any](ss []T, test func(T) bool) (ret []T) {
-	for _, s := range ss {
-		if test(s) {
-			ret = append(ret, s)
-		}
-	}
-	return
-}
-func insertSummary(summary json_schemas.TestSummary, localFinding *local_models.LocalFinding) {
-	localFinding.Summary = summary
-}
 
 func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
 	config := invocationCtx.GetConfiguration()
@@ -80,15 +64,12 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 			}
 		}
 	}
+	// TODO: change this to no transformable data found
 	if !sarif_found {
-		err = fmt.Errorf("no sarif data found")
-		logger.Err(err).Msg(err.Error())
-		return output, err
+		logger.Trace().Msg("no SARIF data found")
+		return output, nil
 	}
-	// Inject Summary into findingsModel
-	// This is a temporary solution to inject the summary into the findings model
-	// This will be done in cue in the future
-	insertSummary(summary, &findingsModel)
+	findingsModel.Summary = summary
 
 	bytes, err := json.Marshal(findingsModel)
 	if err != nil {
