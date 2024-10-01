@@ -163,6 +163,7 @@ func (a *snykApiClient) GetFeatureFlag(flagname string, orgId string) (bool, err
 	}
 
 	var flag contract.OrgFeatureFlagResponse
+	flag.Ok = defaultResult
 	if err = json.Unmarshal(body, &flag); err != nil {
 		return defaultResult, fmt.Errorf("unable to retrieve feature flag (status: %d): %w", res.StatusCode, err)
 	}
@@ -171,7 +172,7 @@ func (a *snykApiClient) GetFeatureFlag(flagname string, orgId string) (bool, err
 		return defaultResult, err
 	}
 
-	return true, nil
+	return flag.Ok, nil
 }
 
 // GetSelf retrieves the authenticated user's information from the Snyk API.
