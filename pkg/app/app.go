@@ -22,26 +22,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
-		if existingValue == nil {
-			flagname := "snykCodeConsistentIgnores"
-			client := engine.GetNetworkAccess().GetHttpClient()
-			url := config.GetString(configuration.API_URL)
-			org := config.GetString(configuration.ORGANIZATION)
-			apiClient := apiClientFactory(url, client)
-			result, err := apiClient.GetFeatureFlag(flagname, org)
-			if err != nil {
-				logger.Printf("Failed to determine feature flag \"%s\" for org \"%s\": %s", flagname, org, err)
-			}
-			return result
-		} else {
-			return existingValue
-		}
-	}
-	return callback
-}
-
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		client := engine.GetNetworkAccess().GetHttpClient()
