@@ -1,0 +1,42 @@
+{
+  "findings": [],
+  "Summary": {
+    "results": [
+      {
+        "severity": "high",
+        "total": 0,
+        "open": 0,
+        "ignored": 0
+      },
+      {
+        "severity": "medium",
+        "total": 0,
+        "open": 0,
+        "ignored": 0
+      },
+      {
+        "severity": "low",
+        "total": 0,
+        "open": 0,
+        "ignored": 0
+      },
+      {
+        "severity": "critical",
+        "total": 0,
+        "open": 0,
+        "ignored": 0
+      }
+    ],
+    "severity_order_asc": [
+      "low",
+      "medium",
+      "high",
+      "critical"
+    ],
+    "type": "sast",
+    "artifacts": 0
+  },
+  "outcome": {
+    "result": "pass"
+  }
+}
