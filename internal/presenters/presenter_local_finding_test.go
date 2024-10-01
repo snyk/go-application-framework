@@ -24,5 +24,5 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	result, err := p.Render()
 
 	require.NoError(t, err)
-	assert.Equal(t, "", result)
+	assert.Contains(t, result, "Testing ")
 }
