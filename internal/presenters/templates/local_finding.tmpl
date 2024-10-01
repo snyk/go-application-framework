@@ -1,0 +1,31 @@
+{{- define "details" }}
+Details
+{{- end}}
+
+{{- define "header" }}
+Testing {{.ScannedPath}}
+{{- end }}
+
+{{- define "summary" }}
+
+  ╭─────────────────────────────────────────────────────╮
+  │ Test Summary                                        │
+  │                                                     │
+  │   Organization:      ide-consistent-ignores-test    │
+  │   Test type:         Static code analysis           │
+  │   Project path:      ../nodejs-goof                 │
+  │                                                     │
+  │   Total issues:   9                                 │
+  │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
+  │   Open issues:    9 [ 2 HIGH  5 MEDIUM  2 LOW ]     │
+  ╰─────────────────────────────────────────────────────╯
+FOOW FOOW FOOW
+{{ end }}
+
+{{- define "main" }}
+{{- template "header"  . }}
+{{- template "details" . }}
+{{- template "summary" . }}
+{{- end }}
+
+{{- template "main" . }}

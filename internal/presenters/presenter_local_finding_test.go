@@ -18,11 +18,14 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&localFindingDoc)
 	require.NoError(t, err)
 
+	scanned_path := "path/to/project"
 	p := LocalFindingPresenter(
-		localFindingDoc)
+		localFindingDoc,
+		scanned_path,
+	)
 
 	result, err := p.Render()
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "Testing ")
+	assert.Contains(t, result, "Testing "+scanned_path)
 }
