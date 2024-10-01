@@ -7,6 +7,7 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/rs/zerolog"
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -60,7 +61,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		logger.Trace().Msg("incomplete input data for transformation")
 		return output, nil
 	}
-	findingsModel, err = transformSarifData(sarifInput)
+	findingsModel, err = transformSarifData(sarifInput, logger)
 	if err != nil {
 		logger.Err(err).Msg(err.Error())
 		return output, err
@@ -90,7 +91,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	return output, nil
 }
 
-func transformSarifData(singleData workflow.Data) (localFinding local_models.LocalFinding, err error) {
+func transformSarifData(singleData workflow.Data, logger *zerolog.Logger) (localFinding local_models.LocalFinding, err error) {
 	jsonData, ok := singleData.GetPayload().([]byte)
 	if !ok {
 		return localFinding, err
@@ -102,7 +103,7 @@ func transformSarifData(singleData workflow.Data) (localFinding local_models.Loc
 	}
 
 	ctx := cuecontext.New()
-	sarif2apiTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToTestApiFromSarif)
+	sarif2apiTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToTestApiFromSarif, cueutil.WithLogger(logger))
 	if transformerError != nil {
 		return localFinding, transformerError
 	}

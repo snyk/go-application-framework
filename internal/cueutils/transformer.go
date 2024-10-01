@@ -11,6 +11,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/load"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -21,12 +22,14 @@ const (
 )
 
 type Transformer struct {
-	inst cue.Value
+	inst   cue.Value
+	logger *zerolog.Logger
 }
 
-func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
+func NewTransformer(ctx *cue.Context, name string, options ...OptionFunc) (*Transformer, error) {
 	var devnull bytes.Buffer
 	overlay := map[string]load.Source{}
+
 	err := fs.WalkDir(EmbeddedFilesystem, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -56,7 +59,19 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 	if err = inst.Err(); err != nil {
 		return nil, fmt.Errorf("failed to instanstiate transforms: %w", err)
 	}
-	return &Transformer{inst: inst}, nil
+
+	t := &Transformer{
+		inst:   inst,
+		logger: &zerolog.Logger{},
+	}
+
+	for _, option := range options {
+		option(t)
+	}
+
+	t.logger.Debug().Msgf("NewTransformer: %s", name)
+
+	return t, nil
 }
 
 func (t *Transformer) Apply(input ast.Expr) (cue.Value, error) {
@@ -83,4 +98,12 @@ func (t *Transformer) ApplyValue(v cue.Value) (cue.Value, error) {
 		return withOutput, fmt.Errorf("failed to get output: %w", err)
 	}
 	return withOutput, nil
+}
+
+type OptionFunc func(*Transformer)
+
+func WithLogger(logger *zerolog.Logger) OptionFunc {
+	return func(t *Transformer) {
+		t.logger = logger
+	}
 }
