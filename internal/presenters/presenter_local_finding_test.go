@@ -29,3 +29,23 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "Testing "+scanned_path)
 }
+
+func TestPresenterLocalFinding_with_Issues(t *testing.T) {
+	fd, err := os.Open("testdata/local-findings-juice-shop.json")
+	require.NoError(t, err)
+
+	var localFindingDoc local_models.LocalFinding
+	err = json.NewDecoder(fd).Decode(&localFindingDoc)
+	require.NoError(t, err)
+
+	scanned_path := "path/to/project"
+	p := LocalFindingPresenter(
+		localFindingDoc,
+		scanned_path,
+	)
+
+	result, err := p.Render()
+
+	require.NoError(t, err)
+	assert.Contains(t, result, "Total issues:   18")
+}

@@ -3,7 +3,7 @@ Details
 {{- end}}
 
 {{- define "header" }}
-Testing {{.ScannedPath}}
+Testing {{.Summary.TestPath}}
 {{- end }}
 
 {{- define "summary" }}
@@ -13,9 +13,9 @@ Testing {{.ScannedPath}}
   │                                                     │
   │   Organization:      ide-consistent-ignores-test    │
   │   Test type:         Static code analysis           │
-  │   Project path:      ../nodejs-goof                 │
+  │   Project path:      {{.Summary.TestPath}}               │
   │                                                     │
-  │   Total issues:   9                                 │
+  │   Total issues:   {{.Summary.TotalIssueCount}}                               │
   │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
   │   Open issues:    9 [ 2 HIGH  5 MEDIUM  2 LOW ]     │
   ╰─────────────────────────────────────────────────────╯

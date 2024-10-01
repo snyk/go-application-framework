@@ -31,9 +31,17 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 		return "", err
 	}
 
+	sum := PrepareSummary(&p.Input.Summary, "", p.ScannedPath, "")
+
 	buf := new(bytes.Buffer)
 	main_tmpl := local_findings_template.Lookup("main")
-	err = main_tmpl.Execute(buf, p)
+	err = main_tmpl.Execute(buf, struct {
+		Summary SummaryData
+		Results local_models.LocalFinding
+	}{
+		Summary: sum,
+		Results: p.Input,
+	})
 	if err != nil {
 		return "", err
 	}
