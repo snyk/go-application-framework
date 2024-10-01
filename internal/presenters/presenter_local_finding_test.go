@@ -28,6 +28,7 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, result, "Testing "+scanned_path)
+	assert.NotContains(t, result, "Ignored issues")
 }
 
 func TestPresenterLocalFinding_with_Issues(t *testing.T) {
@@ -48,4 +49,5 @@ func TestPresenterLocalFinding_with_Issues(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, result, "Total issues:   18")
+	assert.Contains(t, result, "Static code analysis")
 }

@@ -7,25 +7,24 @@ Testing {{.Summary.TestPath}}
 {{- end }}
 
 {{- define "summary" }}
+  Test Summary
+  Organization:      {{.Summary.Org}}
+  Test type:         {{.Summary.Type}}
+  Project path:      {{.Summary.TestPath}}
 
-  ╭─────────────────────────────────────────────────────╮
-  │ Test Summary                                        │
-  │                                                     │
-  │   Organization:      ide-consistent-ignores-test    │
-  │   Test type:         Static code analysis           │
-  │   Project path:      {{.Summary.TestPath}}               │
-  │                                                     │
-  │   Total issues:   {{.Summary.TotalIssueCount}}                               │
-  │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
-  │   Open issues:    9 [ 2 HIGH  5 MEDIUM  2 LOW ]     │
-  ╰─────────────────────────────────────────────────────╯
-FOOW FOOW FOOW
+  Total issues:   {{.Summary.TotalIssueCount}}{{ if .Summary.TotalIssueCount }}
+  Ignored issues: {{ .Summary.IgnoredIssueCountWithSeverities }}
+  Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}
 {{ end }}
 
 {{- define "main" }}
+
+{{ box "Hello" }}
+
+{{- template "summary" . }}
+
 {{- template "header"  . }}
 {{- template "details" . }}
-{{- template "summary" . }}
 {{- end }}
 
 {{- template "main" . }}

@@ -26,7 +26,12 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 		return "", err
 	}
 
-	local_findings_template, err := template.New("local_finding").Parse(string(data))
+	local_findings_template, err := template.New("local_finding").Parse("")
+	if err != nil {
+		return "", err
+	}
+	addTemplateFuncs(local_findings_template)
+	local_findings_template, err = local_findings_template.Parse(string(data))
 	if err != nil {
 		return "", err
 	}
@@ -35,6 +40,7 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 
 	buf := new(bytes.Buffer)
 	main_tmpl := local_findings_template.Lookup("main")
+
 	err = main_tmpl.Execute(buf, struct {
 		Summary SummaryData
 		Results local_models.LocalFinding
@@ -46,4 +52,13 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func addTemplateFuncs(t *template.Template) {
+	var fnMap = template.FuncMap{
+		"box": func(s string) string {
+			return "box"
+		},
+	}
+	t.Funcs(fnMap)
 }
