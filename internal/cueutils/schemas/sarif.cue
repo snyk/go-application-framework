@@ -1127,7 +1127,7 @@ properties?: #propertyBag
 	relatedLocations?: list.UniqueItems() & [...] & [...#location]
 
 	// A set of suppressions relevant to this result.
-	suppressions?: list.UniqueItems() & [...] & [...#suppression] | null
+	suppressions?: null | list.UniqueItems() & [...] & [...#suppression]
 
 	// The state of a result relative to a baseline of a previous run.
 	baselineState?: "new" | "unchanged" | "updated" | "absent"
