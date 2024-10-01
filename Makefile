@@ -45,6 +45,7 @@ generate:
 tools: $(GO_BIN)/golangci-lint
 	GOBIN=$(GO_BIN) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0
 	GOBIN=$(GO_BIN) go install github.com/golang/mock/mockgen@v1.6.0
+	GOBIN=$(GO_BIN) go install cuelang.org/go/cmd/cue@v0.10.0
 
 $(GO_BIN)/golangci-lint:
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
