@@ -2159,7 +2159,7 @@
 
         "suppressions": {
           "description": "A set of suppressions relevant to this result.",
-          "type": "array",
+          "type": ["array", "null"],
           "minItems": 0,
           "uniqueItems": true,
           "items": {
