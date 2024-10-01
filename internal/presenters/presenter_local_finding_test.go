@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,4 +51,6 @@ func TestPresenterLocalFinding_with_Issues(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "Total issues:   18")
 	assert.Contains(t, result, "Static code analysis")
+	assert.Contains(t, result, "box")
+	snaps.MatchSnapshot(t, result)
 }

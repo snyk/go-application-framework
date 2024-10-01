@@ -54,11 +54,23 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 	return buf.String(), nil
 }
 
+func renderTemplateToString(tmpl *template.Template) func(name string, data interface{}) (string, error) {
+	return func(name string, data interface{}) (string, error) {
+		var buf bytes.Buffer
+		err := tmpl.ExecuteTemplate(&buf, name, data)
+		if err != nil {
+			return "", err
+		}
+		return buf.String(), nil
+	}
+}
+
 func addTemplateFuncs(t *template.Template) {
 	var fnMap = template.FuncMap{
 		"box": func(s string) string {
-			return "box"
+			return "box" + s
 		},
+		"renderToString": renderTemplateToString(t),
 	}
 	t.Funcs(fnMap)
 }

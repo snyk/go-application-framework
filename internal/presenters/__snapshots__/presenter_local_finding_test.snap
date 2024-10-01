@@ -1,0 +1,17 @@
+
+[TestPresenterLocalFinding_with_Issues - 1]
+
+
+boxHellobox
+  Test Summary
+  Organization:      
+  Test type:         Static code analysis
+  Project path:      path/to/project
+
+  Total issues:   18
+  Ignored issues: 3 [ 0 CRITICAL  2 HIGH  1 MEDIUM  0 LOW ]
+  Open issues:    5 [ 1 CRITICAL  3 HIGH  1 MEDIUM  0 LOW ]
+
+Testing path/to/project
+Details
+---

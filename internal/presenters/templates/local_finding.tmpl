@@ -6,7 +6,7 @@ Details
 Testing {{.Summary.TestPath}}
 {{- end }}
 
-{{- define "summary" }}
+{{- define "summary"}}
   Test Summary
   Organization:      {{.Summary.Org}}
   Test type:         {{.Summary.Type}}
@@ -21,7 +21,7 @@ Testing {{.Summary.TestPath}}
 
 {{ box "Hello" }}
 
-{{- template "summary" . }}
+{{- box (renderToString "summary" .)}}
 
 {{- template "header"  . }}
 {{- template "details" . }}
