@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -351,4 +353,41 @@ func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 	dataErrors := rs[1].GetErrorList()
 	assert.Equal(t, len(dataErrors), 1)
 	assert.Equal(t, dataErrors[0].ErrorCode, code.NewUnsupportedProjectError("").ErrorCode)
+}
+
+func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
+	response := contract.OrgFeatureFlagResponse{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, err := json.Marshal(response)
+		assert.NoError(t, err)
+		fmt.Fprintln(w, string(data))
+	}))
+	defer ts.Close()
+
+	orgId := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	config := configuration.NewInMemory()
+	config.Set(configuration.ORGANIZATION, orgId)
+	config.Set(configuration.API_URL, ts.URL)
+
+	engine := workflow.NewWorkFlowEngine(config)
+	err := InitCodeWorkflow(engine)
+	assert.NoError(t, err)
+
+	t.Run("Feature Flag set", func(t *testing.T) {
+		response = contract.OrgFeatureFlagResponse{Code: http.StatusOK, Ok: true}
+		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+		assert.True(t, consistentIgnores)
+	})
+
+	t.Run("Feature Flag NOT set", func(t *testing.T) {
+		response = contract.OrgFeatureFlagResponse{Code: http.StatusForbidden}
+		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+		assert.False(t, consistentIgnores)
+	})
+
+	t.Run("Feature Flag not available due to error", func(t *testing.T) {
+		config.Unset(configuration.ORGANIZATION)
+		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+		assert.False(t, consistentIgnores)
+	})
 }

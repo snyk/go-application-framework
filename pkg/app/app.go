@@ -22,26 +22,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
-		if existingValue == nil {
-			flagname := "snykCodeConsistentIgnores"
-			client := engine.GetNetworkAccess().GetHttpClient()
-			url := config.GetString(configuration.API_URL)
-			org := config.GetString(configuration.ORGANIZATION)
-			apiClient := apiClientFactory(url, client)
-			result, err := apiClient.GetFeatureFlag(flagname, org)
-			if err != nil {
-				logger.Printf("Failed to determine feature flag \"%s\" for org \"%s\": %s", flagname, org, err)
-			}
-			return result
-		} else {
-			return existingValue
-		}
-	}
-	return callback
-}
-
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		client := engine.GetNetworkAccess().GetHttpClient()
@@ -237,7 +217,6 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
-	config.AddDefaultValue(configuration.FF_CODE_CONSISTENT_IGNORES, defaultFunc_FF_CODE_CONSISTENT_IGNORES(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine, logger))
 }
 

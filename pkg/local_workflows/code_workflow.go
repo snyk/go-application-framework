@@ -7,6 +7,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -72,6 +73,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 
 	engine.GetConfiguration().AddDefaultValue(ConfigurationSastEnabled, getSastEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
+	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_IGNORES, "snykCodeConsistentIgnores")
 
 	return err
 }

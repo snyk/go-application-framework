@@ -220,34 +220,6 @@ func Test_initConfiguration_NOT_snykgov(t *testing.T) {
 	assert.False(t, isFedramp)
 }
 
-func Test_initConfiguration_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
-	orgId := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-	config := configuration.NewInMemory()
-	config.Set(configuration.ORGANIZATION, orgId)
-
-	// setup mock
-	ctrl := gomock.NewController(t)
-	mockApiClient := mocks.NewMockApiClient(ctrl)
-	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(true, nil).Times(1)
-	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(false, nil).Times(1)
-	mockApiClient.EXPECT().GetFeatureFlag("snykCodeConsistentIgnores", orgId).Return(false, fmt.Errorf("error")).Times(1)
-
-	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
-		return mockApiClient
-	}
-	initConfiguration(workflow.NewWorkFlowEngine(config), config, &zlog.Logger, apiClientFactory)
-
-	consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
-	assert.True(t, consistentIgnores)
-
-	consistentIgnores = config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
-	assert.False(t, consistentIgnores)
-
-	consistentIgnores = config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
-	assert.False(t, consistentIgnores)
-}
-
 func Test_initConfiguration_PREVIEW_FEATURES_ENABLED(t *testing.T) {
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)

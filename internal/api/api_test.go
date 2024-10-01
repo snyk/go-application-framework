@@ -107,6 +107,7 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 	org := "myOrg"
 	featureFlagName := "myFlag"
 	featureFlagResponse := contract.OrgFeatureFlagResponse{
+		Ok:   true,
 		Code: http.StatusOK,
 	}
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
