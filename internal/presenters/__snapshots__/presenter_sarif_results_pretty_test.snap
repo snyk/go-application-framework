@@ -18,17 +18,17 @@ Open Issues
    Info: The SHA1 hash (used in crypto.sha1.New) is insecure. Consider changing it to a secure hash algorithm
 
 
-╭─────────────────────────────────────────────────────╮
-│ Test Summary                                        │
-│                                                     │
-│   Organization:      test-org                       │
-│   Test type:         Static code analysis           │
-│   Project path:      /path/to/project               │
-│                                                     │
-│   Total issues:   3                                 │
-│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
-│   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]     │
-╰─────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   3                                │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
+│   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
+╰────────────────────────────────────────────────────╯
 
 💡 Tip
 
@@ -79,17 +79,17 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-╭─────────────────────────────────────────────────────╮
-│ Test Summary                                        │
-│                                                     │
-│   Organization:      test-org                       │
-│   Test type:         Static code analysis           │
-│   Project path:      /path/to/project               │
-│                                                     │
-│   Total issues:   9                                 │
-│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
-│   Open issues:    9 [ 4 HIGH  5 MEDIUM  0 LOW ]     │
-╰─────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   9                                │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
+│   Open issues:    9 [ 4 HIGH  5 MEDIUM  0 LOW ]    │
+╰────────────────────────────────────────────────────╯
 
 💡 Tip
 
@@ -160,17 +160,17 @@ Testing /path/to/project ...
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-╭─────────────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                        │
-│                                                     │
-│   Organization:      test-org                       │
-│   Test type:         Static code analysis           │
-│   Project path:      /path/to/project               │
-│                                                     │
-│   Total issues:   9                                 │
-│   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]     │
-│   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]     │
-╰─────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   9                                │
+│   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]    │
+│   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]    │
+╰────────────────────────────────────────────────────╯
 
 💡 Tip
 
@@ -303,17 +303,17 @@ Ignored Issues
    Ignores are currently managed in the Snyk Web UI.              
    To edit or remove the ignore please go to: https://app.snyk.io/
 
-╭─────────────────────────────────────────────────────╮
-│ Test Summary                                        │
-│                                                     │
-│   Organization:      test-org                       │
-│   Test type:         Static code analysis           │
-│   Project path:      /path/to/project               │
-│                                                     │
-│   Total issues:   5                                 │
-│   Ignored issues: 1 [ 0 HIGH  1 MEDIUM  0 LOW ]     │
-│   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]     │
-╰─────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   5                                │
+│   Ignored issues: 1 [ 0 HIGH  1 MEDIUM  0 LOW ]    │
+│   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]    │
+╰────────────────────────────────────────────────────╯
 
 
 ---
@@ -348,17 +348,17 @@ Ignored Issues
    Ignores are currently managed in the Snyk Web UI.              
    To edit or remove the ignore please go to: https://app.snyk.io/
 
-╭─────────────────────────────────────────────────────╮
-│ Test Summary                                        │
-│                                                     │
-│   Organization:      test-org                       │
-│   Test type:         Static code analysis           │
-│   Project path:      /path/to/project               │
-│                                                     │
-│   Total issues:   3                                 │
-│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]     │
-│   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]     │
-╰─────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   3                                │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
+│   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
+╰────────────────────────────────────────────────────╯
 
 
 ---
@@ -452,17 +452,17 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-╭─────────────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                        │
-│                                                     │
-│   Organization:      test-org                       │
-│   Test type:         Static code analysis           │
-│   Project path:      /path/to/project               │
-│                                                     │
-│   Total issues:   9                                 │
-│   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]     │
-│   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]     │
-╰─────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   9                                │
+│   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]    │
+│   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]    │
+╰────────────────────────────────────────────────────╯
 
 💡 Tip
 

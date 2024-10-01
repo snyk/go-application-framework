@@ -187,18 +187,18 @@ func FilterSeverityASC(original []string, severityMinLevel string) []string {
 	return original
 }
 
-func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string, severityMinLevel string) (string, error) {
-	var buff bytes.Buffer
-	var summaryTemplate = template.Must(template.New("summary").Parse(`{{ .SummaryTitle }}
+type SummaryData struct {
+	SummaryTitle                    string
+	Org                             string
+	TestPath                        string
+	Type                            string
+	TotalIssueCount                 int
+	IgnoreIssueCount                int
+	OpenIssueCountWithSeverities    string
+	IgnoredIssueCountWithSeverities string
+}
 
-  Organization:      {{ .Org }}
-  Test type:         {{ .Type }}
-  Project path:      {{ .TestPath }}
-
-  Total issues:   {{ .TotalIssueCount }}{{ if .TotalIssueCount }}
-  Ignored issues: {{ .IgnoredIssueCountWithSeverities }} 
-  Open issues:    {{ .OpenIssueCountWithSeverities }}{{ end }}`))
-
+func PrepareSummary(summary *json_schemas.TestSummary, orgName string, testPath string, severityMinLevel string) (data SummaryData) {
 	totalIssueCount := 0
 	openIssueCount := 0
 	ignoredIssueCount := 0
@@ -240,25 +240,31 @@ func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath s
 		testType = "Static code analysis"
 	}
 
-	err := summaryTemplate.Execute(&buff, struct {
-		SummaryTitle                    string
-		Org                             string
-		TestPath                        string
-		Type                            string
-		TotalIssueCount                 int
-		IgnoreIssueCount                int
-		OpenIssueCountWithSeverities    string
-		IgnoredIssueCountWithSeverities string
-	}{
-		SummaryTitle:                    renderBold("Test Summary"),
-		Org:                             orgName,
-		TestPath:                        testPath,
-		Type:                            testType,
-		TotalIssueCount:                 totalIssueCount,
-		IgnoreIssueCount:                ignoredIssueCount,
-		OpenIssueCountWithSeverities:    openIssueCountWithSeverities,
-		IgnoredIssueCountWithSeverities: ignoredIssueCountWithSeverities,
-	})
+	data.SummaryTitle = renderBold("Test Summary")
+	data.Org = orgName
+	data.TestPath = testPath
+	data.Type = testType
+	data.TotalIssueCount = totalIssueCount
+	data.IgnoreIssueCount = ignoredIssueCount
+	data.OpenIssueCountWithSeverities = openIssueCountWithSeverities
+	data.IgnoredIssueCountWithSeverities = ignoredIssueCountWithSeverities
+	return data
+}
+
+func RenderSummary(summary *json_schemas.TestSummary, orgName string, testPath string, severityMinLevel string) (string, error) {
+	var buff bytes.Buffer
+	var summaryTemplate = template.Must(template.New("summary").Parse(`{{ .SummaryTitle }}
+
+  Organization:      {{ .Org }}
+  Test type:         {{ .Type }}
+  Project path:      {{ .TestPath }}
+
+  Total issues:   {{ .TotalIssueCount }}{{ if .TotalIssueCount }}
+  Ignored issues: {{ .IgnoredIssueCountWithSeverities }}
+  Open issues:    {{ .OpenIssueCountWithSeverities }}{{ end }}`))
+
+	summaryData := PrepareSummary(summary, orgName, testPath, severityMinLevel)
+	err := summaryTemplate.Execute(&buff, summaryData)
 	if err != nil {
 		return "", fmt.Errorf("failed to generete test summary from template: %w", err)
 	}
