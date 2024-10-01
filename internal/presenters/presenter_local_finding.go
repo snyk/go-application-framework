@@ -68,7 +68,7 @@ func renderTemplateToString(tmpl *template.Template) func(name string, data inte
 func addTemplateFuncs(t *template.Template) {
 	var fnMap = template.FuncMap{
 		"box": func(s string) string {
-			return "box" + s
+			return boxStyle.Render(s)
 		},
 		"renderToString": renderTemplateToString(t),
 	}

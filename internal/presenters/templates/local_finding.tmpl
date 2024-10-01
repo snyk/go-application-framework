@@ -19,8 +19,6 @@ Testing {{.Summary.TestPath}}
 
 {{- define "main" }}
 
-{{ box "Hello" }}
-
 {{- box (renderToString "summary" .)}}
 
 {{- template "header"  . }}

@@ -51,6 +51,6 @@ func TestPresenterLocalFinding_with_Issues(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "Total issues:   18")
 	assert.Contains(t, result, "Static code analysis")
-	assert.Contains(t, result, "box")
+	assert.Contains(t, result, "╭")
 	snaps.MatchSnapshot(t, result)
 }
