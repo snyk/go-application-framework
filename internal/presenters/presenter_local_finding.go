@@ -20,18 +20,29 @@ func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string) *
 	}
 }
 
+func loadTemplates(files []string, tmpl *template.Template) error {
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		tmpl, err = tmpl.Parse(string(data))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *LocalFindingPresentation) Render() (string, error) {
-	data, err := os.ReadFile("./templates/local_finding.tmpl")
-	if err != nil {
-		return "", err
+	var templatePaths = []string{
+		"./templates/local_finding.tmpl",
+		"./templates/finding.component.tmpl",
 	}
 
-	local_findings_template, err := template.New("local_finding").Parse("")
-	if err != nil {
-		return "", err
-	}
+	local_findings_template, _ := template.New("local_finding").Parse("")
 	addTemplateFuncs(local_findings_template)
-	local_findings_template, err = local_findings_template.Parse(string(data))
+	err := loadTemplates(templatePaths, local_findings_template)
 	if err != nil {
 		return "", err
 	}
@@ -71,6 +82,13 @@ func addTemplateFuncs(t *template.Template) {
 			return boxStyle.Render(s)
 		},
 		"renderToString": renderTemplateToString(t),
+		"renderFinding": func(finding local_models.FindingResource) string {
+			output, err := renderTemplateToString(t)("finding", finding)
+			if err != nil {
+				return ""
+			}
+			return output
+		},
 	}
 	t.Funcs(fnMap)
 }

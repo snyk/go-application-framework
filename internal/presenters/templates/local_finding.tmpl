@@ -1,5 +1,7 @@
 {{define "details" }}
-Details
+    {{- range $finding := $.Results.Findings}}
+        {{ renderFinding $finding }}
+    {{- end }}
 {{end}}
 
 {{- define "header" }}
