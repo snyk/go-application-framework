@@ -2,7 +2,7 @@ package presenters
 
 import (
 	"bytes"
-	"os"
+	"embed"
 	"text/template"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
@@ -20,9 +20,12 @@ func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string) *
 	}
 }
 
+//go:embed templates/*
+var embeddedFiles embed.FS
+
 func loadTemplates(files []string, tmpl *template.Template) error {
 	for _, file := range files {
-		data, err := os.ReadFile(file)
+		data, err := embeddedFiles.ReadFile(file)
 		if err != nil {
 			return err
 		}
@@ -36,8 +39,8 @@ func loadTemplates(files []string, tmpl *template.Template) error {
 
 func (p *LocalFindingPresentation) Render() (string, error) {
 	var templatePaths = []string{
-		"./templates/local_finding.tmpl",
-		"./templates/finding.component.tmpl",
+		"templates/local_finding.tmpl",
+		"templates/finding.component.tmpl",
 	}
 
 	local_findings_template, _ := template.New("local_finding").Parse("")

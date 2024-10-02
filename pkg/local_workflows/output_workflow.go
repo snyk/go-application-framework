@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -101,6 +102,23 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
+			var local_findings local_models.LocalFinding
+			err := json.Unmarshal(input[i].GetPayload().([]byte), &local_findings)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to unmarshal local finding")
+				continue
+			}
+			findingPresentation := presenters.LocalFindingPresentation{
+				Input:       local_findings,
+				ScannedPath: input[i].GetContentLocation(),
+			}
+			result, err := findingPresentation.Render()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to render local finding")
+				continue
+			}
+
+			outputDestination.Println(result)
 			continue
 		}
 

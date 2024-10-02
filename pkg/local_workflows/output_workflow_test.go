@@ -194,19 +194,18 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, 1, len(output))
 	})
 
-	t.Run("should not output anything for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
+	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, []byte(payload))
 
 		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(0)
+		outputDestination.EXPECT().Println(gomock.Any()).Return(0, nil)
 
 		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		_, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, 0, len(output))
 	})
 
 	t.Run("should not output anything for versioned test summary mimeType", func(t *testing.T) {

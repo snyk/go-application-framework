@@ -82,12 +82,11 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return output, err
 	}
 
-	output = append(input, workflow.NewData(
+	return []workflow.Data{workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
 		content_type.LOCAL_FINDING_MODEL,
-		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger)))
-
-	return output, nil
+		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger),
+	)}, nil
 }
 
 func transformSarifData(singleData workflow.Data) (localFinding local_models.LocalFinding, err error) {
