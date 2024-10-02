@@ -1,13 +1,14 @@
-{{- define "details" }}
+{{define "details" }}
 Details
-{{- end}}
+{{end}}
 
 {{- define "header" }}
 Testing {{.Summary.TestPath}}
 {{- end }}
 
 {{- define "summary"}}
-  Test Summary
+Test Summary
+
   Organization:      {{.Summary.Org}}
   Test type:         {{.Summary.Type}}
   Project path:      {{.Summary.TestPath}}
@@ -18,11 +19,9 @@ Testing {{.Summary.TestPath}}
 {{ end }}
 
 {{- define "main" }}
-
-{{- box (renderToString "summary" .)}}
-
 {{- template "header"  . }}
 {{- template "details" . }}
+{{- box (renderToString "summary" .)}}
 {{- end }}
 
 {{- template "main" . }}
