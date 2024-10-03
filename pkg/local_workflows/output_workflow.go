@@ -103,7 +103,11 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
 			var local_findings local_models.LocalFinding
-			err := json.Unmarshal(input[i].GetPayload().([]byte), &local_findings)
+			local_findings_bytes, ok := input[i].GetPayload().([]byte)
+			if !ok {
+				return output, fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
+			}
+			err := json.Unmarshal(local_findings_bytes, &local_findings)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to unmarshal local finding")
 				continue

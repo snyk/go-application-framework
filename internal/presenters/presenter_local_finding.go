@@ -43,9 +43,12 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 		"templates/finding.component.tmpl",
 	}
 
-	local_findings_template, _ := template.New("local_finding").Parse("")
+	local_findings_template, err := template.New("local_finding").Parse("")
+	if err != nil {
+		return "", err
+	}
 	addTemplateFuncs(local_findings_template)
-	err := loadTemplates(templatePaths, local_findings_template)
+	err = loadTemplates(templatePaths, local_findings_template)
 	if err != nil {
 		return "", err
 	}
