@@ -1,7 +1,9 @@
 {{define "finding"}}
  ✗ [{{.Attributes.Rating.Severity.Value}}] {{.Attributes.Message.Header}}
    {{- range $location := $.Attributes.Locations}}
-   Path: {{$location}}
+       {{- if $location.SourceLocations}}
+   Path: {{$location.SourceLocations.Filepath}}
+       {{- end }}
    {{- end }}
    Info: {{.Attributes.Message.Text}}
 {{end}}
