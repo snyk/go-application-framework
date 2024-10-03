@@ -34,6 +34,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	ff_transform_enabled := config.GetBool(configuration.FF_TRANSFORMATION_WORKFLOW)
+	output = input
 
 	logger.Println("dataTransformation workflow start")
 
@@ -52,7 +53,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		}
 
 		if strings.HasPrefix(data.GetContentType(), content_type.TEST_SUMMARY) {
-			output = append(output, data)
+			output = []workflow.Data{data}
 			summaryInput = data
 		}
 	}
@@ -82,7 +83,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return output, err
 	}
 
-	output = append(input, workflow.NewData(
+	output = append(output, workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
 		content_type.LOCAL_FINDING_MODEL,
 		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger)))

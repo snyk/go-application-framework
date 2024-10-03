@@ -2,7 +2,6 @@ package localworkflows
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -172,7 +171,7 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 
 	output, err := dataTransformationEntryPoint(invocationContext, input)
 	assert.Nil(t, err)
-	assert.Len(t, output, 1)
+	assert.Len(t, output, 2)
 
 	var transformedOutput workflow.Data
 
@@ -187,8 +186,6 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 
 	var localFinding = local_models.LocalFinding{}
 	p, ok := transformedOutput.GetPayload().([]byte)
-
-	fmt.Println(string(p))
 
 	assert.True(t, ok)
 
