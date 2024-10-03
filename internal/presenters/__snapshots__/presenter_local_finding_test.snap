@@ -1396,7 +1396,7 @@ Testing path/to/project
 │                                                                │
 │ Test Summary                                                   │
 │                                                                │
-│   bold Organization:                                           │
+│   Organization:                                                │
 │   Test type:         Static code analysis                      │
 │   Project path:      path/to/project                           │
 │                                                                │
