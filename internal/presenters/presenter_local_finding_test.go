@@ -3,6 +3,7 @@ package presenters
 import (
 	"encoding/json"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -11,7 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func skipWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on windows device [CLI-514]")
+	}
+}
+
 func TestPresenterLocalFinding_NoIssues(t *testing.T) {
+	skipWindows(t)
 	fd, err := os.Open("testdata/local-findings-empty.json")
 	require.NoError(t, err)
 
@@ -33,6 +42,7 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_with_Issues(t *testing.T) {
+	skipWindows(t)
 	fd, err := os.Open("testdata/local-findings-juice-shop.json")
 	require.NoError(t, err)
 
