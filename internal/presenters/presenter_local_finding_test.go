@@ -103,7 +103,12 @@ func TestFindingComponent(t *testing.T) {
 
 	output := new(bytes.Buffer)
 
-	test_template.Lookup("finding").Execute(output, test_finding)
+	test_template = test_template.Lookup("finding")
+	if test_template == nil {
+		t.Fatalf("Template not found")
+	}
+	err = test_template.Execute(output, test_finding)
+	require.NoError(t, err)
 
 	require.Contains(t, output.String(), test_finding.Attributes.Message.Header)
 	require.Contains(t, output.String(), test_finding.Attributes.Message.Text)
@@ -124,7 +129,8 @@ func TestBoxStyle(t *testing.T) {
 
 	test_template, err = test_template.Parse("{{ (renderToString \"finding\" .) | box }}")
 	require.NoError(t, err)
-	test_template.Execute(output, test_finding)
+	err = test_template.Execute(output, test_finding)
+	require.NoError(t, err)
 
 	snaps.MatchSnapshot(t, output.String())
 }
