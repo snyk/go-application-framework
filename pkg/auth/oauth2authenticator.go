@@ -65,8 +65,8 @@ type oAuth2Authenticator struct {
 }
 
 func OpenBrowser(authUrl string) {
-	//nolint:errcheck // breaking api change needed to fix this
 	browser.Stdout = os.Stderr
+	//nolint:errcheck // breaking api change needed to fix this
 	_ = browser.OpenURL(authUrl)
 }
 
