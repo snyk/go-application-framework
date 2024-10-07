@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 	"text/template"
 
@@ -69,7 +70,7 @@ var test_finding = local_models.FindingResource{
 			}{
 				OriginalValue: nil,
 				Reason:        nil,
-				Value:         "low",
+				Value:         "high",
 			},
 		},
 		Locations: &[]local_models.FindingLocation{
@@ -112,7 +113,7 @@ func TestFindingComponent(t *testing.T) {
 
 	require.Contains(t, output.String(), test_finding.Attributes.Message.Header)
 	require.Contains(t, output.String(), test_finding.Attributes.Message.Text)
-	require.Contains(t, output.String(), test_finding.Attributes.Rating.Severity.Value)
+	require.Contains(t, output.String(), strings.ToUpper(string(test_finding.Attributes.Rating.Severity.Value)))
 	snaps.MatchSnapshot(t, output.String())
 }
 

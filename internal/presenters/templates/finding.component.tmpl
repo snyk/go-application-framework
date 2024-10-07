@@ -1,5 +1,5 @@
 {{define "finding"}}
-   {{renderToString "severity" . | toUpperCase}} {{.Attributes.Message.Header}}
+   {{- (renderToString "severity" . | toUpperCase)}} {{.Attributes.Message.Header}}
    {{- range $location := $.Attributes.Locations}}
        {{- if $location.SourceLocations}}
    Path: {{$location.SourceLocations.Filepath}}
@@ -8,6 +8,4 @@
    Info: {{.Attributes.Message.Text}}
 {{end}}
 
-{{define "severity"}}
-    ✗ [{{.Attributes.Rating.Severity.Value}}]
-{{end}}
+{{- define "severity"}}✗ [{{.Attributes.Rating.Severity.Value}}]{{end}}

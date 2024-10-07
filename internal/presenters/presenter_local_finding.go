@@ -138,13 +138,27 @@ func renderTemplateToString(tmpl *template.Template) func(name string, data inte
 	}
 }
 
+func valueToString(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+
+	result, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return result
+}
+
 func AddTemplateFuncs(t *template.Template) {
 	var fnMap = template.FuncMap{
 		"box": func(s string) string {
 			return boxStyle.Render(s)
 		},
-		"renderToString": renderTemplateToString(t),
-		"toUpperCase":    strings.ToUpper,
+		"renderToString":        renderTemplateToString(t),
+		"toUpperCase":           strings.ToUpper,
+		"renderInSeverityColor": renderInSeverityColor,
+		"valueToString":         valueToString,
 	}
 	t.Funcs(fnMap)
 }
