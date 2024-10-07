@@ -12,7 +12,6 @@ import (
 var pathListSep = string(os.PathListSeparator)
 
 func TestUpdatePathWithDefaults(t *testing.T) {
-
 	t.Run("add to path from environment", func(t *testing.T) {
 		pathFromEnv := "a"
 		t.Setenv("PATH", pathFromEnv)
