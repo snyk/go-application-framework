@@ -1,4 +1,6 @@
 {{define "details" }}
+Open Issues
+
     {{- range $finding := $.Results.Findings}}
         {{- renderToString "finding" $finding }}
     {{- end }}
