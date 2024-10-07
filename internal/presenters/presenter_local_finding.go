@@ -3,14 +3,16 @@ package presenters
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"text/template"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
 type LocalFindingPresentation struct {
-	Input       local_models.LocalFinding
-	ScannedPath string
+	Input             local_models.LocalFinding
+	ScannedPath       string
+	SeverityThreshold string
 }
 
 // TemplatePathsStruct holds the paths to the templates.
@@ -23,6 +25,42 @@ type TemplatePathsStruct struct {
 var TemplatePaths = TemplatePathsStruct{
 	LocalFindingTemplate:     "templates/local_finding.tmpl",
 	FindingComponentTemplate: "templates/finding.component.tmpl",
+}
+
+// contains checks if a string is in a slice of strings.
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+func FilterBySeverityThreshold(severity_threshold string, findings_model *local_models.LocalFinding) error {
+	if severity_threshold == "" {
+		return nil
+	}
+	var severity_filters = map[string][]string{
+		"low":      {"low", "medium", "high", "critical"},
+		"medium":   {"medium", "high", "critical"},
+		"high":     {"high", "critical"},
+		"critical": {"critical"},
+	}
+	allowed_severities, ok := severity_filters[severity_threshold]
+	if !ok {
+		return errors.New("Invalid severity threshold")
+	}
+
+	filtered_findings := []local_models.FindingResource{}
+	for _, finding := range findings_model.Findings {
+		if contains(allowed_severities, string(finding.Attributes.Rating.Severity.Value)) {
+			filtered_findings = append(filtered_findings, finding)
+		}
+	}
+	findings_model.Findings = filtered_findings
+
+	return nil
 }
 
 func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string) *LocalFindingPresentation {
@@ -63,7 +101,14 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 		return "", err
 	}
 
-	sum := PrepareSummary(&p.Input.Summary, "", p.ScannedPath, "")
+	// filter findings
+	err = FilterBySeverityThreshold(p.SeverityThreshold, &p.Input)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO: Add org and scanned path to the summary
+	sum := PrepareSummary(&p.Input.Summary, "", p.ScannedPath, p.SeverityThreshold)
 
 	buf := new(bytes.Buffer)
 	main_tmpl := local_findings_template.Lookup("main")

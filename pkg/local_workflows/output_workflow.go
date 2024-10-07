@@ -103,6 +103,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
 			var local_findings local_models.LocalFinding
+			severity_threshold := invocation.GetConfiguration().GetString(configuration.FLAG_SEVERITY_THRESHOLD)
 			local_findings_bytes, ok := input[i].GetPayload().([]byte)
 			if !ok {
 				return output, fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
@@ -113,8 +114,9 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 				continue
 			}
 			findingPresentation := presenters.LocalFindingPresentation{
-				Input:       local_findings,
-				ScannedPath: input[i].GetContentLocation(),
+				Input:             local_findings,
+				ScannedPath:       input[i].GetContentLocation(),
+				SeverityThreshold: severity_threshold,
 			}
 			result, err := findingPresentation.Render()
 			if err != nil {
