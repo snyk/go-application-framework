@@ -1,6 +1,10 @@
 {{define "details" }}
-    {{- range $finding := $.Results.Findings}}
-        {{- renderToString "finding" $finding }}
+    {{- range $current_severity := $.Order }}
+        {{- range $finding := $.Results.Findings}}
+            {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
+                {{- renderToString "finding" $finding }}
+            {{- end }}
+        {{- end }}
     {{- end }}
 {{end}}
 
@@ -23,10 +27,22 @@ Test Summary
   Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}
 {{ end }}
 
+{{define "showIgnoredTip"}}
+
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+{{ end }}
+
 {{- define "main" }}
 {{- template "header"  . }}
 {{- template "details" . }}
 {{- box (renderToString "summary" .)}}
+
+{{- if eq $.ShowIgnored false }}
+    {{- template "showIgnoredTip" }}
+{{- end }}
+
 {{- end }}
 
 {{- template "main" . }}

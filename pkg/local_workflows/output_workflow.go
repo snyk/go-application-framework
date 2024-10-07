@@ -93,7 +93,7 @@ func filterSummaryOutput(config configuration.Configuration, input workflow.Data
 // outputWorkflowEntryPoint defines the output entry point
 // the entry point is called by the engine when the workflow is invoked
 func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
-	output := []workflow.Data{}
+	var output []workflow.Data
 
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
@@ -103,23 +103,26 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			var local_findings local_models.LocalFinding
-			severity_threshold := invocation.GetConfiguration().GetString(configuration.FLAG_SEVERITY_THRESHOLD)
-			local_findings_bytes, ok := input[i].GetPayload().([]byte)
+			var localFindings local_models.LocalFinding
+			severityThreshold := invocation.GetConfiguration().GetString(configuration.FLAG_SEVERITY_THRESHOLD)
+			localFindingsBytes, ok := input[i].GetPayload().([]byte)
 			if !ok {
 				return output, fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
 			}
-			err := json.Unmarshal(local_findings_bytes, &local_findings)
+			err := json.Unmarshal(localFindingsBytes, &localFindings)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to unmarshal local finding")
 				continue
 			}
-			findingPresentation := presenters.LocalFindingPresentation{
-				Input:             local_findings,
-				ScannedPath:       input[i].GetContentLocation(),
-				SeverityThreshold: severity_threshold,
-				Organization:      config.GetString(configuration.ORGANIZATION_SLUG),
-			}
+
+			findingPresentation := presenters.LocalFindingsTestResults(
+				localFindings,
+				presenters.WithLocalFindingsTestPath(input[i].GetContentLocation()),
+				presenters.WithLocalFindingsOrg(config.GetString(configuration.ORGANIZATION_SLUG)),
+				presenters.WithLocalFindingsIgnoredIssues(config.GetBool(configuration.FLAG_INCLUDE_IGNORES)),
+				presenters.WithLocalFindingsSeverityLevel(severityThreshold),
+			)
+
 			result, err := findingPresentation.Render()
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to render local finding")

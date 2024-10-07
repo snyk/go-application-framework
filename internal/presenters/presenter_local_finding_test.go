@@ -31,20 +31,17 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&localFindingDoc)
 	require.NoError(t, err)
 
-	scanned_path := "path/to/project"
-	p := LocalFindingPresenter(
-		localFindingDoc,
-		scanned_path,
-	)
+	scannedPath := "path/to/project"
+	p := LocalFindingsTestResults(localFindingDoc, WithLocalFindingsTestPath(scannedPath))
 
 	result, err := p.Render()
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "Testing "+scanned_path)
+	assert.Contains(t, result, "Testing "+scannedPath)
 	assert.NotContains(t, result, "Ignored issues")
 }
 
-var test_finding = local_models.FindingResource{
+var testFinding = local_models.FindingResource{
 	Attributes: local_models.FindingAttributes{
 		Message: struct {
 			Arguments []string `json:"arguments"`
@@ -108,12 +105,12 @@ func TestFindingComponent(t *testing.T) {
 	if test_template == nil {
 		t.Fatalf("Template not found")
 	}
-	err = test_template.Execute(output, test_finding)
+	err = test_template.Execute(output, testFinding)
 	require.NoError(t, err)
 
-	require.Contains(t, output.String(), test_finding.Attributes.Message.Header)
-	require.Contains(t, output.String(), test_finding.Attributes.Message.Text)
-	require.Contains(t, output.String(), strings.ToUpper(string(test_finding.Attributes.Rating.Severity.Value)))
+	require.Contains(t, output.String(), testFinding.Attributes.Message.Header)
+	require.Contains(t, output.String(), testFinding.Attributes.Message.Text)
+	require.Contains(t, output.String(), strings.ToUpper(string(testFinding.Attributes.Rating.Severity.Value)))
 	snaps.MatchSnapshot(t, output.String())
 }
 
@@ -130,7 +127,7 @@ func TestBoxStyle(t *testing.T) {
 
 	test_template, err = test_template.Parse("{{ (renderToString \"finding\" .) | box }}")
 	require.NoError(t, err)
-	err = test_template.Execute(output, test_finding)
+	err = test_template.Execute(output, testFinding)
 	require.NoError(t, err)
 
 	snaps.MatchSnapshot(t, output.String())
@@ -145,11 +142,8 @@ func TestPresenterLocalFinding_with_Issues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&localFindingDoc)
 	require.NoError(t, err)
 
-	scanned_path := "path/to/project"
-	p := LocalFindingPresenter(
-		localFindingDoc,
-		scanned_path,
-	)
+	scannedPath := "path/to/project"
+	p := LocalFindingsTestResults(localFindingDoc, WithLocalFindingsTestPath(scannedPath))
 
 	result, err := p.Render()
 

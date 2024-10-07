@@ -11,11 +11,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
-type LocalFindingPresentation struct {
-	Input             local_models.LocalFinding
-	ScannedPath       string
-	SeverityThreshold string
-	Organization      string
+type LocalFindingPresenter struct {
+	ShowIgnored      bool
+	Input            local_models.LocalFinding
+	OrgName          string
+	TestPath         string
+	SeverityMinLevel string
 }
 
 // TemplatePathsStruct holds the paths to the templates.
@@ -66,12 +67,45 @@ func FilterBySeverityThreshold(severity_threshold string, findings_model *local_
 	return nil
 }
 
-func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string, org string) *LocalFindingPresentation {
-	return &LocalFindingPresentation{
-		Input:        doc,
-		ScannedPath:  scanned_path,
-		Organization: org,
+type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
+
+func WithLocalFindingsIgnoredIssues(showIgnored bool) LocalFindingPresenterOptions {
+	return func(p *LocalFindingPresenter) {
+		p.ShowIgnored = showIgnored
 	}
+}
+
+func WithLocalFindingsOrg(org string) LocalFindingPresenterOptions {
+	return func(p *LocalFindingPresenter) {
+		p.OrgName = org
+	}
+}
+
+func WithLocalFindingsTestPath(testPath string) LocalFindingPresenterOptions {
+	return func(p *LocalFindingPresenter) {
+		p.TestPath = testPath
+	}
+}
+
+func WithLocalFindingsSeverityLevel(severityMinLevel string) LocalFindingPresenterOptions {
+	return func(p *LocalFindingPresenter) {
+		p.SeverityMinLevel = severityMinLevel
+	}
+}
+
+func LocalFindingsTestResults(localFindingsDoc local_models.LocalFinding, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
+	p := &LocalFindingPresenter{
+		ShowIgnored:      false,
+		Input:            localFindingsDoc,
+		OrgName:          "",
+		TestPath:         "",
+		SeverityMinLevel: "",
+	}
+	for _, option := range options {
+		option(p)
+	}
+
+	return p
 }
 
 //go:embed templates/*
@@ -91,38 +125,41 @@ func LoadTemplates(files []string, tmpl *template.Template) error {
 	return nil
 }
 
-func (p *LocalFindingPresentation) Render() (string, error) {
-	local_findings_template, err := template.New("local_finding").Parse("")
+func (p *LocalFindingPresenter) Render() (string, error) {
+	localFindingsTemplate, err := template.New("local_finding").Parse("")
 	if err != nil {
 		return "", err
 	}
-	AddTemplateFuncs(local_findings_template)
+	AddTemplateFuncs(localFindingsTemplate)
 	err = LoadTemplates([]string{
 		TemplatePaths.LocalFindingTemplate,
 		TemplatePaths.FindingComponentTemplate,
-	}, local_findings_template)
+	}, localFindingsTemplate)
 	if err != nil {
 		return "", err
 	}
 
 	// filter findings
-	err = FilterBySeverityThreshold(p.SeverityThreshold, &p.Input)
+	err = FilterBySeverityThreshold(p.SeverityMinLevel, &p.Input)
 	if err != nil {
 		return "", err
 	}
 
-	// TODO: Add org and scanned path to the summary
-	sum := PrepareSummary(&p.Input.Summary, p.Organization, p.ScannedPath, p.SeverityThreshold)
+	sum := PrepareSummary(&p.Input.Summary, p.OrgName, p.TestPath, p.SeverityMinLevel)
 
 	buf := new(bytes.Buffer)
-	main_tmpl := local_findings_template.Lookup("main")
+	mainTmpl := localFindingsTemplate.Lookup("main")
 
-	err = main_tmpl.Execute(buf, struct {
-		Summary SummaryData
-		Results local_models.LocalFinding
+	err = mainTmpl.Execute(buf, struct {
+		Summary     SummaryData
+		Results     local_models.LocalFinding
+		Order       []string
+		ShowIgnored bool
 	}{
-		Summary: sum,
-		Results: p.Input,
+		Summary:     sum,
+		Results:     p.Input,
+		Order:       []string{"low", "medium", "high"},
+		ShowIgnored: p.ShowIgnored,
 	})
 	if err != nil {
 		return "", err
