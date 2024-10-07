@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"errors"
+	"strings"
 	"text/template"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
@@ -143,6 +144,7 @@ func AddTemplateFuncs(t *template.Template) {
 			return boxStyle.Render(s)
 		},
 		"renderToString": renderTemplateToString(t),
+		"toUpperCase":    strings.ToUpper,
 	}
 	t.Funcs(fnMap)
 }
