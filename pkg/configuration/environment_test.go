@@ -31,6 +31,15 @@ func TestUpdatePathWithDefaults(t *testing.T) {
 
 		assert.Equal(t, pathFromEnv+pathListSep+"b", os.Getenv("PATH"))
 	})
+
+	t.Run("add to path from environment only if not blank", func(t *testing.T) {
+		pathFromEnv := "a"
+		t.Setenv("PATH", pathFromEnv)
+
+		UpdatePath("")
+
+		assert.Equal(t, pathFromEnv, os.Getenv("PATH"))
+	})
 }
 
 func TestSetParsedVariablesToEnv(t *testing.T) {
