@@ -46,10 +46,12 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	var summary json_schemas.TestSummary
 	var sarifInput workflow.Data
 	var summaryInput workflow.Data
+	var contentLocation string
 
-	for _, data := range input {
+	for i, data := range input {
 		if strings.HasPrefix(data.GetContentType(), content_type.SARIF_JSON) {
 			sarifInput = data
+			contentLocation = input[i].GetContentLocation()
 		}
 
 		if strings.HasPrefix(data.GetContentType(), content_type.TEST_SUMMARY) {
@@ -83,10 +85,12 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return output, err
 	}
 
-	output = append(output, workflow.NewData(
+	d := workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
 		content_type.LOCAL_FINDING_MODEL,
-		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger)))
+		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger))
+	d.SetContentLocation(contentLocation)
+	output = append(output, d)
 
 	return output, nil
 }

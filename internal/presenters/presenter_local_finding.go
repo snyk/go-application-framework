@@ -15,6 +15,7 @@ type LocalFindingPresentation struct {
 	Input             local_models.LocalFinding
 	ScannedPath       string
 	SeverityThreshold string
+	Organization      string
 }
 
 // TemplatePathsStruct holds the paths to the templates.
@@ -65,10 +66,11 @@ func FilterBySeverityThreshold(severity_threshold string, findings_model *local_
 	return nil
 }
 
-func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string) *LocalFindingPresentation {
+func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string, org string) *LocalFindingPresentation {
 	return &LocalFindingPresentation{
-		Input:       doc,
-		ScannedPath: scanned_path,
+		Input:        doc,
+		ScannedPath:  scanned_path,
+		Organization: org,
 	}
 }
 
@@ -110,7 +112,7 @@ func (p *LocalFindingPresentation) Render() (string, error) {
 	}
 
 	// TODO: Add org and scanned path to the summary
-	sum := PrepareSummary(&p.Input.Summary, "", p.ScannedPath, p.SeverityThreshold)
+	sum := PrepareSummary(&p.Input.Summary, p.Organization, p.ScannedPath, p.SeverityThreshold)
 
 	buf := new(bytes.Buffer)
 	main_tmpl := local_findings_template.Lookup("main")

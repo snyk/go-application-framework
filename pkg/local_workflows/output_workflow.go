@@ -99,6 +99,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	debugLogger := invocation.GetEnhancedLogger()
 
 	for i := range input {
+
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
@@ -117,6 +118,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 				Input:             local_findings,
 				ScannedPath:       input[i].GetContentLocation(),
 				SeverityThreshold: severity_threshold,
+				Organization:      config.GetString(configuration.ORGANIZATION_SLUG),
 			}
 			result, err := findingPresentation.Render()
 			if err != nil {
