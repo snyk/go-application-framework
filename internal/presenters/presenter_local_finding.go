@@ -13,6 +13,18 @@ type LocalFindingPresentation struct {
 	ScannedPath string
 }
 
+// TemplatePathsStruct holds the paths to the templates.
+type TemplatePathsStruct struct {
+	LocalFindingTemplate     string
+	FindingComponentTemplate string
+}
+
+// TemplatePaths is an instance of TemplatePathsStruct with the template paths.
+var TemplatePaths = TemplatePathsStruct{
+	LocalFindingTemplate:     "templates/local_finding.tmpl",
+	FindingComponentTemplate: "templates/finding.component.tmpl",
+}
+
 func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string) *LocalFindingPresentation {
 	return &LocalFindingPresentation{
 		Input:       doc,
@@ -23,7 +35,7 @@ func LocalFindingPresenter(doc local_models.LocalFinding, scanned_path string) *
 //go:embed templates/*
 var embeddedFiles embed.FS
 
-func loadTemplates(files []string, tmpl *template.Template) error {
+func LoadTemplates(files []string, tmpl *template.Template) error {
 	for _, file := range files {
 		data, err := embeddedFiles.ReadFile(file)
 		if err != nil {
@@ -38,17 +50,15 @@ func loadTemplates(files []string, tmpl *template.Template) error {
 }
 
 func (p *LocalFindingPresentation) Render() (string, error) {
-	var templatePaths = []string{
-		"templates/local_finding.tmpl",
-		"templates/finding.component.tmpl",
-	}
-
 	local_findings_template, err := template.New("local_finding").Parse("")
 	if err != nil {
 		return "", err
 	}
-	addTemplateFuncs(local_findings_template)
-	err = loadTemplates(templatePaths, local_findings_template)
+	AddTemplateFuncs(local_findings_template)
+	err = LoadTemplates([]string{
+		TemplatePaths.LocalFindingTemplate,
+		TemplatePaths.FindingComponentTemplate,
+	}, local_findings_template)
 	if err != nil {
 		return "", err
 	}
@@ -82,19 +92,12 @@ func renderTemplateToString(tmpl *template.Template) func(name string, data inte
 	}
 }
 
-func addTemplateFuncs(t *template.Template) {
+func AddTemplateFuncs(t *template.Template) {
 	var fnMap = template.FuncMap{
 		"box": func(s string) string {
 			return boxStyle.Render(s)
 		},
 		"renderToString": renderTemplateToString(t),
-		"renderFinding": func(finding local_models.FindingResource) string {
-			output, err := renderTemplateToString(t)("finding", finding)
-			if err != nil {
-				return ""
-			}
-			return output
-		},
 	}
 	t.Funcs(fnMap)
 }

@@ -1,6 +1,6 @@
 {{define "details" }}
     {{- range $finding := $.Results.Findings}}
-        {{ renderFinding $finding }}
+        {{- renderToString "finding" $finding }}
     {{- end }}
 {{end}}
 
