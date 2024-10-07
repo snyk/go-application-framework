@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -83,6 +85,21 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 	actualApiUrl := config.GetString(configuration.API_URL)
 	assert.Equal(t, expectApiUrl, actualApiUrl)
+}
+
+func Test_CreateAppEngine_config_oauthApiUrl(t *testing.T) {
+	config := configuration.New()
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN,
+		// JWT generated at https://jwt.io with claim:
+		//   "aud": ["https://api.example.com"]
+		`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhdWQiOlsiaHR0cHM6Ly9hcGkuZXhhbXBsZS5jb20iXX0.hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"}`,
+	)
+	logger := log.New(os.Stderr, "", 0)
+	engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(logger))
+	initConfiguration(engine, config, engine.GetLogger(), nil)
+
+	actualApiUrl := config.GetString(configuration.API_URL)
+	assert.Equal(t, "https://api.example.com", actualApiUrl)
 }
 
 func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
