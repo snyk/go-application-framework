@@ -163,6 +163,10 @@ func renderWithSeverity(severity string) string {
 	return severityStyle.Render(severity)
 }
 
+func bold(s string) string {
+	return lipgloss.NewStyle().Bold(true).Render(s)
+}
+
 func AddTemplateFuncs(t *template.Template) {
 	var fnMap = template.FuncMap{
 		"box": func(s string) string {
@@ -172,6 +176,7 @@ func AddTemplateFuncs(t *template.Template) {
 		"toUpperCase":           strings.ToUpper,
 		"renderInSeverityColor": renderWithSeverity,
 		"valueToString":         valueToString,
+		"bold":                  bold,
 	}
 	t.Funcs(fnMap)
 }

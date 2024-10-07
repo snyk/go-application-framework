@@ -1,9 +1,10 @@
 
 [TestPresenterLocalFinding_with_Issues - 1]
 
-Testing path/to/project✗ [HIGH] Server-Side Request Forgery (SSRF)
+Testing path/to/project[91m✗ [HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
    Path: routes/profileImageUrlUpload.ts
    Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
+
 
 ╭────────────────────────────────────────────────────────────────╮
 │                                                                │
@@ -22,16 +23,18 @@ Testing path/to/project✗ [HIGH] Server-Side Request Forgery (SSRF)
 
 [TestBoxStyle - 1]
 ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ✗ [HIGH] Cleartext Transmission of Sensitive Information                                                                                                                                                                                                                        │
+│ [91m✗ [HIGH][0m [1mCleartext Transmission of Sensitive Information[0m                                                                                                                                                                                                                        │
 │    Path: node_modules/qs/support/expresso/test/http.test.js                                                                                                                                                                                                                     │
 │    Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.    │
+│                                                                                                                                                                                                                                                                                 │
 │                                                                                                                                                                                                                                                                                 │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ---
 
 [TestFindingComponent - 1]
-✗ [HIGH] Cleartext Transmission of Sensitive Information
+[91m✗ [HIGH][0m [1mCleartext Transmission of Sensitive Information[0m
    Path: node_modules/qs/support/expresso/test/http.test.js
    Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
 
 ---
