@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
@@ -150,6 +151,18 @@ func valueToString(value interface{}) string {
 	return result
 }
 
+func renderWithSeverity(severity string) string {
+	var style lipgloss.TerminalColor = lipgloss.NoColor{}
+	if strings.Contains(severity, "MEDIUM") {
+		style = lipgloss.AdaptiveColor{Light: "11", Dark: "3"}
+	}
+	if strings.Contains(severity, "HIGH") {
+		style = lipgloss.AdaptiveColor{Light: "9", Dark: "1"}
+	}
+	severityStyle := lipgloss.NewStyle().Foreground(style)
+	return severityStyle.Render(severity)
+}
+
 func AddTemplateFuncs(t *template.Template) {
 	var fnMap = template.FuncMap{
 		"box": func(s string) string {
@@ -157,7 +170,7 @@ func AddTemplateFuncs(t *template.Template) {
 		},
 		"renderToString":        renderTemplateToString(t),
 		"toUpperCase":           strings.ToUpper,
-		"renderInSeverityColor": renderInSeverityColor,
+		"renderInSeverityColor": renderWithSeverity,
 		"valueToString":         valueToString,
 	}
 	t.Funcs(fnMap)
