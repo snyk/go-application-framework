@@ -49,7 +49,7 @@ func TestLoadFile(t *testing.T) {
 	t.Run("should load given config file", func(t *testing.T) {
 		uniqueEnvVar, fileName := setupTestFile(t, "env-file", t.TempDir())
 
-		LoadFile(fileName)
+		loadFile(fileName)
 
 		require.Equal(t, uniqueEnvVar, os.Getenv(uniqueEnvVar))
 	})

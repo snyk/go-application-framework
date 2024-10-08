@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 //  2. given command-line parameter config file
 //  3. std config file in home directory
 //  4. global shell configuration
-func LoadConfiguredEnvironment(configuration Configuration) {
+func LoadConfiguredEnvironment(config Configuration) {
 	parsedEnv := getParsedEnvFromShell("bash")
 	shell := parsedEnv["SHELL"]
 	fromSpecificShell := getParsedEnvFromShell(shell)
@@ -26,12 +27,15 @@ func LoadConfiguredEnvironment(configuration Configuration) {
 		SetParsedVariablesToEnv(parsedEnv, false)
 	}
 
-	for _, file := range configuration.GetStringSlice(CUSTOM_CONFIG_FILES) {
-		LoadFile(file)
+	for _, file := range config.GetStringSlice(CUSTOM_CONFIG_FILES) {
+		if !filepath.IsAbs(file) {
+			file = filepath.Join(config.GetString(WORKING_DIRECTORY), file)
+		}
+		loadFile(file)
 	}
 }
 
-func LoadFile(fileName string) {
+func loadFile(fileName string) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return
