@@ -3,6 +3,7 @@ package presenters
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -151,5 +152,56 @@ func TestPresenterLocalFinding_with_Issues(t *testing.T) {
 	assert.Contains(t, result, "Total issues:   18")
 	assert.Contains(t, result, "Static code analysis")
 	assert.Contains(t, result, "╭")
+	snaps.MatchSnapshot(t, result)
+}
+
+// tests for CLI-521
+func TestPresenterLocalFinding_with_includeIgnores(t *testing.T) {
+	skipWindows(t)
+
+	fd, err := os.Open("testdata/local-findings-juice-shop.json")
+	require.NoError(t, err)
+
+	var localFindingDoc local_models.LocalFinding
+	err = json.NewDecoder(fd).Decode(&localFindingDoc)
+	require.NoError(t, err)
+
+	scannedPath := "path/to/project"
+	p := LocalFindingsTestResults(
+		localFindingDoc,
+		WithLocalFindingsTestPath(scannedPath),
+		WithLocalFindingsIgnoredIssues(true),
+	)
+
+	result, err := p.Render()
+
+	require.NoError(t, err)
+	assert.Contains(t, result, "Ignores are currently managed in the Snyk Web UI")
+	assert.Contains(t, result, "To edit or remove the ignore please go to: https://app.snyk.io/")
+	snaps.MatchSnapshot(t, result)
+}
+
+func TestPresenterLocalFinding_with_severityFilter(t *testing.T) {
+	skipWindows(t)
+
+	fd, err := os.Open("testdata/local-findings-juice-shop.json")
+	require.NoError(t, err)
+
+	var localFindingDoc local_models.LocalFinding
+	err = json.NewDecoder(fd).Decode(&localFindingDoc)
+	require.NoError(t, err)
+
+	scannedPath := "path/to/project"
+	p := LocalFindingsTestResults(
+		localFindingDoc,
+		WithLocalFindingsTestPath(scannedPath),
+		WithLocalFindingsSeverityLevel("high"),
+	)
+
+	result, err := p.Render()
+	fmt.Print(result)
+	require.NoError(t, err)
+	assert.Contains(t, result, "You are currently viewing results with --severity-threshold applied")
+	assert.Contains(t, result, "To view all issues, remove the --severity-threshold flag")
 	snaps.MatchSnapshot(t, result)
 }

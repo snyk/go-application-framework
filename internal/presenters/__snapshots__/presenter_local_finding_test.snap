@@ -46,3 +46,86 @@ Open Issues
 
 
 ---
+
+[TestPresenterLocalFinding_with_severityFilter - 1]
+
+Testing path/to/project ...
+
+Open Issues
+
+[91m✗ [HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
+   Path: routes/profileImageUrlUpload.ts, line 22
+   Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
+
+
+💡 Tip
+
+    You are currently viewing results with --severity-threshold applied.
+    To view all issues, remove the --severity-threshold flag
+
+╭───────────────────────────────────────────────╮
+│ Test Summary                                  │
+│                                               │
+│   Organization:                               │
+│   Test type:         Static code analysis     │
+│   Project path:      path/to/project          │
+│                                               │
+│   Total issues:   11                          │
+│   Ignored issues: [1m2[0m [ 0 CRITICAL [91m 2 HIGH [0m]    │
+│   Open issues:    [1m4[0m [ 1 CRITICAL [91m 3 HIGH [0m]    │
+╰───────────────────────────────────────────────╯
+
+💡 Tip
+
+    To view ignored issues, use the --include-ignores option.
+
+
+---
+
+[TestPresenterLocalFinding_with_ignored - 1]
+
+Testing path/to/project ...
+
+Open Issues
+
+✗ [HIGH] Server-Side Request Forgery (SSRF)
+   Path: routes/profileImageUrlUpload.ts, line 22
+   Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
+
+
+╭────────────────────────────────────────────────────────────────╮
+│ Test Summary                                                   │
+│                                                                │
+│   Organization:                                                │
+│   Test type:         Static code analysis                      │
+│   Project path:      path/to/project                           │
+│                                                                │
+│   Total issues:   18                                           │
+│   Ignored issues: 3 [ 0 CRITICAL  2 HIGH  1 MEDIUM  0 LOW ]    │
+│   Open issues:    5 [ 1 CRITICAL  3 HIGH  1 MEDIUM  0 LOW ]    │
+╰────────────────────────────────────────────────────────────────╯
+---
+
+[TestPresenterLocalFinding_with_includeIgnores - 1]
+
+Testing path/to/project ...
+
+Open Issues
+
+[91m✗ [HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
+   Path: routes/profileImageUrlUpload.ts, line 22
+   Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
+
+
+╭────────────────────────────────────────────────────────────────╮
+│ Test Summary                                                   │
+│                                                                │
+│   Organization:                                                │
+│   Test type:         Static code analysis                      │
+│   Project path:      path/to/project                           │
+│                                                                │
+│   Total issues:   18                                           │
+│   Ignored issues: [1m3[0m [ 0 CRITICAL [91m 2 HIGH [0m[93m 1 MEDIUM [0m 0 LOW ]    │
+│   Open issues:    [1m5[0m [ 1 CRITICAL [91m 3 HIGH [0m[93m 1 MEDIUM [0m 0 LOW ]    │
+╰────────────────────────────────────────────────────────────────╯
+---
