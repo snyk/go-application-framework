@@ -81,7 +81,7 @@ func RenderFindings(findings []Finding, showIgnored bool, isSeverityThresholdApp
 	}
 
 	if isSeverityThresholdApplied {
-		response += RenderTip("You are currently viewing results with --severity-threshold=high applied.\nTo view all issues, remove the --severity-threshold flag\n")
+		response += RenderTip("You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag\n")
 	}
 
 	if showIgnored {

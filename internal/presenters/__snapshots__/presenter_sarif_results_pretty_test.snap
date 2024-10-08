@@ -388,9 +388,9 @@ Open Issues
 
 💡 Tip
 
-   You are currently viewing results with --severity-threshold=high applied.
-   To view all issues, remove the --severity-threshold flag                 
-                                                                            
+   You are currently viewing results with --severity-threshold applied.
+   To view all issues, remove the --severity-threshold flag            
+                                                                       
 ╭──────────────────────────────────────────────╮
 │ Test Summary                                 │
 │                                              │

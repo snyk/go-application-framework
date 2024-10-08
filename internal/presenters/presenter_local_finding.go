@@ -151,15 +151,17 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
 	err = mainTmpl.Execute(buf, struct {
-		Summary     SummaryData               `json:"summary"`
-		Results     local_models.LocalFinding `json:"results"`
-		Order       []string
-		ShowIgnored bool
+		Summary        SummaryData               `json:"summary"`
+		Results        local_models.LocalFinding `json:"results"`
+		Order          []string
+		ShowIgnored    bool
+		SeverityFilter string
 	}{
-		Summary:     sum,
-		Results:     p.Input,
-		Order:       []string{"low", "medium", "high"},
-		ShowIgnored: p.ShowIgnored,
+		Summary:        sum,
+		Results:        p.Input,
+		Order:          []string{"low", "medium", "high"},
+		ShowIgnored:    p.ShowIgnored,
+		SeverityFilter: p.SeverityMinLevel,
 	})
 	if err != nil {
 		return "", err
