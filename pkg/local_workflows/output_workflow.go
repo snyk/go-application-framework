@@ -93,13 +93,12 @@ func filterSummaryOutput(config configuration.Configuration, input workflow.Data
 // outputWorkflowEntryPoint defines the output entry point
 // the entry point is called by the engine when the workflow is invoked
 func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
-	var output []workflow.Data
+	output := []workflow.Data{}
 
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
 
 	for i := range input {
-
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {

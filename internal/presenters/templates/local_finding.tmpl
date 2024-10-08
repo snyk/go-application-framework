@@ -15,8 +15,7 @@ Open Issues
 
 {{end }}
 
-{{- define "summary"}}
-Test Summary
+{{define "summary"}}Test Summary
 
   Organization:      {{.Summary.Org}}
   Test type:         {{.Summary.Type}}
@@ -24,8 +23,7 @@ Test Summary
 
   Total issues:   {{.Summary.TotalIssueCount}}{{ if .Summary.TotalIssueCount }}
   Ignored issues: {{ .Summary.IgnoredIssueCountWithSeverities }}
-  Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}
-{{ end }}
+  Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}{{end}}
 
 {{define "showIgnoredTip"}}
 

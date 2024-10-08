@@ -1,5 +1,5 @@
 {{define "finding"}}
-   {{- (renderToString "severity" . | toUpperCase | renderInSeverityColor )}} {{valueToString .Attributes.Message.Header | bold}}
+   {{- (renderToString "severity" . | toUpperCase | renderInSeverityColor )}} {{print .Attributes.Message.Header | bold}}
    {{- range $location := $.Attributes.Locations}}
        {{- if $location.SourceLocations}}
    Path: {{$location.SourceLocations.Filepath}}, line {{$location.SourceLocations.OriginalStartLine}}

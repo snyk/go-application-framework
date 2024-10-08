@@ -151,8 +151,8 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
 	err = mainTmpl.Execute(buf, struct {
-		Summary     SummaryData
-		Results     local_models.LocalFinding
+		Summary     SummaryData               `json:"summary"`
+		Results     local_models.LocalFinding `json:"results"`
 		Order       []string
 		ShowIgnored bool
 	}{
@@ -176,18 +176,6 @@ func renderTemplateToString(tmpl *template.Template) func(name string, data inte
 		}
 		return buf.String(), nil
 	}
-}
-
-func valueToString(value interface{}) string {
-	if value == nil {
-		return ""
-	}
-
-	result, ok := value.(string)
-	if !ok {
-		return ""
-	}
-	return result
 }
 
 func renderWithSeverity(severity string) string {
@@ -214,7 +202,6 @@ func AddTemplateFuncs(t *template.Template) {
 		"renderToString":        renderTemplateToString(t),
 		"toUpperCase":           strings.ToUpper,
 		"renderInSeverityColor": renderWithSeverity,
-		"valueToString":         valueToString,
 		"bold":                  bold,
 	}
 	t.Funcs(fnMap)
