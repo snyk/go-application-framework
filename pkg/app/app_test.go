@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -26,12 +27,14 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 		conf := engine.GetConfiguration()
 
 		actual := conf.GetStringSlice(configuration.CUSTOM_CONFIG_FILES)
-		assert.Lenf(t, actual, 3, "defaults not set")
+		assert.Lenf(t, actual, 5, "defaults not set")
 		assert.Equal(t, ".snyk.env", actual[0])
 		assert.Equal(t, ".envrc", actual[1])
+		assert.Equal(t, ".snyk.env."+runtime.GOOS, actual[2])
+		assert.Equal(t, ".envrc."+runtime.GOOS, actual[3])
 		home, err := os.UserHomeDir()
 		if err == nil {
-			assert.Equal(t, filepath.Join(home, actual[0]), actual[2])
+			assert.Equal(t, filepath.Join(home, actual[0]), actual[4])
 		}
 	})
 
@@ -41,13 +44,15 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 		conf.Set(configuration.CONFIG_FILE, "abc/d")
 
 		actual := conf.GetStringSlice(configuration.CUSTOM_CONFIG_FILES)
-		assert.Lenf(t, actual, 4, "defaults not set")
+		assert.Lenf(t, actual, 6, "defaults not set")
 		assert.Equal(t, ".snyk.env", actual[0])
 		assert.Equal(t, ".envrc", actual[1])
-		assert.Equal(t, "abc/d", actual[2])
+		assert.Equal(t, ".snyk.env."+runtime.GOOS, actual[2])
+		assert.Equal(t, ".envrc."+runtime.GOOS, actual[3])
+		assert.Equal(t, "abc/d", actual[4])
 		home, err := os.UserHomeDir()
 		if err == nil {
-			assert.Equal(t, filepath.Join(home, actual[0]), actual[3])
+			assert.Equal(t, filepath.Join(home, actual[0]), actual[5])
 		}
 	})
 
