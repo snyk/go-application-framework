@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -218,6 +219,34 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine, logger))
+	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
+}
+
+func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
+	return func(existingValue interface{}) interface{} {
+		var files []string
+		// last file usually wins if the same values are configured
+		// Precedence should be:
+		//   1. std files in current folder
+		//   2. given global config file
+		//   3. std files global
+
+		files = append(files, ".snyk.env")
+		files = append(files, ".envrc")
+
+		configFile := config.GetString(configuration.CONFIG_FILE)
+		if configFile != "" {
+			files = append(files, configFile)
+		}
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return files
+		}
+
+		files = append(files, home+"/.snyk.env")
+		return files
+	}
 }
 
 // CreateAppEngine creates a new workflow engine.

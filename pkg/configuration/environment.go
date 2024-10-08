@@ -4,17 +4,18 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/subosito/gotenv"
 )
 
+// LoadConfiguredEnvironment updates the environment with local configuration. Precedence as follows:
+//  1. std folder-based config files
+//  2. given command-line parameter config file
+//  3. std config file in home directory
+//  4. global shell configuration
 func LoadConfiguredEnvironment(configuration Configuration) {
-	if runtime.GOOS == "windows" {
-		return
-	}
 	parsedEnv := getParsedEnvFromShell("bash")
 	shell := parsedEnv["SHELL"]
 	fromSpecificShell := getParsedEnvFromShell(shell)
@@ -25,7 +26,7 @@ func LoadConfiguredEnvironment(configuration Configuration) {
 		SetParsedVariablesToEnv(parsedEnv, false)
 	}
 
-	for _, file := range configFiles(configuration) {
+	for _, file := range configuration.GetStringSlice(CUSTOM_CONFIG_FILES) {
 		LoadFile(file)
 	}
 }
@@ -40,26 +41,6 @@ func LoadFile(fileName string) {
 
 	// we want these settings to overwrite existing settings (apart from the path)
 	SetParsedVariablesToEnv(env, true)
-}
-
-func configFiles(configuration Configuration) []string {
-	var files []string
-	configFile := configuration.GetString(CONFIG_FILE)
-	if configFile != "" {
-		files = append(files, configFile)
-	}
-
-	stdFiles := []string{
-		".snyk.env",
-		".envrc", // direnv config file
-	}
-
-	home, err := os.UserHomeDir()
-	files = append(files, stdFiles...)
-	if err != nil {
-		return files
-	}
-	return append(files, home+"/.snyk.env")
 }
 
 func SetParsedVariablesToEnv(env gotenv.Env, replaceVars bool) {

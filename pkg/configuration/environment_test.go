@@ -58,12 +58,13 @@ func TestLoadFile(t *testing.T) {
 func TestLoadConfiguredEnvironment(t *testing.T) {
 	t.Run("should load default config files", func(t *testing.T) {
 		dir := t.TempDir()
-		uniqueEnvVarConfigFile, configFileName := setupTestFile(t, "1", dir)
-		uniqueEnvVarDotSnykEnv, _ := setupTestFile(t, ".snyk.env", dir)
-		uniqueEnvVarDotEnvRc, _ := setupTestFile(t, ".envrc", dir)
+		uniqueEnvVarConfigFile, absEnvVarConfigFile := setupTestFile(t, "1", dir)
+		uniqueEnvVarDotSnykEnv, absEnvVarDotSnykEnvFile := setupTestFile(t, ".snyk.env", dir)
+		uniqueEnvVarDotEnvRc, absEnvVarDotEnvRcFile := setupTestFile(t, ".envrc", dir)
 
 		configuration := NewInMemory()
-		configuration.Set(CONFIG_FILE, configFileName)
+		configuration.Set(CUSTOM_CONFIG_FILES, []string{absEnvVarConfigFile, absEnvVarDotSnykEnvFile, absEnvVarDotEnvRcFile})
+
 		err := os.Chdir(dir)
 		require.NoError(t, err)
 
