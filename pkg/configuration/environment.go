@@ -11,7 +11,7 @@ import (
 	"github.com/subosito/gotenv"
 )
 
-func LoadShellEnvironment() {
+func LoadConfiguredEnvironment(configuration Configuration) {
 	if runtime.GOOS == "windows" {
 		return
 	}
@@ -20,22 +20,58 @@ func LoadShellEnvironment() {
 	fromSpecificShell := getParsedEnvFromShell(shell)
 
 	if len(fromSpecificShell) > 0 {
-		SetParsedVariablesToEnv(fromSpecificShell)
+		SetParsedVariablesToEnv(fromSpecificShell, false)
 	} else {
-		SetParsedVariablesToEnv(parsedEnv)
+		SetParsedVariablesToEnv(parsedEnv, false)
+	}
+
+	for _, file := range configFiles(configuration) {
+		LoadFile(file)
 	}
 }
 
-func SetParsedVariablesToEnv(env gotenv.Env) {
+func LoadFile(fileName string) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return
+	}
+	defer func(file *os.File) { _ = file.Close() }(file)
+	env := gotenv.Parse(file)
+
+	// we want these settings to overwrite existing settings (apart from the path)
+	SetParsedVariablesToEnv(env, true)
+}
+
+func configFiles(configuration Configuration) []string {
+	var files []string
+	configFile := configuration.GetString(CONFIG_FILE)
+	if configFile != "" {
+		files = append(files, configFile)
+	}
+
+	stdFiles := []string{
+		".snyk.env",
+		".envrc", // direnv config file
+	}
+
+	home, err := os.UserHomeDir()
+	files = append(files, stdFiles...)
+	if err != nil {
+		return files
+	}
+	return append(files, home+"/.snyk.env")
+}
+
+func SetParsedVariablesToEnv(env gotenv.Env, replaceVars bool) {
 	for k, v := range env {
+		if k == "PATH" {
+			UpdatePath(v)
+			continue
+		}
+
 		_, exists := os.LookupEnv(k)
-		if !exists {
+		if !exists || replaceVars {
 			_ = os.Setenv(k, v)
-		} else {
-			// add to path, don't ignore additional paths
-			if k == "PATH" {
-				UpdatePath(v)
-			}
 		}
 	}
 }
@@ -68,12 +104,16 @@ func getParsedEnvFromShell(shell string) gotenv.Env {
 	return parsedEnv
 }
 
-func UpdatePath(pathExtension string) {
+// UpdatePath prepends the extension to the current path. If the entry is already there, it skips it. The
+// result is set into the process environment with os.Setenv.
+func UpdatePath(pathExtension string) string {
+	pathVarName := "PATH"
+
 	if pathExtension == "" {
-		return
+		return os.Getenv(pathVarName)
 	}
 
-	currentPath := os.Getenv("PATH")
+	currentPath := os.Getenv(pathVarName)
 	currentPathEntries := strings.Split(currentPath, string(os.PathListSeparator))
 
 	pathEntries := map[string]bool{}
@@ -81,14 +121,16 @@ func UpdatePath(pathExtension string) {
 		pathEntries[entry] = true
 	}
 
-	newPathEntries := strings.Split(pathExtension, string(os.PathListSeparator))
-
-	for _, entry := range newPathEntries {
+	addPathEntries := strings.Split(pathExtension, string(os.PathListSeparator))
+	var newPathSlice []string
+	for _, entry := range addPathEntries {
 		if !pathEntries[entry] {
-			currentPathEntries = append(currentPathEntries, entry)
+			newPathSlice = append(newPathSlice, entry)
 		}
 	}
 
-	newPath := strings.Join(currentPathEntries, string(os.PathListSeparator))
-	_ = os.Setenv("PATH", newPath)
+	newPathSlice = append(newPathSlice, currentPathEntries...)
+	newPath := strings.Join(newPathSlice, string(os.PathListSeparator))
+	_ = os.Setenv(pathVarName, newPath)
+	return newPath
 }
