@@ -219,10 +219,10 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine, logger))
-	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
+	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, CustomConfigFiles(config))
 }
 
-func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
+func CustomConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
 	return func(existingValue interface{}) interface{} {
 		var files []string
 		// last file usually wins if the same values are configured
