@@ -14,7 +14,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -65,7 +64,6 @@ type oAuth2Authenticator struct {
 }
 
 func OpenBrowser(authUrl string) {
-	browser.Stdout = os.Stderr
 	//nolint:errcheck // breaking api change needed to fix this
 	_ = browser.OpenURL(authUrl)
 }
