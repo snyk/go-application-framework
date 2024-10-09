@@ -14,6 +14,8 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sync"
 	"time"
 
@@ -287,6 +289,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	var responseCode string
 	var responseState string
 	var responseError string
+	var responseInstance string
 	verifier, err := createVerifier(128)
 	if err != nil {
 		return err
@@ -336,6 +339,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			appUrl := o.config.GetString(configuration.WEB_APP_URL)
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
+			responseInstance = html.EscapeString(r.URL.Query().Get("instance"))
 			w.Header().Add("Location", appUrl+"/authenticated?type=oauth")
 			w.WriteHeader(http.StatusMovedPermanently)
 		}
@@ -388,6 +392,23 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		return fmt.Errorf("incorrect response state: %s != %s", responseState, state)
 	}
 
+	if responseInstance != "" {
+		authHost := redirectAuthHost(responseInstance)
+		if err != nil {
+			return fmt.Errorf("invalid instance: %q", responseInstance)
+		}
+		if !isValidAuthHost(authHost) {
+			return fmt.Errorf("invalid instance: %q", responseInstance)
+		}
+
+		authURL, err := url.Parse(o.oauthConfig.Endpoint.AuthURL)
+		if err != nil {
+			return fmt.Errorf("failed to parse auth url: %w", err)
+		}
+		authURL.Host = authHost
+		o.oauthConfig.Endpoint.AuthURL = authURL.String()
+	}
+
 	// Use the custom HTTP client when requesting a token.
 	if o.httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
@@ -400,6 +421,16 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 
 	err = o.persistToken(token)
 	return err
+}
+
+func redirectAuthHost(instance string) string {
+	return fmt.Sprintf("api.%s", instance)
+}
+
+var redirectAuthHostRE = regexp.MustCompile(`^api\.(.+)\.snyk\.io$`)
+
+func isValidAuthHost(authHost string) bool {
+	return redirectAuthHostRE.MatchString(authHost)
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
