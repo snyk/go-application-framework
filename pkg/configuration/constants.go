@@ -30,6 +30,7 @@ const (
 	LOG_LEVEL                       string = "snyk_log_level" // string that defines the log level based on zerolog levels (trace,debug,info,...)
 
 	// internal constants
+	CUSTOM_CONFIG_FILES            string = "internal_custom_config_files"
 	WORKFLOW_USE_STDIO             string = "internal_wflstdio"
 	RAW_CMD_ARGS                   string = "internal_raw_cmd_args"
 	WEB_APP_URL                    string = "internal_snyk_app"

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -18,6 +20,42 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
+	t.Run("should load default config files (without given command line)", func(t *testing.T) {
+		engine := CreateAppEngine()
+		conf := engine.GetConfiguration()
+
+		actual := conf.GetStringSlice(configuration.CUSTOM_CONFIG_FILES)
+		assert.Lenf(t, actual, 5, "defaults not set")
+		assert.Equal(t, ".snyk.env", actual[0])
+		assert.Equal(t, ".envrc", actual[1])
+		assert.Equal(t, ".snyk.env."+runtime.GOOS, actual[2])
+		assert.Equal(t, ".envrc."+runtime.GOOS, actual[3])
+		home, err := os.UserHomeDir()
+		if err == nil {
+			assert.Equal(t, filepath.Join(home, actual[0]), actual[4])
+		}
+	})
+
+	t.Run("should load default config files (with given command line)", func(t *testing.T) {
+		engine := CreateAppEngine()
+		conf := engine.GetConfiguration()
+		conf.Set("configfile", "abc/d")
+
+		actual := conf.GetStringSlice(configuration.CUSTOM_CONFIG_FILES)
+		assert.Lenf(t, actual, 6, "defaults not set")
+		assert.Equal(t, ".snyk.env", actual[0])
+		assert.Equal(t, ".envrc", actual[1])
+		assert.Equal(t, ".snyk.env."+runtime.GOOS, actual[2])
+		assert.Equal(t, ".envrc."+runtime.GOOS, actual[3])
+		assert.Equal(t, "abc/d", actual[4])
+		home, err := os.UserHomeDir()
+		if err == nil {
+			assert.Equal(t, filepath.Join(home, actual[0]), actual[5])
+		}
+	})
+}
 
 func Test_CreateAppEngine(t *testing.T) {
 	engine := CreateAppEngine()
