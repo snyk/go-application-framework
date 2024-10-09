@@ -35,12 +35,17 @@ jobs:
     <<: *base_image
     steps:
       - checkout
+      - restore-build-cache
       - run:
+          environment:
+            # we re-use the Go build cache as our lint-cache too.
+            GOLANGCI_LINT_CACHE: /home/circleci/.cache/go-build
           name: Lint
           command: make lint
       - run:
           name: Build
           command: make build
+      - save-build-cache
 
   security-scans:
     <<: *base_image
@@ -48,6 +53,23 @@ jobs:
       - checkout
       - prodsec/security_scans:
           mode: auto
+
+commands:
+  save-build-cache:
+    steps:
+      - save_cache:
+          name: Saving Go build cache
+          key: go-build-cache-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - /home/circleci/.cache/go-build
+  restore-build-cache:
+    steps:
+      - restore_cache:
+          name: Restoring Go build cache
+          keys:
+            - go-build-cache-{{ .Branch }}-{{ .Revision }}
+            - go-build-cache-{{ .Branch }}-
+            - go-build-cache-
 
 
 # Orchestrate our job run sequence
