@@ -155,7 +155,8 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	buf := new(bytes.Buffer)
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
-	filteredFindings := filterOutIgnoredFindings(p.Input.Findings)
+	filteredFindings := filterOutIgnoredFindings(p.Input.Findings, p.ShowIgnored)
+
 	err = mainTmpl.Execute(buf, struct {
 		Summary         SummaryData               `json:"summary"`
 		Results         local_models.LocalFinding `json:"results"`
@@ -179,11 +180,11 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	return buf.String(), nil
 }
 
-func filterOutIgnoredFindings(findings []local_models.FindingResource) (filtered FilteredFindings) {
+func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnored bool) (filtered FilteredFindings) {
 	for _, finding := range findings {
 		if finding.Attributes.Suppression == nil {
 			filtered.OpenFindings = append(filtered.OpenFindings, finding)
-		} else {
+		} else if showIgnored {
 			filtered.IgnoredFindings = append(filtered.IgnoredFindings, finding)
 		}
 	}

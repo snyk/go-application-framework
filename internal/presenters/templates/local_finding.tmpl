@@ -6,6 +6,14 @@
             {{- end }}
         {{- end }}
     {{- end }}
+
+    {{- range $current_severity := $.Order }}
+        {{- range $finding := $.IgnoredFindings}}
+            {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
+                {{- renderToString "finding" $finding }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
 {{end}}
 
 {{define "header" }}
