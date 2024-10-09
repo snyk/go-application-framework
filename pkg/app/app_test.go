@@ -55,7 +55,6 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 			assert.Equal(t, filepath.Join(home, actual[0]), actual[5])
 		}
 	})
-
 }
 
 func Test_CreateAppEngine(t *testing.T) {
