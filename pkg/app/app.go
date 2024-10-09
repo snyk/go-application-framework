@@ -236,7 +236,7 @@ func customConfigFiles(config configuration.Configuration) configuration.Default
 		files = append(files, ".snyk.env."+runtime.GOOS)
 		files = append(files, ".envrc."+runtime.GOOS)
 
-		configFile := config.GetString(configuration.CONFIG_FILE)
+		configFile := config.GetString("configfile")
 		if configFile != "" {
 			files = append(files, configFile)
 		}

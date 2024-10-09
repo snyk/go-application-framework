@@ -28,7 +28,6 @@ const (
 	CACHE_PATH                      string = "snyk_cache_path"
 	TIMEOUT                         string = "snyk_timeout_secs"
 	LOG_LEVEL                       string = "snyk_log_level" // string that defines the log level based on zerolog levels (trace,debug,info,...)
-	CONFIG_FILE                     string = "configfile"     // command line flag from language server
 
 	// internal constants
 	CUSTOM_CONFIG_FILES            string = "internal_custom_config_files"
