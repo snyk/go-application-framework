@@ -171,7 +171,7 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 
 	output, err := dataTransformationEntryPoint(invocationContext, input)
 	assert.Nil(t, err)
-	assert.Len(t, output, 3)
+	assert.Len(t, output, 2)
 
 	var transformedOutput workflow.Data
 

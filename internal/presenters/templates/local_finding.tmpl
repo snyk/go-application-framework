@@ -1,0 +1,59 @@
+{{define "details" }}
+    {{- range $current_severity := $.Order }}
+        {{- range $finding := $.Results.Findings}}
+            {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
+                {{- renderToString "finding" $finding }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{end}}
+
+{{define "header" }}
+Testing {{.Summary.TestPath}} ...
+
+Open Issues
+
+{{end }}
+
+{{define "summary"}}Test Summary
+
+  Organization:      {{.Summary.Org}}
+  Test type:         {{.Summary.Type}}
+  Project path:      {{.Summary.TestPath}}
+
+  Total issues:   {{.Summary.TotalIssueCount}}{{ if .Summary.TotalIssueCount }}
+  Ignored issues: {{ .Summary.IgnoredIssueCountWithSeverities }}
+  Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}{{end}}
+
+{{define "showSeverityFilterTip"}}💡 Tip
+
+    You are currently viewing results with --severity-threshold applied.
+    To view all issues, remove the --severity-threshold flag
+
+{{ end }}
+
+{{define "showIgnoredTip"}}
+
+💡 Tip
+
+    To view ignored issues, use the --include-ignores option.
+
+{{ end }}
+
+{{- define "main" }}
+{{- template "header"  . }}
+{{- template "details" . }}
+
+{{- if $.SeverityFilter }}
+    {{- template "showSeverityFilterTip" }}
+{{- end }}
+
+{{- box (renderToString "summary" .)}}
+
+{{- if eq $.ShowIgnored false }}
+    {{- template "showIgnoredTip" }}
+{{- end }}
+
+{{- end }}
+
+{{- template "main" . }}

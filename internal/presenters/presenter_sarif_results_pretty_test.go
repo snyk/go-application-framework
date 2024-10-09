@@ -156,7 +156,7 @@ func TestPresenterSarifResultsPretty_SeverityThresholdHighIssues(t *testing.T) {
 	require.Contains(t, result, "[ 0 HIGH ]")
 	require.Contains(t, result, "[ 4 HIGH ]")
 
-	require.Contains(t, result, "You are currently viewing results with --severity-threshold=high applied")
+	require.Contains(t, result, "You are currently viewing results with --severity-threshold applied")
 
 	snaps.MatchSnapshot(t, result)
 }

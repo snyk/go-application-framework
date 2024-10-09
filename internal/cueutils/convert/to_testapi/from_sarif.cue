@@ -131,7 +131,7 @@ _findings: list.Sort(list.Concat([ for run in input.runs {
                 if location.physicalLocation != _|_ {
                 let _pl = location.physicalLocation
                 {
-                    source_location: {
+                    source_locations: {
                         filepath: _pl.artifactLocation.uri
                         original_start_line: _pl.region.startLine
                         original_end_line: _pl.region.endLine

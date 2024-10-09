@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -101,6 +102,33 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
+			var localFindings local_models.LocalFinding
+			severityThreshold := invocation.GetConfiguration().GetString(configuration.FLAG_SEVERITY_THRESHOLD)
+			localFindingsBytes, ok := input[i].GetPayload().([]byte)
+			if !ok {
+				return output, fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
+			}
+			err := json.Unmarshal(localFindingsBytes, &localFindings)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to unmarshal local finding")
+				continue
+			}
+
+			findingPresentation := presenters.LocalFindingsTestResults(
+				localFindings,
+				presenters.WithLocalFindingsTestPath(input[i].GetContentLocation()),
+				presenters.WithLocalFindingsOrg(config.GetString(configuration.ORGANIZATION_SLUG)),
+				presenters.WithLocalFindingsIgnoredIssues(config.GetBool(configuration.FLAG_INCLUDE_IGNORES)),
+				presenters.WithLocalFindingsSeverityLevel(severityThreshold),
+			)
+
+			result, err := findingPresentation.Render()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to render local finding")
+				continue
+			}
+
+			outputDestination.Println(result)
 			continue
 		}
 

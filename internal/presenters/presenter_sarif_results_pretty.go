@@ -24,7 +24,7 @@ type FindingProperty struct {
 	Value string
 }
 
-type Presenter struct {
+type SarifPresenter struct {
 	ShowIgnored      bool
 	Input            sarif.SarifDocument
 	OrgName          string
@@ -32,34 +32,34 @@ type Presenter struct {
 	SeverityMinLevel string
 }
 
-type PresenterOption func(*Presenter)
+type PresenterOption func(*SarifPresenter)
 
 func WithIgnored(showIgnored bool) PresenterOption {
-	return func(p *Presenter) {
+	return func(p *SarifPresenter) {
 		p.ShowIgnored = showIgnored
 	}
 }
 
 func WithOrgName(orgName string) PresenterOption {
-	return func(p *Presenter) {
+	return func(p *SarifPresenter) {
 		p.OrgName = orgName
 	}
 }
 
 func WithTestPath(testPath string) PresenterOption {
-	return func(p *Presenter) {
+	return func(p *SarifPresenter) {
 		p.TestPath = testPath
 	}
 }
 
 func WithSeverityThershold(severityMinLevel string) PresenterOption {
-	return func(p *Presenter) {
+	return func(p *SarifPresenter) {
 		p.SeverityMinLevel = severityMinLevel
 	}
 }
 
-func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *Presenter {
-	p := &Presenter{
+func SarifTestResults(sarifDocument sarif.SarifDocument, options ...PresenterOption) *SarifPresenter {
+	p := &SarifPresenter{
 		ShowIgnored:      false,
 		Input:            sarifDocument,
 		OrgName:          "",
@@ -86,7 +86,7 @@ func FilterFindingsBySeverity(findings []Finding, minLevel string, severityOrder
 	return filteredFindings
 }
 
-func (p *Presenter) Render() (string, error) {
+func (p *SarifPresenter) Render() (string, error) {
 	summaryData := sarif_utils.CreateCodeSummary(&p.Input)
 	findings :=
 		SortFindings(convertSarifToFindingsList(p.Input), summaryData.SeverityOrderAsc)
