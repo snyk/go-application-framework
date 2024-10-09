@@ -140,7 +140,14 @@ _findings: list.Sort(list.Concat([ for run in input.runs {
                     }
                 }
             }]
+            if result.suppressions != _|_ {
+            	if result.suppressions[0].justification != _|_ {
+								suppression: {
+									kind: "other" // TODO: Hard-coded as this does not map well to kind|state fields from sarif
+  	          		justification: result.suppressions[0].justification,
+	            	}
+            	}
+            }
         }
-
     }]
 }]), { T: _, x: T, y: T, less: x.rating.severity.value < y.rating.severity.value })
