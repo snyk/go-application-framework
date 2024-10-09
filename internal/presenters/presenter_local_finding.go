@@ -25,6 +25,11 @@ type TemplatePathsStruct struct {
 	FindingComponentTemplate string
 }
 
+type FilteredFindings struct {
+	OpenFindings    []local_models.FindingResource
+	IgnoredFindings []local_models.FindingResource
+}
+
 // TemplatePaths is an instance of TemplatePathsStruct with the template paths.
 var TemplatePaths = TemplatePathsStruct{
 	LocalFindingTemplate:     "templates/local_finding.tmpl",
@@ -150,6 +155,7 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	buf := new(bytes.Buffer)
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
+	filteredFindings := filterOutIgnoredFindings(p.Input.Findings)
 	err = mainTmpl.Execute(buf, struct {
 		Summary         SummaryData               `json:"summary"`
 		Results         local_models.LocalFinding `json:"results"`
@@ -161,9 +167,9 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	}{
 		Summary:         sum,
 		Results:         p.Input,
-		OpenFindings:    filterOutIgnoredFindings(p.Input.Findings),
-		IgnoredFindings: p.Input.Findings,
 		Order:           []string{"low", "medium", "high"},
+		OpenFindings:    filteredFindings.OpenFindings,
+		IgnoredFindings: filteredFindings.IgnoredFindings,
 		ShowIgnored:     p.ShowIgnored,
 		SeverityFilter:  p.SeverityMinLevel,
 	})
@@ -173,10 +179,12 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	return buf.String(), nil
 }
 
-func filterOutIgnoredFindings(findings []local_models.FindingResource) (filtered []local_models.FindingResource) {
+func filterOutIgnoredFindings(findings []local_models.FindingResource) (filtered FilteredFindings) {
 	for _, finding := range findings {
 		if finding.Attributes.Suppression == nil {
-			filtered = append(filtered, finding)
+			filtered.OpenFindings = append(filtered.OpenFindings, finding)
+		} else {
+			filtered.IgnoredFindings = append(filtered.IgnoredFindings, finding)
 		}
 	}
 	return filtered

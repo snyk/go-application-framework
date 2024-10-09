@@ -3,6 +3,7 @@ package presenters
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -200,4 +201,28 @@ func TestPresenterLocalFinding_hideIgnoredByDefault(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotContains(t, result, "routes/profileImageUrlUpload.ts, line 22")
+}
+
+func TestPresenterLocalFinding_showIgnoredIssues(t *testing.T) {
+	skipWindows(t)
+
+	fd, err := os.Open("testdata/local-findings-ignored-issues.json")
+	require.NoError(t, err)
+
+	var localFindingDoc local_models.LocalFinding
+	err = json.NewDecoder(fd).Decode(&localFindingDoc)
+	require.NoError(t, err)
+
+	scannedPath := "path/to/project"
+	p := LocalFindingsTestResults(
+		localFindingDoc,
+		WithLocalFindingsTestPath(scannedPath),
+		WithLocalFindingsIgnoredIssues(true),
+	)
+
+	result, err := p.Render()
+	fmt.Print(result)
+
+	require.NoError(t, err)
+	require.Contains(t, result, "routes/profileImageUrlUpload.ts, line 22")
 }
