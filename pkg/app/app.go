@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -246,7 +247,7 @@ func customConfigFiles(config configuration.Configuration) configuration.Default
 			return files
 		}
 
-		files = append(files, home+"/.snyk.env")
+		files = append(files, filepath.Join(home, "/.snyk.env"))
 		return files
 	}
 }
