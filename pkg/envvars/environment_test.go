@@ -1,4 +1,4 @@
-package configuration
+package envvars
 
 import (
 	"fmt"
@@ -69,15 +69,13 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 		uniqueEnvVarDotSnykEnv, absEnvVarDotSnykEnvFile := setupTestFile(t, ".snyk.env", dir)
 		uniqueEnvVarDotEnvRc, absEnvVarDotEnvRcFile := setupTestFile(t, ".envrc", dir)
 
-		conf := NewInMemory()
-		conf.Set(WORKING_DIRECTORY, dir)
-		conf.Set(CUSTOM_CONFIG_FILES, []string{absEnvVarConfigFile, absEnvVarDotSnykEnvFile, absEnvVarDotEnvRcFile})
+		files := []string{absEnvVarConfigFile, absEnvVarDotSnykEnvFile, absEnvVarDotEnvRcFile}
 		currentDir, err := os.Getwd()
 		require.NoError(t, err)
 		err = os.Chdir(dir)
 		require.NoError(t, err)
 
-		LoadConfiguredEnvironment(conf)
+		LoadConfiguredEnvironment(files, dir)
 
 		require.Equal(t, uniqueEnvVarConfigFile, os.Getenv(uniqueEnvVarConfigFile))
 		require.Equal(t, uniqueEnvVarDotSnykEnv, os.Getenv(uniqueEnvVarDotSnykEnv))

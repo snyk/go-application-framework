@@ -1,4 +1,4 @@
-package configuration
+package envvars
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 //  2. given command-line parameter config file
 //  3. std config file in home directory
 //  4. global shell configuration
-func LoadConfiguredEnvironment(config Configuration) {
+func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
 	bashOutput := getEnvFromShell("bash")
 
 	// this is applied at the end always, as it does not overwrite existing variables
@@ -31,9 +31,9 @@ func LoadConfiguredEnvironment(config Configuration) {
 	}
 
 	// process config files
-	for _, file := range config.GetStringSlice(CUSTOM_CONFIG_FILES) {
+	for _, file := range customConfigFiles {
 		if !filepath.IsAbs(file) {
-			file = filepath.Join(config.GetString(WORKING_DIRECTORY), file)
+			file = filepath.Join(workingDirectory, file)
 		}
 		loadFile(file)
 	}
