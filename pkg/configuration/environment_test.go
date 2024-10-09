@@ -69,13 +69,14 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 		uniqueEnvVarDotSnykEnv, absEnvVarDotSnykEnvFile := setupTestFile(t, ".snyk.env", dir)
 		uniqueEnvVarDotEnvRc, absEnvVarDotEnvRcFile := setupTestFile(t, ".envrc", dir)
 
-		configuration := NewInMemory()
-		configuration.Set(CUSTOM_CONFIG_FILES, []string{absEnvVarConfigFile, absEnvVarDotSnykEnvFile, absEnvVarDotEnvRcFile})
+		conf := NewInMemory()
+		conf.Set(WORKING_DIRECTORY, dir)
+		conf.Set(CUSTOM_CONFIG_FILES, []string{absEnvVarConfigFile, absEnvVarDotSnykEnvFile, absEnvVarDotEnvRcFile})
 
 		err := os.Chdir(dir)
 		require.NoError(t, err)
 
-		LoadConfiguredEnvironment(configuration)
+		LoadConfiguredEnvironment(conf)
 
 		require.Equal(t, uniqueEnvVarConfigFile, os.Getenv(uniqueEnvVarConfigFile))
 		require.Equal(t, uniqueEnvVarDotSnykEnv, os.Getenv(uniqueEnvVarDotSnykEnv))
