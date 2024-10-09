@@ -1,6 +1,6 @@
 {{define "details" }}
     {{- range $current_severity := $.Order }}
-        {{- range $finding := $.Results.Findings}}
+        {{- range $finding := $.OpenFindings}}
             {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
                 {{- renderToString "finding" $finding }}
             {{- end }}

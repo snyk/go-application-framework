@@ -178,3 +178,26 @@ func TestPresenterLocalFinding_with_severityFilter(t *testing.T) {
 	assert.Contains(t, result, "To view all issues, remove the --severity-threshold flag")
 	snaps.MatchSnapshot(t, result)
 }
+
+func TestPresenterLocalFinding_hideIgnoredByDefault(t *testing.T) {
+	skipWindows(t)
+
+	fd, err := os.Open("testdata/local-findings-ignored-issues.json")
+	require.NoError(t, err)
+
+	var localFindingDoc local_models.LocalFinding
+	err = json.NewDecoder(fd).Decode(&localFindingDoc)
+	require.NoError(t, err)
+
+	scannedPath := "path/to/project"
+	p := LocalFindingsTestResults(
+		localFindingDoc,
+		WithLocalFindingsTestPath(scannedPath),
+		WithLocalFindingsIgnoredIssues(false),
+	)
+
+	result, err := p.Render()
+
+	require.NoError(t, err)
+	require.NotContains(t, result, "routes/profileImageUrlUpload.ts, line 22")
+}

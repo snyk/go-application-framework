@@ -151,22 +151,35 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
 	err = mainTmpl.Execute(buf, struct {
-		Summary        SummaryData               `json:"summary"`
-		Results        local_models.LocalFinding `json:"results"`
-		Order          []string
-		ShowIgnored    bool
-		SeverityFilter string
+		Summary         SummaryData               `json:"summary"`
+		Results         local_models.LocalFinding `json:"results"`
+		Order           []string
+		OpenFindings    []local_models.FindingResource
+		IgnoredFindings []local_models.FindingResource
+		ShowIgnored     bool
+		SeverityFilter  string
 	}{
-		Summary:        sum,
-		Results:        p.Input,
-		Order:          []string{"low", "medium", "high"},
-		ShowIgnored:    p.ShowIgnored,
-		SeverityFilter: p.SeverityMinLevel,
+		Summary:         sum,
+		Results:         p.Input,
+		OpenFindings:    filterOutIgnoredFindings(p.Input.Findings),
+		IgnoredFindings: p.Input.Findings,
+		Order:           []string{"low", "medium", "high"},
+		ShowIgnored:     p.ShowIgnored,
+		SeverityFilter:  p.SeverityMinLevel,
 	})
 	if err != nil {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func filterOutIgnoredFindings(findings []local_models.FindingResource) (filtered []local_models.FindingResource) {
+	for _, finding := range findings {
+		if finding.Attributes.Suppression == nil {
+			filtered = append(filtered, finding)
+		}
+	}
+	return filtered
 }
 
 func renderTemplateToString(tmpl *template.Template) func(name string, data interface{}) (string, error) {
