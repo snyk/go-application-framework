@@ -25,12 +25,10 @@ func LoadConfiguredEnvironment(config Configuration) {
 
 	env := gotenv.Parse(strings.NewReader(bashOutput))
 	specificShell, ok := env["SHELL"]
-	if !ok {
-		return
+	if ok {
+		fromSpecificShell := getEnvFromShell(specificShell)
+		_ = gotenv.Apply(strings.NewReader(fromSpecificShell)) //nolint:errcheck // we can't do anything with the error
 	}
-
-	fromSpecificShell := getEnvFromShell(specificShell)
-	_ = gotenv.Apply(strings.NewReader(fromSpecificShell)) //nolint:errcheck // we can't do anything with the error
 
 	// process config files
 	for _, file := range config.GetStringSlice(CUSTOM_CONFIG_FILES) {

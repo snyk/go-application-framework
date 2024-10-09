@@ -72,8 +72,9 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 		conf := NewInMemory()
 		conf.Set(WORKING_DIRECTORY, dir)
 		conf.Set(CUSTOM_CONFIG_FILES, []string{absEnvVarConfigFile, absEnvVarDotSnykEnvFile, absEnvVarDotEnvRcFile})
-
-		err := os.Chdir(dir)
+		currentDir, err := os.Getwd()
+		require.NoError(t, err)
+		err = os.Chdir(dir)
 		require.NoError(t, err)
 
 		LoadConfiguredEnvironment(conf)
@@ -81,6 +82,9 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 		require.Equal(t, uniqueEnvVarConfigFile, os.Getenv(uniqueEnvVarConfigFile))
 		require.Equal(t, uniqueEnvVarDotSnykEnv, os.Getenv(uniqueEnvVarDotSnykEnv))
 		require.Equal(t, uniqueEnvVarDotEnvRc, os.Getenv(uniqueEnvVarDotEnvRc))
+
+		err = os.Chdir(currentDir)
+		require.NoError(t, err)
 	})
 }
 
