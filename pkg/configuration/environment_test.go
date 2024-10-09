@@ -8,29 +8,36 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"github.com/subosito/gotenv"
 )
 
 var pathListSep = string(os.PathListSeparator)
 
 func TestUpdatePathWithDefaults(t *testing.T) {
-	t.Run("add to path from environment", func(t *testing.T) {
+	t.Run("add to path from environment (prepend)", func(t *testing.T) {
 		pathFromEnv := "a"
 		t.Setenv("PATH", pathFromEnv)
 
-		UpdatePath("b")
+		UpdatePath("b", true)
 
 		require.Equal(t, "b"+pathListSep+pathFromEnv, os.Getenv("PATH"))
 	})
 
-	t.Run("add to path from environment only once", func(t *testing.T) {
+	t.Run("add to path from environment (append)", func(t *testing.T) {
 		pathFromEnv := "a"
 		t.Setenv("PATH", pathFromEnv)
 
-		UpdatePath("b")
-		UpdatePath("b")
+		UpdatePath("b", false)
+
+		require.Equal(t, pathFromEnv+pathListSep+"b", os.Getenv("PATH"))
+	})
+
+	t.Run("add to path from environment only once (prepend)", func(t *testing.T) {
+		pathFromEnv := "a"
+		t.Setenv("PATH", pathFromEnv)
+
+		UpdatePath("b", true)
+		UpdatePath("b", true)
 
 		require.Equal(t, "b"+pathListSep+pathFromEnv, os.Getenv("PATH"))
 	})
@@ -39,7 +46,7 @@ func TestUpdatePathWithDefaults(t *testing.T) {
 		pathFromEnv := "a"
 		t.Setenv("PATH", pathFromEnv)
 
-		UpdatePath("")
+		UpdatePath("", true)
 
 		require.Equal(t, pathFromEnv, os.Getenv("PATH"))
 	})
@@ -85,51 +92,4 @@ func setupTestFile(t *testing.T, fileName string, dir string) (string, string) {
 	err := os.WriteFile(absFileName, varName, 0660)
 	require.NoError(t, err)
 	return uniqueEnvVar, absFileName
-}
-
-func TestSetParsedVariablesToEnv(t *testing.T) {
-	additionalEnv := gotenv.Env{}
-
-	t.Run("add to path from environment", func(t *testing.T) {
-		t.Setenv("a", "old")
-		t.Setenv("PATH", "abc")
-		additionalEnv["PATH"] = "b"
-		additionalEnv["a"] = "new"
-
-		SetParsedVariablesToEnv(additionalEnv, false)
-
-		require.Equal(t, "b"+pathListSep+"abc", os.Getenv("PATH"))
-		require.Equal(t, "old", os.Getenv("a"))
-	})
-
-	t.Run("replace vars, but path not", func(t *testing.T) {
-		t.Setenv("a", "old")
-		t.Setenv("PATH", "abc")
-		additionalEnv["PATH"] = "b"
-		additionalEnv["a"] = "new"
-
-		SetParsedVariablesToEnv(additionalEnv, true)
-
-		require.Equal(t, "b"+pathListSep+"abc", os.Getenv("PATH"))
-		require.Equal(t, "new", os.Getenv("a"))
-	})
-
-	t.Run("add variables to env if not existent", func(t *testing.T) {
-		newEnvVar := uuid.New().String()
-		additionalEnv[newEnvVar] = "abc"
-
-		SetParsedVariablesToEnv(additionalEnv, false)
-
-		require.Equal(t, "abc", os.Getenv(newEnvVar))
-	})
-
-	t.Run("skip variables if existent", func(t *testing.T) {
-		newEnvVar := uuid.New().String()
-		t.Setenv(newEnvVar, "old")
-		additionalEnv[newEnvVar] = "abc"
-
-		SetParsedVariablesToEnv(additionalEnv, false)
-
-		require.Equal(t, "old", os.Getenv(newEnvVar))
-	})
 }
