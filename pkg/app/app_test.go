@@ -41,7 +41,7 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 	t.Run("should load default config files (with given command line)", func(t *testing.T) {
 		engine := CreateAppEngine()
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.CONFIG_FILE, "abc/d")
+		conf.Set("configfile", "abc/d")
 
 		actual := conf.GetStringSlice(configuration.CUSTOM_CONFIG_FILES)
 		assert.Lenf(t, actual, 6, "defaults not set")
