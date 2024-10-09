@@ -7,6 +7,9 @@
         {{- end }}
     {{- end }}
 
+Ignored Issues
+
+{{if gt ($.IgnoredFindings | len) 0 }}
     {{- range $current_severity := $.Order }}
         {{- range $finding := $.IgnoredFindings}}
             {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
@@ -14,6 +17,12 @@
             {{- end }}
         {{- end }}
     {{- end }}
+{{else}}
+    There are no ignored issues
+{{end}}
+
+    Ignores are currently managed in the Snyk Web UI.
+    To edit or remove the ignore please go to: https://app.snyk.io/
 {{end}}
 
 {{define "header" }}

@@ -1,16 +1,21 @@
 package presenters
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
-	"strings"
 	"testing"
-	"text/template"
 
+	"cuelang.org/go/cue/cuecontext"
+	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gkampitakis/go-snaps/snaps"
+	"github.com/muesli/termenv"
+	"github.com/snyk/code-client-go/sarif"
+	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
+	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,6 +26,71 @@ func skipWindows(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping on windows device [CLI-514]")
 	}
+}
+
+func sarifToLocalFinding(t *testing.T, filename string) (localFinding local_models.LocalFinding, err error) {
+	t.Helper()
+	jsonFile, err := os.Open("./" + filename)
+	if err != nil {
+		t.Errorf("Failed to load json")
+	}
+
+	defer func(jsonFile *os.File) {
+		jsonErr := jsonFile.Close()
+		assert.NoError(t, jsonErr)
+	}(jsonFile)
+	byteValue, err := io.ReadAll(jsonFile)
+	assert.NoError(t, err)
+
+	// Read sarif file again for sarif
+	var sarifDoc sarif.SarifDocument
+
+	err = json.Unmarshal(byteValue, &sarifDoc)
+	assert.NoError(t, err)
+	if err != nil {
+		return local_models.LocalFinding{}, err
+	}
+
+	input, errUnJson := cuejson.Unmarshal(byteValue)
+	assert.NoError(t, errUnJson)
+
+	if errUnJson != nil {
+		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
+	}
+
+	ctx := cuecontext.New()
+	sarif2apiTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToTestApiFromSarif)
+	if transformerError != nil {
+		return localFinding, transformerError
+	}
+
+	api2cliTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToCliFromTestApi)
+	if transformerError != nil {
+		return localFinding, transformerError
+	}
+
+	apiOutput, applyError := sarif2apiTransformer.Apply(input)
+	if applyError != nil {
+		return localFinding, applyError
+	}
+
+	cliOutput, applyError := api2cliTransformer.ApplyValue(apiOutput)
+	if applyError != nil {
+		return localFinding, applyError
+	}
+
+	// Gate with validation before encoding?
+	encodeErr := cliOutput.Decode(&localFinding)
+
+	if encodeErr != nil {
+		return localFinding, fmt.Errorf("failed to convert to type: %w", encodeErr)
+	}
+
+	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc)
+
+	localFinding.Summary = *summaryData
+
+	return localFinding, nil
 }
 
 func TestPresenterLocalFinding_NoIssues(t *testing.T) {
@@ -42,96 +112,168 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	assert.NotContains(t, result, "Ignored issues")
 }
 
-var testFinding = local_models.FindingResource{
-	Attributes: local_models.FindingAttributes{
-		Message: struct {
-			Arguments []string `json:"arguments"`
-			Header    string   `json:"header"`
-			Markdown  string   `json:"markdown"`
-			Text      string   `json:"text"`
-		}{
-			Arguments: []string{"test"},
-			Header:    "Cleartext Transmission of Sensitive Information",
-			Markdown:  "test",
-			Text:      "http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.",
-		},
-		Component: local_models.Component{
-			Name:     "test",
-			ScanType: "sast",
-		},
-		Fingerprint: local_models.Fingerprint{},
-		Rating: &local_models.FindingRating{
-			Severity: struct {
-				OriginalValue *local_models.FindingRatingSeverityOriginalValue `json:"original_value,omitempty"`
-				Reason        *local_models.FindingRatingSeverityReason        `json:"reason,omitempty"`
-				Value         local_models.FindingRatingSeverityValue          `json:"value"`
-			}{
-				OriginalValue: nil,
-				Reason:        nil,
-				Value:         "high",
-			},
-		},
-		Locations: &[]local_models.FindingLocation{
-			{
-				DependencyPath: &[]local_models.ScaPackage{
-					{
-						PackageName:    "test",
-						PackageVersion: "test",
-					},
-				},
-				SourceLocations: &local_models.FindingSourceLocation{
-					Filepath:            "node_modules/qs/support/expresso/test/http.test.js",
-					OriginalEndColumn:   1,
-					OriginalEndLine:     1,
-					OriginalStartColumn: 1,
-					OriginalStartLine:   1,
-				},
-			},
-		},
-	},
+func TestPresenterLocalFinding_LowIssues(t *testing.T) {
+	// Convert our sarif into localfindings
+	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+	)
+
+	result, err := p.Render()
+
+	require.Nil(t, err)
+	snaps.MatchSnapshot(t, result)
 }
 
-func TestFindingComponent(t *testing.T) {
-	skipWindows(t)
-	test_template, err := template.New("test_template").Parse("")
-	require.NoError(t, err)
-	AddTemplateFuncs(test_template)
-	err = LoadTemplates([]string{
-		TemplatePaths.FindingComponentTemplate}, test_template)
-	require.NoError(t, err)
+func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
+	require.Nil(t, err)
 
-	output := new(bytes.Buffer)
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+	)
 
-	test_template = test_template.Lookup("finding")
-	if test_template == nil {
-		t.Fatalf("Template not found")
-	}
-	err = test_template.Execute(output, testFinding)
-	require.NoError(t, err)
+	result, err := p.Render()
 
-	require.Contains(t, output.String(), testFinding.Attributes.Message.Header)
-	require.Contains(t, output.String(), testFinding.Attributes.Message.Text)
-	require.Contains(t, output.String(), strings.ToUpper(string(testFinding.Attributes.Rating.Severity.Value)))
-	snaps.MatchSnapshot(t, output.String())
+	require.Nil(t, err)
+
+	require.Contains(t, result, "[ 0 HIGH  0 MEDIUM  0 LOW ]")
+	require.Contains(t, result, "[ 4 HIGH  5 MEDIUM  0 LOW ]")
+	snaps.MatchSnapshot(t, result)
 }
 
-func TestBoxStyle(t *testing.T) {
-	skipWindows(t)
-	test_template, err := template.New("test_template").Parse("")
-	require.NoError(t, err)
-	AddTemplateFuncs(test_template)
-	err = LoadTemplates([]string{
-		TemplatePaths.FindingComponentTemplate}, test_template)
-	require.NoError(t, err)
+func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
+	require.Nil(t, err)
 
-	output := new(bytes.Buffer)
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+	)
 
-	test_template, err = test_template.Parse("{{ (renderToString \"finding\" .) | box }}")
-	require.NoError(t, err)
-	err = test_template.Execute(output, testFinding)
-	require.NoError(t, err)
+	result, err := p.Render()
 
-	snaps.MatchSnapshot(t, output.String())
+	require.Nil(t, err)
+	require.NotContains(t, result, "You are currently viewing results with --severity-threshold=high applied")
+
+	snaps.MatchSnapshot(t, result)
+}
+
+func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	lipgloss.SetHasDarkBackground(false)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+	)
+
+	result, err := p.Render()
+
+	require.Nil(t, err)
+	require.NotContains(t, result, "You are currently viewing results with --severity-threshold=high applied")
+
+	snaps.MatchSnapshot(t, result)
+}
+
+func TestPresenterLocalFinding_SeverityThresholdHighIssues(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+		WithLocalFindingsSeverityLevel("high"),
+	)
+
+	result, err := p.Render()
+
+	require.Nil(t, err)
+	require.Contains(t, result, "[ 0 HIGH ]")
+	require.Contains(t, result, "[ 4 HIGH ]")
+
+	require.Contains(t, result, "You are currently viewing results with --severity-threshold applied")
+
+	snaps.MatchSnapshot(t, result)
+}
+
+func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json")
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+		WithLocalFindingsIgnoredIssues(false),
+	)
+
+	result, err := p.Render()
+
+	require.Nil(t, err)
+	require.NotContains(t, result, "src/main.ts, line 58")
+}
+
+func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json")
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+		WithLocalFindingsIgnoredIssues(true),
+	)
+
+	result, err := p.Render()
+
+	require.Nil(t, err)
+
+	require.Contains(t, result, "Ignored Issues")
+	require.Contains(t, result, "[ IGNORED ] [MEDIUM]")
+	require.Contains(t, result, "src/main.ts, line 58")
+	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
+	require.NotContains(t, result, "Empty ignore issues state")
+	require.NotContains(t, result, "To view ignored and open issues, use the --include-ignores option.pre")
+
+	snaps.MatchSnapshot(t, result)
+}
+
+func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := LocalFindingsTestResults(
+		input,
+		WithLocalFindingsOrg("test-org"),
+		WithLocalFindingsTestPath("/path/to/project"),
+		WithLocalFindingsIgnoredIssues(true),
+	)
+
+	result, err := p.Render()
+
+	require.Nil(t, err)
+	require.NotContains(t, result, "[ IGNORED ]")
+	require.Contains(t, result, "There are no ignored issues")
+
+	snaps.MatchSnapshot(t, result)
 }
 
 func TestPresenterLocalFinding_with_Issues(t *testing.T) {
@@ -178,51 +320,4 @@ func TestPresenterLocalFinding_with_severityFilter(t *testing.T) {
 	assert.Contains(t, result, "You are currently viewing results with --severity-threshold applied")
 	assert.Contains(t, result, "To view all issues, remove the --severity-threshold flag")
 	snaps.MatchSnapshot(t, result)
-}
-
-func TestPresenterLocalFinding_hideIgnoredByDefault(t *testing.T) {
-	skipWindows(t)
-
-	fd, err := os.Open("testdata/local-findings-ignored-issues.json")
-	require.NoError(t, err)
-
-	var localFindingDoc local_models.LocalFinding
-	err = json.NewDecoder(fd).Decode(&localFindingDoc)
-	require.NoError(t, err)
-
-	scannedPath := "path/to/project"
-	p := LocalFindingsTestResults(
-		localFindingDoc,
-		WithLocalFindingsTestPath(scannedPath),
-		WithLocalFindingsIgnoredIssues(false),
-	)
-
-	result, err := p.Render()
-
-	require.NoError(t, err)
-	require.NotContains(t, result, "routes/profileImageUrlUpload.ts, line 22")
-}
-
-func TestPresenterLocalFinding_showIgnoredIssues(t *testing.T) {
-	skipWindows(t)
-
-	fd, err := os.Open("testdata/local-findings-ignored-issues.json")
-	require.NoError(t, err)
-
-	var localFindingDoc local_models.LocalFinding
-	err = json.NewDecoder(fd).Decode(&localFindingDoc)
-	require.NoError(t, err)
-
-	scannedPath := "path/to/project"
-	p := LocalFindingsTestResults(
-		localFindingDoc,
-		WithLocalFindingsTestPath(scannedPath),
-		WithLocalFindingsIgnoredIssues(true),
-	)
-
-	result, err := p.Render()
-	fmt.Print(result)
-
-	require.NoError(t, err)
-	require.Contains(t, result, "routes/profileImageUrlUpload.ts, line 22")
 }

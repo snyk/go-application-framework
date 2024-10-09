@@ -25,9 +25,17 @@ type TemplatePathsStruct struct {
 	FindingComponentTemplate string
 }
 
+type PresentationFindingResource struct {
+	local_models.FindingResource
+}
+
+func (pfr *PresentationFindingResource) IsIgnored() bool {
+	return pfr.Attributes.Suppression != nil
+}
+
 type FilteredFindings struct {
-	OpenFindings    []local_models.FindingResource
-	IgnoredFindings []local_models.FindingResource
+	OpenFindings    []*PresentationFindingResource
+	IgnoredFindings []*PresentationFindingResource
 }
 
 // TemplatePaths is an instance of TemplatePathsStruct with the template paths.
@@ -161,8 +169,8 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 		Summary         SummaryData               `json:"summary"`
 		Results         local_models.LocalFinding `json:"results"`
 		Order           []string
-		OpenFindings    []local_models.FindingResource
-		IgnoredFindings []local_models.FindingResource
+		OpenFindings    []*PresentationFindingResource
+		IgnoredFindings []*PresentationFindingResource
 		ShowIgnored     bool
 		SeverityFilter  string
 	}{
@@ -183,9 +191,9 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnored bool) (filtered FilteredFindings) {
 	for _, finding := range findings {
 		if finding.Attributes.Suppression == nil {
-			filtered.OpenFindings = append(filtered.OpenFindings, finding)
+			filtered.OpenFindings = append(filtered.OpenFindings, &PresentationFindingResource{FindingResource: finding})
 		} else if showIgnored {
-			filtered.IgnoredFindings = append(filtered.IgnoredFindings, finding)
+			filtered.IgnoredFindings = append(filtered.IgnoredFindings, &PresentationFindingResource{FindingResource: finding})
 		}
 	}
 	return filtered
