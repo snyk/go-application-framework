@@ -31,12 +31,12 @@ Ignored Issues
 
 
 
-
 💡 Tip
 
    Ignores are currently managed in the Snyk Web UI.              
    To edit or remove the ignore please go to: https://app.snyk.io/
                                                                   
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -48,7 +48,6 @@ Ignored Issues
 │   Ignored issues: 1 [ 0 HIGH  1 MEDIUM  0 LOW ]    │
 │   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
 
 ---
 
@@ -74,15 +73,14 @@ Open Issues
 
 Ignored Issues
 
-
-    There are no ignored issues
-
+  There are no ignored issues
 
 💡 Tip
 
    Ignores are currently managed in the Snyk Web UI.              
    To edit or remove the ignore please go to: https://app.snyk.io/
                                                                   
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -94,7 +92,6 @@ Ignored Issues
 │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
 │   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
 
 ---
 
@@ -117,17 +114,7 @@ Open Issues
    Info: The SHA1 hash (used in crypto.sha1.New) is insecure. Consider changing it to a secure hash algorithm
 
 
-Ignored Issues
 
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -144,7 +131,6 @@ Ignored Issues
 
    To view ignored issues, use the --include-ignores option.
                                                             
-
 
 ---
 
@@ -191,17 +177,7 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-Ignored Issues
 
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -219,14 +195,13 @@ Ignored Issues
    To view ignored issues, use the --include-ignores option.
                                                             
 
-
 ---
 
 [TestPresenterLocalFinding_MediumHighIssuesWithColor - 1]
 
-Testing /path/to/project ...
+[1mTesting /path/to/project ...[0m
 
-Open Issues
+[1mOpen Issues[0m
 
 [93m ✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
    Path: app.js, line 63
@@ -265,19 +240,9 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-Ignored Issues
 
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 ╭────────────────────────────────────────────────────╮
-│ Test Summary                                       │
+│ [1mTest Summary[0m                                       │
 │                                                    │
 │   Organization:      test-org                      │
 │   Test type:         Static code analysis          │
@@ -292,15 +257,14 @@ Ignored Issues
 
    To view ignored issues, use the --include-ignores option.
                                                             
-
 
 ---
 
 [TestPresenterLocalFinding_MediumHighIssuesWithColorLight - 1]
 
-Testing /path/to/project ...
+[1mTesting /path/to/project ...[0m
 
-Open Issues
+[1mOpen Issues[0m
 
 [93m ✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
    Path: app.js, line 63
@@ -339,19 +303,9 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-Ignored Issues
 
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 ╭────────────────────────────────────────────────────╮
-│ Test Summary                                       │
+│ [1mTest Summary[0m                                       │
 │                                                    │
 │   Organization:      test-org                      │
 │   Test type:         Static code analysis          │
@@ -367,33 +321,19 @@ Ignored Issues
    To view ignored issues, use the --include-ignores option.
                                                             
 
-
 ---
 
 [TestPresenterLocalFinding_NoIssues - 1]
 
-Testing path/to/project ...
-
-Open Issues
+Testing /path/to/project ...
 
 
-Ignored Issues
-
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 ╭──────────────────────────────────────────────╮
 │ Test Summary                                 │
 │                                              │
-│   Organization:                              │
+│   Organization:      test-org                │
 │   Test type:         Static code analysis    │
-│   Project path:      path/to/project         │
+│   Project path:      /path/to/project        │
 │                                              │
 │   Total issues:   0                          │
 ╰──────────────────────────────────────────────╯
@@ -402,7 +342,6 @@ Ignored Issues
 
    To view ignored issues, use the --include-ignores option.
                                                             
-
 
 ---
 
@@ -429,24 +368,15 @@ Open Issues
    Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
 
 
-Ignored Issues
 
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 
     
 💡 Tip
 
    You are currently viewing results with --severity-threshold applied.
    To view all issues, remove the --severity-threshold flag            
-                                                                       ╭──────────────────────────────────────────────╮
+                                                                       
+╭──────────────────────────────────────────────╮
 │ Test Summary                                 │
 │                                              │
 │   Organization:      test-org                │
@@ -463,7 +393,6 @@ Ignored Issues
    To view ignored issues, use the --include-ignores option.
                                                             
 
-
 ---
 
 [TestPresenterLocalFinding_with_Issues - 1]
@@ -477,17 +406,7 @@ Open Issues
    Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
 
 
-Ignored Issues
 
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 ╭────────────────────────────────────────────────────────────────╮
 │ Test Summary                                                   │
 │                                                                │
@@ -505,7 +424,6 @@ Ignored Issues
    To view ignored issues, use the --include-ignores option.
                                                             
 
-
 ---
 
 [TestPresenterLocalFinding_with_severityFilter - 1]
@@ -519,24 +437,15 @@ Open Issues
    Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
 
 
-Ignored Issues
 
-
-    There are no ignored issues
-
-
-💡 Tip
-
-   Ignores are currently managed in the Snyk Web UI.              
-   To edit or remove the ignore please go to: https://app.snyk.io/
-                                                                  
 
     
 💡 Tip
 
    You are currently viewing results with --severity-threshold applied.
    To view all issues, remove the --severity-threshold flag            
-                                                                       ╭───────────────────────────────────────────────╮
+                                                                       
+╭───────────────────────────────────────────────╮
 │ Test Summary                                  │
 │                                               │
 │   Organization:                               │
@@ -552,6 +461,5 @@ Ignored Issues
 
    To view ignored issues, use the --include-ignores option.
                                                             
-
 
 ---

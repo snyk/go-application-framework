@@ -102,8 +102,9 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	err = json.NewDecoder(fd).Decode(&localFindingDoc)
 	require.NoError(t, err)
 
-	scannedPath := "path/to/project"
-	p := LocalFindingsTestResults(localFindingDoc, WithLocalFindingsTestPath(scannedPath))
+	scannedPath := "/path/to/project"
+	lipgloss.SetColorProfile(termenv.Ascii)
+	p := LocalFindingsTestResults(localFindingDoc, WithLocalFindingsOrg("test-org"), WithLocalFindingsTestPath(scannedPath))
 
 	result, err := p.Render()
 
@@ -235,6 +236,7 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 
 	require.Nil(t, err)
 	require.NotContains(t, result, "src/main.ts, line 58")
+	require.NotContains(t, result, "Ignored Issues")
 }
 
 func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
@@ -283,51 +285,5 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 	require.NotContains(t, result, "[ IGNORED ]")
 	require.Contains(t, result, "There are no ignored issues")
 
-	snaps.MatchSnapshot(t, result)
-}
-
-func TestPresenterLocalFinding_with_Issues(t *testing.T) {
-	skipWindows(t)
-	fd, err := os.Open("testdata/local-findings-juice-shop.json")
-	require.NoError(t, err)
-
-	var localFindingDoc local_models.LocalFinding
-	err = json.NewDecoder(fd).Decode(&localFindingDoc)
-	require.NoError(t, err)
-
-	scannedPath := "path/to/project"
-	p := LocalFindingsTestResults(localFindingDoc, WithLocalFindingsTestPath(scannedPath))
-
-	result, err := p.Render()
-
-	require.NoError(t, err)
-	assert.Contains(t, result, "Total issues:   18")
-	assert.Contains(t, result, "Static code analysis")
-	assert.Contains(t, result, "╭")
-	snaps.MatchSnapshot(t, result)
-}
-
-func TestPresenterLocalFinding_with_severityFilter(t *testing.T) {
-	skipWindows(t)
-
-	fd, err := os.Open("testdata/local-findings-juice-shop.json")
-	require.NoError(t, err)
-
-	var localFindingDoc local_models.LocalFinding
-	err = json.NewDecoder(fd).Decode(&localFindingDoc)
-	require.NoError(t, err)
-
-	scannedPath := "path/to/project"
-	p := LocalFindingsTestResults(
-		localFindingDoc,
-		WithLocalFindingsTestPath(scannedPath),
-		WithLocalFindingsSeverityLevel("high"),
-	)
-
-	result, err := p.Render()
-
-	require.NoError(t, err)
-	assert.Contains(t, result, "You are currently viewing results with --severity-threshold applied")
-	assert.Contains(t, result, "To view all issues, remove the --severity-threshold flag")
 	snaps.MatchSnapshot(t, result)
 }

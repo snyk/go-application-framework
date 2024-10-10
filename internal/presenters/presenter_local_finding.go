@@ -246,6 +246,7 @@ func AddTemplateFuncs(t *template.Template) {
 			return RenderTip(s + "\n")
 		},
 		"divider": RenderDivider,
+		"title":   RenderTitle,
 	}
 	t.Funcs(fnMap)
 }

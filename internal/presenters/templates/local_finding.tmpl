@@ -1,4 +1,6 @@
-{{define "details" }}
+{{- define "details" }}
+{{- if gt ($.OpenFindings | len) 0 }}{{ "Open Issues" | title }}
+
     {{- range $current_severity := $.Order }}
         {{- range $finding := $.OpenFindings}}
             {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
@@ -6,10 +8,11 @@
             {{- end }}
         {{- end }}
     {{- end }}
+{{- end }}
 {{- if .ShowDivider}}{{divider}}{{- end}}
-Ignored Issues
+{{- if $.ShowIgnored }}{{"Ignored Issues" | title }}
 
-{{if gt ($.IgnoredFindings | len) 0 }}
+{{- if gt ($.IgnoredFindings | len) 0 }}
     {{- range $current_severity := $.Order }}
         {{- range $finding := $.IgnoredFindings}}
             {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
@@ -17,20 +20,15 @@ Ignored Issues
             {{- end }}
         {{- end }}
     {{- end }}
-{{else}}
-    There are no ignored issues
-{{end}}
+{{- else}}  There are no ignored issues{{- end}}
 {{tip "Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/"}}
-{{end}}
+{{- end}}{{- end}}{{/* end "details" */}}
 
 {{define "header" }}
-Testing {{.Summary.TestPath}} ...
-
-Open Issues
-
+{{ print "Testing " .Summary.TestPath " ..." | bold }}
 {{end }}
 
-{{define "summary"}}Test Summary
+{{define "summary"}}{{ "Test Summary" | bold }}
 
   Organization:      {{.Summary.Org}}
   Test type:         {{.Summary.Type}}
@@ -44,16 +42,13 @@ Open Issues
 {{- template "header"  . }}
 {{- template "details" . }}
 
-{{- if $.SeverityFilter }}
-    {{tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
-{{- end }}{{- box (renderToString "summary" .)}}
-
-
+{{ if $.SeverityFilter }}
+    {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
+{{ end }}{{- box (renderToString "summary" .)}}
 
 {{- if eq $.ShowIgnored false }}
     {{tip "To view ignored issues, use the --include-ignores option."}}
 {{- end }}
-
 {{end }} {{/* end main */}}
 
 {{template "main" . }}
