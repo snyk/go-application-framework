@@ -6,7 +6,7 @@
             {{- end }}
         {{- end }}
     {{- end }}
-
+{{- if .ShowDivider}}{{divider}}{{- end}}
 Ignored Issues
 
 {{if gt ($.IgnoredFindings | len) 0 }}
@@ -40,20 +40,20 @@ Open Issues
   Ignored issues: {{ .Summary.IgnoredIssueCountWithSeverities }}
   Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}{{end}}
 
-{{- define "main" }}
+{{define "main" }}
 {{- template "header"  . }}
 {{- template "details" . }}
 
-{{if $.SeverityFilter }}
+{{- if $.SeverityFilter }}
     {{tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
-{{end }}
+{{- end }}{{- box (renderToString "summary" .)}}
 
-{{- box (renderToString "summary" .)}}
+
 
 {{- if eq $.ShowIgnored false }}
     {{tip "To view ignored issues, use the --include-ignores option."}}
 {{- end }}
 
-{{- end }}
+{{end }} {{/* end main */}}
 
-{{- template "main" . }}
+{{template "main" . }}

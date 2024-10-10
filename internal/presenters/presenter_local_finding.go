@@ -172,6 +172,7 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 		OpenFindings    []*PresentationFindingResource
 		IgnoredFindings []*PresentationFindingResource
 		ShowIgnored     bool
+		ShowDivider     bool
 		SeverityFilter  string
 	}{
 		Summary:         sum,
@@ -180,12 +181,18 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 		OpenFindings:    filteredFindings.OpenFindings,
 		IgnoredFindings: filteredFindings.IgnoredFindings,
 		ShowIgnored:     p.ShowIgnored,
+		ShowDivider:     shouldShowDivider(filteredFindings, p.ShowIgnored),
 		SeverityFilter:  p.SeverityMinLevel,
 	})
 	if err != nil {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func shouldShowDivider(findings FilteredFindings, showIgnored bool) bool {
+	hasFindings := len(findings.OpenFindings) > 0 && len(findings.IgnoredFindings) > 0
+	return hasFindings || showIgnored
 }
 
 func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnored bool) (filtered FilteredFindings) {
@@ -238,6 +245,7 @@ func AddTemplateFuncs(t *template.Template) {
 		"tip": func(s string) string {
 			return RenderTip(s + "\n")
 		},
+		"divider": RenderDivider,
 	}
 	t.Funcs(fnMap)
 }

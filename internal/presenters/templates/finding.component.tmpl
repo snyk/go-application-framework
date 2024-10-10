@@ -1,12 +1,11 @@
-{{define "finding"}}
-   {{if $.IsIgnored }}! [ IGNORED ]{{else}}{{end}}{{- (renderToString "severity" . | toUpperCase | renderInSeverityColor )}} {{print .Attributes.Message.Header | bold}}
-   {{- range $location := $.Attributes.Locations}}
-       {{- if $location.SourceLocations}}
+{{define "finding"}}{{if $.IsIgnored }} ! [ IGNORED ]{{else}}{{end}}{{- (renderToString "severity" . | toUpperCase | renderInSeverityColor )}} {{print .Attributes.Message.Header | bold}}
+{{- range $location := $.Attributes.Locations}}
+   {{- if $location.SourceLocations}}
    Path: {{$location.SourceLocations.Filepath}}, line {{$location.SourceLocations.OriginalStartLine}}
-       {{- end }}
    {{- end }}
+{{- end }}
    Info: {{.Attributes.Message.Text}}
 
 {{end}}
 
-{{- define "severity"}}{{if $.IsIgnored }}{{else}}✗{{end}} [{{.Attributes.Rating.Severity.Value}}]{{end}}
+{{define "severity"}}{{if $.IsIgnored }}{{else}} ✗{{end}} [{{.Attributes.Rating.Severity.Value}}]{{end}}
