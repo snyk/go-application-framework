@@ -1,25 +1,17 @@
 {{- define "details" }}
 {{- if gt ($.OpenFindings | len) 0 }}{{ "Open Issues" | title }}
 
-    {{- range $current_severity := $.Order }}
         {{- range $finding := $.OpenFindings}}
-            {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
                 {{- renderToString "finding" $finding }}
-            {{- end }}
         {{- end }}
-    {{- end }}
 {{- end }}
 {{- if .ShowDivider}}{{divider}}{{- end}}
 {{- if $.ShowIgnored }}{{"Ignored Issues" | title }}
 
 {{- if gt ($.IgnoredFindings | len) 0 }}
-    {{- range $current_severity := $.Order }}
         {{- range $finding := $.IgnoredFindings}}
-            {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
                 {{- renderToString "finding" $finding }}
-            {{- end }}
         {{- end }}
-    {{- end }}
 {{- else}}  There are no ignored issues{{- end}}
 {{tip "Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/"}}
 {{- end}}{{- end}}{{/* end "details" */}}

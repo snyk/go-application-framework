@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"errors"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -163,12 +164,10 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	buf := new(bytes.Buffer)
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
-	filteredFindings := filterOutIgnoredFindings(p.Input.Findings, p.ShowIgnored)
+	filteredFindings := filterOutIgnoredFindings(p.Input.Findings, p.ShowIgnored, []string{"low", "medium", "high"})
 
 	err = mainTmpl.Execute(buf, struct {
-		Summary         SummaryData               `json:"summary"`
-		Results         local_models.LocalFinding `json:"results"`
-		Order           []string
+		Summary         SummaryData `json:"summary"`
 		OpenFindings    []*PresentationFindingResource
 		IgnoredFindings []*PresentationFindingResource
 		ShowIgnored     bool
@@ -176,8 +175,6 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 		SeverityFilter  string
 	}{
 		Summary:         sum,
-		Results:         p.Input,
-		Order:           []string{"low", "medium", "high"},
 		OpenFindings:    filteredFindings.OpenFindings,
 		IgnoredFindings: filteredFindings.IgnoredFindings,
 		ShowIgnored:     p.ShowIgnored,
@@ -195,7 +192,23 @@ func shouldShowDivider(findings FilteredFindings, showIgnored bool) bool {
 	return hasFindings || showIgnored
 }
 
-func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnored bool) (filtered FilteredFindings) {
+func sortFindings(findings []*PresentationFindingResource, order []string) []*PresentationFindingResource {
+	result := make([]*PresentationFindingResource, 0, len(findings))
+
+	result = append(result, findings...)
+
+	slices.SortFunc(result, func(a, b *PresentationFindingResource) int {
+		if a.Attributes.Rating.Severity.Value != b.Attributes.Rating.Severity.Value {
+			return slices.Index(order, string(a.Attributes.Rating.Severity.Value)) - slices.Index(order, string(b.Attributes.Rating.Severity.Value))
+		}
+
+		return 0
+	})
+
+	return result
+}
+
+func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnored bool, sortOrder []string) (filtered FilteredFindings) {
 	for _, finding := range findings {
 		if finding.Attributes.Suppression == nil {
 			filtered.OpenFindings = append(filtered.OpenFindings, &PresentationFindingResource{FindingResource: finding})
@@ -203,6 +216,9 @@ func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnor
 			filtered.IgnoredFindings = append(filtered.IgnoredFindings, &PresentationFindingResource{FindingResource: finding})
 		}
 	}
+
+	filtered.OpenFindings = sortFindings(filtered.OpenFindings, sortOrder)
+	filtered.IgnoredFindings = sortFindings(filtered.IgnoredFindings, sortOrder)
 	return filtered
 }
 
