@@ -10,4 +10,3 @@
 {{end}}
 
 {{- define "severity"}}{{if $.IsIgnored }}{{else}}✗{{end}} [{{.Attributes.Rating.Severity.Value}}]{{end}}
-{{- define "severityValue"}}{{.Attributes.Rating.Severity.Value}}{{end}}

@@ -235,6 +235,9 @@ func AddTemplateFuncs(t *template.Template) {
 		"toUpperCase":           strings.ToUpper,
 		"renderInSeverityColor": renderWithSeverity,
 		"bold":                  bold,
+		"tip": func(s string) string {
+			return RenderTip(s + "\n")
+		},
 	}
 	t.Funcs(fnMap)
 }

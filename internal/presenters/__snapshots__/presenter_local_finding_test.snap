@@ -37,8 +37,13 @@ Ignored Issues
 
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -81,8 +86,13 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -125,8 +135,13 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -138,12 +153,11 @@ Ignored Issues
 │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
 │   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---
 
 [TestPresenterLocalFinding_MediumHighIssues - 1]
@@ -205,8 +219,13 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -218,12 +237,11 @@ Ignored Issues
 │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
 │   Open issues:    9 [ 4 HIGH  5 MEDIUM  0 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---
 
 [TestPresenterLocalFinding_MediumHighIssuesWithColor - 1]
@@ -285,8 +303,13 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -298,12 +321,11 @@ Ignored Issues
 │   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]    │
 │   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---
 
 [TestPresenterLocalFinding_MediumHighIssuesWithColorLight - 1]
@@ -365,8 +387,13 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭────────────────────────────────────────────────────╮
 │ Test Summary                                       │
 │                                                    │
@@ -378,12 +405,11 @@ Ignored Issues
 │   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]    │
 │   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---
 
 [TestPresenterLocalFinding_NoIssues - 1]
@@ -400,8 +426,13 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭──────────────────────────────────────────────╮
 │ Test Summary                                 │
 │                                              │
@@ -411,12 +442,11 @@ Ignored Issues
 │                                              │
 │   Total issues:   0                          │
 ╰──────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---
 
 [TestPresenterLocalFinding_SeverityThresholdHighIssues - 1]
@@ -453,13 +483,20 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
 💡 Tip
 
-    You are currently viewing results with --severity-threshold applied.
-    To view all issues, remove the --severity-threshold flag
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
 
+
+
+    
+💡 Tip
+
+   You are currently viewing results with --severity-threshold applied.
+   To view all issues, remove the --severity-threshold flag            
+                                                                       
 ╭──────────────────────────────────────────────╮
 │ Test Summary                                 │
 │                                              │
@@ -471,12 +508,11 @@ Ignored Issues
 │   Ignored issues: 0 [ 0 HIGH ]               │
 │   Open issues:    4 [ 4 HIGH ]               │
 ╰──────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---
 
 [TestPresenterLocalFinding_with_Issues - 1]
@@ -498,8 +534,13 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+
 ╭────────────────────────────────────────────────────────────────╮
 │ Test Summary                                                   │
 │                                                                │
@@ -511,12 +552,11 @@ Ignored Issues
 │   Ignored issues: 3 [ 0 CRITICAL  2 HIGH  1 MEDIUM  0 LOW ]    │
 │   Open issues:    5 [ 1 CRITICAL  3 HIGH  1 MEDIUM  0 LOW ]    │
 ╰────────────────────────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---
 
 [TestPresenterLocalFinding_with_severityFilter - 1]
@@ -538,13 +578,20 @@ Ignored Issues
     There are no ignored issues
 
 
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
 💡 Tip
 
-    You are currently viewing results with --severity-threshold applied.
-    To view all issues, remove the --severity-threshold flag
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
 
+
+
+    
+💡 Tip
+
+   You are currently viewing results with --severity-threshold applied.
+   To view all issues, remove the --severity-threshold flag            
+                                                                       
 ╭───────────────────────────────────────────────╮
 │ Test Summary                                  │
 │                                               │
@@ -556,10 +603,9 @@ Ignored Issues
 │   Ignored issues: 2 [ 0 CRITICAL  2 HIGH ]    │
 │   Open issues:    4 [ 1 CRITICAL  3 HIGH ]    │
 ╰───────────────────────────────────────────────╯
-
+    
 💡 Tip
 
-    To view ignored issues, use the --include-ignores option.
-
-
+   To view ignored issues, use the --include-ignores option.
+                                                            
 ---

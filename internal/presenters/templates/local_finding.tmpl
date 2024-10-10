@@ -20,9 +20,7 @@ Ignored Issues
 {{else}}
     There are no ignored issues
 {{end}}
-
-    Ignores are currently managed in the Snyk Web UI.
-    To edit or remove the ignore please go to: https://app.snyk.io/
+{{tip "Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/"}}
 {{end}}
 
 {{define "header" }}
@@ -42,33 +40,18 @@ Open Issues
   Ignored issues: {{ .Summary.IgnoredIssueCountWithSeverities }}
   Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}{{end}}
 
-{{define "showSeverityFilterTip"}}💡 Tip
-
-    You are currently viewing results with --severity-threshold applied.
-    To view all issues, remove the --severity-threshold flag
-
-{{ end }}
-
-{{define "showIgnoredTip"}}
-
-💡 Tip
-
-    To view ignored issues, use the --include-ignores option.
-
-{{ end }}
-
 {{- define "main" }}
 {{- template "header"  . }}
 {{- template "details" . }}
 
-{{- if $.SeverityFilter }}
-    {{- template "showSeverityFilterTip" }}
-{{- end }}
+{{if $.SeverityFilter }}
+    {{tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
+{{end }}
 
 {{- box (renderToString "summary" .)}}
 
 {{- if eq $.ShowIgnored false }}
-    {{- template "showIgnoredTip" }}
+    {{tip "To view ignored issues, use the --include-ignores option."}}
 {{- end }}
 
 {{- end }}
