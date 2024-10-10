@@ -1,32 +1,4 @@
 
-[Test_RenderError/without_links - 1]
-
-[41m [0m[97;41mERROR[0m[41m [0m  [1mClient request cannot be processed (SNYK-0003)[0m
-Info:    A short error description                                                      
-HTTP:    400 
----
-
-[Test_RenderError/with_links - 1]
-
-[41m [0m[97;41mERROR[0m[41m [0m  [1mRequest not fulfilled due to server error (SNYK-9999)[0m
-Info:    An error                                                                       
-HTTP:    500 
-Help:    https://status.snyk.io/                                                                                                       
-         https://docs.snyk.io/getting-started/supported-languages-frameworks-and-feature-availability-overview#code-analysis-snyk-code 
----
-
-[Test_RenderError/colors_for_severity_warn - 1]
-
-[43m [0m[30;43mWARN[0m[43m [0m   [1mService temporarily throttled (SNYK-0001)[0m
-HTTP:    429 
----
-
-[Test_RenderError/colors_for_severity_warn - 2]
-
-[43m [0m[30;43mWARN[0m[43m [0m   [1mService temporarily throttled (SNYK-0001)[0m
-HTTP:    429 
----
-
 [Test_RenderError/colors_for_severity_error - 1]
 
 [41m [0m[97;41mERROR[0m[41m [0m  [1mService temporarily throttled (SNYK-0001)[0m
@@ -49,4 +21,32 @@ HTTP:    429
 
 [41m [0m[97;41mFATAL[0m[41m [0m  [1mService temporarily throttled (SNYK-0001)[0m
 HTTP:    429 
+---
+
+[Test_RenderError/colors_for_severity_warn - 1]
+
+[43m [0m[30;43mWARN[0m[43m [0m   [1mService temporarily throttled (SNYK-0001)[0m
+HTTP:    429 
+---
+
+[Test_RenderError/colors_for_severity_warn - 2]
+
+[43m [0m[30;43mWARN[0m[43m [0m   [1mService temporarily throttled (SNYK-0001)[0m
+HTTP:    429 
+---
+
+[Test_RenderError/with_links - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mRequest not fulfilled due to server error (SNYK-9999)[0m
+Info:    An error                                                                       
+HTTP:    500 
+Help:    https://status.snyk.io/                                                                                                       
+         https://docs.snyk.io/getting-started/supported-languages-frameworks-and-feature-availability-overview#code-analysis-snyk-code 
+---
+
+[Test_RenderError/without_links - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mClient request cannot be processed (SNYK-0003)[0m
+Info:    A short error description                                                      
+HTTP:    400 
 ---
