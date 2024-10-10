@@ -1,96 +1,410 @@
 
+[TestPresenterLocalFinding_IncludeIgnored - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [LOW] Hardcoded Secret
+   Path: test/service-tests/service-utils/knex.service-spec.ts, line 72
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+ ✗ [LOW] Hardcoded Secret
+   Path: test/service-tests/service-utils/knex.service-spec.ts, line 76
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+ ✗ [MEDIUM] Cleartext Transmission of Sensitive Information
+   Path: src/main.ts, line 59
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+ ✗ [HIGH] Hardcoded Secret
+   Path: scripts/db/migrations/20230811153738_add_generated_grouping_columns_to_collections_table.ts, line 4
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+─────────────────────────────────────────────────────
+
+Ignored Issues
+
+ ! [ IGNORED ] [MEDIUM] Cleartext Transmission of Sensitive Information
+   Path: src/main.ts, line 58
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+
+
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   5                                │
+│   Ignored issues: 1 [ 0 HIGH  1 MEDIUM  0 LOW ]    │
+│   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]    │
+╰────────────────────────────────────────────────────╯
+
+---
+
+[TestPresenterLocalFinding_IncludeIgnoredEmpty - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [LOW] Use of Hardcoded Credentials
+   Path: pkg/analytics/analytics_test.go, line 248
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] Use of Hardcoded Credentials
+   Path: internal/api/api_test.go, line 159
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] Use of Password Hash With Insufficient Computational Effort
+   Path: pkg/analytics/analytics.go, line 230
+   Info: The SHA1 hash (used in crypto.sha1.New) is insecure. Consider changing it to a secure hash algorithm
+
+─────────────────────────────────────────────────────
+
+Ignored Issues
+
+  There are no ignored issues
+
+💡 Tip
+
+   Ignores are currently managed in the Snyk Web UI.              
+   To edit or remove the ignore please go to: https://app.snyk.io/
+                                                                  
+
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   3                                │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
+│   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
+╰────────────────────────────────────────────────────╯
+
+---
+
+[TestPresenterLocalFinding_LowIssues - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [LOW] Use of Hardcoded Credentials
+   Path: pkg/analytics/analytics_test.go, line 248
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] Use of Hardcoded Credentials
+   Path: internal/api/api_test.go, line 159
+   Info: Do not hardcode credentials in code. Found hardcoded credential used in Username.
+
+ ✗ [LOW] Use of Password Hash With Insufficient Computational Effort
+   Path: pkg/analytics/analytics.go, line 230
+   Info: The SHA1 hash (used in crypto.sha1.New) is insecure. Consider changing it to a secure hash algorithm
+
+
+
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   3                                │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
+│   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
+╰────────────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
+---
+
+[TestPresenterLocalFinding_MediumHighIssues - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [MEDIUM] Cleartext Transmission of Sensitive Information
+   Path: app.js, line 63
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+ ✗ [MEDIUM] Information Exposure
+   Path: app.js, line 23
+   Info: Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.
+
+ ✗ [MEDIUM] Allocation of Resources Without Limits or Throttling
+   Path: routes/index.js, line 69
+   Info: This endpoint handler performs a system command execution and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.
+
+ ✗ [MEDIUM] Cross-Site Request Forgery (CSRF)
+   Path: app.js, line 23
+   Info: CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.
+
+ ✗ [MEDIUM] Use of Hardcoded Credentials
+   Path: db.js, line 30
+   Info: Do not hardcode passwords in code. Found hardcoded password used in password.
+
+ ✗ [HIGH] Hardcoded Secret
+   Path: app.js, line 60
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 31
+   Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 108
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 136
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+
+
+╭────────────────────────────────────────────────────╮
+│ Test Summary                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   9                                │
+│   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
+│   Open issues:    9 [ 4 HIGH  5 MEDIUM  0 LOW ]    │
+╰────────────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
+---
+
+[TestPresenterLocalFinding_MediumHighIssuesWithColor - 1]
+
+[1mTesting /path/to/project ...[0m
+
+[1mOpen Issues[0m
+
+[93m ✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
+   Path: app.js, line 63
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+[93m ✗ [MEDIUM][0m [1mInformation Exposure[0m
+   Path: app.js, line 23
+   Info: Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.
+
+[93m ✗ [MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
+   Path: routes/index.js, line 69
+   Info: This endpoint handler performs a system command execution and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.
+
+[93m ✗ [MEDIUM][0m [1mCross-Site Request Forgery (CSRF)[0m
+   Path: app.js, line 23
+   Info: CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.
+
+[93m ✗ [MEDIUM][0m [1mUse of Hardcoded Credentials[0m
+   Path: db.js, line 30
+   Info: Do not hardcode passwords in code. Found hardcoded password used in password.
+
+[91m ✗ [HIGH][0m [1mHardcoded Secret[0m
+   Path: app.js, line 60
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
+   Path: routes/index.js, line 31
+   Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
+   Path: routes/index.js, line 108
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
+   Path: routes/index.js, line 136
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+
+
+╭────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   9                                │
+│   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]    │
+│   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]    │
+╰────────────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
+---
+
+[TestPresenterLocalFinding_MediumHighIssuesWithColorLight - 1]
+
+[1mTesting /path/to/project ...[0m
+
+[1mOpen Issues[0m
+
+[93m ✗ [MEDIUM][0m [1mCleartext Transmission of Sensitive Information[0m
+   Path: app.js, line 63
+   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
+
+[93m ✗ [MEDIUM][0m [1mInformation Exposure[0m
+   Path: app.js, line 23
+   Info: Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.
+
+[93m ✗ [MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
+   Path: routes/index.js, line 69
+   Info: This endpoint handler performs a system command execution and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.
+
+[93m ✗ [MEDIUM][0m [1mCross-Site Request Forgery (CSRF)[0m
+   Path: app.js, line 23
+   Info: CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.
+
+[93m ✗ [MEDIUM][0m [1mUse of Hardcoded Credentials[0m
+   Path: db.js, line 30
+   Info: Do not hardcode passwords in code. Found hardcoded password used in password.
+
+[91m ✗ [HIGH][0m [1mHardcoded Secret[0m
+   Path: app.js, line 60
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
+   Path: routes/index.js, line 31
+   Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
+   Path: routes/index.js, line 108
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+[91m ✗ [HIGH][0m [1mNoSQL Injection[0m
+   Path: routes/index.js, line 136
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+
+
+╭────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                       │
+│                                                    │
+│   Organization:      test-org                      │
+│   Test type:         Static code analysis          │
+│   Project path:      /path/to/project              │
+│                                                    │
+│   Total issues:   9                                │
+│   Ignored issues: [1m0[0m [[91m 0 HIGH [0m[93m 0 MEDIUM [0m 0 LOW ]    │
+│   Open issues:    [1m9[0m [[91m 4 HIGH [0m[93m 5 MEDIUM [0m 0 LOW ]    │
+╰────────────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
+---
+
+[TestPresenterLocalFinding_NoIssues - 1]
+
+Testing /path/to/project ...
+
+
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   0                          │
+╰──────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
+---
+
+[TestPresenterLocalFinding_SeverityThresholdHighIssues - 1]
+
+Testing /path/to/project ...
+
+Open Issues
+
+ ✗ [HIGH] Hardcoded Secret
+   Path: app.js, line 60
+   Info: Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 31
+   Info: Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 108
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+ ✗ [HIGH] NoSQL Injection
+   Path: routes/index.js, line 136
+   Info: Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.
+
+
+
+
+    
+💡 Tip
+
+   You are currently viewing results with --severity-threshold applied.
+   To view all issues, remove the --severity-threshold flag            
+                                                                       
+╭──────────────────────────────────────────────╮
+│ Test Summary                                 │
+│                                              │
+│   Organization:      test-org                │
+│   Test type:         Static code analysis    │
+│   Project path:      /path/to/project        │
+│                                              │
+│   Total issues:   4                          │
+│   Ignored issues: 0 [ 0 HIGH ]               │
+│   Open issues:    4 [ 4 HIGH ]               │
+╰──────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
+---
+
 [TestPresenterLocalFinding_with_Issues - 1]
 
 Testing path/to/project ...
 
 Open Issues
 
-[91m✗ [HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
+ ✗ [HIGH] Server-Side Request Forgery (SSRF)
    Path: routes/profileImageUrlUpload.ts, line 22
    Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
 
-
-╭────────────────────────────────────────────────────────────────╮
-│ Test Summary                                                   │
-│                                                                │
-│   Organization:                                                │
-│   Test type:         Static code analysis                      │
-│   Project path:      path/to/project                           │
-│                                                                │
-│   Total issues:   18                                           │
-│   Ignored issues: [1m3[0m [ 0 CRITICAL [91m 2 HIGH [0m[93m 1 MEDIUM [0m 0 LOW ]    │
-│   Open issues:    [1m5[0m [ 1 CRITICAL [91m 3 HIGH [0m[93m 1 MEDIUM [0m 0 LOW ]    │
-╰────────────────────────────────────────────────────────────────╯
-
-💡 Tip
-
-    To view ignored issues, use the --include-ignores option.
-
-
----
-
-[TestBoxStyle - 1]
-╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ [91m✗ [HIGH][0m [1mCleartext Transmission of Sensitive Information[0m                                                                                                                                                                                                                        │
-│    Path: node_modules/qs/support/expresso/test/http.test.js, line 1                                                                                                                                                                                                             │
-│    Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.    │
-│                                                                                                                                                                                                                                                                                 │
-│                                                                                                                                                                                                                                                                                 │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
----
-
-[TestFindingComponent - 1]
-[91m✗ [HIGH][0m [1mCleartext Transmission of Sensitive Information[0m
-   Path: node_modules/qs/support/expresso/test/http.test.js, line 1
-   Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
-
-
----
-
-[TestPresenterLocalFinding_with_severityFilter - 1]
-
-Testing path/to/project ...
-
-Open Issues
-
-[91m✗ [HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
-   Path: routes/profileImageUrlUpload.ts, line 22
-   Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
-
-
-💡 Tip
-
-    You are currently viewing results with --severity-threshold applied.
-    To view all issues, remove the --severity-threshold flag
-
-╭───────────────────────────────────────────────╮
-│ Test Summary                                  │
-│                                               │
-│   Organization:                               │
-│   Test type:         Static code analysis     │
-│   Project path:      path/to/project          │
-│                                               │
-│   Total issues:   11                          │
-│   Ignored issues: [1m2[0m [ 0 CRITICAL [91m 2 HIGH [0m]    │
-│   Open issues:    [1m4[0m [ 1 CRITICAL [91m 3 HIGH [0m]    │
-╰───────────────────────────────────────────────╯
-
-💡 Tip
-
-    To view ignored issues, use the --include-ignores option.
-
-
----
-
-[TestPresenterLocalFinding_with_ignored - 1]
-
-Testing path/to/project ...
-
-Open Issues
-
-✗ [HIGH] Server-Side Request Forgery (SSRF)
-   Path: routes/profileImageUrlUpload.ts, line 22
-   Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
 
 
 ╭────────────────────────────────────────────────────────────────╮
@@ -104,28 +418,48 @@ Open Issues
 │   Ignored issues: 3 [ 0 CRITICAL  2 HIGH  1 MEDIUM  0 LOW ]    │
 │   Open issues:    5 [ 1 CRITICAL  3 HIGH  1 MEDIUM  0 LOW ]    │
 ╰────────────────────────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
 ---
 
-[TestPresenterLocalFinding_with_includeIgnores - 1]
+[TestPresenterLocalFinding_with_severityFilter - 1]
 
 Testing path/to/project ...
 
 Open Issues
 
-[91m✗ [HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
+ ✗ [HIGH] Server-Side Request Forgery (SSRF)
    Path: routes/profileImageUrlUpload.ts, line 22
    Info: Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.
 
 
-╭────────────────────────────────────────────────────────────────╮
-│ Test Summary                                                   │
-│                                                                │
-│   Organization:                                                │
-│   Test type:         Static code analysis                      │
-│   Project path:      path/to/project                           │
-│                                                                │
-│   Total issues:   18                                           │
-│   Ignored issues: [1m3[0m [ 0 CRITICAL [91m 2 HIGH [0m[93m 1 MEDIUM [0m 0 LOW ]    │
-│   Open issues:    [1m5[0m [ 1 CRITICAL [91m 3 HIGH [0m[93m 1 MEDIUM [0m 0 LOW ]    │
-╰────────────────────────────────────────────────────────────────╯
+
+
+    
+💡 Tip
+
+   You are currently viewing results with --severity-threshold applied.
+   To view all issues, remove the --severity-threshold flag            
+                                                                       
+╭───────────────────────────────────────────────╮
+│ Test Summary                                  │
+│                                               │
+│   Organization:                               │
+│   Test type:         Static code analysis     │
+│   Project path:      path/to/project          │
+│                                               │
+│   Total issues:   11                          │
+│   Ignored issues: 2 [ 0 CRITICAL  2 HIGH ]    │
+│   Open issues:    4 [ 1 CRITICAL  3 HIGH ]    │
+╰───────────────────────────────────────────────╯
+    
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
+
 ---

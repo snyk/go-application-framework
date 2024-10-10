@@ -1,0 +1,57 @@
+{
+  "findings": [
+    {
+      "attributes": {
+        "component": { "name": ".", "scan_type": "sast" },
+        "fingerprint": {
+          "scheme": "code-sast-v0",
+          "value": "dca15045.70dd3b3b.568208f0.d7919eeb.79a7d027.98c7c24d.df7e59ba.377cd288.6849fe68.b6e32c83.568208f0.08906714.79a7d027.98c7c24d.83265159.a41fb358"
+        },
+        "locations": [
+          {
+            "source_locations": {
+              "filepath": "routes/profileImageUrlUpload.ts",
+              "original_end_column": 15,
+              "original_end_line": 23,
+              "original_start_column": 30,
+              "original_start_line": 22
+            }
+          }
+        ],
+        "message": {
+          "arguments": [
+            "[the HTTP request body](0)",
+            "[flows](1),(2),(3),(4),(5)",
+            "[request.get](6)"
+          ],
+          "header": "Server-Side Request Forgery (SSRF)",
+          "markdown": "Unsanitized input from {0} {1} into {2}, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability.",
+          "text": "Unsanitized input from the HTTP request body flows into request.get, where it is used as an URL to perform a request. This may result in a Server-Side Request Forgery vulnerability."
+        },
+        "rating": {
+          "severity": { "value": "high" },
+          "severity_method": "CVSSv3"
+        },
+        "suppression": {
+          "justification": "It can not be justified.",
+          "kind": "ignored"
+        }
+      },
+      "id": "cbcfb0df-91ee-5928-bf1f-920329efabfb",
+      "relationships": {},
+      "type": "findings"
+    }
+  ],
+  "summary": {
+    "results": [
+      { "severity": "high", "total": 1, "open": 0, "ignored": 1 },
+      { "severity": "medium", "total": 0, "open": 0, "ignored": 0 },
+      { "severity": "low", "total": 0, "open": 0, "ignored": 0 },
+      { "severity": "critical", "total": 0, "open": 0, "ignored": 0 }
+    ],
+    "severity_order_asc": ["low", "medium", "high", "critical"],
+    "type": "sast",
+    "artifacts": 4
+  },
+  "outcome": { "result": "fail" }
+}

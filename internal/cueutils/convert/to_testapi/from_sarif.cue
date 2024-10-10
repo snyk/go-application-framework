@@ -140,7 +140,14 @@ _findings: list.Sort(list.Concat([ for run in input.runs {
                     }
                 }
             }]
+            if result.suppressions != _|_ {
+            	suppression: {
+            		kind: "ignored"
+	            	if len(result.suppressions) > 0 {
+  	          		justification: result.suppressions[0].justification,
+	            	}
+            	}
+            }
         }
-
     }]
 }]), { T: _, x: T, y: T, less: x.rating.severity.value < y.rating.severity.value })
