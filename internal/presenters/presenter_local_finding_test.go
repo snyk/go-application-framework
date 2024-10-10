@@ -110,6 +110,7 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "Testing "+scannedPath)
 	assert.NotContains(t, result, "Ignored issues")
+	snaps.MatchSnapshot(t, result)
 }
 
 func TestPresenterLocalFinding_LowIssues(t *testing.T) {
