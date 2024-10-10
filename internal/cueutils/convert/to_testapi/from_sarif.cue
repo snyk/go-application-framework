@@ -141,9 +141,9 @@ _findings: list.Sort(list.Concat([ for run in input.runs {
                 }
             }]
             if result.suppressions != _|_ {
-            	if result.suppressions[0].justification != _|_ {
-								suppression: {
-									kind: "other" // TODO: Hard-coded as this does not map well to kind|state fields from sarif
+            	suppression: {
+            		kind: "ignored"
+	            	if len(result.suppressions) > 0 {
   	          		justification: result.suppressions[0].justification,
 	            	}
             	}
