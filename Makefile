@@ -9,11 +9,13 @@ SHELL := env PATH=$(GO_BIN):$(PATH) $(SHELL)
 .PHONY: format
 format:
 	@echo "Formatting..."
+	@cue fmt internal/cueutils/**/**/*.cue internal/cueutils/**/*.cue
 	@gofmt -w -l -e .
 
 .PHONY: lint
 lint: $(GO_BIN)/golangci-lint
 	@echo "Linting..."
+	@cue fmt --all-errors --check internal/cueutils/**/**/*.cue internal/cueutils/**/*.cue
 	@./scripts/lint.sh
 	$(GO_BIN)/golangci-lint run ./...
 
