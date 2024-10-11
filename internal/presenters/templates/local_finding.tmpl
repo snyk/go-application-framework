@@ -1,21 +1,26 @@
-{{define "details" }}
-    {{- range $current_severity := $.Order }}
-        {{- range $finding := $.Results.Findings}}
-            {{- if eq $finding.Attributes.Rating.Severity.Value $current_severity }}
+{{- define "details" }}
+{{- if gt ($.OpenFindings | len) 0 }}{{ "Open Issues" | title }}
+
+        {{- range $finding := $.OpenFindings}}
                 {{- renderToString "finding" $finding }}
-            {{- end }}
         {{- end }}
-    {{- end }}
-{{end}}
+{{- end }}
+{{- if .ShowDivider}}{{divider}}{{- end}}
+{{- if $.ShowIgnored }}{{"Ignored Issues" | title }}
+
+{{- if gt ($.IgnoredFindings | len) 0 }}
+        {{- range $finding := $.IgnoredFindings}}
+                {{- renderToString "finding" $finding }}
+        {{- end }}
+{{- else}}  There are no ignored issues{{- end}}
+{{tip "Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/"}}
+{{- end}}{{- end}}{{/* end "details" */}}
 
 {{define "header" }}
-Testing {{.Summary.TestPath}} ...
-
-Open Issues
-
+{{ print "Testing " .Summary.TestPath " ..." | bold }}
 {{end }}
 
-{{define "summary"}}Test Summary
+{{define "summary"}}{{ "Test Summary" | bold }}
 
   Organization:      {{.Summary.Org}}
   Test type:         {{.Summary.Type}}
@@ -25,35 +30,17 @@ Open Issues
   Ignored issues: {{ .Summary.IgnoredIssueCountWithSeverities }}
   Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}{{end}}
 
-{{define "showSeverityFilterTip"}}💡 Tip
-
-    You are currently viewing results with --severity-threshold applied.
-    To view all issues, remove the --severity-threshold flag
-
-{{ end }}
-
-{{define "showIgnoredTip"}}
-
-💡 Tip
-
-    To view ignored issues, use the --include-ignores option.
-
-{{ end }}
-
-{{- define "main" }}
+{{define "main" }}
 {{- template "header"  . }}
 {{- template "details" . }}
 
-{{- if $.SeverityFilter }}
-    {{- template "showSeverityFilterTip" }}
-{{- end }}
-
-{{- box (renderToString "summary" .)}}
+{{ if $.SeverityFilter }}
+    {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
+{{ end }}{{- box (renderToString "summary" .)}}
 
 {{- if eq $.ShowIgnored false }}
-    {{- template "showIgnoredTip" }}
+    {{tip "To view ignored issues, use the --include-ignores option."}}
 {{- end }}
+{{end }} {{/* end main */}}
 
-{{- end }}
-
-{{- template "main" . }}
+{{template "main" . }}

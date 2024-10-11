@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"errors"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -23,6 +24,19 @@ type LocalFindingPresenter struct {
 type TemplatePathsStruct struct {
 	LocalFindingTemplate     string
 	FindingComponentTemplate string
+}
+
+type PresentationFindingResource struct {
+	local_models.FindingResource
+}
+
+func (pfr *PresentationFindingResource) IsIgnored() bool {
+	return pfr.Attributes.Suppression != nil
+}
+
+type FilteredFindings struct {
+	OpenFindings    []*PresentationFindingResource
+	IgnoredFindings []*PresentationFindingResource
 }
 
 // TemplatePaths is an instance of TemplatePathsStruct with the template paths.
@@ -150,23 +164,62 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 	buf := new(bytes.Buffer)
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
+	filteredFindings := filterOutIgnoredFindings(p.Input.Findings, p.ShowIgnored, []string{"low", "medium", "high"})
+
 	err = mainTmpl.Execute(buf, struct {
-		Summary        SummaryData               `json:"summary"`
-		Results        local_models.LocalFinding `json:"results"`
-		Order          []string
-		ShowIgnored    bool
-		SeverityFilter string
+		Summary         SummaryData `json:"summary"`
+		OpenFindings    []*PresentationFindingResource
+		IgnoredFindings []*PresentationFindingResource
+		ShowIgnored     bool
+		ShowDivider     bool
+		SeverityFilter  string
 	}{
-		Summary:        sum,
-		Results:        p.Input,
-		Order:          []string{"low", "medium", "high"},
-		ShowIgnored:    p.ShowIgnored,
-		SeverityFilter: p.SeverityMinLevel,
+		Summary:         sum,
+		OpenFindings:    filteredFindings.OpenFindings,
+		IgnoredFindings: filteredFindings.IgnoredFindings,
+		ShowIgnored:     p.ShowIgnored,
+		ShowDivider:     shouldShowDivider(filteredFindings, p.ShowIgnored),
+		SeverityFilter:  p.SeverityMinLevel,
 	})
 	if err != nil {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func shouldShowDivider(findings FilteredFindings, showIgnored bool) bool {
+	hasFindings := len(findings.OpenFindings) > 0 && len(findings.IgnoredFindings) > 0
+	return hasFindings || showIgnored
+}
+
+func sortFindings(findings []*PresentationFindingResource, order []string) []*PresentationFindingResource {
+	result := make([]*PresentationFindingResource, 0, len(findings))
+
+	result = append(result, findings...)
+
+	slices.SortFunc(result, func(a, b *PresentationFindingResource) int {
+		if a.Attributes.Rating.Severity.Value != b.Attributes.Rating.Severity.Value {
+			return slices.Index(order, string(a.Attributes.Rating.Severity.Value)) - slices.Index(order, string(b.Attributes.Rating.Severity.Value))
+		}
+
+		return 0
+	})
+
+	return result
+}
+
+func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnored bool, sortOrder []string) (filtered FilteredFindings) {
+	for _, finding := range findings {
+		if finding.Attributes.Suppression == nil {
+			filtered.OpenFindings = append(filtered.OpenFindings, &PresentationFindingResource{FindingResource: finding})
+		} else if showIgnored {
+			filtered.IgnoredFindings = append(filtered.IgnoredFindings, &PresentationFindingResource{FindingResource: finding})
+		}
+	}
+
+	filtered.OpenFindings = sortFindings(filtered.OpenFindings, sortOrder)
+	filtered.IgnoredFindings = sortFindings(filtered.IgnoredFindings, sortOrder)
+	return filtered
 }
 
 func renderTemplateToString(tmpl *template.Template) func(name string, data interface{}) (string, error) {
@@ -205,6 +258,11 @@ func AddTemplateFuncs(t *template.Template) {
 		"toUpperCase":           strings.ToUpper,
 		"renderInSeverityColor": renderWithSeverity,
 		"bold":                  bold,
+		"tip": func(s string) string {
+			return RenderTip(s + "\n")
+		},
+		"divider": RenderDivider,
+		"title":   RenderTitle,
 	}
 	t.Funcs(fnMap)
 }
