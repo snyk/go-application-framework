@@ -43,7 +43,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	}
 
 	var findingsModel local_models.LocalFinding
-	var summary json_schemas.TestSummary
+
 	var sarifInput workflow.Data
 	var summaryInput workflow.Data
 	var contentLocation string
@@ -63,23 +63,23 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		logger.Trace().Msg("incomplete input data for transformation")
 		return output, nil
 	}
-	findingsModel, err = transformSarifData(sarifInput)
-	if err != nil {
-		logger.Err(err).Msg(err.Error())
-		return output, err
-	}
+
 	summary_bytes, ok := summaryInput.GetPayload().([]byte)
 	if !ok {
 		logger.Err(nil).Msg("summary payload is not a byte array")
 		return output, nil
 	}
-	err = json.Unmarshal(summary_bytes, &summary)
-	if err != nil {
-		logger.Err(err).Msg("Failed to unmarshal test summary")
+	sarif_bytes, ok := sarifInput.GetPayload().([]byte)
+	if !ok {
 		return output, err
 	}
 
-	findingsModel.Summary = summary
+	findingsModel, err = TransformToLocalFindingModel(sarif_bytes, summary_bytes)
+	if err != nil {
+		logger.Err(err).Msg(err.Error())
+		return output, err
+	}
+
 	bytes, err := json.Marshal(findingsModel)
 	if err != nil {
 		return output, err
@@ -95,13 +95,14 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	return output, nil
 }
 
-func transformSarifData(singleData workflow.Data) (localFinding local_models.LocalFinding, err error) {
-	jsonData, ok := singleData.GetPayload().([]byte)
-	if !ok {
+func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
+	var summary json_schemas.TestSummary
+	err = json.Unmarshal(summaryBytes, &summary)
+	if err != nil {
 		return localFinding, err
 	}
 
-	input, errUnJson := cuejson.Unmarshal(jsonData)
+	input, errUnJson := cuejson.Unmarshal(sarifBytes)
 	if errUnJson != nil {
 		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
@@ -133,6 +134,8 @@ func transformSarifData(singleData workflow.Data) (localFinding local_models.Loc
 	if encodeErr != nil {
 		return localFinding, fmt.Errorf("failed to convert to type: %w", encodeErr)
 	}
+
+	localFinding.Summary = summary
 
 	return localFinding, nil
 }

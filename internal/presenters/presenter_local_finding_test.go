@@ -1,21 +1,19 @@
-package presenters
+package presenters_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"runtime"
 	"testing"
 
-	"cuelang.org/go/cue/cuecontext"
-	cuejson "cuelang.org/go/pkg/encoding/json"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/muesli/termenv"
 	"github.com/snyk/code-client-go/sarif"
-	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
+	"github.com/snyk/go-application-framework/internal/presenters"
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,58 +37,20 @@ func sarifToLocalFinding(t *testing.T, filename string) (localFinding local_mode
 		jsonErr := jsonFile.Close()
 		assert.NoError(t, jsonErr)
 	}(jsonFile)
-	byteValue, err := io.ReadAll(jsonFile)
+	sarifBytes, err := io.ReadAll(jsonFile)
 	assert.NoError(t, err)
 
-	// Read sarif file again for sarif
+	// Read sarif file again for summary
 	var sarifDoc sarif.SarifDocument
 
-	err = json.Unmarshal(byteValue, &sarifDoc)
+	err = json.Unmarshal(sarifBytes, &sarifDoc)
 	assert.NoError(t, err)
-	if err != nil {
-		return local_models.LocalFinding{}, err
-	}
-
-	input, errUnJson := cuejson.Unmarshal(byteValue)
-	assert.NoError(t, errUnJson)
-
-	if errUnJson != nil {
-		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
-	}
-
-	ctx := cuecontext.New()
-	sarif2apiTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToTestApiFromSarif)
-	if transformerError != nil {
-		return localFinding, transformerError
-	}
-
-	api2cliTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToCliFromTestApi)
-	if transformerError != nil {
-		return localFinding, transformerError
-	}
-
-	apiOutput, applyError := sarif2apiTransformer.Apply(input)
-	if applyError != nil {
-		return localFinding, applyError
-	}
-
-	cliOutput, applyError := api2cliTransformer.ApplyValue(apiOutput)
-	if applyError != nil {
-		return localFinding, applyError
-	}
-
-	// Gate with validation before encoding?
-	encodeErr := cliOutput.Decode(&localFinding)
-
-	if encodeErr != nil {
-		return localFinding, fmt.Errorf("failed to convert to type: %w", encodeErr)
-	}
 
 	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc)
+	summaryBytes, err := json.Marshal(summaryData)
+	assert.NoError(t, err)
 
-	localFinding.Summary = *summaryData
-
-	return localFinding, nil
+	return localworkflows.TransformToLocalFindingModel(sarifBytes, summaryBytes)
 }
 
 func TestPresenterLocalFinding_NoIssues(t *testing.T) {
@@ -104,7 +64,9 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 
 	scannedPath := "/path/to/project"
 	lipgloss.SetColorProfile(termenv.Ascii)
-	p := LocalFindingsTestResults(localFindingDoc, WithLocalFindingsOrg("test-org"), WithLocalFindingsTestPath(scannedPath))
+	p := presenters.LocalFindingsTestResults(localFindingDoc,
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath(scannedPath))
 
 	result, err := p.Render()
 
@@ -121,10 +83,10 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	result, err := p.Render()
@@ -139,10 +101,10 @@ func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	result, err := p.Render()
@@ -160,10 +122,10 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	result, err := p.Render()
@@ -181,10 +143,10 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	lipgloss.SetHasDarkBackground(false)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	result, err := p.Render()
@@ -201,11 +163,11 @@ func TestPresenterLocalFinding_SeverityThresholdHighIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
-		WithLocalFindingsSeverityLevel("high"),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsSeverityLevel("high"),
 	)
 
 	result, err := p.Render()
@@ -225,11 +187,11 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
-		WithLocalFindingsIgnoredIssues(false),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsIgnoredIssues(false),
 	)
 
 	result, err := p.Render()
@@ -245,11 +207,11 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
-		WithLocalFindingsIgnoredIssues(true),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsIgnoredIssues(true),
 	)
 
 	result, err := p.Render()
@@ -272,11 +234,11 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-	p := LocalFindingsTestResults(
+	p := presenters.LocalFindingsTestResults(
 		input,
-		WithLocalFindingsOrg("test-org"),
-		WithLocalFindingsTestPath("/path/to/project"),
-		WithLocalFindingsIgnoredIssues(true),
+		presenters.WithLocalFindingsOrg("test-org"),
+		presenters.WithLocalFindingsTestPath("/path/to/project"),
+		presenters.WithLocalFindingsIgnoredIssues(true),
 	)
 
 	result, err := p.Render()
