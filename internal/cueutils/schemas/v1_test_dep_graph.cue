@@ -135,7 +135,7 @@ info: {
 	{[!~"^(licenseType|severity|instructions)$"]: _}
 }
 #LicensesPolicy: {
-	severities!: [string]: _
+	severities!: [string]:      _
 	orgLicenseRules!: [string]: #LicenseSeverity
 	{[!~"^(severities|orgLicenseRules)$"]: _}
 }
@@ -179,9 +179,9 @@ info: {
 #Remediation: {
 	unresolved!: [...#IssueData]
 	upgrade!: [string]: #UpgradePackage
-	patch!: [string]: #PatchRemediation
-	ignore!: [string]: _
-	pin!: [string]: #UpgradePackage
+	patch!: [string]:   #PatchRemediation
+	ignore!: [string]:  _
+	pin!: [string]:     #UpgradePackage
 	{[!~"^(unresolved|upgrade|patch|ignore|pin)$"]: _}
 }
 #ResponseBody: {
@@ -191,7 +191,7 @@ info: {
 }
 #Result: {
 	affectedPkgs!: [string]: #AffectedPackage
-	issuesData!: [string]: #IssueData
+	issuesData!: [string]:   #IssueData
 	remediation!: #Remediation
 	{[!~"^(affectedPkgs|issuesData|remediation)$"]: _}
 }
