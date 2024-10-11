@@ -53,7 +53,7 @@ info: {
 	{[!~"^(licenseType|severity|instructions)$"]: _}
 }
 #LicensesPolicy: {
-	severities!: [string]: _
+	severities!: [string]:      _
 	orgLicenseRules!: [string]: #LicenseSeverity
 	{[!~"^(severities|orgLicenseRules)$"]: _}
 }
@@ -84,9 +84,9 @@ info: {
 #Remediation: {
 	unresolved?: [...#Vulnerability]
 	upgrade?: [string]: #UpgradePackage
-	patch?: [string]: #PatchRemediation
-	ignore?: [string]: _
-	pin?: [string]: #UpgradePackage
+	patch?: [string]:   #PatchRemediation
+	ignore?: [string]:  _
+	pin?: [string]:     #UpgradePackage
 	{[!~"^(unresolved|upgrade|patch|ignore|pin)$"]: _}
 }
 #Result: {

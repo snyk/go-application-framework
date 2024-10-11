@@ -9,11 +9,13 @@ SHELL := env PATH=$(GO_BIN):$(PATH) $(SHELL)
 .PHONY: format
 format:
 	@echo "Formatting..."
+	@cue fmt internal/cueutils/**/**/*.cue internal/cueutils/**/*.cue
 	@gofmt -w -l -e .
 
 .PHONY: lint
-lint: $(GO_BIN)/golangci-lint
+lint: $(GO_BIN)/golangci-lint $(GO_BIN)/cue
 	@echo "Linting..."
+	@cue fmt --all-errors --check internal/cueutils/**/**/*.cue internal/cueutils/**/*.cue
 	@./scripts/lint.sh
 	$(GO_BIN)/golangci-lint run ./...
 
@@ -42,9 +44,11 @@ generate:
 	@go generate ./...
 
 .PHONY: tools
-tools: $(GO_BIN)/golangci-lint
+tools: $(GO_BIN)/golangci-lint $(GO_BIN)/cue
 	GOBIN=$(GO_BIN) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0
 	GOBIN=$(GO_BIN) go install github.com/golang/mock/mockgen@v1.6.0
+
+$(GO_BIN)/cue:
 	GOBIN=$(GO_BIN) go install cuelang.org/go/cmd/cue@v0.10.0
 
 $(GO_BIN)/golangci-lint:
