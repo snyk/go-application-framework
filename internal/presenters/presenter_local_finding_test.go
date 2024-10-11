@@ -80,7 +80,7 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 	skipWindows(t)
 	// Convert our sarif into localfindings
 	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
 	p := presenters.LocalFindingsTestResults(
@@ -91,7 +91,7 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 
 	result, err := p.Render()
 
-	require.Nil(t, err)
+	require.NoError(t, err)
 	snaps.MatchSnapshot(t, result)
 }
 

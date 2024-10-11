@@ -690,7 +690,8 @@
               }
             ],
             "isAutofixable": false
-          }
+          },
+          "suppressions": null
         }
       ],
       "properties": {
