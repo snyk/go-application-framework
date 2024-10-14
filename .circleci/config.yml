@@ -26,6 +26,9 @@ jobs:
       version: "current"
 
     steps:
+      - run:
+          name: Configure git to translate line terminators locally
+          command: git config --global core.autocrlf input
       - checkout
       - run:
           name: Run unit tests
