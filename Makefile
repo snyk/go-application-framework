@@ -32,12 +32,12 @@ clean:
 .PHONY: test
 test:
 	@echo "Testing..."
-	@go test -cover ./...
+	@go test -cover ./... -race
 
 .PHONY: testv
 testv:
 	@echo "Testing verbosely..."
-	@go test -v ./...
+	@go test -v ./... -race
 
 .PHONY: generate
 generate:

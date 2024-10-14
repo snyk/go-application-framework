@@ -14,6 +14,7 @@ base_image: &base_image
 jobs:
   unit_test:
     <<: *base_image
+    resource_class: medium
     steps:
       - checkout
       - run:
