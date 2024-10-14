@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"runtime"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
@@ -18,13 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func skipWindows(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on windows device [CLI-514]")
-	}
-}
 
 func sarifToLocalFinding(t *testing.T, filename string) (localFinding local_models.LocalFinding, err error) {
 	t.Helper()
@@ -54,7 +46,6 @@ func sarifToLocalFinding(t *testing.T, filename string) (localFinding local_mode
 }
 
 func TestPresenterLocalFinding_NoIssues(t *testing.T) {
-	skipWindows(t)
 	fd, err := os.Open("testdata/local-findings-empty.json")
 	require.NoError(t, err)
 
@@ -77,7 +68,6 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_LowIssues(t *testing.T) {
-	skipWindows(t)
 	// Convert our sarif into localfindings
 	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
 	require.NoError(t, err)
@@ -96,7 +86,6 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
-	skipWindows(t)
 	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
 	require.Nil(t, err)
 
@@ -117,7 +106,6 @@ func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
-	skipWindows(t)
 	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
 	require.Nil(t, err)
 
@@ -137,7 +125,6 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
-	skipWindows(t)
 	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
 	require.Nil(t, err)
 
@@ -158,7 +145,6 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_SeverityThresholdHighIssues(t *testing.T) {
-	skipWindows(t)
 	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
 	require.Nil(t, err)
 
@@ -182,7 +168,6 @@ func TestPresenterLocalFinding_SeverityThresholdHighIssues(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
-	skipWindows(t)
 	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json")
 	require.Nil(t, err)
 
@@ -202,7 +187,6 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
-	skipWindows(t)
 	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json")
 	require.Nil(t, err)
 
@@ -229,7 +213,6 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
-	skipWindows(t)
 	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
 	require.Nil(t, err)
 

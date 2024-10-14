@@ -17,7 +17,6 @@ const (
 	ToTestApiFromCliTestManaged = "convert/to_testapi/from_cli_test_managed.cue"
 	ToTestApiFromSarif          = "convert/to_testapi/from_sarif.cue"
 	ToCliFromTestApi            = "convert/to_cli/from_testapi.cue"
-	pathPrefix                  = "//" // Required for cross-platform support
 )
 
 type Transformer struct {
@@ -45,8 +44,9 @@ func NewTransformer(ctx *cue.Context, name string) (*Transformer, error) {
 		return nil, fmt.Errorf("failed to load module source: %w", err)
 	}
 	insts := load.Instances([]string{pathPrefix + name}, &load.Config{
-		Stdin:   &devnull,
-		Overlay: overlay,
+		Stdin:      &devnull,
+		Overlay:    overlay,
+		ModuleRoot: pathPrefix,
 	})
 	if ierr := insts[0].Err; ierr != nil {
 		return nil, fmt.Errorf("failed to load transform: %w %v", ierr, ierr.InputPositions())
