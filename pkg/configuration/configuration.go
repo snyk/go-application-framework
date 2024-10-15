@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -226,7 +227,9 @@ func (ev *extendedViper) get(key string) interface{} {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 
-	// try to lookup given key
+	// try to lookup given key with SNYK_ prefix
+	ev.viper.SetEnvPrefix("snyk")
+	//ev.viper.BindEnv(key)
 	result := ev.viper.Get(key)
 	isSet := ev.viper.IsSet(key)
 
@@ -236,6 +239,7 @@ func (ev *extendedViper) get(key string) interface{} {
 	alternativeKeysSize := len(alternativeKeys)
 	for !isSet && index < alternativeKeysSize {
 		altKey := alternativeKeys[index]
+		fmt.Println(altKey, ": ", os.Getenv(strings.ToUpper(altKey)))
 		result = ev.viper.Get(altKey)
 		isSet = ev.viper.IsSet(altKey)
 		index++

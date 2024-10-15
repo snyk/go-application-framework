@@ -174,16 +174,12 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 	actualValueInt = config.GetInt("api")
 	assert.Equal(t, 0, actualValueInt)
 
-	cleanupConfigstore(t)
-}
-
-func Test_ConfigurationSet_envVars(t *testing.T) {
 	t.Run("only read env vars prefixed with SNYK_", func(t *testing.T) {
-		key := "SNYK_ORG"
-		wrongKey := "ORG"
-		expected := "hello"
-		notExpected := "notAValidEnvVar"
 		defaultValue := "something"
+		key := "SNYK_CFG_ORG"
+		expected := "hello"
+		wrongKey := "ORG"
+		notExpected := "notAValidEnvVar"
 		flagset := pflag.NewFlagSet("test", pflag.ExitOnError)
 		flagset.String(ORGANIZATION, "", "org")
 
