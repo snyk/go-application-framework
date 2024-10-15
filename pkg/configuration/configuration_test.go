@@ -177,6 +177,45 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 	cleanupConfigstore(t)
 }
 
+func Test_ConfigurationSet_envVars(t *testing.T) {
+	t.Run("only read env vars prefixed with SNYK_", func(t *testing.T) {
+		key := "SNYK_ORG"
+		wrongKey := "ORG"
+		expected := "hello"
+		notExpected := "notAValidEnvVar"
+		defaultValue := "something"
+		flagset := pflag.NewFlagSet("test", pflag.ExitOnError)
+		flagset.String(ORGANIZATION, "", "org")
+
+		config := NewInMemory()
+		err := config.AddFlagSet(flagset)
+		assert.NoError(t, err)
+		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
+		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) interface{} {
+			if existingValue != nil {
+				return existingValue
+			}
+			return defaultValue
+		})
+
+		// not set
+		actual := config.GetString(ORGANIZATION)
+		wasSet := config.IsSet(ORGANIZATION)
+		assert.Equal(t, defaultValue, actual)
+		assert.False(t, wasSet)
+
+		// set via env var
+		t.Setenv(key, expected)
+		t.Setenv(wrongKey, notExpected)
+		actual = config.GetString(ORGANIZATION)
+		wasSet = config.IsSet(ORGANIZATION)
+		assert.Equal(t, expected, actual)
+		assert.True(t, wasSet)
+	})
+
+	cleanupConfigstore(t)
+}
+
 func Test_ConfigurationGet_Url(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"validUrl": "https://www.snyk.io", "invalidUrl": "something"}`))
 
