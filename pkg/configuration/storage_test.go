@@ -55,7 +55,7 @@ func Test_JsonStorage_Set_NoConfigFile(t *testing.T) {
 	}
 }
 
-func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) {
+func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) { //nolint:tparallel // subtests are not mutually exclusive
 	// Arrange
 	t.Parallel()
 	const preExistingKey = "someOtherKey"
@@ -79,16 +79,13 @@ func Test_JsonStorage_Set_ConfigFileHasValues(t *testing.T) {
 	// Assert
 	storedConfig := readStoredConfigFile(t, configFile)
 	t.Run("File contains key", func(t *testing.T) {
-		t.Parallel()
 		assertConfigContainsKey(t, storedConfig, key, expectedValue)
 	})
 	t.Run("Pre-stored values are not deleted", func(t *testing.T) {
-		t.Parallel()
 		assertConfigContainsKey(t, storedConfig, preExistingKey, preExistingValue)
 	})
 	assertSetCallDoesNotDeleteOtherValues(t, storage, configFile, expectedValue, key)
 	t.Run("Overwrites existing value", func(t *testing.T) {
-		t.Parallel()
 		const newValue = "new value"
 		assert.Contains(t, storedConfig, key)
 		err = storage.Set(key, newValue)
