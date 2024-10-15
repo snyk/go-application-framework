@@ -67,7 +67,7 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 
 func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 	expectedValue := "anotherToken"
-	expectedValueDocker := "dockerTocken"
+	expectedValueDocker := "dockerToken"
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
 	config := NewFromFiles(TEST_FILENAME)

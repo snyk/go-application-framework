@@ -1,7 +1,6 @@
 package configuration
 
 import (
-	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -150,7 +149,6 @@ func createViperDefaultConfig() *extendedViper {
 		persistedKeys:   make(map[string]bool),
 	}
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	config.viper.AutomaticEnv()
 	return config
 }
 
@@ -227,9 +225,13 @@ func (ev *extendedViper) get(key string) interface{} {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 
+	// ensure we only get Snyk related keys (prefixed with SNYK_)
+	if ev.GetKeyType(key) == UnspecifiedKeyType {
+		ev.viper.BindEnv(key, "SNYK_"+strings.ToUpper(key))
+	} else {
+		ev.viper.BindEnv(key, strings.ToUpper(key))
+	}
 	// try to lookup given key with SNYK_ prefix
-	ev.viper.SetEnvPrefix("snyk")
-	//ev.viper.BindEnv(key)
 	result := ev.viper.Get(key)
 	isSet := ev.viper.IsSet(key)
 
@@ -239,7 +241,7 @@ func (ev *extendedViper) get(key string) interface{} {
 	alternativeKeysSize := len(alternativeKeys)
 	for !isSet && index < alternativeKeysSize {
 		altKey := alternativeKeys[index]
-		fmt.Println(altKey, ": ", os.Getenv(strings.ToUpper(altKey)))
+		ev.viper.BindEnv(altKey, strings.ToUpper(altKey))
 		result = ev.viper.Get(altKey)
 		isSet = ev.viper.IsSet(altKey)
 		index++
