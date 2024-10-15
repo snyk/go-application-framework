@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -103,13 +102,6 @@ func getTestSarifBytes(t *testing.T) sarif.SarifDocument {
 	return sarifDoc
 }
 
-func skipWindows(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on windows device [CLI-514]")
-	}
-}
-
 func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
@@ -152,8 +144,6 @@ func loadJsonFile(t *testing.T, filename string) []byte {
 }
 
 func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
-	skipWindows(t)
-
 	invocationContext := setupMockTransformationContext(t, true)
 	logger := zerolog.Logger{}
 	input := []workflow.Data{
