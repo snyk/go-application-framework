@@ -51,7 +51,10 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 	expectedValue2 := "123456"
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
-	config := NewFromFiles("test")
+	config := NewWithOpts(
+		WithFiles("test"),
+		WithSupportedEnvVarPrefixes("snyk_"),
+	)
 	config.AddAlternativeKeys(AUTHENTICATION_TOKEN, []string{"snyk_token", "snyk_cfg_api", "api"})
 
 	actualValue := config.GetString(AUTHENTICATION_TOKEN)
@@ -70,7 +73,10 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 	expectedValueDocker := "dockerToken"
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
-	config := NewFromFiles(TEST_FILENAME)
+	config := NewWithOpts(
+		WithFiles(TEST_FILENAME),
+		WithSupportedEnvVarPrefixes("snyk_"),
+	)
 	config.AddAlternativeKeys(AUTHENTICATION_BEARER_TOKEN, []string{"snyk_oauth_token", "snyk_docker_token"})
 
 	t.Run("oauth token", func(t *testing.T) {
@@ -92,7 +98,10 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"snyk_oauth_token": "mytoken", "somethingElse": 12}`))
 
-	config := NewFromFiles(TEST_FILENAME)
+	config := NewWithOpts(
+		WithFiles(TEST_FILENAME),
+		WithSupportedEnvVarPrefixes("snyk_"),
+	)
 
 	t.Setenv("SNYK_DISABLE_ANALYTICS", "1")
 	actualValue := config.GetBool(ANALYTICS_DISABLED)
@@ -126,7 +135,7 @@ func Test_ConfigurationGet_ALTERNATE_KEYS(t *testing.T) {
 func Test_ConfigurationGet_unset(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
 
-	config := NewFromFiles(TEST_FILENAME)
+	config := NewWithOpts(WithFiles(TEST_FILENAME))
 	actualValue := config.Get("notthere")
 	assert.Nil(t, actualValue)
 
@@ -142,7 +151,10 @@ func Test_ConfigurationGet_unset(t *testing.T) {
 func Test_ConfigurationSet_differentCases(t *testing.T) {
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12, "number": 74}`))
 
-	config := NewFromFiles(TEST_FILENAME)
+	config := NewWithOpts(
+		WithFiles(TEST_FILENAME),
+		WithSupportedEnvVarPrefixes("snyk_"),
+	)
 
 	actualValueString := config.GetString("api")
 	assert.Equal(t, "mytoken", actualValueString)
@@ -183,7 +195,7 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 		flagset := pflag.NewFlagSet("test", pflag.ExitOnError)
 		flagset.String(ORGANIZATION, "", "org")
 
-		config := NewInMemory()
+		config := NewWithOpts(WithSupportedEnvVarPrefixes("snyk_"))
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
@@ -387,7 +399,7 @@ func Test_DefaultValuehandling(t *testing.T) {
 		flagset := pflag.NewFlagSet("test", pflag.ExitOnError)
 		flagset.String(ORGANIZATION, "", "org")
 
-		config := NewInMemory()
+		config := NewWithOpts(WithSupportedEnvVarPrefixes("snyk_"))
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
@@ -473,7 +485,9 @@ func Test_ConfigurationGet_GetAllKeysThatContainValues(t *testing.T) {
 }
 
 func Test_Configuration_GetKeyType(t *testing.T) {
-	config := NewInMemory()
+	config := NewWithOpts(
+		WithSupportedEnvVarPrefixes("snyk_"),
+	)
 	assert.Equal(t, EnvVarKeyType, config.GetKeyType("snyk_something"))
 	assert.Equal(t, UnspecifiedKeyType, config.GetKeyType("app"))
 }
@@ -568,4 +582,141 @@ func Test_JsonStorage_Locking_Interrupted(t *testing.T) {
 	// After refresh, we get the sum from all the concurrent goroutines prior
 	// to the context getting canceled.
 	assert.Equal(t, float64(50), outerConfig.GetFloat64("n"))
+}
+
+func Test_Configuration_envVarSupport(t *testing.T) {
+	t.Run("supports a list of prefixes", func(t *testing.T) {
+		config := NewWithOpts(WithSupportedEnvVarPrefixes("snyk_", "internal_"))
+
+		snykKey := "SNYK_TOKEN"
+		snykValue := "someSnykToken"
+		snykInternalKey := "INTERNAL_SNYK_OAUTH_ENABLED"
+		snykInternalValue := "true"
+		invalidKey := "NOT_SUPPORTED"
+		invalidKeyValue := "thisShouldFail"
+
+		t.Setenv(snykKey, snykValue)
+		t.Setenv(snykInternalKey, snykInternalValue)
+		t.Setenv(invalidKey, invalidKeyValue)
+
+		actualSnykKeyValue := config.GetString(snykKey)
+		assert.Equal(t, snykValue, actualSnykKeyValue)
+
+		actualSnykInternalValue := config.GetBool(snykInternalKey)
+		assert.True(t, actualSnykInternalValue)
+
+		shouldBeNil := config.Get(invalidKey)
+		assert.Nil(t, shouldBeNil)
+
+		cleanUpEnvVars()
+	})
+
+	t.Run("supports a list of env vars", func(t *testing.T) {
+		config := NewWithOpts(WithSupportedEnvVars("NODE_EXTRA_CA_CERTS", "ORG"))
+
+		nodeCertsKey := "NODE_EXTRA_CA_CERTS"
+		nodeCertsValue := "some/path/to/certs"
+		orgKey := "ORG"
+		orgValue := "someOrg"
+
+		t.Setenv(nodeCertsKey, nodeCertsValue)
+		t.Setenv(orgKey, orgValue)
+
+		actualNodeCertsValue := config.GetString(nodeCertsKey)
+		actualOrgValue := config.GetString(orgKey)
+
+		assert.Equal(t, nodeCertsValue, actualNodeCertsValue)
+		assert.Equal(t, orgValue, actualOrgValue)
+	})
+
+	t.Run("supports a list of env vars and prefixes", func(t *testing.T) {
+		config := NewWithOpts(
+			WithSupportedEnvVars("NODE_EXTRA_CA_CERTS", "ORG"),
+			WithSupportedEnvVarPrefixes("snyk_", "internal_"),
+		)
+
+		// setup env var support
+		nodeCertsKey := "NODE_EXTRA_CA_CERTS"
+		nodeCertsValue := "some/path/to/certs"
+		orgKey := "ORG"
+		orgValue := "someOrg"
+
+		// setup env var prefix support
+		snykKey := "SNYK_TOKEN"
+		snykValue := "someSnykToken"
+		snykInternalKey := "INTERNAL_SNYK_OAUTH_ENABLED"
+		snykInternalValue := "true"
+
+		// a random env var should not be supported
+		invalidKey := "NOT_SUPPORTED"
+		invalidKeyValue := "thisShouldFail"
+
+		// set all the env vars
+		t.Setenv(nodeCertsKey, nodeCertsValue)
+		t.Setenv(orgKey, orgValue)
+		t.Setenv(snykKey, snykValue)
+		t.Setenv(snykInternalKey, snykInternalValue)
+		t.Setenv(invalidKey, invalidKeyValue)
+
+		// check they are read correctly
+		actualNodeCertsValue := config.GetString(nodeCertsKey)
+		assert.Equal(t, nodeCertsValue, actualNodeCertsValue)
+
+		actualOrgValue := config.GetString(orgKey)
+		assert.Equal(t, orgValue, actualOrgValue)
+
+		actualSnykKeyValue := config.GetString(snykKey)
+		assert.Equal(t, snykValue, actualSnykKeyValue)
+
+		actualSnykInternalValue := config.GetBool(snykInternalKey)
+		assert.True(t, actualSnykInternalValue)
+
+		shouldBeNil := config.Get(invalidKey)
+		assert.Nil(t, shouldBeNil)
+
+		cleanUpEnvVars()
+	})
+
+	t.Run("WithAutomaticEnv takes precedence", func(t *testing.T) {
+		config := NewWithOpts(
+			WithSupportedEnvVars("NODE_EXTRA_CA_CERTS"),
+			WithSupportedEnvVarPrefixes("snyk_", "internal_"),
+			WithAutomaticEnv(),
+		)
+
+		// setup env var support
+		nodeCertsKey := "NODE_EXTRA_CA_CERTS"
+		nodeCertsValue := "some/path/to/certs"
+
+		// setup env var prefix support
+		snykKey := "SNYK_TOKEN"
+		snykValue := "someSnykToken"
+		snykInternalKey := "INTERNAL_SNYK_OAUTH_ENABLED"
+		snykInternalValue := "true"
+
+		// a random env var would be supported WithAutomatedEnv() enabled
+		autoEnv := "AUTOMATIC_ENV"
+		autoEnvValue := "thisShouldBeSet"
+
+		// set all the env vars
+		t.Setenv(nodeCertsKey, nodeCertsValue)
+		t.Setenv(snykKey, snykValue)
+		t.Setenv(snykInternalKey, snykInternalValue)
+		t.Setenv(autoEnv, autoEnvValue)
+
+		// check they are read correctly
+		actualNodeCertsValue := config.GetString(nodeCertsKey)
+		assert.Equal(t, nodeCertsValue, actualNodeCertsValue)
+
+		actualSnykKeyValue := config.GetString(snykKey)
+		assert.Equal(t, snykValue, actualSnykKeyValue)
+
+		actualSnykInternalValue := config.GetBool(snykInternalKey)
+		assert.True(t, actualSnykInternalValue)
+
+		actualAutoEnvValue := config.Get(autoEnv)
+		assert.Equal(t, autoEnvValue, actualAutoEnvValue)
+
+		cleanUpEnvVars()
+	})
 }

@@ -26,7 +26,7 @@ import (
 )
 
 func getConfig() configuration.Configuration {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
 	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
