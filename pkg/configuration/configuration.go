@@ -1,6 +1,8 @@
 package configuration
 
 import (
+	"fmt"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"net/url"
 	"os"
 	"path"
@@ -221,15 +223,25 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	}
 }
 
+func bindEnvSnykErr(key string, err error) snyk_errors.Error {
+	return snyk_errors.Error{
+		Title:          "Unable to bind env",
+		Classification: "ACTIONABLE",
+		Level:          "warning",
+		Detail:         fmt.Sprintf("Unable to bind env: %v. Reason: %v", key, err),
+	}
+}
+
 func (ev *extendedViper) get(key string) interface{} {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 
 	// ensure we only get Snyk related keys (prefixed with SNYK_)
-	if ev.GetKeyType(key) == UnspecifiedKeyType {
-		ev.viper.BindEnv(key, "SNYK_"+strings.ToUpper(key))
-	} else {
-		ev.viper.BindEnv(key, strings.ToUpper(key))
+	if ev.GetKeyType(key) == EnvVarKeyType {
+		err := ev.viper.BindEnv(key, strings.ToUpper(key))
+		if err != nil {
+			return bindEnvSnykErr(key, err)
+		}
 	}
 	// try to lookup given key with SNYK_ prefix
 	result := ev.viper.Get(key)
@@ -241,7 +253,10 @@ func (ev *extendedViper) get(key string) interface{} {
 	alternativeKeysSize := len(alternativeKeys)
 	for !isSet && index < alternativeKeysSize {
 		altKey := alternativeKeys[index]
-		ev.viper.BindEnv(altKey, strings.ToUpper(altKey))
+		err := ev.viper.BindEnv(altKey, strings.ToUpper(altKey))
+		if err != nil {
+			return bindEnvSnykErr(key, err)
+		}
 		result = ev.viper.Get(altKey)
 		isSet = ev.viper.IsSet(altKey)
 		index++
