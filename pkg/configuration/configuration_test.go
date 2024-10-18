@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -490,6 +491,26 @@ func Test_Configuration_GetKeyType(t *testing.T) {
 	)
 	assert.Equal(t, EnvVarKeyType, config.GetKeyType("snyk_something"))
 	assert.Equal(t, UnspecifiedKeyType, config.GetKeyType("app"))
+}
+
+func Test_Configuration_Locking(t *testing.T) {
+	var wg sync.WaitGroup
+	N := 100
+
+	config := New()
+
+	for i := range N {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			key := fmt.Sprintf("%d", i)
+			config.Set(key, i)
+			_ = config.Get(key)
+		}()
+	}
+
+	wg.Wait()
 }
 
 func Test_JsonStorage_Locking(t *testing.T) {
