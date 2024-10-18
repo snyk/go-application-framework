@@ -55,6 +55,16 @@ type Configuration interface {
 	PersistInStorage(key string)
 	SetStorage(storage Storage)
 	GetStorage() Storage
+
+	AutomaticEnv()
+	SetAutomaticEnv(b bool)
+	GetAutomaticEnv() bool
+	SetSupportedEnvVars(envVars ...string)
+	GetSupportedEnvVars() []string
+	SetSupportedEnvVarPrefixes(prefixes ...string)
+	GetSupportedEnvVarPrefixes() []string
+	SetFiles(files ...string)
+	GetFiles() []string
 }
 
 // extendedViper is a wrapper around the viper library.
@@ -124,58 +134,29 @@ func CreateConfigurationFile(filename string) (string, error) {
 	return p, err
 }
 
-type Opts = func(ev *extendedViper)
+type Opts = func(config Configuration)
 
-// WithAutomaticEnv wraps Viper's AutomaticEnv and allows us to check if this has been set or not.
-// If AutomaticEnv is enabled, WithSupportedEnvVars and WithSupportedEnvVarPrefixes is disabled.
 func WithAutomaticEnv() Opts {
-	return func(ev *extendedViper) {
-		ev.mutex.Lock()
-		defer ev.mutex.Unlock()
-
-		ev.viper.AutomaticEnv()
-		ev.automaticEnvEnabled = true
+	return func(c Configuration) {
+		c.AutomaticEnv()
 	}
 }
 
-// WithSupportedEnvVars sets the env vars that will be supported regardless of prefixes
-// Only needed when WithAutomaticEnv is not used
 func WithSupportedEnvVars(envVars ...string) Opts {
-	return func(ev *extendedViper) {
-		ev.mutex.Lock()
-		defer ev.mutex.Unlock()
-
-		for _, envVar := range envVars {
-			if slices.Contains(ev.supportedEnvVars, envVar) {
-				return
-			}
-
-			ev.supportedEnvVars = append(ev.supportedEnvVars, envVar)
-		}
+	return func(c Configuration) {
+		c.SetSupportedEnvVars(envVars...)
 	}
 }
 
-// WithSupportedEnvVarPrefixes sets prefixes which env vars must have to be supported
-// Only needed when WithAutomaticEnv is not used
 func WithSupportedEnvVarPrefixes(prefixes ...string) Opts {
-	return func(ev *extendedViper) {
-		ev.mutex.Lock()
-		defer ev.mutex.Unlock()
-
-		for _, prefix := range prefixes {
-			if slices.Contains(ev.supportedEnvVarPrefixes, prefix) {
-				return
-			}
-
-			ev.supportedEnvVarPrefixes = append(ev.supportedEnvVarPrefixes, prefix)
-		}
+	return func(c Configuration) {
+		c.SetSupportedEnvVarPrefixes(prefixes...)
 	}
 }
 
-// WithFiles sets the files from which the Configuration instance uses
 func WithFiles(files ...string) Opts {
-	return func(ev *extendedViper) {
-		ev.configFiles = append(ev.configFiles, files...)
+	return func(c Configuration) {
+		c.SetFiles(files...)
 	}
 }
 
@@ -286,6 +267,11 @@ func (ev *extendedViper) Clone() Configuration {
 	for k, v := range ev.defaultValues {
 		clone.AddDefaultValue(k, v)
 	}
+
+	clone.SetAutomaticEnv(ev.GetAutomaticEnv())
+	clone.SetSupportedEnvVars(ev.GetSupportedEnvVars()...)
+	clone.SetSupportedEnvVarPrefixes(ev.GetSupportedEnvVarPrefixes()...)
+	clone.SetFiles(ev.GetFiles()...)
 
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
@@ -604,4 +590,72 @@ func (ev *extendedViper) GetKeyType(key string) KeyType {
 	}
 
 	return UnspecifiedKeyType
+}
+
+// AutomaticEnv wraps Viper's AutomaticEnv and allows us to check if this has been set or not.
+// If AutomaticEnv is enabled, SetSupportedEnvVars and SetSupportedEnvVarPrefixes is disabled.
+func (ev *extendedViper) AutomaticEnv() {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	ev.viper.AutomaticEnv()
+	ev.automaticEnvEnabled = true
+}
+
+func (ev *extendedViper) SetAutomaticEnv(b bool) {
+	ev.automaticEnvEnabled = b
+}
+
+func (ev *extendedViper) GetAutomaticEnv() bool {
+	return ev.automaticEnvEnabled
+}
+
+// SetSupportedEnvVars sets the env vars that will be supported regardless of prefixes
+// Only needed when SetAutomaticEnv is not used
+func (ev *extendedViper) SetSupportedEnvVars(envVars ...string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	for _, envVar := range envVars {
+		if slices.Contains(ev.supportedEnvVars, envVar) {
+			return
+		}
+
+		ev.supportedEnvVars = append(ev.supportedEnvVars, envVar)
+	}
+}
+
+func (ev *extendedViper) GetSupportedEnvVars() []string {
+	return ev.supportedEnvVars
+}
+
+// SetSupportedEnvVarPrefixes sets prefixes which env vars must have to be supported
+// Only needed when SetAutomaticEnv is not used
+func (ev *extendedViper) SetSupportedEnvVarPrefixes(prefixes ...string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	for _, prefix := range prefixes {
+		if slices.Contains(ev.supportedEnvVarPrefixes, prefix) {
+			return
+		}
+
+		ev.supportedEnvVarPrefixes = append(ev.supportedEnvVarPrefixes, prefix)
+	}
+}
+
+func (ev *extendedViper) GetSupportedEnvVarPrefixes() []string {
+	return ev.supportedEnvVarPrefixes
+}
+
+// SetFiles sets the files from which the Configuration instance uses
+func (ev *extendedViper) SetFiles(files ...string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	ev.configFiles = append(ev.configFiles, files...)
+}
+
+func (ev *extendedViper) GetFiles() []string {
+	return ev.configFiles
 }
