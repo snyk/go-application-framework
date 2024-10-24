@@ -1,6 +1,7 @@
 package localworkflows
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -9,8 +10,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/code"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -197,9 +199,10 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, []byte(payload))
+		writer := new(bytes.Buffer)
 
 		// mock assertions
-		outputDestination.EXPECT().Println(gomock.Any()).Return(0, nil)
+		outputDestination.EXPECT().GetWriter().Return(writer)
 
 		// execute
 		_, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
