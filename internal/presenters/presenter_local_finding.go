@@ -148,7 +148,12 @@ func (p *LocalFindingPresenter) Render() error {
 	if err != nil {
 		return err
 	}
-	addTemplateFuncs(localFindingsTemplate)
+
+	functionMap := getDefaultTemplateFunctions(p.config)
+	functionMap = getTemplateFuncsCLI(functionMap, localFindingsTemplate)
+
+	localFindingsTemplate.Funcs(functionMap)
+
 	err = loadTemplates([]string{
 		TemplatePaths.LocalFindingTemplate,
 		TemplatePaths.FindingComponentTemplate,
@@ -252,20 +257,21 @@ func bold(s string) string {
 	return lipgloss.NewStyle().Bold(true).Render(s)
 }
 
-func addTemplateFuncs(t *template.Template) {
-	var fnMap = template.FuncMap{
-		"box": func(s string) string {
-			return boxStyle.Render(s)
-		},
-		"renderToString":        renderTemplateToString(t),
-		"toUpperCase":           strings.ToUpper,
-		"renderInSeverityColor": renderWithSeverity,
-		"bold":                  bold,
-		"tip": func(s string) string {
-			return RenderTip(s + "\n")
-		},
-		"divider": RenderDivider,
-		"title":   RenderTitle,
+func getTemplateFuncsCLI(fnMap template.FuncMap, tmpl *template.Template) template.FuncMap {
+	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
+	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["renderInSeverityColor"] = renderWithSeverity
+	fnMap["bold"] = bold
+	fnMap["tip"] = func(s string) string {
+		return RenderTip(s + "\n")
 	}
-	t.Funcs(fnMap)
+	fnMap["divider"] = RenderDivider
+	fnMap["title"] = RenderTitle
+	fnMap["renderToString"] = renderTemplateToString(tmpl)
+	return fnMap
+}
+
+func getDefaultTemplateFunctions(config configuration.Configuration) template.FuncMap {
+	defaultMap := template.FuncMap{}
+	return defaultMap
 }
