@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 )
@@ -13,6 +14,7 @@ type OutputDestination interface {
 	Println(a ...any) (n int, err error)
 	Remove(name string) error
 	WriteFile(filename string, data []byte, perm fs.FileMode) error
+	GetWriter() io.Writer
 }
 type OutputDestinationImpl struct{}
 
@@ -29,6 +31,10 @@ func (odi *OutputDestinationImpl) Remove(name string) error {
 
 func (odi *OutputDestinationImpl) WriteFile(filename string, data []byte, perm fs.FileMode) error {
 	return os.WriteFile(filename, data, perm)
+}
+
+func (odi *OutputDestinationImpl) GetWriter() io.Writer {
+	return os.Stdout
 }
 
 func NewOutputDestination() OutputDestination {
