@@ -67,7 +67,6 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	p := presenters.NewLocalFindingsRenderer(localFindingDoc,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath(scannedPath))
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -93,7 +92,6 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
@@ -117,7 +115,6 @@ func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
@@ -144,7 +141,6 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
@@ -171,7 +167,6 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
@@ -191,15 +186,14 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.Ascii)
 	config := configuration.NewInMemory()
 	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+	config.Set(configuration.FLAG_INCLUDE_IGNORES, false)
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
-		presenters.WithLocalFindingsIgnoredIssues(false),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -217,15 +211,14 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.Ascii)
 	config := configuration.NewInMemory()
 	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+	config.Set(configuration.FLAG_INCLUDE_IGNORES, true)
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
-		presenters.WithLocalFindingsIgnoredIssues(true),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -251,15 +244,14 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 
 	config := configuration.NewInMemory()
 	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+	config.Set(configuration.FLAG_INCLUDE_IGNORES, true)
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
-		presenters.WithLocalFindingsIgnoredIssues(true),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)

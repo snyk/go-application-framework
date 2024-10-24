@@ -1,14 +1,14 @@
 {{- define "main" -}}
 {
-{{- $findingsSize := len $.OpenFindings}}
+{{- $findingsSize := len $.Findings}}
 {{- $findingsSize = sub $findingsSize 1}}
     "findings" :
     [
-{{- range $index, $element := $.OpenFindings}}
+{{- range $index, $element := $.Findings}}
         "{{$element.Attributes.Message.Header}}"{{if lt $index $findingsSize}},{{end}}
 
 {{- end }}
     ]
 }
 {{- end }}
-{{- template "main" . }}
+{{- template "main" . }}u
