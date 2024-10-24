@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"embed"
 	"errors"
+	"io"
 	"slices"
 	"strings"
 	"text/template"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
@@ -18,6 +21,8 @@ type LocalFindingPresenter struct {
 	OrgName          string
 	TestPath         string
 	SeverityMinLevel string
+	config           configuration.Configuration
+	writer           io.Writer
 }
 
 // TemplatePathsStruct holds the paths to the templates.
@@ -107,13 +112,12 @@ func WithLocalFindingsSeverityLevel(severityMinLevel string) LocalFindingPresent
 	}
 }
 
-func LocalFindingsTestResults(localFindingsDoc local_models.LocalFinding, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
+func LocalFindingsTestResults(localFindingsDoc local_models.LocalFinding, config configuration.Configuration, writer io.Writer, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
 	p := &LocalFindingPresenter{
-		ShowIgnored:      false,
-		Input:            localFindingsDoc,
-		OrgName:          "",
-		TestPath:         "",
-		SeverityMinLevel: "",
+		ShowIgnored: false,
+		Input:       localFindingsDoc,
+		config:      config,
+		writer:      writer,
 	}
 	for _, option := range options {
 		option(p)
@@ -125,7 +129,7 @@ func LocalFindingsTestResults(localFindingsDoc local_models.LocalFinding, option
 //go:embed templates/*
 var embeddedFiles embed.FS
 
-func LoadTemplates(files []string, tmpl *template.Template) error {
+func loadTemplates(files []string, tmpl *template.Template) error {
 	for _, file := range files {
 		data, err := embeddedFiles.ReadFile(file)
 		if err != nil {
@@ -139,34 +143,38 @@ func LoadTemplates(files []string, tmpl *template.Template) error {
 	return nil
 }
 
-func (p *LocalFindingPresenter) Render() (string, error) {
+func (p *LocalFindingPresenter) Render() error {
 	localFindingsTemplate, err := template.New("local_finding").Parse("")
 	if err != nil {
-		return "", err
+		return err
 	}
-	AddTemplateFuncs(localFindingsTemplate)
-	err = LoadTemplates([]string{
+
+	functionMap := getDefaultTemplateFunctions(p.config)
+	functionMap = getTemplateFuncsCLI(functionMap, localFindingsTemplate)
+
+	localFindingsTemplate.Funcs(functionMap)
+
+	err = loadTemplates([]string{
 		TemplatePaths.LocalFindingTemplate,
 		TemplatePaths.FindingComponentTemplate,
 	}, localFindingsTemplate)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// filter findings
 	err = FilterBySeverityThreshold(p.SeverityMinLevel, &p.Input)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	sum := PrepareSummary(&p.Input.Summary, p.OrgName, p.TestPath, p.SeverityMinLevel)
 
-	buf := new(bytes.Buffer)
 	mainTmpl := localFindingsTemplate.Lookup("main")
 
 	filteredFindings := filterOutIgnoredFindings(p.Input.Findings, p.ShowIgnored, []string{"low", "medium", "high"})
 
-	err = mainTmpl.Execute(buf, struct {
+	err = mainTmpl.Execute(p.writer, struct {
 		Summary         SummaryData `json:"summary"`
 		OpenFindings    []*PresentationFindingResource
 		IgnoredFindings []*PresentationFindingResource
@@ -182,9 +190,9 @@ func (p *LocalFindingPresenter) Render() (string, error) {
 		SeverityFilter:  p.SeverityMinLevel,
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
-	return buf.String(), nil
+	return nil
 }
 
 func shouldShowDivider(findings FilteredFindings, showIgnored bool) bool {
@@ -249,20 +257,21 @@ func bold(s string) string {
 	return lipgloss.NewStyle().Bold(true).Render(s)
 }
 
-func AddTemplateFuncs(t *template.Template) {
-	var fnMap = template.FuncMap{
-		"box": func(s string) string {
-			return boxStyle.Render(s)
-		},
-		"renderToString":        renderTemplateToString(t),
-		"toUpperCase":           strings.ToUpper,
-		"renderInSeverityColor": renderWithSeverity,
-		"bold":                  bold,
-		"tip": func(s string) string {
-			return RenderTip(s + "\n")
-		},
-		"divider": RenderDivider,
-		"title":   RenderTitle,
+func getTemplateFuncsCLI(fnMap template.FuncMap, tmpl *template.Template) template.FuncMap {
+	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
+	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["renderInSeverityColor"] = renderWithSeverity
+	fnMap["bold"] = bold
+	fnMap["tip"] = func(s string) string {
+		return RenderTip(s + "\n")
 	}
-	t.Funcs(fnMap)
+	fnMap["divider"] = RenderDivider
+	fnMap["title"] = RenderTitle
+	fnMap["renderToString"] = renderTemplateToString(tmpl)
+	return fnMap
+}
+
+func getDefaultTemplateFunctions(config configuration.Configuration) template.FuncMap {
+	defaultMap := template.FuncMap{}
+	return defaultMap
 }

@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	io "io"
 	fs "io/fs"
 	reflect "reflect"
 
@@ -32,6 +33,20 @@ func NewMockOutputDestination(ctrl *gomock.Controller) *MockOutputDestination {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockOutputDestination) EXPECT() *MockOutputDestinationMockRecorder {
 	return m.recorder
+}
+
+// GetWriter mocks base method.
+func (m *MockOutputDestination) GetWriter() io.Writer {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWriter")
+	ret0, _ := ret[0].(io.Writer)
+	return ret0
+}
+
+// GetWriter indicates an expected call of GetWriter.
+func (mr *MockOutputDestinationMockRecorder) GetWriter() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWriter", reflect.TypeOf((*MockOutputDestination)(nil).GetWriter))
 }
 
 // Println mocks base method.

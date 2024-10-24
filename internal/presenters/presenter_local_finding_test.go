@@ -1,6 +1,7 @@
 package presenters_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -10,12 +11,14 @@ import (
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/muesli/termenv"
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/internal/presenters"
-	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
-	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/internal/presenters"
+	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
 func sarifToLocalFinding(t *testing.T, filename string) (localFinding local_models.LocalFinding, err error) {
@@ -55,11 +58,17 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 
 	scannedPath := "/path/to/project"
 	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(localFindingDoc,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath(scannedPath))
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.NoError(t, err)
 	assert.Contains(t, result, "Testing "+scannedPath)
@@ -73,13 +82,19 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 	require.NoError(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.NoError(t, err)
 	snaps.MatchSnapshot(t, result)
@@ -90,13 +105,19 @@ func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.Nil(t, err)
 
@@ -110,13 +131,19 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.Nil(t, err)
 	require.NotContains(t, result, "You are currently viewing results with --severity-threshold=high applied")
@@ -130,13 +157,19 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	lipgloss.SetHasDarkBackground(false)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.Nil(t, err)
 	require.NotContains(t, result, "You are currently viewing results with --severity-threshold=high applied")
@@ -149,14 +182,20 @@ func TestPresenterLocalFinding_SeverityThresholdHighIssues(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 		presenters.WithLocalFindingsSeverityLevel("high"),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.Nil(t, err)
 	require.Contains(t, result, "[ 0 HIGH ]")
@@ -172,14 +211,20 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 		presenters.WithLocalFindingsIgnoredIssues(false),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.Nil(t, err)
 	require.NotContains(t, result, "src/main.ts, line 58")
@@ -191,14 +236,20 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 		presenters.WithLocalFindingsIgnoredIssues(true),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.Nil(t, err)
 
@@ -217,14 +268,20 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
+
 	p := presenters.LocalFindingsTestResults(
 		input,
+		config,
+		writer,
 		presenters.WithLocalFindingsOrg("test-org"),
 		presenters.WithLocalFindingsTestPath("/path/to/project"),
 		presenters.WithLocalFindingsIgnoredIssues(true),
 	)
 
-	result, err := p.Render()
+	err = p.Render()
+	result := writer.String()
 
 	require.Nil(t, err)
 	require.NotContains(t, result, "[ IGNORED ]")
