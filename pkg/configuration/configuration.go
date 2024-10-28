@@ -55,22 +55,40 @@ type Configuration interface {
 	PersistInStorage(key string)
 	SetStorage(storage Storage)
 	GetStorage() Storage
+
+	AutomaticEnv()
+	GetAutomaticEnv() bool
+	SetSupportedEnvVars(envVars ...string)
+	GetSupportedEnvVars() []string
+	SetSupportedEnvVarPrefixes(prefixes ...string)
+	GetSupportedEnvVarPrefixes() []string
+	SetFiles(files ...string)
+	GetFiles() []string
 }
 
 // extendedViper is a wrapper around the viper library.
 // It adds support for default values and alternative keys.
 type extendedViper struct {
-	viper           *viper.Viper
-	alternativeKeys map[string][]string
-	defaultValues   map[string]DefaultValueFunction
-	configType      configType
-	flagsets        []*pflag.FlagSet
+	viper               *viper.Viper
+	alternativeKeys     map[string][]string
+	defaultValues       map[string]DefaultValueFunction
+	configType          configType
+	flagsets            []*pflag.FlagSet
+	storage             Storage
+	mutex               sync.Mutex
+	automaticEnvEnabled bool
+	configFiles         []string
 
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
 	persistedKeys map[string]bool
-	storage       Storage
-	mutex         sync.Mutex
+
+	// supportedEnvVarPrefixes store the namespace prefixes that should be supported.
+	// Any env var without these prefixes, will be ignored by the configuration.
+	supportedEnvVarPrefixes []string
+
+	// supportedEnvVars store the env vars that should be supported REGARDLESS of its prefix. e.g. NODE_EXTRA_CA_CERTS
+	supportedEnvVars []string
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -115,17 +133,55 @@ func CreateConfigurationFile(filename string) (string, error) {
 	return p, err
 }
 
-// New creates a new snyk configuration file.
-func New() Configuration {
-	config := NewFromFiles("snyk")
+type Opts = func(config Configuration)
+
+func WithAutomaticEnv() Opts {
+	return func(c Configuration) {
+		c.AutomaticEnv()
+	}
+}
+
+func WithSupportedEnvVars(envVars ...string) Opts {
+	return func(c Configuration) {
+		c.SetSupportedEnvVars(envVars...)
+	}
+}
+
+func WithSupportedEnvVarPrefixes(prefixes ...string) Opts {
+	return func(c Configuration) {
+		c.SetSupportedEnvVarPrefixes(prefixes...)
+	}
+}
+
+func WithFiles(files ...string) Opts {
+	return func(c Configuration) {
+		c.SetFiles(files...)
+	}
+}
+
+// NewWithOpts creates a new snyk configuration file with optional parameters
+func NewWithOpts(opts ...Opts) Configuration {
+	config := createViperDefaultConfig(opts...)
 	return config
 }
 
+// New creates a new snyk configuration file.
+func New() Configuration {
+	config := NewWithOpts(
+		WithFiles("snyk"),
+		WithAutomaticEnv(),
+	)
+	return config
+}
+
+// Deprecated: Use NewWithOpts with configuration.WithFiles() and configuration.WithAutomaticEnv() options instead
+//
 // NewFromFiles creates a new Configuration instance from the given files.
 func NewFromFiles(files ...string) Configuration {
-	config := createViperDefaultConfig()
-	config.configType = jsonFile
-	readConfigFilesIntoViper(files, config)
+	config := NewWithOpts(
+		WithFiles(files...),
+		WithAutomaticEnv(),
+	)
 	return config
 }
 
@@ -133,14 +189,17 @@ func (ev *extendedViper) getConfigType() configType {
 	return ev.configType
 }
 
+// Deprecated: Use NewWithOpts with configuration.WithAutomaticEnv() option instead
+//
 // NewInMemory creates a new Configuration instance that is not persisted to disk.
 func NewInMemory() Configuration {
-	config := createViperDefaultConfig()
-	config.configType = inMemory
+	config := NewWithOpts(
+		WithAutomaticEnv(),
+	)
 	return config
 }
 
-func createViperDefaultConfig() *extendedViper {
+func createViperDefaultConfig(opts ...Opts) *extendedViper {
 	// prepare environment variables
 	config := &extendedViper{
 		viper:           viper.New(),
@@ -149,7 +208,18 @@ func createViperDefaultConfig() *extendedViper {
 		persistedKeys:   make(map[string]bool),
 	}
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	config.viper.AutomaticEnv()
+
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	if len(config.configFiles) > 0 {
+		config.configType = jsonFile
+		readConfigFilesIntoViper(config.configFiles, config)
+	} else {
+		config.configType = inMemory
+	}
+
 	return config
 }
 
@@ -197,6 +267,13 @@ func (ev *extendedViper) Clone() Configuration {
 		clone.AddDefaultValue(k, v)
 	}
 
+	if ev.automaticEnvEnabled {
+		clone.AutomaticEnv()
+	}
+	clone.SetSupportedEnvVars(ev.supportedEnvVars...)
+	clone.SetSupportedEnvVarPrefixes(ev.supportedEnvVarPrefixes...)
+	clone.SetFiles(ev.configFiles...)
+
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
 	}
@@ -226,7 +303,7 @@ func (ev *extendedViper) get(key string) interface{} {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 
-	// try to lookup given key
+	ev.bindEnv(key)
 	result := ev.viper.Get(key)
 	isSet := ev.viper.IsSet(key)
 
@@ -236,6 +313,7 @@ func (ev *extendedViper) get(key string) interface{} {
 	alternativeKeysSize := len(alternativeKeys)
 	for !isSet && index < alternativeKeysSize {
 		altKey := alternativeKeys[index]
+		ev.bindEnv(altKey)
 		result = ev.viper.Get(altKey)
 		isSet = ev.viper.IsSet(altKey)
 		index++
@@ -244,7 +322,21 @@ func (ev *extendedViper) get(key string) interface{} {
 	return result
 }
 
-// returns true if a value for the given key was explicitly set
+// bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var
+func (ev *extendedViper) bindEnv(key string) {
+	isEnvVarKeyType := ev.GetKeyType(key) == EnvVarKeyType
+	isInAllKeys := slices.Contains(ev.viper.AllKeys(), key)
+
+	// Viper's BindEnv implementation will bind the same env var multiple times, this check avoids potential duplication issues
+	if !isEnvVarKeyType || isInAllKeys || ev.automaticEnvEnabled {
+		return
+	}
+
+	//nolint:errcheck // breaking change needed to fix this
+	_ = ev.viper.BindEnv(key)
+}
+
+// IsSet returns true if a value for the given key was explicitly set
 func (ev *extendedViper) IsSet(key string) bool {
 	isSet := ev.viper.IsSet(key)
 	if !isSet {
@@ -459,7 +551,7 @@ func (ev *extendedViper) createFileStorage(configPath string) Storage {
 	return NewJsonStorage(file, WithConfiguration(ev))
 }
 
-// GetAllKeysThatContainValues() returns a list of all keys, including alternative keys, that are set for the given key.
+// GetAllKeysThatContainValues returns a list of all keys, including alternative keys, that are set for the given key.
 // This can be used to identify in which way a certain key has been set. If the result size is greater 1, this means
 // that one value is specified multiple times.
 func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
@@ -484,9 +576,95 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 }
 
 func (ev *extendedViper) GetKeyType(key string) KeyType {
-	if strings.HasPrefix(strings.ToLower(key), "snyk_") {
-		return EnvVarKeyType
+	// check for supported env vars
+	for _, envVar := range ev.supportedEnvVars {
+		if strings.EqualFold(key, envVar) {
+			return EnvVarKeyType
+		}
+	}
+
+	// check for supported prefixes
+	for _, prefix := range ev.supportedEnvVarPrefixes {
+		if strings.HasPrefix(strings.ToLower(key), strings.ToLower(prefix)) {
+			return EnvVarKeyType
+		}
 	}
 
 	return UnspecifiedKeyType
+}
+
+// AutomaticEnv wraps Viper's AutomaticEnv and allows us to check if this has been set or not.
+// If AutomaticEnv is enabled, SetSupportedEnvVars and SetSupportedEnvVarPrefixes is disabled.
+func (ev *extendedViper) AutomaticEnv() {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	ev.viper.AutomaticEnv()
+	ev.automaticEnvEnabled = true
+}
+
+func (ev *extendedViper) GetAutomaticEnv() bool {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	return ev.automaticEnvEnabled
+}
+
+// SetSupportedEnvVars sets the env vars that will be supported regardless of prefixes
+// Only needed when SetAutomaticEnv is not used
+func (ev *extendedViper) SetSupportedEnvVars(envVars ...string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	for _, envVar := range envVars {
+		if slices.Contains(ev.supportedEnvVars, envVar) {
+			return
+		}
+
+		ev.supportedEnvVars = append(ev.supportedEnvVars, envVar)
+	}
+}
+
+func (ev *extendedViper) GetSupportedEnvVars() []string {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	return ev.supportedEnvVars
+}
+
+// SetSupportedEnvVarPrefixes sets prefixes which env vars must have to be supported
+// Only needed when SetAutomaticEnv is not used
+func (ev *extendedViper) SetSupportedEnvVarPrefixes(prefixes ...string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	for _, prefix := range prefixes {
+		if slices.Contains(ev.supportedEnvVarPrefixes, prefix) {
+			return
+		}
+
+		ev.supportedEnvVarPrefixes = append(ev.supportedEnvVarPrefixes, prefix)
+	}
+}
+
+func (ev *extendedViper) GetSupportedEnvVarPrefixes() []string {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	return ev.supportedEnvVarPrefixes
+}
+
+// SetFiles sets the files from which the Configuration instance uses
+func (ev *extendedViper) SetFiles(files ...string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	ev.configFiles = append(ev.configFiles, files...)
+}
+
+func (ev *extendedViper) GetFiles() []string {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	return ev.configFiles
 }

@@ -138,8 +138,8 @@ func Test_EngineRegisterErrorHandling(t *testing.T) {
 }
 
 func Test_Engine_SetterGlobalValues(t *testing.T) {
-	config := configuration.NewInMemory()
-	config2 := configuration.NewInMemory()
+	config := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
+	config2 := configuration.NewWithOpts(configuration.WithSupportedEnvVarPrefixes("snyk_"))
 	logger2 := &zerolog.Logger{}
 
 	engine := NewWorkFlowEngine(config)
