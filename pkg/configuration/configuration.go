@@ -76,7 +76,7 @@ type extendedViper struct {
 	configType          configType
 	flagsets            []*pflag.FlagSet
 	storage             Storage
-	mutex               sync.Mutex
+	mutex               sync.RWMutex
 	automaticEnvEnabled bool
 	configFiles         []string
 
@@ -243,8 +243,8 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 
 // Clone creates a copy of the current configuration.
 func (ev *extendedViper) Clone() Configuration {
-	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
 
 	// manually clone the Configuration instance
 	var clone Configuration
@@ -290,20 +290,18 @@ func (ev *extendedViper) Clone() Configuration {
 // Set sets a configuration value.
 func (ev *extendedViper) Set(key string, value interface{}) {
 	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
-
+	localStorage := ev.storage
+	isPersisted := ev.persistedKeys[key]
 	ev.viper.Set(key, value)
+	ev.mutex.Unlock()
 
-	if ev.storage != nil && ev.persistedKeys[key] {
+	if localStorage != nil && isPersisted {
 		//nolint:errcheck // breaking api change needed to fix this
-		_ = ev.storage.Set(key, value)
+		_ = localStorage.Set(key, value)
 	}
 }
 
 func (ev *extendedViper) get(key string) interface{} {
-	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
-
 	ev.bindEnv(key)
 	result := ev.viper.Get(key)
 	isSet := ev.viper.IsSet(key)
@@ -325,7 +323,7 @@ func (ev *extendedViper) get(key string) interface{} {
 
 // bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var
 func (ev *extendedViper) bindEnv(key string) {
-	isEnvVarKeyType := ev.GetKeyType(key) == EnvVarKeyType
+	isEnvVarKeyType := ev.getKeyType(key) == EnvVarKeyType
 	isInAllKeys := slices.Contains(ev.viper.AllKeys(), key)
 
 	// Viper's BindEnv implementation will bind the same env var multiple times, this check avoids potential duplication issues
@@ -339,6 +337,9 @@ func (ev *extendedViper) bindEnv(key string) {
 
 // IsSet returns true if a value for the given key was explicitly set
 func (ev *extendedViper) IsSet(key string) bool {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
 	isSet := ev.viper.IsSet(key)
 	if !isSet {
 		for _, altKey := range ev.alternativeKeys[key] {
@@ -372,11 +373,13 @@ func (ev *extendedViper) Unset(key string) {
 
 // Get returns a configuration value.
 func (ev *extendedViper) Get(key string) interface{} {
-	// use synchronized get()
+	ev.mutex.Lock()
 	value := ev.get(key)
+	defaultFunc, ok := ev.defaultValues[key]
+	ev.mutex.Unlock()
 
-	if ev.defaultValues[key] != nil {
-		value = ev.defaultValues[key](value)
+	if ok && defaultFunc != nil {
+		value = defaultFunc(value)
 	}
 
 	return value
@@ -480,6 +483,8 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 
 // AddFlagSet adds a flag set to the configuration.
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
 	ev.flagsets = append(ev.flagsets, flagset)
 	return ev.viper.BindPFlags(flagset)
 }
@@ -503,6 +508,9 @@ func (ev *extendedViper) GetStringSlice(key string) []string {
 
 // AllKeys returns all keys of the configuration.
 func (ev *extendedViper) AllKeys() []string {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
 	keys := ev.viper.AllKeys()
 
 	for k := range ev.defaultValues {
@@ -514,16 +522,23 @@ func (ev *extendedViper) AllKeys() []string {
 
 // AddDefaultValue adds a default value to the configuration.
 func (ev *extendedViper) AddDefaultValue(key string, defaultValue DefaultValueFunction) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
 	ev.defaultValues[key] = defaultValue
 }
 
 // AddAlternativeKeys adds alternative keys to the configuration.
 func (ev *extendedViper) AddAlternativeKeys(key string, altKeys []string) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
 	ev.alternativeKeys[key] = altKeys
 }
 
 // GetAlternativeKeys returns alternative keys from the configuration.
 func (ev *extendedViper) GetAlternativeKeys(key string) []string {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
 	return ev.alternativeKeys[key]
 }
 
@@ -540,8 +555,8 @@ func (ev *extendedViper) SetStorage(storage Storage) {
 }
 
 func (ev *extendedViper) GetStorage() Storage {
-	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
 	return ev.storage
 }
 
@@ -577,6 +592,13 @@ func (ev *extendedViper) GetAllKeysThatContainValues(key string) []string {
 }
 
 func (ev *extendedViper) GetKeyType(key string) KeyType {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+
+	return ev.getKeyType(key)
+}
+
+func (ev *extendedViper) getKeyType(key string) KeyType {
 	// check for supported env vars
 	for _, envVar := range ev.supportedEnvVars {
 		if strings.EqualFold(key, envVar) {
@@ -605,8 +627,8 @@ func (ev *extendedViper) AutomaticEnv() {
 }
 
 func (ev *extendedViper) GetAutomaticEnv() bool {
-	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
 
 	return ev.automaticEnvEnabled
 }
@@ -627,8 +649,8 @@ func (ev *extendedViper) SetSupportedEnvVars(envVars ...string) {
 }
 
 func (ev *extendedViper) GetSupportedEnvVars() []string {
-	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
 
 	return ev.supportedEnvVars
 }
@@ -649,8 +671,8 @@ func (ev *extendedViper) SetSupportedEnvVarPrefixes(prefixes ...string) {
 }
 
 func (ev *extendedViper) GetSupportedEnvVarPrefixes() []string {
-	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
 
 	return ev.supportedEnvVarPrefixes
 }
@@ -664,8 +686,8 @@ func (ev *extendedViper) SetFiles(files ...string) {
 }
 
 func (ev *extendedViper) GetFiles() []string {
-	ev.mutex.Lock()
-	defer ev.mutex.Unlock()
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
 
 	return ev.configFiles
 }
