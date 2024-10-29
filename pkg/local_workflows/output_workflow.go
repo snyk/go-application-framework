@@ -161,6 +161,7 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 }
 
 func handleContentTypeFindingsModel(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
+	debugLogger.Info().Msgf("[%d] Handling findings model", i)
 	var localFindings local_models.LocalFinding
 	localFindingsBytes, ok := input[i].GetPayload().([]byte)
 	if !ok {
@@ -190,13 +191,14 @@ func handleContentTypeFindingsModel(config configuration.Configuration, input []
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) || len(config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)) > 0 {
 		mimeType = presenters.ApplicationJSONMimeType
-		templates = []string{} // TODO: specify SARIF template
+		templates = []string{} // TODO: specify SARIF template CLI-550
 	}
 
 	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
 		templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
 	}
 
+	debugLogger.Info().Msgf("[%d] Creating findings model renderer", i)
 	renderer := presenters.NewLocalFindingsRenderer(
 		&localFindings,
 		config,
@@ -204,12 +206,14 @@ func handleContentTypeFindingsModel(config configuration.Configuration, input []
 		presenters.WithLocalFindingsTestPath(input[i].GetContentLocation()),
 	)
 
+	debugLogger.Info().Msgf("[%d] Rendering %s with %s", i, mimeType, templates)
 	err = renderer.RenderTemplate(templates, mimeType)
 	if err != nil {
 		debugLogger.Warn().Err(err).Msg("Failed to render local finding")
 		return err
 	}
 
+	debugLogger.Info().Msgf("[%d] Rendering done", i)
 	return nil
 }
 
