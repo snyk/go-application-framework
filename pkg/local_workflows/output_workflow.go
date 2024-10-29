@@ -3,10 +3,10 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
@@ -26,6 +26,7 @@ const (
 	OUTPUT_CONFIG_KEY_JSON_FILE  = "json-file-output"
 	OUTPUT_CONFIG_KEY_SARIF      = "sarif"
 	OUTPUT_CONFIG_KEY_SARIF_FILE = "sarif-file-output"
+	OUTPUT_CONFIG_TEMPLATE_FILE  = "internal_template_file"
 )
 
 // InitOutputWorkflow initializes the output workflow
@@ -102,40 +103,17 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			var localFindings local_models.LocalFinding
-			severityThreshold := invocation.GetConfiguration().GetString(configuration.FLAG_SEVERITY_THRESHOLD)
-			localFindingsBytes, ok := input[i].GetPayload().([]byte)
-			if !ok {
-				return output, fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
-			}
-			err := json.Unmarshal(localFindingsBytes, &localFindings)
+			err := handleContentTypeFindingsModel(config, input, i, outputDestination, debugLogger)
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to unmarshal local finding")
-				continue
+				return output, err
 			}
-
-			findingPresentation := presenters.LocalFindingsTestResults(
-				localFindings,
-				presenters.WithLocalFindingsTestPath(input[i].GetContentLocation()),
-				presenters.WithLocalFindingsOrg(config.GetString(configuration.ORGANIZATION_SLUG)),
-				presenters.WithLocalFindingsIgnoredIssues(config.GetBool(configuration.FLAG_INCLUDE_IGNORES)),
-				presenters.WithLocalFindingsSeverityLevel(severityThreshold),
-			)
-
-			result, err := findingPresentation.Render()
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to render local finding")
-				continue
-			}
-
-			outputDestination.Println(result)
 			continue
 		}
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
 			outputSummary, err := filterSummaryOutput(config, input[i], debugLogger)
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to filter test summary output")
+				debugLogger.Warn().Err(err).Msg("Failed to filter test summary output")
 				output = append(output, input[i])
 			}
 			output = append(output, outputSummary)
@@ -179,6 +157,59 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 	}
 
 	outputDestination.Println(singleDataAsString)
+	return nil
+}
+
+func handleContentTypeFindingsModel(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
+	var localFindings local_models.LocalFinding
+	localFindingsBytes, ok := input[i].GetPayload().([]byte)
+	if !ok {
+		return fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
+	}
+
+	err := json.Unmarshal(localFindingsBytes, &localFindings)
+	if err != nil {
+		debugLogger.Warn().Err(err).Msg("Failed to unmarshal local finding")
+		return err
+	}
+
+	writer := outputDestination.GetWriter()
+	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
+	mimeType := presenters.DefaultMimeType
+	templates := presenters.DefaultTemplateFiles
+
+	if len(outputFileName) > 0 {
+		file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
+		if fileErr != nil {
+			return fileErr
+		}
+
+		writer = file
+		defer file.Close()
+	}
+
+	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) || len(config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)) > 0 {
+		mimeType = presenters.ApplicationJSONMimeType
+		templates = []string{} // TODO: specify SARIF template
+	}
+
+	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
+		templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
+	}
+
+	renderer := presenters.NewLocalFindingsRenderer(
+		&localFindings,
+		config,
+		writer,
+		presenters.WithLocalFindingsTestPath(input[i].GetContentLocation()),
+	)
+
+	err = renderer.RenderTemplate(templates, mimeType)
+	if err != nil {
+		debugLogger.Warn().Err(err).Msg("Failed to render local finding")
+		return err
+	}
+
 	return nil
 }
 

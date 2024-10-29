@@ -1,0 +1,14 @@
+{{- define "main" -}}
+{
+{{- $findingsSize := len $.OpenFindings}}
+{{- $findingsSize = sub $findingsSize 1}}
+    "findings" :
+    [
+{{- range $index, $element := $.OpenFindings}}
+        "{{$element.Attributes.Message.Header}}"{{if lt $index $findingsSize}},{{end}}
+
+{{- end }}
+    ]
+}
+{{- end }}
+{{- template "main" . }}
