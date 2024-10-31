@@ -41,6 +41,8 @@ func (e *EngineImpl) GetLogger() *zerolog.Logger {
 }
 
 func (e *EngineImpl) SetLogger(logger *zerolog.Logger) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.logger = logger
 
 	if e.networkAccess != nil {
@@ -49,6 +51,8 @@ func (e *EngineImpl) SetLogger(logger *zerolog.Logger) {
 }
 
 func (e *EngineImpl) SetConfiguration(config configuration.Configuration) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.config = config
 
 	if e.networkAccess != nil {
@@ -247,9 +251,10 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 
 			// prepare logger
 			prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
-			e.mu.Unlock()
-
 			zlogger := e.logger.With().Str("ext", prefix).Logger()
+
+			localUi := e.ui
+			localAnalytics := e.analytics
 
 			// prepare configuration
 			if config == nil {
@@ -259,9 +264,10 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			// prepare networkAccess
 			networkAccess := e.networkAccess.Clone()
 			networkAccess.SetConfiguration(config)
+			e.mu.Unlock()
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, config, e, networkAccess, zlogger, e.analytics, e.ui)
+			context := NewInvocationContext(id, config, e, networkAccess, zlogger, localAnalytics, localUi)
 
 			// invoke workflow through its callback
 			zlogger.Printf("Workflow Start")
