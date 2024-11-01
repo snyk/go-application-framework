@@ -1,16 +1,11 @@
 package presenters
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
 	"io"
 	"os"
-	"slices"
-	"strings"
 	"text/template"
-
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -27,27 +22,11 @@ var embeddedFiles embed.FS
 type TemplateImplFunction func() (*template.Template, template.FuncMap, error)
 
 type LocalFindingPresenter struct {
-	ShowIgnored      bool
-	Input            *local_models.LocalFinding
-	OrgName          string
-	TestPath         string
-	SeverityMinLevel string
-	config           configuration.Configuration
-	writer           io.Writer
-	templateImpl     map[string]TemplateImplFunction
-}
-
-type PresentationFindingResource struct {
-	local_models.FindingResource
-}
-
-func (pfr *PresentationFindingResource) IsIgnored() bool {
-	return pfr.Attributes.Suppression != nil
-}
-
-type FilteredFindings struct {
-	OpenFindings    []*PresentationFindingResource
-	IgnoredFindings []*PresentationFindingResource
+	TestPath     string
+	Input        *local_models.LocalFinding
+	config       configuration.Configuration
+	writer       io.Writer
+	templateImpl map[string]TemplateImplFunction
 }
 
 // DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.
@@ -57,18 +36,6 @@ var DefaultTemplateFiles = []string{
 }
 
 type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
-
-func WithLocalFindingsIgnoredIssues(showIgnored bool) LocalFindingPresenterOptions {
-	return func(p *LocalFindingPresenter) {
-		p.ShowIgnored = showIgnored
-	}
-}
-
-func WithLocalFindingsOrg(org string) LocalFindingPresenterOptions {
-	return func(p *LocalFindingPresenter) {
-		p.OrgName = org
-	}
-}
 
 func WithLocalFindingsTestPath(testPath string) LocalFindingPresenterOptions {
 	return func(p *LocalFindingPresenter) {
@@ -95,7 +62,7 @@ func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, confi
 					return nil, nil, err
 				}
 
-				functionMapMimeType := getTemplateFuncsCLI(localFindingsTemplate)
+				functionMapMimeType := getCliTemplateFuncMap(localFindingsTemplate)
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
 		},
@@ -108,29 +75,8 @@ func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, confi
 	return p
 }
 
-func loadTemplates(files []string, tmpl *template.Template) error {
-	if len(files) == 0 {
-		return fmt.Errorf("a template file must be specified")
-	}
-
-	for _, filename := range files {
-		data, err := embeddedFiles.ReadFile(filename)
-		if err != nil {
-			data, err = os.ReadFile(filename)
-			if err != nil {
-				return fmt.Errorf("failed to read template file %s", filename)
-			}
-		}
-		tmpl, err = tmpl.Parse(string(data))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (p *LocalFindingPresenter) getImplementationFromMimeType(mimeType string) (*template.Template, error) {
-	functionMapGeneral := getDefaultTemplateFunctions(p.config)
+	functionMapGeneral := getDefaultTemplateFuncMap(p.config)
 
 	if _, ok := p.templateImpl[mimeType]; !ok {
 		mimeType = NoneMimeType
@@ -159,6 +105,8 @@ func (p *LocalFindingPresenter) RegisterMimeType(mimeType string, implFactory Te
 }
 
 func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
+	orgName := p.config.GetString(configuration.ORGANIZATION_SLUG)
+	severityMinLevel := p.config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)
 	// mimetype specific
 	localFindingsTemplate, err := p.getImplementationFromMimeType(mimeType)
 	if err != nil {
@@ -171,29 +119,21 @@ func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType 
 		return err
 	}
 
-	sum := PrepareSummary(&p.Input.Summary, p.OrgName, p.TestPath, p.SeverityMinLevel)
+	summary := PrepareSummary(&p.Input.Summary, orgName, p.TestPath, severityMinLevel)
 
 	mainTmpl := localFindingsTemplate.Lookup("main")
 	if mainTmpl == nil {
 		return fmt.Errorf("the template must contain a 'main'")
 	}
 
-	filteredFindings := filterOutIgnoredFindings(p.Input.Findings, p.ShowIgnored, []string{"low", "medium", "high"})
-
 	err = mainTmpl.Execute(p.writer, struct {
-		Summary         SummaryData `json:"summary"`
-		OpenFindings    []*PresentationFindingResource
-		IgnoredFindings []*PresentationFindingResource
-		ShowIgnored     bool
-		ShowDivider     bool
-		SeverityFilter  string
+		Summary  SummaryData `json:"summary"`
+		Finding  *local_models.LocalFinding
+		Findings []local_models.FindingResource
 	}{
-		Summary:         sum,
-		OpenFindings:    filteredFindings.OpenFindings,
-		IgnoredFindings: filteredFindings.IgnoredFindings,
-		ShowIgnored:     p.ShowIgnored,
-		ShowDivider:     shouldShowDivider(filteredFindings, p.ShowIgnored),
-		SeverityFilter:  p.SeverityMinLevel,
+		Summary:  summary,
+		Finding:  p.Input,
+		Findings: p.Input.Findings,
 	})
 	if err != nil {
 		return err
@@ -201,95 +141,23 @@ func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType 
 	return nil
 }
 
-func shouldShowDivider(findings FilteredFindings, showIgnored bool) bool {
-	hasFindings := len(findings.OpenFindings) > 0 && len(findings.IgnoredFindings) > 0
-	return hasFindings || showIgnored
-}
-
-func sortFindings(findings []*PresentationFindingResource, order []string) []*PresentationFindingResource {
-	result := make([]*PresentationFindingResource, 0, len(findings))
-
-	result = append(result, findings...)
-
-	slices.SortFunc(result, func(a, b *PresentationFindingResource) int {
-		if a.Attributes.Rating.Severity.Value != b.Attributes.Rating.Severity.Value {
-			return slices.Index(order, string(a.Attributes.Rating.Severity.Value)) - slices.Index(order, string(b.Attributes.Rating.Severity.Value))
-		}
-
-		return 0
-	})
-
-	return result
-}
-
-func filterOutIgnoredFindings(findings []local_models.FindingResource, showIgnored bool, sortOrder []string) (filtered FilteredFindings) {
-	for _, finding := range findings {
-		if finding.Attributes.Suppression == nil {
-			filtered.OpenFindings = append(filtered.OpenFindings, &PresentationFindingResource{FindingResource: finding})
-		} else if showIgnored {
-			filtered.IgnoredFindings = append(filtered.IgnoredFindings, &PresentationFindingResource{FindingResource: finding})
-		}
+func loadTemplates(files []string, tmpl *template.Template) error {
+	if len(files) == 0 {
+		return fmt.Errorf("a template file must be specified")
 	}
 
-	filtered.OpenFindings = sortFindings(filtered.OpenFindings, sortOrder)
-	filtered.IgnoredFindings = sortFindings(filtered.IgnoredFindings, sortOrder)
-	return filtered
-}
-
-func renderTemplateToString(tmpl *template.Template) func(name string, data interface{}) (string, error) {
-	return func(name string, data interface{}) (string, error) {
-		var buf bytes.Buffer
-		err := tmpl.ExecuteTemplate(&buf, name, data)
+	for _, filename := range files {
+		data, err := embeddedFiles.ReadFile(filename)
 		if err != nil {
-			return "", err
+			data, err = os.ReadFile(filename)
+			if err != nil {
+				return fmt.Errorf("failed to read template file %s", filename)
+			}
 		}
-		return buf.String(), nil
+		tmpl, err = tmpl.Parse(string(data))
+		if err != nil {
+			return err
+		}
 	}
-}
-
-func renderWithSeverity(severity string) string {
-	var style lipgloss.TerminalColor = lipgloss.NoColor{}
-	if strings.Contains(severity, "MEDIUM") {
-		style = lipgloss.AdaptiveColor{Light: "11", Dark: "3"}
-	}
-	if strings.Contains(severity, "HIGH") {
-		style = lipgloss.AdaptiveColor{Light: "9", Dark: "1"}
-	}
-	severityStyle := lipgloss.NewStyle().Foreground(style)
-	return severityStyle.Render(severity)
-}
-
-func bold(s string) string {
-	return lipgloss.NewStyle().Bold(true).Render(s)
-}
-
-func add(a, b int) int {
-	return a + b
-}
-
-func sub(a, b int) int {
-	return a - b
-}
-
-func getTemplateFuncsCLI(tmpl *template.Template) template.FuncMap {
-	fnMap := template.FuncMap{}
-	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
-	fnMap["toUpperCase"] = strings.ToUpper
-	fnMap["renderInSeverityColor"] = renderWithSeverity
-	fnMap["bold"] = bold
-	fnMap["tip"] = func(s string) string {
-		return RenderTip(s + "\n")
-	}
-	fnMap["divider"] = RenderDivider
-	fnMap["title"] = RenderTitle
-	fnMap["renderToString"] = renderTemplateToString(tmpl)
-	return fnMap
-}
-
-func getDefaultTemplateFunctions(config configuration.Configuration) template.FuncMap {
-	defaultMap := template.FuncMap{}
-	defaultMap["getValueFromConfig"] = config.Get
-	defaultMap["add"] = add
-	defaultMap["sub"] = sub
-	return defaultMap
+	return nil
 }

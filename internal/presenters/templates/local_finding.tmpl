@@ -1,20 +1,27 @@
 {{- define "details" }}
-{{- if gt ($.OpenFindings | len) 0 }}{{ "Open Issues" | title }}
-
-        {{- range $finding := $.OpenFindings}}
+    {{- $sortedFindings := $.Finding.Findings | sortFindingBy "Attributes.Rating.Severity.Value" $.Finding.Summary.SeverityOrderAsc }}
+    {{- $openFindings := $sortedFindings | filterFinding (notHasField "Attributes.Suppression.Kind") }}
+    {{- $ignoredFindings := $sortedFindings | filterFinding (hasField "Attributes.Suppression.Kind") }}
+    {{- $hasOpenFindings := gt ($openFindings | len) 0 }}
+    {{- $hasIgnoredFindings := gt ($ignoredFindings | len) 0 }}
+    {{- if $hasOpenFindings }}{{ "Open Issues" | title }}
+            {{- range $finding := $openFindings }}
                 {{- renderToString "finding" $finding }}
-        {{- end }}
-{{- end }}
-{{- if .ShowDivider}}{{divider}}{{- end}}
-{{- if $.ShowIgnored }}{{"Ignored Issues" | title }}
-
-{{- if gt ($.IgnoredFindings | len) 0 }}
-        {{- range $finding := $.IgnoredFindings}}
-                {{- renderToString "finding" $finding }}
-        {{- end }}
-{{- else}}  There are no ignored issues{{- end}}
+            {{- end }}
+    {{- end }}
+    {{- if or (and $hasOpenFindings $hasIgnoredFindings) (eq (getValueFromConfig "include-ignores") "true") }}
+        {{- divider}}
+    {{- end}}
+{{- if eq (getValueFromConfig "include-ignores") "true" }}{{"Ignored Issues" | title }}
+    {{- if $hasIgnoredFindings }}
+            {{- range $finding := $ignoredFindings}}
+                    {{- renderToString "finding" $finding }}
+            {{- end }}
+            {{- else}}  There are no ignored issues
+    {{- end}}
 {{tip "Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/"}}
-{{- end}}{{- end}}{{/* end "details" */}}
+{{- end}}
+{{- end}}{{/* end "details" */}}
 
 {{define "header" }}
 {{ print "Testing " .Summary.TestPath " ..." | bold }}
@@ -34,11 +41,11 @@
 {{- template "header"  . }}
 {{- template "details" . }}
 
-{{ if $.SeverityFilter }}
+{{ if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
     {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
 {{ end }}{{- box (renderToString "summary" .)}}
 
-{{- if eq $.ShowIgnored false }}
+{{- if ne (getValueFromConfig "include-ignores") "true" }}
     {{tip "To view ignored issues, use the --include-ignores option."}}
 {{- end }}
 {{end }} {{/* end main */}}
