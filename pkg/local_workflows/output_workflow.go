@@ -191,6 +191,7 @@ func handleContentTypeFindingsModel(config configuration.Configuration, input []
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) || len(config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)) > 0 {
 		mimeType = presenters.ApplicationSarifMimeType
+		templates = presenters.ApplicationSarifTemplates
 	}
 
 	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {

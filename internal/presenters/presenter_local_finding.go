@@ -35,6 +35,9 @@ type LocalFindingPresenter struct {
 var DefaultTemplateFiles = []string{
 	"templates/local_finding.tmpl",
 	"templates/finding.component.tmpl",
+}
+
+var ApplicationSarifTemplates = []string{
 	"templates/local_finding.sarif.tmpl",
 }
 
