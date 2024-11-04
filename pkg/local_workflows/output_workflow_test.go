@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/code"
+	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -348,6 +352,35 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		}
 		assert.Equal(t, 1, len(output))
 	})
+
+	t.Run("should print valid sarif json output", func(t *testing.T) {
+		localFinding, err := sarifToLocalFinding(t, "testdata/sarif-juice-shop.json")
+		assert.Nil(t, err)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+
+		localFindingBytes, err := json.Marshal(localFinding)
+		assert.Nil(t, err)
+
+		sarifData := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
+		sarifData.SetContentLocation("/mypath")
+
+		// mock assertions
+		byteBuffer := &bytes.Buffer{}
+		outputDestination.EXPECT().GetWriter().Return(byteBuffer)
+
+		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
+		defer config.Set(OUTPUT_CONFIG_KEY_SARIF, nil)
+
+		// execute
+		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+		assert.NoError(t, err)
+
+		// assert
+		var sarifDoc sarif.SarifDocument
+		err = json.Unmarshal(byteBuffer.Bytes(), &sarifDoc)
+		assert.NoError(t, err)
+	})
 }
 
 func getSarifInput() sarif.SarifDocument {
@@ -426,4 +459,32 @@ func getSarifInput() sarif.SarifDocument {
 			},
 		},
 	}
+}
+
+func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_models.LocalFinding, err error) {
+	t.Helper()
+	jsonFile, err := os.Open("./" + filename)
+	if err != nil {
+		t.Errorf("Failed to load json")
+	}
+
+	defer func(jsonFile *os.File) {
+		jsonErr := jsonFile.Close()
+		assert.NoError(t, jsonErr)
+	}(jsonFile)
+	sarifBytes, err := io.ReadAll(jsonFile)
+	assert.NoError(t, err)
+
+	// Read sarif file again for summary
+	var sarifDoc sarif.SarifDocument
+
+	err = json.Unmarshal(sarifBytes, &sarifDoc)
+	assert.NoError(t, err)
+
+	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc)
+	summaryBytes, err := json.Marshal(summaryData)
+	assert.NoError(t, err)
+
+	tmp, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	return &tmp, err
 }

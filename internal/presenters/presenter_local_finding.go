@@ -9,12 +9,14 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
 const DefaultMimeType = "text/cli"
 const NoneMimeType = "unknown"
 const ApplicationJSONMimeType = "application/json"
+const ApplicationSarifMimeType = content_type.SARIF_JSON
 
 //go:embed templates/*
 var embeddedFiles embed.FS
@@ -33,6 +35,7 @@ type LocalFindingPresenter struct {
 var DefaultTemplateFiles = []string{
 	"templates/local_finding.tmpl",
 	"templates/finding.component.tmpl",
+	"templates/local_finding.sarif.tmpl",
 }
 
 type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
@@ -58,6 +61,15 @@ func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, confi
 			},
 			DefaultMimeType: func() (*template.Template, template.FuncMap, error) {
 				localFindingsTemplate, err := template.New(DefaultMimeType).Parse("")
+				if err != nil {
+					return nil, nil, err
+				}
+
+				functionMapMimeType := getCliTemplateFuncMap(localFindingsTemplate)
+				return localFindingsTemplate, functionMapMimeType, nil
+			},
+			ApplicationSarifMimeType: func() (*template.Template, template.FuncMap, error) {
+				localFindingsTemplate, err := template.New(ApplicationSarifMimeType).Parse("")
 				if err != nil {
 					return nil, nil, err
 				}
