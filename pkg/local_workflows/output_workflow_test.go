@@ -6,16 +6,18 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/code"
-	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/stretchr/testify/assert"
 	"github.com/xeipuuv/gojsonschema"
+
+	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
@@ -378,13 +380,17 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 
 		// assert
-		sarifSchema := gojsonschema.NewReferenceLoader("file:///Users/luke/snyk/go-application-framework/internal/cueutils/source/sarif-schema-2.1.0.json")
+		sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
+		assert.NoError(t, err)
+		sarifSchema := gojsonschema.NewReferenceLoader("file://" + sarifSchemaPath)
+		assert.NotNil(t, sarifSchema)
 
-		var sarifDoc sarif.SarifDocument
-		err = json.Unmarshal(byteBuffer.Bytes(), &sarifDoc)
+		validationResult, err := gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(byteBuffer.Bytes()))
 		assert.NoError(t, err)
-		_, err = gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(byteBuffer.Bytes()))
-		assert.NoError(t, err)
+		for _, validationError := range validationResult.Errors() {
+			t.Log(validationError)
+		}
+		assert.True(t, validationResult.Valid(), "Sarif validation failed")
 	})
 }
 
