@@ -24,14 +24,14 @@
 {{- end}}{{/* end "details" */}}
 
 {{define "header" }}
-{{ print "Testing "  " ..." | bold }}
+{{ print "Testing " .Summary.Path  " ..." | bold }}
 {{end }}
 
 {{- define "summary"}}{{ "Test Summary" | bold }}
 
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ if eq .Summary.Type "sast" }}Static code analysis{{else}}{{ .Summary.Type }}}{{ end}}
-  Project path:
+  Project path:      {{ .Summary.Path }}
 
   {{- $totalIssueCount := 0 }}
   {{- $openIssueCount := 0 }}
@@ -44,7 +44,7 @@
 
   Total issues:   {{ $totalIssueCount }}
   {{- if gt $totalIssueCount 0}}
-  Ignored issues: {{ $ignoredIssueCount }} [
+  Ignored issues: {{ print  $ignoredIssueCount | bold }} [
   {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
       {{- $countFound := 0 }}
       {{- range $summaryResults := $.Summary.Results }}
@@ -54,7 +54,7 @@
       {{- end}}
       {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
   {{- end}}]
-  Open issues:    {{ $openIssueCount }} [
+  Open issues:    {{ print $openIssueCount | bold }} [
   {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
       {{- $countFound := 0 }}
       {{- range $summaryResults := $.Summary.Results }}
@@ -73,14 +73,22 @@
 
     {{- if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
         {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
-    {{- end }}{{- box (renderToString "summary" $result)}}
+    {{- end }}
+
+    {{- "\n\n" }}
+
+    {{- box (renderToString "summary" $result)}}
+
+    {{- "\n    " }}
 
     {{- if ne (getValueFromConfig "include-ignores") "true" }}
-        {{tip "To view ignored issues, use the --include-ignores option."}}
+
+        {{- tip "To view ignored issues, use the --include-ignores option."}}
+        {{- "\n" }}
     {{- end }}
 
 {{- end }}
 
 {{- end }} {{/* end main */}}
 
-{{template "main" . }}
+{{ template "main" . }}
