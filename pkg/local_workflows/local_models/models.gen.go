@@ -690,8 +690,8 @@ type TypesFindingRelationships struct {
 	// Autofixes Relate to autofixes for the finding, if available.
 	Autofixes *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -702,8 +702,8 @@ type TypesFindingRelationships struct {
 	// Explanation Relate to a human-readable webpage that explains the finding, if available.
 	Explanation *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -714,8 +714,8 @@ type TypesFindingRelationships struct {
 	// FixDetails Relate to fix information for the finding, if available.
 	FixDetails *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -726,8 +726,8 @@ type TypesFindingRelationships struct {
 	// PolicyModifications Policy modifications applied to this finding, if available.
 	PolicyModifications *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -752,8 +752,8 @@ type TypesFindingRelationships struct {
 	// Pointer fragment if an XML media type is advertised.
 	RawDetails *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink                `json:"links"`
 		Meta  TypesFindingRelationships_RawDetails_Meta `json:"meta"`
@@ -762,8 +762,8 @@ type TypesFindingRelationships struct {
 	// Remediations Relate to remediations for the finding, if available.
 	Remediations *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -774,8 +774,8 @@ type TypesFindingRelationships struct {
 	// SastRuleDetails Relate to details about the rule which was violated in a SAST finding.
 	SastRuleDetails *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -787,8 +787,8 @@ type TypesFindingRelationships struct {
 	// finding.
 	ScaVulnDetails *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -1089,8 +1089,8 @@ type TypesTestRelationships struct {
 	// Findings Relationship link to the findings collection for this test.
 	Findings struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -1101,8 +1101,8 @@ type TypesTestRelationships struct {
 	// Logs Relate to application-facing logs produced by the test.
 	Logs *struct {
 		Data *struct {
-			Id   openapi_types.UUID `json:"id"`
-			Type string             `json:"type"`
+			Id   string `json:"id"`
+			Type string `json:"type"`
 		} `json:"data,omitempty"`
 		Links IoSnykApiCommonRelatedLink `json:"links"`
 
