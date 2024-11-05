@@ -16,8 +16,8 @@ input: sarif
 // Validate the output as conforming to a composition of
 // a Test resource and an array of Finding resources.
 output: {
-	test: testapi.#TestResource
-	findings: [...testapi.#FindingResource]
+	test: testapi.#SchemaMap["types.TestResource"]
+	findings: [...testapi.#SchemaMap["types.FindingResource"]]
 }
 
 // TODO: Inject from runtime context
@@ -26,7 +26,7 @@ context: {
 	test: id: "12d77614-e02d-44d7-bb52-3a1b179d5890"
 }
 
-_summary: testapi.#FindingsSummary
+_summary: testapi.#SchemaMap["types.FindingsSummary"]
 // TODO: Inject from runtime context
 _summary: {
 	counts: {
