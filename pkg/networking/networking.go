@@ -17,7 +17,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
+//go:generate mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
 // NetworkAccess is the interface for network access.
 // It provides methods to get an HTTP client with default behaviors that handle authentication headers for Snyk API calls.
