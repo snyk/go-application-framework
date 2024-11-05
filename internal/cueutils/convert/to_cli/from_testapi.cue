@@ -5,8 +5,8 @@ import "snyk.io/dragonfly/pkg/schemas:testapi"
 input: _
 
 input: {
-	test: testapi.#TestResource
-	findings: [...testapi.#FindingResource]
+	test: testapi.#SchemaMap["types.TestResource"]
+	findings: [...testapi.#SchemaMap["types.FindingResource"]]
 }
 
 // This should align with
