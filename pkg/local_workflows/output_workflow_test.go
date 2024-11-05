@@ -379,6 +379,22 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 		assert.NoError(t, err)
 
+		expectedSarif := &sarif.SarifDocument{}
+		expectedSarifFile, err := os.Open("testdata/sarif-juice-shop.json")
+		assert.NoError(t, err)
+
+		expectedSarifBytes, err := io.ReadAll(expectedSarifFile)
+		assert.NoError(t, err)
+
+		err = json.Unmarshal(expectedSarifBytes, expectedSarif)
+		assert.NoError(t, err)
+
+		actualSarif := &sarif.SarifDocument{}
+		err = json.Unmarshal(byteBuffer.Bytes(), actualSarif)
+		assert.NoError(t, err)
+
+		assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
+
 		t.Log(byteBuffer.String())
 
 		// assert
