@@ -2,6 +2,7 @@ package presenters
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -164,5 +165,34 @@ func getDefaultTemplateFuncMap(config configuration.Configuration) template.Func
 	}
 	defaultMap["add"] = add
 	defaultMap["sub"] = sub
+	defaultMap["reverse"] = reverse
 	return defaultMap
+}
+
+func reverse(v interface{}) []interface{} {
+	l, err := mustReverse(v)
+	if err != nil {
+		panic(err)
+	}
+
+	return l
+}
+
+func mustReverse(v interface{}) ([]interface{}, error) {
+	tp := reflect.TypeOf(v).Kind()
+	switch tp {
+	case reflect.Slice, reflect.Array:
+		l2 := reflect.ValueOf(v)
+
+		l := l2.Len()
+		// We do not sort in place because the incoming array should not be altered.
+		nl := make([]interface{}, l)
+		for i := 0; i < l; i++ {
+			nl[l-i-1] = l2.Index(i).Interface()
+		}
+
+		return nl, nil
+	default:
+		return nil, fmt.Errorf("Cannot find reverse on type %s", tp)
+	}
 }

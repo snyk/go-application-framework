@@ -27,7 +27,7 @@
 {{ print "Testing "  " ..." | bold }}
 {{end }}
 
-{{define "summary"}}{{ "Test Summary" | bold }}
+{{- define "summary"}}{{ "Test Summary" | bold }}
 
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ if eq .Summary.Type "sast" }}Static code analysis{{else}}{{ .Summary.Type }}}{{ end}}
@@ -44,18 +44,36 @@
 
   Total issues:   {{ $totalIssueCount }}
   {{- if gt $totalIssueCount 0}}
-  Ignored issues: {{ $ignoredIssueCount }} [ {{- range $resultCount := .Summary.Results }} {{ $resultCount.Ignored }} {{ $resultCount.Severity | toUpperCase }} {{- end}} ]
-  Open issues:    {{ $openIssueCount }} [ {{- range $resultCount := .Summary.Results }} {{ $resultCount.Open }} {{ $resultCount.Severity | toUpperCase }} {{- end}} ]{{- end}}
-{{end}}
+  Ignored issues: {{ $ignoredIssueCount }} [
+  {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
+      {{- $countFound := 0 }}
+      {{- range $summaryResults := $.Summary.Results }}
+          {{- if eq ($summaryResults.Severity | toUpperCase) ($severity | toUpperCase)}}
+              {{- $countFound = $summaryResults.Ignored }}
+          {{- end}}
+      {{- end}}
+      {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
+  {{- end}}]
+  Open issues:    {{ $openIssueCount }} [
+  {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
+      {{- $countFound := 0 }}
+      {{- range $summaryResults := $.Summary.Results }}
+          {{- if eq ($summaryResults.Severity | toUpperCase) ($severity | toUpperCase)}}
+              {{- $countFound = $summaryResults.Open }}
+          {{- end}}
+      {{- end}}
+      {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
+  {{- end}}]{{- end}}
+{{- end}} {{/* end summary */}}
 
-{{define "main" }}
+{{- define "main" }}
 {{- range $result := $.Results}}
     {{- template "header"  $result }}
     {{- template "details" $result }}
 
-    {{ if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
+    {{- if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
         {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
-    {{ end }}{{- box (renderToString "summary" $result)}}
+    {{- end }}{{- box (renderToString "summary" $result)}}
 
     {{- if ne (getValueFromConfig "include-ignores") "true" }}
         {{tip "To view ignored issues, use the --include-ignores option."}}
@@ -63,6 +81,6 @@
 
 {{- end }}
 
-{{end }} {{/* end main */}}
+{{- end }} {{/* end main */}}
 
 {{template "main" . }}
