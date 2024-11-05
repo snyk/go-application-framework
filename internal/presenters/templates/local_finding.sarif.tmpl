@@ -18,7 +18,7 @@
                             {{- $findingsSize := sub (len $result.Findings) 1 }}
                             {{- range $index, $finding := $result.Findings }}
                                 {
-                                    "id": "{{ $finding. }}",
+                                    "id": "{{ $finding.Id }}",
                                     "shortDescription": {
                                         "text": ""
                                     },
