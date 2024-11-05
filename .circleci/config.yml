@@ -47,6 +47,7 @@ jobs:
           name: Generate Files
           command: |
             make generate
+            make format
             git diff --exit-code || (echo 'Uncommitted changes detected after generate step. Failing build. Run "make generate" locally and commit changes.' && exit 1)
   build:
     <<: *base_image
