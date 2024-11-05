@@ -35,6 +35,19 @@ jobs:
           name: Run unit tests
           command: go test ./...
 
+  generate: 
+    <<: *base_image
+    steps:
+      - checkout
+      - run: 
+          name: Install tools
+          command: | 
+            make tools
+      - run:
+          name: Generate Files
+          command: |
+            make generate
+            git diff --exit-code || (echo 'Uncommitted changes detected after generate step. Failing build. Run "make generate" locally and commit changes.' && exit 1)
   build:
     <<: *base_image
     steps:
@@ -91,8 +104,11 @@ workflows:
           name: Unit tests
       - windows_test:
           name: Windows tests
+      - generate:
+          name: Validate generated files
       - build:
           name: Build
           requires:
+            - Validate generated files
             - Unit tests
             - Windows tests
