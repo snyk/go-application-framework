@@ -79,10 +79,10 @@ output: test: {
 
 output: findings: [for finding in _findings {
 	{
-		id:         uuid.SHA1("be52d740-04f5-44da-8e17-1cf03d2281d7", finding.fingerprint.value)
-		type:       "findings"
-		attributes: finding
-		relationships: {}
+		id:            uuid.SHA1("be52d740-04f5-44da-8e17-1cf03d2281d7", finding.general.fingerprint.value)
+		type:          "findings"
+		attributes:    finding.general
+		relationships: finding.relationships
 	}
 }]
 
@@ -95,63 +95,75 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 	[for result in run.results {
 		let _rule = _rules[result.ruleId]
 		{
-			fingerprint: {
-				scheme: "code-sast-v0"
-				// TODO: improve this with a decomped stable finding ID function!
-				value: string
-			} & {
-				value: [for fp in [
-					result.fingerprints["identity"],
-					result.fingerprints["1"],
-					result.fingerprints["0"],
-					"missing-fingerprint",
-				] if fp != _|_ {fp}][0]
-			}
-			component: {
-				name:      "."
-				scan_type: "sast"
-			}
-			message: {
-				header:    _rule.shortDescription.text
-				text:      result.message.text
-				markdown:  result.message.markdown
-				arguments: result.message.arguments
-			}
-			rating: {
-				severity: {
-					let _ruleLevel = _rules[result.ruleId].defaultConfiguration.level
-					value: [
-						if _ruleLevel == "error" {"high"},
-						if _ruleLevel == "warning" {"medium"},
-						if _ruleLevel == "note" {"low"},
-						"none",
-					][0]
-				}
-				severity_method: "CVSSv3"
-			}
-			locations: [for location in result.locations
-				if location.physicalLocation != _|_ {
-					let _pl = location.physicalLocation
-					{
-						source_locations: {
-							filepath:              _pl.artifactLocation.uri
-							original_start_line:   _pl.region.startLine
-							original_end_line:     _pl.region.endLine
-							original_start_column: _pl.region.startColumn
-							original_end_column:   _pl.region.endColumn
-						}
+			relationships: {
+				sast_rule_details: {
+					data: {
+						// TODO fill type correctly
+						type: "s"
+						id:   result.ruleId
 					}
-				}]
-			if result.suppressions != _|_ {
-				if result.suppressions != null {
-					suppression: {
-						kind: "ignored"
-						if len(result.suppressions) > 0 {
-							justification: result.suppressions[0].justification
+					links: {}
+				}
+			}
+			general: {
+				fingerprint: {
+					scheme: "code-sast-v0"
+					// TODO: improve this with a decomped stable finding ID function!
+					value: string
+				} & {
+					value: [for fp in [
+						result.fingerprints["identity"],
+						result.fingerprints["1"],
+						result.fingerprints["0"],
+						"missing-fingerprint",
+					] if fp != _|_ {fp}][0]
+				}
+				component: {
+					name:      "."
+					scan_type: "sast"
+				}
+				message: {
+					header:    _rule.shortDescription.text
+					text:      result.message.text
+					markdown:  result.message.markdown
+					arguments: result.message.arguments
+				}
+				rating: {
+					severity: {
+						let _ruleLevel = _rules[result.ruleId].defaultConfiguration.level
+						value: [
+							if _ruleLevel == "error" {"high"},
+							if _ruleLevel == "warning" {"medium"},
+							if _ruleLevel == "note" {"low"},
+							"none",
+						][0]
+					}
+					severity_method: "CVSSv3"
+				}
+				locations: [for location in result.locations
+					if location.physicalLocation != _|_ {
+						let _pl = location.physicalLocation
+						{
+							source_locations: {
+								filepath:              _pl.artifactLocation.uri
+								original_start_line:   _pl.region.startLine
+								original_end_line:     _pl.region.endLine
+								original_start_column: _pl.region.startColumn
+								original_end_column:   _pl.region.endColumn
+							}
+						}
+					}]
+				if result.suppressions != _|_ {
+					if result.suppressions != null {
+						suppression: {
+							kind: "ignored"
+							if len(result.suppressions) > 0 {
+								justification: result.suppressions[0].justification
+							}
 						}
 					}
 				}
 			}
 		}
 	}]
-}]), {T: _, x: T, y: T, less: x.rating.severity.value < y.rating.severity.value})
+}]), {T: _, x: T, y: T, less: x.general.rating.severity.value < y.general.rating.severity.value})
