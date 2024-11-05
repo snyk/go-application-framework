@@ -34,7 +34,8 @@
       "critical"
     ],
     "type": "sast",
-    "artifacts": 0
+    "artifacts": 0,
+    "path": "/path/to/project"
   },
   "outcome": {
     "result": "pass"

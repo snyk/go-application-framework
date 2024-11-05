@@ -343,7 +343,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 
 		// Parse output payload
-		summary := json_schemas.NewTestSummary("")
+		summary := json_schemas.NewTestSummary("", "")
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &summary)
 		assert.Nil(t, err)
 		assert.Equal(t, len(output[0].GetErrorList()), 1)
@@ -357,7 +357,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should print valid sarif json output", func(t *testing.T) {
-		localFinding, err := sarifToLocalFinding(t, "testdata/sarif-juice-shop.json")
+		localFinding, err := sarifToLocalFinding(t, "testdata/sarif-juice-shop.json", "/mypath")
 		assert.Nil(t, err)
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
@@ -497,7 +497,7 @@ func getSarifInput() sarif.SarifDocument {
 	}
 }
 
-func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_models.LocalFinding, err error) {
+func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (localFinding *local_models.LocalFinding, err error) {
 	t.Helper()
 	jsonFile, err := os.Open("./" + filename)
 	if err != nil {
@@ -517,7 +517,7 @@ func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_mod
 	err = json.Unmarshal(sarifBytes, &sarifDoc)
 	assert.NoError(t, err)
 
-	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc)
+	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc, projectPath)
 	summaryBytes, err := json.Marshal(summaryData)
 	assert.NoError(t, err)
 

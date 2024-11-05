@@ -46,6 +46,9 @@ const TestSummarySchema = `{
     "artifacts": {
       "type": "integer",
       "minimum": 0
+    },
+	"path": {
+		"type": "string"
     }
   }
 }`
@@ -62,12 +65,14 @@ type TestSummary struct {
 	SeverityOrderAsc []string            `json:"severity_order_asc,omitempty"`
 	Type             string              `json:"type"`
 	Artifacts        int                 `json:"artifacts"`
+	Path             string              `json:"path"`
 }
 
-func NewTestSummary(t string) *TestSummary {
+func NewTestSummary(t string, p string) *TestSummary {
 	return &TestSummary{
 		Type:             t,
 		Artifacts:        0,
 		SeverityOrderAsc: []string{"low", "medium", "high", "critical"},
+		Path:             p,
 	}
 }

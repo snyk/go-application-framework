@@ -26,12 +26,12 @@ func SarifLevelToSeverity(level string) string {
 }
 
 // Iterate through the sarif data and create a summary out of it.
-func CreateCodeSummary(input *sarif.SarifDocument) *json_schemas.TestSummary {
+func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_schemas.TestSummary {
 	if input == nil {
 		return nil
 	}
 
-	summary := json_schemas.NewTestSummary(summaryType)
+	summary := json_schemas.NewTestSummary(summaryType, projectPath)
 	resultMap := map[string]*json_schemas.TestSummaryResult{}
 
 	summary.SeverityOrderAsc = []string{"low", "medium", "high"}

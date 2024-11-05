@@ -22,7 +22,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
 
-func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_models.LocalFinding, err error) {
+func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (localFinding *local_models.LocalFinding, err error) {
 	t.Helper()
 	jsonFile, err := os.Open("./" + filename)
 	if err != nil {
@@ -42,7 +42,7 @@ func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_mod
 	err = json.Unmarshal(sarifBytes, &sarifDoc)
 	assert.NoError(t, err)
 
-	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc)
+	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc, projectPath)
 	summaryBytes, err := json.Marshal(summaryData)
 	assert.NoError(t, err)
 
@@ -67,7 +67,7 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	p := presenters.NewLocalFindingsRenderer(localFindingDoc,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath(scannedPath))
+	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
 	result := writer.String()
@@ -80,7 +80,7 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 
 func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 	// Convert our sarif into localfindings
-	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
+	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json", "/path/to/project")
 	require.NoError(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
@@ -92,7 +92,6 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -103,7 +102,7 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
-	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
+	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json", "/path/to/project")
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
@@ -115,7 +114,6 @@ func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -129,7 +127,7 @@ func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
-	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
+	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json", "/path/to/project")
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
@@ -141,7 +139,6 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -154,7 +151,7 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
-	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json")
+	input, err := sarifToLocalFinding(t, "testdata/4-high-5-medium.json", "/path/to/project")
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.TrueColor)
@@ -167,7 +164,6 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -180,7 +176,7 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
-	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json")
+	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json", "/path/to/project")
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
@@ -193,7 +189,6 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -205,7 +200,7 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
-	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json")
+	input, err := sarifToLocalFinding(t, "testdata/with-ignores.json", "/path/to/project")
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
@@ -218,7 +213,6 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -237,7 +231,7 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
-	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
+	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json", "/path/to/project")
 	require.Nil(t, err)
 
 	lipgloss.SetColorProfile(termenv.Ascii)
@@ -251,7 +245,6 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 		input,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath("/path/to/project"),
 	)
 
 	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
@@ -265,7 +258,7 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 }
 
 func TestPresenterLocalFinding_CustomTemplateFiles(t *testing.T) {
-	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
+	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json", "/path/to/project")
 	require.Nil(t, err)
 	config := configuration.NewInMemory()
 	config.Set(configuration.ORGANIZATION, "org-id1267361872673627")

@@ -49,7 +49,7 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 
 func filterSummaryOutput(config configuration.Configuration, input workflow.Data, logger *zerolog.Logger) (workflow.Data, error) {
 	// Parse the summary data
-	summary := json_schemas.NewTestSummary("")
+	summary := json_schemas.NewTestSummary("", "")
 	payload, ok := input.GetPayload().([]byte)
 	if !ok {
 		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
@@ -203,7 +203,6 @@ func handleContentTypeFindingsModel(config configuration.Configuration, input []
 		&localFindings,
 		config,
 		writer,
-		presenters.WithLocalFindingsTestPath(input[i].GetContentLocation()),
 	)
 
 	debugLogger.Info().Msgf("[%d] Rendering %s with %s", i, mimeType, templates)
