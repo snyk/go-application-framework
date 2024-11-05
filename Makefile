@@ -58,6 +58,7 @@ $(GO_BIN)/golangci-lint:
 .PHONY: update-local-findings
 update-local-findings:
 	@scripts/pull-down-test-api-spec.sh
+	@make generate
 
 .PHONY: help
 help:
