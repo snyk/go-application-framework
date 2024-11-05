@@ -44,8 +44,8 @@
 
   Total issues:   {{ $totalIssueCount }}
   {{- if gt $totalIssueCount 0}}
-  Ignored issues: {{ $ignoredIssueCount }}
-  Open issues:    {{ $openIssueCount }}{{- end}}
+  Ignored issues: {{ $ignoredIssueCount }} [ {{- range $resultCount := .Summary.Results }} {{ $resultCount.Ignored }} {{ $resultCount.Severity | toUpperCase }} {{- end}} ]
+  Open issues:    {{ $openIssueCount }} [ {{- range $resultCount := .Summary.Results }} {{ $resultCount.Open }} {{ $resultCount.Severity | toUpperCase }} {{- end}} ]{{- end}}
 {{end}}
 
 {{define "main" }}
