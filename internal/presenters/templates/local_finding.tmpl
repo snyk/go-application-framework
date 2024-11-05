@@ -29,28 +29,38 @@
 
 {{define "summary"}}{{ "Test Summary" | bold }}
 
-  Organization:
-  Test type:
+  Organization:      {{ getValueFromConfig "internal_org_slug" }}
+  Test type:         {{ if eq .Summary.Type "sast" }}Static code analysis{{else}}{{ .Summary.Type }}}{{ end}}
   Project path:
 
-  Total issues:
-  Ignored issues:
-  Open issues:
+  {{- $totalIssueCount := 0 }}
+  {{- $openIssueCount := 0 }}
+  {{- $ignoredIssueCount := 0}}
+  {{- range $resultCount := .Summary.Results }}
+    {{- $totalIssueCount = add $totalIssueCount $resultCount.Total }}
+    {{- $openIssueCount = add $openIssueCount $resultCount.Open }}
+    {{- $ignoredIssueCount = add $ignoredIssueCount $resultCount.Ignored }}
+  {{- end}}
+
+  Total issues:   {{ $totalIssueCount }}
+  {{- if gt $totalIssueCount 0}}
+  Ignored issues: {{ $ignoredIssueCount }}
+  Open issues:    {{ $openIssueCount }}{{- end}}
 {{end}}
 
 {{define "main" }}
 {{- range $result := $.Results}}
     {{- template "header"  $result }}
     {{- template "details" $result }}
-{{- end }}
 
+    {{ if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
+        {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
+    {{ end }}{{- box (renderToString "summary" $result)}}
 
-{{ if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
-    {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
-{{ end }}{{- box (renderToString "summary" .)}}
+    {{- if ne (getValueFromConfig "include-ignores") "true" }}
+        {{tip "To view ignored issues, use the --include-ignores option."}}
+    {{- end }}
 
-{{- if ne (getValueFromConfig "include-ignores") "true" }}
-    {{tip "To view ignored issues, use the --include-ignores option."}}
 {{- end }}
 
 {{end }} {{/* end main */}}
