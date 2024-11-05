@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 
-API_SPEC_PATH=../dragonfly
+API_SPEC_PATH=$(realpath ../dragonfly)
 API_SPEC_BRANCH=${API_SPEC_BRANCH:-main}
+
+echo --------------------------------------------------------
+echo Updating local findings from dragonfly!
+echo
+echo Path:   $API_SPEC_PATH
+echo Branch: $API_SPEC_BRANCH
+echo --------------------------------------------------------
 
 # Check if the directory exists
 if [[ ! -d "$API_SPEC_PATH" ]]; then

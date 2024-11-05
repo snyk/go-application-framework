@@ -54,6 +54,10 @@ $(GO_BIN)/cue:
 $(GO_BIN)/golangci-lint:
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
 
+.PHONY: update-local-findings
+update-local-findings:
+	@scripts/pull-down-test-api-spec.sh
+
 .PHONY: help
 help:
 	@echo "Main targets:"
