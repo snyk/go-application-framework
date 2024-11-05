@@ -1,8 +1,49 @@
 {{define "main" }}
     {
         "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-          "version": "2.1.0",
-          "runs": []
+        "version": "2.1.0",
+        "runs": [
+        {{- range $result := $.Results}}
+            {
+                "tool": {
+                    "driver" : {
+                        "name" : "SnykCode",
+                        "semanticVersion" : "1.0.0",
+                        "version" : "1.0.0",
+                        "informationUri" : "https://docs.snyk.io/",
+                        "properties" : {
+                            "coverage": []
+                        },
+                        "rules" : [
+                            {{- $findingsSize := sub (len $result.Findings) 1 }}
+                            {{- range $index, $finding := $result.Findings }}
+                                {
+                                    "id": "{{ $finding. }}",
+                                    "shortDescription": {
+                                        "text": ""
+                                    },
+                                    "fullDescription": {
+                                        "text": ""
+                                    },
+                                    "help": {
+                                        "text": "",
+                                        "markdown": ""
+                                    },
+                                    "properties": {
+                                        "tags": [],
+                                        "cvssv3_baseScore": "",
+                                        "security-severity": ""
+                                    }
+                                }{{if lt $index $findingsSize}},{{end}}
+                            {{- end }}
+                        ]
+                    }
+                },
+                "results": [
+                ]
+             }
+        {{- end}}
+        ]
     }
 {{end }} {{/* end main */}}
 

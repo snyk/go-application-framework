@@ -379,6 +379,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 		assert.NoError(t, err)
 
+		t.Log(byteBuffer.String())
+
 		// assert
 		sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
 		assert.NoError(t, err)
