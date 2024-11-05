@@ -48,7 +48,7 @@ Ignored Issues
 │   Ignored issues: 1 [ 0 HIGH  1 MEDIUM  0 LOW ]    │
 │   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 ---
 
 [TestPresenterLocalFinding_IncludeIgnoredEmpty - 1]
@@ -92,7 +92,7 @@ Ignored Issues
 │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
 │   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 ---
 
 [TestPresenterLocalFinding_LowIssues - 1]
