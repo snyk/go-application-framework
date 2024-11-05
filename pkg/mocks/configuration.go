@@ -88,6 +88,18 @@ func (mr *MockConfigurationMockRecorder) AllKeys() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllKeys", reflect.TypeOf((*MockConfiguration)(nil).AllKeys))
 }
 
+// AutomaticEnv mocks base method.
+func (m *MockConfiguration) AutomaticEnv() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AutomaticEnv")
+}
+
+// AutomaticEnv indicates an expected call of AutomaticEnv.
+func (mr *MockConfigurationMockRecorder) AutomaticEnv() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AutomaticEnv", reflect.TypeOf((*MockConfiguration)(nil).AutomaticEnv))
+}
+
 // Clone mocks base method.
 func (m *MockConfiguration) Clone() configuration.Configuration {
 	m.ctrl.T.Helper()
@@ -144,6 +156,20 @@ func (mr *MockConfigurationMockRecorder) GetAlternativeKeys(key interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlternativeKeys", reflect.TypeOf((*MockConfiguration)(nil).GetAlternativeKeys), key)
 }
 
+// GetAutomaticEnv mocks base method.
+func (m *MockConfiguration) GetAutomaticEnv() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomaticEnv")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// GetAutomaticEnv indicates an expected call of GetAutomaticEnv.
+func (mr *MockConfigurationMockRecorder) GetAutomaticEnv() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomaticEnv", reflect.TypeOf((*MockConfiguration)(nil).GetAutomaticEnv))
+}
+
 // GetBool mocks base method.
 func (m *MockConfiguration) GetBool(key string) bool {
 	m.ctrl.T.Helper()
@@ -156,6 +182,20 @@ func (m *MockConfiguration) GetBool(key string) bool {
 func (mr *MockConfigurationMockRecorder) GetBool(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBool", reflect.TypeOf((*MockConfiguration)(nil).GetBool), key)
+}
+
+// GetFiles mocks base method.
+func (m *MockConfiguration) GetFiles() []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFiles")
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetFiles indicates an expected call of GetFiles.
+func (mr *MockConfigurationMockRecorder) GetFiles() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFiles", reflect.TypeOf((*MockConfiguration)(nil).GetFiles))
 }
 
 // GetFloat64 mocks base method.
@@ -242,6 +282,34 @@ func (mr *MockConfigurationMockRecorder) GetStringSlice(key interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStringSlice", reflect.TypeOf((*MockConfiguration)(nil).GetStringSlice), key)
 }
 
+// GetSupportedEnvVarPrefixes mocks base method.
+func (m *MockConfiguration) GetSupportedEnvVarPrefixes() []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSupportedEnvVarPrefixes")
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetSupportedEnvVarPrefixes indicates an expected call of GetSupportedEnvVarPrefixes.
+func (mr *MockConfigurationMockRecorder) GetSupportedEnvVarPrefixes() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSupportedEnvVarPrefixes", reflect.TypeOf((*MockConfiguration)(nil).GetSupportedEnvVarPrefixes))
+}
+
+// GetSupportedEnvVars mocks base method.
+func (m *MockConfiguration) GetSupportedEnvVars() []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSupportedEnvVars")
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetSupportedEnvVars indicates an expected call of GetSupportedEnvVars.
+func (mr *MockConfigurationMockRecorder) GetSupportedEnvVars() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSupportedEnvVars", reflect.TypeOf((*MockConfiguration)(nil).GetSupportedEnvVars))
+}
+
 // GetUrl mocks base method.
 func (m *MockConfiguration) GetUrl(key string) *url.URL {
 	m.ctrl.T.Helper()
@@ -294,6 +362,22 @@ func (mr *MockConfigurationMockRecorder) Set(key, value interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockConfiguration)(nil).Set), key, value)
 }
 
+// SetFiles mocks base method.
+func (m *MockConfiguration) SetFiles(files ...string) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range files {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetFiles", varargs...)
+}
+
+// SetFiles indicates an expected call of SetFiles.
+func (mr *MockConfigurationMockRecorder) SetFiles(files ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetFiles", reflect.TypeOf((*MockConfiguration)(nil).SetFiles), files...)
+}
+
 // SetStorage mocks base method.
 func (m *MockConfiguration) SetStorage(storage configuration.Storage) {
 	m.ctrl.T.Helper()
@@ -304,6 +388,38 @@ func (m *MockConfiguration) SetStorage(storage configuration.Storage) {
 func (mr *MockConfigurationMockRecorder) SetStorage(storage interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStorage", reflect.TypeOf((*MockConfiguration)(nil).SetStorage), storage)
+}
+
+// SetSupportedEnvVarPrefixes mocks base method.
+func (m *MockConfiguration) SetSupportedEnvVarPrefixes(prefixes ...string) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range prefixes {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetSupportedEnvVarPrefixes", varargs...)
+}
+
+// SetSupportedEnvVarPrefixes indicates an expected call of SetSupportedEnvVarPrefixes.
+func (mr *MockConfigurationMockRecorder) SetSupportedEnvVarPrefixes(prefixes ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSupportedEnvVarPrefixes", reflect.TypeOf((*MockConfiguration)(nil).SetSupportedEnvVarPrefixes), prefixes...)
+}
+
+// SetSupportedEnvVars mocks base method.
+func (m *MockConfiguration) SetSupportedEnvVars(envVars ...string) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range envVars {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetSupportedEnvVars", varargs...)
+}
+
+// SetSupportedEnvVars indicates an expected call of SetSupportedEnvVars.
+func (mr *MockConfigurationMockRecorder) SetSupportedEnvVars(envVars ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSupportedEnvVars", reflect.TypeOf((*MockConfiguration)(nil).SetSupportedEnvVars), envVars...)
 }
 
 // Unset mocks base method.
