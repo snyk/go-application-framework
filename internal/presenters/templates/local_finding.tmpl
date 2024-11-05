@@ -1,5 +1,5 @@
 {{- define "details" }}
-    {{- $sortedFindings := $.Finding.Findings | sortFindingBy "Attributes.Rating.Severity.Value" $.Finding.Summary.SeverityOrderAsc }}
+    {{- $sortedFindings := .Findings | sortFindingBy "Attributes.Rating.Severity.Value" .Summary.SeverityOrderAsc }}
     {{- $openFindings := $sortedFindings | filterFinding (notHasField "Attributes.Suppression.Kind") }}
     {{- $ignoredFindings := $sortedFindings | filterFinding (hasField "Attributes.Suppression.Kind") }}
     {{- $hasOpenFindings := gt ($openFindings | len) 0 }}
@@ -24,22 +24,26 @@
 {{- end}}{{/* end "details" */}}
 
 {{define "header" }}
-{{ print "Testing " .Summary.TestPath " ..." | bold }}
+{{ print "Testing "  " ..." | bold }}
 {{end }}
 
 {{define "summary"}}{{ "Test Summary" | bold }}
 
-  Organization:      {{.Summary.Org}}
-  Test type:         {{.Summary.Type}}
-  Project path:      {{.Summary.TestPath}}
+  Organization:
+  Test type:
+  Project path:
 
-  Total issues:   {{.Summary.TotalIssueCount}}{{ if .Summary.TotalIssueCount }}
-  Ignored issues: {{ .Summary.IgnoredIssueCountWithSeverities }}
-  Open issues:    {{ .Summary.OpenIssueCountWithSeverities }}{{ end }}{{end}}
+  Total issues:
+  Ignored issues:
+  Open issues:
+{{end}}
 
 {{define "main" }}
-{{- template "header"  . }}
-{{- template "details" . }}
+{{- range $result := $.Results}}
+    {{- template "header"  $result }}
+    {{- template "details" $result }}
+{{- end }}
+
 
 {{ if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
     {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
@@ -48,6 +52,7 @@
 {{- if ne (getValueFromConfig "include-ignores") "true" }}
     {{tip "To view ignored issues, use the --include-ignores option."}}
 {{- end }}
+
 {{end }} {{/* end main */}}
 
 {{template "main" . }}
