@@ -42,9 +42,9 @@
  </head>
  <body>
 
-    {{- $findingsSize := len $.Findings}}
+    {{- $findingsSize := len (index $.Results 0).Findings}}
     {{- $findingsSize = sub $findingsSize 1}}
-    {{- range $index, $element := $.Findings}}
+    {{- range $index, $element := (index $.Results 0).Findings}}
     <div class="container">
         <div class="title"><span style="text-transform: uppercase;">[{{$element.Attributes.Rating.Severity.Value}}]</span> {{$element.Attributes.Message.Header}}</div>
         {{$element.Attributes.Message.Text}}

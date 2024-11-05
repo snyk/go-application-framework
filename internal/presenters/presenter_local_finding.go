@@ -120,8 +120,6 @@ func (p *LocalFindingPresenter) RegisterMimeType(mimeType string, implFactory Te
 }
 
 func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
-	orgName := p.config.GetString(configuration.ORGANIZATION_SLUG)
-	severityMinLevel := p.config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)
 	// mimetype specific
 	localFindingsTemplate, err := p.getImplementationFromMimeType(mimeType)
 	if err != nil {
@@ -134,21 +132,15 @@ func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType 
 		return err
 	}
 
-	summary := PrepareSummary(&p.Input.Summary, orgName, p.TestPath, severityMinLevel)
-
 	mainTmpl := localFindingsTemplate.Lookup("main")
 	if mainTmpl == nil {
 		return fmt.Errorf("the template must contain a 'main'")
 	}
 
 	err = mainTmpl.Execute(p.writer, struct {
-		Summary  SummaryData `json:"summary"`
-		Finding  *local_models.LocalFinding
-		Findings []local_models.FindingResource
+		Results []*local_models.LocalFinding
 	}{
-		Summary:  summary,
-		Finding:  p.Input,
-		Findings: p.Input.Findings,
+		Results: []*local_models.LocalFinding{p.Input},
 	})
 	if err != nil {
 		return err
