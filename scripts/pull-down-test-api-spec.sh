@@ -30,5 +30,3 @@ cd -
 
 # Vendor OpenAPI build artefacts for use in cue
 cp -r $API_SPEC_PATH/tsp-output/@typespec/openapi3/ ./internal/cueutils/source/openapi/rest
-
-make generate
