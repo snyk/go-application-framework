@@ -382,7 +382,14 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// assert
 		sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
 		assert.NoError(t, err)
-		sarifSchema := gojsonschema.NewReferenceLoader("file://" + sarifSchemaPath)
+
+		sarifSchemaFile, err := os.Open(sarifSchemaPath)
+		assert.NoError(t, err)
+
+		sarifSchemaBytes, err := io.ReadAll(sarifSchemaFile)
+		assert.NoError(t, err)
+
+		sarifSchema := gojsonschema.NewBytesLoader(sarifSchemaBytes)
 		assert.NotNil(t, sarifSchema)
 
 		validationResult, err := gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(byteBuffer.Bytes()))
