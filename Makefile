@@ -42,6 +42,7 @@ testv:
 .PHONY: generate
 generate:
 	@go generate ./...
+	@make format
 
 .PHONY: tools
 tools: $(GO_BIN)/golangci-lint $(GO_BIN)/cue
