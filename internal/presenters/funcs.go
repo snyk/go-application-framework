@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 func add(a, b int) int {
@@ -161,8 +162,9 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	return fnMap
 }
 
-func getDefaultTemplateFuncMap(config configuration.Configuration) template.FuncMap {
+func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
 	defaultMap := template.FuncMap{}
+	defaultMap["getRuntimeInfo"] = func(key string) string { return getRuntimeInfo(key, ri) }
 	defaultMap["getValueFromConfig"] = getFromConfig(config)
 	defaultMap["sortFindingBy"] = sortFindingBy
 	defaultMap["getFieldValueFrom"] = getFieldValueFrom
@@ -177,6 +179,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration) template.Func
 	defaultMap["sub"] = sub
 	defaultMap["reverse"] = reverse
 	defaultMap["join"] = strings.Join
+
 	return defaultMap
 }
 
@@ -205,5 +208,20 @@ func mustReverse(v interface{}) ([]interface{}, error) {
 		return nl, nil
 	default:
 		return nil, fmt.Errorf("Cannot find reverse on type %s", tp)
+	}
+}
+
+func getRuntimeInfo(key string, ri runtimeinfo.RuntimeInfo) string {
+	if ri == nil {
+		return ""
+	}
+
+	switch strings.ToLower(key) {
+	case "name":
+		return ri.GetName()
+	case "version":
+		return ri.GetVersion()
+	default:
+		return ""
 	}
 }

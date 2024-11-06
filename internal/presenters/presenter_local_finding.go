@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 const DefaultMimeType = "text/cli"
@@ -28,6 +29,7 @@ type LocalFindingPresenter struct {
 	Input        *local_models.LocalFinding
 	config       configuration.Configuration
 	writer       io.Writer
+	runtimeinfo  runtimeinfo.RuntimeInfo
 	templateImpl map[string]TemplateImplFunction
 }
 
@@ -46,6 +48,12 @@ type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
 func WithLocalFindingsTestPath(testPath string) LocalFindingPresenterOptions {
 	return func(p *LocalFindingPresenter) {
 		p.TestPath = testPath
+	}
+}
+
+func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) LocalFindingPresenterOptions {
+	return func(p *LocalFindingPresenter) {
+		p.runtimeinfo = ri
 	}
 }
 
@@ -91,7 +99,7 @@ func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, confi
 }
 
 func (p *LocalFindingPresenter) getImplementationFromMimeType(mimeType string) (*template.Template, error) {
-	functionMapGeneral := getDefaultTemplateFuncMap(p.config)
+	functionMapGeneral := getDefaultTemplateFuncMap(p.config, p.runtimeinfo)
 
 	if _, ok := p.templateImpl[mimeType]; !ok {
 		mimeType = NoneMimeType
