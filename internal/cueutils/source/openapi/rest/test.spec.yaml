@@ -1198,6 +1198,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1221,6 +1222,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1242,6 +1244,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1264,6 +1267,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1324,6 +1328,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1345,6 +1350,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1366,6 +1372,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1387,6 +1394,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1792,6 +1800,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
@@ -1813,6 +1822,7 @@ components:
                   pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
                 id:
                   type: string
+                  format: uuid
               required:
                 - type
                 - id
