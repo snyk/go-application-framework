@@ -2,6 +2,7 @@ package sarif
 
 import (
 	"github.com/snyk/code-client-go/sarif"
+
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
@@ -23,6 +24,20 @@ func SarifLevelToSeverity(level string) string {
 	}
 
 	return severity
+}
+
+func SeverityToSarifLevel(severity string) string {
+	var level string
+	if severity == "low" {
+		level = "note"
+	} else if severity == "medium" {
+		level = "warning"
+	} else if severity == "high" || severity == "critical" {
+		level = "error"
+	} else {
+		level = "unmapped"
+	}
+	return level
 }
 
 // Iterate through the sarif data and create a summary out of it.
