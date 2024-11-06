@@ -397,7 +397,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		err = json.Unmarshal(byteBuffer.Bytes(), actualSarif)
 		assert.NoError(t, err)
 
-		//assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
+		//		assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
+		assert.Equal(t, len(expectedSarif.Runs[0].Results), len(actualSarif.Runs[0].Results))
 
 		// assert
 		sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
