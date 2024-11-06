@@ -9,6 +9,8 @@ import (
 	"text/template"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 )
@@ -134,6 +136,14 @@ func filterFinding(cmpFunc func(any) bool, findings []local_models.FindingResour
 	}
 
 	return filteredFindings
+}
+
+func getSarifTemplateFuncMap(tmpl *template.Template) template.FuncMap {
+	fnMap := template.FuncMap{}
+	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
+		return sarif.SeverityToSarifLevel(string(s))
+	}
+	return fnMap
 }
 
 func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
