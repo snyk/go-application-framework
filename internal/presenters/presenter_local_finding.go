@@ -85,7 +85,7 @@ func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, confi
 					return nil, nil, err
 				}
 
-				functionMapMimeType := getSarifTemplateFuncMap(localFindingsTemplate)
+				functionMapMimeType := getSarifTemplateFuncMap()
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
 		},
