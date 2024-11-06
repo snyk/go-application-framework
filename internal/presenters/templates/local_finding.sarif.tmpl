@@ -7,41 +7,59 @@
             {
                 "tool": {
                     "driver" : {
-                        "name" : "SnykCode",
-                        "semanticVersion" : "1.0.0",
-                        "version" : "1.0.0",
+                        "name" : "{{- getRuntimeInfo "name" }}",
+                        "semanticVersion" : "{{- getRuntimeInfo "version" }}",
+                        "version" : "{{- getRuntimeInfo "version" }}",
                         "informationUri" : "https://docs.snyk.io/",
                         "properties" : {
                             "coverage": []
                         },
-                        "rules" : [
-                            {{- $findingsSize := sub (len $result.Findings) 1 }}
-                            {{- range $index, $finding := $result.Findings }}
-                                {
-                                    "id": "{{ $finding.Id }}",
-                                    "shortDescription": {
-                                        "text": ""
-                                    },
-                                    "fullDescription": {
-                                        "text": ""
-                                    },
-                                    "help": {
-                                        "text": "",
-                                        "markdown": ""
-                                    },
-                                    "properties": {
-                                        "tags": [],
-                                        "cvssv3_baseScore": "",
-                                        "security-severity": ""
-                                    }
-                                }{{if lt $index $findingsSize}},{{end}}
-                            {{- end }}
-                        ]
+                        "rules" : []
                     }
                 },
                 "results": [
+                    {{- $findingsSize := sub (len $result.Findings) 1 }}
+                    {{- range $index, $finding := $result.Findings }}
+                    {
+                        "ruleId": "",
+                        "ruleIndex": 0,
+                        "level": "{{- SeverityToSarifLevel $finding.Attributes.Rating.Severity.Value }}",
+                        "message": {
+                            "text": "{{- $finding.Attributes.Message.Text }}",
+                            "markdown": "{{- $finding.Attributes.Message.Markdown }}",
+                            "arguments": [
+                                "{{- join $finding.Attributes.Message.Arguments "\", \"" }}"
+                            ]
+                        },
+                        "locations": [
+                            {{- $locationSize := sub (len $finding.Attributes.Locations) 1 }}
+                            {{- range $index, $findingLocation := $finding.Attributes.Locations }}
+                            {
+                              "physicalLocation": {
+                                "artifactLocation": {
+                                  "uri": "{{- $findingLocation.SourceLocations.Filepath}}",
+                                  "uriBaseId": "%SRCROOT%"
+                                },
+                                "region": {
+                                  "startLine": {{- $findingLocation.SourceLocations.OriginalStartLine}},
+                                  "endLine": {{- $findingLocation.SourceLocations.OriginalEndLine}},
+                                  "startColumn": {{- $findingLocation.SourceLocations.OriginalStartColumn}},
+                                  "endColumn": {{- $findingLocation.SourceLocations.OriginalEndColumn}}
+                                }
+                              }
+                            }{{if lt $index $locationSize}},{{end}}
+                            {{- end}}
+                        ],
+                        "fingerprints": {
+                            "0": "",
+                            "1": ""
+                        },
+                        "codeFlows": [],
+                        "properties": {}
+                    }{{if lt $index $findingsSize}},{{end}}
+                    {{- end}}
                 ]
-             }
+            }
         {{- end}}
         ]
     }
