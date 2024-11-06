@@ -139,7 +139,7 @@ func filterFinding(cmpFunc func(any) bool, findings []local_models.FindingResour
 	return filteredFindings
 }
 
-func getSarifTemplateFuncMap(tmpl *template.Template) template.FuncMap {
+func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
 		return sarif.SeverityToSarifLevel(string(s))
