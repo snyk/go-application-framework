@@ -55,6 +55,13 @@
                             "1": ""
                         },
                         "codeFlows": [],
+                        {{- if $finding.Attributes.Suppression }}
+                        "suppressions" : [
+                            {
+                                "kind": "{{- $finding.Attributes.Suppression.Kind }}"
+                            }
+                        ],
+                        {{- end }}
                         "properties": {}
                     }{{if lt $index $findingsSize}},{{end}}
                     {{- end}}
