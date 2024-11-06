@@ -42,7 +42,7 @@ func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_mod
 	err = json.Unmarshal(sarifBytes, &sarifDoc)
 	assert.NoError(t, err)
 
-	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc)
+	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc, "/path/to/project")
 	summaryBytes, err := json.Marshal(summaryData)
 	assert.NoError(t, err)
 
