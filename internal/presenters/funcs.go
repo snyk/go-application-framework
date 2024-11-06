@@ -176,6 +176,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration) template.Func
 	defaultMap["add"] = add
 	defaultMap["sub"] = sub
 	defaultMap["reverse"] = reverse
+	defaultMap["join"] = strings.Join
 	return defaultMap
 }
 
