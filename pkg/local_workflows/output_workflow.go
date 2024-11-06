@@ -103,7 +103,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			err := handleContentTypeFindingsModel(config, input, i, outputDestination, debugLogger)
+			err := handleContentTypeFindingsModel(invocation, input, i, outputDestination)
 			if err != nil {
 				return output, err
 			}
@@ -160,7 +160,10 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 	return nil
 }
 
-func handleContentTypeFindingsModel(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
+func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input []workflow.Data, i int, outputDestination iUtils.OutputDestination) error {
+	debugLogger := invocation.GetEnhancedLogger()
+	config := invocation.GetConfiguration()
+
 	debugLogger.Info().Msgf("[%d] Handling findings model", i)
 	var localFindings local_models.LocalFinding
 	localFindingsBytes, ok := input[i].GetPayload().([]byte)
@@ -203,6 +206,7 @@ func handleContentTypeFindingsModel(config configuration.Configuration, input []
 		&localFindings,
 		config,
 		writer,
+		presenters.WithRuntimeInfo(invocation.GetRuntimeInfo()),
 	)
 
 	debugLogger.Info().Msgf("[%d] Rendering %s with %s", i, mimeType, templates)
