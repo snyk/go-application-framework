@@ -419,7 +419,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Equal(t, len(expectedSarif.Runs[0].Results), len(actualSarif.Runs[0].Results))
 		//		assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
-
 	})
 }
 
