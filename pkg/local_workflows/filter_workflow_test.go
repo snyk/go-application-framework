@@ -113,23 +113,19 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 
 	t.Run("filters findings with threshold set to high", func(t *testing.T) {
 		ctx := setupMockFilterContext(t, "hIgH")
-
 		randomInputData := getRandomWorkflowData()
 		findingsData := getFindingsInputData(t)
-
 		input := []workflow.Data{findingsData, randomInputData}
 		output, err := filterFindingsEntryPoint(ctx, input)
 		assert.NoError(t, err)
 		assert.Equal(t, len(input), len(output))
 		var filteredFindings local_models.LocalFinding
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
-
 		assert.NoError(t, err)
 		for _, finding := range filteredFindings.Findings {
 			severity := string(finding.Attributes.Rating.Severity.Value)
 			assert.True(t, severity == "high" || severity == "critical", "Unexpected severity: %s", severity)
 		}
-
 		assert.Equal(t, randomInputData, output[1])
 	})
 
@@ -143,4 +139,38 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, input, output)
 	})
+	t.Run("updates findings summary with filtered totals", func(t *testing.T) {
+		ctx := setupMockFilterContext(t, "high")
+		sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
+		summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
+		findings, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+		assert.NoError(t, err)
+		findingsBytes, err := json.Marshal(findings)
+		assert.NoError(t, err)
+		input := []workflow.Data{workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_FILTER_FINDINGS, FilterFindingsWorkflowName),
+			content_type.LOCAL_FINDING_MODEL,
+			findingsBytes,
+		)}
+		output, err := filterFindingsEntryPoint(ctx, input)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(output))
+		var filteredFindings local_models.LocalFinding
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
+		assert.NoError(t, err)
+
+		// Check if the summary is updated correctly
+		expectedSeverities := map[string]int{
+			"low":      0,
+			"medium":   0,
+			"high":     22,
+			"critical": 0,
+		}
+
+		for _, result := range filteredFindings.Summary.Results {
+			assert.Equal(t, expectedSeverities[result.Severity], result.Total)
+			assert.Equal(t, expectedSeverities[result.Severity], result.Open)
+		}
+	})
+
 }
