@@ -58,7 +58,17 @@
                         {{- if $finding.Attributes.Suppression }}
                         "suppressions" : [
                             {
-                                "kind": "{{- $finding.Attributes.Suppression.Kind }}"
+                                "kind": "external"{{- if $finding.Attributes.Suppression.Details }},
+                                "properties": {
+                                    "category": "{{ $finding.Attributes.Suppression.Details.Category }}",
+                                    "expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",
+                                    "ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
+                                    "ignoredBy": {
+                                          "name": "{{ $finding.Attributes.Suppression.Details.IgnoredBy.Name }}",
+                                          "email": "{{ $finding.Attributes.Suppression.Details.IgnoredBy.Email }}"
+                                    }
+                                }
+                                {{- end }}
                             }
                         ],
                         {{- end }}
