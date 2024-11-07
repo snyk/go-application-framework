@@ -997,12 +997,24 @@ type TypesSuggestedPackageUpgradeUpgradeConflicts bool
 
 // TypesSuppression Reasons for why a Finding can be suppressed from a Test result. This MAY NOT be required at all, given the presentation
 type TypesSuppression struct {
-	Justification *string              `json:"justification,omitempty"`
-	Kind          TypesSuppressionKind `json:"kind"`
+	// Details Suppression meta data
+	Details       *TypesSuppressionDetails `json:"details,omitempty"`
+	Justification *string                  `json:"justification,omitempty"`
+	Kind          TypesSuppressionKind     `json:"kind"`
 }
 
 // TypesSuppressionKind defines model for TypesSuppression.Kind.
 type TypesSuppressionKind string
+
+// TypesSuppressionDetails Suppression meta data
+type TypesSuppressionDetails struct {
+	Category   string `json:"category"`
+	Expiration string `json:"expiration"`
+
+	// IgnoredBy User definition
+	IgnoredBy TypesUser `json:"ignoredBy"`
+	IgnoredOn string    `json:"ignoredOn"`
+}
 
 // TypesTestContext TestContext identifies the context in which this Test occurs.
 type TypesTestContext struct {
@@ -1170,6 +1182,12 @@ type TypesTestState struct {
 
 	// Status Test execution status.
 	Status TypesTestExecStatus `json:"status"`
+}
+
+// TypesUser User definition
+type TypesUser struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
 }
 
 // TypesVulnerabilityFactRiskFactor defines model for types.VulnerabilityFactRiskFactor.
