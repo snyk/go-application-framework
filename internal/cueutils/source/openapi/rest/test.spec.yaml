@@ -1672,7 +1672,26 @@ components:
             - other
         justification:
           type: string
+        details:
+          $ref: '#/components/schemas/types.SuppressionDetails'
       description: Reasons for why a Finding can be suppressed from a Test result. This MAY NOT be required at all, given the presentation
+    types.SuppressionDetails:
+      type: object
+      required:
+        - expiration
+        - category
+        - ignoredOn
+        - ignoredBy
+      properties:
+        expiration:
+          type: string
+        category:
+          type: string
+        ignoredOn:
+          type: string
+        ignoredBy:
+          $ref: '#/components/schemas/types.User'
+      description: Suppression meta data
     types.TestContext:
       type: object
       required:
@@ -1918,6 +1937,17 @@ components:
             - $ref: '#/components/schemas/types.TestError'
           description: Errors that occurred during the test execution.
       description: The state of a Test execution. Does not include the pass or fail.
+    types.User:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+      description: User definition
     types.VulnerabilityFactRiskFactor:
       type: object
       required:

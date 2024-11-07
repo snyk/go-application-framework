@@ -892,6 +892,17 @@ info: {
 	"types.Suppression": {
 		kind!:          "ignored" | "pending_ignore_approval" | "other"
 		justification?: string
+		details?:       #SchemaMap["types.SuppressionDetails"]
+		...
+	}
+}
+#SchemaMap: {
+	// Suppression meta data
+	"types.SuppressionDetails": {
+		expiration!: string
+		category!:   string
+		ignoredOn!:  string
+		ignoredBy!:  #SchemaMap["types.User"]
 		...
 	}
 }
@@ -1084,6 +1095,14 @@ info: {
 
 		// Errors that occurred during the test execution.
 		errors?: #SchemaMap["types.TestError"]
+		...
+	}
+}
+#SchemaMap: {
+	// User definition
+	"types.User": {
+		name!:  string
+		email!: string
 		...
 	}
 }
