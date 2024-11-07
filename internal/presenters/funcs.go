@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -179,6 +180,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["sub"] = sub
 	defaultMap["reverse"] = reverse
 	defaultMap["join"] = strings.Join
+	defaultMap["formatDatetime"] = formatDatetime
 
 	return defaultMap
 }
@@ -224,4 +226,13 @@ func getRuntimeInfo(key string, ri runtimeinfo.RuntimeInfo) string {
 	default:
 		return ""
 	}
+}
+
+func formatDatetime(input string, inputFormat string, outputFormat string) string {
+	datetime, err := time.Parse(inputFormat, input)
+	if err != nil {
+		return input
+	}
+
+	return datetime.Format(outputFormat)
 }

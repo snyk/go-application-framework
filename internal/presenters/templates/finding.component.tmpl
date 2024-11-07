@@ -6,6 +6,13 @@
 {{- end }}
    Info: {{.Attributes.Message.Text}}
 
-{{end}}
+   {{- if .Attributes.Suppression}}
 
+   Expiration: {{ formatDatetime .Attributes.Suppression.Details.Expiration "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
+   Category:   {{ .Attributes.Suppression.Details.Category }}
+   Ignored on: {{ formatDatetime .Attributes.Suppression.Details.IgnoredOn "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
+   Ignored by: {{ .Attributes.Suppression.Details.IgnoredBy.Name }}
+   Reason:     {{ .Attributes.Suppression.Justification }}
+   {{- end}}
+{{end}}
 {{define "severity"}}{{if .Attributes.Suppression }}{{else}} ✗{{end}} [{{.Attributes.Rating.Severity.Value}}]{{end}}
