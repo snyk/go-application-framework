@@ -2,13 +2,12 @@ package localworkflows
 
 import (
 	"encoding/json"
-	"slices"
 	"strings"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/internal/utils/findings"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -28,33 +27,9 @@ func InitFilterFindingsWorkflow(engine workflow.Engine) error {
 	return err
 }
 
-type FindingsFilterFunc func(local_models.FindingResource) bool
-
-func filterSeverityASC(original []string, severityMinLevel string) []string {
-	if severityMinLevel == "" {
-		return original
-	}
-
-	minLevelPointer := slices.Index(original, severityMinLevel)
-
-	if minLevelPointer >= 0 {
-		return original[minLevelPointer:]
-	}
-
-	return original
-}
-
-func getSeverityThresholdFilter(severityThreshold string, severityOrder []string) FindingsFilterFunc {
-	return func(finding local_models.FindingResource) bool {
-		allowed_severities := filterSeverityASC(severityOrder, severityThreshold)
-
-		return utils.Contains(allowed_severities, string(finding.Attributes.Rating.Severity.Value))
-	}
-}
-
 // applyFilters applies the filters to the findings
 // if a finding does not match all of the filters, it is removed
-func applyFilters(findingsModel *local_models.LocalFinding, filters []FindingsFilterFunc) {
+func applyFilters(findingsModel *local_models.LocalFinding, filters []findings.FindingsFilterFunc) {
 	filteredFindings := []local_models.FindingResource{}
 	for _, finding := range findingsModel.Findings {
 		match := true
@@ -70,47 +45,6 @@ func applyFilters(findingsModel *local_models.LocalFinding, filters []FindingsFi
 		}
 	}
 	findingsModel.Findings = filteredFindings
-}
-
-// updateFindingsSummary updates the summary of the findings based on their severity levels
-func updateFindingsSummary(findingsModel *local_models.LocalFinding) {
-	severityCount := make(map[string]int)
-	// Initialize all severities to 0
-	for _, severity := range findingsModel.Summary.SeverityOrderAsc {
-		if _, exists := severityCount[severity]; !exists {
-			severityCount[severity] = 0
-		}
-	}
-
-	for _, finding := range findingsModel.Findings {
-		severity := string(finding.Attributes.Rating.Severity.Value)
-		severityCount[severity]++
-	}
-	// Build TestSummaryResult for each severity
-	results := []json_schemas.TestSummaryResult{}
-	for _, result := range findingsModel.Summary.Results {
-		if count, exists := severityCount[result.Severity]; exists {
-			results = append(results, json_schemas.TestSummaryResult{
-				Severity: result.Severity,
-				Total:    count,
-				Open:     count,          // Assuming all are open for this example
-				Ignored:  result.Ignored, // Keep the existing ignored value
-			})
-			delete(severityCount, result.Severity)
-		}
-	}
-
-	// Add any new severities that were not in the original results
-	for severity, count := range severityCount {
-		results = append(results, json_schemas.TestSummaryResult{
-			Severity: severity,
-			Total:    count,
-			Open:     count, // Assuming all are open for this example
-			Ignored:  0,     // Assuming none are ignored for this example
-		})
-	}
-
-	findingsModel.Summary.Results = results
 }
 
 func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
@@ -166,10 +100,10 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 				output = append(output, data)
 				continue
 			}
-			applyFilters(&findingsModel, []FindingsFilterFunc{getSeverityThresholdFilter(severityThreshold, severityOrder)})
+			applyFilters(&findingsModel, []findings.FindingsFilterFunc{findings.GetSeverityThresholdFilter(severityThreshold, severityOrder)})
 
 			// Update the findings summary after filtering
-			updateFindingsSummary(&findingsModel)
+			findings.UpdateFindingsSummary(&findingsModel)
 
 			filteredFindingsBytes, err := json.Marshal(findingsModel)
 			if err != nil {
