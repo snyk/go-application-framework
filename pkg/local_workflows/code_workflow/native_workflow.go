@@ -110,7 +110,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		output = append(output, sarifData)
 	}
 
-	summary := sarif2.CreateCodeSummary(&result.Sarif, "path/to/project")
+	summary := sarif2.CreateCodeSummary(&result.Sarif, config.GetString(configuration.INPUT_DIRECTORY))
 	summaryData, err := createCodeWorkflowData(
 		workflow.NewTypeIdentifier(id, "summary"),
 		config,
