@@ -71,7 +71,7 @@
     {{- template "header"  $result }}
     {{- template "details" $result }}
 
-    {{- if or (eq (getValueFromConfig "severity-threshold") "low") (eq (getValueFromConfig "severity-threshold") "medium") (eq (getValueFromConfig "severity-threshold") "high")}}
+    {{- if not (eq (getValueFromConfig "severity-threshold") "") }}
         {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
     {{- end }}
 
