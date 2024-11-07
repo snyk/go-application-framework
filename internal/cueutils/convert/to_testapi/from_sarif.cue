@@ -149,6 +149,15 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 						if len(result.suppressions) > 0 {
 							justification: result.suppressions[0].justification
 						}
+						details: {
+							category:   result.suppressions[0].properties.category
+							expiration: *result.suppressions[0].properties.expiration | ""
+							ignoredOn:  result.suppressions[0].properties.ignoredOn
+							ignoredBy: {
+								name:  result.suppressions[0].properties.ignoredBy.name
+								email: result.suppressions[0].properties.ignoredBy.email
+							}
+						}
 					}
 				}
 			}
