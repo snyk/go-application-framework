@@ -7,7 +7,7 @@
     {{- if $hasOpenFindings }}{{ "Open Issues" | title }}
             {{- range $finding := $openFindings }}
                 {{- renderToString "finding" $finding }}
-            {{- end }}
+{{end }}
     {{- end }}
     {{- if or (and $hasOpenFindings $hasIgnoredFindings) (eq (getValueFromConfig "include-ignores") "true") }}
         {{- divider}}
@@ -16,7 +16,7 @@
     {{- if $hasIgnoredFindings }}
             {{- range $finding := $ignoredFindings}}
                     {{- renderToString "finding" $finding }}
-            {{- end }}
+{{end }}
             {{- else}}  There are no ignored issues
     {{- end}}
 {{tip "Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/"}}
