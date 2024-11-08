@@ -172,5 +172,4 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 			assert.Equal(t, expectedSeverities[result.Severity], result.Open)
 		}
 	})
-
 }

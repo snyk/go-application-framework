@@ -39,7 +39,9 @@ func UpdateFindingsSummary(findingsModel *local_models.LocalFinding) {
 	for _, finding := range findingsModel.Findings {
 		severity := string(finding.Attributes.Rating.Severity.Value)
 		if _, ok := resultMap[severity]; !ok {
-			resultMap[severity] = &json_schemas.TestSummaryResult{}
+			resultMap[severity] = &json_schemas.TestSummaryResult{
+				Severity: severity,
+			}
 		}
 
 		resultMap[severity].Total++
