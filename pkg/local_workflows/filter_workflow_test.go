@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -159,17 +160,13 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
 		assert.NoError(t, err)
 
-		// Check if the summary is updated correctly
-		expectedSeverities := map[string]int{
-			"low":      0,
-			"medium":   0,
-			"high":     22,
-			"critical": 0,
-		}
-
-		for _, result := range filteredFindings.Summary.Results {
-			assert.Equal(t, expectedSeverities[result.Severity], result.Total)
-			assert.Equal(t, expectedSeverities[result.Severity], result.Open)
-		}
+		assert.ElementsMatch(t, []json_schemas.TestSummaryResult{
+			{
+				Severity: "high",
+				Total:    22,
+				Open:     22,
+				Ignored:  0,
+			},
+		}, filteredFindings.Summary.Results)
 	})
 }
