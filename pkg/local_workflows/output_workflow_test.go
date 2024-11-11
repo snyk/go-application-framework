@@ -207,17 +207,55 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		data := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, []byte(payload))
+		testfile := "testdata/sarif-snyk-goof-ignores.json"
+		localFinding, err := sarifToLocalFinding(t, testfile, "/mypath")
+		assert.NoError(t, err)
+		localFindingBytes, err := json.Marshal(localFinding)
+		assert.NoError(t, err)
+		data := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
 		writer := new(bytes.Buffer)
 
 		// mock assertions
 		outputDestination.EXPECT().GetWriter().Return(writer)
 
 		// execute
-		_, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
-
-		// assert
+		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 		assert.Nil(t, err)
+
+		content := writer.String()
+		// assert
+		assert.Contains(t, content, "Total issues:   11")
+		assert.Contains(t, content, "Project path:      /mypath")
+	})
+
+	t.Run("should output multiple results when there are multiple local findings models", func(t *testing.T) {
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		writer := new(bytes.Buffer)
+		testfile1 := "testdata/sarif-snyk-goof-ignores.json"
+		localFinding1, err := sarifToLocalFinding(t, testfile1, "/mypath")
+		assert.NoError(t, err)
+		localFindingBytes1, err := json.Marshal(localFinding1)
+		assert.NoError(t, err)
+		data1 := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes1)
+		testfile2 := "testdata/sarif-juice-shop.json"
+		localFinding2, err := sarifToLocalFinding(t, testfile2, "/juice-shop")
+		assert.NoError(t, err)
+		localFindingBytes2, err := json.Marshal(localFinding2)
+		assert.NoError(t, err)
+		data2 := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes2)
+		// mock assertions
+		outputDestination.EXPECT().GetWriter().Return(writer).Times(2)
+
+		// execute
+		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data1, data2}, outputDestination)
+		assert.Nil(t, err)
+
+		content := writer.String()
+		// assert
+		assert.Contains(t, content, "Total issues:   11")
+		assert.Contains(t, content, "Project path:      /mypath")
+		assert.Contains(t, content, "Total issues:   278")
+		assert.Contains(t, content, "Project path:      /juice-shop")
 	})
 
 	t.Run("should not output anything for versioned test summary mimeType", func(t *testing.T) {
