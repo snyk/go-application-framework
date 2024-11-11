@@ -99,14 +99,16 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
 
+	// Handle findings models, if none found, continue with the rest
+	err := handleContentTypeFindingsModel(invocation, input, outputDestination)
+	if err != nil {
+		return output, err
+	}
+
 	for i := range input {
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			err := handleContentTypeFindingsModel(invocation, input, i, outputDestination)
-			if err != nil {
-				return output, err
-			}
 			continue
 		}
 
@@ -160,21 +162,34 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 	return nil
 }
 
-func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input []workflow.Data, i int, outputDestination iUtils.OutputDestination) error {
+func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) error {
+	findings := []*local_models.LocalFinding{}
 	debugLogger := invocation.GetEnhancedLogger()
 	config := invocation.GetConfiguration()
 
-	debugLogger.Info().Msgf("[%d] Handling findings model", i)
-	var localFindings local_models.LocalFinding
-	localFindingsBytes, ok := input[i].GetPayload().([]byte)
-	if !ok {
-		return fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
+	for i := range input {
+		if !strings.HasPrefix(input[i].GetContentType(), content_type.LOCAL_FINDING_MODEL) {
+			continue
+		}
+		debugLogger.Info().Msgf("[%s] Handling findings model", input[i].GetIdentifier().String())
+		var localFindingsModel local_models.LocalFinding
+		localFindingsBytes, ok := input[i].GetPayload().([]byte)
+		if !ok {
+			debugLogger.Warn().Err(fmt.Errorf("invalid payload type: %T", input[i].GetPayload()))
+			continue
+		}
+
+		err := json.Unmarshal(localFindingsBytes, &localFindingsModel)
+		if err != nil {
+			debugLogger.Warn().Err(err).Msg("Failed to unmarshal local finding")
+			continue
+		}
+		findings = append(findings, &localFindingsModel)
 	}
 
-	err := json.Unmarshal(localFindingsBytes, &localFindings)
-	if err != nil {
-		debugLogger.Warn().Err(err).Msg("Failed to unmarshal local finding")
-		return err
+	if len(findings) == 0 {
+		debugLogger.Info().Msg("No findings to process")
+		return nil
 	}
 
 	writer := outputDestination.GetWriter()
@@ -201,22 +216,22 @@ func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input
 		templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
 	}
 
-	debugLogger.Info().Msgf("[%d] Creating findings model renderer", i)
+	debugLogger.Info().Msgf("Creating findings model renderer")
 	renderer := presenters.NewLocalFindingsRenderer(
-		&localFindings,
+		findings,
 		config,
 		writer,
 		presenters.WithRuntimeInfo(invocation.GetRuntimeInfo()),
 	)
 
-	debugLogger.Info().Msgf("[%d] Rendering %s with %s", i, mimeType, templates)
-	err = renderer.RenderTemplate(templates, mimeType)
+	debugLogger.Info().Msgf("Rendering %s with %s", mimeType, templates)
+	err := renderer.RenderTemplate(templates, mimeType)
 	if err != nil {
 		debugLogger.Warn().Err(err).Msg("Failed to render local finding")
 		return err
 	}
 
-	debugLogger.Info().Msgf("[%d] Rendering done", i)
+	debugLogger.Info().Msgf("Rendering done")
 	return nil
 }
 

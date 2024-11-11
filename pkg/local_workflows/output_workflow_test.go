@@ -3,7 +3,6 @@ package localworkflows
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -213,13 +212,14 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		localFindingBytes, err := json.Marshal(localFinding)
 		assert.NoError(t, err)
 		data := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
+		wrongData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte("yolo"))
 		writer := new(bytes.Buffer)
 
 		// mock assertions
 		outputDestination.EXPECT().GetWriter().Return(writer)
 
 		// execute
-		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data, wrongData}, outputDestination)
 		assert.Nil(t, err)
 
 		content := writer.String()
@@ -244,7 +244,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 		data2 := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes2)
 		// mock assertions
-		outputDestination.EXPECT().GetWriter().Return(writer).Times(2)
+		outputDestination.EXPECT().GetWriter().Return(writer)
 
 		// execute
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data1, data2}, outputDestination)
@@ -390,7 +390,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		for _, result := range summary.Results {
-			fmt.Println(result.Severity)
+			// fmt.Println(result.Severity)
 			assert.NotEqual(t, "medium", result.Severity)
 		}
 		assert.Equal(t, 1, len(output))

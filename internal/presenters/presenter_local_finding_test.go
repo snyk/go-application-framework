@@ -64,7 +64,8 @@ func TestPresenterLocalFinding_NoIssues(t *testing.T) {
 	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
 	writer := new(bytes.Buffer)
 
-	p := presenters.NewLocalFindingsRenderer(localFindingDoc,
+	p := presenters.NewLocalFindingsRenderer(
+		[]*local_models.LocalFinding{localFindingDoc},
 		config,
 		writer,
 	)
@@ -89,7 +90,7 @@ func TestPresenterLocalFinding_LowIssues(t *testing.T) {
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)
@@ -111,7 +112,7 @@ func TestPresenterLocalFinding_MediumHighIssues(t *testing.T) {
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)
@@ -136,7 +137,7 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColor(t *testing.T) {
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)
@@ -161,7 +162,7 @@ func TestPresenterLocalFinding_MediumHighIssuesWithColorLight(t *testing.T) {
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)
@@ -186,7 +187,7 @@ func TestPresenterLocalFinding_DefaultHideIgnored(t *testing.T) {
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)
@@ -210,7 +211,7 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)
@@ -242,7 +243,7 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 	writer := new(bytes.Buffer)
 
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)
@@ -265,7 +266,7 @@ func TestPresenterLocalFinding_CustomTemplateFiles(t *testing.T) {
 	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
 	writer := new(bytes.Buffer)
 	p := presenters.NewLocalFindingsRenderer(
-		input,
+		[]*local_models.LocalFinding{input},
 		config,
 		writer,
 	)

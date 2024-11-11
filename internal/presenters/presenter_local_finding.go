@@ -26,7 +26,7 @@ type TemplateImplFunction func() (*template.Template, template.FuncMap, error)
 
 type LocalFindingPresenter struct {
 	TestPath     string
-	Input        *local_models.LocalFinding
+	Input        []*local_models.LocalFinding
 	config       configuration.Configuration
 	writer       io.Writer
 	runtimeinfo  runtimeinfo.RuntimeInfo
@@ -57,7 +57,7 @@ func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) LocalFindingPresenterOptions {
 	}
 }
 
-func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, config configuration.Configuration, writer io.Writer, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
+func NewLocalFindingsRenderer(localFindingsDoc []*local_models.LocalFinding, config configuration.Configuration, writer io.Writer, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
 	p := &LocalFindingPresenter{
 		Input:  localFindingsDoc,
 		config: config,
@@ -148,7 +148,7 @@ func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType 
 	err = mainTmpl.Execute(p.writer, struct {
 		Results []*local_models.LocalFinding
 	}{
-		Results: []*local_models.LocalFinding{p.Input},
+		Results: p.Input,
 	})
 	if err != nil {
 		return err
