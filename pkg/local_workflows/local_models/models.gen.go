@@ -121,6 +121,11 @@ const (
 	GitScm TypesGitSCMInputType = "git-scm"
 )
 
+// Defines values for TypesIdentityFingerprintScheme.
+const (
+	Identity TypesIdentityFingerprintScheme = "identity"
+)
+
 // Defines values for TypesLegacyDeepcodeBundleAddressScheme.
 const (
 	DeepcodeBundle TypesLegacyDeepcodeBundleAddressScheme = "deepcode-bundle"
@@ -596,7 +601,7 @@ type TypesFindingAttributes struct {
 	// Fingerprint Natural key, or fingerprint, to identify the same Finding across multiple
 	// Test runs. Unique per Test. Here's why:
 	// https://github.com/snyk/pr-experience-poc/blob/main/docs/design-documents/pr-inline-comments.md#why-do-we-need-fingerprints
-	Fingerprint Fingerprint `json:"fingerprint"`
+	Fingerprint []Fingerprint `json:"fingerprint"`
 
 	// Locations A set of locations where the result was detected. Only one location should
 	// be included unless the finding can only be resolved by making a change at
@@ -873,6 +878,15 @@ type TypesGitScmImportSpec struct {
 	// branch will be associated with a test. It is the caller's responsibility to ensure this is correct.
 	Target *TypesGitCommit `json:"target,omitempty"`
 }
+
+// TypesIdentityFingerprint defines model for types.IdentityFingerprint.
+type TypesIdentityFingerprint struct {
+	Scheme TypesIdentityFingerprintScheme `json:"scheme"`
+	Value  string                         `json:"value"`
+}
+
+// TypesIdentityFingerprintScheme defines model for TypesIdentityFingerprint.Scheme.
+type TypesIdentityFingerprintScheme string
 
 // TypesLegacyDeepcodeBundleAddress Legacy Deepcode API bundle.
 //
@@ -1876,6 +1890,34 @@ func (t *Fingerprint) MergeTypesScaProblemFingerprint(v TypesScaProblemFingerpri
 	return err
 }
 
+// AsTypesIdentityFingerprint returns the union data inside the Fingerprint as a TypesIdentityFingerprint
+func (t Fingerprint) AsTypesIdentityFingerprint() (TypesIdentityFingerprint, error) {
+	var body TypesIdentityFingerprint
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypesIdentityFingerprint overwrites any union data inside the Fingerprint as the provided TypesIdentityFingerprint
+func (t *Fingerprint) FromTypesIdentityFingerprint(v TypesIdentityFingerprint) error {
+	v.Scheme = "identity"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypesIdentityFingerprint performs a merge with any union data inside the Fingerprint, using the provided TypesIdentityFingerprint
+func (t *Fingerprint) MergeTypesIdentityFingerprint(v TypesIdentityFingerprint) error {
+	v.Scheme = "identity"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JsonMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t Fingerprint) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"scheme"`
@@ -1894,6 +1936,8 @@ func (t Fingerprint) ValueByDiscriminator() (interface{}, error) {
 		return t.AsTypesCodeSastFingerprintV0()
 	case "code-sast-v1":
 		return t.AsTypesCodeSastFingerprintV1()
+	case "identity":
+		return t.AsTypesIdentityFingerprint()
 	case "sca-problem":
 		return t.AsTypesScaProblemFingerprint()
 	default:

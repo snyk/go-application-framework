@@ -79,7 +79,7 @@ output: test: {
 
 output: findings: [for finding in _findings {
 	{
-		id:         uuid.SHA1("be52d740-04f5-44da-8e17-1cf03d2281d7", finding.fingerprint.value)
+		id:         uuid.SHA1("be52d740-04f5-44da-8e17-1cf03d2281d7", finding.fingerprint[0].value)
 		type:       "findings"
 		attributes: finding
 		relationships: {}
@@ -95,18 +95,16 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 	[for result in run.results {
 		let _rule = _rules[result.ruleId]
 		{
-			fingerprint: {
-				scheme: "code-sast-v0"
-				// TODO: improve this with a decomped stable finding ID function!
-				value: string
-			} & {
-				value: [for fp in [
-					result.fingerprints["identity"],
-					result.fingerprints["1"],
-					result.fingerprints["0"],
-					"missing-fingerprint",
-				] if fp != _|_ {fp}][0]
-			}
+			fingerprint: [for k, v in result.fingerprints {
+				{
+					scheme: [
+						if k == "0" {"code-sast-v0"},
+						if k == "1" {"code-sast-v1"},
+						k,
+					][0]
+					value: v
+				}
+			}]
 			component: {
 				name:      "."
 				scan_type: "sast"
@@ -118,6 +116,17 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 				arguments: result.message.arguments
 			}
 			rating: {
+				if result.properties != _|_ {
+					risk: {
+						// TODO clarify if this is correct
+						factors: {
+							factor: "vulnerability-fact"
+							name:   result.properties.priorityScoreFactors[0].type
+							value:  result.properties.priorityScoreFactors[0].label
+						}
+						score: result.properties.priorityScore
+					}
+				}
 				severity: {
 					let _ruleLevel = _rules[result.ruleId].defaultConfiguration.level
 					value: [
@@ -127,7 +136,7 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 						"none",
 					][0]
 				}
-				severity_method: "CVSSv3"
+				severity_method: "CVSSv3" // TODO double check if this is correct
 			}
 			locations: [for location in result.locations
 				if location.physicalLocation != _|_ {

@@ -36,7 +36,7 @@ info: {
 // or explicitly
 // stated file patterns as recursive globs.
 #ExcludeRule:       string | #ObjectExcludeRule
-#Fingerprint:       #SchemaMap["types.CodeSastFingerprintV0"] | #SchemaMap["types.CodeSastFingerprintV1"] | #SchemaMap["types.ScaProblemFingerprint"]
+#Fingerprint:       #SchemaMap["types.CodeSastFingerprintV0"] | #SchemaMap["types.CodeSastFingerprintV1"] | #SchemaMap["types.ScaProblemFingerprint"] | #SchemaMap["types.IdentityFingerprint"]
 #LinkProperty:      #SchemaMap["io.snyk.api.common.LinkString"] | #SchemaMap["io.snyk.api.common.LinkObject"]
 #ObjectExcludeRule: #SchemaMap["types.FileObjectExcludeRule"] | #SchemaMap["types.OtherObjectExcludeRule"]
 
@@ -412,7 +412,7 @@ info: {
 		// across multiple
 		// Test runs. Unique per Test. Here's why:
 		// https://github.com/snyk/pr-experience-poc/blob/main/docs/design-documents/pr-inline-comments.md#why-do-we-need-fingerprints
-		fingerprint!: #Fingerprint
+		fingerprint!: [...#Fingerprint]
 
 		// Component in which the finding was discovered.
 		component!: #SchemaMap["types.Component"]
@@ -754,6 +754,13 @@ info: {
 		// Components that should be excluded when importing the SCM
 		// contents into a Workspace.
 		exclude?: [...#ExcludeRule]
+		...
+	}
+}
+#SchemaMap: {
+	"types.IdentityFingerprint": {
+		scheme!: "identity"
+		value!:  string
 		...
 	}
 }

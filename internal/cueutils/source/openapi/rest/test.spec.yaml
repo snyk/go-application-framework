@@ -469,12 +469,14 @@ components:
         - $ref: '#/components/schemas/types.CodeSastFingerprintV0'
         - $ref: '#/components/schemas/types.CodeSastFingerprintV1'
         - $ref: '#/components/schemas/types.ScaProblemFingerprint'
+        - $ref: '#/components/schemas/types.IdentityFingerprint'
       discriminator:
         propertyName: scheme
         mapping:
           code-sast-v0: '#/components/schemas/types.CodeSastFingerprintV0'
           code-sast-v1: '#/components/schemas/types.CodeSastFingerprintV1'
           sca-problem: '#/components/schemas/types.ScaProblemFingerprint'
+          identity: '#/components/schemas/types.IdentityFingerprint'
     LinkProperty:
       oneOf:
         - $ref: '#/components/schemas/io.snyk.api.common.LinkString'
@@ -956,8 +958,9 @@ components:
         - message
       properties:
         fingerprint:
-          allOf:
-            - $ref: '#/components/schemas/Fingerprint'
+          type: array
+          items:
+            $ref: '#/components/schemas/Fingerprint'
           description: |-
             Natural key, or fingerprint, to identify the same Finding across multiple
             Test runs. Unique per Test. Here's why:
@@ -1500,6 +1503,18 @@ components:
         Git SCM import specification, which defines how to import content from a Git
         SCM repository location into a workspace for testing, or a set of workspaces
         for differential testing.
+    types.IdentityFingerprint:
+      type: object
+      required:
+        - scheme
+        - value
+      properties:
+        scheme:
+          type: string
+          enum:
+            - identity
+        value:
+          type: string
     types.LegacyDeepcodeBundleAddress:
       type: object
       required:

@@ -181,6 +181,19 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["reverse"] = reverse
 	defaultMap["join"] = strings.Join
 	defaultMap["formatDatetime"] = formatDatetime
+	defaultMap["getUnionValue"] = func(input interface{}) interface{} {
+		u, ok := input.(local_models.UnionInterface)
+		if !ok {
+			return ""
+		}
+
+		result, err := u.ValueByDiscriminator()
+		if err != nil {
+			return ""
+		}
+
+		return result
+	}
 
 	return defaultMap
 }

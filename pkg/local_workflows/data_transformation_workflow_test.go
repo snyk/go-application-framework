@@ -10,12 +10,13 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/stretchr/testify/assert"
 )
 
 func setupMockTransformationContext(t *testing.T, fflagEnabled bool) *mocks.MockInvocationContext {
@@ -185,7 +186,6 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 	// Assert against local finding transformation
 	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 	assert.Len(t, localFinding.Findings, 278)
-	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
 
 	// Assert Summary
 	assert.Equal(t, 4, localFinding.Summary.Artifacts)

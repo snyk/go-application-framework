@@ -11,3 +11,7 @@ type LocalFinding struct {
 	Summary  json_schemas.TestSummary
 	Outcome  TestOutcome `json:"outcome"`
 }
+
+type UnionInterface interface {
+	ValueByDiscriminator() (interface{}, error)
+}

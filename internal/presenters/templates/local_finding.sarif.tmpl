@@ -51,8 +51,11 @@
                             {{- end}}
                         ],
                         "fingerprints": {
-                            "0": "",
-                            "1": ""
+                            {{- $fingerprintSize := sub (len $finding.Attributes.Fingerprint) 1 }}
+                            {{- range $index, $finger := $finding.Attributes.Fingerprint }}
+                            {{- $decodedFingerPrint := getUnionValue $finger }}
+                            "{{ $decodedFingerPrint.Scheme }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
+                            {{- end }}
                         },
                         "codeFlows": [],
                         {{- if $finding.Attributes.Suppression }}
@@ -72,7 +75,19 @@
                             }
                         ],
                         {{- end }}
-                        "properties": {}
+                        "properties": {
+                            "priorityScore": {{ $finding.Attributes.Rating.Risk.Score }},
+                            "priorityScoreFactors": [
+                                  {
+                                    "label": true,
+                                    "type": "hotFileCodeFlow"
+                                  },
+                                  {
+                                    "label": true,
+                                    "type": "fixExamples"
+                                  }
+                            ]
+                        }
                     }{{if lt $index $findingsSize}},{{end}}
                     {{- end}}
                 ],
