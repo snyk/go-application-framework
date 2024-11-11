@@ -54,7 +54,42 @@
                             "{{ $decodedFingerPrint.Scheme }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
                             {{- end }}
                         },
-                        "codeFlows": [],
+                        "codeFlows": [
+                            {{- $clSize := sub (len $finding.Attributes.CodeFlows) 1 }}
+                            {{- range $index, $cl := $finding.Attributes.CodeFlows }}
+                            {
+                                "threadFlows": [
+                                    {{- $tfSize := sub (len $cl.ThreadFlows) 1 }}
+                                    {{- range $index, $tf := $cl.ThreadFlows }}
+                                    {
+                                        "locations": [
+                                        {{- $locSize := sub (len $tf.Locations) 1 }}
+                                        {{- range $locIndex, $loc := $tf.Locations }}
+                                        {
+                                            "location": {
+                                                "id": {{ $locIndex }},
+                                                "physicalLocation": {
+                                                    "artifactLocation": {
+                                                      "uri": "{{- $loc.Filepath}}",
+                                                      "uriBaseId": "%SRCROOT%"
+                                                    },
+                                                    "region": {
+                                                      "startLine": {{- $loc.OriginalStartLine}},
+                                                      "endLine": {{- $loc.OriginalEndLine}},
+                                                      "startColumn": {{- $loc.OriginalStartColumn}},
+                                                      "endColumn": {{- $loc.OriginalEndColumn}}
+                                                    }
+                                                }
+                                            }
+                                        }{{if lt $locIndex $locSize}},{{end}}
+                                        {{- end }}
+                                        ]
+                                    }{{if lt $index $tfSize}},{{end}}
+                                    {{- end }}
+                                ]
+                            }{{if lt $index $clSize}},{{end}}
+                            {{- end }}
+                        ],
                         {{- if $finding.Attributes.Suppression }}
                         "suppressions" : [
                             {

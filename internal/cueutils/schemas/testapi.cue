@@ -223,6 +223,12 @@ info: {
 	}
 }
 #SchemaMap: {
+	"types.CodeFlow": {
+		threadFlows!: [...#SchemaMap["types.ThreadFlow"]]
+		...
+	}
+}
+#SchemaMap: {
 	"types.CodeSastFingerprintV0": {
 		scheme!: "code-sast-v0"
 		value!:  string
@@ -465,6 +471,7 @@ info: {
 		}
 		rating?:      #SchemaMap["types.FindingRating"]
 		suppression?: #SchemaMap["types.Suppression"]
+		codeFlows?: [...#SchemaMap["types.CodeFlow"]]
 		...
 	}
 }
@@ -1102,6 +1109,12 @@ info: {
 
 		// Errors that occurred during the test execution.
 		errors?: #SchemaMap["types.TestError"]
+		...
+	}
+}
+#SchemaMap: {
+	"types.ThreadFlow": {
+		locations!: [...#SchemaMap["io.snyk.reactive.FindingSourceLocation"]]
 		...
 	}
 }

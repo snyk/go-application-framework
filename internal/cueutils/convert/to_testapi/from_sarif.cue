@@ -170,6 +170,21 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 					}
 				}
 			}
+
+			if result.codeFlows != _|_ {
+				codeFlows: [for cl in result.codeFlows {
+					threadFlows: [for tf in cl.threadFlows {
+						locations: [for loc in tf.locations {
+							filepath:              loc.location.physicalLocation.artifactLocation.uri
+							original_start_line:   loc.location.physicalLocation.region.startLine
+							original_end_line:     loc.location.physicalLocation.region.endLine
+							original_start_column: loc.location.physicalLocation.region.startColumn
+							original_end_column:   loc.location.physicalLocation.region.endColumn
+						}]
+					}]
+				},
+				]
+			}
 		}
 	}]
 }]), {T: _, x: T, y: T, less: x.rating.severity.value < y.rating.severity.value})

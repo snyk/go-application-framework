@@ -428,6 +428,11 @@ type TypesBusinessCriticalityRiskFactorFactor string
 // TypesBusinessCriticalityRiskFactorValue defines model for TypesBusinessCriticalityRiskFactor.Value.
 type TypesBusinessCriticalityRiskFactorValue string
 
+// TypesCodeFlow defines model for types.CodeFlow.
+type TypesCodeFlow struct {
+	ThreadFlows []TypesThreadFlow `json:"threadFlows"`
+}
+
 // TypesCodeSastFingerprintV0 defines model for types.CodeSastFingerprintV0.
 type TypesCodeSastFingerprintV0 struct {
 	Scheme TypesCodeSastFingerprintV0Scheme `json:"scheme"`
@@ -589,6 +594,8 @@ type TypesFileObjectExcludeRuleType string
 
 // TypesFindingAttributes A Finding entity with a common format for all types of security scans. Notably, this is a sub-resource of a Test.
 type TypesFindingAttributes struct {
+	CodeFlows *[]TypesCodeFlow `json:"codeFlows,omitempty"`
+
 	// Component Component in which the finding was discovered.
 	Component TypesComponent `json:"component"`
 
@@ -1196,6 +1203,11 @@ type TypesTestState struct {
 
 	// Status Test execution status.
 	Status TypesTestExecStatus `json:"status"`
+}
+
+// TypesThreadFlow defines model for types.ThreadFlow.
+type TypesThreadFlow struct {
+	Locations []IoSnykReactiveFindingSourceLocation `json:"locations"`
 }
 
 // TypesUser User definition

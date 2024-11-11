@@ -730,6 +730,15 @@ components:
             - low
             - medium
             - high
+    types.CodeFlow:
+      type: object
+      required:
+        - threadFlows
+      properties:
+        threadFlows:
+          type: array
+          items:
+            $ref: '#/components/schemas/types.ThreadFlow'
     types.CodeSastFingerprintV0:
       type: object
       required:
@@ -1043,6 +1052,10 @@ components:
           $ref: '#/components/schemas/types.FindingRating'
         suppression:
           $ref: '#/components/schemas/types.Suppression'
+        codeFlows:
+          type: array
+          items:
+            $ref: '#/components/schemas/types.CodeFlow'
       description: A Finding entity with a common format for all types of security scans. Notably, this is a sub-resource of a Test.
     types.FindingCounts:
       type: object
@@ -1952,6 +1965,15 @@ components:
             - $ref: '#/components/schemas/types.TestError'
           description: Errors that occurred during the test execution.
       description: The state of a Test execution. Does not include the pass or fail.
+    types.ThreadFlow:
+      type: object
+      required:
+        - locations
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/io.snyk.reactive.FindingSourceLocation'
     types.User:
       type: object
       required:
