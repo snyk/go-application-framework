@@ -11,9 +11,6 @@
                         "semanticVersion" : "{{- getRuntimeInfo "version" }}",
                         "version" : "{{- getRuntimeInfo "version" }}",
                         "informationUri" : "https://docs.snyk.io/",
-                        "properties" : {
-                            "coverage": []
-                        },
                         "rules" : []
                     }
                 },
@@ -91,7 +88,9 @@
                     }{{if lt $index $findingsSize}},{{end}}
                     {{- end}}
                 ],
-                "properties": {}
+                "properties": {
+                    "coverage": []
+                }
             }
         {{- end}}
         ]
