@@ -1157,7 +1157,7 @@ components:
           items:
             $ref: '#/components/schemas/types.CodeFlow'
         referenceId:
-          type: string
+          $ref: '#/components/schemas/types.ReferenceId'
       description: A Finding entity with a common format for all types of security scans. Notably, this is a sub-resource of a Test.
     types.FindingCounts:
       type: object
@@ -1707,6 +1707,16 @@ components:
       type: string
       format: uri
       description: Package information represented in Package URL (pURL) form.
+    types.ReferenceId:
+      type: object
+      required:
+        - identifier
+        - index
+      properties:
+        identifier:
+          type: string
+        index:
+          type: integer
     types.Rules:
       type: object
       required:

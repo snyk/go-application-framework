@@ -121,7 +121,10 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 	[for result in run.results {
 		let _rule = _rules[result.ruleId]
 		{
-			referenceId: result.ruleId
+			referenceId: {
+				identifier: result.ruleId
+				index:      result.ruleIndex
+			}
 			fingerprint: [for k, v in result.fingerprints {
 				{
 					scheme: [

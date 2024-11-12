@@ -472,7 +472,7 @@ info: {
 		rating?:      #SchemaMap["types.FindingRating"]
 		suppression?: #SchemaMap["types.Suppression"]
 		codeFlows?: [...#SchemaMap["types.CodeFlow"]]
-		referenceId?: string
+		referenceId?: #SchemaMap["types.ReferenceId"]
 		...
 	}
 }
@@ -831,6 +831,13 @@ info: {
 #SchemaMap: {
 	// Package information represented in Package URL (pURL) form.
 	"types.PackageURL": string
+}
+#SchemaMap: {
+	"types.ReferenceId": {
+		identifier!: string
+		index!:      int
+		...
+	}
 }
 #SchemaMap: {
 	// Based on Sarif rules

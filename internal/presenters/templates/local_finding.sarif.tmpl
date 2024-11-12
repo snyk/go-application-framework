@@ -64,8 +64,8 @@
                     {{- $findingsSize := sub (len $result.Findings) 1 }}
                     {{- range $index, $finding := $result.Findings }}
                     {
-                        "ruleId": "{{ $finding.Attributes.ReferenceId }}",
-                        "ruleIndex": 0,
+                        "ruleId": "{{ $finding.Attributes.ReferenceId.Identifier }}",
+                        "ruleIndex": {{ $finding.Attributes.ReferenceId.Index }},
                         "level": "{{- SeverityToSarifLevel $finding.Attributes.Rating.Severity.Value }}",
                         "message": {
                             "text": "{{- $finding.Attributes.Message.Text }}",

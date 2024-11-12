@@ -638,7 +638,7 @@ type TypesFindingAttributes struct {
 
 	// Rating The severity and risk rating of the vulnerability
 	Rating      *TypesFindingRating `json:"rating,omitempty"`
-	ReferenceId *string             `json:"referenceId,omitempty"`
+	ReferenceId *TypesReferenceId   `json:"referenceId,omitempty"`
 
 	// Suggestions Suggestions are indications given to the user that might help with
 	// mitigating the finding.
@@ -948,6 +948,12 @@ type TypesPackageObject struct {
 
 // TypesPackageURL Package information represented in Package URL (pURL) form.
 type TypesPackageURL = string
+
+// TypesReferenceId defines model for types.ReferenceId.
+type TypesReferenceId struct {
+	Identifier string `json:"identifier"`
+	Index      int    `json:"index"`
+}
 
 // TypesRules Based on Sarif rules
 type TypesRules struct {
