@@ -209,7 +209,8 @@ func (a *AnalyticsImpl) GetOutputData() *analyticsOutput {
 	io.WriteString(shasum, uuid)
 	output.Id = fmt.Sprintf("%x", shasum.Sum(nil))
 
-	output.Args = a.args[1:]
+	// CLI-586 - stop sending CLI args to analytics
+	output.Args = []string{}
 
 	if len(a.command) > 0 {
 		output.Command = a.command
