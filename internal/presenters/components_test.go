@@ -31,7 +31,10 @@ func Test_RenderError(t *testing.T) {
 	t.Run("without links", func(t *testing.T) {
 		lipgloss.SetColorProfile(termenv.TrueColor)
 		lipgloss.SetHasDarkBackground(false)
-		output := RenderError(snyk.NewBadRequestError("A short error description"))
+		err := snyk.NewBadRequestError("A short error description")
+		// no error code => no error catalog link
+		err.ErrorCode = ""
+		output := RenderError(err)
 
 		assert.NotContains(t, output, "Help:")
 		snaps.MatchSnapshot(t, output)
@@ -44,7 +47,7 @@ func Test_RenderError(t *testing.T) {
 		err.Links = append(err.Links, "https://docs.snyk.io/getting-started/supported-languages-frameworks-and-feature-availability-overview#code-analysis-snyk-code")
 		output := RenderError(err)
 
-		assert.Contains(t, output, "Help:")
+		assert.Contains(t, output, "Docs:")
 		snaps.MatchSnapshot(t, output)
 	})
 }

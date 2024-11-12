@@ -3,6 +3,8 @@ package presenters
 import (
 	"bytes"
 	"fmt"
+	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,8 +13,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
+
+const valueStyleWidth = 80
 
 func errorLevelToStyle(errLevel string) lipgloss.Style {
 	style := lipgloss.NewStyle().
@@ -41,25 +46,52 @@ func RenderError(err snyk_errors.Error) string {
 	if len(err.Detail) > 0 {
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
 			label.Render("Info:"),
-			value.Copy().Width(80).Render(err.Detail),
+			value.Copy().Width(valueStyleWidth).Render(err.Detail),
 		))
 	}
 
 	if err.StatusCode > 0 {
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("HTTP:"),
-			value.Render(strconv.Itoa(err.StatusCode)),
+			label.Render("Status:"),
+			value.Render(strconv.Itoa(err.StatusCode)+" "+http.StatusText(err.StatusCode)),
 		))
+	}
+
+	if len(err.Description) > 0 {
+		desc := err.Description
+		re := regexp.MustCompile("\n+")
+		lines := re.Split(desc, -1)
+
+		if len(lines) > 1 {
+			lines = lines[0:2]
+			for i, l := range lines {
+				lines[i] = strings.Trim(l, " \n")
+			}
+			desc = strings.Join(lines, " ")
+		}
+
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Details:"),
+			value.Copy().Width(valueStyleWidth).Render(desc),
+		))
+	}
+
+	title := strings.TrimSpace(err.Title)
+	if len(err.ErrorCode) > 0 {
+		fragment := "#" + strings.ToLower(err.ErrorCode)
+		link := constants.SNYK_DOCS_URL + constants.SNYK_DOCS_ERROR_CATALOG_PATH + fragment
+		err.Links = append([]string{link}, err.Links...)
+		title = title + fmt.Sprintf(" (%s)", err.ErrorCode)
 	}
 
 	if len(err.Links) > 0 {
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Help:"),
+			label.Render("Docs:"),
 			value.Render(strings.Join(err.Links, "\n")),
 		))
 	}
 
-	title := renderBold(strings.TrimSpace(err.Title) + " " + fmt.Sprintf("(%s)", err.ErrorCode))
+	title = renderBold(title)
 
 	return "\n" + backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +
 		strings.Join(body, "\n")
