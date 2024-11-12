@@ -1,0 +1,1242 @@
+
+            {
+                "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {
+                            "driver" : {
+                                "name" : "snyk-cli",
+                                "semanticVersion" : "1.2.3",
+                                "version" : "1.2.3",
+                                "informationUri" : "https://docs.snyk.io/",
+                                "rules" : [
+                                    {
+                                        "id": "javascript/NoRateLimitingForExpensiveWebOperation",
+                                        "name": "NoRateLimitingForExpensiveWebOperation",
+                                        "shortDescription": {
+                                            "text": "Allocation of Resources Without Limits or Throttling"
+                                        },
+                                        "defaultConfiguration": {
+                                            "level": "warning"
+                                        },
+                                        "help": {
+                                            "markdown": ""\n## Details\n\nWithout unlimited resources, software operating in the real world is inherently limited in the resources it may consume; similarly, servers are limited by the number of simultaneous sessions they can handle. Therefore, it is important for developers to design software that considers these real-world physical (or virtual) limitations and limits user sessions accordingly, both in terms of the number of user sessions and in the quantity of resources each user may demand. Software with this weakness does not include such limitations and as a result, individual user sessions may consume too many resources, leading to unintended software behavior including, potentially, denial of service. This can be compared to a single restaurant customer emptying out the entire buffet, leaving no food for other customers--or an entire busload mobbing the buffet all at once, with a similar effect. This may happen inadvertently or as a result of an attack by a malicious user.\n\n## Best practices for prevention\n* Test extensively to obtain baseline values indicating how the software performs in the real world under various conditions (normal and peak); use these values to determine reasonable software limits.\n* Set clear limits for all flexible parameters such as maximum allocable memory, number of processes within a given timeframe, file descriptors, requests per client, number of records per request, etc. This is particularly true for any parameters within user control.\n* Release all resources when no longer in use, including incorporating timeouts for inactive users, processes, and resources.\n* Familiarize Dev, Ops, and IT teams with best practices for recognizing and preventing DoS attacks and out-of-control resource allocation to prevent catastrophic failures."",
+                                            "text": ""
+                                        }
+                                    },
+                                    {
+                                        "id": "javascript/NoSqli",
+                                        "name": "NoSqli",
+                                        "shortDescription": {
+                                            "text": "NoSQL Injection"
+                                        },
+                                        "defaultConfiguration": {
+                                            "level": "error"
+                                        },
+                                        "help": {
+                                            "markdown": ""## Details\n\nIn an NoSQL injection attack, the user can submit an NoSQL query directly to the database, gaining access without providing appropriate credentials. Attackers can then view, export, modify, and delete confidential information; change passwords and other authentication information; and possibly gain access to other systems within the network. This is one of the most commonly exploited categories of vulnerability, but can largely be avoided through good coding practices."",
+                                            "text": ""
+                                        }
+                                    },
+                                    {
+                                        "id": "javascript/HardcodedNonCryptoSecret",
+                                        "name": "HardcodedNonCryptoSecret",
+                                        "shortDescription": {
+                                            "text": "Hardcoded Secret"
+                                        },
+                                        "defaultConfiguration": {
+                                            "level": "error"
+                                        },
+                                        "help": {
+                                            "markdown": ""## Details\n\nWhen constants are hardcoded into applications, this information could easily be reverse-engineered and become known to attackers. For example, if a breached authentication token is hardcoded in multiple places in the application, it may lead to components of the application remaining vulnerable if not all instances are changed.\nAnother negative effect of hard-coding constants is potential unpredictability in the application's performance if the development team fails to update every single instance of the hardcoded constant throughout the code. For these reasons, hard-coding security-relevant constants is considered bad coding practice and should be remedied if present and avoided in future.\n\n## Best practices for prevention\n- Never hard code security-related constants; use symbolic names or configuration lookup files.\n- As hard coding is often done by coders working alone on a small scale, examine all legacy code components and test carefully when scaling.\n- Adopt a \"future-proof code\" mindset: While use of constants may save a little time now and make development simpler in the short term, it could cost time and money adapting to scale or other unforeseen circumstances (such as new hardware) in the future."",
+                                            "text": ""
+                                        }
+                                    },
+                                    {
+                                        "id": "javascript/DisablePoweredBy",
+                                        "name": "DisablePoweredBy",
+                                        "shortDescription": {
+                                            "text": "Information Exposure"
+                                        },
+                                        "defaultConfiguration": {
+                                            "level": "warning"
+                                        },
+                                        "help": {
+                                            "markdown": ""## Details\n\nSensitive data includes: personally identifiable information (PII) of employees, customers, users, or other third parties; financial information; code; intellectual property; or protected network information such as passwords. Exposure of sensitive information to an unauthorized actor occurs when any party who does not require this information for business purposes can remove this information from the secure network.\nConsequences of exposure can include holding it for ransom payment, identity theft, or access to other internal network resources-along with financial loss due to regulatory fines, court settlements, or cost to restore compromised systems. As most attackers aim to extract sensitive information, this CWE only describes exploits that take advantage of vulnerabilities related to how data is handled: the management, storage, transfer, or removal of sensitive information.\n\n## Best practices for prevention\n- Encrypt data at all times, whether in transit or at rest.\n- When transporting data, always use a secure protocol such as TLS.\n- Before collecting PII or financial information, consider whether there is a true business need for this information; similarly, before storing the data, ensure that there is an ongoing business need.\n- Classify all incoming data according to privacy and security guidelines to improve awareness of sensitive data.\n- Ensure that caching is disabled for all transactions involving sensitive information.\n- Store passwords with secure, salted hashing functions.\n- Apply a network-wide least-privilege policy so sensitive data is provided only to users with business need to know."",
+                                            "text": ""
+                                        }
+                                    },
+                                    {
+                                        "id": "javascript/HttpToHttps",
+                                        "name": "HttpToHttps",
+                                        "shortDescription": {
+                                            "text": "Cleartext Transmission of Sensitive Information"
+                                        },
+                                        "defaultConfiguration": {
+                                            "level": "warning"
+                                        },
+                                        "help": {
+                                            "markdown": ""\n## Details\nThis weakness occurs when software transmits sensitive information, such as passwords or credit card numbers, in unencrypted form. This information may then be intercepted by threat actors using sniffer tools or interception techniques such as man-in-the-middle (MITM) attacks (often involving social engineering). Attackers can then use information gleaned to perform a variety of actions, depending on the information type. Possible actions include gaining unauthorized access, impersonating a user, moving laterally within the organization's network, or retrieving and potentially modifying files. This weakness is almost completely avoidable through intelligent architecture and design.\n\n## Best practices for prevention\n* Build web applications around a security mindset and the awareness that sniffers may be present at any time.\n* Ensure that all sensitive data transmission uses reliable encryption.\n* Implement security measures so that sensitive results are never returned in plain text.\n* Implement multiple-factor authentication methods to validate remote instances.\n* Use SSL not only at logon but throughout communications."",
+                                            "text": ""
+                                        }
+                                    },
+                                    {
+                                        "id": "javascript/UseCsurfForExpress",
+                                        "name": "UseCsurfForExpress",
+                                        "shortDescription": {
+                                            "text": "Cross-Site Request Forgery (CSRF)"
+                                        },
+                                        "defaultConfiguration": {
+                                            "level": "warning"
+                                        },
+                                        "help": {
+                                            "markdown": ""\n## Details\nCross-site request forgery is an attack in which a malicious third party takes advantage of a user's authenticated credentials (such as a browser cookie) to impersonate that trusted user and perform unauthorized actions. The web application server cannot tell the difference between legitimate and malicious requests. This type of attack generally begins by tricking the user with a social engineering attack, such as a link or popup that the user inadvertently clicks, causing an unauthorized request to be sent to the web server. Consequences vary: At a standard user level, attackers can change passwords, transfer funds, make purchases, or connect with contacts; from an administrator account, attackers can then make changes to or even take down the app itself.\n\n## Best practices for prevention\n* Use development frameworks that defend against CSRF, using a nonce, hash, or some other security device to the URL and/or to forms.\n* Implement secure, unique, hidden tokens that are checked by the server each time to validate state-change requests.\n* Never assume that authentication tokens and session identifiers mean a request is legitimate.\n* Understand and implement other safe-cookie techniques, such as double submit cookies.\n* Terminate user sessions when not in use, including automatic timeout.\n* Ensure rigorous coding practices and defenses against other commonly exploited CWEs, since cross-site scripting (XSS), for example, can be used to bypass defenses against CSRF.\n\n## References\n* [Snyk Learn - CSRF](https://learn.snyk.io/lesson/csrf-attack/)"",
+                                            "text": ""
+                                        }
+                                    },
+                                    {
+                                        "id": "javascript/NoHardcodedPasswords",
+                                        "name": "NoHardcodedPasswords",
+                                        "shortDescription": {
+                                            "text": "Use of Hardcoded Credentials"
+                                        },
+                                        "defaultConfiguration": {
+                                            "level": "warning"
+                                        },
+                                        "help": {
+                                            "markdown": ""\n## Details\n\nDevelopers may use hardcoded credentials for convenience when coding in order to simplify their workflow. While they are responsible for removing these before production, occasionally this task may fall through the cracks. This also becomes a maintenance challenge when credentials are re-used across multiple applications.\n\nOnce attackers gain access, they may take advantage of privilege level to remove or alter data, take down a site or app, or hold any of the above for ransom. The risk across multiple similar projects is even greater. If code containing the credentials is reused across multiple projects, they will all be compromised.\n\n## Best practices for prevention\n* Plan software architecture such that keys and passwords are always stored outside the code, wherever possible.\n* Plan encryption into software architecture for all credential information and ensure proper handling of keys, credentials, and passwords.\n* Prompt for a secure password on first login rather than hard-code a default password.\n* If a hardcoded password or credential must be used, limit its use, for example, to system console users rather than via the network.\n* Use strong hashes for inbound password authentication, ideally with randomly assigned salts to increase the difficulty level in case of brute-force attack."",
+                                            "text": ""
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "results": [
+                            {
+                                "ruleId": "javascript/NoSqli",
+                                "ruleIndex": 0,
+                                "level": "error",
+                                "message": {
+                                    "text": "Unsanitized input from the HTTP request body flows into find, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.",
+                                    "markdown": "Unsanitized input from {0} {1} into {2}, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.",
+                                    "arguments": [
+                                        "[the HTTP request body](0)", "[flows](1),(2),(3),(4)", "[find](5)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "routes/index.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":39,
+                                          "endLine":39,
+                                          "startColumn":8,
+                                          "endColumn":12
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "5dacd021007d5479cb1b35404420a56a7fc14480d99c3f62ac16a87ad2bfe1ed",
+                                    "code-sast-v1": "12567ef6.4773f344.7fde84c3.750eb3ec.cea4e9be.8020cfdf.cd61fc56.3cd69235.f759b1f9.4773f344.7fde84c3.08906714.79a7d027.5fce695c.c0a0d45c.1ce8e212",
+                                    "identity": "0e275117-61b7-4344-b310-1b6e61fb5af5"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":39,
+                                                              "endLine":39,
+                                                              "startColumn":29,
+                                                              "endColumn":33
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 1,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":39,
+                                                              "endLine":39,
+                                                              "startColumn":29,
+                                                              "endColumn":33
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 2,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":39,
+                                                              "endLine":39,
+                                                              "startColumn":25,
+                                                              "endColumn":33
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 3,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":39,
+                                                              "endLine":39,
+                                                              "startColumn":15,
+                                                              "endColumn":23
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 4,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":39,
+                                                              "endLine":39,
+                                                              "startColumn":13,
+                                                              "endColumn":73
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 5,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":39,
+                                                              "endLine":39,
+                                                              "startColumn":8,
+                                                              "endColumn":12
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 828,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/NoSqli",
+                                "ruleIndex": 0,
+                                "level": "error",
+                                "message": {
+                                    "text": "Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.",
+                                    "markdown": "Unsanitized input from {0} {1} into {2}, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.",
+                                    "arguments": [
+                                        "[an HTTP parameter](0)", "[flows](1),(2),(3)", "[findById](4)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "routes/index.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":116,
+                                          "endLine":116,
+                                          "startColumn":8,
+                                          "endColumn":16
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "554c9e4d45c7e592d275a3ed9e055135b84585bdbb8acb649705786728e3b248",
+                                    "code-sast-v1": "d6cf995b.7f46b8bf.607187b5.f2573d69.ef9f7d82.f8890b3c.cd61fc56.7354dc7a.1e99c45f.7f46b8bf.7c3fa097.f2573d69.6f7f4efa.5fce695c.c0a0d45c.1ce8e212",
+                                    "identity": "126a3820-25bb-4f73-9910-bb8810c7042c"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":116,
+                                                              "endLine":116,
+                                                              "startColumn":21,
+                                                              "endColumn":27
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 1,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":116,
+                                                              "endLine":116,
+                                                              "startColumn":21,
+                                                              "endColumn":27
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 2,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":116,
+                                                              "endLine":116,
+                                                              "startColumn":17,
+                                                              "endColumn":27
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 3,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":116,
+                                                              "endLine":116,
+                                                              "startColumn":17,
+                                                              "endColumn":30
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 4,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":116,
+                                                              "endLine":116,
+                                                              "startColumn":8,
+                                                              "endColumn":16
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 828,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/NoSqli",
+                                "ruleIndex": 0,
+                                "level": "error",
+                                "message": {
+                                    "text": "Unsanitized input from an HTTP parameter flows into findById, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.",
+                                    "markdown": "Unsanitized input from {0} {1} into {2}, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.",
+                                    "arguments": [
+                                        "[an HTTP parameter](0)", "[flows](1),(2),(3)", "[findById](4)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "routes/index.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":144,
+                                          "endLine":144,
+                                          "startColumn":8,
+                                          "endColumn":16
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "7411360805c50d8c4bc0bc5fd48895ca9355d0598b8aaa1f9a01476df07a3f83",
+                                    "code-sast-v1": "d6cf995b.7f46b8bf.607187b5.f2573d69.ef9f7d82.f8890b3c.cd61fc56.7354dc7a.1e99c45f.7f46b8bf.7c3fa097.f2573d69.6f7f4efa.5fce695c.c0a0d45c.1ce8e212",
+                                    "identity": "ef606779-f8c5-4346-97ff-5a9a6d4ef358"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":144,
+                                                              "endLine":144,
+                                                              "startColumn":21,
+                                                              "endColumn":27
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 1,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":144,
+                                                              "endLine":144,
+                                                              "startColumn":21,
+                                                              "endColumn":27
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 2,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":144,
+                                                              "endLine":144,
+                                                              "startColumn":17,
+                                                              "endColumn":27
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 3,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":144,
+                                                              "endLine":144,
+                                                              "startColumn":17,
+                                                              "endColumn":30
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 4,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":144,
+                                                              "endLine":144,
+                                                              "startColumn":8,
+                                                              "endColumn":16
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "suppressions" : [
+                                    {
+                                        "kind": "external",
+                                        "properties": {
+                                            "category": "temporary-ignore",
+                                            "expiration": "2025-02-11T23:00:00Z",
+                                            "ignoredOn": "2024-10-11T12:26:17.028Z",
+                                            "ignoredBy": {
+                                                  "name": "Luke Watts",
+                                                  "email": "luke@snyk.io"
+                                            }
+                                        }
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 828,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/HardcodedNonCryptoSecret",
+                                "ruleIndex": 0,
+                                "level": "error",
+                                "message": {
+                                    "text": "Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.",
+                                    "markdown": "Avoid hardcoding values that are meant to be secret. Found {0} used in {1}.",
+                                    "arguments": [
+                                        "[a hardcoded string](0)", "[here](1)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "app.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":74,
+                                          "endLine":74,
+                                          "startColumn":5,
+                                          "endColumn":10
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "a244acfe383de501ab67d46263a13b67af3e6eb8ef8f44f79cb9ff6f1ea8a851",
+                                    "code-sast-v1": "46b7c801.8e456e36.642d3d87.72a8f743.a46de81d.5fce695c.fee35010.89d75565.46b7c801.8e456e36.642d3d87.72a8f743.a46de81d.5fce695c.fee35010.89d75565",
+                                    "identity": "06c2fa18-2920-46fe-a838-66d276a171f0"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "app.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":74,
+                                                              "endLine":74,
+                                                              "startColumn":13,
+                                                              "endColumn":67
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 1,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "app.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":74,
+                                                              "endLine":74,
+                                                              "startColumn":5,
+                                                              "endColumn":10
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 810,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/NoRateLimitingForExpensiveWebOperation",
+                                "ruleIndex": 0,
+                                "level": "warning",
+                                "message": {
+                                    "text": "This endpoint handler performs a system command execution and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.",
+                                    "markdown": "This {0} performs {1} and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.",
+                                    "arguments": [
+                                        "[endpoint handler](0)", "[a system command execution](1)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "routes/index.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":77,
+                                          "endLine":113,
+                                          "startColumn":18,
+                                          "endColumn":2
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "f927008c43b00df60dbeccb9e5565bb0529ea1454f7e3e665d29c61801357953",
+                                    "code-sast-v1": "a3c051e6.9c6e2949.98501263.c559ebce.b5c66366.5fce695c.83265159.89d75565.a3c051e6.4773f344.c2905f73.c559ebce.b6be8b13.5fce695c.83265159.89d75565",
+                                    "identity": "5fe97046-d8ce-45c3-82e5-8756e8ffe20c"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":77,
+                                                              "endLine":113,
+                                                              "startColumn":18,
+                                                              "endColumn":2
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 1,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":86,
+                                                              "endLine":86,
+                                                              "startColumn":10,
+                                                              "endColumn":27
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 578,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/NoRateLimitingForExpensiveWebOperation",
+                                "ruleIndex": 0,
+                                "level": "warning",
+                                "message": {
+                                    "text": "This endpoint handler performs a file system operation and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.",
+                                    "markdown": "This {0} performs {1} and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.",
+                                    "arguments": [
+                                        "[endpoint handler](0)", "[a file system operation](1)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "routes/index.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":166,
+                                          "endLine":220,
+                                          "startColumn":18,
+                                          "endColumn":2
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "c2357a8e5cf9d2246841d185e94a82260932a6b66fb086b92a0fc28744a2ea65",
+                                    "code-sast-v1": "ae77ea27.9c6e2949.98501263.c559ebce.fd1fa73f.5fce695c.83265159.89d75565.c3f8dfad.4773f344.1ec824b2.c559ebce.546471fb.5fce695c.83265159.2f05c567",
+                                    "identity": "6036809b-b137-44f1-b44e-98cf08fd8e37"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":166,
+                                                              "endLine":220,
+                                                              "startColumn":18,
+                                                              "endColumn":2
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 1,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":184,
+                                                              "endLine":184,
+                                                              "startColumn":5,
+                                                              "endColumn":16
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 578,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/NoRateLimitingForExpensiveWebOperation",
+                                "ruleIndex": 0,
+                                "level": "warning",
+                                "message": {
+                                    "text": "This endpoint handler performs a file system operation and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.",
+                                    "markdown": "This {0} performs {1} and does not use a rate-limiting mechanism. It may enable the attackers to perform Denial-of-service attacks. Consider using a rate-limiting middleware such as express-limit.",
+                                    "arguments": [
+                                        "[endpoint handler](0)", "[a file system operation](1)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "routes/index.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":222,
+                                          "endLine":230,
+                                          "startColumn":21,
+                                          "endColumn":2
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "48a814ab1cfc6be77ad23666764c1d71bddffb00ea0d83a9a17ab3d72e797bb2",
+                                    "code-sast-v1": "ae77ea27.4773f344.607187b5.1c17f46e.93e94ad5.5fce695c.83265159.89d75565.ae77ea27.4773f344.607187b5.1c17f46e.93e94ad5.5fce695c.83265159.89d75565",
+                                    "identity": "84bef90d-511b-4645-b0e4-fbfcdc3721fd"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":222,
+                                                              "endLine":230,
+                                                              "startColumn":21,
+                                                              "endColumn":2
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "location": {
+                                                        "id": 1,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "routes/index.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":224,
+                                                              "endLine":224,
+                                                              "startColumn":16,
+                                                              "endColumn":22
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 578,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/DisablePoweredBy",
+                                "ruleIndex": 0,
+                                "level": "warning",
+                                "message": {
+                                    "text": "Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.",
+                                    "markdown": "Disable X-Powered-By header for your {0} (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.",
+                                    "arguments": [
+                                        "[Express app](0)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "app.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":31,
+                                          "endLine":31,
+                                          "startColumn":11,
+                                          "endColumn":18
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "11bbff3168402efa1154da12d7fa26f86f48501b097ca872c04bae6fe8c91c80",
+                                    "code-sast-v1": "ae77ea27.4773f344.607187b5.d7919eeb.a1fb1152.5fce695c.fee35010.89d75565.630e4ed1.4773f344.aa4dda5f.d7919eeb.f30fb760.49b28873.85bdc101.83642794",
+                                    "identity": "c2942d51-e62d-4d15-8ba4-a716e6368604"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "app.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":31,
+                                                              "endLine":31,
+                                                              "startColumn":11,
+                                                              "endColumn":18
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "suppressions" : [
+                                    {
+                                        "kind": "external",
+                                        "properties": {
+                                            "category": "not-vulnerable",
+                                            "expiration": "",
+                                            "ignoredOn": "2024-10-08T09:33:05.933Z",
+                                            "ignoredBy": {
+                                                  "name": "JSON",
+                                                  "email": "jason.luong@snyk.io"
+                                            }
+                                        }
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 560,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/HttpToHttps",
+                                "ruleIndex": 0,
+                                "level": "warning",
+                                "message": {
+                                    "text": "http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.",
+                                    "markdown": "{0} uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.",
+                                    "arguments": [
+                                        "[http.createServer](0)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "app.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":77,
+                                          "endLine":77,
+                                          "startColumn":1,
+                                          "endColumn":18
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "0910eae8edf827e1795e21e2a1722ba5d97e7b0a34c71f9620a04f51858c1247",
+                                    "code-sast-v1": "aac70831.4773f344.607187b5.9a6c48e6.2fce9a75.6f0d36d4.a4e722aa.b1b5c7cb.7a85a498.4773f344.d685e3e1.d7919eeb.8b312d3d.5fce695c.ea1fda40.89d75565",
+                                    "identity": "0fc278c9-0bfe-4bdd-b206-f107a17c0101"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "app.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":77,
+                                                              "endLine":77,
+                                                              "startColumn":1,
+                                                              "endColumn":18
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 560,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/UseCsurfForExpress",
+                                "ruleIndex": 0,
+                                "level": "warning",
+                                "message": {
+                                    "text": "CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.",
+                                    "markdown": "CSRF protection is disabled for your {0}. This allows the attackers to execute requests on a user's behalf.",
+                                    "arguments": [
+                                        "[Express app](0)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "app.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":31,
+                                          "endLine":31,
+                                          "startColumn":11,
+                                          "endColumn":18
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "e9efef11df29effdf12993c800f24b845901a11c4b123d7115a075c201c5acc2",
+                                    "code-sast-v1": "ae77ea27.4773f344.607187b5.d7919eeb.a1fb1152.5fce695c.fee35010.89d75565.630e4ed1.4773f344.aa4dda5f.d7919eeb.f30fb760.49b28873.85bdc101.83642794",
+                                    "identity": "a282b3ec-cbe1-4b5c-9b31-1caccaeaaa55"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "app.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":31,
+                                                              "endLine":31,
+                                                              "startColumn":11,
+                                                              "endColumn":18
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 560,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            },
+                            {
+                                "ruleId": "javascript/NoHardcodedPasswords",
+                                "ruleIndex": 0,
+                                "level": "warning",
+                                "message": {
+                                    "text": "Do not hardcode passwords in code. Found hardcoded password used in password.",
+                                    "markdown": "Do not hardcode passwords in code. Found hardcoded password used in {0}.",
+                                    "arguments": [
+                                        "[password](0)"
+                                    ]
+                                },
+                                "locations": [
+                                    {
+                                      "physicalLocation": {
+                                        "artifactLocation": {
+                                          "uri": "db.js",
+                                          "uriBaseId": "%SRCROOT%"
+                                        },
+                                        "region": {
+                                          "startLine":48,
+                                          "endLine":48,
+                                          "startColumn":35,
+                                          "endColumn":43
+                                        }
+                                      }
+                                    }
+                                ],
+                                "fingerprints": {
+                                    "code-sast-v0": "6e75768361e7b6592dcdc2667b17df3e12a1fa62a963d187774266b51729d4bc",
+                                    "code-sast-v1": "12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d.12567ef6.6d936dbf.bd65d204.fd94bb7c.79a7d027.fcf3002d.81d021f5.91c60b7d",
+                                    "identity": "4b7c5f54-4850-4de8-9857-21c5a98e26eb"
+                                },
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                {
+                                                    "location": {
+                                                        "id": 0,
+                                                        "physicalLocation": {
+                                                            "artifactLocation": {
+                                                              "uri": "db.js",
+                                                              "uriBaseId": "%SRCROOT%"
+                                                            },
+                                                            "region": {
+                                                              "startLine":48,
+                                                              "endLine":48,
+                                                              "startColumn":35,
+                                                              "endColumn":43
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "priorityScore": 510,
+                                    "priorityScoreFactors": [
+                                          {
+                                            "label": true,
+                                            "type": "hotFileCodeFlow"
+                                          },
+                                          {
+                                            "label": true,
+                                            "type": "fixExamples"
+                                          }
+                                    ]
+                                }
+                            }
+                        ],
+                        "properties": {
+                            "coverage": []
+                        }
+                    }
+                ]
+            }

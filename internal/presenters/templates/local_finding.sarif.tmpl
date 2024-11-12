@@ -16,7 +16,17 @@
                             {{- range $index, $rule := $result.Rules }}
                             {
                                 "id": "{{ $rule.Id }}",
-                                "name": "{{ $rule.Name }}"
+                                "name": "{{ $rule.Name }}",
+                                "shortDescription": {
+                                    "text": "{{ $rule.ShortDescription.Text }}"
+                                },
+                                "defaultConfiguration": {
+                                    "level": "{{ $rule.DefaultConfiguration.Level }}"
+                                },
+                                "help": {
+                                    "markdown": {{ escape $rule.Help.Markdown }},
+                                    "text": "{{ $rule.Help.Text }}"
+                                }
                             }{{if lt $index $rulesSize}},{{end}}
                             {{- end }}
                         ]

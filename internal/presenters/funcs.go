@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -193,6 +194,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 
 		return result
+	}
+	defaultMap["escape"] = func(input string) string {
+		return strconv.Quote(input)
 	}
 
 	return defaultMap
