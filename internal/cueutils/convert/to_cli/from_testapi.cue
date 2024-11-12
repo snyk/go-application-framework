@@ -20,4 +20,5 @@ output: {
 	}]
 	summary: input.test.attributes.summary
 	outcome: input.test.attributes.outcome
+	rules:   input.rules
 }

@@ -360,6 +360,106 @@ paths:
                 $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
       tags:
         - Findings
+  /orgs/{org_id}/tests/{test_id}/rules:
+    get:
+      operationId: getRules
+      summary: Get all rules
+      description: Get Rules
+      parameters:
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
+        - $ref: '#/components/parameters/types.OrgIdParam'
+        - $ref: '#/components/parameters/types.TestIdParam'
+      responses:
+        '200':
+          description: The request has succeeded.
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+            retry-after:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/vnd.api+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/types.Rules'
+                  jsonapi:
+                    $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
+                  links:
+                    type: object
+                    properties:
+                      self:
+                        $ref: '#/components/schemas/LinkProperty'
+                      related:
+                        $ref: '#/components/schemas/LinkProperty'
+                    additionalProperties:
+                      $ref: '#/components/schemas/LinkProperty'
+                  meta:
+                    $ref: '#/components/schemas/io.snyk.api.common.Meta'
+                required:
+                  - data
+                  - jsonapi
+                  - links
+        '404':
+          description: Resource not found
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+      tags:
+        - Test
 components:
   parameters:
     io.snyk.api.request.PaginatedRequest.ending_before:
@@ -1056,6 +1156,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/types.CodeFlow'
+        referenceId:
+          type: string
       description: A Finding entity with a common format for all types of security scans. Notably, this is a sub-resource of a Test.
     types.FindingCounts:
       type: object
@@ -1605,6 +1707,75 @@ components:
       type: string
       format: uri
       description: Package information represented in Package URL (pURL) form.
+    types.Rules:
+      type: object
+      required:
+        - id
+        - name
+        - shortDescription
+        - defaultConfiguration
+        - help
+        - properties
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        shortDescription:
+          type: object
+          properties:
+            text:
+              type: string
+          required:
+            - text
+        defaultConfiguration:
+          type: object
+          properties:
+            level:
+              type: string
+          required:
+            - level
+        help:
+          type: object
+          properties:
+            markdown:
+              type: string
+            text:
+              type: string
+          required:
+            - markdown
+            - text
+        properties:
+          type: object
+          properties:
+            tags:
+              type: array
+              items:
+                type: string
+            categories:
+              type: array
+              items:
+                type: string
+            exampleCommitDescriptions:
+              type: array
+              items:
+                type: string
+            precision:
+              type: string
+            repoDatasetSize:
+              type: integer
+            cwe:
+              type: array
+              items:
+                type: string
+          required:
+            - tags
+            - categories
+            - exampleCommitDescriptions
+            - precision
+            - repoDatasetSize
+            - cwe
+      description: Based on Sarif rules
     types.ScaProblemFingerprint:
       type: object
       required:

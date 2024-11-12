@@ -472,6 +472,7 @@ info: {
 		rating?:      #SchemaMap["types.FindingRating"]
 		suppression?: #SchemaMap["types.Suppression"]
 		codeFlows?: [...#SchemaMap["types.CodeFlow"]]
+		referenceId?: string
 		...
 	}
 }
@@ -830,6 +831,36 @@ info: {
 #SchemaMap: {
 	// Package information represented in Package URL (pURL) form.
 	"types.PackageURL": string
+}
+#SchemaMap: {
+	// Based on Sarif rules
+	"types.Rules": {
+		id!:   string
+		name!: string
+		shortDescription!: {
+			text!: string
+			...
+		}
+		defaultConfiguration!: {
+			level!: string
+			...
+		}
+		help!: {
+			markdown!: string
+			text!:     string
+			...
+		}
+		properties!: {
+			tags!: [...string]
+			categories!: [...string]
+			exampleCommitDescriptions!: [...string]
+			precision!:       string
+			repoDatasetSize!: int
+			cwe!: [...string]
+			...
+		}
+		...
+	}
 }
 #SchemaMap: {
 	"types.ScaProblemFingerprint": {

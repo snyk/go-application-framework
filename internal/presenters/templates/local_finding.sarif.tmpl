@@ -11,14 +11,22 @@
                         "semanticVersion" : "{{- getRuntimeInfo "version" }}",
                         "version" : "{{- getRuntimeInfo "version" }}",
                         "informationUri" : "https://docs.snyk.io/",
-                        "rules" : []
+                        "rules" : [
+                            {{- $rulesSize := sub (len $result.Rules) 1 }}
+                            {{- range $index, $rule := $result.Rules }}
+                            {
+                                "id": "{{ $rule.Id }}",
+                                "name": "{{ $rule.Name }}"
+                            }{{if lt $index $rulesSize}},{{end}}
+                            {{- end }}
+                        ]
                     }
                 },
                 "results": [
                     {{- $findingsSize := sub (len $result.Findings) 1 }}
                     {{- range $index, $finding := $result.Findings }}
                     {
-                        "ruleId": "",
+                        "ruleId": "{{ $finding.Attributes.ReferenceId }}",
                         "ruleIndex": 0,
                         "level": "{{- SeverityToSarifLevel $finding.Attributes.Rating.Severity.Value }}",
                         "message": {

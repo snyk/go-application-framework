@@ -637,7 +637,8 @@ type TypesFindingAttributes struct {
 	} `json:"message"`
 
 	// Rating The severity and risk rating of the vulnerability
-	Rating *TypesFindingRating `json:"rating,omitempty"`
+	Rating      *TypesFindingRating `json:"rating,omitempty"`
+	ReferenceId *string             `json:"referenceId,omitempty"`
 
 	// Suggestions Suggestions are indications given to the user that might help with
 	// mitigating the finding.
@@ -947,6 +948,30 @@ type TypesPackageObject struct {
 
 // TypesPackageURL Package information represented in Package URL (pURL) form.
 type TypesPackageURL = string
+
+// TypesRules Based on Sarif rules
+type TypesRules struct {
+	DefaultConfiguration struct {
+		Level string `json:"level"`
+	} `json:"defaultConfiguration"`
+	Help struct {
+		Markdown string `json:"markdown"`
+		Text     string `json:"text"`
+	} `json:"help"`
+	Id         string `json:"id"`
+	Name       string `json:"name"`
+	Properties struct {
+		Categories                []string `json:"categories"`
+		Cwe                       []string `json:"cwe"`
+		ExampleCommitDescriptions []string `json:"exampleCommitDescriptions"`
+		Precision                 string   `json:"precision"`
+		RepoDatasetSize           int      `json:"repoDatasetSize"`
+		Tags                      []string `json:"tags"`
+	} `json:"properties"`
+	ShortDescription struct {
+		Text string `json:"text"`
+	} `json:"shortDescription"`
+}
 
 // TypesScaProblemFingerprint defines model for types.ScaProblemFingerprint.
 type TypesScaProblemFingerprint struct {
@@ -1322,6 +1347,24 @@ type ListFindingsParams struct {
 
 	// Limit The number of items to return.
 	Limit *IoSnykApiRequestPaginatedRequestLimit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// SnykRequestId A unique ID assigned to each API request, for tracing and troubleshooting.
+	//
+	// Snyk clients can optionally provide this ID.
+	SnykRequestId *IoSnykApiRequestSnykApiRequestRequestId `json:"snyk-request-id,omitempty"`
+
+	// SnykInteractionId Identifies the Snyk client interaction in which this API request occurs.
+	//
+	// The identifier is an opaque string. though at the time of writing it may either be a
+	// uuid or a urn containing a uuid and some metadata.
+	// to be safe, the
+	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
+}
+
+// GetRulesParams defines parameters for GetRules.
+type GetRulesParams struct {
+	// Version The API version requested.
+	Version IoSnykApiRequestSnykApiRequestVersion `form:"version" json:"version"`
 
 	// SnykRequestId A unique ID assigned to each API request, for tracing and troubleshooting.
 	//

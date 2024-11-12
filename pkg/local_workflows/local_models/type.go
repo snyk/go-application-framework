@@ -9,7 +9,8 @@ type TestOutcome TypesTestOutcome
 type LocalFinding struct {
 	Findings []FindingResource `json:"findings"`
 	Summary  json_schemas.TestSummary
-	Outcome  TestOutcome `json:"outcome"`
+	Outcome  TestOutcome  `json:"outcome"`
+	Rules    []TypesRules `json:"rules"`
 }
 
 type UnionInterface interface {
