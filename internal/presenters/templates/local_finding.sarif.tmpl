@@ -26,6 +26,34 @@
                                 "help": {
                                     "markdown": {{ escape $rule.Help.Markdown }},
                                     "text": "{{ $rule.Help.Text }}"
+                                },
+                                "properties": {
+                                    "tags": [
+                                        {{- $tagsSize := sub (len $rule.Properties.Tags) 1 }}
+                                        {{- range $tagIndex, $tag := $rule.Properties.Tags }}
+                                        "{{ $tag }}"{{if lt $tagIndex $tagsSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "categories": [
+                                        {{- $categoriesSize := sub (len $rule.Properties.Categories) 1 }}
+                                        {{- range $catIndex, $category := $rule.Properties.Categories }}
+                                        "{{ $category }}"{{if lt $catIndex $categoriesSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "exampleCommitDescriptions": [
+                                        {{- $examplesSize := sub (len $rule.Properties.ExampleCommitDescriptions) 1 }}
+                                        {{- range $exampleIndex, $example := $rule.Properties.ExampleCommitDescriptions }}
+                                        "{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "precision": "{{ $rule.Properties.Precision }}",
+                                    "repoDatasetSize": {{ $rule.Properties.RepoDatasetSize }},
+                                    "cwe": [
+                                        {{- $cweSize := sub (len $rule.Properties.Cwe) 1 }}
+                                        {{- range $cweIndex, $cwe := $rule.Properties.Cwe }}
+                                        "{{ $cwe }}"{{if lt $cweIndex $cweSize}},{{end}}
+                                        {{- end }}
+                                    ]
                                 }
                             }{{if lt $index $rulesSize}},{{end}}
                             {{- end }}
