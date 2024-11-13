@@ -73,7 +73,8 @@ func Test_Basic(t *testing.T) {
 
 			body, err := io.ReadAll(request.Body)
 			assert.Nil(t, err)
-			assert.Equal(t, len(testFields), strings.Count(string(body), sanitizeReplacementString), "Not all sensitive values have been replaced!")
+			// expect no CLI args to be sent to analytics (CLI-586)
+			assert.Equal(t, 0, strings.Count(string(body), sanitizeReplacementString))
 
 			var requestBody dataOutput
 			err = json.Unmarshal(body, &requestBody)
