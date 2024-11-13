@@ -87,31 +87,33 @@ output: findings: [for finding in _findings {
 }]
 
 // TODO remove 0
-output: rules: [for rule in input.runs[0].tool.driver.rules {
-	{
-		id:   rule.id
-		name: rule.name
-		shortDescription: {
-			text: rule.shortDescription.text
+output: rules: list.Concat([for run in input.runs {
+	[for rule in run.tool.driver.rules {
+		{
+			id:   rule.id
+			name: rule.name
+			shortDescription: {
+				text: rule.shortDescription.text
+			}
+			defaultConfiguration: {
+				level: rule.defaultConfiguration.level
+			}
+			help: {
+				markdown: rule.help.markdown
+				text:     rule.help.text
+			}
+			properties: {
+				tags:                      rule.properties.tags
+				categories:                rule.properties.categories
+				exampleCommitDescriptions: rule.properties.exampleCommitDescriptions
+				exampleCommitFixes:        rule.properties.exampleCommitFixes
+				precision:                 rule.properties.precision
+				repoDatasetSize:           rule.properties.repoDatasetSize
+				cwe:                       rule.properties.cwe
+			}
 		}
-		defaultConfiguration: {
-			level: rule.defaultConfiguration.level
-		}
-		help: {
-			markdown: rule.help.markdown
-			text:     rule.help.text
-		}
-		properties: {
-			tags:                      rule.properties.tags
-			categories:                rule.properties.categories
-			exampleCommitDescriptions: rule.properties.exampleCommitDescriptions
-			exampleCommitFixes:        rule.properties.exampleCommitFixes
-			precision:                 rule.properties.precision
-			repoDatasetSize:           rule.properties.repoDatasetSize
-			cwe:                       rule.properties.cwe
-		}
-	}
-}]
+	}]
+}])
 
 // Transform the input
 _findings: list.Sort(list.Concat([for run in input.runs {
