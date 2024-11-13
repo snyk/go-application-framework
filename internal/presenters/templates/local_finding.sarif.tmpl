@@ -190,6 +190,18 @@
                 ],
                 "properties": {
                     "coverage": [
+                        {
+                            "files": {{ len $result.NewSummary.Coverage }}
+                        },
+                        {{- $coverageSize := sub (len $result.NewSummary.Coverage) 1 }}
+                        {{- range $coverageIndex, $coverage := $result.NewSummary.Coverage }}
+                        {
+                            "files": {{ $coverage.Files }},
+                            "isSupported": {{ $coverage.IsSupported }},
+                            "lang": "{{ $coverage.Lang }}"
+                            "type": "{{ $coverage.Type }}"
+                        }{{if lt $coverageIndex $coverageSize}},{{end}}
+                        {{- end }}
                     ]
                 }
             }

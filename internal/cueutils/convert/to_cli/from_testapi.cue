@@ -18,7 +18,8 @@ output: {
 		relationships: finding.relationships
 		type:          finding.type
 	}]
-	summary: input.test.attributes.summary
 	outcome: input.test.attributes.outcome
 	rules:   input.rules
+	newSummary: input.test.attributes.newSummary
+	summary: input.test.attributes.summary
 }

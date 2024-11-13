@@ -54,6 +54,26 @@ _summary: {
 	}
 }
 
+_newSummary: {
+	coverage: [{
+		files: 2
+		isSupported: true
+		lang: "HTML"
+		type: "HardCoded"
+	}]
+}
+
+// _newSummary: coverage: list.Concat([for run in input.runs {
+// 	[for coverage in run.properties.coverage {
+// 		{
+// 			files: coverage.files
+// 			isSupported: coverage.isSupported
+// 			lang: coverage.lang
+// 			type: coverage.type
+// 		}
+// 	}]
+// }])
+
 // Transform the input into the output
 output: test: {
 	id:   context.test.id
@@ -67,6 +87,7 @@ output: test: {
 			"fail",
 		][0]
 		summary: _summary
+		newSummary: _newSummary
 	}
 	relationships: {
 		findings: {
