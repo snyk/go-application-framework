@@ -861,6 +861,16 @@ info: {
 			tags!: [...string]
 			categories!: [...string]
 			exampleCommitDescriptions!: [...string]
+			exampleCommitFixes!: [...{
+				commitUrl!: string
+				lines!: [...{
+					line!:       string
+					lineNumber!: int
+					linechange!: string
+					...
+				}]
+				...
+			}]
 			precision!:       string
 			repoDatasetSize!: int
 			cwe!: [...string]

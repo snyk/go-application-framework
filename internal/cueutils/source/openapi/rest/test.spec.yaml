@@ -1770,6 +1770,31 @@ components:
               type: array
               items:
                 type: string
+            exampleCommitFixes:
+              type: array
+              items:
+                type: object
+                properties:
+                  commitUrl:
+                    type: string
+                  lines:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        line:
+                          type: string
+                        lineNumber:
+                          type: integer
+                        linechange:
+                          type: string
+                      required:
+                        - line
+                        - lineNumber
+                        - linechange
+                required:
+                  - commitUrl
+                  - lines
             precision:
               type: string
             repoDatasetSize:
@@ -1782,6 +1807,7 @@ components:
             - tags
             - categories
             - exampleCommitDescriptions
+            - exampleCommitFixes
             - precision
             - repoDatasetSize
             - cwe

@@ -105,6 +105,7 @@ output: rules: [for rule in input.runs[0].tool.driver.rules {
 			tags:                      rule.properties.tags
 			categories:                rule.properties.categories
 			exampleCommitDescriptions: rule.properties.exampleCommitDescriptions
+			exampleCommitFixes:        rule.properties.exampleCommitFixes
 			precision:                 rule.properties.precision
 			repoDatasetSize:           rule.properties.repoDatasetSize
 			cwe:                       rule.properties.cwe
