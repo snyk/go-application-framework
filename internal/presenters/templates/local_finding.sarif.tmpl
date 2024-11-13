@@ -46,6 +46,25 @@
                                         "{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
                                         {{- end }}
                                     ],
+                                    "exampleCommitFixes": [
+                                        {{- $examplesSize := sub (len $rule.Properties.ExampleCommitFixes) 1 }}
+                                        {{- range $exampleIndex, $example := $rule.Properties.ExampleCommitFixes }}
+                                        {
+
+                                            "commitUrl": "{{ $example.CommitUrl }}",
+                                            "lines": [
+                                                {{- $lineSize := sub (len $example.Lines) 1 }}
+                                                {{- range $lineIndex, $line := $example.Lines }}
+                                                {
+                                                    "line": {{ escape $line.Line -}},
+                                                    "lineNumber": {{ $line.LineNumber }},
+                                                    "linechange": "{{ $line.Linechange }}"
+                                                }{{if lt $lineIndex $lineSize}},{{end}}
+                                                {{- end }}
+                                            ]
+                                        }{{if lt $exampleIndex $examplesSize}},{{end}}
+                                        {{- end }}
+                                    ],
                                     "precision": "{{ $rule.Properties.Precision }}",
                                     "repoDatasetSize": {{ $rule.Properties.RepoDatasetSize }},
                                     "cwe": [
