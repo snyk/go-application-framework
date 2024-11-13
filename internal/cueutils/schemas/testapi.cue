@@ -48,7 +48,7 @@ info: {
 // information about
 // pURLs.
 #Package:     #SchemaMap["types.PackageURL"] | #SchemaMap["types.PackageObject"]
-#RiskFactors: #SchemaMap["types.BusinessCriticalityRiskFactor"] | #SchemaMap["types.CvssRiskFactor"] | #SchemaMap["types.EpssRiskFactor"] | #SchemaMap["types.VulnerabilityFactRiskFactor"] | #SchemaMap["types.VulnerabilityInstanceFactRiskFactor"]
+#RiskFactors: #SchemaMap["types.BusinessCriticalityRiskFactor"] | #SchemaMap["types.CvssRiskFactor"] | #SchemaMap["types.EpssRiskFactor"] | #SchemaMap["types.VulnerabilityFactRiskFactor"] | #SchemaMap["types.VulnerabilityInstanceFactRiskFactor"] | #SchemaMap["types.VulnerabilityGenericFactor"]
 
 // Suggestions are indications given to the user that might help
 // with
@@ -533,9 +533,17 @@ info: {
 	}
 }
 #SchemaMap: {
+	"types.FindingNumericalRating": {
+		score!: int & >=0 & <=1000
+		factors!: [...#RiskFactors]
+		...
+	}
+}
+#SchemaMap: {
 	// The severity and risk rating of the vulnerability
 	"types.FindingRating": {
-		risk?: #SchemaMap["types.FindingRisk"]
+		risk?:     #SchemaMap["types.FindingNumericalRating"]
+		priority?: #SchemaMap["types.FindingNumericalRating"]
 
 		// A value which may be modified by enrichment stages.
 		severity!: {
@@ -701,13 +709,6 @@ info: {
 		type!:          "findings"
 		attributes!:    #SchemaMap["types.FindingAttributes"]
 		relationships!: #SchemaMap["types.FindingRelationships"]
-		...
-	}
-}
-#SchemaMap: {
-	"types.FindingRisk": {
-		score!:   int & >=0 & <=1000
-		factors!: #RiskFactors
 		...
 	}
 }
@@ -1177,6 +1178,14 @@ info: {
 #SchemaMap: {
 	"types.VulnerabilityFactRiskFactor": {
 		factor!: "vulnerability-fact"
+		name!:   string
+		value!:  bool
+		...
+	}
+}
+#SchemaMap: {
+	"types.VulnerabilityGenericFactor": {
+		factor!: "vulnerability-generic-fact"
 		name!:   string
 		value!:  bool
 		...

@@ -173,16 +173,16 @@
                         ],
                         {{- end }}
                         "properties": {
-                            "priorityScore": {{ $finding.Attributes.Rating.Risk.Score }},
+                            "priorityScore": {{ $finding.Attributes.Rating.Priority.Score }},
                             "priorityScoreFactors": [
+                            {{- $factorSize := sub (len $finding.Attributes.Rating.Priority.Factors) 1 }}
+                            {{- range $index, $factor := $finding.Attributes.Rating.Priority.Factors }}
+                            {{- $decodedFactor := getUnionValue $factor }}
                                   {
-                                    "label": true,
-                                    "type": "hotFileCodeFlow"
-                                  },
-                                  {
-                                    "label": true,
-                                    "type": "fixExamples"
-                                  }
+                                    "label": {{ $decodedFactor.Value }},
+                                    "type": "{{ $decodedFactor.Name }}"
+                                  }{{if lt $index $factorSize}},{{end}}
+                            {{- end }}
                             ]
                         }
                     }{{if lt $index $findingsSize}},{{end}}

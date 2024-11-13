@@ -607,6 +607,7 @@ components:
         - $ref: '#/components/schemas/types.EpssRiskFactor'
         - $ref: '#/components/schemas/types.VulnerabilityFactRiskFactor'
         - $ref: '#/components/schemas/types.VulnerabilityInstanceFactRiskFactor'
+        - $ref: '#/components/schemas/types.VulnerabilityGenericFactor'
       discriminator:
         propertyName: factor
         mapping:
@@ -615,6 +616,7 @@ components:
           epss: '#/components/schemas/types.EpssRiskFactor'
           vulnerability-fact: '#/components/schemas/types.VulnerabilityFactRiskFactor'
           vulnerability-instance-fact: '#/components/schemas/types.VulnerabilityInstanceFactRiskFactor'
+          vulnerability-generic-fact: '#/components/schemas/types.VulnerabilityGenericFactor'
     Suggestion:
       oneOf:
         - $ref: '#/components/schemas/types.SuggestedPackageUpgrade'
@@ -1246,6 +1248,20 @@ components:
           type: string
           format: uuid
           description: The finding identity (fingerprint). Uniquely identified in combination with a Test ID.
+    types.FindingNumericalRating:
+      type: object
+      required:
+        - score
+        - factors
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskFactors'
     types.FindingRating:
       type: object
       required:
@@ -1253,7 +1269,9 @@ components:
         - severity_method
       properties:
         risk:
-          $ref: '#/components/schemas/types.FindingRisk'
+          $ref: '#/components/schemas/types.FindingNumericalRating'
+        priority:
+          $ref: '#/components/schemas/types.FindingNumericalRating'
         severity:
           type: object
           required:
@@ -1543,18 +1561,6 @@ components:
         relationships:
           $ref: '#/components/schemas/types.FindingRelationships'
       description: FindingResource models a JSON API Finding resource.
-    types.FindingRisk:
-      type: object
-      required:
-        - score
-        - factors
-      properties:
-        score:
-          type: integer
-          minimum: 0
-          maximum: 1000
-        factors:
-          $ref: '#/components/schemas/RiskFactors'
     types.FindingsSummary:
       type: object
       required:
@@ -2203,6 +2209,21 @@ components:
           type: string
           enum:
             - vulnerability-fact
+        name:
+          type: string
+        value:
+          type: boolean
+    types.VulnerabilityGenericFactor:
+      type: object
+      required:
+        - factor
+        - name
+        - value
+      properties:
+        factor:
+          type: string
+          enum:
+            - vulnerability-generic-fact
         name:
           type: string
         value:
