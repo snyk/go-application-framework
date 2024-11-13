@@ -716,6 +716,13 @@ info: {
 	// Summary statistics about a Test's Findings.
 	"types.FindingsSummary": {
 		counts!: #SchemaMap["types.FindingCounts"]
+		coverage!: [...{
+			files!:       int
+			isSupported!: bool
+			lang!:        string
+			type!:        string
+			...
+		}]
 		...
 	}
 }

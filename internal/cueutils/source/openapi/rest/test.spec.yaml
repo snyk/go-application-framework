@@ -1565,9 +1565,28 @@ components:
       type: object
       required:
         - counts
+        - coverage
       properties:
         counts:
           $ref: '#/components/schemas/types.FindingCounts'
+        coverage:
+          type: array
+          items:
+            type: object
+            properties:
+              files:
+                type: integer
+              isSupported:
+                type: boolean
+              lang:
+                type: string
+              type:
+                type: string
+            required:
+              - files
+              - isSupported
+              - lang
+              - type
       description: Summary statistics about a Test's Findings.
     types.GitCommit:
       type: string

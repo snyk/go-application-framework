@@ -58,7 +58,7 @@
                                                 {
                                                     "line": {{ escape $line.Line -}},
                                                     "lineNumber": {{ $line.LineNumber }},
-                                                    "linechange": "{{ $line.Linechange }}"
+                                                    "lineChange": "{{ $line.Linechange }}"
                                                 }{{if lt $lineIndex $lineSize}},{{end}}
                                                 {{- end }}
                                             ]
@@ -189,7 +189,8 @@
                     {{- end}}
                 ],
                 "properties": {
-                    "coverage": []
+                    "coverage": [
+                    ]
                 }
             }
         {{- end}}

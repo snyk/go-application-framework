@@ -7,10 +7,11 @@ type TestOutcome TypesTestOutcome
 
 // TODO: This schema should be imported from Dragonfly
 type LocalFinding struct {
-	Findings []FindingResource `json:"findings"`
-	Summary  json_schemas.TestSummary
-	Outcome  TestOutcome  `json:"outcome"`
-	Rules    []TypesRules `json:"rules"`
+	Findings   []FindingResource `json:"findings"`
+	Outcome    TestOutcome       `json:"outcome"`
+	Rules      []TypesRules      `json:"rules"`
+	NewSummary TypesMetaData     `json:"properties"`
+	Summary    json_schemas.TestSummary
 }
 
 type UnionInterface interface {
