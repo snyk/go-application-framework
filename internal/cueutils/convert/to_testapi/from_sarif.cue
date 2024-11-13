@@ -79,7 +79,7 @@ output: test: {
 
 output: findings: [for finding in _findings {
 	{
-	    // TODO
+		// TODO
 		id:         uuid.SHA1("be52d740-04f5-44da-8e17-1cf03d2281d7", finding.fingerprint[0].value)
 		type:       "findings"
 		attributes: finding
@@ -152,16 +152,16 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 			}
 			rating: {
 				if result.properties != _|_ {
-				    if result.properties.priorityScore != _|_ {
-					priority: {
-						factors: [
-						{
-							factor: "vulnerability-fact"
-							name:   result.properties.priorityScoreFactors[0].type
-							value:  result.properties.priorityScoreFactors[0].label
-						}]
-						score: result.properties.priorityScore
-					}
+					if result.properties.priorityScore != _|_ {
+						priority: {
+							factors: [
+								{
+									factor: "vulnerability-fact"
+									name:   result.properties.priorityScoreFactors[0].type
+									value:  result.properties.priorityScoreFactors[0].label
+								}]
+							score: result.properties.priorityScore
+						}
 					}
 				}
 				severity: {
