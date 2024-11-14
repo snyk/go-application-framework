@@ -16,28 +16,28 @@
                             {{- range $index, $rule := $result.Rules }}
                             {
                                 "id": "{{ $rule.Id }}",
-                                "name": "{{ $rule.Name }}",
+                                "name": {{ getQuotedString $rule.Name }},
                                 "shortDescription": {
-                                    "text": "{{ $rule.ShortDescription.Text }}"
+                                    "text": {{ getQuotedString $rule.ShortDescription.Text }}
                                 },
                                 "defaultConfiguration": {
                                     "level": "{{ $rule.DefaultConfiguration.Level }}"
                                 },
                                 "help": {
                                     "markdown": {{ getQuotedString $rule.Help.Markdown }},
-                                    "text": "{{ $rule.Help.Text }}"
+                                    "text": {{ getQuotedString $rule.Help.Text }}
                                 },
                                 "properties": {
                                     "tags": [
                                         {{- $tagsSize := sub (len $rule.Properties.Tags) 1 }}
                                         {{- range $tagIndex, $tag := $rule.Properties.Tags }}
-                                        "{{ $tag }}"{{if lt $tagIndex $tagsSize}},{{end}}
+                                        {{ getQuotedString $tag }}{{if lt $tagIndex $tagsSize}},{{end}}
                                         {{- end }}
                                     ],
                                     "categories": [
                                         {{- $categoriesSize := sub (len $rule.Properties.Categories) 1 }}
                                         {{- range $catIndex, $category := $rule.Properties.Categories }}
-                                        "{{ $category }}"{{if lt $catIndex $categoriesSize}},{{end}}
+                                        {{ getQuotedString $category }}{{if lt $catIndex $categoriesSize}},{{end}}
                                         {{- end }}
                                     ],
                                     "exampleCommitDescriptions": [
@@ -87,10 +87,13 @@
                         "ruleIndex": {{ $finding.Attributes.ReferenceId.Index }},
                         "level": "{{- SeverityToSarifLevel $finding.Attributes.Rating.Severity.Value }}",
                         "message": {
-                            "text": "{{- $finding.Attributes.Message.Text }}",
-                            "markdown": "{{- $finding.Attributes.Message.Markdown }}",
+                            "text": {{- getQuotedString $finding.Attributes.Message.Text }},
+                            "markdown": {{- getQuotedString $finding.Attributes.Message.Markdown }},
                             "arguments": [
-                                "{{- join $finding.Attributes.Message.Arguments "\", \"" }}"
+                                {{- $messageArgSize := sub (len $finding.Attributes.Message.Arguments) 1 }}
+                                {{- range $index, $messageArgument := $finding.Attributes.Message.Arguments }}
+                                {{- getQuotedString $messageArgument }}{{if lt $index $messageArgSize}},{{end}}
+                                {{- end }}
                             ]
                         },
                         "locations": [
@@ -160,12 +163,12 @@
                             {
                                 "kind": "external"{{- if $finding.Attributes.Suppression.Details }},
                                 "properties": {
-                                    "category": "{{ $finding.Attributes.Suppression.Details.Category }}",
+                                    "category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
                                     "expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",
                                     "ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
                                     "ignoredBy": {
-                                          "name": "{{ $finding.Attributes.Suppression.Details.IgnoredBy.Name }}",
-                                          "email": "{{ $finding.Attributes.Suppression.Details.IgnoredBy.Email }}"
+                                          "name": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Name }},
+                                          "email": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Email }}
                                     }
                                 }
                                 {{- end }}
