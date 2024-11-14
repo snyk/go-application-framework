@@ -100,17 +100,13 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	debugLogger := invocation.GetEnhancedLogger()
 
 	// Handle findings models, if none found, continue with the rest
-	err := handleContentTypeFindingsModel(invocation, input, outputDestination)
+	input, err := handleContentTypeFindingsModel(invocation, input, outputDestination)
 	if err != nil {
 		return output, err
 	}
 
 	for i := range input {
 		mimeType := input[i].GetContentType()
-
-		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			continue
-		}
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
 			outputSummary, err := filterSummaryOutput(config, input[i], debugLogger)
@@ -162,13 +158,15 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 	return nil
 }
 
-func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) error {
+func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
 	findings := []*local_models.LocalFinding{}
 	debugLogger := invocation.GetEnhancedLogger()
 	config := invocation.GetConfiguration()
+	filteredInput := []workflow.Data{}
 
 	for i := range input {
 		if !strings.HasPrefix(input[i].GetContentType(), content_type.LOCAL_FINDING_MODEL) {
+			filteredInput = append(filteredInput, input[i])
 			continue
 		}
 		debugLogger.Info().Msgf("[%s] Handling findings model", input[i].GetIdentifier().String())
@@ -189,7 +187,7 @@ func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input
 
 	if len(findings) == 0 {
 		debugLogger.Info().Msg("No findings to process")
-		return nil
+		return input, nil
 	}
 
 	writer := outputDestination.GetWriter()
@@ -200,7 +198,7 @@ func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input
 	if len(outputFileName) > 0 {
 		file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
 		if fileErr != nil {
-			return fileErr
+			return nil, fileErr
 		}
 
 		writer = file
@@ -228,11 +226,11 @@ func handleContentTypeFindingsModel(invocation workflow.InvocationContext, input
 	err := renderer.RenderTemplate(templates, mimeType)
 	if err != nil {
 		debugLogger.Warn().Err(err).Msg("Failed to render local finding")
-		return err
+		return nil, err
 	}
 
 	debugLogger.Info().Msgf("Rendering done")
-	return nil
+	return filteredInput, nil
 }
 
 func handleContentTypeJson(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
