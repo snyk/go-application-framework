@@ -24,7 +24,7 @@
                                     "level": "{{ $rule.DefaultConfiguration.Level }}"
                                 },
                                 "help": {
-                                    "markdown": {{ escape $rule.Help.Markdown }},
+                                    "markdown": {{ getQuotedString $rule.Help.Markdown }},
                                     "text": "{{ $rule.Help.Text }}"
                                 },
                                 "properties": {
@@ -56,7 +56,7 @@
                                                 {{- $lineSize := sub (len $example.Lines) 1 }}
                                                 {{- range $lineIndex, $line := $example.Lines }}
                                                 {
-                                                    "line": {{ escape $line.Line -}},
+                                                    "line": {{ getQuotedString $line.Line -}},
                                                     "lineNumber": {{ $line.LineNumber }},
                                                     "lineChange": "{{ $line.Linechange }}"
                                                 }{{if lt $lineIndex $lineSize}},{{end}}

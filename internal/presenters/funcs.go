@@ -195,7 +195,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 
 		return result
 	}
-	defaultMap["escape"] = func(input string) string {
+	defaultMap["getQuotedString"] = func(input string) string {
 		return strconv.Quote(input)
 	}
 
