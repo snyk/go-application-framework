@@ -10,7 +10,7 @@ type LocalFinding struct {
 	Findings   []FindingResource    `json:"findings"`
 	Outcome    TestOutcome          `json:"outcome"`
 	Rules      []TypesRules         `json:"rules"`
-	NewSummary TypesFindingsSummary `json:"properties"`
+	NewSummary TypesFindingsSummary `json:"newSummary"`
 	Summary    json_schemas.TestSummary
 }
 

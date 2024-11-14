@@ -26,9 +26,18 @@ context: {
 	test: id: "12d77614-e02d-44d7-bb52-3a1b179d5890"
 }
 
-_summary: testapi.#SchemaMap["types.FindingsSummary"]
-// TODO: Inject from runtime context
+// TODO: _newSummary will eventually replace (overwrite) _summary
 _summary: {
+	results: []
+	severityOrderAsc: []
+	type:      "type"
+	artifacts: 1
+	path:      "path"
+}
+
+// TODO: Inject from runtime context
+_newSummary: {
+	artifacts: 1
 	counts: {
 		count:            0
 		count_suppressed: 0
@@ -52,27 +61,20 @@ _summary: {
 			severity: ["none", "low", "medium", "high", "critical"]
 		}
 	}
+	// TODO: this needs to be updated to support n runs
+	coverage: list.Concat([for run in input.runs {
+		[for coverage in run.properties.coverage {
+			{
+				files:       coverage.files
+				isSupported: coverage.isSupported
+				lang:        coverage.lang
+				type:        coverage.type
+			}
+		}]
+	}])
+	path: "path"
+	type: "type"
 }
-
-_newSummary: {
-	coverage: [{
-		files: 2
-		isSupported: true
-		lang: "HTML"
-		type: "HardCoded"
-	}]
-}
-
-// _newSummary: coverage: list.Concat([for run in input.runs {
-// 	[for coverage in run.properties.coverage {
-// 		{
-// 			files: coverage.files
-// 			isSupported: coverage.isSupported
-// 			lang: coverage.lang
-// 			type: coverage.type
-// 		}
-// 	}]
-// }])
 
 // Transform the input into the output
 output: test: {
@@ -86,7 +88,7 @@ output: test: {
 			if len(_findings) == 0 {"pass"},
 			"fail",
 		][0]
-		summary: _summary
+		summary:    _summary
 		newSummary: _newSummary
 	}
 	relationships: {
@@ -109,6 +111,7 @@ output: findings: [for finding in _findings {
 }]
 
 // TODO remove 0
+// TODO: this needs to be updated to support n runs
 output: rules: list.Concat([for run in input.runs {
 	[for rule in run.tool.driver.rules {
 		{
@@ -138,6 +141,7 @@ output: rules: list.Concat([for run in input.runs {
 }])
 
 // Transform the input
+// TODO: this needs to be updated to support n runs
 _findings: list.Sort(list.Concat([for run in input.runs {
 	let _rules = {for rule in run.tool.driver.rules {
 		"\(rule.id)": rule
@@ -181,7 +185,7 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 									name:   f.type
 									value:  f.label
 								}
-								}]
+							}]
 							score: result.properties.priorityScore
 						}
 					}

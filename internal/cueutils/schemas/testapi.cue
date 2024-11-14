@@ -285,6 +285,16 @@ info: {
 	}
 }
 #SchemaMap: {
+	// Coverage statistics about a Test's Findings.
+	"types.Coverage": {
+		files!:       int
+		isSupported!: bool
+		lang!:        string
+		type!:        string
+		...
+	}
+}
+#SchemaMap: {
 	// Attributes provided when creating a new test.
 	"types.CreateTestAttributes": {
 		// Test inputs; what will be tested.
@@ -715,14 +725,11 @@ info: {
 #SchemaMap: {
 	// Summary statistics about a Test's Findings.
 	"types.FindingsSummary": {
-		counts!: #SchemaMap["types.FindingCounts"]
-		coverage!: [...{
-			files!:       int
-			isSupported!: bool
-			lang!:        string
-			type!:        string
-			...
-		}]
+		counts!:    #SchemaMap["types.FindingCounts"]
+		type!:      string
+		artifacts!: int
+		path!:      string
+		coverage!: [...#SchemaMap["types.Coverage"]]
 		...
 	}
 }

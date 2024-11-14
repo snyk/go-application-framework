@@ -919,6 +919,23 @@ components:
       description: |-
         Content address specification, which defines the target address to test, or a
         pair of addresses to test for a differential test.
+    types.Coverage:
+      type: object
+      required:
+        - files
+        - isSupported
+        - lang
+        - type
+      properties:
+        files:
+          type: integer
+        isSupported:
+          type: boolean
+        lang:
+          type: string
+        type:
+          type: string
+      description: Coverage statistics about a Test's Findings.
     types.CreateTestAttributes:
       type: object
       required:
@@ -1565,28 +1582,23 @@ components:
       type: object
       required:
         - counts
+        - type
+        - artifacts
+        - path
         - coverage
       properties:
         counts:
           $ref: '#/components/schemas/types.FindingCounts'
+        type:
+          type: string
+        artifacts:
+          type: integer
+        path:
+          type: string
         coverage:
           type: array
           items:
-            type: object
-            properties:
-              files:
-                type: integer
-              isSupported:
-                type: boolean
-              lang:
-                type: string
-              type:
-                type: string
-            required:
-              - files
-              - isSupported
-              - lang
-              - type
+            $ref: '#/components/schemas/types.Coverage'
       description: Summary statistics about a Test's Findings.
     types.GitCommit:
       type: string

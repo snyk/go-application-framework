@@ -198,7 +198,7 @@
                         {
                             "files": {{ $coverage.Files }},
                             "isSupported": {{ $coverage.IsSupported }},
-                            "lang": "{{ $coverage.Lang }}"
+                            "lang": "{{ $coverage.Lang }}",
                             "type": "{{ $coverage.Type }}"
                         }{{if lt $coverageIndex $coverageSize}},{{end}}
                         {{- end }}

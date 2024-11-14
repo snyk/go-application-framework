@@ -491,6 +491,14 @@ type TypesContentAddressSpec struct {
 	Target ContentAddress `json:"target"`
 }
 
+// TypesCoverage Coverage statistics about a Test's Findings.
+type TypesCoverage struct {
+	Files       int    `json:"files"`
+	IsSupported bool   `json:"isSupported"`
+	Lang        string `json:"lang"`
+	Type        string `json:"type"`
+}
+
 // TypesCreateTestAttributes Attributes provided when creating a new test.
 type TypesCreateTestAttributes struct {
 	// Context Test context; pertinent information important to associate with the outcome
@@ -851,13 +859,11 @@ type TypesFindingResourceType string
 
 // TypesFindingsSummary Summary statistics about a Test's Findings.
 type TypesFindingsSummary struct {
-	Counts   TypesFindingCounts `json:"counts"`
-	Coverage []struct {
-		Files       int    `json:"files"`
-		IsSupported bool   `json:"isSupported"`
-		Lang        string `json:"lang"`
-		Type        string `json:"type"`
-	} `json:"coverage"`
+	Artifacts int                `json:"artifacts"`
+	Counts    TypesFindingCounts `json:"counts"`
+	Coverage  []TypesCoverage    `json:"coverage"`
+	Path      string             `json:"path"`
+	Type      string             `json:"type"`
 }
 
 // TypesGitCommit Git commit SHA.
