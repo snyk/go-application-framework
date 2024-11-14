@@ -175,11 +175,12 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 				if result.properties != _|_ {
 					if result.properties.priorityScore != _|_ {
 						priority: {
-							factors: [
+							factors: [for f in result.properties.priorityScoreFactors {
 								{
 									factor: "vulnerability-fact"
-									name:   result.properties.priorityScoreFactors[0].type
-									value:  result.properties.priorityScoreFactors[0].label
+									name:   f.type
+									value:  f.label
+								}
 								}]
 							score: result.properties.priorityScore
 						}

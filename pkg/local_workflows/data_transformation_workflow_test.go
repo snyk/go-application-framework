@@ -175,6 +175,8 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 		}
 	}
 
+	assert.NotNil(t, transformedOutput)
+
 	var localFinding = local_models.LocalFinding{}
 	p, ok := transformedOutput.GetPayload().([]byte)
 
