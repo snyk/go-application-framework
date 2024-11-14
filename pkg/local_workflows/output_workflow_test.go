@@ -17,6 +17,7 @@ import (
 
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -413,8 +414,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		byteBuffer := &bytes.Buffer{}
 		outputDestination.EXPECT().GetWriter().Return(byteBuffer)
 
-		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
-		defer config.Set(OUTPUT_CONFIG_KEY_SARIF, nil)
+		config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+		defer config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, nil)
 
 		// execute
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
@@ -437,28 +438,34 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 
 		// assert
-		sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
-		assert.NoError(t, err)
-
-		sarifSchemaFile, err := os.Open(sarifSchemaPath)
-		assert.NoError(t, err)
-
-		sarifSchemaBytes, err := io.ReadAll(sarifSchemaFile)
-		assert.NoError(t, err)
-
-		sarifSchema := gojsonschema.NewBytesLoader(sarifSchemaBytes)
-		assert.NotNil(t, sarifSchema)
-
-		validationResult, err := gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(byteBuffer.Bytes()))
-		assert.NoError(t, err)
-		for _, validationError := range validationResult.Errors() {
-			t.Log(validationError)
-		}
-		assert.True(t, validationResult.Valid(), "Sarif validation failed")
+		validateSarifData(t, byteBuffer.Bytes())
 
 		assert.Equal(t, len(expectedSarif.Runs[0].Results), len(actualSarif.Runs[0].Results))
 		//		assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
 	})
+}
+
+func validateSarifData(t *testing.T, data []byte) {
+	t.Helper()
+
+	sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
+	assert.NoError(t, err)
+
+	sarifSchemaFile, err := os.Open(sarifSchemaPath)
+	assert.NoError(t, err)
+
+	sarifSchemaBytes, err := io.ReadAll(sarifSchemaFile)
+	assert.NoError(t, err)
+
+	sarifSchema := gojsonschema.NewBytesLoader(sarifSchemaBytes)
+	assert.NotNil(t, sarifSchema)
+
+	validationResult, err := gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(data))
+	assert.NoError(t, err)
+	for _, validationError := range validationResult.Errors() {
+		t.Log(validationError)
+	}
+	assert.True(t, validationResult.Valid(), "Sarif validation failed")
 }
 
 func getSarifInput() sarif.SarifDocument {
@@ -565,4 +572,64 @@ func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (loc
 
 	tmp, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
 	return &tmp, err
+}
+
+func getWorkflowDataFromLocalFinding(localFinding *local_models.LocalFinding) (workflow.Data, error) {
+	localFindingBytes, err := json.Marshal(localFinding)
+	if err != nil {
+		return nil, err
+	}
+
+	return workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "LocalFinding"), content_type.LOCAL_FINDING_MODEL, localFindingBytes), nil
+}
+
+func TestLocalFindingsHandling_renderSarifFile_renderUI(t *testing.T) {
+	logger := &zerolog.Logger{}
+	config := configuration.NewInMemory()
+
+	// setup mocks
+	ctrl := gomock.NewController(t)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	outputDestination := iMocks.NewMockOutputDestination(ctrl)
+
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
+
+	byteBuffer := &bytes.Buffer{}
+	outputDestination.EXPECT().GetWriter().Return(byteBuffer).AnyTimes()
+
+	expecetdSarifFile := filepath.Join(t.TempDir(), "TestLocalFindingsHandling.sarif")
+	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE, expecetdSarifFile)
+	config.Set(configuration.MAX_THREADS, 10)
+
+	testfile := "testdata/sarif-snyk-goof-ignores.json"
+
+	finding, err := sarifToLocalFinding(t, testfile, "")
+	assert.NoError(t, err)
+
+	findingData, err := getWorkflowDataFromLocalFinding(finding)
+	assert.NoError(t, err)
+
+	randomData1 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), content_type.SARIF_JSON, []byte{})
+	randomData2 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), "plain", []byte{})
+	input := []workflow.Data{randomData1, findingData, randomData2}
+
+	// invoking method under test
+	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, outputDestination)
+	assert.NoError(t, err)
+	assert.NotNil(t, actualRemainingData)
+
+	expectedRemainingData := []workflow.Data{randomData1, randomData2}
+	assert.Equal(t, expectedRemainingData, actualRemainingData)
+
+	dataFromSarifFile, err := os.ReadFile(expecetdSarifFile)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, dataFromSarifFile)
+
+	dataFromBuffer := byteBuffer.Bytes()
+	assert.NotEmpty(t, dataFromBuffer)
+
+	validateSarifData(t, dataFromSarifFile)
 }

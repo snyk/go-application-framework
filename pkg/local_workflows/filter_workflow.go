@@ -5,13 +5,14 @@ import (
 	"strings"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/go-application-framework/internal/utils/findings"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -121,6 +122,7 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 				workflow.NewTypeIdentifier(WORKFLOWID_FILTER_FINDINGS, FilterFindingsWorkflowName),
 				content_type.LOCAL_FINDING_MODEL,
 				filteredFindingsBytes,
+				workflow.WithInputData(data),
 			))
 		} else {
 			output = append(output, data)
