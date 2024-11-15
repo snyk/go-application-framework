@@ -60,8 +60,6 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 		return input, nil
 	}
 
-	logger.Println("Workflow Name:", FilterFindingsWorkflowName)
-
 	for _, data := range input {
 		if strings.HasPrefix(data.GetContentType(), content_type.LOCAL_FINDING_MODEL) {
 			var findingsModel local_models.LocalFinding

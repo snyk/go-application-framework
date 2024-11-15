@@ -66,8 +66,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	logger.Printf(reportAnalyticsWorkflowName + " workflow start")
-
 	if !config.GetBool(configuration.FLAG_EXPERIMENTAL) {
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
@@ -143,7 +141,6 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 			return nil, err
 		}
 	}
-	logger.Printf(reportAnalyticsWorkflowName + " workflow end")
 	return nil, nil
 }
 
