@@ -183,7 +183,7 @@
                             {{- $decodedFactor := getUnionValue $factor }}
                                   {
                                     "label": {{ $decodedFactor.Value }},
-                                    "type": "{{ $decodedFactor.Name }}"
+                                    "type": {{ getQuotedString $decodedFactor.Name }}
                                   }{{if lt $index $factorSize}},{{end}}
                             {{- end }}
                             ]
