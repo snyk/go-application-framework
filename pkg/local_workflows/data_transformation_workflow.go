@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -37,11 +38,23 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	ff_transform_enabled := config.GetBool(configuration.FF_TRANSFORMATION_WORKFLOW)
 	output = input
 
-	logger.Println("dataTransformation workflow start")
-
 	if !ff_transform_enabled {
 		return output, nil
 	}
+
+	progress := invocationCtx.GetUserInterface().NewProgressBar()
+	progress.SetTitle("Transforming data")
+	progressError := progress.UpdateProgress(ui.InfiniteProgress)
+	if progressError != nil {
+		logger.Err(progressError).Msgf("Error when setting progress")
+	}
+
+	defer func() {
+		localError := progress.Clear()
+		if localError != nil {
+			logger.Err(localError).Msgf("Error when clearing progress")
+		}
+	}()
 
 	var findingsModel local_models.LocalFinding
 
