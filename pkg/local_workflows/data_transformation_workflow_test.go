@@ -16,6 +16,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -30,10 +31,12 @@ func setupMockTransformationContext(t *testing.T, fflagEnabled bool) *mocks.Mock
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	userInterface := ui.DefaultUi()
 
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config)
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger)
+	invocationContextMock.EXPECT().GetUserInterface().Return(userInterface).AnyTimes()
 
 	return invocationContextMock
 }
