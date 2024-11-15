@@ -193,8 +193,8 @@
                 ],
                 "properties": {
                     "coverage": [
-                        {{- $coverageSize := sub (len $result.NewSummary.Coverage) 1 }}
-                        {{- range $coverageIndex, $coverage := $result.NewSummary.Coverage }}
+                        {{- $coverageSize := sub (len $result.Summary.Coverage) 1 }}
+                        {{- range $coverageIndex, $coverage := $result.Summary.Coverage }}
                         {
                             "files": {{ $coverage.Files }},
                             "isSupported": {{ $coverage.IsSupported }},

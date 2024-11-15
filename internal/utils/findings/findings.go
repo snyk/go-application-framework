@@ -3,7 +3,6 @@ package findings
 import (
 	"slices"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -34,28 +33,18 @@ func GetSeverityThresholdFilter(severityThreshold string, severityOrder []string
 
 // updateFindingsSummary updates the summary of the findings based on their severity levels
 func UpdateFindingsSummary(findingsModel *local_models.LocalFinding) {
-	resultMap := map[string]*json_schemas.TestSummaryResult{}
+	findingCounts := &findingsModel.Summary.Counts
 
+	// update FindingsCount with Findings data
 	for _, finding := range findingsModel.Findings {
 		severity := string(finding.Attributes.Rating.Severity.Value)
-		if _, ok := resultMap[severity]; !ok {
-			resultMap[severity] = &json_schemas.TestSummaryResult{
-				Severity: severity,
-			}
-		}
-
-		resultMap[severity].Total++
+		findingCounts.CountBy.Severity[severity]++
 
 		if finding.Attributes.Suppression != nil {
-			resultMap[severity].Ignored++
+			findingCounts.CountSuppressed++
 		} else {
-			resultMap[severity].Open++
+			findingCounts.CountByAdjusted.Severity[severity]++
+			findingCounts.CountAdjusted++
 		}
 	}
-
-	results := make([]json_schemas.TestSummaryResult, 0, len(resultMap))
-	for _, v := range resultMap {
-		results = append(results, *v)
-	}
-	findingsModel.Summary.Results = results
 }

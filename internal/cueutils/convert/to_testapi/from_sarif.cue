@@ -26,17 +26,8 @@ context: {
 	test: id: "12d77614-e02d-44d7-bb52-3a1b179d5890"
 }
 
-// TODO: _newSummary will eventually replace (overwrite) _summary
-_summary: {
-	results: []
-	severityOrderAsc: []
-	type:      "type"
-	artifacts: 1
-	path:      "path"
-}
-
 // TODO: Inject from runtime context
-_newSummary: {
+_summary: {
 	artifacts: 1
 	counts: {
 		count:            0
@@ -88,8 +79,7 @@ output: test: {
 			if len(_findings) == 0 {"pass"},
 			"fail",
 		][0]
-		summary:    _summary
-		newSummary: _newSummary
+		summary: _summary
 	}
 	relationships: {
 		findings: {

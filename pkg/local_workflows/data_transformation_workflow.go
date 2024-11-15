@@ -12,7 +12,6 @@ import (
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -110,7 +109,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 }
 
 func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
-	var summary json_schemas.TestSummary
+	var summary local_models.TypesFindingsSummary
 	err = json.Unmarshal(summaryBytes, &summary)
 	if err != nil {
 		return localFinding, err

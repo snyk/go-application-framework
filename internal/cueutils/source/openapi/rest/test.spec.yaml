@@ -642,37 +642,6 @@ components:
         TestInput defines what will be tested.
 
         Another term for this might be "test coordinates".
-    io.snyk.api.common.CollectionCounts:
-      type: object
-      required:
-        - count
-        - count_by
-      properties:
-        count:
-          type: integer
-          format: uint32
-          description: Count of all items in the collection.
-        count_by:
-          type: object
-          additionalProperties:
-            type: object
-            additionalProperties:
-              type: integer
-              format: uint32
-          description: |-
-            Counts of items grouped by various dimensions.
-
-            Outer record key is a well-known grouping dimension of the resource object.
-
-            Inner record key is a value in that dimension.
-      description: |-
-        CollectionCounts implements the Snyk REST API standard representation for
-        collection counts.
-
-        Collection counts may be provided as metadata on a collection resource or in
-        an attribute of a parent resource.
-
-        See https://snyk.roadie.so/docs/default/component/sweater-comb/standards/rest/#collection-counts.
     io.snyk.api.common.Error:
       type: object
       required:
@@ -1228,8 +1197,15 @@ components:
           properties:
             severity:
               type: array
-              items: {}
+              items:
+                type: string
               description: FindingCounts has a deterministic ordering for severity counts.
+              default:
+                - none
+                - low
+                - medium
+                - high
+                - critical
           required:
             - severity
           additionalProperties:
@@ -1254,8 +1230,6 @@ components:
           type: integer
           format: uint32
           description: Net count of findings minus suppressions.
-      allOf:
-        - $ref: '#/components/schemas/io.snyk.api.common.CollectionCounts'
     types.FindingIdParam:
       type: object
       required:

@@ -60,33 +60,6 @@ info: {
 // Another term for this might be "test coordinates".
 #TestInput: #SchemaMap["types.GitSCMInput"] | #SchemaMap["types.ContentAddressInput"]
 #SchemaMap: {
-	// CollectionCounts implements the Snyk REST API standard
-	// representation for
-	// collection counts.
-	//
-	// Collection counts may be provided as metadata on a collection
-	// resource or in
-	// an attribute of a parent resource.
-	//
-	// See
-	// https://snyk.roadie.so/docs/default/component/sweater-comb/standards/rest/#collection-counts.
-	"io.snyk.api.common.CollectionCounts": {
-		// Count of all items in the collection.
-		count!: int
-
-		// Counts of items grouped by various dimensions.
-		//
-		// Outer record key is a well-known grouping dimension of the
-		// resource object.
-		//
-		// Inner record key is a value in that dimension.
-		count_by!: {
-			[string]: [string]: int
-		}
-		...
-	}
-}
-#SchemaMap: {
 	"io.snyk.api.common.Error": {
 		// A unique identifier for this particular occurrence of the
 		// problem.
@@ -487,9 +460,7 @@ info: {
 	}
 }
 #SchemaMap: {
-	"types.FindingCounts": #SchemaMap["io.snyk.api.common.CollectionCounts"] & {
-		...
-	} & {
+	"types.FindingCounts": {
 		// Total finding counts (not considering ignores) grouped by
 		// severity and
 		// possibly other factors.
@@ -521,7 +492,7 @@ info: {
 		// values.
 		count_key_order_asc!: {
 			// FindingCounts has a deterministic ordering for severity counts.
-			severity!: [...]
+			severity!: [...string] | *["none", "low", "medium", "high", "critical"]
 			{[!~"^(severity)$"]: [...string]}
 		}
 

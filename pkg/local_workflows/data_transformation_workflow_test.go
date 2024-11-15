@@ -192,12 +192,12 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 	assert.Len(t, localFinding.Findings, 278)
 
+	totalHighFindings := localFinding.Summary.Counts.CountBy.Severity["high"] + localFinding.Summary.Counts.CountByAdjusted.Severity["high"]
+	totalMediumFindings := localFinding.Summary.Counts.CountBy.Severity["medium"] + localFinding.Summary.Counts.CountByAdjusted.Severity["medium"]
 	// Assert Summary
 	assert.Equal(t, 4, localFinding.Summary.Artifacts)
-	assert.Equal(t, 10, localFinding.Summary.Results[0].Total)
-	assert.Equal(t, "high", localFinding.Summary.Results[0].Severity)
+	assert.Equal(t, 10, totalHighFindings)
 	assert.Equal(t, 4, localFinding.Summary.Artifacts)
-	assert.Equal(t, 5, localFinding.Summary.Results[1].Total)
-	assert.Equal(t, "medium", localFinding.Summary.Results[1].Severity)
+	assert.Equal(t, 5, totalMediumFindings)
 	assert.Equal(t, "sast", localFinding.Summary.Type)
 }

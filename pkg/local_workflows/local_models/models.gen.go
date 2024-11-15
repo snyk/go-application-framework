@@ -295,25 +295,6 @@ type TestInput struct {
 	union json.RawMessage
 }
 
-// IoSnykApiCommonCollectionCounts CollectionCounts implements the Snyk REST API standard representation for
-// collection counts.
-//
-// Collection counts may be provided as metadata on a collection resource or in
-// an attribute of a parent resource.
-//
-// See https://snyk.roadie.so/docs/default/component/sweater-comb/standards/rest/#collection-counts.
-type IoSnykApiCommonCollectionCounts struct {
-	// Count Count of all items in the collection.
-	Count uint32 `json:"count"`
-
-	// CountBy Counts of items grouped by various dimensions.
-	//
-	// Outer record key is a well-known grouping dimension of the resource object.
-	//
-	// Inner record key is a value in that dimension.
-	CountBy map[string]map[string]uint32 `json:"count_by"`
-}
-
 // IoSnykApiCommonError defines model for io.snyk.api.common.Error.
 type IoSnykApiCommonError struct {
 	// Code An application-specific error code, expressed as a string value.
@@ -670,14 +651,62 @@ type TypesFindingAttributes struct {
 // Only set in a differential test conducted with respect to base content.
 type TypesFindingAttributesDelta string
 
-// TypesFindingCounts CollectionCounts implements the Snyk REST API standard representation for
-// collection counts.
+// TypesFindingCounts defines model for types.FindingCounts.
+type TypesFindingCounts struct {
+	// CountAdjusted Net count of findings minus suppressions.
+	CountAdjusted uint32 `json:"count_adjusted"`
+
+	// CountBy Total finding counts (not considering ignores) grouped by severity and
+	// possibly other factors.
+	CountBy TypesFindingCounts_CountBy `json:"count_by"`
+
+	// CountByAdjusted Net finding counts (ignores removed) grouped by severity and possibly other
+	// factors.
+	CountByAdjusted TypesFindingCounts_CountByAdjusted `json:"count_by_adjusted"`
+
+	// CountKeyOrderAsc Ordering hint for the grouping keys in count_by.
+	//
+	// Record key is a well-known grouping of the resource object, matched with
+	// count_by.
+	//
+	// Record values are arrays of known possible values for the group keys in
+	// ascending order, from lowest to highest. Values other than those enumerated
+	// must be tolerated; their ordering is unspecified with respect to enumerated
+	// values.
+	CountKeyOrderAsc TypesFindingCounts_CountKeyOrderAsc `json:"count_key_order_asc"`
+
+	// CountSuppressed Findings excluded from the count shown to users, including ignored findings.
+	CountSuppressed uint32 `json:"count_suppressed"`
+}
+
+// TypesFindingCounts_CountBy Total finding counts (not considering ignores) grouped by severity and
+// possibly other factors.
+type TypesFindingCounts_CountBy struct {
+	Severity             map[string]uint32            `json:"severity"`
+	AdditionalProperties map[string]map[string]uint32 `json:"-"`
+}
+
+// TypesFindingCounts_CountByAdjusted Net finding counts (ignores removed) grouped by severity and possibly other
+// factors.
+type TypesFindingCounts_CountByAdjusted struct {
+	Severity             map[string]uint32            `json:"severity"`
+	AdditionalProperties map[string]map[string]uint32 `json:"-"`
+}
+
+// TypesFindingCounts_CountKeyOrderAsc Ordering hint for the grouping keys in count_by.
 //
-// Collection counts may be provided as metadata on a collection resource or in
-// an attribute of a parent resource.
+// Record key is a well-known grouping of the resource object, matched with
+// count_by.
 //
-// See https://snyk.roadie.so/docs/default/component/sweater-comb/standards/rest/#collection-counts.
-type TypesFindingCounts = IoSnykApiCommonCollectionCounts
+// Record values are arrays of known possible values for the group keys in
+// ascending order, from lowest to highest. Values other than those enumerated
+// must be tolerated; their ordering is unspecified with respect to enumerated
+// values.
+type TypesFindingCounts_CountKeyOrderAsc struct {
+	// Severity FindingCounts has a deterministic ordering for severity counts.
+	Severity             []string            `json:"severity"`
+	AdditionalProperties map[string][]string `json:"-"`
+}
 
 // TypesFindingNumericalRating defines model for types.FindingNumericalRating.
 type TypesFindingNumericalRating struct {
@@ -1481,6 +1510,204 @@ func (a IoSnykApiCommonErrorLink) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'about': %w", err)
 		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for TypesFindingCounts_CountBy. Returns the specified
+// element and whether it was found
+func (a TypesFindingCounts_CountBy) Get(fieldName string) (value map[string]uint32, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for TypesFindingCounts_CountBy
+func (a *TypesFindingCounts_CountBy) Set(fieldName string, value map[string]uint32) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]map[string]uint32)
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for TypesFindingCounts_CountBy to handle AdditionalProperties
+func (a *TypesFindingCounts_CountBy) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["severity"]; found {
+		err = json.Unmarshal(raw, &a.Severity)
+		if err != nil {
+			return fmt.Errorf("error reading 'severity': %w", err)
+		}
+		delete(object, "severity")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]map[string]uint32)
+		for fieldName, fieldBuf := range object {
+			var fieldVal map[string]uint32
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for TypesFindingCounts_CountBy to handle AdditionalProperties
+func (a TypesFindingCounts_CountBy) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["severity"], err = json.Marshal(a.Severity)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'severity': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for TypesFindingCounts_CountByAdjusted. Returns the specified
+// element and whether it was found
+func (a TypesFindingCounts_CountByAdjusted) Get(fieldName string) (value map[string]uint32, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for TypesFindingCounts_CountByAdjusted
+func (a *TypesFindingCounts_CountByAdjusted) Set(fieldName string, value map[string]uint32) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]map[string]uint32)
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for TypesFindingCounts_CountByAdjusted to handle AdditionalProperties
+func (a *TypesFindingCounts_CountByAdjusted) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["severity"]; found {
+		err = json.Unmarshal(raw, &a.Severity)
+		if err != nil {
+			return fmt.Errorf("error reading 'severity': %w", err)
+		}
+		delete(object, "severity")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]map[string]uint32)
+		for fieldName, fieldBuf := range object {
+			var fieldVal map[string]uint32
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for TypesFindingCounts_CountByAdjusted to handle AdditionalProperties
+func (a TypesFindingCounts_CountByAdjusted) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["severity"], err = json.Marshal(a.Severity)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'severity': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for TypesFindingCounts_CountKeyOrderAsc. Returns the specified
+// element and whether it was found
+func (a TypesFindingCounts_CountKeyOrderAsc) Get(fieldName string) (value []string, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for TypesFindingCounts_CountKeyOrderAsc
+func (a *TypesFindingCounts_CountKeyOrderAsc) Set(fieldName string, value []string) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string][]string)
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for TypesFindingCounts_CountKeyOrderAsc to handle AdditionalProperties
+func (a *TypesFindingCounts_CountKeyOrderAsc) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["severity"]; found {
+		err = json.Unmarshal(raw, &a.Severity)
+		if err != nil {
+			return fmt.Errorf("error reading 'severity': %w", err)
+		}
+		delete(object, "severity")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string][]string)
+		for fieldName, fieldBuf := range object {
+			var fieldVal []string
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for TypesFindingCounts_CountKeyOrderAsc to handle AdditionalProperties
+func (a TypesFindingCounts_CountKeyOrderAsc) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["severity"], err = json.Marshal(a.Severity)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'severity': %w", err)
 	}
 
 	for fieldName, field := range a.AdditionalProperties {
