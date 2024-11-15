@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -160,13 +159,19 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
 		assert.NoError(t, err)
 
-		assert.ElementsMatch(t, []json_schemas.TestSummaryResult{
-			{
-				Severity: "high",
-				Total:    22,
-				Open:     22,
-				Ignored:  0,
+		assert.ElementsMatch(t, local_models.TypesFindingCounts{
+			CountAdjusted:   22,
+			CountSuppressed: 0,
+			CountBy: local_models.TypesFindingCounts_CountBy{
+				Severity: map[string]uint32{
+					"high": 22,
+				},
 			},
-		}, filteredFindings.Summary.Results)
+			CountByAdjusted: local_models.TypesFindingCounts_CountByAdjusted{
+				Severity: map[string]uint32{
+					"high": 22,
+				},
+			},
+		}, filteredFindings.Summary.Counts)
 	})
 }
