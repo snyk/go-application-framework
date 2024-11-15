@@ -2,6 +2,7 @@ package networking
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -36,6 +38,8 @@ type NetworkAccess interface {
 	AddDynamicHeaderField(key string, f DynamicHeaderFunc)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
+	// AddErrorHandler registers an error handler for the underlying http.RoundTripper.
+	AddErrorHandler(func(err error, ctx context.Context) error)
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
 
@@ -55,6 +59,7 @@ type networkImpl struct {
 	staticHeader   http.Header
 	dynamicHeaders map[string]DynamicHeaderFunc
 	proxy          func(req *http.Request) (*url.URL, error)
+	errorHandler   func(error, context.Context) error
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
 }
@@ -121,7 +126,25 @@ func (rt *defaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Re
 
 	rt.logRoundTrip(newRequest, response, err)
 
+	if err != nil {
+		return nil, err
+	}
+
+	if rt.networkAccess.errorHandler != nil {
+		errFromStatus := errFromStatusCode(response.StatusCode)
+		// Maybe?: add to the context the response and handle the status code at the handler callback function.
+		err = rt.networkAccess.errorHandler(errFromStatus, context.TODO())
+	}
+
 	return response, err
+}
+
+func errFromStatusCode(code int) error {
+	if code == http.StatusUnauthorized {
+		return snyk.NewUnauthorisedError("Authentication is required.")
+	}
+
+	return nil
 }
 
 func (rt *defaultHeadersRoundTripper) SetLogLevel(level zerolog.Level) {
@@ -158,6 +181,12 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 // For more flexibility, see AddDynamicHeaderField().
 func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
+}
+
+// AddErrorHandler registers an error handler for the underlying http.RoundTripper, allowing to wrap/return or
+// ignore the error bases on the argument callback function.
+func (n *networkImpl) AddErrorHandler(handler func(err error, ctx context.Context) error) {
+	n.errorHandler = handler
 }
 
 // AddDynamicHeaderField enables to define functions that will be invoked when a header field is added to a request.

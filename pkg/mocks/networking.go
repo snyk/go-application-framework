@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	http "net/http"
 	reflect "reflect"
 
@@ -48,6 +49,18 @@ func (m *MockNetworkAccess) AddDynamicHeaderField(key string, f networking.Dynam
 func (mr *MockNetworkAccessMockRecorder) AddDynamicHeaderField(key, f interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDynamicHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).AddDynamicHeaderField), key, f)
+}
+
+// AddErrorHandler mocks base method.
+func (m *MockNetworkAccess) AddErrorHandler(arg0 func(error, context.Context) error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddErrorHandler", arg0)
+}
+
+// AddErrorHandler indicates an expected call of AddErrorHandler.
+func (mr *MockNetworkAccessMockRecorder) AddErrorHandler(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddErrorHandler", reflect.TypeOf((*MockNetworkAccess)(nil).AddErrorHandler), arg0)
 }
 
 // AddHeaderField mocks base method.

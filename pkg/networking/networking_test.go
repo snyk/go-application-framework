@@ -2,6 +2,7 @@ package networking
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -515,4 +517,29 @@ func TestNetworkImpl_LogResponse_nolog(t *testing.T) {
 		actualLoggerContent := logBuffer.String()
 		assert.Empty(t, actualLoggerContent)
 	})
+}
+
+func TestNetworkImpl_ErrorHandler(t *testing.T) {
+	expectedErr := snyk.NewUnauthorisedError("no auth")
+	config := configuration.NewInMemory()
+	network := NewNetworkAccess(config)
+	network.AddErrorHandler(func(err error, ctx context.Context) error {
+		return expectedErr // overrides the previes error
+	})
+
+	client := network.GetHttpClient()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	server := httptest.NewServer(handler)
+
+	// returns the expected err
+	_, err := client.Get(server.URL)
+	assert.ErrorAs(t, err, &expectedErr)
+
+	// does not call the handler
+	network.AddErrorHandler(nil)
+	res, err := client.Get(server.URL)
+	assert.Nil(t, err)
+	assert.Equal(t, res.StatusCode, http.StatusUnauthorized)
 }
