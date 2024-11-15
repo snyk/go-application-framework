@@ -7,13 +7,14 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/spf13/pflag"
+
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -88,7 +89,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	d := workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
 		content_type.LOCAL_FINDING_MODEL,
-		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger))
+		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger), workflow.WithInputData(summaryInput))
 	d.SetContentLocation(contentLocation)
 	output = append(output, d)
 
