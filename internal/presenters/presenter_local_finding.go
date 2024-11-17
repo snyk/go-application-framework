@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -18,6 +19,7 @@ const DefaultMimeType = "text/cli"
 const NoneMimeType = "unknown"
 const ApplicationJSONMimeType = "application/json"
 const ApplicationSarifMimeType = content_type.SARIF_JSON
+const CONFIG_JSON_STRIP_WHITESPACES = "internal_json_no_whitespaces"
 
 //go:embed templates/*
 var embeddedFiles embed.FS
@@ -44,12 +46,6 @@ var ApplicationSarifTemplates = []string{
 }
 
 type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
-
-func WithLocalFindingsTestPath(testPath string) LocalFindingPresenterOptions {
-	return func(p *LocalFindingPresenter) {
-		p.TestPath = testPath
-	}
-}
 
 func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) LocalFindingPresenterOptions {
 	return func(p *LocalFindingPresenter) {
@@ -145,7 +141,12 @@ func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType 
 		return fmt.Errorf("the template must contain a 'main'")
 	}
 
-	err = mainTmpl.Execute(p.writer, struct {
+	writer := p.writer
+	if strings.Contains(mimeType, "json") {
+		writer = NewJsonWriter(writer, p.config.GetBool(CONFIG_JSON_STRIP_WHITESPACES))
+	}
+
+	err = mainTmpl.Execute(writer, struct {
 		Results []*local_models.LocalFinding
 	}{
 		Results: p.Input,
