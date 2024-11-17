@@ -17,7 +17,7 @@ type JsonWriter struct {
 func NewJsonWriter(next io.Writer, stripWhitespaces bool) io.Writer {
 	return &JsonWriter{
 		next:             next,
-		regex:            regexp.MustCompile(" {4}|[\\n\\t]"),
+		regex:            regexp.MustCompile(` {4}|[\n\t]`),
 		stripWhiteSpaces: stripWhitespaces,
 	}
 }
