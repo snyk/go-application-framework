@@ -291,7 +291,7 @@ func TestPresenterLocalFinding_CustomTemplateFiles(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("custom template file", func(t *testing.T) {
+	t.Run("custom template file (with whitespaces)", func(t *testing.T) {
 		writer.Reset()
 
 		err = p.RenderTemplate([]string{"testdata/custom_template.tmpl"}, "application/json")
@@ -305,6 +305,19 @@ func TestPresenterLocalFinding_CustomTemplateFiles(t *testing.T) {
         "Use of Password Hash With Insufficient Computational Effort"
     ]
 }`
+
+		actual := writer.String()
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("custom template file (without whitespaces)", func(t *testing.T) {
+		writer.Reset()
+		config.Set(presenters.CONFIG_JSON_STRIP_WHITESPACES, true)
+
+		err = p.RenderTemplate([]string{"testdata/custom_template.tmpl"}, "application/json")
+		assert.NoError(t, err)
+
+		expected := `{"findings" :["Use of Hardcoded Credentials","Use of Hardcoded Credentials","Use of Password Hash With Insufficient Computational Effort"]}`
 
 		actual := writer.String()
 		assert.Equal(t, expected, actual)
@@ -328,5 +341,39 @@ func TestPresenterLocalFinding_RegisterMimeType(t *testing.T) {
 			return nil, nil, nil
 		})
 		assert.NoError(t, err)
+	})
+}
+
+func TestJsonWriter(t *testing.T) {
+	t.Run("strip whitespaces while writing", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		writerUnderTest := presenters.NewJsonWriter(buffer, true)
+
+		input := []byte(`{
+	"name": "myName",
+    "address": "myAddr"
+}`)
+
+		expected := `{"name": "myName","address": "myAddr"}`
+
+		bytesWritten, err := writerUnderTest.Write(input)
+		assert.NoError(t, err)
+		assert.Equal(t, len(input), bytesWritten)
+		assert.Equal(t, expected, buffer.String())
+	})
+
+	t.Run("Don't strip whitespaces while writing", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		writerUnderTest := presenters.NewJsonWriter(buffer, false)
+
+		input := []byte(`{
+	"name": "myName",
+    "address": "myAddr"
+}`)
+
+		bytesWritten, err := writerUnderTest.Write(input)
+		assert.NoError(t, err)
+		assert.Equal(t, len(input), bytesWritten)
+		assert.Equal(t, input, buffer.Bytes())
 	})
 }
