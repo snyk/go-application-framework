@@ -653,16 +653,22 @@ type TypesFindingAttributesDelta string
 
 // TypesFindingCounts defines model for types.FindingCounts.
 type TypesFindingCounts struct {
+	// Count Net count of findings, including suppressions.
+	Count uint32 `json:"count"`
+
 	// CountAdjusted Net count of findings minus suppressions.
 	CountAdjusted uint32 `json:"count_adjusted"`
 
-	// CountBy Total finding counts (not considering ignores) grouped by severity and
+	// CountBy Total finding counts (including ignores) grouped by severity and
 	// possibly other factors.
 	CountBy TypesFindingCounts_CountBy `json:"count_by"`
 
-	// CountByAdjusted Net finding counts (ignores removed) grouped by severity and possibly other
+	// CountByAdjusted Net finding counts (excluding ignores) grouped by severity and possibly other
 	// factors.
 	CountByAdjusted TypesFindingCounts_CountByAdjusted `json:"count_by_adjusted"`
+
+	// CountBySuppressed Net suppressed finding count, grouped by severity and possibly other factors.
+	CountBySuppressed TypesFindingCounts_CountBySuppressed `json:"count_by_suppressed"`
 
 	// CountKeyOrderAsc Ordering hint for the grouping keys in count_by.
 	//
@@ -679,16 +685,22 @@ type TypesFindingCounts struct {
 	CountSuppressed uint32 `json:"count_suppressed"`
 }
 
-// TypesFindingCounts_CountBy Total finding counts (not considering ignores) grouped by severity and
+// TypesFindingCounts_CountBy Total finding counts (including ignores) grouped by severity and
 // possibly other factors.
 type TypesFindingCounts_CountBy struct {
 	Severity             map[string]uint32            `json:"severity"`
 	AdditionalProperties map[string]map[string]uint32 `json:"-"`
 }
 
-// TypesFindingCounts_CountByAdjusted Net finding counts (ignores removed) grouped by severity and possibly other
+// TypesFindingCounts_CountByAdjusted Net finding counts (excluding ignores) grouped by severity and possibly other
 // factors.
 type TypesFindingCounts_CountByAdjusted struct {
+	Severity             map[string]uint32            `json:"severity"`
+	AdditionalProperties map[string]map[string]uint32 `json:"-"`
+}
+
+// TypesFindingCounts_CountBySuppressed Net suppressed finding count, grouped by severity and possibly other factors.
+type TypesFindingCounts_CountBySuppressed struct {
 	Severity             map[string]uint32            `json:"severity"`
 	AdditionalProperties map[string]map[string]uint32 `json:"-"`
 }
@@ -1636,6 +1648,72 @@ func (a *TypesFindingCounts_CountByAdjusted) UnmarshalJSON(b []byte) error {
 
 // Override default JSON handling for TypesFindingCounts_CountByAdjusted to handle AdditionalProperties
 func (a TypesFindingCounts_CountByAdjusted) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["severity"], err = json.Marshal(a.Severity)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'severity': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for TypesFindingCounts_CountBySuppressed. Returns the specified
+// element and whether it was found
+func (a TypesFindingCounts_CountBySuppressed) Get(fieldName string) (value map[string]uint32, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for TypesFindingCounts_CountBySuppressed
+func (a *TypesFindingCounts_CountBySuppressed) Set(fieldName string, value map[string]uint32) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]map[string]uint32)
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for TypesFindingCounts_CountBySuppressed to handle AdditionalProperties
+func (a *TypesFindingCounts_CountBySuppressed) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["severity"]; found {
+		err = json.Unmarshal(raw, &a.Severity)
+		if err != nil {
+			return fmt.Errorf("error reading 'severity': %w", err)
+		}
+		delete(object, "severity")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]map[string]uint32)
+		for fieldName, fieldBuf := range object {
+			var fieldVal map[string]uint32
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for TypesFindingCounts_CountBySuppressed to handle AdditionalProperties
+func (a TypesFindingCounts_CountBySuppressed) MarshalJSON() ([]byte, error) {
 	var err error
 	object := make(map[string]json.RawMessage)
 

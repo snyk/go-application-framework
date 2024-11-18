@@ -1152,7 +1152,9 @@ components:
       required:
         - count_by
         - count_by_adjusted
+        - count_by_suppressed
         - count_key_order_asc
+        - count
         - count_suppressed
         - count_adjusted
       properties:
@@ -1172,7 +1174,7 @@ components:
               type: integer
               format: uint32
           description: |-
-            Total finding counts (not considering ignores) grouped by severity and
+            Total finding counts (including ignores) grouped by severity and
             possibly other factors.
         count_by_adjusted:
           type: object
@@ -1190,8 +1192,24 @@ components:
               type: integer
               format: uint32
           description: |-
-            Net finding counts (ignores removed) grouped by severity and possibly other
+            Net finding counts (excluding ignores) grouped by severity and possibly other
             factors.
+        count_by_suppressed:
+          type: object
+          properties:
+            severity:
+              type: object
+              additionalProperties:
+                type: integer
+                format: uint32
+          required:
+            - severity
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: integer
+              format: uint32
+          description: Net suppressed finding count, grouped by severity and possibly other factors.
         count_key_order_asc:
           type: object
           properties:
@@ -1222,6 +1240,10 @@ components:
             ascending order, from lowest to highest. Values other than those enumerated
             must be tolerated; their ordering is unspecified with respect to enumerated
             values.
+        count:
+          type: integer
+          format: uint32
+          description: Net count of findings, including suppressions.
         count_suppressed:
           type: integer
           format: uint32

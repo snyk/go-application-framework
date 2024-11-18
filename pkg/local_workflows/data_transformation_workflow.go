@@ -153,15 +153,18 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 	localFinding.Summary.Artifacts = testSummary.Artifacts
 	localFinding.Summary.Type = testSummary.Type
 	localFinding.Summary.Counts.CountKeyOrderAsc.Severity = testSummary.SeverityOrderAsc
+	localFinding.Summary.Counts.Count = 0
 	localFinding.Summary.Counts.CountAdjusted = 0
 	localFinding.Summary.Counts.CountSuppressed = 0
 
 	for _, summaryResults := range testSummary.Results {
 		localFinding.Summary.Counts.CountBy.Severity[summaryResults.Severity] = uint32(summaryResults.Total)
 		localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity] = uint32(summaryResults.Open)
+		localFinding.Summary.Counts.CountBySuppressed.Severity[summaryResults.Severity] = uint32(summaryResults.Ignored)
 
 		localFinding.Summary.Counts.CountAdjusted += localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity]
 		localFinding.Summary.Counts.CountSuppressed += uint32(summaryResults.Ignored)
+		localFinding.Summary.Counts.Count += uint32(summaryResults.Total)
 	}
 
 	return localFinding, nil

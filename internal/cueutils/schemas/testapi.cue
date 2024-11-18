@@ -461,18 +461,25 @@ info: {
 }
 #SchemaMap: {
 	"types.FindingCounts": {
-		// Total finding counts (not considering ignores) grouped by
-		// severity and
+		// Total finding counts (including ignores) grouped by severity
+		// and
 		// possibly other factors.
 		count_by!: {
 			severity!: [string]: int
 			{[!~"^(severity)$"]: [string]: int}
 		}
 
-		// Net finding counts (ignores removed) grouped by severity and
+		// Net finding counts (excluding ignores) grouped by severity and
 		// possibly other
 		// factors.
 		count_by_adjusted!: {
+			severity!: [string]: int
+			{[!~"^(severity)$"]: [string]: int}
+		}
+
+		// Net suppressed finding count, grouped by severity and possibly
+		// other factors.
+		count_by_suppressed!: {
 			severity!: [string]: int
 			{[!~"^(severity)$"]: [string]: int}
 		}
@@ -495,6 +502,9 @@ info: {
 			severity!: [...string] | *["none", "low", "medium", "high", "critical"]
 			{[!~"^(severity)$"]: [...string]}
 		}
+
+		// Net count of findings, including suppressions.
+		count!: int
 
 		// Findings excluded from the count shown to users, including
 		// ignored findings.
