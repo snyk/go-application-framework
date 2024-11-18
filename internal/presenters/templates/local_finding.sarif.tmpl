@@ -161,6 +161,8 @@
                         {{- if $finding.Attributes.Suppression }}
                         "suppressions" : [
                             {
+                                {{- if $finding.Attributes.Suppression.Justification }}
+                                "justification": {{ getQuotedString $finding.Attributes.Suppression.Justification }},{{- end }}
                                 "kind": "external"{{- if $finding.Attributes.Suppression.Details }},
                                 "properties": {
                                     "category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
