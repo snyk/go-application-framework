@@ -22,28 +22,16 @@ output: {
 
 // TODO: Inject from runtime context
 _summary: {
-	artifacts: 1
+	artifacts: 0
 	counts: {
 		count:            0
 		count_suppressed: 0
 		count_adjusted:   0
 
-		count_by: severity: {
-			critical: 0
-			high:     0
-			medium:   0
-			low:      0
-			none:     0
-		}
-		count_by_adjusted: severity: {
-			critical: 0
-			high:     0
-			medium:   0
-			low:      0
-			none:     0
-		}
+		count_by: severity: {}
+		count_by_adjusted: severity: {}
 		count_key_order_asc: {
-			severity: ["none", "low", "medium", "high", "critical"]
+			severity: []
 		}
 	}
 	// TODO: this needs to be updated to support n runs
@@ -57,8 +45,8 @@ _summary: {
 			}
 		}]
 	}])
-	path: "path"
-	type: "type"
+	path: ""
+	type: ""
 }
 
 // Transform the input into the output

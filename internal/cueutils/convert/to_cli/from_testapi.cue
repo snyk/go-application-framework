@@ -19,6 +19,5 @@ output: {
 	}]
 	outcome:    input.test.attributes.outcome
 	rules:      input.rules
-	newSummary: input.test.attributes.newSummary
 	summary:    input.test.attributes.summary
 }
