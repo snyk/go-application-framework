@@ -164,7 +164,7 @@
                                 "kind": "external"{{- if $finding.Attributes.Suppression.Details }},
                                 "properties": {
                                     "category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
-                                    "expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",
+                                    {{- if $finding.Attributes.Suppression.Details.Expiration }}"expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",{{- end }}
                                     "ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
                                     "ignoredBy": {
                                           "name": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Name }},
