@@ -15,7 +15,6 @@ output: {
 	findings: [for finding in input.findings {
 		attributes:    finding.attributes
 		id:            finding.id
-		relationships: finding.relationships
 		type:          finding.type
 	}]
 	outcome:    input.test.attributes.outcome

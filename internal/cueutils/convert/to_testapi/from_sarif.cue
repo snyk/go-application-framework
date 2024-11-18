@@ -21,12 +21,6 @@ output: {
 }
 
 // TODO: Inject from runtime context
-context: {
-	org: id:  "f640a238-ee99-44d4-8d49-42ec6af96bc6"
-	test: id: "12d77614-e02d-44d7-bb52-3a1b179d5890"
-}
-
-// TODO: Inject from runtime context
 _summary: {
 	artifacts: 1
 	counts: {
@@ -69,7 +63,6 @@ _summary: {
 
 // Transform the input into the output
 output: test: {
-	id:   context.test.id
 	type: "tests"
 	attributes: {
 		state: {
@@ -80,13 +73,6 @@ output: test: {
 			"fail",
 		][0]
 		summary: _summary
-	}
-	relationships: {
-		findings: {
-			links: {
-				related: "/orgs/\(context.org.id)/test/\(context.test.id)/findings" // TODO
-			}
-		}
 	}
 }
 
