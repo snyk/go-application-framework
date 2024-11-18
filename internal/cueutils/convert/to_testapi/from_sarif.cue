@@ -29,7 +29,7 @@ _summary: {
 		count_adjusted:   0
 
 		count_by: severity: {}
-		count_by_suppressed: severity: { "high": 0, "medium": 0, "low": 0 }
+		count_by_suppressed: severity: {}
 		count_by_adjusted: severity: {}
 		count_key_order_asc: {
 			severity: []
