@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -13,6 +14,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
 
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
@@ -421,7 +423,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 		assert.NoError(t, err)
 
-		t.Log(byteBuffer.String())
+		// t.Log(byteBuffer.String())
 
 		expectedSarif := &sarif.SarifDocument{}
 		expectedSarifFile, err := os.Open(testfile)
@@ -432,16 +434,96 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		err = json.Unmarshal(expectedSarifBytes, expectedSarif)
 		assert.NoError(t, err)
+		sortSarif(expectedSarif)
 
 		actualSarif := &sarif.SarifDocument{}
 		err = json.Unmarshal(byteBuffer.Bytes(), actualSarif)
 		assert.NoError(t, err)
+		sortSarif(actualSarif)
+
+		// Pretty print the actual SARIF for debugging
+		prettyActualSarif, err := json.MarshalIndent(actualSarif, "", "  ")
+		assert.NoError(t, err)
+		// t.Log("Actual SARIF content:")
+		// t.Log(string(prettyActualSarif))
 
 		// assert
 		validateSarifData(t, byteBuffer.Bytes())
 
+		expectedString := string(expectedSarifBytes)
+		actualSarifString := string(prettyActualSarif)
 		assert.Equal(t, len(expectedSarif.Runs[0].Results), len(actualSarif.Runs[0].Results))
+		require.JSONEq(t, expectedString, actualSarifString)
 		//		assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
+	})
+}
+
+func sortSarif(sarifDoc *sarif.SarifDocument) {
+	sort.Slice(sarifDoc.Runs, func(i, j int) bool {
+		return sarifDoc.Runs[i].Tool.Driver.Name < sarifDoc.Runs[j].Tool.Driver.Name
+	})
+	for _, run := range sarifDoc.Runs {
+		sort.Slice(run.Results, func(i, j int) bool {
+			return run.Results[i].RuleIndex < run.Results[j].RuleIndex
+		})
+	}
+}
+
+func Test_JsonComparison(t *testing.T) {
+	t.Run("basic json equality", func(t *testing.T) {
+		json1 := `{"name":"test","values":[1,2,3]}`
+		json2 := `{"values":[1,2,3],"name":"test"}`
+		assert.JSONEq(t, json1, json2)
+	})
+
+	t.Run("json equality with different array orders", func(t *testing.T) {
+		json1 := `{
+			"name": "test",
+			"items": [
+				{"id": 1, "value": "first"},
+				{"id": 2, "value": "second"},
+				{"id": 3, "value": "third"}
+			]
+		}`
+
+		json2 := `{
+			"name": "test",
+			"items": [
+				{"id": 2, "value": "second"},
+				{"id": 1, "value": "first"}
+			]
+		}`
+
+		// JSONEq does NOT handle different array orders - this will fail
+		// assert.JSONEq(t, json1, json2)
+
+		// To compare with unordered arrays, we need to:
+		// 1. Parse both JSONs
+		var obj1, obj2 map[string]interface{}
+		err1 := json.Unmarshal([]byte(json1), &obj1)
+		err2 := json.Unmarshal([]byte(json2), &obj2)
+		assert.NoError(t, err1)
+		assert.NoError(t, err2)
+
+		// 2. Sort the arrays before comparing
+		items1 := obj1["items"].([]interface{})
+		items2 := obj2["items"].([]interface{})
+
+		// Sort both arrays by id
+		sortByID := func(items []interface{}) {
+			sort.Slice(items, func(i, j int) bool {
+				return items[i].(map[string]interface{})["id"].(float64) <
+					items[j].(map[string]interface{})["id"].(float64)
+			})
+		}
+
+		sortByID(items1)
+		sortByID(items2)
+
+		// 3. Marshal back to JSON strings and compare
+		sorted1, _ := json.Marshal(obj1)
+		sorted2, _ := json.Marshal(obj2)
+		assert.JSONEq(t, string(sorted1), string(sorted2))
 	})
 }
 
