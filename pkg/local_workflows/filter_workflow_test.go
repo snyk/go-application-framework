@@ -10,6 +10,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -162,6 +163,9 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		expectedCounts := local_models.TypesFindingCounts{
 			CountAdjusted:   22,
 			CountSuppressed: 0,
+			CountKeyOrderAsc: local_models.TypesFindingCounts_CountKeyOrderAsc{
+				Severity: json_schemas.DEFAULT_SEVERITIES,
+			},
 			CountBy: local_models.TypesFindingCounts_CountBy{
 				Severity: map[string]uint32{
 					"high": 22,
