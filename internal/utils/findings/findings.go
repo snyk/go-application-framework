@@ -69,6 +69,7 @@ func NewFindingsCounts() local_models.TypesFindingCounts {
 // updateFindingsSummary updates the summary of the findings based on their severity levels
 func UpdateFindingsSummary(findingsModel *local_models.LocalFinding) {
 	updatedFindingCounts := NewFindingsCounts()
+	updatedFindingCounts.CountKeyOrderAsc = findingsModel.Summary.Counts.CountKeyOrderAsc
 
 	// update FindingsCount with Findings data
 	for _, finding := range findingsModel.Findings {
