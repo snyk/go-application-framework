@@ -12,6 +12,7 @@ import (
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -109,8 +110,8 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 }
 
 func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
-	var summary local_models.TypesFindingsSummary
-	err = json.Unmarshal(summaryBytes, &summary)
+	var testSummary json_schemas.TestSummary
+	err = json.Unmarshal(summaryBytes, &testSummary)
 	if err != nil {
 		return localFinding, err
 	}
@@ -148,7 +149,20 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 		return localFinding, fmt.Errorf("failed to convert to type: %w", encodeErr)
 	}
 
-	localFinding.Summary = summary
+	localFinding.Summary.Path = testSummary.Path
+	localFinding.Summary.Artifacts = testSummary.Artifacts
+	localFinding.Summary.Type = testSummary.Type
+	localFinding.Summary.Counts.CountKeyOrderAsc.Severity = testSummary.SeverityOrderAsc
+	localFinding.Summary.Counts.CountAdjusted = 0
+	localFinding.Summary.Counts.CountSuppressed = 0
+
+	for _, summaryResults := range testSummary.Results {
+		localFinding.Summary.Counts.CountBy.Severity[summaryResults.Severity] = uint32(summaryResults.Total)
+		localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity] = uint32(summaryResults.Open)
+
+		localFinding.Summary.Counts.CountAdjusted += localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity]
+		localFinding.Summary.Counts.CountSuppressed += uint32(summaryResults.Ignored)
+	}
 
 	return localFinding, nil
 }
