@@ -159,7 +159,7 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
 		assert.NoError(t, err)
 
-		assert.ElementsMatch(t, local_models.TypesFindingCounts{
+		expectedCounts := local_models.TypesFindingCounts{
 			CountAdjusted:   22,
 			CountSuppressed: 0,
 			CountBy: local_models.TypesFindingCounts_CountBy{
@@ -172,6 +172,7 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 					"high": 22,
 				},
 			},
-		}, filteredFindings.Summary.Counts)
+		}
+		assert.Equal(t, expectedCounts, filteredFindings.Summary.Counts)
 	})
 }

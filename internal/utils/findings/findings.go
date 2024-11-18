@@ -59,20 +59,29 @@ func GetSeverityThresholdFilter(severityThreshold string, severityOrder []string
 //	findingsModel.Summary.Results = results
 //}
 
+func NewFindingsCounts() local_models.TypesFindingCounts {
+	return local_models.TypesFindingCounts{
+		CountBy:         local_models.TypesFindingCounts_CountBy{Severity: map[string]uint32{}},
+		CountByAdjusted: local_models.TypesFindingCounts_CountByAdjusted{Severity: map[string]uint32{}},
+	}
+}
+
 // updateFindingsSummary updates the summary of the findings based on their severity levels
 func UpdateFindingsSummary(findingsModel *local_models.LocalFinding) {
-	findingCounts := &findingsModel.Summary.Counts
+	updatedFindingCounts := NewFindingsCounts()
 
 	// update FindingsCount with Findings data
 	for _, finding := range findingsModel.Findings {
 		severity := string(finding.Attributes.Rating.Severity.Value)
-		findingCounts.CountBy.Severity[severity]++
+		updatedFindingCounts.CountBy.Severity[severity]++
 
 		if finding.Attributes.Suppression != nil {
-			findingCounts.CountSuppressed++
+			updatedFindingCounts.CountSuppressed++
 		} else {
-			findingCounts.CountByAdjusted.Severity[severity]++
-			findingCounts.CountAdjusted++
+			updatedFindingCounts.CountByAdjusted.Severity[severity]++
+			updatedFindingCounts.CountAdjusted++
 		}
 	}
+
+	findingsModel.Summary.Counts = updatedFindingCounts
 }
