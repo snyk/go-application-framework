@@ -32,7 +32,7 @@ func GetSeverityThresholdFilter(severityThreshold string, severityOrder []string
 }
 
 //// updateFindingsSummary updates the summary of the findings based on their severity levels
-//func UpdateFindingsSummary(findingsModel *local_models.LocalFinding) {
+//func UpdateFindingSummary(findingsModel *local_models.LocalFinding) {
 //	resultMap := map[string]*json_schemas.TestSummaryResult{}
 //
 //	for _, finding := range findingsModel.Findings {
@@ -68,7 +68,7 @@ func NewFindingsCounts() local_models.TypesFindingCounts {
 }
 
 // updateFindingsSummary updates the summary of the findings based on their severity levels
-func UpdateFindingsSummary(findingsModel *local_models.LocalFinding) {
+func UpdateFindingSummary(findingsModel *local_models.LocalFinding) {
 	updatedFindingCounts := NewFindingsCounts()
 	updatedFindingCounts.CountKeyOrderAsc = findingsModel.Summary.Counts.CountKeyOrderAsc
 

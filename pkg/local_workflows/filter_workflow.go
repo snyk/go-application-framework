@@ -102,7 +102,7 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 			applyFilters(&findingsModel, []findings.FindingsFilterFunc{findings.GetSeverityThresholdFilter(severityThreshold, severityOrder)})
 
 			// Update the findings summary after filtering
-			findings.UpdateFindingsSummary(&findingsModel)
+			findings.UpdateFindingSummary(&findingsModel)
 
 			filteredFindingsBytes, err := json.Marshal(findingsModel)
 			if err != nil {
