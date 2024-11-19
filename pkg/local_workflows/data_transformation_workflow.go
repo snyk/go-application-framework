@@ -28,7 +28,6 @@ func InitDataTransformationWorkflow(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet(DataTransformationWorkflowName, pflag.ExitOnError)
 	_, err := engine.Register(WORKFLOWID_DATATRANSFORMATION, workflow.ConfigurationOptionsFromFlagset(flags), dataTransformationEntryPoint)
 
-	engine.GetConfiguration().AddDefaultValue(configuration.FF_TRANSFORMATION_WORKFLOW, configuration.StandardDefaultValueFunction(false))
 	return err
 }
 
