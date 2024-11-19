@@ -59,6 +59,10 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 			writer:    outputDestination.GetWriter(),
 			mimeType:  presenters.DefaultMimeType,
 			templates: presenters.DefaultTemplateFiles,
+			closer: func() error {
+				_, err := fmt.Fprintln(outputDestination.GetWriter(), "")
+				return err
+			},
 		},
 	}
 
