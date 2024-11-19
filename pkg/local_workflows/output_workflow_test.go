@@ -423,8 +423,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 		assert.NoError(t, err)
 
-		// t.Log(byteBuffer.String())
-
 		expectedSarif := &sarif.SarifDocument{}
 		expectedSarifFile, err := os.Open(testfile)
 		assert.NoError(t, err)
@@ -444,8 +442,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// Pretty print the actual SARIF for debugging
 		prettyActualSarif, err := json.MarshalIndent(actualSarif, "", "  ")
 		assert.NoError(t, err)
-		// t.Log("Actual SARIF content:")
-		// t.Log(string(prettyActualSarif))
 
 		// assert
 		validateSarifData(t, byteBuffer.Bytes())
@@ -454,7 +450,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		actualSarifString := string(prettyActualSarif)
 		assert.Equal(t, len(expectedSarif.Runs[0].Results), len(actualSarif.Runs[0].Results))
 		require.JSONEq(t, expectedString, actualSarifString)
-		//		assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
 	})
 }
 
