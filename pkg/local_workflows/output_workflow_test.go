@@ -469,64 +469,6 @@ func sortSarif(sarifDoc *sarif.SarifDocument) {
 	}
 }
 
-func Test_JsonComparison(t *testing.T) {
-	t.Run("basic json equality", func(t *testing.T) {
-		json1 := `{"name":"test","values":[1,2,3]}`
-		json2 := `{"values":[1,2,3],"name":"test"}`
-		assert.JSONEq(t, json1, json2)
-	})
-
-	t.Run("json equality with different array orders", func(t *testing.T) {
-		json1 := `{
-			"name": "test",
-			"items": [
-				{"id": 1, "value": "first"},
-				{"id": 2, "value": "second"},
-				{"id": 3, "value": "third"}
-			]
-		}`
-
-		json2 := `{
-			"name": "test",
-			"items": [
-				{"id": 2, "value": "second"},
-				{"id": 1, "value": "first"}
-			]
-		}`
-
-		// JSONEq does NOT handle different array orders - this will fail
-		// assert.JSONEq(t, json1, json2)
-
-		// To compare with unordered arrays, we need to:
-		// 1. Parse both JSONs
-		var obj1, obj2 map[string]interface{}
-		err1 := json.Unmarshal([]byte(json1), &obj1)
-		err2 := json.Unmarshal([]byte(json2), &obj2)
-		assert.NoError(t, err1)
-		assert.NoError(t, err2)
-
-		// 2. Sort the arrays before comparing
-		items1 := obj1["items"].([]interface{})
-		items2 := obj2["items"].([]interface{})
-
-		// Sort both arrays by id
-		sortByID := func(items []interface{}) {
-			sort.Slice(items, func(i, j int) bool {
-				return items[i].(map[string]interface{})["id"].(float64) <
-					items[j].(map[string]interface{})["id"].(float64)
-			})
-		}
-
-		sortByID(items1)
-		sortByID(items2)
-
-		// 3. Marshal back to JSON strings and compare
-		sorted1, _ := json.Marshal(obj1)
-		sorted2, _ := json.Marshal(obj2)
-		assert.JSONEq(t, string(sorted1), string(sorted2))
-	})
-}
-
 func validateSarifData(t *testing.T, data []byte) {
 	t.Helper()
 
