@@ -31,34 +31,6 @@ func GetSeverityThresholdFilter(severityThreshold string, severityOrder []string
 	}
 }
 
-//// updateFindingsSummary updates the summary of the findings based on their severity levels
-//func UpdateFindingSummary(findingsModel *local_models.LocalFinding) {
-//	resultMap := map[string]*json_schemas.TestSummaryResult{}
-//
-//	for _, finding := range findingsModel.Findings {
-//		severity := string(finding.Attributes.Rating.Severity.Value)
-//		if _, ok := resultMap[severity]; !ok {
-//			resultMap[severity] = &json_schemas.TestSummaryResult{
-//				Severity: severity,
-//			}
-//		}
-//
-//		resultMap[severity].Total++
-//
-//		if finding.Attributes.Suppression != nil {
-//			resultMap[severity].Ignored++
-//		} else {
-//			resultMap[severity].Open++
-//		}
-//	}
-//
-//	results := make([]json_schemas.TestSummaryResult, 0, len(resultMap))
-//	for _, v := range resultMap {
-//		results = append(results, *v)
-//	}
-//	findingsModel.Summary.Results = results
-//}
-
 func NewFindingsCounts() local_models.TypesFindingCounts {
 	return local_models.TypesFindingCounts{
 		CountBy:           local_models.TypesFindingCounts_CountBy{Severity: map[string]uint32{}},
