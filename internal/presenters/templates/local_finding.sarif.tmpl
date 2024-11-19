@@ -119,7 +119,8 @@
                             {{- $fingerprintSize := sub (len $finding.Attributes.Fingerprint) 1 }}
                             {{- range $index, $finger := $finding.Attributes.Fingerprint }}
                             {{- $decodedFingerPrint := getUnionValue $finger }}
-                            "{{ $decodedFingerPrint.Scheme }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
+                            {{- $scheme := print $decodedFingerPrint.Scheme }}
+                            "{{ replaceString $scheme "code-sast-v" "" }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
                             {{- end }}
                         },
                         "codeFlows": [

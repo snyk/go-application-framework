@@ -198,6 +198,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getQuotedString"] = func(input string) string {
 		return strconv.Quote(input)
 	}
+	defaultMap["replaceString"] = func(str string, old string, new string) string {
+		return strings.ReplaceAll(str, old, new)
+	}
 
 	return defaultMap
 }
