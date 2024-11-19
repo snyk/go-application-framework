@@ -193,11 +193,45 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 	assert.Len(t, localFinding.Findings, 278)
 
 	// Assert Summary
-	assert.Equal(t, 4, localFinding.Summary.Artifacts)
-	assert.Equal(t, 10, localFinding.Summary.Results[0].Total)
-	assert.Equal(t, "high", localFinding.Summary.Results[0].Severity)
-	assert.Equal(t, 4, localFinding.Summary.Artifacts)
-	assert.Equal(t, 5, localFinding.Summary.Results[1].Total)
-	assert.Equal(t, "medium", localFinding.Summary.Results[1].Severity)
 	assert.Equal(t, "sast", localFinding.Summary.Type)
+	assert.Equal(t, 4, localFinding.Summary.Artifacts)
+
+	// Assert total findings
+	totalCriticalFindings := int(localFinding.Summary.Counts.CountBy.Severity["critical"])
+	totalHighFindings := int(localFinding.Summary.Counts.CountBy.Severity["high"])
+	totalMediumFindings := int(localFinding.Summary.Counts.CountBy.Severity["medium"])
+	totalLowFindings := int(localFinding.Summary.Counts.CountBy.Severity["low"])
+	totalFindings := int(localFinding.Summary.Counts.Count)
+
+	assert.Equal(t, 1, totalCriticalFindings)
+	assert.Equal(t, 10, totalHighFindings)
+	assert.Equal(t, 5, totalMediumFindings)
+	assert.Equal(t, 2, totalLowFindings)
+	assert.Equal(t, 18, totalFindings)
+
+	// Assert total excluding ignored
+	adjustedCriticalFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["critical"])
+	adjustedHighFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["high"])
+	adjustedMediumFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["medium"])
+	adjustedLowFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["low"])
+	adjustedFindings := int(localFinding.Summary.Counts.CountAdjusted)
+
+	assert.Equal(t, 1, adjustedCriticalFindings)
+	assert.Equal(t, 3, adjustedHighFindings)
+	assert.Equal(t, 1, adjustedMediumFindings)
+	assert.Equal(t, 0, adjustedLowFindings)
+	assert.Equal(t, 5, adjustedFindings)
+
+	// Assert total ignored
+	ignoredCriticalFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["critical"])
+	ignoredHighFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["high"])
+	ignoredMediumFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["medium"])
+	ignoredLowFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["low"])
+	ignoredFindings := int(localFinding.Summary.Counts.CountSuppressed)
+
+	assert.Equal(t, 0, ignoredCriticalFindings)
+	assert.Equal(t, 2, ignoredHighFindings)
+	assert.Equal(t, 1, ignoredMediumFindings)
+	assert.Equal(t, 0, ignoredLowFindings)
+	assert.Equal(t, 3, ignoredFindings)
 }

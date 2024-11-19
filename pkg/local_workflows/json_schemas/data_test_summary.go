@@ -72,7 +72,9 @@ func NewTestSummary(t string, p string) *TestSummary {
 	return &TestSummary{
 		Type:             t,
 		Artifacts:        0,
-		SeverityOrderAsc: []string{"low", "medium", "high", "critical"},
+		SeverityOrderAsc: DEFAULT_SEVERITIES,
 		Path:             p,
 	}
 }
+
+var DEFAULT_SEVERITIES = []string{"low", "medium", "high", "critical"}

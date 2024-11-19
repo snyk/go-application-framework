@@ -2,15 +2,16 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"github.com/snyk/go-application-framework/internal/utils/findings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -144,9 +145,9 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		ctx := setupMockFilterContext(t, "high")
 		sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
 		summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
-		findings, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+		findingsInput, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
 		assert.NoError(t, err)
-		findingsBytes, err := json.Marshal(findings)
+		findingsBytes, err := json.Marshal(findingsInput)
 		assert.NoError(t, err)
 		input := []workflow.Data{workflow.NewData(
 			workflow.NewTypeIdentifier(WORKFLOWID_FILTER_FINDINGS, FilterFindingsWorkflowName),
@@ -160,13 +161,22 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
 		assert.NoError(t, err)
 
-		assert.ElementsMatch(t, []json_schemas.TestSummaryResult{
-			{
-				Severity: "high",
-				Total:    22,
-				Open:     22,
-				Ignored:  0,
+		expectedCounts := findings.NewFindingsCounts()
+		expectedCounts.Count = 22
+		expectedCounts.CountAdjusted = 22
+		expectedCounts.CountKeyOrderAsc = local_models.TypesFindingCounts_CountKeyOrderAsc{
+			Severity: json_schemas.DEFAULT_SEVERITIES,
+		}
+		expectedCounts.CountBy = local_models.TypesFindingCounts_CountBy{
+			Severity: map[string]uint32{
+				"high": 22,
 			},
-		}, filteredFindings.Summary.Results)
+		}
+		expectedCounts.CountByAdjusted = local_models.TypesFindingCounts_CountByAdjusted{
+			Severity: map[string]uint32{
+				"high": 22,
+			},
+		}
+		assert.Equal(t, expectedCounts, filteredFindings.Summary.Counts)
 	})
 }

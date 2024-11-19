@@ -1,5 +1,5 @@
 {{- define "details" }}
-    {{- $sortedFindings := .Findings | sortFindingBy "Attributes.Rating.Severity.Value" .Summary.SeverityOrderAsc }}
+    {{- $sortedFindings := .Findings | sortFindingBy "Attributes.Rating.Severity.Value" .Summary.Counts.CountKeyOrderAsc.Severity }}
     {{- $openFindings := $sortedFindings | filterFinding (notHasField "Attributes.Suppression.Kind") }}
     {{- $ignoredFindings := $sortedFindings | filterFinding (hasField "Attributes.Suppression.Kind") }}
     {{- $hasOpenFindings := gt ($openFindings | len) 0 }}
@@ -33,35 +33,26 @@
   Test type:         {{ if eq .Summary.Type "sast" }}Static code analysis{{else}}{{ .Summary.Type }}}{{ end}}
   Project path:      {{ .Summary.Path }}
 
-  {{- $totalIssueCount := 0 }}
-  {{- $openIssueCount := 0 }}
-  {{- $ignoredIssueCount := 0}}
-  {{- range $resultCount := .Summary.Results }}
-    {{- $totalIssueCount = add $totalIssueCount $resultCount.Total }}
-    {{- $openIssueCount = add $openIssueCount $resultCount.Open }}
-    {{- $ignoredIssueCount = add $ignoredIssueCount $resultCount.Ignored }}
-  {{- end}}
+  {{- $totalIssueCount := .Summary.Counts.Count }}
+  {{- $openIssueCount := .Summary.Counts.CountAdjusted }}
+  {{- $ignoredIssueCount := .Summary.Counts.CountSuppressed }}
 
   Total issues:   {{ $totalIssueCount }}
   {{- if gt $totalIssueCount 0}}
   Ignored issues: {{ print  $ignoredIssueCount | bold }} [
-  {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
+  {{- range $severity := .Summary.Counts.CountKeyOrderAsc.Severity | reverse }}
       {{- $countFound := 0 }}
-      {{- range $summaryResults := $.Summary.Results }}
-          {{- if eq ($summaryResults.Severity | toUpperCase) ($severity | toUpperCase)}}
-              {{- $countFound = $summaryResults.Ignored }}
+          {{- if gt (index $.Summary.Counts.CountBySuppressed.Severity $severity) 0}}
+              {{- $countFound = index $.Summary.Counts.CountBySuppressed.Severity $severity }}
           {{- end}}
-      {{- end}}
       {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
   {{- end}}]
   Open issues:    {{ print $openIssueCount | bold }} [
-  {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
+  {{- range $severity := .Summary.Counts.CountKeyOrderAsc.Severity | reverse }}
       {{- $countFound := 0 }}
-      {{- range $summaryResults := $.Summary.Results }}
-          {{- if eq ($summaryResults.Severity | toUpperCase) ($severity | toUpperCase)}}
-              {{- $countFound = $summaryResults.Open }}
+          {{- if gt (index $.Summary.Counts.CountByAdjusted.Severity $severity) 0 }}
+              {{- $countFound = index $.Summary.Counts.CountByAdjusted.Severity $severity }}
           {{- end}}
-      {{- end}}
       {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
   {{- end}}]{{- end}}
 {{- end}} {{/* end summary */}}

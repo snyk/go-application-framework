@@ -21,44 +21,18 @@ output: {
 }
 
 // TODO: Inject from runtime context
-context: {
-	org: id:  "f640a238-ee99-44d4-8d49-42ec6af96bc6"
-	test: id: "12d77614-e02d-44d7-bb52-3a1b179d5890"
-}
-
-// TODO: _newSummary will eventually replace (overwrite) _summary
 _summary: {
-	results: []
-	severityOrderAsc: []
-	type:      "type"
-	artifacts: 1
-	path:      "path"
-}
-
-// TODO: Inject from runtime context
-_newSummary: {
-	artifacts: 1
+	artifacts: 0
 	counts: {
 		count:            0
 		count_suppressed: 0
 		count_adjusted:   0
 
-		count_by: severity: {
-			critical: 0
-			high:     0
-			medium:   0
-			low:      0
-			none:     0
-		}
-		count_by_adjusted: severity: {
-			critical: 0
-			high:     0
-			medium:   0
-			low:      0
-			none:     0
-		}
+		count_by: severity: {}
+		count_by_suppressed: severity: {}
+		count_by_adjusted: severity: {}
 		count_key_order_asc: {
-			severity: ["none", "low", "medium", "high", "critical"]
+			severity: []
 		}
 	}
 	// TODO: this needs to be updated to support n runs
@@ -72,13 +46,12 @@ _newSummary: {
 			}
 		}]
 	}])
-	path: "path"
-	type: "type"
+	path: ""
+	type: ""
 }
 
 // Transform the input into the output
 output: test: {
-	id:   context.test.id
 	type: "tests"
 	attributes: {
 		state: {
@@ -88,15 +61,7 @@ output: test: {
 			if len(_findings) == 0 {"pass"},
 			"fail",
 		][0]
-		summary:    _summary
-		newSummary: _newSummary
-	}
-	relationships: {
-		findings: {
-			links: {
-				related: "/orgs/\(context.org.id)/test/\(context.test.id)/findings" // TODO
-			}
-		}
+		summary: _summary
 	}
 }
 

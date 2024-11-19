@@ -40,18 +40,12 @@
                                         {{ getQuotedString $category }}{{if lt $catIndex $categoriesSize}},{{end}}
                                         {{- end }}
                                     ],
-                                    "exampleCommitDescriptions": [
-                                        {{- $examplesSize := sub (len $rule.Properties.ExampleCommitDescriptions) 1 }}
-                                        {{- range $exampleIndex, $example := $rule.Properties.ExampleCommitDescriptions }}
-                                        "{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
-                                        {{- end }}
-                                    ],
                                     "exampleCommitFixes": [
                                         {{- $examplesSize := sub (len $rule.Properties.ExampleCommitFixes) 1 }}
                                         {{- range $exampleIndex, $example := $rule.Properties.ExampleCommitFixes }}
                                         {
 
-                                            "commitUrl": "{{ $example.CommitUrl }}",
+                                            "commitURL": "{{ $example.CommitUrl }}",
                                             "lines": [
                                                 {{- $lineSize := sub (len $example.Lines) 1 }}
                                                 {{- range $lineIndex, $line := $example.Lines }}
@@ -63,6 +57,12 @@
                                                 {{- end }}
                                             ]
                                         }{{if lt $exampleIndex $examplesSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "exampleCommitDescriptions": [
+                                        {{- $examplesSize := sub (len $rule.Properties.ExampleCommitDescriptions) 1 }}
+                                        {{- range $exampleIndex, $example := $rule.Properties.ExampleCommitDescriptions }}
+                                        "{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
                                         {{- end }}
                                     ],
                                     "precision": "{{ $rule.Properties.Precision }}",
@@ -119,7 +119,8 @@
                             {{- $fingerprintSize := sub (len $finding.Attributes.Fingerprint) 1 }}
                             {{- range $index, $finger := $finding.Attributes.Fingerprint }}
                             {{- $decodedFingerPrint := getUnionValue $finger }}
-                            "{{ $decodedFingerPrint.Scheme }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
+                            {{- $scheme := print $decodedFingerPrint.Scheme }}
+                            "{{ replaceString $scheme "code-sast-v" "" }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
                             {{- end }}
                         },
                         "codeFlows": [
@@ -161,10 +162,12 @@
                         {{- if $finding.Attributes.Suppression }}
                         "suppressions" : [
                             {
+                                {{- if $finding.Attributes.Suppression.Justification }}
+                                "justification": {{ getQuotedString $finding.Attributes.Suppression.Justification }},{{- end }}
                                 "kind": "external"{{- if $finding.Attributes.Suppression.Details }},
                                 "properties": {
                                     "category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
-                                    "expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",
+                                    {{- if $finding.Attributes.Suppression.Details.Expiration }}"expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",{{- end }}
                                     "ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
                                     "ignoredBy": {
                                           "name": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Name }},
@@ -193,8 +196,8 @@
                 ],
                 "properties": {
                     "coverage": [
-                        {{- $coverageSize := sub (len $result.NewSummary.Coverage) 1 }}
-                        {{- range $coverageIndex, $coverage := $result.NewSummary.Coverage }}
+                        {{- $coverageSize := sub (len $result.Summary.Coverage) 1 }}
+                        {{- range $coverageIndex, $coverage := $result.Summary.Coverage }}
                         {
                             "files": {{ $coverage.Files }},
                             "isSupported": {{ $coverage.IsSupported }},

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -13,6 +14,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
 
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
@@ -29,6 +31,171 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+func getSortedSarifBytes(input []byte) ([]byte, error) {
+	expectedSarif := &sarif.SarifDocument{}
+	err := json.Unmarshal(input, expectedSarif)
+	if err != nil {
+		return nil, err
+	}
+	sortSarif(expectedSarif)
+
+	prettyExpectedSarif, err := json.MarshalIndent(expectedSarif, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return prettyExpectedSarif, nil
+}
+
+func sortSarif(sarifDoc *sarif.SarifDocument) {
+	sort.Slice(sarifDoc.Runs, func(i, j int) bool {
+		return sarifDoc.Runs[i].Tool.Driver.Name < sarifDoc.Runs[j].Tool.Driver.Name
+	})
+	for _, run := range sarifDoc.Runs {
+		sort.Slice(run.Results, func(i, j int) bool {
+			return run.Results[i].Fingerprints.Identity < run.Results[j].Fingerprints.Identity
+		})
+	}
+}
+
+func validateSarifData(t *testing.T, data []byte) {
+	t.Helper()
+
+	sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
+	assert.NoError(t, err)
+
+	sarifSchemaFile, err := os.Open(sarifSchemaPath)
+	assert.NoError(t, err)
+
+	sarifSchemaBytes, err := io.ReadAll(sarifSchemaFile)
+	assert.NoError(t, err)
+
+	sarifSchema := gojsonschema.NewBytesLoader(sarifSchemaBytes)
+	assert.NotNil(t, sarifSchema)
+
+	validationResult, err := gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(data))
+	assert.NoError(t, err)
+	for _, validationError := range validationResult.Errors() {
+		t.Log(validationError)
+	}
+	assert.True(t, validationResult.Valid(), "Sarif validation failed")
+}
+
+func getSarifInput() sarif.SarifDocument {
+	return sarif.SarifDocument{
+		Runs: []sarif.Run{
+			{
+				Results: []sarif.Result{
+					{Level: "error"},
+					{Level: "warning"},
+				},
+			},
+			{
+				Results: []sarif.Result{
+					{Level: "error",
+						RuleID: "openIssue",
+					},
+					{
+						Level:        "error",
+						Suppressions: make([]sarif.Suppression, 1),
+						RuleID:       "rule1",
+					},
+				},
+				Tool: sarif.Tool{
+					Driver: sarif.Driver{
+						Rules: []sarif.Rule{
+							{
+								ID:   "rule1",
+								Name: "Ignored rule",
+								ShortDescription: sarif.ShortDescription{
+									Text: "Ignored rule",
+								},
+								Help: sarif.Help{
+									Text: "Rule 1 help",
+								},
+								DefaultConfiguration: sarif.DefaultConfiguration{
+									Level: "error",
+								},
+								Properties: sarif.RuleProperties{
+									Tags:               []string{"tag1", "tag2"},
+									Categories:         []string{},
+									ExampleCommitFixes: []sarif.ExampleCommitFix{},
+									Precision:          "",
+									RepoDatasetSize:    0,
+									Cwe:                []string{""},
+								},
+							},
+							{
+								ID:   "openIssue",
+								Name: "This rule is open",
+								ShortDescription: sarif.ShortDescription{
+									Text: "This rule is open",
+								},
+								Help: sarif.Help{
+									Text: "",
+								},
+								DefaultConfiguration: sarif.DefaultConfiguration{
+									Level: "error",
+								},
+								Properties: sarif.RuleProperties{
+									Tags:               []string{"tag1", "tag2"},
+									Categories:         []string{},
+									ExampleCommitFixes: []sarif.ExampleCommitFix{},
+									Precision:          "",
+									RepoDatasetSize:    0,
+									Cwe:                []string{""},
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				Results: []sarif.Result{
+					{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
+				},
+			},
+		},
+	}
+}
+
+func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (localFinding *local_models.LocalFinding, err error) {
+	t.Helper()
+	jsonFile, err := os.Open("./" + filename)
+	if err != nil {
+		t.Errorf("Failed to load json")
+	}
+
+	defer func(jsonFile *os.File) {
+		jsonErr := jsonFile.Close()
+		assert.NoError(t, jsonErr)
+	}(jsonFile)
+	sarifBytes, err := io.ReadAll(jsonFile)
+	assert.NoError(t, err)
+
+	// Read sarif file again for summary
+	var sarifDoc sarif.SarifDocument
+
+	err = json.Unmarshal(sarifBytes, &sarifDoc)
+	assert.NoError(t, err)
+
+	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc, projectPath)
+	summaryBytes, err := json.Marshal(summaryData)
+	assert.NoError(t, err)
+
+	tmp, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	return &tmp, err
+}
+
+func getWorkflowDataFromLocalFinding(localFinding *local_models.LocalFinding) (workflow.Data, error) {
+	localFindingBytes, err := json.Marshal(localFinding)
+	if err != nil {
+		return nil, err
+	}
+
+	return workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "LocalFinding"), content_type.LOCAL_FINDING_MODEL, localFindingBytes), nil
+}
 
 func Test_Output_InitOutputWorkflow(t *testing.T) {
 	config := configuration.New()
@@ -56,7 +223,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("SnykCode"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
 
 	payload := `
 	{
@@ -421,166 +588,25 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 		assert.NoError(t, err)
 
-		t.Log(byteBuffer.String())
+		// assert
+		validateSarifData(t, byteBuffer.Bytes())
 
-		expectedSarif := &sarif.SarifDocument{}
 		expectedSarifFile, err := os.Open(testfile)
 		assert.NoError(t, err)
 
 		expectedSarifBytes, err := io.ReadAll(expectedSarifFile)
 		assert.NoError(t, err)
 
-		err = json.Unmarshal(expectedSarifBytes, expectedSarif)
+		prettyExpectedSarif, err := getSortedSarifBytes(expectedSarifBytes)
 		assert.NoError(t, err)
 
-		actualSarif := &sarif.SarifDocument{}
-		err = json.Unmarshal(byteBuffer.Bytes(), actualSarif)
+		prettyActualSarif, err := getSortedSarifBytes(byteBuffer.Bytes())
 		assert.NoError(t, err)
 
-		// assert
-		validateSarifData(t, byteBuffer.Bytes())
-
-		assert.Equal(t, len(expectedSarif.Runs[0].Results), len(actualSarif.Runs[0].Results))
-		//		assert.Equal(t, len(expectedSarif.Runs[0].Tool.Driver.Rules), len(actualSarif.Runs[0].Tool.Driver.Rules))
+		expectedString := string(prettyExpectedSarif)
+		actualSarifString := string(prettyActualSarif)
+		require.JSONEq(t, expectedString, actualSarifString)
 	})
-}
-
-func validateSarifData(t *testing.T, data []byte) {
-	t.Helper()
-
-	sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
-	assert.NoError(t, err)
-
-	sarifSchemaFile, err := os.Open(sarifSchemaPath)
-	assert.NoError(t, err)
-
-	sarifSchemaBytes, err := io.ReadAll(sarifSchemaFile)
-	assert.NoError(t, err)
-
-	sarifSchema := gojsonschema.NewBytesLoader(sarifSchemaBytes)
-	assert.NotNil(t, sarifSchema)
-
-	validationResult, err := gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(data))
-	assert.NoError(t, err)
-	for _, validationError := range validationResult.Errors() {
-		t.Log(validationError)
-	}
-	assert.True(t, validationResult.Valid(), "Sarif validation failed")
-}
-
-func getSarifInput() sarif.SarifDocument {
-	return sarif.SarifDocument{
-		Runs: []sarif.Run{
-			{
-				Results: []sarif.Result{
-					{Level: "error"},
-					{Level: "warning"},
-				},
-			},
-			{
-				Results: []sarif.Result{
-					{Level: "error",
-						RuleID: "openIssue",
-					},
-					{
-						Level:        "error",
-						Suppressions: make([]sarif.Suppression, 1),
-						RuleID:       "rule1",
-					},
-				},
-				Tool: sarif.Tool{
-					Driver: sarif.Driver{
-						Rules: []sarif.Rule{
-							{
-								ID:   "rule1",
-								Name: "Ignored rule",
-								ShortDescription: sarif.ShortDescription{
-									Text: "Ignored rule",
-								},
-								Help: sarif.Help{
-									Text: "Rule 1 help",
-								},
-								DefaultConfiguration: sarif.DefaultConfiguration{
-									Level: "error",
-								},
-								Properties: sarif.RuleProperties{
-									Tags:               []string{"tag1", "tag2"},
-									Categories:         []string{},
-									ExampleCommitFixes: []sarif.ExampleCommitFix{},
-									Precision:          "",
-									RepoDatasetSize:    0,
-									Cwe:                []string{""},
-								},
-							},
-							{
-								ID:   "openIssue",
-								Name: "This rule is open",
-								ShortDescription: sarif.ShortDescription{
-									Text: "This rule is open",
-								},
-								Help: sarif.Help{
-									Text: "",
-								},
-								DefaultConfiguration: sarif.DefaultConfiguration{
-									Level: "error",
-								},
-								Properties: sarif.RuleProperties{
-									Tags:               []string{"tag1", "tag2"},
-									Categories:         []string{},
-									ExampleCommitFixes: []sarif.ExampleCommitFix{},
-									Precision:          "",
-									RepoDatasetSize:    0,
-									Cwe:                []string{""},
-								},
-							},
-						},
-					},
-				},
-			},
-			{
-				Results: []sarif.Result{
-					{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
-				},
-			},
-		},
-	}
-}
-
-func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (localFinding *local_models.LocalFinding, err error) {
-	t.Helper()
-	jsonFile, err := os.Open("./" + filename)
-	if err != nil {
-		t.Errorf("Failed to load json")
-	}
-
-	defer func(jsonFile *os.File) {
-		jsonErr := jsonFile.Close()
-		assert.NoError(t, jsonErr)
-	}(jsonFile)
-	sarifBytes, err := io.ReadAll(jsonFile)
-	assert.NoError(t, err)
-
-	// Read sarif file again for summary
-	var sarifDoc sarif.SarifDocument
-
-	err = json.Unmarshal(sarifBytes, &sarifDoc)
-	assert.NoError(t, err)
-
-	summaryData := sarif_utils.CreateCodeSummary(&sarifDoc, projectPath)
-	summaryBytes, err := json.Marshal(summaryData)
-	assert.NoError(t, err)
-
-	tmp, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
-	return &tmp, err
-}
-
-func getWorkflowDataFromLocalFinding(localFinding *local_models.LocalFinding) (workflow.Data, error) {
-	localFindingBytes, err := json.Marshal(localFinding)
-	if err != nil {
-		return nil, err
-	}
-
-	return workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "LocalFinding"), content_type.LOCAL_FINDING_MODEL, localFindingBytes), nil
 }
 
 func TestLocalFindingsHandling_renderSarifFile_renderUI(t *testing.T) {

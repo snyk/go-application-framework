@@ -65,7 +65,7 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 			var findingsModel local_models.LocalFinding
 			findingsBytes, ok := data.GetPayload().([]byte)
 			if !ok {
-				var findingsError snyk_errors.Error = snyk_errors.Error{
+				var findingsError = snyk_errors.Error{
 					Title:          "Invalid Payload Type",
 					Classification: "Internal",
 					Level:          "warning",
@@ -77,7 +77,7 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 			}
 			err := json.Unmarshal(findingsBytes, &findingsModel)
 			if err != nil {
-				var unmarshallError snyk_errors.Error = snyk_errors.Error{
+				var unmarshallError = snyk_errors.Error{
 					Title:          "Failed to unmarshall findings",
 					Classification: "Internal",
 					Level:          "warning",
@@ -87,9 +87,9 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 				output = append(output, data)
 				continue
 			}
-			severityOrder := findingsModel.Summary.SeverityOrderAsc
+			severityOrder := findingsModel.Summary.Counts.CountKeyOrderAsc.Severity
 			if !utils.Contains(severityOrder, severityThreshold) {
-				var severityError snyk_errors.Error = snyk_errors.Error{
+				var severityError = snyk_errors.Error{
 					Title:          "Invalid Severity Threshold",
 					Classification: "Internal",
 					Level:          "warning",
@@ -102,11 +102,11 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 			applyFilters(&findingsModel, []findings.FindingsFilterFunc{findings.GetSeverityThresholdFilter(severityThreshold, severityOrder)})
 
 			// Update the findings summary after filtering
-			findings.UpdateFindingsSummary(&findingsModel)
+			findings.UpdateFindingSummary(&findingsModel)
 
 			filteredFindingsBytes, err := json.Marshal(findingsModel)
 			if err != nil {
-				var marshallError snyk_errors.Error = snyk_errors.Error{
+				var marshallError = snyk_errors.Error{
 					Title:          "Failed to marshall findings",
 					Classification: "Internal",
 					Level:          "warning",
