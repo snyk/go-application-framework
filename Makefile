@@ -3,7 +3,7 @@ GOOS = $(shell go env GOOS)
 GOARCH = $(shell go env GOARCH)
 
 GO_BIN := $(shell pwd)/.bin
-OVERRIDE_GOCI_LINT_V := v1.59.1
+OVERRIDE_GOCI_LINT_V := v1.62.0
 SHELL := env PATH=$(GO_BIN):$(PATH) $(SHELL)
 
 .PHONY: format
