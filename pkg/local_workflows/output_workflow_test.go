@@ -214,6 +214,7 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	logger := &zerolog.Logger{}
 	config := configuration.NewInMemory()
+	writer := new(bytes.Buffer)
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -224,6 +225,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("SnykCode"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
+
+	outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
 
 	payload := `
 	{
@@ -381,10 +384,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 		data := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
 		wrongData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte("yolo"))
-		writer := new(bytes.Buffer)
-
-		// mock assertions
-		outputDestination.EXPECT().GetWriter().Return(writer)
+		writer.Reset()
 
 		// execute
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data, wrongData}, outputDestination)
@@ -398,7 +398,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 	t.Run("should output multiple results when there are multiple local findings models", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		writer := new(bytes.Buffer)
+		writer.Reset()
 		testfile1 := "testdata/sarif-snyk-goof-ignores.json"
 		localFinding1, err := sarifToLocalFinding(t, testfile1, "/mypath")
 		assert.NoError(t, err)
@@ -412,7 +412,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 		data2 := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes2)
 		// mock assertions
-		outputDestination.EXPECT().GetWriter().Return(writer)
+		outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
 
 		// execute
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data1, data2}, outputDestination)
@@ -578,8 +578,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		sarifData.SetContentLocation("/mypath")
 
 		// mock assertions
-		byteBuffer := &bytes.Buffer{}
-		outputDestination.EXPECT().GetWriter().Return(byteBuffer)
+		writer.Reset()
 
 		config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
 		defer config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, nil)
@@ -589,7 +588,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 
 		// assert
-		validateSarifData(t, byteBuffer.Bytes())
+		validateSarifData(t, writer.Bytes())
 
 		expectedSarifFile, err := os.Open(testfile)
 		assert.NoError(t, err)
@@ -600,7 +599,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		prettyExpectedSarif, err := getSortedSarifBytes(expectedSarifBytes)
 		assert.NoError(t, err)
 
-		prettyActualSarif, err := getSortedSarifBytes(byteBuffer.Bytes())
+		prettyActualSarif, err := getSortedSarifBytes(writer.Bytes())
 		assert.NoError(t, err)
 
 		expectedString := string(prettyExpectedSarif)
