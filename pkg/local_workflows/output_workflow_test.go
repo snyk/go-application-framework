@@ -588,6 +588,9 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 		assert.NoError(t, err)
 
+		// assert
+		validateSarifData(t, byteBuffer.Bytes())
+
 		expectedSarifFile, err := os.Open(testfile)
 		assert.NoError(t, err)
 
@@ -599,9 +602,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		prettyActualSarif, err := getSortedSarifBytes(byteBuffer.Bytes())
 		assert.NoError(t, err)
-
-		// assert
-		validateSarifData(t, byteBuffer.Bytes())
 
 		expectedString := string(prettyExpectedSarif)
 		actualSarifString := string(prettyActualSarif)
