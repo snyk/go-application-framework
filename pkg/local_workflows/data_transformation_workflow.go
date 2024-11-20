@@ -74,28 +74,28 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	}
 	if sarifInput == nil || summaryInput == nil {
 		logger.Trace().Msg("incomplete input data for transformation")
-		return output, nil
+		return input, nil
 	}
 
 	summary_bytes, ok := summaryInput.GetPayload().([]byte)
 	if !ok {
 		logger.Err(nil).Msg("summary payload is not a byte array")
-		return output, nil
+		return input, nil
 	}
 	sarif_bytes, ok := sarifInput.GetPayload().([]byte)
 	if !ok {
-		return output, err
+		return input, err
 	}
 
 	findingsModel, err = TransformToLocalFindingModel(sarif_bytes, summary_bytes)
 	if err != nil {
 		logger.Err(err).Msg(err.Error())
-		return output, err
+		return input, err
 	}
 
 	bytes, err := json.Marshal(findingsModel)
 	if err != nil {
-		return output, err
+		return input, err
 	}
 
 	d := workflow.NewData(
