@@ -46,15 +46,16 @@ func Test_ResponseMiddleware(t *testing.T) {
 	})
 
 	t.Run("returns Erorr Catalog errors for matching status codes", func(t *testing.T) {
-		endpoints := []int{400, 401, 500}
-		for _, endpoint := range endpoints {
-			url := fmt.Sprintf("%s/%d", server.URL, endpoint)
+		codes := []int{400, 401, 500}
+		for _, code := range codes {
+			snykErr := snyk_errors.Error{}
+			url := fmt.Sprintf("%s/%d", server.URL, code)
 			req := buildRequest(url)
 
 			res, err := rt.RoundTrip(req)
 			assert.Nil(t, res)
-			assert.ErrorAs(t, err, &snyk_errors.Error{})
-			assert.Equal(t, err.(snyk_errors.Error).StatusCode, endpoint)
+			assert.ErrorAs(t, err, &snykErr)
+			assert.Equal(t, snykErr.StatusCode, code)
 		}
 	})
 }
