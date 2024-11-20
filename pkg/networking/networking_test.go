@@ -438,10 +438,10 @@ func Test_UserAgentInfo_Complete(t *testing.T) {
 }
 
 func TestNetworkImpl_Clone(t *testing.T) {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	network := NewNetworkAccess(config)
 
-	config2 := configuration.NewInMemory()
+	config2 := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	config2.Set(configuration.AUTHENTICATION_TOKEN, "test")
 	clonedNetwork := network.Clone()
 	clonedNetwork.SetConfiguration(config2)
@@ -521,25 +521,40 @@ func TestNetworkImpl_LogResponse_nolog(t *testing.T) {
 
 func TestNetworkImpl_ErrorHandler(t *testing.T) {
 	expectedErr := snyk.NewUnauthorisedError("no auth")
-	config := configuration.NewInMemory()
-	network := NewNetworkAccess(config)
-	network.AddErrorHandler(func(err error, ctx context.Context) error {
-		return expectedErr // overrides the previes error
-	})
+	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
-	client := network.GetHttpClient()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	})
 	server := httptest.NewServer(handler)
+	defer server.Close()
 
-	// returns the expected err
-	_, err := client.Get(server.URL)
-	assert.ErrorAs(t, err, &expectedErr)
+	t.Run("returns the error from the handler", func(t *testing.T) {
+		network := NewNetworkAccess(config)
+		network.AddErrorHandler(func(err error, ctx context.Context) error {
+			return expectedErr // overrides the previous error
+		})
+		client := network.GetHttpClient()
+		_, err := client.Get(server.URL)
+		assert.ErrorAs(t, err, &expectedErr)
+	})
 
-	// does not call the handler
-	network.AddErrorHandler(nil)
-	res, err := client.Get(server.URL)
-	assert.Nil(t, err)
-	assert.Equal(t, res.StatusCode, http.StatusUnauthorized)
+	t.Run("no error if the handler is not specified", func(t *testing.T) {
+		network := NewNetworkAccess(config)
+		network.AddErrorHandler(nil)
+		client := network.GetHttpClient()
+		res, err := client.Get(server.URL)
+		assert.Nil(t, err)
+		assert.Equal(t, res.StatusCode, http.StatusUnauthorized)
+	})
+
+	t.Run("unauthorized http client", func(t *testing.T) {
+		network := NewNetworkAccess(config)
+		network.AddErrorHandler(func(err error, ctx context.Context) error {
+			return expectedErr // overrides the previous error
+		})
+		client := network.GetUnauthorizedHttpClient()
+		_, err := client.Get(server.URL)
+		assert.ErrorAs(t, err, &expectedErr)
+	})
 }

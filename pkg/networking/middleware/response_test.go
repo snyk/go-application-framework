@@ -1,0 +1,88 @@
+package middleware_test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
+	"github.com/stretchr/testify/assert"
+)
+
+func Test_ResponseMiddleware(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/400":
+			w.WriteHeader(http.StatusBadRequest)
+		case "/404":
+			w.WriteHeader(http.StatusNotFound)
+		case "/401":
+			w.WriteHeader(http.StatusUnauthorized)
+		case "/500":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	rt := middleware.NewReponseMiddleware(http.DefaultTransport, nil)
+
+	t.Run("no error for 2xx", func(t *testing.T) {
+		req := buildRequest(server.URL)
+		_, err := rt.RoundTrip(req)
+		assert.Nil(t, err)
+	})
+
+	t.Run("no error for status codes not handled by the middleware", func(t *testing.T) {
+		req := buildRequest(server.URL + "/404")
+		_, err := rt.RoundTrip(req)
+		assert.Nil(t, err)
+	})
+
+	t.Run("returns Erorr Catalog errors for matching status codes", func(t *testing.T) {
+		endpoints := []int{400, 401, 500}
+		for _, endpoint := range endpoints {
+			url := fmt.Sprintf("%s/%d", server.URL, endpoint)
+			req := buildRequest(url)
+
+			res, err := rt.RoundTrip(req)
+			assert.Nil(t, res)
+			assert.ErrorAs(t, err, &snyk_errors.Error{})
+			assert.Equal(t, err.(snyk_errors.Error).StatusCode, endpoint)
+		}
+	})
+}
+
+func Test_ResponseMiddleware_WithErrorHandler(t *testing.T) {
+	expectedErr := errors.New("Big oopsie in the middleware")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	rt := middleware.NewReponseMiddleware(http.DefaultTransport, func(err error, ctx context.Context) error {
+		return expectedErr // this will override error parameter
+	})
+
+	req := buildRequest(server.URL)
+	res, err := rt.RoundTrip(req)
+	assert.Nil(t, res)
+	assert.ErrorAs(t, err, &expectedErr)
+}
+
+func buildRequest(url string) *http.Request {
+	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	if err != nil {
+		panic(err)
+	}
+
+	return req
+}

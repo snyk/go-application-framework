@@ -10,7 +10,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -126,25 +125,7 @@ func (rt *defaultHeadersRoundTripper) RoundTrip(request *http.Request) (*http.Re
 
 	rt.logRoundTrip(newRequest, response, err)
 
-	if err != nil {
-		return nil, err
-	}
-
-	if rt.networkAccess.errorHandler != nil {
-		errFromStatus := errFromStatusCode(response.StatusCode)
-		// Maybe?: add to the context the response and handle the status code at the handler callback function.
-		err = rt.networkAccess.errorHandler(errFromStatus, context.TODO())
-	}
-
 	return response, err
-}
-
-func errFromStatusCode(code int) error {
-	if code == http.StatusUnauthorized {
-		return snyk.NewUnauthorisedError("Authentication is required.")
-	}
-
-	return nil
 }
 
 func (rt *defaultHeadersRoundTripper) SetLogLevel(level zerolog.Level) {
@@ -183,8 +164,8 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
 }
 
-// AddErrorHandler registers an error handler for the underlying http.RoundTripper, allowing to wrap/return or
-// ignore the error bases on the argument callback function.
+// AddErrorHandler registers an error handler for the underlying http.RoundTripper and registers the response middleware
+// that maps non 2xx status codes to Error Catalog errors.
 func (n *networkImpl) AddErrorHandler(handler func(err error, ctx context.Context) error) {
 	n.errorHandler = handler
 }
@@ -225,9 +206,13 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 	//nolint:errcheck // breaking api change needed to fix this
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
+	var crt http.RoundTripper = n.configureRoundTripper(transport)
+	if n.errorHandler != nil {
+		crt = middleware.NewReponseMiddleware(crt, n.errorHandler)
+	}
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
-		encapsulatedRoundTripper: n.configureRoundTripper(transport),
+		encapsulatedRoundTripper: crt,
 		logLevel:                 defaultNetworkLogLevel,
 	}
 	return &rt
