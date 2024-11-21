@@ -133,6 +133,15 @@ func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 	assert.Nil(t, transformedOutput)
 }
 
+func Test_DataTransformation_with_Incomplete_Input(t *testing.T) {
+	invocationContext := setupMockTransformationContext(t, true)
+	input := []workflow.Data{}
+	output, err := dataTransformationEntryPoint(invocationContext, input)
+	assert.NoError(t, err)
+	assert.Len(t, output, 0)
+	assert.Equal(t, input, output)
+}
+
 func loadJsonFile(t *testing.T, filename string) []byte {
 	t.Helper()
 
