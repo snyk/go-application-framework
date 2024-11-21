@@ -69,7 +69,7 @@ func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 			}
 
 			// a shorthand variant for debug
-			if flagName == "d" {
+			if flagName == configuration.DEBUG_FLAG_SHORTHAND {
 				flags = append(flags, configuration.DEBUG)
 			}
 		} else if slices.Contains(knownCommands, arg) {
