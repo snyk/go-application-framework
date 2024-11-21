@@ -3,7 +3,7 @@ GOOS = $(shell go env GOOS)
 GOARCH = $(shell go env GOARCH)
 
 GO_BIN := $(shell pwd)/.bin
-OVERRIDE_GOCI_LINT_V := v1.59.1
+OVERRIDE_GOCI_LINT_V := v1.60.1
 SHELL := env PATH=$(GO_BIN):$(PATH) $(SHELL)
 
 .PHONY: format
@@ -42,6 +42,7 @@ testv:
 .PHONY: generate
 generate:
 	@go generate ./...
+	@make format
 
 .PHONY: tools
 tools: $(GO_BIN)/golangci-lint $(GO_BIN)/cue
@@ -53,6 +54,11 @@ $(GO_BIN)/cue:
 
 $(GO_BIN)/golangci-lint:
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
+
+.PHONY: update-local-findings
+update-local-findings:
+	@scripts/pull-down-test-api-spec.sh
+	@make generate
 
 .PHONY: help
 help:

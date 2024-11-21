@@ -215,8 +215,6 @@ func (d *DataImpl) GetPayload() interface{} {
 			payload = payloadFromFile
 			d.logger.Trace().Msg("payload read from file")
 		}
-	} else {
-		d.logger.Debug().Msgf("payload location for: %s is in memory, returning payload", d.identifier.String())
 	}
 	return payload
 }

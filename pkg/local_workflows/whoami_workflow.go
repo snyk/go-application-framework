@@ -3,12 +3,14 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/rs/zerolog"
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -44,8 +46,6 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	var a = api.NewApi(url, httpClient)
-
-	logger.Println("whoAmI workflow start")
 
 	// only run if experimental flag is set
 	if !config.GetBool(experimentalFlag) {

@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"github.com/snyk/go-application-framework/internal/utils/findings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -113,23 +115,19 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 
 	t.Run("filters findings with threshold set to high", func(t *testing.T) {
 		ctx := setupMockFilterContext(t, "hIgH")
-
 		randomInputData := getRandomWorkflowData()
 		findingsData := getFindingsInputData(t)
-
 		input := []workflow.Data{findingsData, randomInputData}
 		output, err := filterFindingsEntryPoint(ctx, input)
 		assert.NoError(t, err)
 		assert.Equal(t, len(input), len(output))
 		var filteredFindings local_models.LocalFinding
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
-
 		assert.NoError(t, err)
 		for _, finding := range filteredFindings.Findings {
 			severity := string(finding.Attributes.Rating.Severity.Value)
 			assert.True(t, severity == "high" || severity == "critical", "Unexpected severity: %s", severity)
 		}
-
 		assert.Equal(t, randomInputData, output[1])
 	})
 
@@ -142,5 +140,43 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		output, err := filterFindingsEntryPoint(ctx, input)
 		assert.NoError(t, err)
 		assert.Equal(t, input, output)
+	})
+	t.Run("updates findings summary with filtered totals", func(t *testing.T) {
+		ctx := setupMockFilterContext(t, "high")
+		sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
+		summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
+		findingsInput, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+		assert.NoError(t, err)
+		findingsBytes, err := json.Marshal(findingsInput)
+		assert.NoError(t, err)
+		input := []workflow.Data{workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_FILTER_FINDINGS, FilterFindingsWorkflowName),
+			content_type.LOCAL_FINDING_MODEL,
+			findingsBytes,
+		)}
+		output, err := filterFindingsEntryPoint(ctx, input)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(output))
+		var filteredFindings local_models.LocalFinding
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
+		assert.NoError(t, err)
+
+		expectedCounts := findings.NewFindingsCounts()
+		expectedCounts.Count = 22
+		expectedCounts.CountAdjusted = 22
+		expectedCounts.CountKeyOrderAsc = local_models.TypesFindingCounts_CountKeyOrderAsc{
+			Severity: json_schemas.DEFAULT_SEVERITIES,
+		}
+		expectedCounts.CountBy = local_models.TypesFindingCounts_CountBy{
+			Severity: map[string]uint32{
+				"high": 22,
+			},
+		}
+		expectedCounts.CountByAdjusted = local_models.TypesFindingCounts_CountByAdjusted{
+			Severity: map[string]uint32{
+				"high": 22,
+			},
+		}
+		assert.Equal(t, expectedCounts, filteredFindings.Summary.Counts)
 	})
 }

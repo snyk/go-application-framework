@@ -264,7 +264,9 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			context := NewInvocationContext(id, config, e, networkAccess, zlogger, e.analytics, e.ui)
 
 			// invoke workflow through its callback
+			zlogger.Printf("Workflow Start")
 			output, err = callback(context, input)
+			zlogger.Printf("Workflow End")
 		}
 	} else {
 		err = fmt.Errorf("workflow '%v' not found", id)

@@ -1,0 +1,216 @@
+{{define "main" }}
+    {
+        "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/csprd01/schemas/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+        {{- range $result := $.Results}}
+            {
+                "tool": {
+                    "driver" : {
+                        "name" : "{{- getRuntimeInfo "name" }}",
+                        "semanticVersion" : "{{- getRuntimeInfo "version" }}",
+                        "version" : "{{- getRuntimeInfo "version" }}",
+                        "informationUri" : "https://docs.snyk.io/",
+                        "rules" : [
+                            {{- $rulesSize := sub (len $result.Rules) 1 }}
+                            {{- range $index, $rule := $result.Rules }}
+                            {
+                                "id": "{{ $rule.Id }}",
+                                "name": {{ getQuotedString $rule.Name }},
+                                "shortDescription": {
+                                    "text": {{ getQuotedString $rule.ShortDescription.Text }}
+                                },
+                                "defaultConfiguration": {
+                                    "level": "{{ $rule.DefaultConfiguration.Level }}"
+                                },
+                                "help": {
+                                    "markdown": {{ getQuotedString $rule.Help.Markdown }},
+                                    "text": {{ getQuotedString $rule.Help.Text }}
+                                },
+                                "properties": {
+                                    "tags": [
+                                        {{- $tagsSize := sub (len $rule.Properties.Tags) 1 }}
+                                        {{- range $tagIndex, $tag := $rule.Properties.Tags }}
+                                        {{ getQuotedString $tag }}{{if lt $tagIndex $tagsSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "categories": [
+                                        {{- $categoriesSize := sub (len $rule.Properties.Categories) 1 }}
+                                        {{- range $catIndex, $category := $rule.Properties.Categories }}
+                                        {{ getQuotedString $category }}{{if lt $catIndex $categoriesSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "exampleCommitFixes": [
+                                        {{- $examplesSize := sub (len $rule.Properties.ExampleCommitFixes) 1 }}
+                                        {{- range $exampleIndex, $example := $rule.Properties.ExampleCommitFixes }}
+                                        {
+
+                                            "commitURL": "{{ $example.CommitUrl }}",
+                                            "lines": [
+                                                {{- $lineSize := sub (len $example.Lines) 1 }}
+                                                {{- range $lineIndex, $line := $example.Lines }}
+                                                {
+                                                    "line": {{ getQuotedString $line.Line -}},
+                                                    "lineNumber": {{ $line.LineNumber }},
+                                                    "lineChange": "{{ $line.Linechange }}"
+                                                }{{if lt $lineIndex $lineSize}},{{end}}
+                                                {{- end }}
+                                            ]
+                                        }{{if lt $exampleIndex $examplesSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "exampleCommitDescriptions": [
+                                        {{- $examplesSize := sub (len $rule.Properties.ExampleCommitDescriptions) 1 }}
+                                        {{- range $exampleIndex, $example := $rule.Properties.ExampleCommitDescriptions }}
+                                        "{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
+                                        {{- end }}
+                                    ],
+                                    "precision": "{{ $rule.Properties.Precision }}",
+                                    "repoDatasetSize": {{ $rule.Properties.RepoDatasetSize }},
+                                    "cwe": [
+                                        {{- $cweSize := sub (len $rule.Properties.Cwe) 1 }}
+                                        {{- range $cweIndex, $cwe := $rule.Properties.Cwe }}
+                                        "{{ $cwe }}"{{if lt $cweIndex $cweSize}},{{end}}
+                                        {{- end }}
+                                    ]
+                                }
+                            }{{if lt $index $rulesSize}},{{end}}
+                            {{- end }}
+                        ]
+                    }
+                },
+                "results": [
+                    {{- $findingsSize := sub (len $result.Findings) 1 }}
+                    {{- range $index, $finding := $result.Findings }}
+                    {
+                        "ruleId": "{{ $finding.Attributes.ReferenceId.Identifier }}",
+                        "ruleIndex": {{ $finding.Attributes.ReferenceId.Index }},
+                        "level": "{{- SeverityToSarifLevel $finding.Attributes.Rating.Severity.Value }}",
+                        "message": {
+                            "text": {{- getQuotedString $finding.Attributes.Message.Text }},
+                            "markdown": {{- getQuotedString $finding.Attributes.Message.Markdown }},
+                            "arguments": [
+                                {{- $messageArgSize := sub (len $finding.Attributes.Message.Arguments) 1 }}
+                                {{- range $index, $messageArgument := $finding.Attributes.Message.Arguments }}
+                                {{- getQuotedString $messageArgument }}{{if lt $index $messageArgSize}},{{end}}
+                                {{- end }}
+                            ]
+                        },
+                        "locations": [
+                            {{- $locationSize := sub (len $finding.Attributes.Locations) 1 }}
+                            {{- range $index, $findingLocation := $finding.Attributes.Locations }}
+                            {
+                              "physicalLocation": {
+                                "artifactLocation": {
+                                  "uri": "{{- $findingLocation.SourceLocations.Filepath}}",
+                                  "uriBaseId": "%SRCROOT%"
+                                },
+                                "region": {
+                                  "startLine": {{- $findingLocation.SourceLocations.OriginalStartLine}},
+                                  "endLine": {{- $findingLocation.SourceLocations.OriginalEndLine}},
+                                  "startColumn": {{- $findingLocation.SourceLocations.OriginalStartColumn}},
+                                  "endColumn": {{- $findingLocation.SourceLocations.OriginalEndColumn}}
+                                }
+                              }
+                            }{{if lt $index $locationSize}},{{end}}
+                            {{- end}}
+                        ],
+                        "fingerprints": {
+                            {{- $fingerprintSize := sub (len $finding.Attributes.Fingerprint) 1 }}
+                            {{- range $index, $finger := $finding.Attributes.Fingerprint }}
+                            {{- $decodedFingerPrint := getUnionValue $finger }}
+                            {{- $scheme := print $decodedFingerPrint.Scheme }}
+                            "{{ replaceString $scheme "code-sast-v" "" }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
+                            {{- end }}
+                        },
+                        "codeFlows": [
+                            {{- $clSize := sub (len $finding.Attributes.CodeFlows) 1 }}
+                            {{- range $index, $cl := $finding.Attributes.CodeFlows }}
+                            {
+                                "threadFlows": [
+                                    {{- $tfSize := sub (len $cl.ThreadFlows) 1 }}
+                                    {{- range $index, $tf := $cl.ThreadFlows }}
+                                    {
+                                        "locations": [
+                                        {{- $locSize := sub (len $tf.Locations) 1 }}
+                                        {{- range $locIndex, $loc := $tf.Locations }}
+                                        {
+                                            "location": {
+                                                "id": {{ $locIndex }},
+                                                "physicalLocation": {
+                                                    "artifactLocation": {
+                                                      "uri": "{{- $loc.Filepath}}",
+                                                      "uriBaseId": "%SRCROOT%"
+                                                    },
+                                                    "region": {
+                                                      "startLine": {{- $loc.OriginalStartLine}},
+                                                      "endLine": {{- $loc.OriginalEndLine}},
+                                                      "startColumn": {{- $loc.OriginalStartColumn}},
+                                                      "endColumn": {{- $loc.OriginalEndColumn}}
+                                                    }
+                                                }
+                                            }
+                                        }{{if lt $locIndex $locSize}},{{end}}
+                                        {{- end }}
+                                        ]
+                                    }{{if lt $index $tfSize}},{{end}}
+                                    {{- end }}
+                                ]
+                            }{{if lt $index $clSize}},{{end}}
+                            {{- end }}
+                        ],
+                        {{- if $finding.Attributes.Suppression }}
+                        "suppressions" : [
+                            {
+                                {{- if $finding.Attributes.Suppression.Justification }}
+                                "justification": {{ getQuotedString $finding.Attributes.Suppression.Justification }},{{- end }}
+                                "kind": "external"{{- if $finding.Attributes.Suppression.Details }},
+                                "properties": {
+                                    "category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
+                                    {{- if $finding.Attributes.Suppression.Details.Expiration }}"expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",{{- end }}
+                                    "ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
+                                    "ignoredBy": {
+                                          "name": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Name }},
+                                          "email": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Email }}
+                                    }
+                                }
+                                {{- end }}
+                            }
+                        ],
+                        {{- end }}
+                        "properties": {
+                            "priorityScore": {{ $finding.Attributes.Rating.Priority.Score }},
+                            "priorityScoreFactors": [
+                            {{- $factorSize := sub (len $finding.Attributes.Rating.Priority.Factors) 1 }}
+                            {{- range $index, $factor := $finding.Attributes.Rating.Priority.Factors }}
+                            {{- $decodedFactor := getUnionValue $factor }}
+                                  {
+                                    "label": {{ $decodedFactor.Value }},
+                                    "type": {{ getQuotedString $decodedFactor.Name }}
+                                  }{{if lt $index $factorSize}},{{end}}
+                            {{- end }}
+                            ]
+                        }
+                    }{{if lt $index $findingsSize}},{{end}}
+                    {{- end}}
+                ],
+                "properties": {
+                    "coverage": [
+                        {{- $coverageSize := sub (len $result.Summary.Coverage) 1 }}
+                        {{- range $coverageIndex, $coverage := $result.Summary.Coverage }}
+                        {
+                            "files": {{ $coverage.Files }},
+                            "isSupported": {{ $coverage.IsSupported }},
+                            "lang": "{{ $coverage.Lang }}",
+                            "type": "{{ $coverage.Type }}"
+                        }{{if lt $coverageIndex $coverageSize}},{{end}}
+                        {{- end }}
+                    ]
+                }
+            }
+        {{- end}}
+        ]
+    }
+{{end }} {{/* end main */}}
+
+{{template "main" . }}

@@ -5,16 +5,21 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 const DefaultMimeType = "text/cli"
 const NoneMimeType = "unknown"
 const ApplicationJSONMimeType = "application/json"
+const ApplicationSarifMimeType = content_type.SARIF_JSON
+const CONFIG_JSON_STRIP_WHITESPACES = "internal_json_no_whitespaces"
 
 //go:embed templates/*
 var embeddedFiles embed.FS
@@ -23,9 +28,10 @@ type TemplateImplFunction func() (*template.Template, template.FuncMap, error)
 
 type LocalFindingPresenter struct {
 	TestPath     string
-	Input        *local_models.LocalFinding
+	Input        []*local_models.LocalFinding
 	config       configuration.Configuration
 	writer       io.Writer
+	runtimeinfo  runtimeinfo.RuntimeInfo
 	templateImpl map[string]TemplateImplFunction
 }
 
@@ -35,15 +41,19 @@ var DefaultTemplateFiles = []string{
 	"templates/finding.component.tmpl",
 }
 
+var ApplicationSarifTemplates = []string{
+	"templates/local_finding.sarif.tmpl",
+}
+
 type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
 
-func WithLocalFindingsTestPath(testPath string) LocalFindingPresenterOptions {
+func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) LocalFindingPresenterOptions {
 	return func(p *LocalFindingPresenter) {
-		p.TestPath = testPath
+		p.runtimeinfo = ri
 	}
 }
 
-func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, config configuration.Configuration, writer io.Writer, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
+func NewLocalFindingsRenderer(localFindingsDoc []*local_models.LocalFinding, config configuration.Configuration, writer io.Writer, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
 	p := &LocalFindingPresenter{
 		Input:  localFindingsDoc,
 		config: config,
@@ -65,6 +75,15 @@ func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, confi
 				functionMapMimeType := getCliTemplateFuncMap(localFindingsTemplate)
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
+			ApplicationSarifMimeType: func() (*template.Template, template.FuncMap, error) {
+				localFindingsTemplate, err := template.New(ApplicationSarifMimeType).Parse("")
+				if err != nil {
+					return nil, nil, err
+				}
+
+				functionMapMimeType := getSarifTemplateFuncMap()
+				return localFindingsTemplate, functionMapMimeType, nil
+			},
 		},
 	}
 
@@ -76,7 +95,7 @@ func NewLocalFindingsRenderer(localFindingsDoc *local_models.LocalFinding, confi
 }
 
 func (p *LocalFindingPresenter) getImplementationFromMimeType(mimeType string) (*template.Template, error) {
-	functionMapGeneral := getDefaultTemplateFuncMap(p.config)
+	functionMapGeneral := getDefaultTemplateFuncMap(p.config, p.runtimeinfo)
 
 	if _, ok := p.templateImpl[mimeType]; !ok {
 		mimeType = NoneMimeType
@@ -105,8 +124,6 @@ func (p *LocalFindingPresenter) RegisterMimeType(mimeType string, implFactory Te
 }
 
 func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
-	orgName := p.config.GetString(configuration.ORGANIZATION_SLUG)
-	severityMinLevel := p.config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)
 	// mimetype specific
 	localFindingsTemplate, err := p.getImplementationFromMimeType(mimeType)
 	if err != nil {
@@ -119,21 +136,20 @@ func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType 
 		return err
 	}
 
-	summary := PrepareSummary(&p.Input.Summary, orgName, p.TestPath, severityMinLevel)
-
 	mainTmpl := localFindingsTemplate.Lookup("main")
 	if mainTmpl == nil {
 		return fmt.Errorf("the template must contain a 'main'")
 	}
 
-	err = mainTmpl.Execute(p.writer, struct {
-		Summary  SummaryData `json:"summary"`
-		Finding  *local_models.LocalFinding
-		Findings []local_models.FindingResource
+	writer := p.writer
+	if strings.Contains(mimeType, "json") {
+		writer = NewJsonWriter(writer, p.config.GetBool(CONFIG_JSON_STRIP_WHITESPACES))
+	}
+
+	err = mainTmpl.Execute(writer, struct {
+		Results []*local_models.LocalFinding
 	}{
-		Summary:  summary,
-		Finding:  p.Input,
-		Findings: p.Input.Findings,
+		Results: p.Input,
 	})
 	if err != nil {
 		return err

@@ -3,7 +3,6 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -15,29 +14,21 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 var WORKFLOWID_OUTPUT_WORKFLOW workflow.Identifier = workflow.NewWorkflowIdentifier("output")
-
-const (
-	OUTPUT_CONFIG_KEY_JSON       = "json"
-	OUTPUT_CONFIG_KEY_JSON_FILE  = "json-file-output"
-	OUTPUT_CONFIG_KEY_SARIF      = "sarif"
-	OUTPUT_CONFIG_KEY_SARIF_FILE = "sarif-file-output"
-	OUTPUT_CONFIG_TEMPLATE_FILE  = "internal_template_file"
-)
 
 // InitOutputWorkflow initializes the output workflow
 // The output workflow is responsible for handling the output destination of workflow data
 // As part of the localworkflows package, it is registered via the localworkflows.Init method
 func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig := pflag.NewFlagSet("output", pflag.ExitOnError)
-	outputConfig.Bool(OUTPUT_CONFIG_KEY_JSON, false, "Print json output to console")
-	outputConfig.String(OUTPUT_CONFIG_KEY_JSON_FILE, "", "Write json output to file")
-	outputConfig.Bool(OUTPUT_CONFIG_KEY_SARIF, false, "Print sarif output to console")
-	outputConfig.String(OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
+	outputConfig.Bool(output_workflow.OUTPUT_CONFIG_KEY_JSON, false, "Print json output to console")
+	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE, "", "Write json output to file")
+	outputConfig.Bool(output_workflow.OUTPUT_CONFIG_KEY_SARIF, false, "Print sarif output to console")
+	outputConfig.String(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE, "", "Write sarif output to file")
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
 
@@ -49,7 +40,7 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 
 func filterSummaryOutput(config configuration.Configuration, input workflow.Data, logger *zerolog.Logger) (workflow.Data, error) {
 	// Parse the summary data
-	summary := json_schemas.NewTestSummary("")
+	summary := json_schemas.NewTestSummary("", "")
 	payload, ok := input.GetPayload().([]byte)
 	if !ok {
 		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
@@ -99,16 +90,14 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
 
+	// Handle findings models, if none found, continue with the rest
+	input, err := output_workflow.HandleContentTypeFindingsModel(input, invocation, outputDestination)
+	if err != nil {
+		return output, err
+	}
+
 	for i := range input {
 		mimeType := input[i].GetContentType()
-
-		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
-			err := handleContentTypeFindingsModel(config, input, i, outputDestination, debugLogger)
-			if err != nil {
-				return output, err
-			}
-			continue
-		}
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
 			outputSummary, err := filterSummaryOutput(config, input[i], debugLogger)
@@ -127,7 +116,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'", input[i].GetIdentifier().String(), contentLocation, mimeType)
 
-		if strings.Contains(mimeType, OUTPUT_CONFIG_KEY_JSON) { // handle application/json
+		if strings.Contains(mimeType, output_workflow.OUTPUT_CONFIG_KEY_JSON) { // handle application/json
 			err := handleContentTypeJson(config, input, i, outputDestination, debugLogger)
 			if err != nil {
 				return output, err
@@ -160,70 +149,13 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 	return nil
 }
 
-func handleContentTypeFindingsModel(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
-	debugLogger.Info().Msgf("[%d] Handling findings model", i)
-	var localFindings local_models.LocalFinding
-	localFindingsBytes, ok := input[i].GetPayload().([]byte)
-	if !ok {
-		return fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
-	}
-
-	err := json.Unmarshal(localFindingsBytes, &localFindings)
-	if err != nil {
-		debugLogger.Warn().Err(err).Msg("Failed to unmarshal local finding")
-		return err
-	}
-
-	writer := outputDestination.GetWriter()
-	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
-	mimeType := presenters.DefaultMimeType
-	templates := presenters.DefaultTemplateFiles
-
-	if len(outputFileName) > 0 {
-		file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
-		if fileErr != nil {
-			return fileErr
-		}
-
-		writer = file
-		defer file.Close()
-	}
-
-	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) || len(config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)) > 0 {
-		mimeType = presenters.ApplicationJSONMimeType
-		templates = []string{} // TODO: specify SARIF template CLI-550
-	}
-
-	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
-		templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
-	}
-
-	debugLogger.Info().Msgf("[%d] Creating findings model renderer", i)
-	renderer := presenters.NewLocalFindingsRenderer(
-		&localFindings,
-		config,
-		writer,
-		presenters.WithLocalFindingsTestPath(input[i].GetContentLocation()),
-	)
-
-	debugLogger.Info().Msgf("[%d] Rendering %s with %s", i, mimeType, templates)
-	err = renderer.RenderTemplate(templates, mimeType)
-	if err != nil {
-		debugLogger.Warn().Err(err).Msg("Failed to render local finding")
-		return err
-	}
-
-	debugLogger.Info().Msgf("[%d] Rendering done", i)
-	return nil
-}
-
 func handleContentTypeJson(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
-	printJsonToCmd := config.GetBool(OUTPUT_CONFIG_KEY_JSON) || config.GetBool(OUTPUT_CONFIG_KEY_SARIF)
+	printJsonToCmd := config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_JSON) || config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_SARIF)
 	showToHuman := !printJsonToCmd
 
-	jsonFileName := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
+	jsonFileName := config.GetString(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE)
 	if len(jsonFileName) == 0 {
-		jsonFileName = config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
+		jsonFileName = config.GetString(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE)
 	}
 	writeToFile := len(jsonFileName) > 0
 

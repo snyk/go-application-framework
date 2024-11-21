@@ -29,6 +29,12 @@ Ignored Issues
    Path: src/main.ts, line 58
    Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
 
+   Expiration: 15 days
+   Category:   wont-fix
+   Ignored on: February 23, 2024
+   Ignored by: Neil M
+   Reason:     False positive
+
 
 
 💡 Tip
@@ -48,7 +54,7 @@ Ignored Issues
 │   Ignored issues: 1 [ 0 HIGH  1 MEDIUM  0 LOW ]    │
 │   Open issues:    4 [ 1 HIGH  1 MEDIUM  2 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 ---
 
 [TestPresenterLocalFinding_IncludeIgnoredEmpty - 1]
@@ -92,7 +98,7 @@ Ignored Issues
 │   Ignored issues: 0 [ 0 HIGH  0 MEDIUM  0 LOW ]    │
 │   Open issues:    3 [ 0 HIGH  0 MEDIUM  3 LOW ]    │
 ╰────────────────────────────────────────────────────╯
-
+    
 ---
 
 [TestPresenterLocalFinding_LowIssues - 1]

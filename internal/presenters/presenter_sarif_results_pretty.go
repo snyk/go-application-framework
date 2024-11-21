@@ -87,7 +87,7 @@ func FilterFindingsBySeverity(findings []Finding, minLevel string, severityOrder
 }
 
 func (p *SarifPresenter) Render() (string, error) {
-	summaryData := sarif_utils.CreateCodeSummary(&p.Input)
+	summaryData := sarif_utils.CreateCodeSummary(&p.Input, p.TestPath)
 	findings :=
 		SortFindings(convertSarifToFindingsList(p.Input), summaryData.SeverityOrderAsc)
 	summaryOutput, err := RenderSummary(summaryData, p.OrgName, p.TestPath, p.SeverityMinLevel)

@@ -7,13 +7,15 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/spf13/pflag"
+
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -26,7 +28,6 @@ func InitDataTransformationWorkflow(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet(DataTransformationWorkflowName, pflag.ExitOnError)
 	_, err := engine.Register(WORKFLOWID_DATATRANSFORMATION, workflow.ConfigurationOptionsFromFlagset(flags), dataTransformationEntryPoint)
 
-	engine.GetConfiguration().AddDefaultValue(configuration.FF_TRANSFORMATION_WORKFLOW, configuration.StandardDefaultValueFunction(false))
 	return err
 }
 
@@ -36,11 +37,23 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	ff_transform_enabled := config.GetBool(configuration.FF_TRANSFORMATION_WORKFLOW)
 	output = input
 
-	logger.Println("dataTransformation workflow start")
-
 	if !ff_transform_enabled {
 		return output, nil
 	}
+
+	progress := invocationCtx.GetUserInterface().NewProgressBar()
+	progress.SetTitle("Transforming data")
+	progressError := progress.UpdateProgress(ui.InfiniteProgress)
+	if progressError != nil {
+		logger.Err(progressError).Msgf("Error when setting progress")
+	}
+
+	defer func() {
+		localError := progress.Clear()
+		if localError != nil {
+			logger.Err(localError).Msgf("Error when clearing progress")
+		}
+	}()
 
 	var findingsModel local_models.LocalFinding
 
@@ -61,34 +74,34 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	}
 	if sarifInput == nil || summaryInput == nil {
 		logger.Trace().Msg("incomplete input data for transformation")
-		return output, nil
+		return input, nil
 	}
 
 	summary_bytes, ok := summaryInput.GetPayload().([]byte)
 	if !ok {
 		logger.Err(nil).Msg("summary payload is not a byte array")
-		return output, nil
+		return input, nil
 	}
 	sarif_bytes, ok := sarifInput.GetPayload().([]byte)
 	if !ok {
-		return output, err
+		return input, err
 	}
 
 	findingsModel, err = TransformToLocalFindingModel(sarif_bytes, summary_bytes)
 	if err != nil {
 		logger.Err(err).Msg(err.Error())
-		return output, err
+		return input, err
 	}
 
 	bytes, err := json.Marshal(findingsModel)
 	if err != nil {
-		return output, err
+		return input, err
 	}
 
 	d := workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
 		content_type.LOCAL_FINDING_MODEL,
-		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger))
+		bytes, workflow.WithConfiguration(config), workflow.WithLogger(logger), workflow.WithInputData(summaryInput))
 	d.SetContentLocation(contentLocation)
 	output = append(output, d)
 
@@ -96,8 +109,8 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 }
 
 func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
-	var summary json_schemas.TestSummary
-	err = json.Unmarshal(summaryBytes, &summary)
+	var testSummary json_schemas.TestSummary
+	err = json.Unmarshal(summaryBytes, &testSummary)
 	if err != nil {
 		return localFinding, err
 	}
@@ -135,7 +148,23 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 		return localFinding, fmt.Errorf("failed to convert to type: %w", encodeErr)
 	}
 
-	localFinding.Summary = summary
+	localFinding.Summary.Path = testSummary.Path
+	localFinding.Summary.Artifacts = testSummary.Artifacts
+	localFinding.Summary.Type = testSummary.Type
+	localFinding.Summary.Counts.CountKeyOrderAsc.Severity = testSummary.SeverityOrderAsc
+	localFinding.Summary.Counts.Count = 0
+	localFinding.Summary.Counts.CountAdjusted = 0
+	localFinding.Summary.Counts.CountSuppressed = 0
+
+	for _, summaryResults := range testSummary.Results {
+		localFinding.Summary.Counts.CountBy.Severity[summaryResults.Severity] = uint32(summaryResults.Total)
+		localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity] = uint32(summaryResults.Open)
+		localFinding.Summary.Counts.CountBySuppressed.Severity[summaryResults.Severity] = uint32(summaryResults.Ignored)
+
+		localFinding.Summary.Counts.CountAdjusted += localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity]
+		localFinding.Summary.Counts.CountSuppressed += uint32(summaryResults.Ignored)
+		localFinding.Summary.Counts.Count += uint32(summaryResults.Total)
+	}
 
 	return localFinding, nil
 }

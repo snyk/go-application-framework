@@ -10,6 +10,98 @@ tags:
   - name: Findings
 paths:
   /orgs/{org_id}/tests:
+    get:
+      operationId: listTests
+      summary: List known test entities
+      description: A paged array of test entities
+      parameters:
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
+        - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.starting_after'
+        - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.ending_before'
+        - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.limit'
+        - $ref: '#/components/parameters/OrgIdParam'
+      responses:
+        '200':
+          description: Successful API response for a paginated collection.
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+          content:
+            application/vnd.api+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TestResource'
+                  jsonapi:
+                    $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
+                  links:
+                    $ref: '#/components/schemas/io.snyk.api.common.PaginatedLinks'
+                  meta:
+                    $ref: '#/components/schemas/io.snyk.api.common.Meta'
+                required:
+                  - data
+                  - jsonapi
+                  - links
+        '404':
+          description: Resource not found
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+      tags:
+        - Test
     post:
       operationId: createTest
       summary: Create a new test.
@@ -18,7 +110,7 @@ paths:
         - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
         - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
         - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
-        - $ref: '#/components/parameters/types.OrgIdParam'
+        - $ref: '#/components/parameters/OrgIdParam'
       responses:
         '202':
           description: The request has been accepted for processing, but processing has not yet completed.
@@ -72,7 +164,7 @@ paths:
                         type: object
                         properties:
                           state:
-                            $ref: '#/components/schemas/types.TestState'
+                            $ref: '#/components/schemas/TestState'
                         required:
                           - state
                     required:
@@ -165,8 +257,141 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/types.CreateTestAttributes'
+              $ref: '#/components/schemas/CreateTestAttributes'
   /orgs/{org_id}/tests/{test_id}:
+    delete:
+      operationId: deleteTest
+      summary: Cancel the given test run.
+      description: Cancels the given test run
+      parameters:
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
+        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/TestIdParam'
+      responses:
+        '204':
+          description: Successful operation, but no content in response
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+        '400':
+          description: Invalid input
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+        '404':
+          description: Resource not found
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+        '422':
+          description: Validation exception
+          headers:
+            sunset:
+              required: true
+              schema:
+                type: string
+            deprecation:
+              required: true
+              schema:
+                type: string
+            snyk-version-requested:
+              required: true
+              schema:
+                type: string
+            snyk-version-served:
+              required: true
+              schema:
+                type: string
+            snyk-request-id:
+              required: true
+              schema:
+                type: string
+            snyk-version-lifecycle-stage:
+              required: true
+              schema:
+                type: string
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
+      tags:
+        - Test
     get:
       operationId: getTest
       summary: Get the given test by id.
@@ -175,8 +400,8 @@ paths:
         - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
         - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
         - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
-        - $ref: '#/components/parameters/types.OrgIdParam'
-        - $ref: '#/components/parameters/types.TestIdParam'
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/TestIdParam'
       responses:
         '200':
           description: The request has succeeded.
@@ -215,7 +440,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/types.TestResource'
+                    $ref: '#/components/schemas/TestResource'
                   jsonapi:
                     $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
                   links:
@@ -278,8 +503,8 @@ paths:
         - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.starting_after'
         - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.ending_before'
         - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.limit'
-        - $ref: '#/components/parameters/types.OrgIdParam'
-        - $ref: '#/components/parameters/types.TestIdParam'
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/TestIdParam'
       responses:
         '200':
           description: Successful API response for a paginated collection.
@@ -316,7 +541,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/types.FindingResource'
+                      $ref: '#/components/schemas/FindingResource'
                   jsonapi:
                     $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
                   links:
@@ -360,108 +585,24 @@ paths:
                 $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
       tags:
         - Findings
-  /orgs/{org_id}/tests/{test_id}/rules:
-    get:
-      operationId: getRules
-      summary: Get all rules
-      description: Get Rules
-      parameters:
-        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
-        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
-        - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
-        - $ref: '#/components/parameters/types.OrgIdParam'
-        - $ref: '#/components/parameters/types.TestIdParam'
-      responses:
-        '200':
-          description: The request has succeeded.
-          headers:
-            sunset:
-              required: true
-              schema:
-                type: string
-            deprecation:
-              required: true
-              schema:
-                type: string
-            snyk-version-requested:
-              required: true
-              schema:
-                type: string
-            snyk-version-served:
-              required: true
-              schema:
-                type: string
-            snyk-request-id:
-              required: true
-              schema:
-                type: string
-            snyk-version-lifecycle-stage:
-              required: true
-              schema:
-                type: string
-            retry-after:
-              required: false
-              schema:
-                type: integer
-          content:
-            application/vnd.api+json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/types.Rules'
-                  jsonapi:
-                    $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
-                  links:
-                    type: object
-                    properties:
-                      self:
-                        $ref: '#/components/schemas/LinkProperty'
-                      related:
-                        $ref: '#/components/schemas/LinkProperty'
-                    additionalProperties:
-                      $ref: '#/components/schemas/LinkProperty'
-                  meta:
-                    $ref: '#/components/schemas/io.snyk.api.common.Meta'
-                required:
-                  - data
-                  - jsonapi
-                  - links
-        '404':
-          description: Resource not found
-          headers:
-            sunset:
-              required: true
-              schema:
-                type: string
-            deprecation:
-              required: true
-              schema:
-                type: string
-            snyk-version-requested:
-              required: true
-              schema:
-                type: string
-            snyk-version-served:
-              required: true
-              schema:
-                type: string
-            snyk-request-id:
-              required: true
-              schema:
-                type: string
-            snyk-version-lifecycle-stage:
-              required: true
-              schema:
-                type: string
-          content:
-            application/vnd.api+json:
-              schema:
-                $ref: '#/components/schemas/io.snyk.api.common.ErrorDocument'
-      tags:
-        - Test
 components:
   parameters:
+    OrgIdParam:
+      name: org_id
+      in: path
+      required: true
+      description: The org id
+      schema:
+        type: string
+        format: uuid
+    TestIdParam:
+      name: test_id
+      in: path
+      required: true
+      description: The test id
+      schema:
+        type: string
+        format: uuid
     io.snyk.api.request.PaginatedRequest.ending_before:
       name: ending_before
       in: query
@@ -519,273 +660,8 @@ components:
       description: The API version requested.
       schema:
         type: string
-    types.OrgIdParam:
-      name: org_id
-      in: path
-      required: true
-      description: The org id
-      schema:
-        type: string
-        format: uuid
-    types.TestIdParam:
-      name: test_id
-      in: path
-      required: true
-      description: The test id
-      schema:
-        type: string
-        format: uuid
   schemas:
-    ContentAddress:
-      oneOf:
-        - $ref: '#/components/schemas/types.LegacyDeepcodeBundleAddress'
-        - $ref: '#/components/schemas/types.WorkspaceV1Address'
-      discriminator:
-        propertyName: scheme
-        mapping:
-          deepcode-bundle: '#/components/schemas/types.LegacyDeepcodeBundleAddress'
-          workspace-v1: '#/components/schemas/types.WorkspaceV1Address'
-      description: Content address whence source code can be obtained for scanning.
-    CreateExcludeRule:
-      oneOf:
-        - type: string
-        - $ref: '#/components/schemas/CreateObjectExcludeRule'
-      description: |-
-        CreateExcludeRule defines individual rules for exclusion of files during a test.
-        Currently it supports either bare strings as recursive globs, or explicitly
-        stated file patterns as recursive globs.
-    CreateObjectExcludeRule:
-      $ref: '#/components/schemas/types.FileObjectExcludeRule'
-    ExcludeRule:
-      oneOf:
-        - type: string
-        - $ref: '#/components/schemas/ObjectExcludeRule'
-      description: |-
-        ExcludeRule defines individual rules for exclusion of files during a test.
-        Currently it supports either bare strings as recursive globs, or explicitly
-        stated file patterns as recursive globs.
-    Fingerprint:
-      oneOf:
-        - $ref: '#/components/schemas/types.CodeSastFingerprintV0'
-        - $ref: '#/components/schemas/types.CodeSastFingerprintV1'
-        - $ref: '#/components/schemas/types.ScaProblemFingerprint'
-        - $ref: '#/components/schemas/types.IdentityFingerprint'
-      discriminator:
-        propertyName: scheme
-        mapping:
-          code-sast-v0: '#/components/schemas/types.CodeSastFingerprintV0'
-          code-sast-v1: '#/components/schemas/types.CodeSastFingerprintV1'
-          sca-problem: '#/components/schemas/types.ScaProblemFingerprint'
-          identity: '#/components/schemas/types.IdentityFingerprint'
-    LinkProperty:
-      oneOf:
-        - $ref: '#/components/schemas/io.snyk.api.common.LinkString'
-        - $ref: '#/components/schemas/io.snyk.api.common.LinkObject'
-    ObjectExcludeRule:
-      oneOf:
-        - $ref: '#/components/schemas/types.FileObjectExcludeRule'
-        - $ref: '#/components/schemas/types.OtherObjectExcludeRule'
-      discriminator:
-        propertyName: type
-        mapping:
-          file: '#/components/schemas/types.FileObjectExcludeRule'
-          other: '#/components/schemas/types.OtherObjectExcludeRule'
-    Package:
-      anyOf:
-        - $ref: '#/components/schemas/types.PackageURL'
-        - $ref: '#/components/schemas/types.PackageObject'
-      description: |-
-        A Package is either a Package URL (pURL) or a decomposed PackageObject
-        identifying a software package.
-
-        See https://github.com/package-url/purl-spec for more information about
-        pURLs.
-    RiskFactors:
-      oneOf:
-        - $ref: '#/components/schemas/types.BusinessCriticalityRiskFactor'
-        - $ref: '#/components/schemas/types.CvssRiskFactor'
-        - $ref: '#/components/schemas/types.EpssRiskFactor'
-        - $ref: '#/components/schemas/types.VulnerabilityFactRiskFactor'
-        - $ref: '#/components/schemas/types.VulnerabilityInstanceFactRiskFactor'
-        - $ref: '#/components/schemas/types.VulnerabilityGenericFactor'
-      discriminator:
-        propertyName: factor
-        mapping:
-          business-criticality: '#/components/schemas/types.BusinessCriticalityRiskFactor'
-          cvss: '#/components/schemas/types.CvssRiskFactor'
-          epss: '#/components/schemas/types.EpssRiskFactor'
-          vulnerability-fact: '#/components/schemas/types.VulnerabilityFactRiskFactor'
-          vulnerability-instance-fact: '#/components/schemas/types.VulnerabilityInstanceFactRiskFactor'
-          vulnerability-generic-fact: '#/components/schemas/types.VulnerabilityGenericFactor'
-    Suggestion:
-      oneOf:
-        - $ref: '#/components/schemas/types.SuggestedPackageUpgrade'
-        - $ref: '#/components/schemas/types.SuggestedOther'
-      discriminator:
-        propertyName: type
-        mapping:
-          package-upgrade: '#/components/schemas/types.SuggestedPackageUpgrade'
-          other: '#/components/schemas/types.SuggestedOther'
-      description: |-
-        Suggestions are indications given to the user that might help with
-        mitigating the finding.
-    TestInput:
-      oneOf:
-        - $ref: '#/components/schemas/types.GitSCMInput'
-        - $ref: '#/components/schemas/types.ContentAddressInput'
-      discriminator:
-        propertyName: type
-        mapping:
-          git-scm: '#/components/schemas/types.GitSCMInput'
-          content-address: '#/components/schemas/types.ContentAddressInput'
-      description: |-
-        TestInput defines what will be tested.
-
-        Another term for this might be "test coordinates".
-    io.snyk.api.common.Error:
-      type: object
-      required:
-        - status
-        - detail
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: A unique identifier for this particular occurrence of the problem.
-        links:
-          $ref: '#/components/schemas/io.snyk.api.common.ErrorLink'
-        status:
-          type: string
-          pattern: ^[45]\\d\\d$
-          description: The HTTP status code applicable to this problem, expressed as a string value.
-        detail:
-          type: string
-          description: A human-readable explanation specific to this occurrence of the problem.
-        code:
-          type: string
-          description: An application-specific error code, expressed as a string value.
-        title:
-          type: string
-          description: A short, human-readable summary of the problem that SHOULD NOT change from occurrence to occurrence of the problem, except for purposes of localization.
-        source:
-          type: object
-          properties:
-            pointer:
-              type: string
-            parameter:
-              type: string
-        meta:
-          type: object
-    io.snyk.api.common.ErrorDocument:
-      type: object
-      required:
-        - jsonapi
-        - errors
-      properties:
-        jsonapi:
-          $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
-        errors:
-          type: array
-          items:
-            $ref: '#/components/schemas/io.snyk.api.common.Error'
-          minItems: 1
-    io.snyk.api.common.ErrorLink:
-      type: object
-      properties:
-        about:
-          $ref: '#/components/schemas/LinkProperty'
-      additionalProperties:
-        $ref: '#/components/schemas/LinkProperty'
-      description: A link that leads to further details about this particular occurrance of the problem.
-    io.snyk.api.common.JsonApi:
-      type: object
-      required:
-        - version
-      properties:
-        version:
-          type: string
-          enum:
-            - '1.0'
-          description: Version of the JSON API specification this server supports.
-    io.snyk.api.common.LinkObject:
-      type: object
-      required:
-        - href
-      properties:
-        href:
-          $ref: '#/components/schemas/io.snyk.api.common.LinkString'
-        meta:
-          $ref: '#/components/schemas/io.snyk.api.common.Meta'
-    io.snyk.api.common.LinkString:
-      type: string
-      format: uri
-    io.snyk.api.common.Meta:
-      type: object
-      additionalProperties: {}
-      description: Free-form object that may contain non-standard information.
-    io.snyk.api.common.PaginatedLinks:
-      type: object
-      properties:
-        first:
-          $ref: '#/components/schemas/LinkProperty'
-        last:
-          $ref: '#/components/schemas/LinkProperty'
-        prev:
-          $ref: '#/components/schemas/LinkProperty'
-        next:
-          $ref: '#/components/schemas/LinkProperty'
-        self:
-          $ref: '#/components/schemas/LinkProperty'
-    io.snyk.api.common.RelatedLink:
-      type: object
-      properties:
-        related:
-          $ref: '#/components/schemas/LinkProperty'
-    io.snyk.reactive.FindingLocation:
-      type: object
-      properties:
-        source_locations:
-          $ref: '#/components/schemas/io.snyk.reactive.FindingSourceLocation'
-        dependency_path:
-          type: array
-          items:
-            $ref: '#/components/schemas/io.snyk.reactive.ScaPackage'
-    io.snyk.reactive.FindingSourceLocation:
-      type: object
-      required:
-        - filepath
-        - original_start_line
-        - original_start_column
-        - original_end_line
-        - original_end_column
-      properties:
-        filepath:
-          type: string
-          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.ArtifactLocation.URI`
-        original_start_line:
-          type: integer
-          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.StartLine`
-        original_start_column:
-          type: integer
-          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.StartColumn`
-        original_end_line:
-          type: integer
-          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.EndLine`
-        original_end_column:
-          type: integer
-          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.EndColumn`
-      description: Original locations are necessary for "existing" and "removed" findings. Locations should be available for all scan types where possible.
-    io.snyk.reactive.ScaPackage:
-      type: object
-      required:
-        - package_name
-        - package_version
-      properties:
-        package_name:
-          type: string
-        package_version:
-          type: string
-    types.BusinessCriticalityRiskFactor:
+    BusinessCriticalityRiskFactor:
       type: object
       required:
         - factor
@@ -801,16 +677,7 @@ components:
             - low
             - medium
             - high
-    types.CodeFlow:
-      type: object
-      required:
-        - threadFlows
-      properties:
-        threadFlows:
-          type: array
-          items:
-            $ref: '#/components/schemas/types.ThreadFlow'
-    types.CodeSastFingerprintV0:
+    CodeSastFingerprintV0:
       type: object
       required:
         - scheme
@@ -822,7 +689,7 @@ components:
             - code-sast-v0
         value:
           type: string
-    types.CodeSastFingerprintV1:
+    CodeSastFingerprintV1:
       type: object
       required:
         - scheme
@@ -834,7 +701,7 @@ components:
             - code-sast-v1
         value:
           type: string
-    types.Component:
+    Component:
       type: object
       required:
         - name
@@ -849,74 +716,28 @@ components:
             depending on what is scanned.
         scan_type:
           allOf:
-            - $ref: '#/components/schemas/types.ScanType'
+            - $ref: '#/components/schemas/ScanType'
           description: Scan type of the component.
       example:
         name: image:docker.io/library/postgres:16
         scan_type: sca
       description: A Component (as in, software component) is the subject of a security scan.
-    types.ContentAddressInput:
-      type: object
-      required:
-        - type
-        - spec
-      properties:
-        type:
-          type: string
-          enum:
-            - content-address
-        spec:
-          $ref: '#/components/schemas/types.ContentAddressSpec'
-      description: Test input obtained from a source code image, addressed by its content digest.
-    types.ContentAddressSpec:
-      type: object
-      required:
-        - target
-      properties:
-        target:
-          allOf:
-            - $ref: '#/components/schemas/ContentAddress'
-          description: Target content to be scanned for this security test.
-        base:
-          allOf:
-            - $ref: '#/components/schemas/ContentAddress'
-          description: |-
-            Base content for a differential test. When provided,
-            FindingAttributes.delta will be set with respect to the base in results.
-
-            Otherwise FindingAttributes.delta is left unset.
+    CreateExcludeRule:
+      oneOf:
+        - type: string
+        - $ref: '#/components/schemas/CreateObjectExcludeRule'
       description: |-
-        Content address specification, which defines the target address to test, or a
-        pair of addresses to test for a differential test.
-    types.Coverage:
+        CreateExcludeRule defines individual rules for exclusion of files during a test.
+        Currently it supports either bare strings as recursive globs, or explicitly
+        stated file patterns as recursive globs.
+    CreateObjectExcludeRule:
+      $ref: '#/components/schemas/FileObjectExcludeRule'
+    CreateTestAttributes:
       type: object
-      required:
-        - files
-        - isSupported
-        - lang
-        - type
       properties:
-        files:
-          type: integer
-        isSupported:
-          type: boolean
-        lang:
-          type: string
-        type:
-          type: string
-      description: Coverage statistics about a Test's Findings.
-    types.CreateTestAttributes:
-      type: object
-      required:
-        - input
-      properties:
-        input:
-          allOf:
-            - $ref: '#/components/schemas/TestInput'
-          description: Test inputs; what will be tested.
         context:
           allOf:
-            - $ref: '#/components/schemas/types.CreateTestContext'
+            - $ref: '#/components/schemas/CreateTestContext'
           description: |-
             Test context; pertinent information important to associate with the outcome
             of the test and its further processing, but is not directly used in the
@@ -927,7 +748,7 @@ components:
             available.
         options:
           allOf:
-            - $ref: '#/components/schemas/types.CreateTestOptions'
+            - $ref: '#/components/schemas/CreateTestOptions'
           description: |-
             CreateTestOptions are arguments which configure the test and determine the
             behavior of how it is conducted.
@@ -939,7 +760,7 @@ components:
             In the requested Test resource, these options will reflect the effective
             options resolved and applied to the execution of the test.
       description: Attributes provided when creating a new test.
-    types.CreateTestContext:
+    CreateTestContext:
       type: object
       required:
         - sdlc_stage
@@ -952,27 +773,8 @@ components:
             - prcheck
             - recurring
           description: Indicate at which point in the SDLC lifecycle the test was executed.
-        git_scm_url:
-          type: string
-          description: |-
-            Git SCM URL associated with the content, if known.
-
-            This allows providing the Git SCM URL as context in cases where the input
-            is not directly imported from a Git SCM repository.
-
-            For example, a developer working in an IDE on source code which was cloned
-            from, and will be proposed for merging back into, an SCM repository.
-        git_scm_branch:
-          type: string
-          description: |-
-            Git SCM branch associated with the content, if known.
-
-            This allows providing the Git SCM branch as context in cases where the input
-            is not directly imported from a Git SCM repository.
-
-            For example, a developer working in an IDE on a feature branch.
       description: CreateTestContext identifies the context in which this Test occurs.
-    types.CreateTestOptions:
+    CreateTestOptions:
       type: object
       properties:
         exclude:
@@ -996,7 +798,7 @@ components:
             chain) might transit an excluded file, enabling discovery in a
             non-excluded file.
       description: CreateTestOptions defines options which determine how the Test is conducted.
-    types.CvssRiskFactor:
+    CvssRiskFactor:
       type: object
       required:
         - factor
@@ -1020,7 +822,7 @@ components:
 
             See https://www.first.org/cvss/specification-document#Vector-String for
             details.
-    types.EpssRiskFactor:
+    EpssRiskFactor:
       type: object
       required:
         - factor
@@ -1033,7 +835,15 @@ components:
         value:
           type: number
           format: float
-    types.FileObjectExcludeRule:
+    ExcludeRule:
+      oneOf:
+        - type: string
+        - $ref: '#/components/schemas/ObjectExcludeRule'
+      description: |-
+        ExcludeRule defines individual rules for exclusion of files during a test.
+        Currently it supports either bare strings as recursive globs, or explicitly
+        stated file patterns as recursive globs.
+    FileObjectExcludeRule:
       type: object
       required:
         - type
@@ -1047,7 +857,7 @@ components:
           type: string
           example: helm/out/**
           description: A recursive glob matching files. Equivalent to a bare string.
-    types.FindingAttributes:
+    FindingAttributes:
       type: object
       required:
         - fingerprint
@@ -1055,16 +865,15 @@ components:
         - message
       properties:
         fingerprint:
-          type: array
-          items:
-            $ref: '#/components/schemas/Fingerprint'
+          allOf:
+            - $ref: '#/components/schemas/Fingerprint'
           description: |-
             Natural key, or fingerprint, to identify the same Finding across multiple
             Test runs. Unique per Test. Here's why:
             https://github.com/snyk/pr-experience-poc/blob/main/docs/design-documents/pr-inline-comments.md#why-do-we-need-fingerprints
         component:
           allOf:
-            - $ref: '#/components/schemas/types.Component'
+            - $ref: '#/components/schemas/Component'
           description: Component in which the finding was discovered.
         delta:
           type: string
@@ -1080,7 +889,7 @@ components:
         locations:
           type: array
           items:
-            $ref: '#/components/schemas/io.snyk.reactive.FindingLocation'
+            $ref: '#/components/schemas/FindingLocation'
           description: |-
             A set of locations where the result was detected. Only one location should
             be included unless the finding can only be resolved by making a change at
@@ -1101,7 +910,7 @@ components:
           properties:
             header:
               type: string
-              maxLength: 100
+              maxLength: 200
               description: |-
                 Short text description of finding rule.
 
@@ -1134,27 +943,17 @@ components:
           required:
             - header
             - text
-            - markdown
-            - arguments
         rating:
-          $ref: '#/components/schemas/types.FindingRating'
+          $ref: '#/components/schemas/FindingRating'
         suppression:
-          $ref: '#/components/schemas/types.Suppression'
-        codeFlows:
-          type: array
-          items:
-            $ref: '#/components/schemas/types.CodeFlow'
-        referenceId:
-          $ref: '#/components/schemas/types.ReferenceId'
+          $ref: '#/components/schemas/Suppression'
       description: A Finding entity with a common format for all types of security scans. Notably, this is a sub-resource of a Test.
-    types.FindingCounts:
+    FindingCounts:
       type: object
       required:
         - count_by
         - count_by_adjusted
-        - count_by_suppressed
         - count_key_order_asc
-        - count
         - count_suppressed
         - count_adjusted
       properties:
@@ -1174,7 +973,7 @@ components:
               type: integer
               format: uint32
           description: |-
-            Total finding counts (including ignores) grouped by severity and
+            Total finding counts (not considering ignores) grouped by severity and
             possibly other factors.
         count_by_adjusted:
           type: object
@@ -1192,38 +991,15 @@ components:
               type: integer
               format: uint32
           description: |-
-            Net finding counts (excluding ignores) grouped by severity and possibly other
+            Net finding counts (ignores removed) grouped by severity and possibly other
             factors.
-        count_by_suppressed:
-          type: object
-          properties:
-            severity:
-              type: object
-              additionalProperties:
-                type: integer
-                format: uint32
-          required:
-            - severity
-          additionalProperties:
-            type: object
-            additionalProperties:
-              type: integer
-              format: uint32
-          description: Net suppressed finding count, grouped by severity and possibly other factors.
         count_key_order_asc:
           type: object
           properties:
             severity:
               type: array
-              items:
-                type: string
+              items: {}
               description: FindingCounts has a deterministic ordering for severity counts.
-              default:
-                - none
-                - low
-                - medium
-                - high
-                - critical
           required:
             - severity
           additionalProperties:
@@ -1240,10 +1016,6 @@ components:
             ascending order, from lowest to highest. Values other than those enumerated
             must be tolerated; their ordering is unspecified with respect to enumerated
             values.
-        count:
-          type: integer
-          format: uint32
-          description: Net count of findings, including suppressions.
         count_suppressed:
           type: integer
           format: uint32
@@ -1252,7 +1024,9 @@ components:
           type: integer
           format: uint32
           description: Net count of findings minus suppressions.
-    types.FindingIdParam:
+      allOf:
+        - $ref: '#/components/schemas/io.snyk.api.common.CollectionCounts'
+    FindingIdParam:
       type: object
       required:
         - finding_id
@@ -1261,30 +1035,23 @@ components:
           type: string
           format: uuid
           description: The finding identity (fingerprint). Uniquely identified in combination with a Test ID.
-    types.FindingNumericalRating:
+    FindingLocation:
       type: object
-      required:
-        - score
-        - factors
       properties:
-        score:
-          type: integer
-          minimum: 0
-          maximum: 1000
-        factors:
+        source_locations:
+          $ref: '#/components/schemas/FindingSourceLocation'
+        dependency_path:
           type: array
           items:
-            $ref: '#/components/schemas/RiskFactors'
-    types.FindingRating:
+            $ref: '#/components/schemas/ScaPackage'
+    FindingRating:
       type: object
       required:
         - severity
         - severity_method
       properties:
         risk:
-          $ref: '#/components/schemas/types.FindingNumericalRating'
-        priority:
-          $ref: '#/components/schemas/types.FindingNumericalRating'
+          $ref: '#/components/schemas/FindingRisk'
         severity:
           type: object
           required:
@@ -1331,7 +1098,7 @@ components:
           type: string
           description: Optional reason for rating the vulnerability like this
       description: The severity and risk rating of the vulnerability
-    types.FindingRelationships:
+    FindingRelationships:
       type: object
       properties:
         sca_vuln_details:
@@ -1553,7 +1320,7 @@ components:
               $ref: '#/components/schemas/io.snyk.api.common.Meta'
           description: Policy modifications applied to this finding, if available.
       description: Resources which may relate to a Finding.
-    types.FindingResource:
+    FindingResource:
       type: object
       required:
         - id
@@ -1570,118 +1337,80 @@ components:
           enum:
             - findings
         attributes:
-          $ref: '#/components/schemas/types.FindingAttributes'
+          $ref: '#/components/schemas/FindingAttributes'
         relationships:
-          $ref: '#/components/schemas/types.FindingRelationships'
+          $ref: '#/components/schemas/FindingRelationships'
       description: FindingResource models a JSON API Finding resource.
-    types.FindingsSummary:
+    FindingRisk:
+      type: object
+      required:
+        - score
+        - factors
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        factors:
+          $ref: '#/components/schemas/RiskFactors'
+    FindingSourceLocation:
+      type: object
+      required:
+        - filepath
+        - original_start_line
+        - original_start_column
+        - original_end_line
+        - original_end_column
+      properties:
+        filepath:
+          type: string
+          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.ArtifactLocation.URI`
+        original_start_line:
+          type: integer
+          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.StartLine`
+        original_start_column:
+          type: integer
+          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.StartColumn`
+        original_end_line:
+          type: integer
+          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.EndLine`
+        original_end_column:
+          type: integer
+          description: Maps `sarif.Runs.Results.Location.PhysicalLocation.Region.EndColumn`
+      description: Original locations are necessary for "existing" and "removed" findings. Locations should be available for all scan types where possible.
+    FindingsSummary:
       type: object
       required:
         - counts
-        - type
-        - artifacts
-        - path
-        - coverage
       properties:
         counts:
-          $ref: '#/components/schemas/types.FindingCounts'
-        type:
-          type: string
-        artifacts:
-          type: integer
-        path:
-          type: string
-        coverage:
-          type: array
-          items:
-            $ref: '#/components/schemas/types.Coverage'
+          $ref: '#/components/schemas/FindingCounts'
       description: Summary statistics about a Test's Findings.
-    types.GitCommit:
-      type: string
-      example: 23ee663c96889a1ce6f62217adf4dea2bea1b09e
-      minLength: 40
-      pattern: '[0-9a-f]+'
-      description: Git commit SHA.
-    types.GitSCMInput:
-      type: object
-      required:
-        - type
-        - spec
-      properties:
-        type:
-          type: string
-          enum:
-            - git-scm
-        spec:
-          $ref: '#/components/schemas/types.GitScmImportSpec'
-      description: Test input obtained from a Git SCM.
-    types.GitScmImportSpec:
-      type: object
-      required:
-        - remote_url
-      properties:
-        remote_url:
-          type: string
-          example: https://github.com/snyk/cli.git
-          description: Git SCM repository URL.
-        branch:
-          type: string
-          description: branch is optional. If not provided, the default branch is used.
-        base:
-          allOf:
-            - $ref: '#/components/schemas/types.GitCommit'
-          description: base is optional. If provided, it is used in supplying differential test data.
-        target:
-          allOf:
-            - $ref: '#/components/schemas/types.GitCommit'
-          description: |-
-            target is optional. If not provided the current HEAD of the selected branch is used.
-
-            If target is provided and branch is not, no branch metadata is associated with the test.
-            If target is provided and branch is, but target is not an ancestor of branch, the wrong
-            branch will be associated with a test. It is the caller's responsibility to ensure this is correct.
-        exclude:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExcludeRule'
-          example:
-            - {}
-          description: Components that should be excluded when importing the SCM contents into a Workspace.
-      description: |-
-        Git SCM import specification, which defines how to import content from a Git
-        SCM repository location into a workspace for testing, or a set of workspaces
-        for differential testing.
-    types.IdentityFingerprint:
-      type: object
-      required:
-        - scheme
-        - value
-      properties:
-        scheme:
-          type: string
-          enum:
-            - identity
-        value:
-          type: string
-    types.LegacyDeepcodeBundleAddress:
-      type: object
-      required:
-        - scheme
-        - bundle_id
-      properties:
-        scheme:
-          type: string
-          enum:
-            - deepcode-bundle
-        bundle_id:
-          type: string
-          pattern: '[0-9a-f]{64}'
-          description: Legacy Deepcode bundle ID is a sha256 sum (64 hex digits).
-      description: |-
-        Legacy Deepcode API bundle.
-
-        This is provided provisionally for compatibility purposes.
-    types.OtherObjectExcludeRule:
+    Fingerprint:
+      oneOf:
+        - $ref: '#/components/schemas/CodeSastFingerprintV0'
+        - $ref: '#/components/schemas/CodeSastFingerprintV1'
+        - $ref: '#/components/schemas/ScaProblemFingerprint'
+      discriminator:
+        propertyName: scheme
+        mapping:
+          code-sast-v0: '#/components/schemas/CodeSastFingerprintV0'
+          code-sast-v1: '#/components/schemas/CodeSastFingerprintV1'
+          sca-problem: '#/components/schemas/ScaProblemFingerprint'
+    LinkProperty:
+      oneOf:
+        - $ref: '#/components/schemas/io.snyk.api.common.LinkString'
+        - $ref: '#/components/schemas/io.snyk.api.common.LinkObject'
+    ObjectExcludeRule:
+      oneOf:
+        - $ref: '#/components/schemas/FileObjectExcludeRule'
+        - $ref: '#/components/schemas/OtherObjectExcludeRule'
+      discriminator:
+        propertyName: type
+        mapping:
+          file: '#/components/schemas/FileObjectExcludeRule'
+          other: '#/components/schemas/OtherObjectExcludeRule'
+    OtherObjectExcludeRule:
       type: object
       required:
         - type
@@ -1692,9 +1421,19 @@ components:
             - other
       additionalProperties: {}
       description: |-
-        OtherObjectExcludeRule is a placeholder expansion value, for when types of exclusion rules
+        OtherObjectExludeRule is a placeholder expansion value, for when types of exclusion rules
         were used in testing that are not present in the called version of the API.
-    types.PackageObject:
+    Package:
+      anyOf:
+        - $ref: '#/components/schemas/PackageURL'
+        - $ref: '#/components/schemas/PackageObject'
+      description: |-
+        A Package is either a Package URL (pURL) or a decomposed PackageObject
+        identifying a software package.
+
+        See https://github.com/package-url/purl-spec for more information about
+        pURLs.
+    PackageObject:
       type: object
       required:
         - type
@@ -1736,116 +1475,36 @@ components:
         PackageObject represents a decomposed Package URL, enriched with a resolved
         package repository root location. This disambiguates public packages from
         private packages in security SCA and remediation.
-    types.PackageURL:
+    PackageURL:
       type: string
       format: uri
       description: Package information represented in Package URL (pURL) form.
-    types.ReferenceId:
+    RiskFactors:
+      oneOf:
+        - $ref: '#/components/schemas/BusinessCriticalityRiskFactor'
+        - $ref: '#/components/schemas/CvssRiskFactor'
+        - $ref: '#/components/schemas/EpssRiskFactor'
+        - $ref: '#/components/schemas/VulnerabilityFactRiskFactor'
+        - $ref: '#/components/schemas/VulnerabilityInstanceFactRiskFactor'
+      discriminator:
+        propertyName: factor
+        mapping:
+          business-criticality: '#/components/schemas/BusinessCriticalityRiskFactor'
+          cvss: '#/components/schemas/CvssRiskFactor'
+          epss: '#/components/schemas/EpssRiskFactor'
+          vulnerability-fact: '#/components/schemas/VulnerabilityFactRiskFactor'
+          vulnerability-instance-fact: '#/components/schemas/VulnerabilityInstanceFactRiskFactor'
+    ScaPackage:
       type: object
       required:
-        - identifier
-        - index
+        - package_name
+        - package_version
       properties:
-        identifier:
+        package_name:
           type: string
-        index:
-          type: integer
-    types.Rules:
-      type: object
-      required:
-        - id
-        - name
-        - shortDescription
-        - defaultConfiguration
-        - help
-        - properties
-      properties:
-        id:
+        package_version:
           type: string
-        name:
-          type: string
-        shortDescription:
-          type: object
-          properties:
-            text:
-              type: string
-          required:
-            - text
-        defaultConfiguration:
-          type: object
-          properties:
-            level:
-              type: string
-          required:
-            - level
-        help:
-          type: object
-          properties:
-            markdown:
-              type: string
-            text:
-              type: string
-          required:
-            - markdown
-            - text
-        properties:
-          type: object
-          properties:
-            tags:
-              type: array
-              items:
-                type: string
-            categories:
-              type: array
-              items:
-                type: string
-            exampleCommitDescriptions:
-              type: array
-              items:
-                type: string
-            exampleCommitFixes:
-              type: array
-              items:
-                type: object
-                properties:
-                  commitUrl:
-                    type: string
-                  lines:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        line:
-                          type: string
-                        lineNumber:
-                          type: integer
-                        linechange:
-                          type: string
-                      required:
-                        - line
-                        - lineNumber
-                        - linechange
-                required:
-                  - commitUrl
-                  - lines
-            precision:
-              type: string
-            repoDatasetSize:
-              type: integer
-            cwe:
-              type: array
-              items:
-                type: string
-          required:
-            - tags
-            - categories
-            - exampleCommitDescriptions
-            - exampleCommitFixes
-            - precision
-            - repoDatasetSize
-            - cwe
-      description: Based on Sarif rules
-    types.ScaProblemFingerprint:
+    ScaProblemFingerprint:
       type: object
       required:
         - scheme
@@ -1857,7 +1516,7 @@ components:
             - sca-problem
         value:
           type: string
-    types.ScanType:
+    ScanType:
       type: string
       enum:
         - sca
@@ -1866,18 +1525,7 @@ components:
       description: |-
         Security scan type. The scan type determines what types of attributes one
         might expect to find in the finding.
-    types.SuggestedOther:
-      type: object
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - other
-      additionalProperties: {}
-      description: SuggestedOther that aren't yet defined in this API version.
-    types.SuggestedPackageUpgrade:
+    SuggestedPackageUpgrade:
       type: object
       required:
         - type
@@ -1927,7 +1575,29 @@ components:
         If conflicts are known to exist this may be reported, but the absense of this
         flag should not be taken as a guarantee conflicts will not be encountered. It
         only means the conflict status is unknown.
-    types.Suppression:
+    Suggestion:
+      oneOf:
+        - $ref: '#/components/schemas/SuggestedPackageUpgrade'
+        - $ref: '#/components/schemas/SuggestionOther'
+      discriminator:
+        propertyName: type
+        mapping:
+          package-upgrade: '#/components/schemas/SuggestedPackageUpgrade'
+          other: '#/components/schemas/SuggestionOther'
+      description: |-
+        Suggestions are indications given to the user that might help with
+        mitigating the finding.
+    SuggestionOther:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - other
+      additionalProperties: {}
+    Suppression:
       type: object
       required:
         - kind
@@ -1940,27 +1610,8 @@ components:
             - other
         justification:
           type: string
-        details:
-          $ref: '#/components/schemas/types.SuppressionDetails'
       description: Reasons for why a Finding can be suppressed from a Test result. This MAY NOT be required at all, given the presentation
-    types.SuppressionDetails:
-      type: object
-      required:
-        - expiration
-        - category
-        - ignoredOn
-        - ignoredBy
-      properties:
-        expiration:
-          type: string
-        category:
-          type: string
-        ignoredOn:
-          type: string
-        ignoredBy:
-          $ref: '#/components/schemas/types.User'
-      description: Suppression meta data
-    types.TestContext:
+    TestContext:
       type: object
       required:
         - sdlc_stage
@@ -1978,53 +1629,8 @@ components:
             `other` is returned if the test was created with a newer version of
             the API including a new SDLC stage, not supported in the version of
             the API used for retrieval.
-        git_scm_url:
-          type: string
-          description: |-
-            Git SCM URL associated with the content, if known.
-
-            This allows providing the Git SCM URL as context in cases where the input
-            is not directly imported from a Git SCM repository.
-
-            For example, a developer working in an IDE on source code which was cloned
-            from, and will be proposed for merging back into, an SCM repository.
-        git_scm_branch:
-          type: string
-          description: |-
-            Git SCM branch associated with the content, if known.
-
-            This allows providing the Git SCM branch as context in cases where the input
-            is not directly imported from a Git SCM repository.
-
-            For example, a developer working in an IDE on a feature branch.
       description: TestContext identifies the context in which this Test occurs.
-    types.TestError:
-      type: object
-      required:
-        - code
-      properties:
-        code:
-          type: string
-          description: Error code, references Snyk error catalog.
-        reason:
-          type: string
-          description: Descriptive reason for the error.
-        links:
-          allOf:
-            - $ref: '#/components/schemas/io.snyk.api.common.ErrorLink'
-          description: Links to error detail information.
-        meta:
-          allOf:
-            - $ref: '#/components/schemas/io.snyk.api.common.Meta'
-          description: Free-form metadata associated with the error.
-      description: An error that occurred during a Test.
-    types.TestExecStatus:
-      type: string
-      enum:
-        - pending
-        - running
-        - done
-    types.TestOptions:
+    TestOptions:
       type: object
       properties:
         exclude:
@@ -2050,7 +1656,7 @@ components:
       description: |-
         TestOptions defines options which determine how the Test is conducted.
         In includes the fields used in create test options, but in a backwards compatible manner.
-    types.TestOutcome:
+    TestOutcome:
       type: object
       required:
         - result
@@ -2069,7 +1675,7 @@ components:
       description: |-
         The outcome of a Test; pass or fail. It is possible for the Test to show
         failure before the overall status has completed.
-    types.TestRelationships:
+    TestRelationships:
       type: object
       required:
         - findings
@@ -2119,7 +1725,7 @@ components:
               $ref: '#/components/schemas/io.snyk.api.common.Meta'
           description: Relate to application-facing logs produced by the test.
       description: Resources related to a test.
-    types.TestResource:
+    TestResource:
       type: object
       required:
         - id
@@ -2141,13 +1747,27 @@ components:
           properties:
             state:
               allOf:
-                - $ref: '#/components/schemas/types.TestState'
+                - $ref: '#/components/schemas/TestState'
               description: |-
                 State of the test, which should be polled to status "running" or "done"
                 before unmarshaling into this type.
+            outcome:
+              allOf:
+                - $ref: '#/components/schemas/TestOutcome'
+              description: |-
+                Overall outcome of the security test: pass or fail.
+
+                This outcome may indicate failure early even while the test is still
+                running to completion.
+            summary:
+              allOf:
+                - $ref: '#/components/schemas/FindingsSummary'
+              description: |-
+                Summary of all the findings discovered by all the security scans conducted
+                for this test.
             context:
               allOf:
-                - $ref: '#/components/schemas/types.TestContext'
+                - $ref: '#/components/schemas/TestContext'
               description: |-
                 Test context; pertinent information important to associate with the outcome
                 of the test and its further processing, but is not directly used in the
@@ -2158,7 +1778,7 @@ components:
                 available.
             options:
               allOf:
-                - $ref: '#/components/schemas/types.TestOptions'
+                - $ref: '#/components/schemas/TestOptions'
               description: |-
                 TestOptions are arguments which were used to configure the test and determine the
                 behavior of how it is conducted.
@@ -2169,63 +1789,18 @@ components:
 
                 In the requested Test resource, these options will reflect the effective
                 options resolved and applied to the execution of the test.
-            outcome:
-              allOf:
-                - $ref: '#/components/schemas/types.TestOutcome'
-              description: |-
-                Overall outcome of the security test: pass or fail.
-
-                This outcome may indicate failure early even while the test is still
-                running to completion.
-            summary:
-              allOf:
-                - $ref: '#/components/schemas/types.FindingsSummary'
-              description: |-
-                Summary of all the findings discovered by all the security scans conducted
-                for this test.
           required:
             - state
             - outcome
             - summary
           description: Summary-level attributes of a test.
         relationships:
-          $ref: '#/components/schemas/types.TestRelationships'
+          $ref: '#/components/schemas/TestRelationships'
       description: TestResource models a JSON API Test resource.
-    types.TestState:
+    TestState:
       type: object
-      required:
-        - status
-      properties:
-        status:
-          allOf:
-            - $ref: '#/components/schemas/types.TestExecStatus'
-          description: Test execution status.
-        errors:
-          allOf:
-            - $ref: '#/components/schemas/types.TestError'
-          description: Errors that occurred during the test execution.
       description: The state of a Test execution. Does not include the pass or fail.
-    types.ThreadFlow:
-      type: object
-      required:
-        - locations
-      properties:
-        locations:
-          type: array
-          items:
-            $ref: '#/components/schemas/io.snyk.reactive.FindingSourceLocation'
-    types.User:
-      type: object
-      required:
-        - name
-        - email
-      properties:
-        name:
-          type: string
-        email:
-          type: string
-      description: User definition
-    types.VulnerabilityFactRiskFactor:
+    VulnerabilityFactRiskFactor:
       type: object
       required:
         - factor
@@ -2240,22 +1815,7 @@ components:
           type: string
         value:
           type: boolean
-    types.VulnerabilityGenericFactor:
-      type: object
-      required:
-        - factor
-        - name
-        - value
-      properties:
-        factor:
-          type: string
-          enum:
-            - vulnerability-generic-fact
-        name:
-          type: string
-        value:
-          type: boolean
-    types.VulnerabilityInstanceFactRiskFactor:
+    VulnerabilityInstanceFactRiskFactor:
       type: object
       required:
         - factor
@@ -2270,24 +1830,136 @@ components:
           type: string
         value:
           type: boolean
-    types.WorkspaceV1Address:
+    io.snyk.api.common.CollectionCounts:
       type: object
       required:
-        - scheme
-        - workspace_id
+        - count
+        - count_by
       properties:
-        scheme:
+        count:
+          type: integer
+          format: uint32
+          description: Count of all items in the collection.
+        count_by:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: integer
+              format: uint32
+          description: |-
+            Counts of items grouped by various dimensions.
+
+            Outer record key is a well-known grouping dimension of the resource object.
+
+            Inner record key is a value in that dimension.
+      description: |-
+        CollectionCounts implements the Snyk REST API standard representation for
+        collection counts.
+
+        Collection counts may be provided as metadata on a collection resource or in
+        an attribute of a parent resource.
+
+        See https://snyk.roadie.so/docs/default/component/sweater-comb/standards/rest/#collection-counts.
+    io.snyk.api.common.Error:
+      type: object
+      required:
+        - status
+        - detail
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: A unique identifier for this particular occurrence of the problem.
+        links:
+          $ref: '#/components/schemas/io.snyk.api.common.ErrorLink'
+        status:
+          type: string
+          pattern: ^[45]\\d\\d$
+          description: The HTTP status code applicable to this problem, expressed as a string value.
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence of the problem.
+        code:
+          type: string
+          description: An application-specific error code, expressed as a string value.
+        title:
+          type: string
+          description: A short, human-readable summary of the problem that SHOULD NOT change from occurrence to occurrence of the problem, except for purposes of localization.
+        source:
+          type: object
+          properties:
+            pointer:
+              type: string
+            parameter:
+              type: string
+        meta:
+          type: object
+    io.snyk.api.common.ErrorDocument:
+      type: object
+      required:
+        - jsonapi
+        - errors
+      properties:
+        jsonapi:
+          $ref: '#/components/schemas/io.snyk.api.common.JsonApi'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/io.snyk.api.common.Error'
+          minItems: 1
+    io.snyk.api.common.ErrorLink:
+      type: object
+      properties:
+        about:
+          $ref: '#/components/schemas/LinkProperty'
+      additionalProperties:
+        $ref: '#/components/schemas/LinkProperty'
+      description: A link that leads to further details about this particular occurrance of the problem.
+    io.snyk.api.common.JsonApi:
+      type: object
+      required:
+        - version
+      properties:
+        version:
           type: string
           enum:
-            - workspace-v1
-        workspace_id:
-          type: string
-          pattern: '[0-9a-f]{64}'
-          description: Workspace v1 is a sha256 sum (64 hex digits).
-      description: |-
-        Workspace v1 content storage address.
-
-        TODO: Update this as needed.
+            - '1.0'
+          description: Version of the JSON API specification this server supports.
+    io.snyk.api.common.LinkObject:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          $ref: '#/components/schemas/io.snyk.api.common.LinkString'
+        meta:
+          $ref: '#/components/schemas/io.snyk.api.common.Meta'
+    io.snyk.api.common.LinkString:
+      type: string
+      format: uri
+    io.snyk.api.common.Meta:
+      type: object
+      additionalProperties: {}
+      description: Free-form object that may contain non-standard information.
+    io.snyk.api.common.PaginatedLinks:
+      type: object
+      properties:
+        first:
+          $ref: '#/components/schemas/LinkProperty'
+        last:
+          $ref: '#/components/schemas/LinkProperty'
+        prev:
+          $ref: '#/components/schemas/LinkProperty'
+        next:
+          $ref: '#/components/schemas/LinkProperty'
+        self:
+          $ref: '#/components/schemas/LinkProperty'
+    io.snyk.api.common.RelatedLink:
+      type: object
+      properties:
+        related:
+          $ref: '#/components/schemas/LinkProperty'
 servers:
   - url: /rest
     description: Rest API server

@@ -10,12 +10,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/stretchr/testify/assert"
 )
 
 func setupMockTransformationContext(t *testing.T, fflagEnabled bool) *mocks.MockInvocationContext {
@@ -29,10 +31,12 @@ func setupMockTransformationContext(t *testing.T, fflagEnabled bool) *mocks.Mock
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	userInterface := ui.DefaultUi()
 
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config)
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger)
+	invocationContextMock.EXPECT().GetUserInterface().Return(userInterface).AnyTimes()
 
 	return invocationContextMock
 }
@@ -129,6 +133,15 @@ func Test_DataTransformation_withUnsupportedInput(t *testing.T) {
 	assert.Nil(t, transformedOutput)
 }
 
+func Test_DataTransformation_with_Incomplete_Input(t *testing.T) {
+	invocationContext := setupMockTransformationContext(t, true)
+	input := []workflow.Data{}
+	output, err := dataTransformationEntryPoint(invocationContext, input)
+	assert.NoError(t, err)
+	assert.Len(t, output, 0)
+	assert.Equal(t, input, output)
+}
+
 func loadJsonFile(t *testing.T, filename string) []byte {
 	t.Helper()
 
@@ -174,6 +187,8 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 		}
 	}
 
+	assert.NotNil(t, transformedOutput)
+
 	var localFinding = local_models.LocalFinding{}
 	p, ok := transformedOutput.GetPayload().([]byte)
 
@@ -185,14 +200,47 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 	// Assert against local finding transformation
 	assert.IsType(t, local_models.LocalFinding{}, localFinding)
 	assert.Len(t, localFinding.Findings, 278)
-	assert.Equal(t, "662d6134-2c32-55f7-9717-d60add450b1b", localFinding.Findings[0].Id.String())
 
 	// Assert Summary
-	assert.Equal(t, 4, localFinding.Summary.Artifacts)
-	assert.Equal(t, 10, localFinding.Summary.Results[0].Total)
-	assert.Equal(t, "high", localFinding.Summary.Results[0].Severity)
-	assert.Equal(t, 4, localFinding.Summary.Artifacts)
-	assert.Equal(t, 5, localFinding.Summary.Results[1].Total)
-	assert.Equal(t, "medium", localFinding.Summary.Results[1].Severity)
 	assert.Equal(t, "sast", localFinding.Summary.Type)
+	assert.Equal(t, 4, localFinding.Summary.Artifacts)
+
+	// Assert total findings
+	totalCriticalFindings := int(localFinding.Summary.Counts.CountBy.Severity["critical"])
+	totalHighFindings := int(localFinding.Summary.Counts.CountBy.Severity["high"])
+	totalMediumFindings := int(localFinding.Summary.Counts.CountBy.Severity["medium"])
+	totalLowFindings := int(localFinding.Summary.Counts.CountBy.Severity["low"])
+	totalFindings := int(localFinding.Summary.Counts.Count)
+
+	assert.Equal(t, 1, totalCriticalFindings)
+	assert.Equal(t, 10, totalHighFindings)
+	assert.Equal(t, 5, totalMediumFindings)
+	assert.Equal(t, 2, totalLowFindings)
+	assert.Equal(t, 18, totalFindings)
+
+	// Assert total excluding ignored
+	adjustedCriticalFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["critical"])
+	adjustedHighFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["high"])
+	adjustedMediumFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["medium"])
+	adjustedLowFindings := int(localFinding.Summary.Counts.CountByAdjusted.Severity["low"])
+	adjustedFindings := int(localFinding.Summary.Counts.CountAdjusted)
+
+	assert.Equal(t, 1, adjustedCriticalFindings)
+	assert.Equal(t, 3, adjustedHighFindings)
+	assert.Equal(t, 1, adjustedMediumFindings)
+	assert.Equal(t, 0, adjustedLowFindings)
+	assert.Equal(t, 5, adjustedFindings)
+
+	// Assert total ignored
+	ignoredCriticalFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["critical"])
+	ignoredHighFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["high"])
+	ignoredMediumFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["medium"])
+	ignoredLowFindings := int(localFinding.Summary.Counts.CountBySuppressed.Severity["low"])
+	ignoredFindings := int(localFinding.Summary.Counts.CountSuppressed)
+
+	assert.Equal(t, 0, ignoredCriticalFindings)
+	assert.Equal(t, 2, ignoredHighFindings)
+	assert.Equal(t, 1, ignoredMediumFindings)
+	assert.Equal(t, 0, ignoredLowFindings)
+	assert.Equal(t, 3, ignoredFindings)
 }

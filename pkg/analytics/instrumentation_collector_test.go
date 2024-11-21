@@ -25,7 +25,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 	mockInteractionType := "Scan done"
 	mockCategory := []string{"code", "test"}
 	mockStatus := Success
-	mockTestSummary := json_schemas.NewTestSummary("sast")
+	mockTestSummary := json_schemas.NewTestSummary("sast", "")
 	mockTargetId := "targetID"
 	mockExtension := map[string]interface{}{"strings": "hello world"}
 
