@@ -25,9 +25,9 @@ func TestCategorizeCliArgs(t *testing.T) {
 		{"Command with debug flag", []string{"snyk", "test", "--debug"}, []string{"oss", "test", "debug"}, nil},
 
 		// Real-World Example with Mixed Input
-		{"Mixed flags and commands", []string{"snyk", "-d", "test", "../folder/", "--org=myorg", "--remote-repo-url", "https://github.com/snyk"}, []string{"oss", "test", "org", "remote-repo-url"}, nil},
-		{"Mixed wrong flags value and commands", []string{"snyk", "-d", "test", "../folder/", "--org=+myorg", "--remote-repo-url", "https://github.com/snyk"}, []string{"oss", "test", "org", "remote-repo-url"}, nil},
-		{"Mixed wrong flags and commands", []string{"snyk", "-d", "test", "../folder/", "--org+=myorg", "--remote-repo-url", "https://github.com/snyk"}, []string{"oss", "test", "remote-repo-url"}, nil},
+		{"Mixed flags and commands", []string{"snyk", "-d", "test", "../folder/", "--org=myorg", "--remote-repo-url", "https://github.com/snyk"}, []string{"oss", "test", "debug", "org", "remote-repo-url"}, nil},
+		{"Mixed wrong flags value and commands", []string{"snyk", "-d", "test", "../folder/", "--org=+myorg", "--remote-repo-url", "https://github.com/snyk"}, []string{"oss", "test", "debug", "org", "remote-repo-url"}, nil},
+		{"Mixed wrong flags and commands", []string{"snyk", "-d", "test", "../folder/", "--org+=myorg", "--remote-repo-url", "https://github.com/snyk"}, []string{"oss", "test", "debug", "remote-repo-url"}, nil},
 
 		// Missing or Invalid Commands
 		{"Invalid command", []string{"snyk", "invalid"}, []string{}, nil},

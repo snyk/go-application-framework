@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -65,6 +66,11 @@ func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 
 			if slices.Contains(flagsAllowList, flagName) {
 				flags = append(flags, strings.ToLower(flagName))
+			}
+
+			// a shorthand variant for debug
+			if flagName == "d" {
+				flags = append(flags, configuration.DEBUG)
 			}
 		} else if slices.Contains(knownCommands, arg) {
 			if len(commands) == 0 && arg == "test" {
