@@ -24,6 +24,10 @@ func Test_ResponseMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 		case "/500":
 			w.WriteHeader(http.StatusInternalServerError)
+		case "/jsonapi":
+			w.WriteHeader(http.StatusProxyAuthRequired)
+			_, err := w.Write([]byte(`{"jsonapi":{"version":"1.0"},"errors":[{"status":"407","detail":"Proxy auth required"}]}`))
+			assert.Nil(t, err)
 		default:
 			w.WriteHeader(http.StatusOK)
 		}
@@ -36,27 +40,43 @@ func Test_ResponseMiddleware(t *testing.T) {
 	t.Run("no error for 2xx", func(t *testing.T) {
 		req := buildRequest(server.URL)
 		_, err := rt.RoundTrip(req)
+
 		assert.Nil(t, err)
 	})
 
-	t.Run("no error for status codes not handled by the middleware", func(t *testing.T) {
-		req := buildRequest(server.URL + "/404")
-		_, err := rt.RoundTrip(req)
-		assert.Nil(t, err)
-	})
-
-	t.Run("returns Erorr Catalog errors for matching status codes", func(t *testing.T) {
+	t.Run("proper errors for matching status codes", func(t *testing.T) {
 		codes := []int{400, 401, 500}
 		for _, code := range codes {
 			snykErr := snyk_errors.Error{}
 			url := fmt.Sprintf("%s/%d", server.URL, code)
 			req := buildRequest(url)
-
 			res, err := rt.RoundTrip(req)
+
 			assert.Nil(t, res)
 			assert.ErrorAs(t, err, &snykErr)
-			assert.Equal(t, snykErr.StatusCode, code)
+			assert.Equal(t, code, snykErr.StatusCode)
 		}
+	})
+
+	t.Run("error from JSON API response", func(t *testing.T) {
+		req := buildRequest(server.URL + "/jsonapi")
+		_, err := rt.RoundTrip(req)
+
+		snykErr := snyk_errors.Error{}
+		assert.NotNil(t, err)
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, http.StatusProxyAuthRequired, snykErr.StatusCode)
+		assert.Equal(t, "Proxy auth required", snykErr.Detail)
+	})
+
+	t.Run("fallback error if no status code", func(t *testing.T) {
+		req := buildRequest(server.URL + "/404")
+		_, err := rt.RoundTrip(req)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, http.StatusNotFound, snykErr.StatusCode)
+		assert.Equal(t, "Unsuccessful network request", snykErr.Title)
 	})
 }
 
