@@ -2060,7 +2060,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         },
@@ -2158,7 +2161,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         },
@@ -2256,7 +2262,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         },
@@ -2423,7 +2432,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         },
@@ -2573,9 +2585,25 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
-          "suppressions": null
+          "suppressions": [
+            {
+              "justification": "Experimenting with consistent ignores capability. ",
+              "properties": {
+                "category": "temporary-ignore",
+                "expiration": "2025-02-11T23:00:00Z",
+                "ignoredOn": "2024-10-11T12:26:17.028Z",
+                "ignoredBy": {
+                  "name": "Luke Watts",
+                  "email": "luke@snyk.io"
+                }
+              }
+            }
+          ]
         },
         {
           "ruleId": "javascript/NoSqli",
@@ -2723,18 +2751,21 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": [
             {
-              "justification": "Experimenting with consistent ignores capability. ",
+              "justification": "",
               "properties": {
-                "category": "temporary-ignore",
-                "expiration": "2025-02-11T23:00:00Z",
-                "ignoredOn": "2024-10-11T12:26:17.028Z",
+                "category": "not-vulnerable",
+                "expiration": null,
+                "ignoredOn": "2024-10-08T09:33:05.933Z",
                 "ignoredBy": {
-                  "name": "Luke Watts",
-                  "email": "luke@snyk.io"
+                  "name": "JSON",
+                  "email": "jason.luong@snyk.io"
                 }
               }
             }
@@ -2830,7 +2861,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         },
@@ -2906,7 +2940,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": [
             {
@@ -2995,7 +3032,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         },
@@ -3071,7 +3111,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         },
@@ -3147,7 +3190,10 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false
+            "isAutofixable": false,
+            "snykPolicy/v1": {
+              "originalLevel": "warning"
+            }
           },
           "suppressions": null
         }

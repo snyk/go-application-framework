@@ -140,6 +140,13 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 				markdown:  result.message.markdown
 				arguments: result.message.arguments
 			}
+			if result.properties != _|_ {
+				if result.properties["snykPolicy/v1"] != _|_ {
+						policy: {
+							originalLevel: result.properties["snykPolicy/v1"].originalLevel
+						}
+				}
+			}
 			rating: {
 				if result.properties != _|_ {
 					if result.properties.priorityScore != _|_ {

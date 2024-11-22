@@ -179,6 +179,11 @@
                         ],
                         {{- end }}
                         "properties": {
+                            {{- if $finding.Attributes.Policy }}
+                            "snykPolicy/v1": {
+                                "originalLevel": "{{ $finding.Attributes.Policy.OriginalLevel }}"
+                            },
+                            {{- end}}
                             "priorityScore": {{ $finding.Attributes.Rating.Priority.Score }},
                             "priorityScoreFactors": [
                             {{- $factorSize := sub (len $finding.Attributes.Rating.Priority.Factors) 1 }}
