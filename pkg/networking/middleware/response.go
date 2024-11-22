@@ -107,7 +107,7 @@ func (jar *jsonAPIErroResponse) ToErrorCatalog() error {
 	}
 
 	jsonErr := jar.Errors[0]
-	
+
 	statusCode, err := strconv.Atoi(jsonErr.Status)
 	if err != nil {
 		statusCode = 0

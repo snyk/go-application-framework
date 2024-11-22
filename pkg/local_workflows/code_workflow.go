@@ -83,7 +83,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	config := invocationCtx.GetConfiguration()
 	engine := invocationCtx.GetEngine()
 	logger := invocationCtx.GetEnhancedLogger()
-	
+
 	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	reportEnabled := config.GetBool("report")
 	sastEnabled, err := getSastEnabled(config, engine)
