@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -108,7 +107,7 @@ func (jar *jsonAPIErroResponse) ToErrorCatalog() error {
 	}
 
 	jsonErr := jar.Errors[0]
-	fmt.Println(jsonErr)
+	
 	statusCode, err := strconv.Atoi(jsonErr.Status)
 	if err != nil {
 		statusCode = 0
