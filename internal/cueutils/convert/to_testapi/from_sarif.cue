@@ -142,9 +142,17 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 			}
 			if result.properties != _|_ {
 				if result.properties["snykPolicy/v1"] != _|_ {
-						policy: {
+					policy: {
+						if result.properties["snykPolicy/v1"].originalLevel != _|_ {
 							originalLevel: result.properties["snykPolicy/v1"].originalLevel
 						}
+						if result.properties["snykPolicy/v1"].originalSeverity != _|_ {
+							originalSeverity: result.properties["snykPolicy/v1"].originalSeverity
+						}
+						if result.properties["snykPolicy/v1"].severity != _|_ {
+							severity: result.properties["snykPolicy/v1"].severity
+						}
+					}
 				}
 			}
 			rating: {

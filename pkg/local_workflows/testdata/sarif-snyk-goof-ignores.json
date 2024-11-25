@@ -3192,7 +3192,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
