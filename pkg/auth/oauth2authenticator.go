@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,7 +34,7 @@ const (
 	OAUTH_CLIENT_ID         string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
 	CALLBACK_HOSTNAME       string = "127.0.0.1"
 	CALLBACK_PATH           string = "/authorization-code/callback"
-	TIMEOUT_SECONDS                = 120 * time.Second
+	TIMEOUT_SECONDS                = 5 * time.Second
 	AUTHENTICATED_MESSAGE          = "Your account has been authenticated."
 	PARAMETER_CLIENT_ID     string = "client-id"
 	PARAMETER_CLIENT_SECRET string = "client-secret"
@@ -400,21 +401,20 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		o.logger.Info().Msg("Instance specified in callback " + responseInstance)
 		authHost := redirectAuthHost(responseInstance)
 		if !isValidAuthHost(authHost) {
-			o.logger.Info().Msg("Instance specified in callback was invalid:" + responseCode)
+			o.logger.Info().Msg("Instance specified in callback was invalid:" + authHost)
 			return fmt.Errorf("invalid instance: %q", responseInstance)
 		}
 
-		authURL, err := url.Parse(o.oauthConfig.Endpoint.AuthURL)
-		if err != nil {
-			return fmt.Errorf("failed to parse auth url: %w", err)
+		oauthTokenUrl, urlParseErr := url.Parse(o.oauthConfig.Endpoint.TokenURL)
+		if urlParseErr != nil {
+			return fmt.Errorf("failed to parse auth url: %w", urlParseErr)
 		}
-		if authURL.Host != authHost {
-			o.logger.Info().Msgf("Instance specified in callback %s does not match configured value: %s", authHost, authURL.Host)
+		if oauthTokenUrl.Host != authHost {
+			o.logger.Info().Msgf("Instance specified in callback (%s) does not match pre-configured value (%s)", authHost, oauthTokenUrl.Host)
+			oauthTokenUrl.Host = authHost
+			o.oauthConfig.Endpoint.TokenURL = oauthTokenUrl.String()
+			o.logger.Info().Msgf("New token url endpoint is: %s", o.oauthConfig.Endpoint.TokenURL)
 		}
-		authURL.Host = authHost
-		authURL.Host = "thisis.la"
-		o.logger.Info().Msg("Instance specified in callback was valid, updating o auth endpoint")
-		o.oauthConfig.Endpoint.AuthURL = authURL.String()
 	}
 
 	// Use the custom HTTP client when requesting a token.
@@ -432,6 +432,9 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 }
 
 func redirectAuthHost(instance string) string {
+	if strings.HasPrefix(instance, "api") {
+		return instance
+	}
 	return fmt.Sprintf("api.%s", instance)
 }
 
