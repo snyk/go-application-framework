@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pkg/browser"
+	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
@@ -60,6 +61,7 @@ type oAuth2Authenticator struct {
 	token              *oauth2.Token
 	headless           bool
 	grantType          GrantType
+	logger             *zerolog.Logger
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
@@ -195,6 +197,9 @@ func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http
 
 func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...OAuth2AuthenticatorOption) Authenticator {
 	o := &oAuth2Authenticator{}
+	nopLogger := zerolog.Nop()
+
+	o.logger = &nopLogger
 	o.config = config
 	//nolint:errcheck // breaking api change needed to fix this
 	o.token, _ = GetOAuthToken(config)
@@ -357,8 +362,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 
 		// fill redirect url now that the port is known
 		o.oauthConfig.RedirectURL = getRedirectUri(port)
-
-		url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
+		authCodeUrl := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
 			oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 			oauth2.SetAuthURLParam("response_type", "code"),
@@ -366,7 +370,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			oauth2.SetAuthURLParam("version", "2021-08-11~experimental"))
 
 		// launch browser
-		go o.openBrowserFunc(url)
+		go o.openBrowserFunc(authCodeUrl)
 
 		timedOut := false
 		timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
@@ -393,11 +397,10 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	}
 
 	if responseInstance != "" {
+		o.logger.Info().Msg("Instance specified in callback " + responseInstance)
 		authHost := redirectAuthHost(responseInstance)
-		if err != nil {
-			return fmt.Errorf("invalid instance: %q", responseInstance)
-		}
 		if !isValidAuthHost(authHost) {
+			o.logger.Info().Msg("Instance specified in callback was invalid:" + responseCode)
 			return fmt.Errorf("invalid instance: %q", responseInstance)
 		}
 
@@ -405,7 +408,12 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		if err != nil {
 			return fmt.Errorf("failed to parse auth url: %w", err)
 		}
+		if authURL.Host != authHost {
+			o.logger.Info().Msgf("Instance specified in callback %s does not match configured value: %s", authHost, authURL.Host)
+		}
 		authURL.Host = authHost
+		authURL.Host = "thisis.la"
+		o.logger.Info().Msg("Instance specified in callback was valid, updating o auth endpoint")
 		o.oauthConfig.Endpoint.AuthURL = authURL.String()
 	}
 
@@ -427,7 +435,7 @@ func redirectAuthHost(instance string) string {
 	return fmt.Sprintf("api.%s", instance)
 }
 
-var redirectAuthHostRE = regexp.MustCompile(`^api\.(.+)\.snyk\.io$`)
+var redirectAuthHostRE = regexp.MustCompile(`^api(\.(.+))?\.snyk|snykgov\.io$`)
 
 func isValidAuthHost(authHost string) bool {
 	return redirectAuthHostRE.MatchString(authHost)

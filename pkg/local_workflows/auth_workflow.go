@@ -68,6 +68,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithHttpClient(httpClient),
 		auth.WithOpenBrowserFunc(OpenBrowser),
 		auth.WithShutdownServerFunc(auth.ShutdownServer),
+		auth.WithLogger(logger),
 	)
 
 	err = entryPointDI(config, logger, engine, authenticator)
