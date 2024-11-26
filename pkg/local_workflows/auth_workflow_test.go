@@ -27,6 +27,17 @@ func logMiddleware(t *testing.T, handler http.Handler) http.Handler {
 	})
 }
 
+func headlessOpenBrowserFunc(t *testing.T) func(url string) {
+	t.Helper()
+	return func(url string) {
+		fmt.Println("Mock opening browser...", url)
+		_, err := http.DefaultClient.Get(url)
+		if err != nil {
+			fmt.Println("Error opening browser:", err)
+		}
+	}
+}
+
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	logContent := &bytes.Buffer{}
@@ -64,10 +75,7 @@ func Test_auth_oauth(t *testing.T) {
 
 		authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 			config,
-			auth.WithOpenBrowserFunc(func(url string) {
-				fmt.Println("Mock opening browser...", url)
-				http.DefaultClient.Get(url)
-			}),
+			auth.WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
 		err = entryPointDI(config, &logger, engine, authenticator)
@@ -97,10 +105,7 @@ func Test_auth_oauth(t *testing.T) {
 			config,
 			auth.WithHttpClient(c),
 			auth.WithLogger(&logger),
-			auth.WithOpenBrowserFunc(func(url string) {
-				fmt.Println("Mock opening browser...", url)
-				http.DefaultClient.Get(url)
-			}),
+			auth.WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
 		defer gock.OffAll()
@@ -116,7 +121,7 @@ func Test_auth_oauth(t *testing.T) {
 				"expiry":        "3600",
 			})
 
-		// Pass through to our handrolled oauth2 server
+		// Pass through to our local oauth2 server
 		gock.New("http://127.0.0.1").
 			Persist().
 			EnableNetworking()
@@ -128,7 +133,7 @@ func Test_auth_oauth(t *testing.T) {
 		assert.Equal(t, false, gock.HasUnmatchedRequest())
 	})
 
-	t.Run("unhappy", func(t *testing.T) {
+	t.Run("fails with malformed state", func(t *testing.T) {
 		config := configuration.NewInMemory()
 		config.Set(authTypeParameter, nil)
 
@@ -149,10 +154,7 @@ func Test_auth_oauth(t *testing.T) {
 
 		authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 			config,
-			auth.WithOpenBrowserFunc(func(url string) {
-				fmt.Println("Mock opening browser...", url)
-				http.DefaultClient.Get(url)
-			}),
+			auth.WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 		err = entryPointDI(config, &logger, engine, authenticator)
 		assert.ErrorContains(t, err, "incorrect response state")
@@ -160,6 +162,7 @@ func Test_auth_oauth(t *testing.T) {
 }
 
 func mockOAuth2TokenHandler(t *testing.T) http.HandlerFunc {
+	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		newToken := &oauth2.Token{
 			AccessToken: "a",
@@ -174,6 +177,7 @@ func mockOAuth2TokenHandler(t *testing.T) http.HandlerFunc {
 		assert.Nil(t, err)
 	}
 }
+
 func Test_auth_token(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	logContent := &bytes.Buffer{}

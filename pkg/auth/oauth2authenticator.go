@@ -34,7 +34,7 @@ const (
 	OAUTH_CLIENT_ID         string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
 	CALLBACK_HOSTNAME       string = "127.0.0.1"
 	CALLBACK_PATH           string = "/authorization-code/callback"
-	TIMEOUT_SECONDS                = 5 * time.Second
+	TIMEOUT_SECONDS                = 120 * time.Second
 	AUTHENTICATED_MESSAGE          = "Your account has been authenticated."
 	PARAMETER_CLIENT_ID     string = "client-id"
 	PARAMETER_CLIENT_SECRET string = "client-secret"
@@ -321,24 +321,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	mux.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
-			details := html.EscapeString(r.URL.Query().Get("error_description"))
-
-			tmpl := template.New("")
-			tmpl, tmplError := tmpl.Parse(errorResponsePage)
-			if tmplError != nil {
-				return
-			}
-
-			data := struct {
-				Reason      string
-				Description string
-			}{
-				Reason:      responseError,
-				Description: details,
-			}
-
-			tmplError = tmpl.Execute(w, data)
-			if tmplError != nil {
+			if writeCallbackErrorResponse(w, r.URL.Query(), responseError) {
 				return
 			}
 		} else {
@@ -356,6 +339,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	// iterate over different known ports if one fails
 	for _, port := range acceptedCallbackPorts {
 		srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
+		o.logger.Debug().Msgf("Checking server:port %s:%d", CALLBACK_HOSTNAME, port)
 		listener, listenErr := net.Listen("tcp", srv.Addr)
 		if listenErr != nil { // skip port if it can't be listened to
 			continue
@@ -397,24 +381,9 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		return fmt.Errorf("incorrect response state: %s != %s", responseState, state)
 	}
 
-	if responseInstance != "" {
-		o.logger.Info().Msg("Instance specified in callback " + responseInstance)
-		authHost := redirectAuthHost(responseInstance)
-		if !isValidAuthHost(authHost) {
-			o.logger.Info().Msg("Instance specified in callback was invalid:" + authHost)
-			return fmt.Errorf("invalid instance: %q", responseInstance)
-		}
-
-		oauthTokenUrl, urlParseErr := url.Parse(o.oauthConfig.Endpoint.TokenURL)
-		if urlParseErr != nil {
-			return fmt.Errorf("failed to parse auth url: %w", urlParseErr)
-		}
-		if oauthTokenUrl.Host != authHost {
-			o.logger.Info().Msgf("Instance specified in callback (%s) does not match pre-configured value (%s)", authHost, oauthTokenUrl.Host)
-			oauthTokenUrl.Host = authHost
-			o.oauthConfig.Endpoint.TokenURL = oauthTokenUrl.String()
-			o.logger.Info().Msgf("New token url endpoint is: %s", o.oauthConfig.Endpoint.TokenURL)
-		}
+	modifyTokenErr := o.modifyTokenUrl(responseInstance)
+	if modifyTokenErr != nil {
+		return modifyTokenErr
 	}
 
 	// Use the custom HTTP client when requesting a token.
@@ -429,6 +398,55 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 
 	err = o.persistToken(token)
 	return err
+}
+
+func writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
+	tmpl := template.New("")
+	tmpl, tmplError := tmpl.Parse(errorResponsePage)
+	if tmplError != nil {
+		return true
+	}
+
+	data := struct {
+		Reason      string
+		Description string
+	}{
+		Reason:      responseError,
+		Description: html.EscapeString(q.Get("error_description")),
+	}
+
+	tmplError = tmpl.Execute(w, data)
+
+	return tmplError != nil
+}
+
+func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
+	if responseInstance == "" {
+		return nil
+	}
+
+	o.logger.Info().Msg("Instance specified in callback " + responseInstance)
+	authHost := redirectAuthHost(responseInstance)
+	if !isValidAuthHost(authHost) {
+		o.logger.Info().Msg("Instance specified in callback was invalid:" + authHost)
+		return fmt.Errorf("invalid instance: %q", responseInstance)
+	}
+
+	oauthTokenUrl, urlParseErr := url.Parse(o.oauthConfig.Endpoint.TokenURL)
+	if urlParseErr != nil {
+		return fmt.Errorf("failed to parse auth url: %w", urlParseErr)
+	}
+	if oauthTokenUrl.Host == authHost {
+		o.logger.Info().Msgf("Instance specified in callback (%s) matches pre-configured value (%s)", authHost, oauthTokenUrl.Host)
+		return nil
+	}
+
+	o.logger.Info().Msgf("Instance specified in callback (%s) does not match pre-configured value (%s)", authHost, oauthTokenUrl.Host)
+	oauthTokenUrl.Host = authHost
+	o.oauthConfig.Endpoint.TokenURL = oauthTokenUrl.String()
+	o.logger.Info().Msgf("New token url endpoint is: %s", o.oauthConfig.Endpoint.TokenURL)
+
+	return nil
 }
 
 func redirectAuthHost(instance string) string {
