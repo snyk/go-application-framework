@@ -429,7 +429,7 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 	authHost := redirectAuthHost(responseInstance)
 	if !isValidAuthHost(authHost) {
 		o.logger.Info().Msg("Instance specified in callback was invalid:" + authHost)
-		return fmt.Errorf("invalid instance: %q", responseInstance)
+		return nil
 	}
 
 	oauthTokenUrl, urlParseErr := url.Parse(o.oauthConfig.Endpoint.TokenURL)
