@@ -2062,7 +2062,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
@@ -2163,7 +2165,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
@@ -2264,7 +2268,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
@@ -2434,7 +2440,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
@@ -2587,7 +2595,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": [
@@ -2601,7 +2611,8 @@
                   "name": "Luke Watts",
                   "email": "luke@snyk.io"
                 }
-              }
+              },
+              "kind": "external"
             }
           ]
         },
@@ -2753,7 +2764,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": [
@@ -2767,7 +2780,8 @@
                   "name": "JSON",
                   "email": "jason.luong@snyk.io"
                 }
-              }
+              },
+              "kind": "external"
             }
           ]
         },
@@ -2863,7 +2877,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
@@ -2942,7 +2958,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": [
@@ -2956,7 +2974,8 @@
                   "name": "JSON",
                   "email": "jason.luong@snyk.io"
                 }
-              }
+              },
+              "kind": "external"
             }
           ]
         },
@@ -3034,7 +3053,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
@@ -3113,7 +3134,9 @@
             ],
             "isAutofixable": false,
             "snykPolicy/v1": {
-              "originalLevel": "warning"
+              "originalLevel": "warning",
+              "severity": "high",
+              "originalSeverity": "low"
             }
           },
           "suppressions": null
