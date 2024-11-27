@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -16,7 +17,7 @@ import (
 
 //go:generate $GOPATH/bin/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
 
-type DefaultValueFunction func(existingValue interface{}) interface{}
+type DefaultValueFunction func(existingValue interface{}) (interface{}, error)
 
 type configType string
 type KeyType int
@@ -42,6 +43,7 @@ type Configuration interface {
 	GetInt(key string) int
 	GetFloat64(key string) float64
 	GetUrl(key string) *url.URL
+	GetE(key string) (interface{}, error)
 
 	AddFlagSet(flagset *pflag.FlagSet) error
 	AllKeys() []string
@@ -94,11 +96,11 @@ type extendedViper struct {
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
 func StandardDefaultValueFunction(defaultValue interface{}) DefaultValueFunction {
-	return func(existingValue interface{}) interface{} {
+	return func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
-			return existingValue
+			return existingValue, nil
 		} else {
-			return defaultValue
+			return defaultValue, nil
 		}
 	}
 }
@@ -379,10 +381,25 @@ func (ev *extendedViper) Get(key string) interface{} {
 	ev.mutex.Unlock()
 
 	if ok && defaultFunc != nil {
-		value = defaultFunc(value)
+		value, _ = defaultFunc(value)
 	}
 
 	return value
+}
+
+// GetE returns a configuration value and and error if the value is not set.
+func (ev *extendedViper) GetE(key string) (value interface{}, err error) {
+	value = ev.get(key)
+
+	if ev.defaultValues[key] != nil {
+		value, err = ev.defaultValues[key](value)
+	}
+
+	if value == nil && err == nil {
+		err = fmt.Errorf("missing value")
+	}
+
+	return value, err
 }
 
 // GetString returns a configuration value as string.
