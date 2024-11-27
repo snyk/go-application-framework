@@ -17,6 +17,10 @@ import (
 )
 
 func Test_ConfigEnvironment_determineUrlFromAlias(t *testing.T) {
+	defaultUrl, defaultErr := determineUrlFromAlias("default")
+	assert.NoError(t, defaultErr)
+	assert.Equal(t, "https://api.snyk.io", defaultUrl)
+
 	envUrl, envErr := determineUrlFromAlias("SNYK-US-01")
 	assert.NoError(t, envErr)
 	assert.NotEmpty(t, envUrl)
