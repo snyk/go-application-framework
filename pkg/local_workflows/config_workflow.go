@@ -35,6 +35,35 @@ func InitConfigWorkflow(engine workflow.Engine) error {
 	return err
 }
 
+type SnykRegion struct {
+	alias string
+	url   string
+}
+
+func DetermineRegionFromUrl(url string) (string, error) {
+	if len(url) == 0 {
+		return "", fmt.Errorf("url must not be empty")
+	}
+
+	regions := []SnykRegion{
+		{alias: "snyk-us-01", url: "https://api.snyk.io"},
+		{alias: "snyk-us-02", url: "https://api.us.snyk.io"},
+		{alias: "snyk-au-01", url: "https://api.au.snyk.io"},
+		{alias: "snyk-eu-01", url: "https://api.eu.snyk.io"},
+		{alias: "snyk-gov-01", url: "https://api.snykgov.io"},
+	}
+
+	// Loop through each region and check for a match in the URL host
+	for _, region := range regions {
+		if strings.HasPrefix(url, region.url) {
+			return region.alias, nil
+		}
+	}
+
+	// If no match found, throw an error
+	return "", fmt.Errorf("no region found for the given URL")
+}
+
 func determineUrlFromAlias(alias string) (string, error) {
 	if len(alias) == 0 {
 		return "", fmt.Errorf("environment alias must not be empty")

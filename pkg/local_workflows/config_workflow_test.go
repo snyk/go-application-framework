@@ -125,3 +125,74 @@ func Test_ConfigEnvironment_entryPoint_Failed(t *testing.T) {
 	assert.Nil(t, outputData)
 	assert.Error(t, outputErr)
 }
+
+func Test_DetermineRegionFromUrl(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "Empty URL",
+			url:     "",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "US Region 1",
+			url:     "https://api.snyk.io/something",
+			want:    "snyk-us-01",
+			wantErr: false,
+		},
+		{
+			name:    "US Region 2",
+			url:     "https://api.us.snyk.io/something",
+			want:    "snyk-us-02",
+			wantErr: false,
+		},
+		{
+			name:    "AU Region",
+			url:     "https://api.au.snyk.io/something",
+			want:    "snyk-au-01",
+			wantErr: false,
+		},
+		{
+			name:    "EU Region",
+			url:     "https://api.eu.snyk.io/something",
+			want:    "snyk-eu-01",
+			wantErr: false,
+		},
+		{
+			name:    "Gov Region",
+			url:     "https://api.snykgov.io/something",
+			want:    "snyk-gov-01",
+			wantErr: false,
+		},
+		{
+			name:    "Invalid URL",
+			url:     "invalid_url",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "Unknown Region",
+			url:     "https://unknown.snyk.io/something",
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DetermineRegionFromUrl(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DetermineRegionFromUrl() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("DetermineRegionFromUrl() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
