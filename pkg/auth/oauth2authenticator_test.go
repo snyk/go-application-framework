@@ -3,16 +3,45 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+func headlessOpenBrowserFunc(t *testing.T) func(url string) {
+	return func(url string) {
+		t.Helper()
+		fmt.Printf("Mock opening browser... %s", url)
+		client := *http.DefaultClient
+		_, err := client.Get(url)
+		assert.NoError(t, err)
+	}
+}
+
+func mockOAuth2TokenHandler(t *testing.T) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		newToken := &oauth2.Token{
+			AccessToken: "a",
+			TokenType:   "b",
+			Expiry:      time.Now().Add(60 * time.Second).UTC(),
+		}
+		data, err := json.Marshal(newToken)
+		assert.Nil(t, err)
+
+		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, err = w.Write(data)
+		assert.Nil(t, err)
+	}
+}
 
 func Test_GetVerifier(t *testing.T) {
 	expectedCount := 23
@@ -331,4 +360,122 @@ func Test_isValidAuthHost(t *testing.T) {
 			t.Errorf("isValidAuthHost(%q) = %v, want %v", tc.authHost, actual, tc.expected)
 		}
 	}
+}
+
+func Test_Authenticate_AuthorizationCode(t *testing.T) {
+	logger := zerolog.Nop()
+	t.Run("happy", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+
+		// Create mock server for successful oauth2 flow
+		mux := http.NewServeMux()
+		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+			// Redirect to the redirect_uri with a mock authorization code
+			redirectURI := r.URL.Query().Get("redirect_uri")
+			state := r.URL.Query().Get("state")
+			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state, http.StatusFound)
+		})
+		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		config.Set(configuration.API_URL, ts.URL)
+		config.Set(configuration.WEB_APP_URL, ts.URL)
+
+		authenticator := NewOAuth2AuthenticatorWithOpts(
+			config,
+			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+			WithLogger(&logger),
+		)
+
+		err := authenticator.Authenticate()
+		assert.Nil(t, err)
+
+		assert.Equal(t, "{\"access_token\":\"a\",\"token_type\":\"b\",\"expiry\":\"0001-01-01T00:00:00Z\"}", config.GetString(CONFIG_KEY_OAUTH_TOKEN))
+	})
+
+	t.Run("supports redirect to valid instance", func(t *testing.T) {
+		tokenServer := httptest.NewServer(mockOAuth2TokenHandler(t))
+		defer tokenServer.Close()
+
+		// Create mock server for successful oauth2 flow
+		mux := http.NewServeMux()
+		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+			// Redirect to the redirect_uri with a mock authorization code
+			redirectURI := r.URL.Query().Get("redirect_uri")
+			state := r.URL.Query().Get("state")
+
+			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+"&instance="+tokenServer.URL, http.StatusFound)
+		})
+		initialAuthServer := httptest.NewServer(mux)
+		defer initialAuthServer.Close()
+
+		config := configuration.NewInMemory()
+		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, ".*")
+		config.Set(configuration.API_URL, initialAuthServer.URL)
+		config.Set(configuration.WEB_APP_URL, initialAuthServer.URL)
+
+		authenticator := NewOAuth2AuthenticatorWithOpts(
+			config,
+			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+		)
+
+		err := authenticator.Authenticate()
+		assert.NoError(t, err)
+	})
+
+	t.Run("does not redirect to invalid instance", func(t *testing.T) {
+		config := configuration.NewInMemory()
+		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, `^api(\.(.+))?\.snyk|snykgov\.io$`)
+
+		// Create mock server for successful oauth2 flow
+		mux := http.NewServeMux()
+		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+			// Redirect to the redirect_uri with a mock authorization code
+			redirectURI := r.URL.Query().Get("redirect_uri")
+			state := r.URL.Query().Get("state")
+			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+"&instance=api.malicioussnyk.io", http.StatusFound)
+		})
+		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
+
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		config.Set(configuration.WEB_APP_URL, ts.URL)
+		config.Set(configuration.API_URL, ts.URL)
+		authenticator := NewOAuth2AuthenticatorWithOpts(
+			config,
+			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+		)
+
+		err := authenticator.Authenticate()
+		assert.Error(t, err)
+	})
+
+	t.Run("fails with malformed state", func(t *testing.T) {
+		config := configuration.NewInMemory()
+
+		// Create mock server for unsuccessful oauth2 flow
+		mux := http.NewServeMux()
+		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+			// Redirect to the redirect_uri with a mock authorization code
+			redirectURI := r.URL.Query().Get("redirect_uri")
+			state := "invalid-state-object"
+			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state, http.StatusFound)
+		})
+		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		config.Set(configuration.API_URL, ts.URL)
+		config.Set(configuration.WEB_APP_URL, ts.URL)
+
+		authenticator := NewOAuth2AuthenticatorWithOpts(
+			config,
+			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+		)
+
+		err := authenticator.Authenticate()
+		assert.ErrorContains(t, err, "incorrect response state")
+	})
 }
