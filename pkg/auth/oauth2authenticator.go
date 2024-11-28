@@ -25,6 +25,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -427,7 +428,11 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 	}
 
 	o.logger.Info().Msg("Instance specified in callback " + responseInstance)
-	authHost := redirectAuthHost(responseInstance)
+	authHost, err := redirectAuthHost(responseInstance)
+	if err != nil {
+		// todo error-catalog error
+		return err
+	}
 
 	redirectAuthHostRE := o.config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
 	isValidHost, err := isValidAuthHost(authHost, redirectAuthHostRE)
@@ -457,15 +462,30 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 	return nil
 }
 
-func redirectAuthHost(instance string) string {
-	// todo use canonicalization api.GetCanonicalApiUrlFromString()
-	if strings.HasPrefix(instance, "api") {
-		return instance
+func redirectAuthHost(instance string) (string, error) {
+	// handle both cases if instance is a URL or just a host
+	if !strings.HasPrefix(instance, "http") {
+		instance = "https://" + instance
 	}
-	return fmt.Sprintf("api.%s", instance)
+
+	instanceUrl, err := url.Parse(instance)
+	if err != nil {
+		return "", err
+	}
+
+	canonicalizedInstanceUrl, err := api.GetCanonicalApiAsUrl(*instanceUrl)
+	if err != nil {
+		return "", err
+	}
+
+	return canonicalizedInstanceUrl.Host, nil
 }
 
 func isValidAuthHost(authHost string, hostRegularExpression string) (bool, error) {
+	if len(hostRegularExpression) == 0 {
+		return false, fmt.Errorf("regular expression to check host names must not be empty")
+	}
+
 	r, err := regexp.Compile(hostRegularExpression)
 	if err != nil {
 		return false, err

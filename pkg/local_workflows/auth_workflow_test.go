@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/h2non/gock"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
+
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/oauth2"
 )
 
 func logMiddleware(t *testing.T, handler http.Handler) http.Handler {
@@ -84,10 +84,8 @@ func Test_auth_oauth(t *testing.T) {
 	})
 
 	t.Run("supports redirect to valid instance", func(t *testing.T) {
-		config := configuration.NewInMemory()
-		config.Set(authTypeParameter, nil)
-
-		const targetInstance = "api.region.snyk.io"
+		tokenServer := httptest.NewServer(mockOAuth2TokenHandler(t))
+		defer tokenServer.Close()
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()
@@ -95,12 +93,19 @@ func Test_auth_oauth(t *testing.T) {
 			// Redirect to the redirect_uri with a mock authorization code
 			redirectURI := r.URL.Query().Get("redirect_uri")
 			state := r.URL.Query().Get("state")
-			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+"&instance="+targetInstance, http.StatusFound)
-		})
-		ts := httptest.NewServer(logMiddleware(t, mux))
-		defer ts.Close()
 
-		config.Set(configuration.WEB_APP_URL, ts.URL)
+			assert.NoError(t, err)
+			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+"&instance="+tokenServer.URL, http.StatusFound)
+		})
+		initialAuthServer := httptest.NewServer(logMiddleware(t, mux))
+		defer initialAuthServer.Close()
+
+		config := configuration.NewInMemory()
+		config.Set(authTypeParameter, nil)
+		config.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, ".*")
+		config.Set(configuration.API_URL, initialAuthServer.URL)
+		config.Set(configuration.WEB_APP_URL, initialAuthServer.URL)
+
 		c := &http.Client{}
 		authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 			config,
@@ -109,33 +114,15 @@ func Test_auth_oauth(t *testing.T) {
 			auth.WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		defer gock.OffAll()
-
-		// Pass through to our local oauth2 server
-		gock.New("http://127.0.0.1").
-			Persist().
-			EnableNetworking()
-
-		// Second instance
-		gock.New("https://" + targetInstance).
-			Post("/oauth2/token").
-			Reply(200).
-			JSON(map[string]string{
-				"access_token":  "abc",
-				"token_type":    "bearer",
-				"refresh_token": "123",
-				"expiry":        "3600",
-			})
-
 		err = entryPointDI(config, &logger, engine, authenticator)
 
 		assert.NoError(t, err)
-		assert.Equal(t, false, gock.HasUnmatchedRequest())
 	})
 
 	t.Run("does not redirect to invalid instance", func(t *testing.T) {
 		config := configuration.NewInMemory()
 		config.Set(authTypeParameter, nil)
+		config.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, `^api(\.(.+))?\.snyk|snykgov\.io$`)
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()
@@ -162,7 +149,7 @@ func Test_auth_oauth(t *testing.T) {
 
 		err = entryPointDI(config, &logger, engine, authenticator)
 
-		assert.NoError(t, err)
+		assert.Error(t, err)
 	})
 
 	t.Run("fails with malformed state", func(t *testing.T) {
