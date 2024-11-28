@@ -19,13 +19,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 )
 
-func logMiddleware(t *testing.T, handler http.Handler) http.Handler {
-	t.Helper()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handler.ServeHTTP(w, r) // Call the actual handler
-	})
-}
-
 func headlessOpenBrowserFunc(t *testing.T) func(url string) {
 	t.Helper()
 	return func(url string) {
@@ -66,7 +59,7 @@ func Test_auth_oauth(t *testing.T) {
 			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state, http.StatusFound)
 		})
 		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
-		ts := httptest.NewServer(logMiddleware(t, mux))
+		ts := httptest.NewServer(mux)
 		defer ts.Close()
 
 		config.Set(configuration.API_URL, ts.URL)
@@ -97,7 +90,7 @@ func Test_auth_oauth(t *testing.T) {
 			assert.NoError(t, err)
 			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+"&instance="+tokenServer.URL, http.StatusFound)
 		})
-		initialAuthServer := httptest.NewServer(logMiddleware(t, mux))
+		initialAuthServer := httptest.NewServer(mux)
 		defer initialAuthServer.Close()
 
 		config := configuration.NewInMemory()
@@ -134,7 +127,7 @@ func Test_auth_oauth(t *testing.T) {
 		})
 		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
 
-		ts := httptest.NewServer(logMiddleware(t, mux))
+		ts := httptest.NewServer(mux)
 		defer ts.Close()
 
 		config.Set(configuration.WEB_APP_URL, ts.URL)
@@ -165,7 +158,7 @@ func Test_auth_oauth(t *testing.T) {
 			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state, http.StatusFound)
 		})
 		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
-		ts := httptest.NewServer(logMiddleware(t, mux))
+		ts := httptest.NewServer(mux)
 		defer ts.Close()
 
 		config.Set(configuration.API_URL, ts.URL)
