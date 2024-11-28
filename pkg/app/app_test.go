@@ -60,7 +60,8 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 }
 
 func Test_CreateAppEngine(t *testing.T) {
-	engine := CreateAppEngine()
+	localConfig := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 	assert.NotNil(t, engine)
 
 	err := engine.Init()
@@ -72,7 +73,8 @@ func Test_CreateAppEngine(t *testing.T) {
 }
 
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
-	engine := CreateAppEngine()
+	localConfig := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 	assert.NotNil(t, engine)
 
 	err := engine.Init()
