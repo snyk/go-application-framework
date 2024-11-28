@@ -324,7 +324,9 @@ func Test_isValidAuthHost(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		actual := isValidAuthHost(tc.authHost)
+		actual, err := isValidAuthHost(tc.authHost, `^api(\.(.+))?\.snyk|snykgov\.io$`)
+		assert.NoError(t, err)
+
 		if actual != tc.expected {
 			t.Errorf("isValidAuthHost(%q) = %v, want %v", tc.authHost, actual, tc.expected)
 		}

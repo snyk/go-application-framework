@@ -30,14 +30,15 @@ import (
 
 const (
 	//nolint:gosec // not a token value, but a configuration key
-	CONFIG_KEY_OAUTH_TOKEN  string = "INTERNAL_OAUTH_TOKEN_STORAGE"
-	OAUTH_CLIENT_ID         string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
-	CALLBACK_HOSTNAME       string = "127.0.0.1"
-	CALLBACK_PATH           string = "/authorization-code/callback"
-	TIMEOUT_SECONDS                = 120 * time.Second
-	AUTHENTICATED_MESSAGE          = "Your account has been authenticated."
-	PARAMETER_CLIENT_ID     string = "client-id"
-	PARAMETER_CLIENT_SECRET string = "client-secret"
+	CONFIG_KEY_ALLOWED_HOST_REGEXP        = "INTERNAL_OAUTH_ALLOWED_HOSTS"
+	CONFIG_KEY_OAUTH_TOKEN         string = "INTERNAL_OAUTH_TOKEN_STORAGE"
+	OAUTH_CLIENT_ID                string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
+	CALLBACK_HOSTNAME              string = "127.0.0.1"
+	CALLBACK_PATH                  string = "/authorization-code/callback"
+	TIMEOUT_SECONDS                       = 120 * time.Second
+	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
+	PARAMETER_CLIENT_ID            string = "client-id"
+	PARAMETER_CLIENT_SECRET        string = "client-secret"
 )
 
 type GrantType int
@@ -427,9 +428,16 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 
 	o.logger.Info().Msg("Instance specified in callback " + responseInstance)
 	authHost := redirectAuthHost(responseInstance)
-	if !isValidAuthHost(authHost) {
+
+	redirectAuthHostRE := o.config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
+	isValidHost, err := isValidAuthHost(authHost, redirectAuthHostRE)
+	if err != nil {
+		return err
+	}
+
+	if !isValidHost {
 		o.logger.Info().Msg("Instance specified in callback was invalid:" + authHost)
-		return nil
+		return fmt.Errorf("specified instance is an invalid host")
 	}
 
 	oauthTokenUrl, urlParseErr := url.Parse(o.oauthConfig.Endpoint.TokenURL)
@@ -450,16 +458,20 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 }
 
 func redirectAuthHost(instance string) string {
+	// todo use canonicalization api.GetCanonicalApiUrlFromString()
 	if strings.HasPrefix(instance, "api") {
 		return instance
 	}
 	return fmt.Sprintf("api.%s", instance)
 }
 
-var redirectAuthHostRE = regexp.MustCompile(`^api(\.(.+))?\.snyk|snykgov\.io$`)
+func isValidAuthHost(authHost string, hostRegularExpression string) (bool, error) {
+	r, err := regexp.Compile(hostRegularExpression)
+	if err != nil {
+		return false, err
+	}
 
-func isValidAuthHost(authHost string) bool {
-	return redirectAuthHostRE.MatchString(authHost)
+	return r.MatchString(authHost), nil
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
