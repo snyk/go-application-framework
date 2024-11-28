@@ -20,7 +20,16 @@ const (
 	configEnvWorkflowName = "config.environment"
 	environmentAlias      = "internal_environment_name"
 	noCheckFlag           = "no-check"
+	defaultRegion         = "snyk-us-01"
 )
+
+var regions = []SnykRegion{
+	{alias: "snyk-us-01", url: "https://api.snyk.io"},
+	{alias: "snyk-us-02", url: "https://api.us.snyk.io"},
+	{alias: "snyk-au-01", url: "https://api.au.snyk.io"},
+	{alias: "snyk-eu-01", url: "https://api.eu.snyk.io"},
+	{alias: "snyk-gov-01", url: "https://api.snykgov.io"},
+}
 
 var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIdentifier(configEnvWorkflowName)
 
@@ -35,6 +44,27 @@ func InitConfigWorkflow(engine workflow.Engine) error {
 	return err
 }
 
+type SnykRegion struct {
+	alias string
+	url   string
+}
+
+func DetermineRegionFromUrl(url string) (string, error) {
+	if len(url) == 0 {
+		return "", fmt.Errorf("url must not be empty")
+	}
+
+	// Loop through each region and check for a match in the URL host
+	for _, region := range regions {
+		if strings.HasPrefix(url, region.url) {
+			return region.alias, nil
+		}
+	}
+
+	// If no match found, throw an error
+	return "", fmt.Errorf("no region found for the given URL")
+}
+
 func determineUrlFromAlias(alias string) (string, error) {
 	if len(alias) == 0 {
 		return "", fmt.Errorf("environment alias must not be empty")
@@ -46,19 +76,16 @@ func determineUrlFromAlias(alias string) (string, error) {
 
 	dnsPattern := "https://api.%s.snyk.io"
 	supportedUrlSchemes := []string{"http", "https"}
-	knownAliases := map[string]string{
-		"default":     "https://api.snyk.io",
-		"snyk-us-01":  "https://api.snyk.io",
-		"snyk-us-02":  "https://api.us.snyk.io",
-		"snyk-au-01":  "https://api.au.snyk.io",
-		"snyk-eu-01":  "https://api.eu.snyk.io",
-		"snyk-gov-01": "https://api.snykgov.io",
-	}
 
 	// lookup if alias can be directly mapped to a URL
-	urlString, aliasFound := knownAliases[strings.ToLower(alias)]
-	if aliasFound {
-		return urlString, nil
+	if alias == "default" {
+		alias = defaultRegion
+	}
+
+	for _, region := range regions {
+		if region.alias == strings.ToLower(alias) {
+			return region.url, nil
+		}
 	}
 
 	// test if the alias is already an url?
