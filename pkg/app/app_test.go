@@ -120,7 +120,6 @@ func Test_CreateAppEngine_config_OauthAudHasPredence(t *testing.T) {
 		actualApiUrl := localConfig.GetString(configuration.API_URL)
 		assert.Equal(t, expectedApiUrl, actualApiUrl)
 	})
-
 }
 
 func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
