@@ -95,7 +95,7 @@ func Test_CreateAppEngine_config_OauthAudHasPredence(t *testing.T) {
 		// JWT generated at https://jwt.io with claim:
 		//   "aud": ["https://api.example.com"]
 		`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhdWQiOlsiaHR0cHM6Ly9hcGkuZXhhbXBsZS5jb20iXX0.hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"}`,
-	) //gitleaks:allow
+	)
 	logger := log.New(os.Stderr, "", 0)
 
 	t.Run("", func(t *testing.T) {
