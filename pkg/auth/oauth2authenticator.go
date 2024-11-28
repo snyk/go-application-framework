@@ -434,6 +434,7 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 	}
 
 	redirectAuthHostRE := o.config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
+	o.logger.Info().Msgf("Validating with regexp: \"%s\"", redirectAuthHostRE)
 	isValidHost, err := isValidAuthHost(authHost, redirectAuthHostRE)
 	if err != nil {
 		return err
