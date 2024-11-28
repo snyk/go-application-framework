@@ -85,14 +85,19 @@ func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logge
 	callback := func(existingValue interface{}) interface{} {
 		urlString := constants.SNYK_DEFAULT_API_URL
 
-		if existingValue != nil {
+		urlFromOauthToken, err := oauthApiUrl(config)
+		if err != nil {
+			logger.Warn().Err(err).Msg("failed to read oauth token")
+		}
+
+		if len(urlFromOauthToken) > 0 {
+			urlString = urlFromOauthToken
+		}
+
+		if len(urlFromOauthToken) == 0 && existingValue != nil {
 			if temp, ok := existingValue.(string); ok {
 				urlString = temp
 			}
-		} else if u, err := oauthApiUrl(config); err != nil {
-			logger.Warn().Err(err).Msg("failed to read oauth token")
-		} else if u != "" {
-			urlString = u
 		}
 
 		apiString, err := api.GetCanonicalApiUrlFromString(urlString)

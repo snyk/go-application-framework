@@ -87,8 +87,9 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
-func Test_CreateAppEngine_config_oauthApiUrl(t *testing.T) {
+func Test_CreateAppEngine_config_OauthAudHasPredence(t *testing.T) {
 	config := configuration.New()
+	config.Set(configuration.API_URL, "https://api.dev.snyk.io")
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN,
 		// JWT generated at https://jwt.io with claim:
 		//   "aud": ["https://api.example.com"]
@@ -96,7 +97,7 @@ func Test_CreateAppEngine_config_oauthApiUrl(t *testing.T) {
 	)
 	logger := log.New(os.Stderr, "", 0)
 	engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(logger))
-	initConfiguration(engine, config, engine.GetLogger(), nil)
+	assert.NotNil(t, engine)
 
 	actualApiUrl := config.GetString(configuration.API_URL)
 	assert.Equal(t, "https://api.example.com", actualApiUrl)
