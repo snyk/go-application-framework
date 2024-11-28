@@ -89,18 +89,36 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 func Test_CreateAppEngine_config_OauthAudHasPredence(t *testing.T) {
 	config := configuration.New()
-	config.Set(configuration.API_URL, "https://api.dev.snyk.io")
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN,
 		// JWT generated at https://jwt.io with claim:
 		//   "aud": ["https://api.example.com"]
 		`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhdWQiOlsiaHR0cHM6Ly9hcGkuZXhhbXBsZS5jb20iXX0.hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"}`,
 	)
 	logger := log.New(os.Stderr, "", 0)
-	engine := CreateAppEngineWithOptions(WithConfiguration(config), WithLogger(logger))
-	assert.NotNil(t, engine)
 
-	actualApiUrl := config.GetString(configuration.API_URL)
-	assert.Equal(t, "https://api.example.com", actualApiUrl)
+	t.Run("", func(t *testing.T) {
+		expectedApiUrl := "https://api.dev.snyk.io"
+		localConfig := config.Clone()
+		localConfig.Set(configuration.API_URL, expectedApiUrl)
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig), WithLogger(logger))
+		assert.NotNil(t, engine)
+
+		actualApiUrl := localConfig.GetString(configuration.API_URL)
+		assert.Equal(t, expectedApiUrl, actualApiUrl)
+	})
+
+	t.Run("", func(t *testing.T) {
+		expectedApiUrl := "https://api.example.com"
+		localConfig := config.Clone()
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig), WithLogger(logger))
+		assert.NotNil(t, engine)
+
+		actualApiUrl := localConfig.GetString(configuration.API_URL)
+		assert.Equal(t, expectedApiUrl, actualApiUrl)
+	})
+
 }
 
 func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
