@@ -341,7 +341,6 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	// iterate over different known ports if one fails
 	for _, port := range acceptedCallbackPorts {
 		srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
-		o.logger.Debug().Msgf("Checking server:port %s:%d", CALLBACK_HOSTNAME, port)
 		listener, listenErr := net.Listen("tcp", srv.Addr)
 		if listenErr != nil { // skip port if it can't be listened to
 			continue
