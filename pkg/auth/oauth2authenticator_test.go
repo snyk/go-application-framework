@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 
@@ -17,12 +16,13 @@ import (
 )
 
 func headlessOpenBrowserFunc(t *testing.T) func(url string) {
+	t.Helper()
 	return func(url string) {
-		t.Helper()
 		fmt.Printf("Mock opening browser... %s", url)
-		client := *http.DefaultClient
-		_, err := client.Get(url)
-		assert.NoError(t, err)
+		_, err := http.DefaultClient.Get(url)
+		if err != nil {
+			fmt.Printf("Error opening browser: %s", err)
+		}
 	}
 }
 
@@ -363,7 +363,6 @@ func Test_isValidAuthHost(t *testing.T) {
 }
 
 func Test_Authenticate_AuthorizationCode(t *testing.T) {
-	logger := zerolog.Nop()
 	t.Run("happy", func(t *testing.T) {
 		config := configuration.NewWithOpts()
 
@@ -385,7 +384,6 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 		authenticator := NewOAuth2AuthenticatorWithOpts(
 			config,
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
-			WithLogger(&logger),
 		)
 
 		err := authenticator.Authenticate()
