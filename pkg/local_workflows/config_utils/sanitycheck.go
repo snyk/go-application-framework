@@ -28,7 +28,7 @@ func CheckSanity(config configuration.Configuration) []SanityCheckResult {
 	}
 
 	if keysSpecified := config.GetAllKeysThatContainValues(configuration.API_URL); len(keysSpecified) > 0 {
-		audience, err := auth.GetAudienceClaimFromOauthToken(config)
+		audience, err := auth.GetAudienceClaimFromOauthToken(config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 		if err == nil && len(audience) > 0 {
 			clonedConfig := config.Clone()
 			clonedConfig.AddDefaultValue(configuration.API_URL, nil)

@@ -9,8 +9,6 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/jws"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type arrayClaimSet struct {
@@ -25,9 +23,8 @@ type arrayClaimSet struct {
 // Returns an empty string if an OAuth token is not available, cannot be parsed,
 // or lacks such an audience claim, along with an error that may have occurred
 // in the attempt to parse it.
-func GetAudienceClaimFromOauthToken(config configuration.Configuration) ([]string, error) {
-	oauthTokenString, ok := config.Get(CONFIG_KEY_OAUTH_TOKEN).(string)
-	if !ok || oauthTokenString == "" {
+func GetAudienceClaimFromOauthToken(oauthTokenString string) ([]string, error) {
+	if oauthTokenString == "" {
 		return []string{}, nil
 	}
 	var token oauth2.Token

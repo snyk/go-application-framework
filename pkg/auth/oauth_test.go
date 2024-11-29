@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,4 +53,38 @@ func Test_ReadAudience_ArrayClaim(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, expectedAudience, actualAudience)
+}
+
+func Test_GetAudienceClaimFromOauthToken(t *testing.T) {
+
+	t.Run("Happy path", func(t *testing.T) {
+		expectedString := "api.eu.snyk.io"
+		expectedAudience := []string{expectedString}
+		token := oauth2.Token{
+			AccessToken: getAccessTokenWithSingleAudienceClaim(t, expectedString),
+		}
+
+		tokenBytes, err := json.Marshal(token)
+		assert.NoError(t, err)
+
+		actualClaims, err := GetAudienceClaimFromOauthToken(string(tokenBytes))
+		assert.NoError(t, err)
+		assert.Equal(t, expectedAudience, actualClaims)
+	})
+
+	t.Run("empty token string", func(t *testing.T) {
+		expectedAudience := []string{}
+
+		actualClaims, err := GetAudienceClaimFromOauthToken("")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedAudience, actualClaims)
+	})
+
+	t.Run("random string value", func(t *testing.T) {
+		expectedAudience := []string{}
+
+		actualClaims, err := GetAudienceClaimFromOauthToken("aihsfdhajksh")
+		assert.Error(t, err)
+		assert.Equal(t, expectedAudience, actualClaims)
+	})
 }
