@@ -31,7 +31,7 @@ func CheckSanity(config configuration.Configuration) []SanityCheckResult {
 		audience, err := auth.GetAudienceClaimFromOauthToken(config)
 		if err == nil && len(audience) > 0 {
 			clonedConfig := config.Clone()
-			clonedConfig.DisableDefaultFunctions(true)
+			clonedConfig.AddDefaultValue(configuration.API_URL, nil)
 			configuredValue := clonedConfig.GetString(configuration.API_URL)
 			differentApiUrlsSpecified := utils.ValueOf(api.GetCanonicalApiUrlFromString(audience[0])) != utils.ValueOf(api.GetCanonicalApiUrlFromString(configuredValue))
 
