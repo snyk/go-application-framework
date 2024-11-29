@@ -8,10 +8,17 @@ import (
 	"strings"
 
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/jws"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+type arrayClaimSet struct {
+	// NOTE: The original jws package models audience with a string, not a
+	// []string. This fails to parse Snyk JWTs.
+	Aud []string `json:"aud"`
+}
 
 // oauthApiUrl returns the API URL specified by the audience claim in a JWT
 // token established by a prior OAuth authentication flow.
@@ -35,6 +42,9 @@ func GetApiUrlFromOauthToken(config configuration.Configuration) (string, error)
 // readAudience returns the first audience claim from an OAuth2 access token, or
 // an error which prevented its parsing.
 //
+// https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3
+// Audience can be an array or a single value.
+//
 // If the claim is not present, an empty string is returned.
 //
 // This function was derived from https://pkg.go.dev/golang.org/x/oauth2/jws#Decode,
@@ -47,24 +57,31 @@ func readAudience(token *oauth2.Token) (string, error) {
 	// decode returned id token to get expiry
 	s := strings.Split(token.AccessToken, ".")
 	if len(s) < 2 {
-		// TODO(jbd): Provide more context about the error.
 		return "", errors.New("jws: invalid token received")
 	}
+
 	decoded, err := base64.RawURLEncoding.DecodeString(s[1])
 	if err != nil {
 		return "", err
 	}
-	c := struct {
-		// NOTE: The original jws package models audience with a string, not a
-		// []string. This fails to parse Snyk JWTs.
-		Aud []string `json:"aud"`
-	}{}
+
+	// try decode as array
+	c := arrayClaimSet{}
 	err = json.NewDecoder(bytes.NewBuffer(decoded)).Decode(&c)
-	if err != nil {
-		return "", err
+	if err == nil {
+		if len(c.Aud) > 0 {
+			return c.Aud[0], nil
+		}
+	} else {
+		// try decode as single value
+		claimset := jws.ClaimSet{}
+		err = json.NewDecoder(bytes.NewBuffer(decoded)).Decode(&claimset)
+		if err != nil {
+			return "", err
+		}
+
+		return claimset.Aud, nil
 	}
-	if len(c.Aud) > 0 {
-		return c.Aud[0], nil
-	}
+
 	return "", nil
 }

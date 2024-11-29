@@ -1,1 +1,54 @@
 package auth
+
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/jws"
+)
+
+func getAccessTokenWithSingleAudienceClaim(t *testing.T, audience string) string {
+	t.Helper()
+	header := &jws.Header{}
+	claims := &jws.ClaimSet{
+		Aud: audience,
+	}
+	pk, err := rsa.GenerateKey(rand.Reader, 1023)
+	assert.NoError(t, err)
+
+	accessToken, err := jws.Encode(header, claims, pk)
+	assert.NoError(t, err)
+
+	return accessToken
+}
+
+func getAccessTokenWithMultpleAudienceClaim() string {
+	return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhdWQiOlsiaHR0cHM6Ly9hcGkuZXhhbXBsZS5jb20iXX0.hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"
+}
+
+func Test_ReadAudience_SingleClaim(t *testing.T) {
+	expectedAudience := "api.eu.snyk.io"
+	token := oauth2.Token{
+		AccessToken: getAccessTokenWithSingleAudienceClaim(t, expectedAudience),
+	}
+
+	actualAudience, err := readAudience(&token)
+	assert.NoError(t, err)
+
+	assert.Equal(t, expectedAudience, actualAudience)
+}
+
+func Test_ReadAudience_ArrayClaim(t *testing.T) {
+	expectedAudience := "https://api.example.com"
+	token := oauth2.Token{
+		AccessToken: getAccessTokenWithMultpleAudienceClaim(),
+	}
+
+	actualAudience, err := readAudience(&token)
+	assert.NoError(t, err)
+
+	assert.Equal(t, expectedAudience, actualAudience)
+}
