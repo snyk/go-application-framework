@@ -741,3 +741,24 @@ func Test_Configuration_envVarSupport(t *testing.T) {
 		cleanUpEnvVars()
 	})
 }
+
+func Test_Configuration_noDefaultFunction(t *testing.T) {
+	config := NewWithOpts()
+	configKey := "mykey"
+	defaultValue := "red"
+	setValue := "blue"
+	config.Set(configKey, setValue)
+	config.AddDefaultValue(configKey, func(existingValue interface{}) interface{} {
+		return defaultValue
+	})
+
+	assert.Equal(t, defaultValue, config.GetString(configKey))
+
+	config.DisableDefaultFunctions(true)
+
+	assert.Equal(t, setValue, config.GetString(configKey))
+
+	config.DisableDefaultFunctions(false)
+
+	assert.Equal(t, defaultValue, config.GetString(configKey))
+}
