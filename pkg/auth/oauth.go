@@ -10,7 +10,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/jws"
 
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -26,14 +25,14 @@ type arrayClaimSet struct {
 // Returns an empty string if an OAuth token is not available, cannot be parsed,
 // or lacks such an audience claim, along with an error that may have occurred
 // in the attempt to parse it.
-func GetApiUrlFromOauthToken(config configuration.Configuration) (string, error) {
-	oauthTokenString, ok := config.Get(auth.CONFIG_KEY_OAUTH_TOKEN).(string)
+func GetAudienceClaimFromOauthToken(config configuration.Configuration) ([]string, error) {
+	oauthTokenString, ok := config.Get(CONFIG_KEY_OAUTH_TOKEN).(string)
 	if !ok || oauthTokenString == "" {
-		return "", nil
+		return []string{}, nil
 	}
 	var token oauth2.Token
 	if err := json.Unmarshal([]byte(oauthTokenString), &token); err != nil {
-		return "", err
+		return []string{}, err
 	}
 
 	return readAudience(&token)
@@ -53,35 +52,33 @@ func GetApiUrlFromOauthToken(config configuration.Configuration) (string, error)
 // Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-func readAudience(token *oauth2.Token) (string, error) {
+func readAudience(token *oauth2.Token) ([]string, error) {
 	// decode returned id token to get expiry
 	s := strings.Split(token.AccessToken, ".")
 	if len(s) < 2 {
-		return "", errors.New("jws: invalid token received")
+		return []string{}, errors.New("jws: invalid token received")
 	}
 
 	decoded, err := base64.RawURLEncoding.DecodeString(s[1])
 	if err != nil {
-		return "", err
+		return []string{}, err
 	}
 
 	// try decode as array
 	c := arrayClaimSet{}
 	err = json.NewDecoder(bytes.NewBuffer(decoded)).Decode(&c)
 	if err == nil {
-		if len(c.Aud) > 0 {
-			return c.Aud[0], nil
-		}
+		return c.Aud, nil
 	} else {
 		// try decode as single value
 		claimset := jws.ClaimSet{}
 		err = json.NewDecoder(bytes.NewBuffer(decoded)).Decode(&claimset)
 		if err != nil {
-			return "", err
+			return []string{}, err
 		}
 
-		return claimset.Aud, nil
+		return []string{claimset.Aud}, nil
 	}
 
-	return "", nil
+	return []string{}, nil
 }

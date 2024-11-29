@@ -16,7 +16,6 @@ import (
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	auth_internal "github.com/snyk/go-application-framework/internal/auth"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -87,13 +86,13 @@ func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logge
 				urlString = temp
 			}
 		} else { // extract API URL from token
-			urlFromOauthToken, err := auth_internal.GetApiUrlFromOauthToken(config)
+			urlFromOauthToken, err := auth.GetAudienceClaimFromOauthToken(config)
 			if err != nil {
 				logger.Warn().Err(err).Msg("failed to read oauth token")
 			}
 
-			if len(urlFromOauthToken) > 0 {
-				urlString = urlFromOauthToken
+			if len(urlFromOauthToken) > 0 && len(urlFromOauthToken[0]) > 0 {
+				urlString = urlFromOauthToken[0]
 			}
 		}
 

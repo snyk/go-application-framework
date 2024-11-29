@@ -30,9 +30,10 @@ func getAccessTokenWithMultpleAudienceClaim() string {
 }
 
 func Test_ReadAudience_SingleClaim(t *testing.T) {
-	expectedAudience := "api.eu.snyk.io"
+	expectedString := "api.eu.snyk.io"
+	expectedAudience := []string{expectedString}
 	token := oauth2.Token{
-		AccessToken: getAccessTokenWithSingleAudienceClaim(t, expectedAudience),
+		AccessToken: getAccessTokenWithSingleAudienceClaim(t, expectedString),
 	}
 
 	actualAudience, err := readAudience(&token)
@@ -42,7 +43,7 @@ func Test_ReadAudience_SingleClaim(t *testing.T) {
 }
 
 func Test_ReadAudience_ArrayClaim(t *testing.T) {
-	expectedAudience := "https://api.example.com"
+	expectedAudience := []string{"https://api.example.com"}
 	token := oauth2.Token{
 		AccessToken: getAccessTokenWithMultpleAudienceClaim(),
 	}
