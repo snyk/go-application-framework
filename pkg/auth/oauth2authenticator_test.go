@@ -43,6 +43,24 @@ func mockOAuth2TokenHandler(t *testing.T) http.HandlerFunc {
 	}
 }
 
+func mockAuthorizeHandler(state string, instance string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Redirect to the redirect_uri with a mock authorization code
+		redirectURI := r.URL.Query().Get("redirect_uri")
+
+		if state == "" {
+			state = r.URL.Query().Get("state")
+		}
+
+		instanceParam := ""
+		if instance != "" {
+			instanceParam = "&instance=" + instance
+		}
+
+		http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+instanceParam, http.StatusFound)
+	}
+}
+
 func Test_GetVerifier(t *testing.T) {
 	expectedCount := 23
 	verifier, err := createVerifier(expectedCount)
@@ -368,12 +386,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()
-		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
-			// Redirect to the redirect_uri with a mock authorization code
-			redirectURI := r.URL.Query().Get("redirect_uri")
-			state := r.URL.Query().Get("state")
-			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state, http.StatusFound)
-		})
+		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("", ""))
 		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
@@ -398,13 +411,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()
-		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
-			// Redirect to the redirect_uri with a mock authorization code
-			redirectURI := r.URL.Query().Get("redirect_uri")
-			state := r.URL.Query().Get("state")
-
-			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+"&instance="+tokenServer.URL, http.StatusFound)
-		})
+		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("", tokenServer.URL))
 		initialAuthServer := httptest.NewServer(mux)
 		defer initialAuthServer.Close()
 
@@ -420,6 +427,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 		err := authenticator.Authenticate()
 		assert.NoError(t, err)
+		assert.Equal(t, "{\"access_token\":\"a\",\"token_type\":\"b\",\"expiry\":\"0001-01-01T00:00:00Z\"}", config.GetString(CONFIG_KEY_OAUTH_TOKEN))
 	})
 
 	t.Run("does not redirect to invalid instance", func(t *testing.T) {
@@ -428,12 +436,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()
-		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
-			// Redirect to the redirect_uri with a mock authorization code
-			redirectURI := r.URL.Query().Get("redirect_uri")
-			state := r.URL.Query().Get("state")
-			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state+"&instance=api.malicioussnyk.io", http.StatusFound)
-		})
+		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("", "api.malicioussnyk.io"))
 		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
 
 		ts := httptest.NewServer(mux)
@@ -447,7 +450,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 		)
 
 		err := authenticator.Authenticate()
-		assert.Error(t, err)
+		assert.ErrorContains(t, err, "invalid host")
 	})
 
 	t.Run("fails with malformed state", func(t *testing.T) {
@@ -455,12 +458,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 		// Create mock server for unsuccessful oauth2 flow
 		mux := http.NewServeMux()
-		mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
-			// Redirect to the redirect_uri with a mock authorization code
-			redirectURI := r.URL.Query().Get("redirect_uri")
-			state := "invalid-state-object"
-			http.Redirect(w, r, redirectURI+"?code=mock-auth-code&state="+state, http.StatusFound)
-		})
+		mux.HandleFunc("/oauth2/authorize", mockAuthorizeHandler("incorrect-state", ""))
 		mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
