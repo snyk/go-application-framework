@@ -89,7 +89,7 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
-func Test_CreateAppEngine_config_OauthAudHasPredence(t *testing.T) {
+func Test_CreateAppEngine_config_OauthAudHasPrecedence(t *testing.T) {
 	config := configuration.New()
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN,
 		// JWT generated at https://jwt.io with claim:
@@ -98,10 +98,10 @@ func Test_CreateAppEngine_config_OauthAudHasPredence(t *testing.T) {
 	)
 	logger := log.New(os.Stderr, "", 0)
 
-	t.Run("", func(t *testing.T) {
-		expectedApiUrl := "https://api.dev.snyk.io"
+	t.Run("Audience claim takes precedence of configured value", func(t *testing.T) {
+		expectedApiUrl := "https://api.example.com"
 		localConfig := config.Clone()
-		localConfig.Set(configuration.API_URL, expectedApiUrl)
+		localConfig.Set(configuration.API_URL, "https://api.dev.snyk.io")
 
 		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig), WithLogger(logger))
 		assert.NotNil(t, engine)
@@ -110,7 +110,7 @@ func Test_CreateAppEngine_config_OauthAudHasPredence(t *testing.T) {
 		assert.Equal(t, expectedApiUrl, actualApiUrl)
 	})
 
-	t.Run("", func(t *testing.T) {
+	t.Run("nothing configured", func(t *testing.T) {
 		expectedApiUrl := "https://api.example.com"
 		localConfig := config.Clone()
 
