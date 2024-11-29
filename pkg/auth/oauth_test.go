@@ -56,7 +56,6 @@ func Test_ReadAudience_ArrayClaim(t *testing.T) {
 }
 
 func Test_GetAudienceClaimFromOauthToken(t *testing.T) {
-
 	t.Run("Happy path", func(t *testing.T) {
 		expectedString := "api.eu.snyk.io"
 		expectedAudience := []string{expectedString}
