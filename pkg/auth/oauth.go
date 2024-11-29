@@ -79,6 +79,4 @@ func readAudience(token *oauth2.Token) ([]string, error) {
 
 		return []string{claimset.Aud}, nil
 	}
-
-	return []string{}, nil
 }
