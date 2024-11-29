@@ -64,22 +64,20 @@ type Configuration interface {
 	GetSupportedEnvVarPrefixes() []string
 	SetFiles(files ...string)
 	GetFiles() []string
-	DisableDefaultFunctions(disable bool)
 }
 
 // extendedViper is a wrapper around the viper library.
 // It adds support for default values and alternative keys.
 type extendedViper struct {
-	viper                   *viper.Viper
-	alternativeKeys         map[string][]string
-	defaultValues           map[string]DefaultValueFunction
-	configType              configType
-	flagsets                []*pflag.FlagSet
-	storage                 Storage
-	mutex                   sync.Mutex
-	automaticEnvEnabled     bool
-	configFiles             []string
-	defaultFunctionDisabled bool
+	viper               *viper.Viper
+	alternativeKeys     map[string][]string
+	defaultValues       map[string]DefaultValueFunction
+	configType          configType
+	flagsets            []*pflag.FlagSet
+	storage             Storage
+	mutex               sync.Mutex
+	automaticEnvEnabled bool
+	configFiles         []string
 
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
@@ -275,7 +273,6 @@ func (ev *extendedViper) Clone() Configuration {
 	clone.SetSupportedEnvVars(ev.supportedEnvVars...)
 	clone.SetSupportedEnvVarPrefixes(ev.supportedEnvVarPrefixes...)
 	clone.SetFiles(ev.configFiles...)
-	clone.DisableDefaultFunctions(ev.defaultFunctionDisabled)
 
 	for k, v := range ev.alternativeKeys {
 		clone.AddAlternativeKeys(k, v)
@@ -377,7 +374,7 @@ func (ev *extendedViper) Get(key string) interface{} {
 	// use synchronized get()
 	value := ev.get(key)
 
-	if ev.defaultValues[key] != nil && !ev.defaultFunctionDisabled {
+	if ev.defaultValues[key] != nil {
 		value = ev.defaultValues[key](value)
 	}
 
@@ -670,8 +667,4 @@ func (ev *extendedViper) GetFiles() []string {
 	defer ev.mutex.Unlock()
 
 	return ev.configFiles
-}
-
-func (ev *extendedViper) DisableDefaultFunctions(disable bool) {
-	ev.defaultFunctionDisabled = disable
 }
