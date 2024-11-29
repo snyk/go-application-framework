@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
@@ -75,11 +76,18 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	return callback
 }
 
-func defaultFuncApiUrl(logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) interface{} {
 		urlString := constants.SNYK_DEFAULT_API_URL
 
-		if existingValue != nil {
+		urlFromOauthToken, err := auth.GetAudienceClaimFromOauthToken(config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+		if err != nil {
+			logger.Warn().Err(err).Msg("failed to read oauth token")
+		}
+
+		if len(urlFromOauthToken) > 0 && len(urlFromOauthToken[0]) > 0 {
+			urlString = urlFromOauthToken[0]
+		} else if existingValue != nil { // configured value takes precedence
 			if temp, ok := existingValue.(string); ok {
 				urlString = temp
 			}
@@ -186,10 +194,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
+	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(`^api(\.(.+))?\.snyk|snykgov\.io$`))
 
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(logger))
+	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {

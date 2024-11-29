@@ -64,6 +64,7 @@ type Configuration interface {
 	GetSupportedEnvVarPrefixes() []string
 	SetFiles(files ...string)
 	GetFiles() []string
+	ReloadConfig() error
 }
 
 // extendedViper is a wrapper around the viper library.
@@ -667,4 +668,8 @@ func (ev *extendedViper) GetFiles() []string {
 	defer ev.mutex.Unlock()
 
 	return ev.configFiles
+}
+
+func (ev *extendedViper) ReloadConfig() error {
+	return ev.viper.ReadInConfig()
 }

@@ -14,26 +14,32 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pkg/browser"
+	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 const (
 	//nolint:gosec // not a token value, but a configuration key
-	CONFIG_KEY_OAUTH_TOKEN  string = "INTERNAL_OAUTH_TOKEN_STORAGE"
-	OAUTH_CLIENT_ID         string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
-	CALLBACK_HOSTNAME       string = "127.0.0.1"
-	CALLBACK_PATH           string = "/authorization-code/callback"
-	TIMEOUT_SECONDS                = 120 * time.Second
-	AUTHENTICATED_MESSAGE          = "Your account has been authenticated."
-	PARAMETER_CLIENT_ID     string = "client-id"
-	PARAMETER_CLIENT_SECRET string = "client-secret"
+	CONFIG_KEY_ALLOWED_HOST_REGEXP        = "INTERNAL_OAUTH_ALLOWED_HOSTS"
+	CONFIG_KEY_OAUTH_TOKEN         string = "INTERNAL_OAUTH_TOKEN_STORAGE"
+	OAUTH_CLIENT_ID                string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
+	CALLBACK_HOSTNAME              string = "127.0.0.1"
+	CALLBACK_PATH                  string = "/authorization-code/callback"
+	TIMEOUT_SECONDS                       = 120 * time.Second
+	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
+	PARAMETER_CLIENT_ID            string = "client-id"
+	PARAMETER_CLIENT_SECRET        string = "client-secret"
 )
 
 type GrantType int
@@ -58,6 +64,7 @@ type oAuth2Authenticator struct {
 	token              *oauth2.Token
 	headless           bool
 	grantType          GrantType
+	logger             *zerolog.Logger
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
@@ -193,6 +200,9 @@ func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http
 
 func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...OAuth2AuthenticatorOption) Authenticator {
 	o := &oAuth2Authenticator{}
+	nopLogger := zerolog.Nop()
+
+	o.logger = &nopLogger
 	o.config = config
 	//nolint:errcheck // breaking api change needed to fix this
 	o.token, _ = GetOAuthToken(config)
@@ -287,6 +297,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	var responseCode string
 	var responseState string
 	var responseError string
+	var responseInstance string
 	verifier, err := createVerifier(128)
 	if err != nil {
 		return err
@@ -312,30 +323,14 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	mux.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
-			details := html.EscapeString(r.URL.Query().Get("error_description"))
-
-			tmpl := template.New("")
-			tmpl, tmplError := tmpl.Parse(errorResponsePage)
-			if tmplError != nil {
-				return
-			}
-
-			data := struct {
-				Reason      string
-				Description string
-			}{
-				Reason:      responseError,
-				Description: details,
-			}
-
-			tmplError = tmpl.Execute(w, data)
-			if tmplError != nil {
+			if writeCallbackErrorResponse(w, r.URL.Query(), responseError) {
 				return
 			}
 		} else {
 			appUrl := o.config.GetString(configuration.WEB_APP_URL)
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
+			responseInstance = html.EscapeString(r.URL.Query().Get("instance"))
 			w.Header().Add("Location", appUrl+"/authenticated?type=oauth")
 			w.WriteHeader(http.StatusMovedPermanently)
 		}
@@ -353,8 +348,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 
 		// fill redirect url now that the port is known
 		o.oauthConfig.RedirectURL = getRedirectUri(port)
-
-		url := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
+		authCodeUrl := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
 			oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 			oauth2.SetAuthURLParam("response_type", "code"),
@@ -362,7 +356,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			oauth2.SetAuthURLParam("version", "2021-08-11~experimental"))
 
 		// launch browser
-		go o.openBrowserFunc(url)
+		go o.openBrowserFunc(authCodeUrl)
 
 		timedOut := false
 		timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
@@ -388,6 +382,11 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		return fmt.Errorf("incorrect response state: %s != %s", responseState, state)
 	}
 
+	modifyTokenErr := o.modifyTokenUrl(responseInstance)
+	if modifyTokenErr != nil {
+		return modifyTokenErr
+	}
+
 	// Use the custom HTTP client when requesting a token.
 	if o.httpClient != nil {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
@@ -400,6 +399,99 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 
 	err = o.persistToken(token)
 	return err
+}
+
+func writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
+	tmpl := template.New("")
+	tmpl, tmplError := tmpl.Parse(errorResponsePage)
+	if tmplError != nil {
+		return true
+	}
+
+	data := struct {
+		Reason      string
+		Description string
+	}{
+		Reason:      responseError,
+		Description: html.EscapeString(q.Get("error_description")),
+	}
+
+	tmplError = tmpl.Execute(w, data)
+
+	return tmplError != nil
+}
+
+func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
+	if responseInstance == "" {
+		return nil
+	}
+
+	o.logger.Info().Msg("Instance specified in callback " + responseInstance)
+	authHost, err := redirectAuthHost(responseInstance)
+	if err != nil {
+		// todo error-catalog error
+		return err
+	}
+
+	redirectAuthHostRE := o.config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
+	o.logger.Info().Msgf("Validating with regexp: \"%s\"", redirectAuthHostRE)
+	isValidHost, err := isValidAuthHost(authHost, redirectAuthHostRE)
+	if err != nil {
+		return err
+	}
+
+	if !isValidHost {
+		o.logger.Info().Msg("Instance specified in callback was invalid:" + authHost)
+		return fmt.Errorf("specified instance is an invalid host")
+	}
+
+	oauthTokenUrl, urlParseErr := url.Parse(o.oauthConfig.Endpoint.TokenURL)
+	if urlParseErr != nil {
+		return fmt.Errorf("failed to parse auth url: %w", urlParseErr)
+	}
+	if oauthTokenUrl.Host == authHost {
+		o.logger.Info().Msgf("Instance specified in callback (%s) matches pre-configured value (%s)", authHost, oauthTokenUrl.Host)
+		return nil
+	}
+
+	o.logger.Info().Msgf("Instance specified in callback (%s) does not match pre-configured value (%s)", authHost, oauthTokenUrl.Host)
+	oauthTokenUrl.Host = authHost
+	o.oauthConfig.Endpoint.TokenURL = oauthTokenUrl.String()
+	o.logger.Info().Msgf("New token url endpoint is: %s", o.oauthConfig.Endpoint.TokenURL)
+
+	return nil
+}
+
+func redirectAuthHost(instance string) (string, error) {
+	// handle both cases if instance is a URL or just a host
+	if !strings.HasPrefix(instance, "http") {
+		instance = "https://" + instance
+	}
+
+	instanceUrl, err := url.Parse(instance)
+	if err != nil {
+		return "", err
+	}
+
+	canonicalizedInstanceUrl, err := api.GetCanonicalApiAsUrl(*instanceUrl)
+	if err != nil {
+		return "", err
+	}
+
+	return canonicalizedInstanceUrl.Host, nil
+}
+
+func isValidAuthHost(authHost string, hostRegularExpression string) (bool, error) {
+	if len(hostRegularExpression) == 0 {
+		return false, fmt.Errorf("regular expression to check host names must not be empty")
+	}
+
+	r, err := regexp.Compile(hostRegularExpression)
+	if err != nil {
+		return false, err
+	}
+
+	return r.MatchString(authHost), nil
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {

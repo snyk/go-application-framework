@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 )
 
@@ -18,6 +19,12 @@ func WithOpenBrowserFunc(openBrowserFunc func(string)) OAuth2AuthenticatorOption
 func WithShutdownServerFunc(shutdownServerFunc func(server *http.Server)) OAuth2AuthenticatorOption {
 	return func(authenticator *oAuth2Authenticator) {
 		authenticator.shutdownServerFunc = shutdownServerFunc
+	}
+}
+
+func WithLogger(logger *zerolog.Logger) OAuth2AuthenticatorOption {
+	return func(authenticator *oAuth2Authenticator) {
+		authenticator.logger = logger
 	}
 }
 

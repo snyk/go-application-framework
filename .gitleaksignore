@@ -14,3 +14,7 @@ b0ba7f6ed181c23a5c6532cf6f124b731d390f86:internal/presenters/testdata/with-ignor
 237c7f05ec087733fa7929ee9fa3db2bd56bdba4:pkg/logging/scrubbingLogWriter_test.go:github-pat:183
 237c7f05ec087733fa7929ee9fa3db2bd56bdba4:pkg/logging/scrubbingLogWriter_test.go:snyk-api-token:208
 0481cdb4d07351149e65a57ebc9ad5b983896849:pkg/auth/oauth2authenticator.go:generic-api-key:30
+0a646dd3b9eeca0463fd8240b87957106f4b71f3:pkg/app/app_test.go:jwt:57
+997b87d4bed3623bdf34dcaa29b63647f1f0460a:pkg/app/app_test.go:jwt:97
+5a4b6d6a75be3cbfc5122dd7d6d4ead5142b6429:pkg/app/app_test.go:jwt:95
+internal/auth/oauth_test.go:jwt:29

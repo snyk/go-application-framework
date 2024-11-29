@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -58,7 +60,8 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 }
 
 func Test_CreateAppEngine(t *testing.T) {
-	engine := CreateAppEngine()
+	localConfig := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 	assert.NotNil(t, engine)
 
 	err := engine.Init()
@@ -70,7 +73,8 @@ func Test_CreateAppEngine(t *testing.T) {
 }
 
 func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
-	engine := CreateAppEngine()
+	localConfig := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 	assert.NotNil(t, engine)
 
 	err := engine.Init()
@@ -83,6 +87,39 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 	actualApiUrl := config.GetString(configuration.API_URL)
 	assert.Equal(t, expectApiUrl, actualApiUrl)
+}
+
+func Test_CreateAppEngine_config_OauthAudHasPrecedence(t *testing.T) {
+	config := configuration.New()
+	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN,
+		// JWT generated at https://jwt.io with claim:
+		//   "aud": ["https://api.example.com"]
+		`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhdWQiOlsiaHR0cHM6Ly9hcGkuZXhhbXBsZS5jb20iXX0.hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"}`,
+	)
+	logger := log.New(os.Stderr, "", 0)
+
+	t.Run("Audience claim takes precedence of configured value", func(t *testing.T) {
+		expectedApiUrl := "https://api.example.com"
+		localConfig := config.Clone()
+		localConfig.Set(configuration.API_URL, "https://api.dev.snyk.io")
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig), WithLogger(logger))
+		assert.NotNil(t, engine)
+
+		actualApiUrl := localConfig.GetString(configuration.API_URL)
+		assert.Equal(t, expectedApiUrl, actualApiUrl)
+	})
+
+	t.Run("nothing configured", func(t *testing.T) {
+		expectedApiUrl := "https://api.example.com"
+		localConfig := config.Clone()
+
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig), WithLogger(logger))
+		assert.NotNil(t, engine)
+
+		actualApiUrl := localConfig.GetString(configuration.API_URL)
+		assert.Equal(t, expectedApiUrl, actualApiUrl)
+	})
 }
 
 func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {

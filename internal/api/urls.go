@@ -52,9 +52,7 @@ func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 	return GetCanonicalApiUrl(*url)
 }
 
-func GetCanonicalApiUrl(url url.URL) (string, error) {
-	var result string
-
+func GetCanonicalApiAsUrl(url url.URL) (url.URL, error) {
 	// for localhost we don't change the host, since there are no subdomains
 	if isImmutableHost(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
@@ -71,8 +69,16 @@ func GetCanonicalApiUrl(url url.URL) (string, error) {
 		url.RawQuery = ""
 	}
 
-	result = url.String()
-	return result, nil
+	return url, nil
+}
+
+func GetCanonicalApiUrl(url url.URL) (string, error) {
+	result, err := GetCanonicalApiAsUrl(url)
+	if err != nil {
+		return "", err
+	}
+
+	return result.String(), nil
 }
 
 func DeriveAppUrl(canonicalUrl string) (string, error) {
