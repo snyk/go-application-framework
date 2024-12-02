@@ -140,6 +140,21 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 				markdown:  result.message.markdown
 				arguments: result.message.arguments
 			}
+			if result.properties != _|_ {
+				if result.properties["snykPolicy/v1"] != _|_ {
+					policy: {
+						if result.properties["snykPolicy/v1"].originalLevel != _|_ {
+							originalLevel: result.properties["snykPolicy/v1"].originalLevel
+						}
+						if result.properties["snykPolicy/v1"].originalSeverity != _|_ {
+							originalSeverity: result.properties["snykPolicy/v1"].originalSeverity
+						}
+						if result.properties["snykPolicy/v1"].severity != _|_ {
+							severity: result.properties["snykPolicy/v1"].severity
+						}
+					}
+				}
+			}
 			rating: {
 				if result.properties != _|_ {
 					if result.properties.priorityScore != _|_ {
@@ -156,7 +171,7 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 					}
 				}
 				severity: {
-					let _ruleLevel = _rules[result.ruleId].defaultConfiguration.level
+					let _ruleLevel = result.level
 					value: [
 						if _ruleLevel == "error" {"high"},
 						if _ruleLevel == "warning" {"medium"},

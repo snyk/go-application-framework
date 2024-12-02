@@ -604,6 +604,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		expectedString := string(prettyExpectedSarif)
 		actualSarifString := string(prettyActualSarif)
+
 		require.JSONEq(t, expectedString, actualSarifString)
 	})
 }

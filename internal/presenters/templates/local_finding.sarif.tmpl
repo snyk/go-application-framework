@@ -179,6 +179,19 @@
                         ],
                         {{- end }}
                         "properties": {
+                            {{- if $finding.Attributes.Policy }}
+                            "snykPolicy/v1": {
+                                {{- if $finding.Attributes.Policy.OriginalLevel }}
+                                "originalLevel": "{{ $finding.Attributes.Policy.OriginalLevel }}"{{if or $finding.Attributes.Policy.Severity $finding.Attributes.Policy.OriginalSeverity}},{{end}}
+                                {{- end }}
+                                {{- if $finding.Attributes.Policy.Severity }}
+                                "severity": "{{ $finding.Attributes.Policy.Severity }}"{{if $finding.Attributes.Policy.OriginalSeverity}},{{end}}
+                                {{- end }}
+                                {{- if $finding.Attributes.Policy.OriginalSeverity }}
+                                "originalSeverity": "{{ $finding.Attributes.Policy.OriginalSeverity }}"
+                                {{- end }}
+                            },
+                            {{- end }}
                             "priorityScore": {{ $finding.Attributes.Rating.Priority.Score }},
                             "priorityScoreFactors": [
                             {{- $factorSize := sub (len $finding.Attributes.Rating.Priority.Factors) 1 }}
