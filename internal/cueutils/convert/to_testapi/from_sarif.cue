@@ -171,7 +171,7 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 					}
 				}
 				severity: {
-					let _ruleLevel = _rules[result.ruleId].defaultConfiguration.level
+					let _ruleLevel = result.level
 					value: [
 						if _ruleLevel == "error" {"high"},
 						if _ruleLevel == "warning" {"medium"},
