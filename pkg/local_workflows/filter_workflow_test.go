@@ -162,19 +162,19 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 
 		expectedCounts := findings.NewFindingsCounts()
-		expectedCounts.Count = 22
-		expectedCounts.CountAdjusted = 22
+		expectedCounts.Count = 25
+		expectedCounts.CountAdjusted = 25
 		expectedCounts.CountKeyOrderAsc = local_models.TypesFindingCounts_CountKeyOrderAsc{
 			Severity: json_schemas.DEFAULT_SEVERITIES,
 		}
 		expectedCounts.CountBy = local_models.TypesFindingCounts_CountBy{
 			Severity: map[string]uint32{
-				"high": 22,
+				"high": 25,
 			},
 		}
 		expectedCounts.CountByAdjusted = local_models.TypesFindingCounts_CountByAdjusted{
 			Severity: map[string]uint32{
-				"high": 22,
+				"high": 25,
 			},
 		}
 		assert.Equal(t, expectedCounts, filteredFindings.Summary.Counts)
