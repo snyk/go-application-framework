@@ -494,23 +494,43 @@ func Test_Configuration_GetKeyType(t *testing.T) {
 }
 
 func Test_Configuration_Locking(t *testing.T) {
-	var wg sync.WaitGroup
-	N := 100
+	t.Run("locks env var gets", func(t *testing.T) {
+		var wg sync.WaitGroup
+		N := 100
 
-	config := New()
+		config := NewWithOpts(WithSupportedEnvVarPrefixes("test_"))
 
-	for i := range N {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		for i := range N {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 
-			key := fmt.Sprintf("%d", i)
-			config.Set(key, i)
-			_ = config.Get(key)
-		}()
-	}
+				key := fmt.Sprintf("test_%d", i)
+				_ = config.Get(key)
+			}()
+		}
 
-	wg.Wait()
+		wg.Wait()
+	})
+
+	t.Run("locks gets", func(t *testing.T) {
+		var wg sync.WaitGroup
+		N := 100
+
+		config := New()
+
+		for i := range N {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				key := fmt.Sprintf("%d", i)
+				_ = config.Get(key)
+			}()
+		}
+
+		wg.Wait()
+	})
 }
 
 func Test_JsonStorage_Locking(t *testing.T) {
