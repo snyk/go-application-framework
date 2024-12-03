@@ -76,10 +76,13 @@ func validateSarifData(t *testing.T, data []byte) {
 
 	validationResult, err := gojsonschema.Validate(sarifSchema, gojsonschema.NewBytesLoader(data))
 	assert.NoError(t, err)
-	for _, validationError := range validationResult.Errors() {
-		t.Log(validationError)
+	assert.NotNil(t, validationResult)
+	if validationResult != nil {
+		for _, validationError := range validationResult.Errors() {
+			t.Log(validationError)
+		}
+		assert.True(t, validationResult.Valid(), "Sarif validation failed")
 	}
-	assert.True(t, validationResult.Valid(), "Sarif validation failed")
 }
 
 func getSarifInput() sarif.SarifDocument {
