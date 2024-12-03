@@ -443,7 +443,7 @@
                     ]
                   }
                 ],
-                "exampleCommitDescriptions": [],
+                "exampleCommitDescriptions": ["1","2"],
                 "precision": "very-high",
                 "repoDatasetSize": 27,
                 "cwe": [
