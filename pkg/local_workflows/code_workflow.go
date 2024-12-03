@@ -1,6 +1,8 @@
 package localworkflows
 
 import (
+	"fmt"
+
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/error-catalog-golang-public/code"
@@ -86,7 +88,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	sastEnabledI, err := config.GetE(ConfigurationSastEnabled)
+	sastEnabledI, err := config.GetWithError(ConfigurationSastEnabled)
 	if err != nil {
 		return result, err
 	}
@@ -102,7 +104,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
 
 	if !sastEnabled {
-		return result, code.NewFeatureIsNotEnabledError("Snyk Code is not supported for your current organization.")
+		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
 	}
 
 	if ignoresFeatureFlag && !reportEnabled {

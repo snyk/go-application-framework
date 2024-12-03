@@ -126,18 +126,18 @@ func Test_Configuration_GetE(t *testing.T) {
 
 	_ = os.Unsetenv(ANALYTICS_DISABLED)
 
-	actualValue, err := config.GetE(ANALYTICS_DISABLED)
-	assert.NotNil(t, err)
+	actualValue, err := config.GetWithError(ANALYTICS_DISABLED)
+	assert.Nil(t, err)
 	assert.Nil(t, actualValue)
 
 	t.Setenv("SNYK_DISABLE_ANALYTICS", "1")
-	actualValue, err = config.GetE(ANALYTICS_DISABLED)
+	actualValue, err = config.GetWithError(ANALYTICS_DISABLED)
 	assert.Nil(t, err)
 	assert.NotNil(t, actualValue)
 	assert.Equal(t, "1", actualValue)
 
 	t.Setenv("SNYK_DISABLE_ANALYTICS", "0")
-	actualValue, err = config.GetE(ANALYTICS_DISABLED)
+	actualValue, err = config.GetWithError(ANALYTICS_DISABLED)
 	assert.Nil(t, err)
 	assert.NotNil(t, actualValue)
 	assert.Equal(t, "0", actualValue)

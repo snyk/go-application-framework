@@ -1,7 +1,6 @@
 package configuration
 
 import (
-	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -43,7 +42,7 @@ type Configuration interface {
 	GetInt(key string) int
 	GetFloat64(key string) float64
 	GetUrl(key string) *url.URL
-	GetE(key string) (interface{}, error)
+	GetWithError(key string) (interface{}, error)
 
 	AddFlagSet(flagset *pflag.FlagSet) error
 	AllKeys() []string
@@ -387,16 +386,12 @@ func (ev *extendedViper) Get(key string) interface{} {
 	return value
 }
 
-// GetE returns a configuration value and and error if the value is not set.
-func (ev *extendedViper) GetE(key string) (value interface{}, err error) {
+// GetWithError returns a configuration value and and the potential error returned by the DefaultValueFunction for the configuration value.
+func (ev *extendedViper) GetWithError(key string) (value interface{}, err error) {
 	value = ev.get(key)
 
 	if ev.defaultValues[key] != nil {
 		value, err = ev.defaultValues[key](value)
-	}
-
-	if value == nil && err == nil {
-		err = fmt.Errorf("missing value")
 	}
 
 	return value, err

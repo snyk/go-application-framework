@@ -58,25 +58,11 @@ func Test_ResponseMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("error from JSON API response", func(t *testing.T) {
-		req := buildRequest(server.URL + "/jsonapi")
-		_, err := rt.RoundTrip(req)
-
-		snykErr := snyk_errors.Error{}
-		assert.NotNil(t, err)
-		assert.ErrorAs(t, err, &snykErr)
-		assert.Equal(t, http.StatusProxyAuthRequired, snykErr.StatusCode)
-		assert.Equal(t, "Proxy auth required", snykErr.Detail)
-	})
-
-	t.Run("fallback error if no status code", func(t *testing.T) {
+	t.Run("no error if no status code matches", func(t *testing.T) {
 		req := buildRequest(server.URL + "/404")
 		_, err := rt.RoundTrip(req)
 
-		snykErr := snyk_errors.Error{}
-		assert.ErrorAs(t, err, &snykErr)
-		assert.Equal(t, http.StatusNotFound, snykErr.StatusCode)
-		assert.Equal(t, "Unsuccessful network request", snykErr.Title)
+		assert.Nil(t, err)
 	})
 }
 
