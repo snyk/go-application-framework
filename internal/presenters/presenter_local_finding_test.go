@@ -298,12 +298,12 @@ func TestPresenterLocalFinding_CustomTemplateFiles(t *testing.T) {
 		assert.NoError(t, err)
 
 		expected := `{
-    "findings" :
-    [
-        "Use of Hardcoded Credentials",
-        "Use of Hardcoded Credentials",
-        "Use of Password Hash With Insufficient Computational Effort"
-    ]
+	"findings" :
+	[
+		"Use of Hardcoded Credentials",
+		"Use of Hardcoded Credentials",
+		"Use of Password Hash With Insufficient Computational Effort"
+	]
 }`
 
 		actual := writer.String()
@@ -351,7 +351,7 @@ func TestJsonWriter(t *testing.T) {
 
 		input := []byte(`{
 	"name": "myName",
-    "address": "myAddr"
+	"address": "myAddr"
 }`)
 
 		expected := `{"name": "myName","address": "myAddr"}`
