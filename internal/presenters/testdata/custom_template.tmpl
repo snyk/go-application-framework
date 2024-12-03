@@ -2,13 +2,13 @@
 {
 {{- $findingsSize := len (index $.Results 0).Findings}}
 {{- $findingsSize = sub $findingsSize 1}}
-    "findings" :
-    [
+	"findings" :
+	[
 {{- range $index, $element := (index $.Results 0).Findings}}
-        "{{$element.Attributes.Message.Header}}"{{if lt $index $findingsSize}},{{end}}
+		"{{$element.Attributes.Message.Header}}"{{if lt $index $findingsSize}},{{end}}
 
 {{- end }}
-    ]
+	]
 }
 {{- end }}
 {{- template "main" . }}u
