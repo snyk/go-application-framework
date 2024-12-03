@@ -602,7 +602,8 @@ type TypesFindingAttributes struct {
 	// Fingerprint Natural key, or fingerprint, to identify the same Finding across multiple
 	// Test runs. Unique per Test. Here's why:
 	// https://github.com/snyk/pr-experience-poc/blob/main/docs/design-documents/pr-inline-comments.md#why-do-we-need-fingerprints
-	Fingerprint []Fingerprint `json:"fingerprint"`
+	Fingerprint   []Fingerprint `json:"fingerprint"`
+	IsAutofixable *bool         `json:"isAutofixable,omitempty"`
 
 	// Locations A set of locations where the result was detected. Only one location should
 	// be included unless the finding can only be resolved by making a change at

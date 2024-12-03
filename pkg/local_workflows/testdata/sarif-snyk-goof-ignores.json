@@ -443,7 +443,7 @@
                     ]
                   }
                 ],
-                "exampleCommitDescriptions": [],
+                "exampleCommitDescriptions": ["1","2"],
                 "precision": "very-high",
                 "repoDatasetSize": 27,
                 "cwe": [
@@ -2910,6 +2910,21 @@
                   "endColumn": 18
                 }
               }
+            },
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app.js",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 131,
+                  "endLine": 131,
+                  "startColumn": 1111,
+                  "endColumn": 118
+                }
+              }
             }
           ],
           "fingerprints": {
@@ -3213,7 +3228,7 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false,
+            "isAutofixable": true,
             "snykPolicy/v1": {
               "originalLevel": "warning",
               "severity": "high",

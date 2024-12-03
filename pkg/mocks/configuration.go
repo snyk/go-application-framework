@@ -350,6 +350,20 @@ func (mr *MockConfigurationMockRecorder) PersistInStorage(key interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistInStorage", reflect.TypeOf((*MockConfiguration)(nil).PersistInStorage), key)
 }
 
+// ReloadConfig mocks base method.
+func (m *MockConfiguration) ReloadConfig() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReloadConfig")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReloadConfig indicates an expected call of ReloadConfig.
+func (mr *MockConfigurationMockRecorder) ReloadConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadConfig", reflect.TypeOf((*MockConfiguration)(nil).ReloadConfig))
+}
+
 // Set mocks base method.
 func (m *MockConfiguration) Set(key string, value interface{}) {
 	m.ctrl.T.Helper()
