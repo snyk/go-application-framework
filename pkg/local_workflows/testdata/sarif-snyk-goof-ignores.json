@@ -2910,6 +2910,21 @@
                   "endColumn": 18
                 }
               }
+            },
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app.js",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 131,
+                  "endLine": 131,
+                  "startColumn": 1111,
+                  "endColumn": 118
+                }
+              }
             }
           ],
           "fingerprints": {
