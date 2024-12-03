@@ -141,6 +141,9 @@ _findings: list.Sort(list.Concat([for run in input.runs {
 				arguments: result.message.arguments
 			}
 			if result.properties != _|_ {
+				if result.properties.isAutofixable != _|_ {
+					isAutofixable: result.properties.isAutofixable
+				}
 				if result.properties["snykPolicy/v1"] != _|_ {
 					policy: {
 						if result.properties["snykPolicy/v1"].originalLevel != _|_ {

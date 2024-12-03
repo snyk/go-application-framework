@@ -455,8 +455,9 @@ info: {
 		rating?:      #SchemaMap["types.FindingRating"]
 		suppression?: #SchemaMap["types.Suppression"]
 		codeFlows?: [...#SchemaMap["types.CodeFlow"]]
-		referenceId?: #SchemaMap["types.ReferenceId"]
-		policy?:      #SchemaMap["types.Policyv1"]
+		referenceId?:   #SchemaMap["types.ReferenceId"]
+		policy?:        #SchemaMap["types.Policyv1"]
+		isAutofixable?: bool
 		...
 	}
 }

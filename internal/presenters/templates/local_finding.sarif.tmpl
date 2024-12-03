@@ -179,6 +179,7 @@
                         ],
                         {{- end }}
                         "properties": {
+                            {{if $finding.Attributes.IsAutofixable }}"isAutofixable": {{ $finding.Attributes.IsAutofixable }},{{ end }}
                             {{- if $finding.Attributes.Policy }}
                             "snykPolicy/v1": {
                                 {{- if $finding.Attributes.Policy.OriginalLevel }}

@@ -3213,7 +3213,7 @@
                 "type": "fixExamples"
               }
             ],
-            "isAutofixable": false,
+            "isAutofixable": true,
             "snykPolicy/v1": {
               "originalLevel": "warning",
               "severity": "high",
