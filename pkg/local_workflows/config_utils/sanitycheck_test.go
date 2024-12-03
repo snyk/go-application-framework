@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ func Test_CheckSanity_ApiUrl(t *testing.T) {
 
 		result := CheckSanity(config)
 
-		expectedDescription := "Using API Url from authentication material, therefore ignoring the specified"
+		expectedDescription := fmt.Sprintf(configCheckMismatchedUrlMsg, "SNYK_API")
 		assert.Len(t, result, 1)
 		assert.Contains(t, result[0].Description, expectedDescription)
 	})

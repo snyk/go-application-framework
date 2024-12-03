@@ -10,6 +10,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
+const configCheckMismatchedUrlMsg = "\"Using API Url from authentication material, therefore ignoring the configured %s value.\""
+
 type SanityCheckResult struct {
 	Description string
 }
@@ -37,7 +39,7 @@ func CheckSanity(config configuration.Configuration) []SanityCheckResult {
 
 			if differentApiUrlsSpecified {
 				result = append(result, SanityCheckResult{
-					Description: fmt.Sprintf("Using API Url from authentication material, therefore ignoring the specified %s.", strings.ToUpper(strings.Join(keysSpecified, ", "))),
+					Description: fmt.Sprintf(configCheckMismatchedUrlMsg, strings.ToUpper(strings.Join(keysSpecified, ", "))),
 				})
 			}
 		}
