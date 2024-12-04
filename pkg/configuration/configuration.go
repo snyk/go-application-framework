@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"errors"
 	"net/url"
 	"os"
 	"path"
@@ -302,9 +303,9 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	}
 }
 
-func (ev *extendedViper) get(key string) interface{} {
-	ev.bindEnv(key)
-	result := ev.viper.Get(key)
+func (ev *extendedViper) get(key string) (result interface{}, err error) {
+	err = ev.bindEnv(key)
+	result = ev.viper.Get(key)
 	isSet := ev.viper.IsSet(key)
 
 	// try to lookup alternative keys if available
@@ -313,27 +314,26 @@ func (ev *extendedViper) get(key string) interface{} {
 	alternativeKeysSize := len(alternativeKeys)
 	for !isSet && index < alternativeKeysSize {
 		altKey := alternativeKeys[index]
-		ev.bindEnv(altKey)
+		err = ev.bindEnv(altKey)
 		result = ev.viper.Get(altKey)
 		isSet = ev.viper.IsSet(altKey)
 		index++
 	}
 
-	return result
+	return result, err
 }
 
 // bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var
-func (ev *extendedViper) bindEnv(key string) {
+func (ev *extendedViper) bindEnv(key string) error {
 	isEnvVarKeyType := ev.getKeyType(key) == EnvVarKeyType
 	isInAllKeys := slices.Contains(ev.viper.AllKeys(), key)
 
 	// Viper's BindEnv implementation will bind the same env var multiple times, this check avoids potential duplication issues
 	if !isEnvVarKeyType || isInAllKeys || ev.automaticEnvEnabled {
-		return
+		return nil
 	}
 
-	//nolint:errcheck // breaking change needed to fix this
-	_ = ev.viper.BindEnv(key)
+	return ev.viper.BindEnv(key)
 }
 
 // IsSet returns true if a value for the given key was explicitly set
@@ -374,25 +374,22 @@ func (ev *extendedViper) Unset(key string) {
 
 // Get returns a configuration value.
 func (ev *extendedViper) Get(key string) interface{} {
-	ev.mutex.Lock()
-	value := ev.get(key)
-	defaultFunc, ok := ev.defaultValues[key]
-	ev.mutex.Unlock()
-
-	if ok && defaultFunc != nil {
-		//nolint:errcheck // discarded err in favor of zero values
-		value, _ = defaultFunc(value)
-	}
-
+	//nolint:errcheck // discarded error for callers who don't care
+	value, _ := ev.GetWithError(key)
 	return value
 }
 
 // GetWithError returns a configuration value and and the potential error returned by the DefaultValueFunction for the configuration value.
 func (ev *extendedViper) GetWithError(key string) (value interface{}, err error) {
-	value = ev.get(key)
+	ev.mutex.Lock()
+	value, err = ev.get(key)
+	defaultFunc, ok := ev.defaultValues[key]
+	ev.mutex.Unlock()
 
-	if ev.defaultValues[key] != nil {
-		value, err = ev.defaultValues[key](value)
+	if ok && defaultFunc != nil {
+		var defErr error
+		value, defErr = defaultFunc(value)
+		err = errors.Join(err, defErr)
 	}
 
 	return value, err
