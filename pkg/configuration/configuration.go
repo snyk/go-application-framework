@@ -380,6 +380,7 @@ func (ev *extendedViper) Get(key string) interface{} {
 	ev.mutex.Unlock()
 
 	if ok && defaultFunc != nil {
+		// nolint:errcheck // discarded err in favor of zero values
 		value, _ = defaultFunc(value)
 	}
 
