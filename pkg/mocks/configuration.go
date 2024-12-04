@@ -324,6 +324,21 @@ func (mr *MockConfigurationMockRecorder) GetUrl(key interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUrl", reflect.TypeOf((*MockConfiguration)(nil).GetUrl), key)
 }
 
+// GetWithError mocks base method.
+func (m *MockConfiguration) GetWithError(key string) (interface{}, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWithError", key)
+	ret0, _ := ret[0].(interface{})
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWithError indicates an expected call of GetWithError.
+func (mr *MockConfigurationMockRecorder) GetWithError(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithError", reflect.TypeOf((*MockConfiguration)(nil).GetWithError), key)
+}
+
 // IsSet mocks base method.
 func (m *MockConfiguration) IsSet(key string) bool {
 	m.ctrl.T.Helper()

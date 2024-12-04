@@ -145,6 +145,20 @@ func (mr *MockNetworkAccessMockRecorder) GetConfiguration() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfiguration", reflect.TypeOf((*MockNetworkAccess)(nil).GetConfiguration))
 }
 
+// GetErrorHandler mocks base method.
+func (m *MockNetworkAccess) GetErrorHandler() func(error, context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetErrorHandler")
+	ret0, _ := ret[0].(func(error, context.Context) error)
+	return ret0
+}
+
+// GetErrorHandler indicates an expected call of GetErrorHandler.
+func (mr *MockNetworkAccessMockRecorder) GetErrorHandler() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetErrorHandler", reflect.TypeOf((*MockNetworkAccess)(nil).GetErrorHandler))
+}
+
 // GetHttpClient mocks base method.
 func (m *MockNetworkAccess) GetHttpClient() *http.Client {
 	m.ctrl.T.Helper()

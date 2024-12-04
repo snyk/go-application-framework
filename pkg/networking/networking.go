@@ -39,6 +39,8 @@ type NetworkAccess interface {
 	AddRootCAs(pemFileLocation string) error
 	// AddErrorHandler registers an error handler for the underlying http.RoundTripper.
 	AddErrorHandler(func(err error, ctx context.Context) error)
+	// GetErrorHandler returns the registered error handler.
+	GetErrorHandler() func(err error, ctx context.Context) error
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
 
@@ -168,6 +170,10 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 // that maps non 2xx status codes to Error Catalog errors.
 func (n *networkImpl) AddErrorHandler(handler func(err error, ctx context.Context) error) {
 	n.errorHandler = handler
+}
+
+func (n *networkImpl) GetErrorHandler() func(err error, ctx context.Context) error {
+	return n.errorHandler
 }
 
 // AddDynamicHeaderField enables to define functions that will be invoked when a header field is added to a request.

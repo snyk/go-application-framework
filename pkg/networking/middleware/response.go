@@ -19,8 +19,8 @@ func NewReponseMiddleware(roundTriper http.RoundTripper, errHandler func(error, 
 	}
 }
 
-// ErrFromStatusCode matches the providede status code to an Error Catalog error. If no match is found, nil is returned.
-func ErrFromStatusCode(code int) error {
+// errFromStatusCode matches the providede status code to an Error Catalog error. If no match is found, nil is returned.
+func errFromStatusCode(code int) error {
 	switch code {
 	case http.StatusUnauthorized:
 		return snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
@@ -33,6 +33,15 @@ func ErrFromStatusCode(code int) error {
 	}
 }
 
+// HandleResponse maps the response param to the eror catalog error.
+func HandleResponse(res *http.Response) error {
+	if err := errFromStatusCode(res.StatusCode); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (rm ResponseMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	res, err := rm.next.RoundTrip(req)
 
@@ -40,7 +49,7 @@ func (rm ResponseMiddleware) RoundTrip(req *http.Request) (*http.Response, error
 		return res, err
 	}
 
-	err = ErrFromStatusCode(res.StatusCode)
+	err = HandleResponse(res)
 
 	if rm.errHandler != nil {
 		err = rm.errHandler(err, res.Request.Context())
