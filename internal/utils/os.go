@@ -4,6 +4,8 @@ package utils
 
 import "os"
 
+//go:generate $GOPATH/bin/mockgen -source=os.go -destination ../mocks/os.go -package mocks -self_package github.com/snyk/go-application-framework/internal/utils/
+
 type SnykOSUtil interface {
 	UserCacheDir() (string, error)
 	MkdirAll(path string, perm os.FileMode) error

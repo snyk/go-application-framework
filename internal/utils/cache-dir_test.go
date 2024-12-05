@@ -2,68 +2,76 @@ package utils
 
 import (
 	"errors"
-	"os"
+	"fmt"
 	"path"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/internal/mocks"
 )
 
-type mockCacheDirOSUtil struct {
-	cacheDir      string
-	cacheDirError error
-	dirPath       string
-	dirPerm       os.FileMode
-	dirError      error
-}
+func Test_SnykCacheDir(t *testing.T) {
+	t.Run("get default cache dir", func(t *testing.T) {
+		dir := "path/to/cache/dir"
+		expectedDirName := path.Join("snyk", "snyk-cli")
+		expectedDir := path.Join(dir, expectedDirName)
 
-func (m *mockCacheDirOSUtil) UserCacheDir() (string, error) {
-	return m.cacheDir, m.cacheDirError
-}
+		osutil := mocks.NewMockSnykOSUtil(gomock.NewController(t))
+		osutil.EXPECT().UserCacheDir().Return(dir, nil)
+		osutil.EXPECT().TempDir().Return(dir)
+		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(nil)
 
-func (m *mockCacheDirOSUtil) MkdirAll(path string, perm os.FileMode) error {
-	m.dirPath = path
-	m.dirPerm = perm
-	return m.dirError
-}
+		cacheDir, err := SnykCacheDirImpl(osutil)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedDir, cacheDir)
+	})
 
-func (m *mockCacheDirOSUtil) Stat(_ string) (os.FileInfo, error) {
-	return nil, nil //nolint:nilnil // its a mock
-}
+	t.Run("get default cache dir but keep error message", func(t *testing.T) {
+		dir := "path/to/cache/dir"
+		expectedDirName := path.Join("snyk", "snyk-cli")
+		expectedDir := path.Join(dir, expectedDirName)
 
-func (m *mockCacheDirOSUtil) TempDir() string {
-	return ""
-}
+		osutil := mocks.NewMockSnykOSUtil(gomock.NewController(t))
+		osutil.EXPECT().UserCacheDir().Return(dir, fmt.Errorf("user cache dir unknown"))
+		osutil.EXPECT().TempDir().Return(dir)
+		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(nil)
 
-func newMockSnykCacheDirUtil(cacheDir string, cacheDirError error, dirError error) SnykOSUtil {
-	return &mockCacheDirOSUtil{
-		cacheDir:      cacheDir,
-		cacheDirError: cacheDirError,
-		dirError:      dirError,
-	}
-}
+		cacheDir, err := SnykCacheDirImpl(osutil)
+		assert.Error(t, err)
+		assert.Equal(t, expectedDir, cacheDir)
+	})
 
-func Test_SnykCacheDir_returnsCacheDir(t *testing.T) {
-	cacheDir := "path/to/cache/dir"
-	expectedDirName := path.Join("snyk", "snyk-cli")
-	expectedDir := path.Join(cacheDir, expectedDirName)
+	t.Run("fall back to tmp dir based cache dir", func(t *testing.T) {
+		dir := "/tmp"
+		expectedDir := path.Join(dir, "snyk", "snyk-cli")
 
-	osutil := newMockSnykCacheDirUtil(cacheDir, nil, nil)
+		osutil := mocks.NewMockSnykOSUtil(gomock.NewController(t))
+		osutil.EXPECT().UserCacheDir().Return("/.cache", fmt.Errorf("something went wrong"))
+		osutil.EXPECT().TempDir().Return(dir)
+		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(errors.New("mkdir: failed to create dir"))
+		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(nil)
 
-	cacheDir, err := SnykCacheDirImpl(osutil)
-	assert.Nil(t, err)
-	assert.Equal(t, expectedDir, cacheDir)
-}
+		cacheDir, err := SnykCacheDirImpl(osutil)
+		assert.Error(t, err)
+		assert.Equal(t, expectedDir, cacheDir)
+	})
 
-func Test_SnykCacheDir_handlesCacheDirErr(t *testing.T) {
-	expectedDir := path.Join("snyk", "snyk-cli")
-	expectedErr := errors.New("error getting cache dir")
+	t.Run("fall back to sub dir based cache dir", func(t *testing.T) {
+		expectedDir := path.Join("snyk", "snyk-cli")
 
-	osutil := newMockSnykCacheDirUtil("", expectedErr, nil)
+		osutil := mocks.NewMockSnykOSUtil(gomock.NewController(t))
+		osutil.EXPECT().UserCacheDir().Return("/.cache", fmt.Errorf("something went wrong"))
+		osutil.EXPECT().TempDir().Return("/tmp")
+		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(errors.New("mkdir: failed to create dir"))
+		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(errors.New("mkdir: failed to create dir"))
+		osutil.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Return(nil)
 
-	cacheDir, err := SnykCacheDirImpl(osutil)
-	assert.Equal(t, "error getting cache dir", err.Error())
-	assert.Equal(t, expectedDir, cacheDir)
+		cacheDir, err := SnykCacheDirImpl(osutil)
+		assert.Error(t, err)
+		assert.Equal(t, expectedDir, cacheDir)
+	})
 }
 
 func Test_FullPathInSnykCacheDir_returnsFullPath(t *testing.T) {
