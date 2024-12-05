@@ -5,7 +5,6 @@
 package mocks
 
 import (
-	context "context"
 	http "net/http"
 	reflect "reflect"
 
@@ -14,6 +13,7 @@ import (
 	auth "github.com/snyk/go-application-framework/pkg/auth"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -52,7 +52,7 @@ func (mr *MockNetworkAccessMockRecorder) AddDynamicHeaderField(key, f interface{
 }
 
 // AddErrorHandler mocks base method.
-func (m *MockNetworkAccess) AddErrorHandler(arg0 func(error, context.Context) error) {
+func (m *MockNetworkAccess) AddErrorHandler(arg0 networktypes.ErrorHandlerFunc) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddErrorHandler", arg0)
 }
@@ -146,10 +146,10 @@ func (mr *MockNetworkAccessMockRecorder) GetConfiguration() *gomock.Call {
 }
 
 // GetErrorHandler mocks base method.
-func (m *MockNetworkAccess) GetErrorHandler() func(error, context.Context) error {
+func (m *MockNetworkAccess) GetErrorHandler() networktypes.ErrorHandlerFunc {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetErrorHandler")
-	ret0, _ := ret[0].(func(error, context.Context) error)
+	ret0, _ := ret[0].(networktypes.ErrorHandlerFunc)
 	return ret0
 }
 

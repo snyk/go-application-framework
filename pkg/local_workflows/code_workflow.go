@@ -98,7 +98,6 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	reportEnabled := config.GetBool("report")
 
-	logger.Debug().Msg("code workflow start")
 	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
 	logger.Debug().Msgf("Consistent Ignores: %v", ignoresFeatureFlag)
 	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)

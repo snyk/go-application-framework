@@ -1,18 +1,18 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 type ResponseMiddleware struct {
 	next       http.RoundTripper
-	errHandler func(error, context.Context) error
+	errHandler networktypes.ErrorHandlerFunc
 }
 
-func NewReponseMiddleware(roundTriper http.RoundTripper, errHandler func(error, context.Context) error) *ResponseMiddleware {
+func NewReponseMiddleware(roundTriper http.RoundTripper, errHandler networktypes.ErrorHandlerFunc) *ResponseMiddleware {
 	return &ResponseMiddleware{
 		next:       roundTriper,
 		errHandler: errHandler,

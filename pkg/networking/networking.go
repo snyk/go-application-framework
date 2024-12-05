@@ -2,7 +2,6 @@ package networking
 
 import (
 	"bytes"
-	"context"
 	"crypto/x509"
 	"io"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
@@ -38,9 +38,9 @@ type NetworkAccess interface {
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// AddErrorHandler registers an error handler for the underlying http.RoundTripper.
-	AddErrorHandler(func(err error, ctx context.Context) error)
+	AddErrorHandler(networktypes.ErrorHandlerFunc)
 	// GetErrorHandler returns the registered error handler.
-	GetErrorHandler() func(err error, ctx context.Context) error
+	GetErrorHandler() networktypes.ErrorHandlerFunc
 	// GetAuthenticator returns the authenticator.
 	GetAuthenticator() auth.Authenticator
 
@@ -60,7 +60,7 @@ type networkImpl struct {
 	staticHeader   http.Header
 	dynamicHeaders map[string]DynamicHeaderFunc
 	proxy          func(req *http.Request) (*url.URL, error)
-	errorHandler   func(error, context.Context) error
+	errorHandler   networktypes.ErrorHandlerFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
 }
@@ -168,11 +168,11 @@ func (n *networkImpl) AddHeaderField(key, value string) {
 
 // AddErrorHandler registers an error handler for the underlying http.RoundTripper and registers the response middleware
 // that maps non 2xx status codes to Error Catalog errors.
-func (n *networkImpl) AddErrorHandler(handler func(err error, ctx context.Context) error) {
+func (n *networkImpl) AddErrorHandler(handler networktypes.ErrorHandlerFunc) {
 	n.errorHandler = handler
 }
 
-func (n *networkImpl) GetErrorHandler() func(err error, ctx context.Context) error {
+func (n *networkImpl) GetErrorHandler() networktypes.ErrorHandlerFunc {
 	return n.errorHandler
 }
 
@@ -295,6 +295,7 @@ func (n *networkImpl) Clone() NetworkAccess {
 		staticHeader:   n.staticHeader.Clone(),
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 		proxy:          n.proxy,
+		errorHandler:   n.errorHandler,
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {
