@@ -13,7 +13,7 @@ import (
 
 func Test_DetermineCategory(t *testing.T) {
 	args := []string{"application", "whoami", "--experimental", "-d"}
-	expected := []string{"whoami", "experimental"}
+	expected := []string{"whoami", "experimental", "debug"}
 
 	engine := workflow.NewWorkFlowEngine(configuration.NewInMemory())
 	err := localworkflows.Init(engine)
