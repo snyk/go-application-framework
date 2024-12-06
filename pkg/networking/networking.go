@@ -214,7 +214,7 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
 	var crt http.RoundTripper = n.configureRoundTripper(transport)
 	if n.errorHandler != nil {
-		crt = middleware.NewReponseMiddleware(crt, n.errorHandler)
+		crt = middleware.NewReponseMiddleware(crt, n.config, n.errorHandler)
 	}
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
