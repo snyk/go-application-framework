@@ -16,6 +16,7 @@ func TestCategorizeCliArgs(t *testing.T) {
 	}{
 		// Happy Path Tests (Valid Commands & Flags)
 		{"OSS test", []string{"snyk", "test"}, []string{"oss", "test"}, nil},
+		{"OSS test", []string{"snyk", "monitor"}, []string{"oss", "monitor"}, nil},
 		{"OSS test with unmanaged flag", []string{"snyk", "test", "--unmanaged"}, []string{"oss", "test", "unmanaged"}, nil},
 		{"Code test", []string{"snyk", "code", "test"}, []string{"code", "test"}, nil},
 		{"IAC describe", []string{"snyk", "iac", "describe"}, []string{"iac", "describe"}, nil},

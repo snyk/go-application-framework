@@ -67,7 +67,7 @@ func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 				flags = append(flags, strings.ToLower(flagName))
 			}
 		} else if slices.Contains(knownCommands, arg) {
-			if len(commands) == 0 && arg == "test" {
+			if len(commands) == 0 && (arg == "test" || arg == "monitor") {
 				result = append(commands, productFallback)
 			}
 
