@@ -212,11 +212,5 @@ func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
 	w.m.RLock()
 	defer w.m.RUnlock()
 	_, err = w.writer.Write(scrub(p, w.scrubDict))
-	if err != nil {
-		// in case of an error of the underlying writer, we return zero bytes written,
-		// since it is difficult to map back to the unredacted length.
-		return 0, err
-	}
-
-	return len(p), err
+	return len(p), err // we return the original length, since we don't know the length of the redacted string
 }

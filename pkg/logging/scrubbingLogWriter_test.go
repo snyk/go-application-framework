@@ -32,16 +32,17 @@ import (
 
 type mockWriter struct {
 	written []byte
+	Error   error
 }
 
 func (m *mockWriter) Write(p []byte) (n int, err error) {
 	m.written = p
-	return len(p), nil
+	return len(p), m.Error
 }
 
 func (m *mockWriter) WriteLevel(_ zerolog.Level, p []byte) (n int, err error) {
 	m.written = p
-	return len(p), nil
+	return len(p), m.Error
 }
 
 func TestScrubbingWriter_Write(t *testing.T) {
@@ -99,27 +100,43 @@ func TestScrubbingIoWriter(t *testing.T) {
 	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
 
 	// now remove term token from dict and test again
-	bufioWriter = bytes.NewBufferString("")
-	writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
+	t.Run("now remove term token from dict and test again", func(t *testing.T) {
+		bufioWriter = bytes.NewBufferString("")
+		writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
 
-	writer.(ScrubbingLogWriter).RemoveTerm("token")
-	writer.(ScrubbingLogWriter).RemoveTerm("password")
+		writer.(ScrubbingLogWriter).RemoveTerm("token")
+		writer.(ScrubbingLogWriter).RemoveTerm("password")
 
-	n, err = writer.Write([]byte(patternWithSecret))
-	require.NoError(t, err)
-	require.Equal(t, len(patternWithSecret), n)
-	require.Equal(t, patternWithSecret, bufioWriter.String())
+		n, err = writer.Write([]byte(patternWithSecret))
+		require.NoError(t, err)
+		require.Equal(t, len(patternWithSecret), n)
+		require.Equal(t, patternWithSecret, bufioWriter.String())
+	})
 
 	// now re-add
-	bufioWriter = bytes.NewBufferString("")
-	writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
-	writer.(ScrubbingLogWriter).AddTerm("token", 0)
-	writer.(ScrubbingLogWriter).AddTerm("password", 0)
+	t.Run("now re-add", func(t *testing.T) {
+		bufioWriter = bytes.NewBufferString("")
+		writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
+		writer.(ScrubbingLogWriter).AddTerm("token", 0)
+		writer.(ScrubbingLogWriter).AddTerm("password", 0)
 
-	n, err = writer.Write([]byte(patternWithSecret))
-	require.NoError(t, err)
-	require.Equal(t, len(patternWithSecret), n)
-	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
+		n, err = writer.Write([]byte(patternWithSecret))
+		require.NoError(t, err)
+		require.Equal(t, len(patternWithSecret), n)
+		require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
+	})
+
+	t.Run("handle writer error", func(t *testing.T) {
+		expectedError := fmt.Errorf("something went wrong")
+		expectedData := []byte("djalskjkads")
+		mockWriter := &mockWriter{
+			Error: expectedError,
+		}
+		writer = NewScrubbingIoWriter(mockWriter, scrubDict)
+		actualLength, actualError := writer.Write(expectedData)
+		assert.Equal(t, expectedError, actualError)
+		assert.Equal(t, len(expectedData), actualLength)
+	})
 }
 
 func TestScrubFunction(t *testing.T) {
