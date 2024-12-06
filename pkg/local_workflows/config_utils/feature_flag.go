@@ -9,7 +9,7 @@ import (
 func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFlagName string) {
 	config := engine.GetConfiguration()
 
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		if existingValue == nil {
 			httpClient := engine.GetNetworkAccess().GetHttpClient()
 			logger := engine.GetLogger()
@@ -20,9 +20,9 @@ func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFla
 			if err != nil {
 				logger.Printf("Failed to determine feature flag \"%s\" for org \"%s\": %s", featureFlagName, org, err)
 			}
-			return result
+			return result, nil
 		} else {
-			return existingValue
+			return existingValue, nil
 		}
 	}
 

@@ -1,10 +1,13 @@
 package localworkflows
 
 import (
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"fmt"
+
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -41,9 +44,9 @@ func GetCodeFlagSet() *pflag.FlagSet {
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
-			return existingValue
+			return existingValue, nil
 		}
 
 		client := engine.GetNetworkAccess().GetHttpClient()
@@ -53,10 +56,10 @@ func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 		response, err := apiClient.GetSastSettings(org)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
-			return false
+			return false, err
 		}
 
-		return response.SastEnabled
+		return response.SastEnabled, nil
 	}
 	return callback
 }
@@ -84,7 +87,14 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
-	sastEnabled := config.GetBool(ConfigurationSastEnabled)
+
+	sastEnabledI, err := config.GetWithError(ConfigurationSastEnabled)
+	if err != nil {
+		return result, err
+	}
+
+	sastEnabled := utils.ToBool(sastEnabledI)
+
 	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 	reportEnabled := config.GetBool("report")
 
@@ -93,14 +103,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
 
 	if !sastEnabled {
-		err = snyk_errors.Error{
-			Title:          "Snyk Code is not supported",
-			Classification: "ACTIONABLE",
-			Level:          "warning",
-			Detail:         "Snyk Code is not supported for org " + config.GetString(configuration.ORGANIZATION) + ": enable in Settings > Snyk Code",
-			Links:          []string{"https://docs.snyk.io/scan-using-snyk/snyk-code/configure-snyk-code#enable-snyk-code-in-snyk-web-ui\n"},
-		}
-		return result, err
+		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
 	}
 
 	if ignoresFeatureFlag && !reportEnabled {
