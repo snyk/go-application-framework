@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -165,6 +166,11 @@ func getSarifInput() sarif.SarifDocument {
 
 func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (localFinding *local_models.LocalFinding, err error) {
 	t.Helper()
+	return sarifToLocalFindingHelper(t, filename, projectPath, true)
+}
+
+func sarifToLocalFindingHelper(t *testing.T, filename string, projectPath string, useCuelang bool) (localFinding *local_models.LocalFinding, err error) {
+	t.Helper()
 	jsonFile, err := os.Open("./" + filename)
 	if err != nil {
 		t.Errorf("Failed to load json")
@@ -187,7 +193,16 @@ func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (loc
 	summaryBytes, err := json.Marshal(summaryData)
 	assert.NoError(t, err)
 
-	tmp, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	t.Log("transform start", time.Now())
+
+	var tmp local_models.LocalFinding
+	if !useCuelang {
+		tmp, err = TransformToLocalFindingModel_nocue(sarifBytes, summaryBytes)
+	} else {
+		tmp, err = TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	}
+
+	t.Log("transform end", time.Now())
 	return &tmp, err
 }
 
@@ -605,6 +620,8 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		prettyActualSarif, err := getSortedSarifBytes(writer.Bytes())
 		assert.NoError(t, err)
 
+		t.Log("comparing")
+
 		expectedString := string(prettyExpectedSarif)
 		actualSarifString := string(prettyActualSarif)
 
@@ -661,4 +678,71 @@ func TestLocalFindingsHandling_renderSarifFile_renderUI(t *testing.T) {
 	assert.NotEmpty(t, dataFromBuffer)
 
 	validateSarifData(t, dataFromSarifFile)
+}
+
+func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
+	t := &testing.T{}
+	logger := &zerolog.Logger{}
+	config := configuration.NewWithOpts()
+	writer := new(bytes.Buffer)
+
+	// setup mocks
+	ctrl := gomock.NewController(t)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	outputDestination := iMocks.NewMockOutputDestination(ctrl)
+
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("SnykCode"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
+	outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
+
+	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+	testfile := "testdata/10000Findings.json"
+
+	b.Run("cuelang", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			writer.Reset()
+			localFinding, err := sarifToLocalFindingHelper(t, testfile, "/mypath", true)
+			assert.Nil(t, err)
+
+			workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+
+			localFindingBytes, err := json.Marshal(localFinding)
+			assert.Nil(t, err)
+
+			sarifData := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
+			sarifData.SetContentLocation("/mypath")
+
+			// execute
+			_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+			assert.NoError(t, err)
+
+			// assert
+			validateSarifData(t, writer.Bytes())
+		}
+	})
+
+	b.Run("native", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			writer.Reset()
+			localFinding, err := sarifToLocalFindingHelper(t, testfile, "/mypath", false)
+			assert.Nil(t, err)
+
+			workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+
+			localFindingBytes, err := json.Marshal(localFinding)
+			assert.Nil(t, err)
+
+			sarifData := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
+			sarifData.SetContentLocation("/mypath")
+
+			// execute
+			_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+			assert.NoError(t, err)
+
+			// assert
+			validateSarifData(t, writer.Bytes())
+		}
+	})
 }
