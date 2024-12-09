@@ -4,8 +4,11 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+const dEBUG_FLAG_SHORTHAND string = "d"
 
 // DetermineCategoryFromArgs categorizes command-line arguments into a structured slice.
 //
@@ -65,6 +68,10 @@ func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 
 			if slices.Contains(flagsAllowList, flagName) {
 				flags = append(flags, strings.ToLower(flagName))
+			}
+
+			if flagName == dEBUG_FLAG_SHORTHAND {
+				flags = append(flags, configuration.DEBUG)
 			}
 		} else if slices.Contains(knownCommands, arg) {
 			if len(commands) == 0 && (arg == "test" || arg == "monitor") {
