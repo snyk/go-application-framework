@@ -320,7 +320,7 @@ func (e *EngineImpl) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
 func GetGlobalConfiguration() ConfigurationOptions {
 	globalFLags := pflag.NewFlagSet("global", pflag.ContinueOnError)
 	globalFLags.String(configuration.ORGANIZATION, "", "")
-	globalFLags.BoolP(configuration.DEBUG, configuration.DEBUG_FLAG_SHORTHAND, false, "")
+	globalFLags.BoolP(configuration.DEBUG, "d", false, "")
 	globalFLags.Bool(configuration.INSECURE_HTTPS, false, "")
 	return ConfigurationOptionsFromFlagset(globalFLags)
 }
