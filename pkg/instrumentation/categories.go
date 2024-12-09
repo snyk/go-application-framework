@@ -70,7 +70,6 @@ func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 				flags = append(flags, strings.ToLower(flagName))
 			}
 
-			// a shorthand variant for debug
 			if flagName == dEBUG_FLAG_SHORTHAND {
 				flags = append(flags, configuration.DEBUG)
 			}
