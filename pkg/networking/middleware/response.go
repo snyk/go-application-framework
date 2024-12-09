@@ -33,9 +33,7 @@ func (rm ResponseMiddleware) RoundTrip(req *http.Request) (*http.Response, error
 
 	err = HandleResponse(res, rm.config)
 
-	if rm.errHandler != nil {
-		err = rm.errHandler(err, res.Request.Context())
-	}
+	err = rm.errHandler(err, res.Request.Context())
 
 	// RoundTrip should return one or the other.
 	if err != nil {
@@ -54,14 +52,16 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	//nolint:errcheck // discarded error since it's returned only with the value of false
-	requiresAuth, _ := ShouldRequireAuthentication(apiUrl, res.Request.URL, additionalSubdomains, additionalUrls)
 
-	if !requiresAuth {
+	isKnownHost, err := ShouldRequireAuthentication(apiUrl, res.Request.URL, additionalSubdomains, additionalUrls)
+
+	// only handle request to known hosts
+	//nolint:nilerr // this type of error is not surfaced to the user
+	if !isKnownHost || err != nil {
 		return nil
 	}
 
-	err := errFromStatusCode(res.StatusCode)
+	err = errFromStatusCode(res.StatusCode)
 	if err != nil {
 		return addMetadataToErr(err, res)
 	}

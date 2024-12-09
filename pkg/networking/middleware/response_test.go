@@ -2,7 +2,6 @@ package middleware_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -35,10 +34,13 @@ func Test_ResponseMiddleware(t *testing.T) {
 	})
 	server := httptest.NewServer(handler)
 	defer server.Close()
+	errHandler := func(err error, ctx context.Context) error {
+		return err
+	}
 
 	t.Run("no error for 2xx", func(t *testing.T) {
 		config := getBaseConfig()
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, nil)
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
 
 		req := buildRequest(server.URL)
 		res, err := rt.RoundTrip(req)
@@ -50,7 +52,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 	t.Run("proper errors for matching status codes", func(t *testing.T) {
 		config := getBaseConfig()
 		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, nil)
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
 
 		codes := []int{400, 401, 500}
 		for _, code := range codes {
@@ -73,7 +75,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		config := getBaseConfig()
 		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
 
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, nil)
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
 		req := buildRequest(server.URL + "/404")
 		res, err := rt.RoundTrip(req)
 
@@ -85,7 +87,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		config := getBaseConfig()
 
 		// server url is not in the base config, so it's not intercepted
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, nil)
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
 		req := buildRequest(server.URL + "/401")
 		res, err := rt.RoundTrip(req)
 
@@ -93,27 +95,6 @@ func Test_ResponseMiddleware(t *testing.T) {
 		assert.Equal(t, res.StatusCode, http.StatusUnauthorized)
 		assert.NoError(t, err)
 	})
-}
-
-func Test_ResponseMiddleware_WithErrorHandler(t *testing.T) {
-	expectedErr := errors.New("Big oopsie in the middleware")
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-	})
-	server := httptest.NewServer(handler)
-	defer server.Close()
-	config := getBaseConfig()
-	config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
-
-	rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, func(err error, ctx context.Context) error {
-		return expectedErr // this will override error parameter
-	})
-
-	req := buildRequest(server.URL)
-	res, err := rt.RoundTrip(req)
-
-	assert.Nil(t, res)
-	assert.ErrorIs(t, err, expectedErr)
 }
 
 func buildRequest(url string) *http.Request {
@@ -127,7 +108,7 @@ func buildRequest(url string) *http.Request {
 }
 
 func getBaseConfig() configuration.Configuration {
-	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	return config
 }
