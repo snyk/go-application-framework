@@ -7,9 +7,11 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
 	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
+	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -87,7 +89,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return input, err
 	}
 
-	findingsModel, err = TransformToLocalFindingModel(sarif_bytes, summary_bytes)
+	findingsModel, err = TransformToLocalFindingModel_nocue(sarif_bytes, summary_bytes)
 	if err != nil {
 		logger.Err(err).Msg(err.Error())
 		return input, err
@@ -167,4 +169,128 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 	}
 
 	return localFinding, nil
+}
+
+func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
+	var testSummary json_schemas.TestSummary
+	err = json.Unmarshal(summaryBytes, &testSummary)
+	if err != nil {
+		return localFinding, err
+	}
+
+	var sarifDoc sarif.SarifDocument
+	err = json.Unmarshal(sarifBytes, &sarifDoc)
+	if err != nil {
+		return localFinding, err
+	}
+
+	localFinding.Summary = *transformTestSummary(&testSummary)
+
+	for _, res := range sarifDoc.Runs[0].Results {
+		var shortDescription string
+		if len(sarifDoc.Runs[0].Tool.Driver.Rules) > res.RuleIndex && res.RuleIndex >= 0 {
+			shortDescription = sarifDoc.Runs[0].Tool.Driver.Rules[res.RuleIndex].ShortDescription.Text
+		}
+
+		finding := local_models.FindingResource{
+			Attributes: local_models.TypesFindingAttributes{
+				ReferenceId: &local_models.TypesReferenceId{
+					Identifier: res.RuleID,
+					Index:      res.RuleIndex,
+				},
+				Fingerprint: []local_models.Fingerprint{
+					// todo
+				},
+
+				Message: struct {
+					Arguments []string `json:"arguments"`
+					Header    string   `json:"header"`
+					Markdown  string   `json:"markdown"`
+					Text      string   `json:"text"`
+				}{
+					Header:    shortDescription,
+					Text:      res.Message.Text,
+					Markdown:  res.Message.Markdown,
+					Arguments: res.Message.Arguments,
+				},
+			},
+		}
+
+		finding.Attributes.IsAutofixable = &res.Properties.IsAutofixable
+
+		if res.Properties.Policy != nil {
+			finding.Attributes.Policy = &local_models.TypesPolicyv1{
+				OriginalLevel:    &res.Properties.Policy.OriginalLevel,
+				OriginalSeverity: &res.Properties.Policy.OriginalSeverity,
+				Severity:         &res.Properties.Policy.Severity,
+			}
+		}
+
+		finding.Attributes.Rating = &local_models.TypesFindingRating{
+			Severity: struct {
+				OriginalValue *local_models.TypesFindingRatingSeverityOriginalValue `json:"original_value,omitempty"`
+				Reason        *local_models.TypesFindingRatingSeverityReason        `json:"reason,omitempty"`
+				Value         local_models.TypesFindingRatingSeverityValue          `json:"value"`
+			}{
+				Value: local_models.TypesFindingRatingSeverityValue(sarif_utils.SarifLevelToSeverity(res.Level)),
+			},
+		}
+
+		finding.Attributes.Rating.Priority = &local_models.TypesFindingNumericalRating{
+			Score: res.Properties.PriorityScore,
+			Factors: func() (factors []local_models.RiskFactors) {
+				for _, v := range res.Properties.PriorityScoreFactors {
+					factor := &local_models.RiskFactors{}
+					err = factor.FromTypesVulnerabilityFactRiskFactor(local_models.TypesVulnerabilityFactRiskFactor{
+						Name:  v.Type,
+						Value: v.Label,
+					})
+					factors = append(factors, *factor)
+				}
+				return factors
+			}(),
+		}
+
+		if err != nil {
+			return localFinding, err
+		}
+
+		finding.Attributes.Locations = &[]local_models.IoSnykReactiveFindingLocation{}
+		finding.Attributes.CodeFlows = &[]local_models.TypesCodeFlow{}
+		finding.Attributes.Suppression = &local_models.TypesSuppression{}
+		finding.Attributes.Suggestions = &[]local_models.Suggestion{}
+
+		localFinding.Findings = append(localFinding.Findings, finding)
+	}
+
+	return localFinding, err
+}
+
+func transformTestSummary(testSummary *json_schemas.TestSummary) *local_models.TypesFindingsSummary {
+	var summary local_models.TypesFindingsSummary
+	summary.Path = testSummary.Path
+	summary.Artifacts = testSummary.Artifacts
+	summary.Type = testSummary.Type
+	summary.Counts.CountKeyOrderAsc.Severity = testSummary.SeverityOrderAsc
+	summary.Counts.Count = 0
+	summary.Counts.CountAdjusted = 0
+	summary.Counts.CountSuppressed = 0
+	summary.Counts.CountBy.Severity = make(map[string]uint32)
+	summary.Counts.CountByAdjusted.Severity = make(map[string]uint32)
+	summary.Counts.CountBySuppressed.Severity = make(map[string]uint32)
+	summary.Counts.CountBy.AdditionalProperties = make(map[string]map[string]uint32)
+	summary.Counts.CountByAdjusted.AdditionalProperties = make(map[string]map[string]uint32)
+	summary.Counts.CountBySuppressed.AdditionalProperties = make(map[string]map[string]uint32)
+
+	for _, summaryResults := range testSummary.Results {
+		summary.Counts.CountBy.Severity[summaryResults.Severity] = uint32(summaryResults.Total)
+		summary.Counts.CountByAdjusted.Severity[summaryResults.Severity] = uint32(summaryResults.Open)
+		summary.Counts.CountBySuppressed.Severity[summaryResults.Severity] = uint32(summaryResults.Ignored)
+
+		summary.Counts.CountAdjusted += summary.Counts.CountByAdjusted.Severity[summaryResults.Severity]
+		summary.Counts.CountSuppressed += uint32(summaryResults.Ignored)
+		summary.Counts.Count += uint32(summaryResults.Total)
+	}
+
+	return &summary
 }
