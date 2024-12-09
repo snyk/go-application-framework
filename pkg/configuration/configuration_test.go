@@ -116,6 +116,36 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 	cleanUpEnvVars()
 }
 
+func Test_Configuration_GetE(t *testing.T) {
+	assert.Nil(t, prepareConfigstore(`{"snyk_oauth_token": "mytoken", "somethingElse": 12}`))
+
+	config := NewWithOpts(
+		WithFiles(TEST_FILENAME),
+		WithSupportedEnvVarPrefixes("snyk_"),
+	)
+
+	_ = os.Unsetenv(ANALYTICS_DISABLED)
+
+	actualValue, err := config.GetWithError(ANALYTICS_DISABLED)
+	assert.Nil(t, err)
+	assert.Nil(t, actualValue)
+
+	t.Setenv("SNYK_DISABLE_ANALYTICS", "1")
+	actualValue, err = config.GetWithError(ANALYTICS_DISABLED)
+	assert.Nil(t, err)
+	assert.NotNil(t, actualValue)
+	assert.Equal(t, "1", actualValue)
+
+	t.Setenv("SNYK_DISABLE_ANALYTICS", "0")
+	actualValue, err = config.GetWithError(ANALYTICS_DISABLED)
+	assert.Nil(t, err)
+	assert.NotNil(t, actualValue)
+	assert.Equal(t, "0", actualValue)
+
+	cleanupConfigstore(t)
+	cleanUpEnvVars()
+}
+
 func Test_ConfigurationGet_ALTERNATE_KEYS(t *testing.T) {
 	key := "snyk_cfg_api"
 	expected := "value"
@@ -200,11 +230,11 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
-		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) interface{} {
+		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
-				return existingValue
+				return existingValue, nil
 			}
-			return defaultValue
+			return defaultValue, nil
 		})
 
 		// not set
@@ -365,12 +395,11 @@ func Test_DefaultValuehandling(t *testing.T) {
 		valueExplicitlySet := "explicitly set value"
 
 		config := NewInMemory()
-		config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) interface{} {
+		config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
-				return existingValue
+				return existingValue, nil
 			}
-
-			return valueWithDefault
+			return valueWithDefault, nil
 		})
 
 		// access value that has a default value
@@ -404,11 +433,11 @@ func Test_DefaultValuehandling(t *testing.T) {
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
-		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) interface{} {
+		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
-				return existingValue
+				return existingValue, nil
 			}
-			return defaultValue
+			return defaultValue, nil
 		})
 
 		// not set

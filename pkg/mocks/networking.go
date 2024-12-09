@@ -13,6 +13,7 @@ import (
 	auth "github.com/snyk/go-application-framework/pkg/auth"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -48,6 +49,18 @@ func (m *MockNetworkAccess) AddDynamicHeaderField(key string, f networking.Dynam
 func (mr *MockNetworkAccessMockRecorder) AddDynamicHeaderField(key, f interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDynamicHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).AddDynamicHeaderField), key, f)
+}
+
+// AddErrorHandler mocks base method.
+func (m *MockNetworkAccess) AddErrorHandler(arg0 networktypes.ErrorHandlerFunc) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddErrorHandler", arg0)
+}
+
+// AddErrorHandler indicates an expected call of AddErrorHandler.
+func (mr *MockNetworkAccessMockRecorder) AddErrorHandler(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddErrorHandler", reflect.TypeOf((*MockNetworkAccess)(nil).AddErrorHandler), arg0)
 }
 
 // AddHeaderField mocks base method.
@@ -130,6 +143,20 @@ func (m *MockNetworkAccess) GetConfiguration() configuration.Configuration {
 func (mr *MockNetworkAccessMockRecorder) GetConfiguration() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfiguration", reflect.TypeOf((*MockNetworkAccess)(nil).GetConfiguration))
+}
+
+// GetErrorHandler mocks base method.
+func (m *MockNetworkAccess) GetErrorHandler() networktypes.ErrorHandlerFunc {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetErrorHandler")
+	ret0, _ := ret[0].(networktypes.ErrorHandlerFunc)
+	return ret0
+}
+
+// GetErrorHandler indicates an expected call of GetErrorHandler.
+func (mr *MockNetworkAccessMockRecorder) GetErrorHandler() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetErrorHandler", reflect.TypeOf((*MockNetworkAccess)(nil).GetErrorHandler))
 }
 
 // GetHttpClient mocks base method.

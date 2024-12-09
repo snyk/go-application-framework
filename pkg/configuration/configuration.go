@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"errors"
 	"net/url"
 	"os"
 	"path"
@@ -16,7 +17,7 @@ import (
 
 //go:generate $GOPATH/bin/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
 
-type DefaultValueFunction func(existingValue interface{}) interface{}
+type DefaultValueFunction func(existingValue interface{}) (interface{}, error)
 
 type configType string
 type KeyType int
@@ -42,6 +43,7 @@ type Configuration interface {
 	GetInt(key string) int
 	GetFloat64(key string) float64
 	GetUrl(key string) *url.URL
+	GetWithError(key string) (interface{}, error)
 
 	AddFlagSet(flagset *pflag.FlagSet) error
 	AllKeys() []string
@@ -94,11 +96,11 @@ type extendedViper struct {
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
 func StandardDefaultValueFunction(defaultValue interface{}) DefaultValueFunction {
-	return func(existingValue interface{}) interface{} {
+	return func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
-			return existingValue
+			return existingValue, nil
 		} else {
-			return defaultValue
+			return defaultValue, nil
 		}
 	}
 }
@@ -301,9 +303,9 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	}
 }
 
-func (ev *extendedViper) get(key string) interface{} {
-	ev.bindEnv(key)
-	result := ev.viper.Get(key)
+func (ev *extendedViper) get(key string) (result interface{}, err error) {
+	err = ev.bindEnv(key)
+	result = ev.viper.Get(key)
 	isSet := ev.viper.IsSet(key)
 
 	// try to lookup alternative keys if available
@@ -312,27 +314,26 @@ func (ev *extendedViper) get(key string) interface{} {
 	alternativeKeysSize := len(alternativeKeys)
 	for !isSet && index < alternativeKeysSize {
 		altKey := alternativeKeys[index]
-		ev.bindEnv(altKey)
+		err = ev.bindEnv(altKey)
 		result = ev.viper.Get(altKey)
 		isSet = ev.viper.IsSet(altKey)
 		index++
 	}
 
-	return result
+	return result, err
 }
 
 // bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var
-func (ev *extendedViper) bindEnv(key string) {
+func (ev *extendedViper) bindEnv(key string) error {
 	isEnvVarKeyType := ev.getKeyType(key) == EnvVarKeyType
 	isInAllKeys := slices.Contains(ev.viper.AllKeys(), key)
 
 	// Viper's BindEnv implementation will bind the same env var multiple times, this check avoids potential duplication issues
 	if !isEnvVarKeyType || isInAllKeys || ev.automaticEnvEnabled {
-		return
+		return nil
 	}
 
-	//nolint:errcheck // breaking change needed to fix this
-	_ = ev.viper.BindEnv(key)
+	return ev.viper.BindEnv(key)
 }
 
 // IsSet returns true if a value for the given key was explicitly set
@@ -373,16 +374,25 @@ func (ev *extendedViper) Unset(key string) {
 
 // Get returns a configuration value.
 func (ev *extendedViper) Get(key string) interface{} {
+	//nolint:errcheck // discarded error for callers who don't care
+	value, _ := ev.GetWithError(key)
+	return value
+}
+
+// GetWithError returns a configuration value and and the potential error returned by the DefaultValueFunction for the configuration value.
+func (ev *extendedViper) GetWithError(key string) (value interface{}, err error) {
 	ev.mutex.Lock()
-	value := ev.get(key)
+	value, err = ev.get(key)
 	defaultFunc, ok := ev.defaultValues[key]
 	ev.mutex.Unlock()
 
 	if ok && defaultFunc != nil {
-		value = defaultFunc(value)
+		var defErr error
+		value, defErr = defaultFunc(value)
+		err = errors.Join(err, defErr)
 	}
 
-	return value
+	return value, err
 }
 
 // GetString returns a configuration value as string.

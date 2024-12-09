@@ -27,25 +27,25 @@ import (
 )
 
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
 		orgId := config.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
-			return existingValue
+			return existingValue, nil
 		}
 		slugName, err := apiClient.GetSlugFromOrgId(orgId)
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
 		}
-		return slugName
+		return slugName, nil
 	}
 	return callback
 }
 
 func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
@@ -59,10 +59,10 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 				if err != nil {
 					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 				} else {
-					return orgId
+					return orgId, nil
 				}
 			} else {
-				return orgId
+				return orgId, nil
 			}
 		}
 
@@ -71,13 +71,13 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
 
-		return orgId
+		return orgId, nil
 	}
 	return callback
 }
 
 func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		urlString := constants.SNYK_DEFAULT_API_URL
 
 		urlFromOauthToken, err := auth.GetAudienceClaimFromOauthToken(config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
@@ -97,28 +97,28 @@ func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logge
 		if err != nil {
 			logger.Warn().Err(err).Str(configuration.API_URL, urlString).Msg("failed to get api url")
 		}
-		return apiString
+		return apiString, nil
 	}
 	return callback
 }
 
 func defaultInputDirectory() configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		if existingValue == nil {
 			path, err := os.Getwd()
 			if err != nil {
-				return ""
+				return "", err
 			}
-			return path
+			return path, nil
 		} else {
-			return existingValue
+			return existingValue, nil
 		}
 	}
 	return callback
 }
 
 func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
 		if ri != nil && len(ri.GetVersion()) > 0 {
@@ -134,7 +134,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 				}
 			}
 
-			return existingValue
+			return existingValue, nil
 		}
 
 		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
@@ -143,30 +143,30 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 			logger.Err(err)
 		}
 
-		return tmpDir
+		return tmpDir, nil
 	}
 	return callback
 }
 
 func defaultPreviewFeaturesEnabled(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) interface{} {
+	callback := func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
-			return existingValue
+			return existingValue, nil
 		}
 
 		ri := engine.GetRuntimeInfo()
 		if ri == nil {
-			return false
+			return false, nil
 		}
 
 		version := ri.GetVersion()
 
 		if strings.Contains(version, "-preview") || strings.Contains(version, "-dev") {
 			logger.Warn().Msg("Using a preview feature!")
-			return true
+			return true, nil
 		}
 
-		return false
+		return false, nil
 	}
 	return callback
 }
@@ -201,32 +201,32 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
-	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) any {
+	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) (any, error) {
 		canonicalApiUrl := config.GetString(configuration.API_URL)
 		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
 		if err != nil {
 			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", err)
 		}
 
-		return appUrl
+		return appUrl, nil
 	})
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
 
-	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) any {
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) (any, error) {
 		if existingValue == nil {
-			return true
+			return true, nil
 		} else {
-			return existingValue
+			return existingValue, nil
 		}
 	})
 
-	config.AddDefaultValue(configuration.IS_FEDRAMP, func(existingValue any) any {
+	config.AddDefaultValue(configuration.IS_FEDRAMP, func(existingValue any) (any, error) {
 		if existingValue == nil {
-			return api.IsFedramp(config.GetString(configuration.API_URL))
+			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
 		} else {
-			return existingValue
+			return existingValue, nil
 		}
 	})
 
@@ -236,7 +236,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
-	return func(existingValue interface{}) interface{} {
+	return func(existingValue interface{}) (interface{}, error) {
 		var files []string
 		// last file usually wins if the same values are configured
 		// Precedence should be:
@@ -256,11 +256,11 @@ func customConfigFiles(config configuration.Configuration) configuration.Default
 
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return files
+			return files, err
 		}
 
 		files = append(files, filepath.Join(home, "/.snyk.env"))
-		return files
+		return files, nil
 	}
 }
 
