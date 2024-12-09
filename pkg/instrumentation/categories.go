@@ -8,6 +8,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+const dEBUG_FLAG_SHORTHAND string = "d"
+
 // DetermineCategoryFromArgs categorizes command-line arguments into a structured slice.
 //
 // This function receives the entire os.Args slice (including the program name at index 0)
@@ -69,7 +71,7 @@ func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 			}
 
 			// a shorthand variant for debug
-			if flagName == configuration.DEBUG_FLAG_SHORTHAND {
+			if flagName == dEBUG_FLAG_SHORTHAND {
 				flags = append(flags, configuration.DEBUG)
 			}
 		} else if slices.Contains(knownCommands, arg) {

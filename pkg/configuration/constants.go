@@ -3,7 +3,6 @@ package configuration
 const (
 	ORGANIZATION                   string = "org"
 	DEBUG                          string = "debug"
-	DEBUG_FLAG_SHORTHAND           string = "d"
 	DEBUG_FORMAT                   string = "debug_format"
 	INSECURE_HTTPS                 string = "insecure"
 	PROXY_AUTHENTICATION_MECHANISM string = "proxy_auth"
