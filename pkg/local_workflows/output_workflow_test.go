@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -702,6 +703,10 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 
 	b.Run("cuelang", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
+			var memStart runtime.MemStats
+			var memEnd runtime.MemStats
+			runtime.ReadMemStats(&memStart)
+
 			writer.Reset()
 			localFinding, err := sarifToLocalFindingHelper(t, testfile, "/mypath", true)
 			assert.Nil(t, err)
@@ -718,6 +723,9 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 			_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 			assert.NoError(t, err)
 
+			runtime.ReadMemStats(&memEnd)
+			b.Logf("Used Memory: %d [MB]", (memEnd.TotalAlloc-memStart.TotalAlloc)/1024/1024)
+
 			// assert
 			validateSarifData(t, writer.Bytes())
 		}
@@ -725,6 +733,10 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 
 	b.Run("native", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
+			var memStart runtime.MemStats
+			var memEnd runtime.MemStats
+			runtime.ReadMemStats(&memStart)
+
 			writer.Reset()
 			localFinding, err := sarifToLocalFindingHelper(t, testfile, "/mypath", false)
 			assert.Nil(t, err)
@@ -740,6 +752,9 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 			// execute
 			_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
 			assert.NoError(t, err)
+
+			runtime.ReadMemStats(&memEnd)
+			b.Logf("Used Memory: %d [MB]", (memEnd.TotalAlloc-memStart.TotalAlloc)/1024/1024)
 
 			// assert
 			validateSarifData(t, writer.Bytes())
