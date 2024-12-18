@@ -353,7 +353,8 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 			oauth2.SetAuthURLParam("response_type", "code"),
 			oauth2.SetAuthURLParam("scope", "offline_access"),
-			oauth2.SetAuthURLParam("version", "2021-08-11~experimental"))
+			oauth2.SetAuthURLParam("version", "2021-08-11~experimental"),
+			oauth2.SetAuthURLParam("cross_region_routing", "true"))
 
 		// launch browser
 		go o.openBrowserFunc(authCodeUrl)
