@@ -43,7 +43,7 @@ func Test_Code_legacyImplementation_happyPath(t *testing.T) {
 	engine := workflow.NewWorkFlowEngine(config)
 
 	config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, false)
-	config.Set(ConfigurationSastEnabled, true)
+	config.Set(code_workflow.ConfigurationSastEnabled, true)
 
 	err := InitCodeWorkflow(engine)
 	assert.NoError(t, err)
@@ -86,7 +86,7 @@ func Test_Code_legacyImplementation_experimentalFlag(t *testing.T) {
 	config := configuration.New()
 	engine := workflow.NewWorkFlowEngine(config)
 
-	config.Set(ConfigurationSastEnabled, true)
+	config.Set(code_workflow.ConfigurationSastEnabled, true)
 
 	err := InitCodeWorkflow(engine)
 	assert.NoError(t, err)
@@ -131,7 +131,7 @@ func Test_Code_legacyImplementation_experimentalFlagAndReport(t *testing.T) {
 	config := configuration.New()
 	engine := workflow.NewWorkFlowEngine(config)
 
-	config.Set(ConfigurationSastEnabled, true)
+	config.Set(code_workflow.ConfigurationSastEnabled, true)
 
 	err := InitCodeWorkflow(engine)
 	assert.NoError(t, err)

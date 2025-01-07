@@ -87,6 +87,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	path := config.GetString(configuration.INPUT_DIRECTORY)
 
 	logger.Debug().Msgf("Path: %s", path)
+	logger.Debug().Msgf("Report: %s", GetReportMode(config))
 
 	analyzeFnc := defaultAnalyzeFunction
 	if len(opts) == 1 {
@@ -154,7 +155,6 @@ func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Clie
 	}
 
 	logger.Debug().Msgf("Interaction ID: %s", interactionId)
-	logger.Debug().Msgf("Report Mode: %s", GetReportMode(config))
 
 	files, err := getFilesForPath(target.GetPath(), logger, config.GetInt(configuration.MAX_THREADS))
 	if err != nil {
