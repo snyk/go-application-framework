@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/error-catalog-golang-public/code"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -109,7 +110,8 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	if ignoresFeatureFlag && !reportEnabled {
 		logger.Debug().Msg("Implementation: Native")
 
-		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name", "target-file"}
+		// all parameters will be supported as soon as --report is being supported
+		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name"}
 		for _, v := range unsupportedParameter {
 			if config.IsSet(v) {
 				logger.Warn().Msgf("The parameter \"%s\" is not yet supported in this experimental implementation!", v)
