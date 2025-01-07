@@ -36,3 +36,16 @@ func (c *codeClientConfig) SnykCodeAnalysisTimeout() time.Duration {
 	timeoutInSeconds := c.localConfiguration.GetInt(configuration.TIMEOUT)
 	return time.Duration(timeoutInSeconds) * time.Second
 }
+
+func GetReportMode(config configuration.Configuration) reportType {
+	reportEnabled := config.GetBool(ConfigurationReportFlag)
+	if !reportEnabled {
+		return noReport
+	}
+
+	if len(config.GetString(ConfigurationProjectName)) > 0 {
+		return remoteCode
+	}
+
+	return localCode
+}

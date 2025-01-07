@@ -22,8 +22,19 @@ import (
 )
 
 const (
-	RemoteRepoUrlFlagname     = "remote-repo-url"
-	ConfigurationTestFLowName = "internal_code_test_flow_name"
+	ConfigurationRemoteRepoUrlFlagname = "remote-repo-url"
+	ConfigurationTestFLowName          = "internal_code_test_flow_name"
+	ConfigurationReportFlag            = "report"
+	ConfigurationProjectName           = "project-name"
+	ConfigurationSastEnabled           = "internal_sast_enabled"
+)
+
+type reportType string
+
+const (
+	localCode  reportType = "local_code"
+	remoteCode reportType = "remote_code"
+	noReport   reportType = "no_report"
 )
 
 type OptionalAnalysisFunctions func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
@@ -82,7 +93,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		analyzeFnc = opts[0]
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
 	if err != nil {
 		logger.Warn().Err(err)
 	}
@@ -143,6 +154,7 @@ func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Clie
 	}
 
 	logger.Debug().Msgf("Interaction ID: %s", interactionId)
+	logger.Debug().Msgf("Report Mode: %s", GetReportMode(config))
 
 	files, err := getFilesForPath(target.GetPath(), logger, config.GetInt(configuration.MAX_THREADS))
 	if err != nil {
@@ -171,6 +183,11 @@ func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Clie
 		codeclient.WithTrackerFactory(progressFactory),
 		codeclient.WithFlow(testFlowName),
 	)
+
+	if GetReportMode(config) == remoteCode {
+		// for the use case: stateful remote code testing, use another code scanner method
+		return result, err
+	}
 
 	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
 	return result, err

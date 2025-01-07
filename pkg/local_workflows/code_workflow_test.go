@@ -176,7 +176,7 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 	expectedPath := "/var/lib/something"
 
 	config := configuration.NewInMemory()
-	config.Set(code_workflow.RemoteRepoUrlFlagname, expectedRepoUrl)
+	config.Set(code_workflow.ConfigurationRemoteRepoUrlFlagname, expectedRepoUrl)
 	config.Set(configuration.INPUT_DIRECTORY, expectedPath)
 
 	networkAccess := networking.NewNetworkAccess(config)
