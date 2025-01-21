@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "ExampleTool",
+          "semanticVersion": "1.0.0",
+          "rules": [
+            {
+              "id": "example-rule",
+              "name": "Example Rule",
+              "shortDescription": {
+                "text": "This is an example rule."
+              },
+              "fullDescription": {
+                "text": "This rule is used as an example."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "example-rule",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {
+            "text": "This is an example result."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "example-file.js"
+                },
+                "region": {
+                  "startLine": 1,
+                  "startColumn": 1,
+                  "endLine": 1,
+                  "endColumn": 10
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

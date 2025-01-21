@@ -167,7 +167,7 @@ func getSarifInput() sarif.SarifDocument {
 
 func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (localFinding *local_models.LocalFinding, err error) {
 	t.Helper()
-	return sarifToLocalFindingHelper(t, filename, projectPath, true)
+	return sarifToLocalFindingHelper(t, filename, projectPath, false)
 }
 
 func sarifToLocalFindingHelper(t *testing.T, filename string, projectPath string, useCuelang bool) (localFinding *local_models.LocalFinding, err error) {
@@ -624,6 +624,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		t.Log("comparing")
 
 		expectedString := string(prettyExpectedSarif)
+
 		actualSarifString := string(prettyActualSarif)
 
 		require.JSONEq(t, expectedString, actualSarifString)
@@ -703,6 +704,7 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 
 	b.Run("cuelang", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
+			start := time.Now()
 			var memStart runtime.MemStats
 			var memEnd runtime.MemStats
 			runtime.ReadMemStats(&memStart)
@@ -724,15 +726,22 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 			assert.NoError(t, err)
 
 			runtime.ReadMemStats(&memEnd)
+			duration := time.Since(start)
 			b.Logf("Used Memory: %d [MB]", (memEnd.TotalAlloc-memStart.TotalAlloc)/1024/1024)
+			b.Logf("Duration: %s", duration)
 
 			// assert
 			validateSarifData(t, writer.Bytes())
+
+			if duration > 10*time.Second {
+				b.Fatalf("cuelang transformation took too long: %s", duration)
+			}
 		}
 	})
 
 	b.Run("native", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
+			start := time.Now()
 			var memStart runtime.MemStats
 			var memEnd runtime.MemStats
 			runtime.ReadMemStats(&memStart)
@@ -754,10 +763,16 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 			assert.NoError(t, err)
 
 			runtime.ReadMemStats(&memEnd)
+			duration := time.Since(start)
 			b.Logf("Used Memory: %d [MB]", (memEnd.TotalAlloc-memStart.TotalAlloc)/1024/1024)
+			b.Logf("Duration: %s", duration)
 
 			// assert
 			validateSarifData(t, writer.Bytes())
+
+			if duration > 10*time.Second {
+				b.Fatalf("native transformation took too long: %s", duration)
+			}
 		}
 	})
 }

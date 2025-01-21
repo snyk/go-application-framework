@@ -201,7 +201,11 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 				Fingerprint: []local_models.Fingerprint{
 					// todo
 				},
-
+				Component: local_models.TypesComponent{
+					Name:     ".",
+					ScanType: "sast",
+				},
+				IsAutofixable: &res.Properties.IsAutofixable,
 				Message: struct {
 					Arguments []string `json:"arguments"`
 					Header    string   `json:"header"`
@@ -215,8 +219,6 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 				},
 			},
 		}
-
-		finding.Attributes.IsAutofixable = &res.Properties.IsAutofixable
 
 		if res.Properties.Policy != nil {
 			finding.Attributes.Policy = &local_models.TypesPolicyv1{
@@ -257,8 +259,50 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 
 		finding.Attributes.Locations = &[]local_models.IoSnykReactiveFindingLocation{}
 		finding.Attributes.CodeFlows = &[]local_models.TypesCodeFlow{}
-		finding.Attributes.Suppression = &local_models.TypesSuppression{}
 		finding.Attributes.Suggestions = &[]local_models.Suggestion{}
+
+		for _, location := range res.Locations {
+			var l = local_models.IoSnykReactiveFindingLocation{
+				SourceLocations: &local_models.IoSnykReactiveFindingSourceLocation{
+					Filepath:            location.PhysicalLocation.ArtifactLocation.URI,
+					OriginalStartLine:   location.PhysicalLocation.Region.StartLine,
+					OriginalEndLine:     location.PhysicalLocation.Region.EndLine,
+					OriginalStartColumn: location.PhysicalLocation.Region.StartColumn,
+					OriginalEndColumn:   location.PhysicalLocation.Region.EndColumn,
+				},
+			}
+			*finding.Attributes.Locations = append(*finding.Attributes.Locations, l)
+		}
+
+		if len(res.Suppressions) > 0 {
+			suppresion := res.Suppressions[0]
+			expiration := ""
+			ignored_email := ""
+			if suppresion.Properties.Expiration != nil {
+				expiration = *suppresion.Properties.Expiration
+			}
+			if suppresion.Properties.IgnoredBy.Email != nil {
+				ignored_email = *suppresion.Properties.IgnoredBy.Email
+			}
+			var sp = local_models.TypesSuppression{
+				Details: &local_models.TypesSuppressionDetails{
+					Category:   string(suppresion.Properties.Category),
+					Expiration: expiration,
+					IgnoredOn:  string(suppresion.Properties.IgnoredOn),
+					IgnoredBy: local_models.TypesUser{
+						Name:  suppresion.Properties.IgnoredBy.Name,
+						Email: ignored_email,
+					},
+				},
+				Justification: &suppresion.Justification,
+				Kind:          "ignored",
+			}
+			finding.Attributes.Suppression = &sp
+		}
+
+		// for _, cf := range res.CodeFlows {
+
+		// }
 
 		localFinding.Findings = append(localFinding.Findings, finding)
 	}
