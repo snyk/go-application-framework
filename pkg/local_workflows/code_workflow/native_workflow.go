@@ -86,9 +86,6 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	output := []workflow.Data{}
 	path := config.GetString(configuration.INPUT_DIRECTORY)
 
-	logger.Debug().Msgf("Path: %s", path)
-	logger.Debug().Msgf("Report: %s", GetReportMode(config))
-
 	analyzeFnc := defaultAnalyzeFunction
 	if len(opts) == 1 {
 		analyzeFnc = opts[0]
@@ -98,6 +95,9 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	if err != nil {
 		logger.Warn().Err(err)
 	}
+
+	logger.Debug().Msgf("Target: %v", target)
+	logger.Debug().Msgf("Report: %s", GetReportMode(config))
 
 	result, err := analyzeFnc(target, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface())
 
