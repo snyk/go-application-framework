@@ -585,7 +585,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should print valid sarif json output", func(t *testing.T) {
-		testfile := "testdata/single-result.json"
+		testfile := "testdata/sarif-snyk-goof-ignores.json"
 		localFinding, err := sarifToLocalFinding(t, testfile, "/mypath")
 		assert.Nil(t, err)
 

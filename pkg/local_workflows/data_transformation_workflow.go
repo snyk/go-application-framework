@@ -185,6 +185,18 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 	}
 
 	localFinding.Summary = *transformTestSummary(&testSummary)
+	var coverage []local_models.TypesCoverage
+	for _, run := range sarifDoc.Runs {
+		for _, cov := range run.Properties.Coverage {
+			coverage = append(coverage, local_models.TypesCoverage{
+				Files:       cov.Files,
+				IsSupported: cov.IsSupported,
+				Lang:        cov.Lang,
+				Type:        cov.Type,
+			})
+		}
+	}
+	localFinding.Summary.Coverage = coverage
 
 	// Map rules
 	rules := mapRules(sarifDoc)
@@ -326,9 +338,24 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 			finding.Attributes.Suppression = &sp
 		}
 
-		// for _, cf := range res.CodeFlows {
-
-		// }
+		// Add codeFlows mappings
+		for _, cf := range res.CodeFlows {
+			var codeFlow local_models.TypesCodeFlow
+			for _, tf := range cf.ThreadFlows {
+				var threadFlow local_models.TypesThreadFlow
+				for _, loc := range tf.Locations {
+					threadFlow.Locations = append(threadFlow.Locations, local_models.IoSnykReactiveFindingSourceLocation{
+						Filepath:            loc.Location.PhysicalLocation.ArtifactLocation.URI,
+						OriginalStartLine:   loc.Location.PhysicalLocation.Region.StartLine,
+						OriginalEndLine:     loc.Location.PhysicalLocation.Region.EndLine,
+						OriginalStartColumn: loc.Location.PhysicalLocation.Region.StartColumn,
+						OriginalEndColumn:   loc.Location.PhysicalLocation.Region.EndColumn,
+					})
+				}
+				codeFlow.ThreadFlows = append(codeFlow.ThreadFlows, threadFlow)
+			}
+			*finding.Attributes.CodeFlows = append(*finding.Attributes.CodeFlows, codeFlow)
+		}
 
 		localFinding.Findings = append(localFinding.Findings, finding)
 	}
