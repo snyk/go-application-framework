@@ -186,10 +186,38 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 
 	localFinding.Summary = *transformTestSummary(&testSummary)
 
+	// Map rules
+	rules := mapRules(sarifDoc)
+	// Use the mapped rules as needed
+	localFinding.Rules = rules
+
 	for _, res := range sarifDoc.Runs[0].Results {
 		var shortDescription string
 		if len(sarifDoc.Runs[0].Tool.Driver.Rules) > res.RuleIndex && res.RuleIndex >= 0 {
 			shortDescription = sarifDoc.Runs[0].Tool.Driver.Rules[res.RuleIndex].ShortDescription.Text
+		}
+
+		fingerprints := []local_models.Fingerprint{}
+		if res.Fingerprints.Identity != "" {
+			var fp local_models.Fingerprint
+			rawIdentity := []byte(`{"scheme":"` + string(local_models.Identity) + `","value":"` + res.Fingerprints.Identity + `"}`)
+			if err := json.Unmarshal(rawIdentity, &fp); err == nil {
+				fingerprints = append(fingerprints, fp)
+			}
+		}
+		if res.Fingerprints.Num0 != "" {
+			var fp local_models.Fingerprint
+			rawNum0 := []byte(`{"scheme":"` + string(local_models.CodeSastV0) + `","value":"` + res.Fingerprints.Num0 + `"}`)
+			if err := json.Unmarshal(rawNum0, &fp); err == nil {
+				fingerprints = append(fingerprints, fp)
+			}
+		}
+		if res.Fingerprints.Num1 != "" {
+			var fp local_models.Fingerprint
+			rawNum1 := []byte(`{"scheme":"` + string(local_models.CodeSastV1) + `","value":"` + res.Fingerprints.Num1 + `"}`)
+			if err := json.Unmarshal(rawNum1, &fp); err == nil {
+				fingerprints = append(fingerprints, fp)
+			}
 		}
 
 		finding := local_models.FindingResource{
@@ -198,9 +226,7 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 					Identifier: res.RuleID,
 					Index:      res.RuleIndex,
 				},
-				Fingerprint: []local_models.Fingerprint{
-					// todo
-				},
+				Fingerprint: fingerprints,
 				Component: local_models.TypesComponent{
 					Name:     ".",
 					ScanType: "sast",
@@ -308,6 +334,110 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 	}
 
 	return localFinding, err
+}
+
+func mapRules(sarifDoc sarif.SarifDocument) []local_models.TypesRules {
+	var rules []local_models.TypesRules
+	for _, rule := range sarifDoc.Runs[0].Tool.Driver.Rules {
+		rules = append(rules, local_models.TypesRules{
+			Id:   rule.ID,
+			Name: rule.Name,
+			ShortDescription: struct {
+				Text string `json:"text"`
+			}{
+				Text: rule.ShortDescription.Text,
+			},
+			DefaultConfiguration: struct {
+				Level string `json:"level"`
+			}{
+				Level: rule.DefaultConfiguration.Level,
+			},
+			Help: struct {
+				Markdown string `json:"markdown"`
+				Text     string `json:"text"`
+			}{
+				Markdown: rule.Help.Markdown,
+				Text:     rule.Help.Text,
+			},
+			Properties: struct {
+				Categories                []string `json:"categories"`
+				Cwe                       []string `json:"cwe"`
+				ExampleCommitDescriptions []string `json:"exampleCommitDescriptions"`
+				ExampleCommitFixes        []struct {
+					CommitUrl string `json:"commitUrl"`
+					Lines     []struct {
+						Line       string `json:"line"`
+						LineNumber int    `json:"lineNumber"`
+						Linechange string `json:"linechange"`
+					} `json:"lines"`
+				} `json:"exampleCommitFixes"`
+				Precision       string   `json:"precision"`
+				RepoDatasetSize int      `json:"repoDatasetSize"`
+				Tags            []string `json:"tags"`
+			}{
+				Categories:                rule.Properties.Categories,
+				Cwe:                       rule.Properties.Cwe,
+				ExampleCommitDescriptions: rule.Properties.ExampleCommitDescriptions,
+				ExampleCommitFixes: func() []struct {
+					CommitUrl string `json:"commitUrl"`
+					Lines     []struct {
+						Line       string `json:"line"`
+						LineNumber int    `json:"lineNumber"`
+						Linechange string `json:"linechange"`
+					} `json:"lines"`
+				} {
+					var fixes []struct {
+						CommitUrl string `json:"commitUrl"`
+						Lines     []struct {
+							Line       string `json:"line"`
+							LineNumber int    `json:"lineNumber"`
+							Linechange string `json:"linechange"`
+						} `json:"lines"`
+					}
+					for _, fix := range rule.Properties.ExampleCommitFixes {
+						fixes = append(fixes, struct {
+							CommitUrl string `json:"commitUrl"`
+							Lines     []struct {
+								Line       string `json:"line"`
+								LineNumber int    `json:"lineNumber"`
+								Linechange string `json:"linechange"`
+							} `json:"lines"`
+						}{
+							CommitUrl: fix.CommitURL,
+							Lines: func() []struct {
+								Line       string `json:"line"`
+								LineNumber int    `json:"lineNumber"`
+								Linechange string `json:"linechange"`
+							} {
+								var lines []struct {
+									Line       string `json:"line"`
+									LineNumber int    `json:"lineNumber"`
+									Linechange string `json:"linechange"`
+								}
+								for _, line := range fix.Lines {
+									lines = append(lines, struct {
+										Line       string `json:"line"`
+										LineNumber int    `json:"lineNumber"`
+										Linechange string `json:"linechange"`
+									}{
+										Line:       line.Line,
+										LineNumber: line.LineNumber,
+										Linechange: line.LineChange,
+									})
+								}
+								return lines
+							}(),
+						})
+					}
+					return fixes
+				}(),
+				Precision:       rule.Properties.Precision,
+				RepoDatasetSize: rule.Properties.RepoDatasetSize,
+				Tags:            rule.Properties.Tags,
+			},
+		})
+	}
+	return rules
 }
 
 func transformTestSummary(testSummary *json_schemas.TestSummary) *local_models.TypesFindingsSummary {
