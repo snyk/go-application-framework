@@ -7,6 +7,7 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
@@ -209,28 +210,7 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 			shortDescription = sarifDoc.Runs[0].Tool.Driver.Rules[res.RuleIndex].ShortDescription.Text
 		}
 
-		fingerprints := []local_models.Fingerprint{}
-		if res.Fingerprints.Identity != "" {
-			var fp local_models.Fingerprint
-			rawIdentity := []byte(`{"scheme":"` + string(local_models.Identity) + `","value":"` + res.Fingerprints.Identity + `"}`)
-			if err := json.Unmarshal(rawIdentity, &fp); err == nil {
-				fingerprints = append(fingerprints, fp)
-			}
-		}
-		if res.Fingerprints.Num0 != "" {
-			var fp local_models.Fingerprint
-			rawNum0 := []byte(`{"scheme":"` + string(local_models.CodeSastV0) + `","value":"` + res.Fingerprints.Num0 + `"}`)
-			if err := json.Unmarshal(rawNum0, &fp); err == nil {
-				fingerprints = append(fingerprints, fp)
-			}
-		}
-		if res.Fingerprints.Num1 != "" {
-			var fp local_models.Fingerprint
-			rawNum1 := []byte(`{"scheme":"` + string(local_models.CodeSastV1) + `","value":"` + res.Fingerprints.Num1 + `"}`)
-			if err := json.Unmarshal(rawNum1, &fp); err == nil {
-				fingerprints = append(fingerprints, fp)
-			}
-		}
+		fingerprints := mapFingerprints(res)
 
 		finding := local_models.FindingResource{
 			Attributes: local_models.TypesFindingAttributes{
@@ -313,54 +293,88 @@ func TransformToLocalFindingModel_nocue(sarifBytes []byte, summaryBytes []byte) 
 		}
 
 		if len(res.Suppressions) > 0 {
-			suppresion := res.Suppressions[0]
+			suppression := res.Suppressions[0]
 			expiration := ""
 			ignored_email := ""
-			if suppresion.Properties.Expiration != nil {
-				expiration = *suppresion.Properties.Expiration
+			if suppression.Properties.Expiration != nil {
+				expiration = *suppression.Properties.Expiration
 			}
-			if suppresion.Properties.IgnoredBy.Email != nil {
-				ignored_email = *suppresion.Properties.IgnoredBy.Email
+			if suppression.Properties.IgnoredBy.Email != nil {
+				ignored_email = *suppression.Properties.IgnoredBy.Email
 			}
 			var sp = local_models.TypesSuppression{
 				Details: &local_models.TypesSuppressionDetails{
-					Category:   string(suppresion.Properties.Category),
+					Category:   string(suppression.Properties.Category),
 					Expiration: expiration,
-					IgnoredOn:  string(suppresion.Properties.IgnoredOn),
+					IgnoredOn:  suppression.Properties.IgnoredOn,
 					IgnoredBy: local_models.TypesUser{
-						Name:  suppresion.Properties.IgnoredBy.Name,
+						Name:  suppression.Properties.IgnoredBy.Name,
 						Email: ignored_email,
 					},
 				},
-				Justification: &suppresion.Justification,
+				Justification: &suppression.Justification,
 				Kind:          "ignored",
 			}
 			finding.Attributes.Suppression = &sp
 		}
 
 		// Add codeFlows mappings
-		for _, cf := range res.CodeFlows {
-			var codeFlow local_models.TypesCodeFlow
-			for _, tf := range cf.ThreadFlows {
-				var threadFlow local_models.TypesThreadFlow
-				for _, loc := range tf.Locations {
-					threadFlow.Locations = append(threadFlow.Locations, local_models.IoSnykReactiveFindingSourceLocation{
-						Filepath:            loc.Location.PhysicalLocation.ArtifactLocation.URI,
-						OriginalStartLine:   loc.Location.PhysicalLocation.Region.StartLine,
-						OriginalEndLine:     loc.Location.PhysicalLocation.Region.EndLine,
-						OriginalStartColumn: loc.Location.PhysicalLocation.Region.StartColumn,
-						OriginalEndColumn:   loc.Location.PhysicalLocation.Region.EndColumn,
-					})
-				}
-				codeFlow.ThreadFlows = append(codeFlow.ThreadFlows, threadFlow)
-			}
-			*finding.Attributes.CodeFlows = append(*finding.Attributes.CodeFlows, codeFlow)
-		}
+		*finding.Attributes.CodeFlows = mapCodeFlows(res)
 
 		localFinding.Findings = append(localFinding.Findings, finding)
 	}
 
 	return localFinding, err
+}
+
+func mapFingerprints(res sarif.Result) []local_models.Fingerprint {
+	var fingerprints []local_models.Fingerprint
+	if res.Fingerprints.Identity != "" {
+		var fp local_models.Fingerprint
+		rawIdentity := []byte(`{"scheme":"` + string(local_models.Identity) + `","value":"` + res.Fingerprints.Identity + `"}`)
+		if err := json.Unmarshal(rawIdentity, &fp); err != nil {
+			log.Warn().Msg("Failed to unmarshal identity fingerprint")
+		} else {
+			fingerprints = append(fingerprints, fp)
+		}
+	}
+	if res.Fingerprints.Num0 != "" {
+		var fp local_models.Fingerprint
+		rawNum0 := []byte(`{"scheme":"` + string(local_models.CodeSastV0) + `","value":"` + res.Fingerprints.Num0 + `"}`)
+		if err := json.Unmarshal(rawNum0, &fp); err == nil {
+			fingerprints = append(fingerprints, fp)
+		}
+	}
+	if res.Fingerprints.Num1 != "" {
+		var fp local_models.Fingerprint
+		rawNum1 := []byte(`{"scheme":"` + string(local_models.CodeSastV1) + `","value":"` + res.Fingerprints.Num1 + `"}`)
+		if err := json.Unmarshal(rawNum1, &fp); err == nil {
+			fingerprints = append(fingerprints, fp)
+		}
+	}
+	return fingerprints
+}
+
+func mapCodeFlows(res sarif.Result) []local_models.TypesCodeFlow {
+	var codeFlows []local_models.TypesCodeFlow
+	for _, cf := range res.CodeFlows {
+		var codeFlow local_models.TypesCodeFlow
+		for _, tf := range cf.ThreadFlows {
+			var threadFlow local_models.TypesThreadFlow
+			for _, loc := range tf.Locations {
+				threadFlow.Locations = append(threadFlow.Locations, local_models.IoSnykReactiveFindingSourceLocation{
+					Filepath:            loc.Location.PhysicalLocation.ArtifactLocation.URI,
+					OriginalStartLine:   loc.Location.PhysicalLocation.Region.StartLine,
+					OriginalEndLine:     loc.Location.PhysicalLocation.Region.EndLine,
+					OriginalStartColumn: loc.Location.PhysicalLocation.Region.StartColumn,
+					OriginalEndColumn:   loc.Location.PhysicalLocation.Region.EndColumn,
+				})
+			}
+			codeFlow.ThreadFlows = append(codeFlow.ThreadFlows, threadFlow)
+		}
+		codeFlows = append(codeFlows, codeFlow)
+	}
+	return codeFlows
 }
 
 func mapRules(sarifDoc sarif.SarifDocument) []local_models.TypesRules {
