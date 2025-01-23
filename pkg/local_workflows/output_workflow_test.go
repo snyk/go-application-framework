@@ -168,11 +168,6 @@ func getSarifInput() sarif.SarifDocument {
 
 func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (localFinding *local_models.LocalFinding, err error) {
 	t.Helper()
-	return sarifToLocalFindingHelper(t, filename, projectPath, false)
-}
-
-func sarifToLocalFindingHelper(t *testing.T, filename string, projectPath string, useCuelang bool) (localFinding *local_models.LocalFinding, err error) {
-	t.Helper()
 	jsonFile, err := os.Open("./" + filename)
 	if err != nil {
 		t.Errorf("Failed to load json")
@@ -198,11 +193,7 @@ func sarifToLocalFindingHelper(t *testing.T, filename string, projectPath string
 	t.Log("transform start", time.Now())
 
 	var tmp local_models.LocalFinding
-	if !useCuelang {
-		tmp, err = TransformToLocalFindingModel_nocue(sarifBytes, summaryBytes)
-	} else {
-		tmp, err = TransformToLocalFindingModel(sarifBytes, summaryBytes)
-	}
+	tmp, err = TransformToLocalFindingModel(sarifBytes, summaryBytes)
 
 	t.Log("transform end", time.Now())
 	return &tmp, err
@@ -705,43 +696,6 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
 	testfile := "testdata/10000Findings.json"
 
-	b.Run("cuelang", func(b *testing.B) {
-		for n := 0; n < b.N; n++ {
-			start := time.Now()
-			var memStart runtime.MemStats
-			var memEnd runtime.MemStats
-			runtime.ReadMemStats(&memStart)
-
-			writer.Reset()
-			localFinding, err := sarifToLocalFindingHelper(t, testfile, "/mypath", true)
-			assert.Nil(t, err)
-
-			workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-
-			localFindingBytes, err := json.Marshal(localFinding)
-			assert.Nil(t, err)
-
-			sarifData := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
-			sarifData.SetContentLocation("/mypath")
-
-			// execute
-			_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
-			assert.NoError(t, err)
-
-			runtime.ReadMemStats(&memEnd)
-			duration := time.Since(start)
-			b.Logf("Used Memory: %d [MB]", (memEnd.TotalAlloc-memStart.TotalAlloc)/1024/1024)
-			b.Logf("Duration: %s", duration)
-
-			// assert
-			validateSarifData(t, writer.Bytes())
-
-			if duration > 10*time.Second {
-				b.Fatalf("cuelang transformation took too long: %s", duration)
-			}
-		}
-	})
-
 	b.Run("native", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			start := time.Now()
@@ -750,7 +704,7 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 			runtime.ReadMemStats(&memStart)
 
 			writer.Reset()
-			localFinding, err := sarifToLocalFindingHelper(t, testfile, "/mypath", false)
+			localFinding, err := sarifToLocalFinding(t, testfile, "/mypath")
 			assert.Nil(t, err)
 
 			workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")

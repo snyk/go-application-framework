@@ -244,22 +244,3 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 	assert.Equal(t, 0, ignoredLowFindings)
 	assert.Equal(t, 3, ignoredFindings)
 }
-
-// func Test_DataTransformation_compare_with_Cue(t *testing.T) {
-// 	sarifBytes := loadJsonFile(t, "single-result.json")
-
-// 	summary := json_schemas.TestSummary{
-// 		Path: "testdata/single-result.json",
-// 		// ...populate other fields as needed...
-// 	}
-// 	summaryBytes, err := json.Marshal(summary)
-// 	assert.NoError(t, err)
-
-// 	expected, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
-// 	assert.NoError(t, err)
-
-// 	actual, err := TransformToLocalFindingModel_nocue(sarifBytes, summaryBytes)
-// 	assert.NoError(t, err)
-
-// 	assert.Equal(t, expected, actual)
-// }
