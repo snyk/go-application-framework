@@ -134,9 +134,7 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 	}
 	localFinding.Summary.Coverage = coverage
 
-	// Map rules
 	rules := mapRules(sarifDoc)
-	// Use the mapped rules as needed
 	localFinding.Rules = rules
 
 	for _, res := range sarifDoc.Runs[0].Results {
@@ -253,7 +251,6 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 			finding.Attributes.Suppression = &sp
 		}
 
-		// Add codeFlows mappings
 		*finding.Attributes.CodeFlows = mapCodeFlows(res)
 
 		localFinding.Findings = append(localFinding.Findings, finding)
