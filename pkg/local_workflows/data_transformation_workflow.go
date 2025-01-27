@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -117,7 +118,7 @@ func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (
 	var sarifDoc sarif.SarifDocument
 	err = json.Unmarshal(sarifBytes, &sarifDoc)
 	if err != nil {
-		return localFinding, err
+		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
 
 	localFinding.Summary = *transformTestSummary(&testSummary, &sarifDoc)
