@@ -86,7 +86,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return input, err
 	}
 
-	findingsModel, err = TransformToLocalFindingModel(sarif_bytes, summary_bytes)
+	findingsModel, err = TransformSarifToLocalFindingModel(sarif_bytes, summary_bytes)
 	if err != nil {
 		logger.Err(err).Msg(err.Error())
 		return input, err
@@ -107,7 +107,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	return output, nil
 }
 
-func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
+func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
 	var testSummary json_schemas.TestSummary
 	err = json.Unmarshal(summaryBytes, &testSummary)
 	if err != nil {

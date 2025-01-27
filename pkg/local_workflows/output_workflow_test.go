@@ -190,12 +190,9 @@ func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (loc
 	summaryBytes, err := json.Marshal(summaryData)
 	assert.NoError(t, err)
 
-	t.Log("transform start", time.Now())
-
 	var tmp local_models.LocalFinding
-	tmp, err = TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	tmp, err = TransformSarifToLocalFindingModel(sarifBytes, summaryBytes)
 
-	t.Log("transform end", time.Now())
 	return &tmp, err
 }
 
@@ -613,8 +610,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		prettyActualSarif, err := getSortedSarifBytes(writer.Bytes())
 		assert.NoError(t, err)
 
-		t.Log("comparing")
-
 		expectedString := string(prettyExpectedSarif)
 		fmt.Println(expectedString)
 
@@ -696,7 +691,7 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
 	testfile := "testdata/10000Findings.json"
 
-	b.Run("native", func(b *testing.B) {
+	b.Run("sarif to localFindings transformer", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			start := time.Now()
 			var memStart runtime.MemStats

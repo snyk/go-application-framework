@@ -46,7 +46,7 @@ func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_mod
 	summaryBytes, err := json.Marshal(summaryData)
 	assert.NoError(t, err)
 
-	tmp, err := localworkflows.TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	tmp, err := localworkflows.TransformSarifToLocalFindingModel(sarifBytes, summaryBytes)
 	return &tmp, err
 }
 

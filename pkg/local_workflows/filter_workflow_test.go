@@ -2,8 +2,9 @@ package localworkflows
 
 import (
 	"encoding/json"
-	"github.com/snyk/go-application-framework/internal/utils/findings"
 	"testing"
+
+	"github.com/snyk/go-application-framework/internal/utils/findings"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -49,7 +50,7 @@ func getFindingsInputData(t *testing.T) workflow.Data {
 	sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
 	summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
 
-	findings, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	findings, err := TransformSarifToLocalFindingModel(sarifBytes, summaryBytes)
 	assert.NoError(t, err)
 
 	findingsBytes, err := json.Marshal(findings)
@@ -145,7 +146,7 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		ctx := setupMockFilterContext(t, "high")
 		sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
 		summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
-		findingsInput, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+		findingsInput, err := TransformSarifToLocalFindingModel(sarifBytes, summaryBytes)
 		assert.NoError(t, err)
 		findingsBytes, err := json.Marshal(findingsInput)
 		assert.NoError(t, err)
