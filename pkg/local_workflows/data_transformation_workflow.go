@@ -120,23 +120,21 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 		return localFinding, err
 	}
 
-	localFinding.Summary = *transformTestSummary(&testSummary)
-	var coverage []local_models.TypesCoverage
-	for _, run := range sarifDoc.Runs {
-		for _, cov := range run.Properties.Coverage {
-			coverage = append(coverage, local_models.TypesCoverage{
-				Files:       cov.Files,
-				IsSupported: cov.IsSupported,
-				Lang:        cov.Lang,
-				Type:        cov.Type,
-			})
-		}
-	}
-	localFinding.Summary.Coverage = coverage
+	localFinding.Summary = *transformTestSummary(&testSummary, &sarifDoc)
 
 	rules := mapRules(sarifDoc)
 	localFinding.Rules = rules
 
+	localFinding.Findings, err = mapFindings(sarifDoc)
+	if err != nil {
+		return localFinding, err
+	}
+
+	return localFinding, err
+}
+
+func mapFindings(sarifDoc sarif.SarifDocument) ([]local_models.FindingResource, error) {
+	var findings []local_models.FindingResource
 	for _, res := range sarifDoc.Runs[0].Results {
 		var shortDescription string
 		if len(sarifDoc.Runs[0].Tool.Driver.Rules) > res.RuleIndex && res.RuleIndex >= 0 {
@@ -194,18 +192,17 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 			Factors: func() (factors []local_models.RiskFactors) {
 				for _, v := range res.Properties.PriorityScoreFactors {
 					factor := &local_models.RiskFactors{}
-					err = factor.FromTypesVulnerabilityFactRiskFactor(local_models.TypesVulnerabilityFactRiskFactor{
+					err := factor.FromTypesVulnerabilityFactRiskFactor(local_models.TypesVulnerabilityFactRiskFactor{
 						Name:  v.Type,
 						Value: v.Label,
 					})
+					if err != nil {
+						return nil
+					}
 					factors = append(factors, *factor)
 				}
 				return factors
 			}(),
-		}
-
-		if err != nil {
-			return localFinding, err
 		}
 
 		finding.Attributes.Locations = &[]local_models.IoSnykReactiveFindingLocation{}
@@ -253,10 +250,9 @@ func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (local
 
 		*finding.Attributes.CodeFlows = mapCodeFlows(res)
 
-		localFinding.Findings = append(localFinding.Findings, finding)
+		findings = append(findings, finding)
 	}
-
-	return localFinding, err
+	return findings, nil
 }
 
 func mapFingerprints(res sarif.Result) []local_models.Fingerprint {
@@ -413,7 +409,7 @@ func mapRules(sarifDoc sarif.SarifDocument) []local_models.TypesRules {
 	return rules
 }
 
-func transformTestSummary(testSummary *json_schemas.TestSummary) *local_models.TypesFindingsSummary {
+func transformTestSummary(testSummary *json_schemas.TestSummary, sarifDoc *sarif.SarifDocument) *local_models.TypesFindingsSummary {
 	var summary local_models.TypesFindingsSummary
 	summary.Path = testSummary.Path
 	summary.Artifacts = testSummary.Artifacts
@@ -438,6 +434,19 @@ func transformTestSummary(testSummary *json_schemas.TestSummary) *local_models.T
 		summary.Counts.CountSuppressed += uint32(summaryResults.Ignored)
 		summary.Counts.Count += uint32(summaryResults.Total)
 	}
+
+	var coverage []local_models.TypesCoverage
+	for _, run := range sarifDoc.Runs {
+		for _, cov := range run.Properties.Coverage {
+			coverage = append(coverage, local_models.TypesCoverage{
+				Files:       cov.Files,
+				IsSupported: cov.IsSupported,
+				Lang:        cov.Lang,
+				Type:        cov.Type,
+			})
+		}
+	}
+	summary.Coverage = coverage
 
 	return &summary
 }
