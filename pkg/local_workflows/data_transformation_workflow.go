@@ -205,54 +205,45 @@ func mapFindings(sarifDoc sarif.SarifDocument) ([]local_models.FindingResource, 
 			}(),
 		}
 
-		finding.Attributes.Locations = &[]local_models.IoSnykReactiveFindingLocation{}
-		finding.Attributes.CodeFlows = &[]local_models.TypesCodeFlow{}
+		codeFlows := mapCodeFlows(res)
+		finding.Attributes.CodeFlows = &codeFlows
+
 		finding.Attributes.Suggestions = &[]local_models.Suggestion{}
-
-		for _, location := range res.Locations {
-			var l = local_models.IoSnykReactiveFindingLocation{
-				SourceLocations: &local_models.IoSnykReactiveFindingSourceLocation{
-					Filepath:            location.PhysicalLocation.ArtifactLocation.URI,
-					OriginalStartLine:   location.PhysicalLocation.Region.StartLine,
-					OriginalEndLine:     location.PhysicalLocation.Region.EndLine,
-					OriginalStartColumn: location.PhysicalLocation.Region.StartColumn,
-					OriginalEndColumn:   location.PhysicalLocation.Region.EndColumn,
-				},
-			}
-			*finding.Attributes.Locations = append(*finding.Attributes.Locations, l)
-		}
-
-		if len(res.Suppressions) > 0 {
-			suppression := res.Suppressions[0]
-			expiration := ""
-			ignored_email := ""
-			if suppression.Properties.Expiration != nil {
-				expiration = *suppression.Properties.Expiration
-			}
-			if suppression.Properties.IgnoredBy.Email != nil {
-				ignored_email = *suppression.Properties.IgnoredBy.Email
-			}
-			var sp = local_models.TypesSuppression{
-				Details: &local_models.TypesSuppressionDetails{
-					Category:   string(suppression.Properties.Category),
-					Expiration: expiration,
-					IgnoredOn:  suppression.Properties.IgnoredOn,
-					IgnoredBy: local_models.TypesUser{
-						Name:  suppression.Properties.IgnoredBy.Name,
-						Email: ignored_email,
-					},
-				},
-				Justification: &suppression.Justification,
-				Kind:          "ignored",
-			}
-			finding.Attributes.Suppression = &sp
-		}
-
-		*finding.Attributes.CodeFlows = mapCodeFlows(res)
+		finding.Attributes.Locations = &[]local_models.IoSnykReactiveFindingLocation{}
+		*finding.Attributes.Locations = append(*finding.Attributes.Locations, mapLocations(res)...)
+		finding.Attributes.Suppression = mapSuppressions(res)
 
 		findings = append(findings, finding)
 	}
 	return findings, nil
+}
+
+func mapSuppressions(res sarif.Result) *local_models.TypesSuppression {
+	if len(res.Suppressions) == 0 {
+		return nil
+	}
+	suppression := res.Suppressions[0]
+	expiration := ""
+	ignored_email := ""
+	if suppression.Properties.Expiration != nil {
+		expiration = *suppression.Properties.Expiration
+	}
+	if suppression.Properties.IgnoredBy.Email != nil {
+		ignored_email = *suppression.Properties.IgnoredBy.Email
+	}
+	return &local_models.TypesSuppression{
+		Details: &local_models.TypesSuppressionDetails{
+			Category:   string(suppression.Properties.Category),
+			Expiration: expiration,
+			IgnoredOn:  suppression.Properties.IgnoredOn,
+			IgnoredBy: local_models.TypesUser{
+				Name:  suppression.Properties.IgnoredBy.Name,
+				Email: ignored_email,
+			},
+		},
+		Justification: &suppression.Justification,
+		Kind:          "ignored",
+	}
 }
 
 func mapFingerprints(res sarif.Result) []local_models.Fingerprint {
@@ -449,4 +440,20 @@ func transformTestSummary(testSummary *json_schemas.TestSummary, sarifDoc *sarif
 	summary.Coverage = coverage
 
 	return &summary
+}
+
+func mapLocations(res sarif.Result) []local_models.IoSnykReactiveFindingLocation {
+	var locations []local_models.IoSnykReactiveFindingLocation
+	for _, location := range res.Locations {
+		locations = append(locations, local_models.IoSnykReactiveFindingLocation{
+			SourceLocations: &local_models.IoSnykReactiveFindingSourceLocation{
+				Filepath:            location.PhysicalLocation.ArtifactLocation.URI,
+				OriginalStartLine:   location.PhysicalLocation.Region.StartLine,
+				OriginalEndLine:     location.PhysicalLocation.Region.EndLine,
+				OriginalStartColumn: location.PhysicalLocation.Region.StartColumn,
+				OriginalEndColumn:   location.PhysicalLocation.Region.EndColumn,
+			},
+		})
+	}
+	return locations
 }
