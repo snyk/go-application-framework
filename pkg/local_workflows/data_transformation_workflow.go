@@ -122,9 +122,14 @@ func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (
 		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
 
-	localFinding.Summary = transformTestSummary(&testSummary, &sarifDoc)
-
-	rules := mapRules(sarifDoc)
+	localFinding.Summary = transformTestSummary(testSummary, sarifDoc)
+	var rules []local_models.TypesRules
+	for _, run := range sarifDoc.Runs {
+		for _, rule := range run.Tool.Driver.Rules {
+			localFindingsRule := mapRules(rule)
+			rules = append(rules, localFindingsRule)
+		}
+	}
 	localFinding.Rules = rules
 
 	localFinding.Findings, err = mapFindings(sarifDoc)
@@ -298,111 +303,25 @@ func mapCodeFlows(res sarif.Result) []local_models.TypesCodeFlow {
 	return codeFlows
 }
 
-func mapRules(sarifDoc sarif.SarifDocument) []local_models.TypesRules {
-	var rules []local_models.TypesRules
-	for _, rule := range sarifDoc.Runs[0].Tool.Driver.Rules {
-		rules = append(rules, local_models.TypesRules{
-			Id:   rule.ID,
-			Name: rule.Name,
-			ShortDescription: struct {
-				Text string `json:"text"`
-			}{
-				Text: rule.ShortDescription.Text,
-			},
-			DefaultConfiguration: struct {
-				Level string `json:"level"`
-			}{
-				Level: rule.DefaultConfiguration.Level,
-			},
-			Help: struct {
-				Markdown string `json:"markdown"`
-				Text     string `json:"text"`
-			}{
-				Markdown: rule.Help.Markdown,
-				Text:     rule.Help.Text,
-			},
-			Properties: struct {
-				Categories                []string `json:"categories"`
-				Cwe                       []string `json:"cwe"`
-				ExampleCommitDescriptions []string `json:"exampleCommitDescriptions"`
-				ExampleCommitFixes        []struct {
-					CommitUrl string `json:"commitUrl"`
-					Lines     []struct {
-						Line       string `json:"line"`
-						LineNumber int    `json:"lineNumber"`
-						Linechange string `json:"linechange"`
-					} `json:"lines"`
-				} `json:"exampleCommitFixes"`
-				Precision       string   `json:"precision"`
-				RepoDatasetSize int      `json:"repoDatasetSize"`
-				Tags            []string `json:"tags"`
-			}{
-				Categories:                rule.Properties.Categories,
-				Cwe:                       rule.Properties.Cwe,
-				ExampleCommitDescriptions: rule.Properties.ExampleCommitDescriptions,
-				ExampleCommitFixes: func() []struct {
-					CommitUrl string `json:"commitUrl"`
-					Lines     []struct {
-						Line       string `json:"line"`
-						LineNumber int    `json:"lineNumber"`
-						Linechange string `json:"linechange"`
-					} `json:"lines"`
-				} {
-					var fixes []struct {
-						CommitUrl string `json:"commitUrl"`
-						Lines     []struct {
-							Line       string `json:"line"`
-							LineNumber int    `json:"lineNumber"`
-							Linechange string `json:"linechange"`
-						} `json:"lines"`
-					}
-					for _, fix := range rule.Properties.ExampleCommitFixes {
-						fixes = append(fixes, struct {
-							CommitUrl string `json:"commitUrl"`
-							Lines     []struct {
-								Line       string `json:"line"`
-								LineNumber int    `json:"lineNumber"`
-								Linechange string `json:"linechange"`
-							} `json:"lines"`
-						}{
-							CommitUrl: fix.CommitURL,
-							Lines: func() []struct {
-								Line       string `json:"line"`
-								LineNumber int    `json:"lineNumber"`
-								Linechange string `json:"linechange"`
-							} {
-								var lines []struct {
-									Line       string `json:"line"`
-									LineNumber int    `json:"lineNumber"`
-									Linechange string `json:"linechange"`
-								}
-								for _, line := range fix.Lines {
-									lines = append(lines, struct {
-										Line       string `json:"line"`
-										LineNumber int    `json:"lineNumber"`
-										Linechange string `json:"linechange"`
-									}{
-										Line:       line.Line,
-										LineNumber: line.LineNumber,
-										Linechange: line.LineChange,
-									})
-								}
-								return lines
-							}(),
-						})
-					}
-					return fixes
-				}(),
-				Precision:       rule.Properties.Precision,
-				RepoDatasetSize: rule.Properties.RepoDatasetSize,
-				Tags:            rule.Properties.Tags,
-			},
-		})
-	}
-	return rules
+func mapRules(sarifRule sarif.Rule) local_models.TypesRules {
+	return local_models.NewTypesRules(
+		sarifRule.ID,
+		sarifRule.Name,
+		sarifRule.ShortDescription.Text,
+		sarifRule.DefaultConfiguration.Level,
+		sarifRule.Help.Markdown,
+		sarifRule.Help.Text,
+		local_models.WithCategories(sarifRule.Properties.Categories),
+		local_models.WithCwe(sarifRule.Properties.Cwe),
+		local_models.WithExampleCommitDescriptions(sarifRule.Properties.ExampleCommitDescriptions),
+		local_models.WithExampleCommitFixes(local_models.CreateExampleCommitFixes(sarifRule)),
+		local_models.WithPrecision(sarifRule.Properties.Precision),
+		local_models.WithRepoDatasetSize(sarifRule.Properties.RepoDatasetSize),
+		local_models.WithTags(sarifRule.Properties.Tags),
+	)
 }
 
-func transformTestSummary(testSummary *json_schemas.TestSummary, sarifDoc *sarif.SarifDocument) local_models.TypesFindingsSummary {
+func transformTestSummary(testSummary json_schemas.TestSummary, sarifDoc sarif.SarifDocument) local_models.TypesFindingsSummary {
 	var summary local_models.TypesFindingsSummary
 	summary.Path = testSummary.Path
 	summary.Artifacts = testSummary.Artifacts

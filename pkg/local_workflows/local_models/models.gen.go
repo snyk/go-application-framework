@@ -1039,14 +1039,7 @@ type TypesRules struct {
 		Categories                []string `json:"categories"`
 		Cwe                       []string `json:"cwe"`
 		ExampleCommitDescriptions []string `json:"exampleCommitDescriptions"`
-		ExampleCommitFixes        []struct {
-			CommitUrl string `json:"commitUrl"`
-			Lines     []struct {
-				Line       string `json:"line"`
-				LineNumber int    `json:"lineNumber"`
-				Linechange string `json:"linechange"`
-			} `json:"lines"`
-		} `json:"exampleCommitFixes"`
+		ExampleCommitFixes        []ExampleCommitFix
 		Precision       string   `json:"precision"`
 		RepoDatasetSize int      `json:"repoDatasetSize"`
 		Tags            []string `json:"tags"`
