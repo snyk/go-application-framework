@@ -9,6 +9,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/utils/findings"
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
@@ -406,16 +407,8 @@ func transformTestSummary(testSummary *json_schemas.TestSummary, sarifDoc *sarif
 	summary.Path = testSummary.Path
 	summary.Artifacts = testSummary.Artifacts
 	summary.Type = testSummary.Type
+	summary.Counts = findings.NewFindingsCounts()
 	summary.Counts.CountKeyOrderAsc.Severity = testSummary.SeverityOrderAsc
-	summary.Counts.Count = 0
-	summary.Counts.CountAdjusted = 0
-	summary.Counts.CountSuppressed = 0
-	summary.Counts.CountBy.Severity = make(map[string]uint32)
-	summary.Counts.CountByAdjusted.Severity = make(map[string]uint32)
-	summary.Counts.CountBySuppressed.Severity = make(map[string]uint32)
-	summary.Counts.CountBy.AdditionalProperties = make(map[string]map[string]uint32)
-	summary.Counts.CountByAdjusted.AdditionalProperties = make(map[string]map[string]uint32)
-	summary.Counts.CountBySuppressed.AdditionalProperties = make(map[string]map[string]uint32)
 
 	for _, summaryResults := range testSummary.Results {
 		summary.Counts.CountBy.Severity[summaryResults.Severity] = uint32(summaryResults.Total)

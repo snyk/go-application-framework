@@ -3,7 +3,6 @@ package localworkflows
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -611,10 +610,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 
 		expectedString := string(prettyExpectedSarif)
-		fmt.Println(expectedString)
-
 		actualSarifString := string(prettyActualSarif)
-		fmt.Println(actualSarifString)
 
 		require.JSONEq(t, expectedString, actualSarifString)
 	})
