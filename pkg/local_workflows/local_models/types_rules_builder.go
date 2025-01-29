@@ -3,60 +3,32 @@ package local_models
 import "github.com/snyk/code-client-go/sarif"
 
 // ExampleCommitFix defines the structure for commit fixes
-type ExampleCommitFix struct {
-	CommitUrl string `json:"commitUrl"`
-	Lines     []struct {
-		Line       string `json:"line"`
-		LineNumber int    `json:"lineNumber"`
-		LineChange string `json:"lineChange"`
-	} `json:"lines"`
-}
 
 // NewExampleCommitFix creates a new ExampleCommitFix with the provided parameters
-func NewExampleCommitFix(commitUrl string, lines []struct {
-	Line       string `json:"line"`
-	LineNumber int    `json:"lineNumber"`
-	LineChange string `json:"lineChange"`
-}) ExampleCommitFix {
-	return ExampleCommitFix{
+func NewExampleCommitFix(commitUrl string, lines []TypesLine) TypesExampleCommitFix {
+	return TypesExampleCommitFix{
 		CommitUrl: commitUrl,
 		Lines:     lines,
 	}
 }
 
 // CreateExampleCommitFixes creates a slice of ExampleCommitFix from the provided sarifRule
-func CreateExampleCommitFixes(sarifRule sarif.Rule) []ExampleCommitFix {
-	var fixes []ExampleCommitFix
+func CreateExampleCommitFixes(sarifRule sarif.Rule) []TypesExampleCommitFix {
+	var fixes []TypesExampleCommitFix
 	for _, fix := range sarifRule.Properties.ExampleCommitFixes {
 		fixes = append(fixes, NewExampleCommitFix(
 			fix.CommitURL,
-			CreateLines(fix.Lines),
+			CreateLines(fix),
 		))
 	}
 	return fixes
 }
 
 // CreateLines creates a slice of lines from the provided lines
-func CreateLines(lines []struct {
-	Line       string `json:"line"`
-	LineNumber int    `json:"lineNumber"`
-	LineChange string `json:"lineChange"`
-}) []struct {
-	Line       string `json:"line"`
-	LineNumber int    `json:"lineNumber"`
-	LineChange string `json:"lineChange"`
-} {
-	var result []struct {
-		Line       string `json:"line"`
-		LineNumber int    `json:"lineNumber"`
-		LineChange string `json:"lineChange"`
-	}
-	for _, line := range lines {
-		result = append(result, struct {
-			Line       string `json:"line"`
-			LineNumber int    `json:"lineNumber"`
-			LineChange string `json:"lineChange"`
-		}{
+func CreateLines(fix sarif.ExampleCommitFix) []TypesLine {
+	var result []TypesLine
+	for _, line := range fix.Lines {
+		result = append(result, TypesLine{
 			Line:       line.Line,
 			LineNumber: line.LineNumber,
 			LineChange: line.LineChange,
@@ -90,7 +62,7 @@ func WithExampleCommitDescriptions(descriptions []string) TypesRulesOption {
 }
 
 // WithExampleCommitFixes sets the ExampleCommitFixes field
-func WithExampleCommitFixes(fixes []ExampleCommitFix) TypesRulesOption {
+func WithExampleCommitFixes(fixes []TypesExampleCommitFix) TypesRulesOption {
 	return func(r *TypesRules) {
 		r.Properties.ExampleCommitFixes = fixes
 	}

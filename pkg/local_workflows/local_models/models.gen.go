@@ -575,6 +575,12 @@ type TypesEpssRiskFactor struct {
 // TypesEpssRiskFactorFactor defines model for TypesEpssRiskFactor.Factor.
 type TypesEpssRiskFactorFactor string
 
+// TypesExampleCommitFix defines model for types.ExampleCommitFix.
+type TypesExampleCommitFix struct {
+	CommitUrl string      `json:"commitUrl"`
+	Lines     []TypesLine `json:"lines"`
+}
+
 // TypesFileObjectExcludeRule defines model for types.FileObjectExcludeRule.
 type TypesFileObjectExcludeRule struct {
 	Type TypesFileObjectExcludeRuleType `json:"type"`
@@ -969,6 +975,13 @@ type TypesLegacyDeepcodeBundleAddress struct {
 // TypesLegacyDeepcodeBundleAddressScheme defines model for TypesLegacyDeepcodeBundleAddress.Scheme.
 type TypesLegacyDeepcodeBundleAddressScheme string
 
+// TypesLine defines model for types.Line.
+type TypesLine struct {
+	Line       string `json:"line"`
+	LineChange string `json:"lineChange"`
+	LineNumber int    `json:"lineNumber"`
+}
+
 // TypesOtherObjectExcludeRule OtherObjectExcludeRule is a placeholder expansion value, for when types of exclusion rules
 // were used in testing that are not present in the called version of the API.
 type TypesOtherObjectExcludeRule struct {
@@ -1036,13 +1049,13 @@ type TypesRules struct {
 	Id         string `json:"id"`
 	Name       string `json:"name"`
 	Properties struct {
-		Categories                []string `json:"categories"`
-		Cwe                       []string `json:"cwe"`
-		ExampleCommitDescriptions []string `json:"exampleCommitDescriptions"`
-		ExampleCommitFixes        []ExampleCommitFix
-		Precision       string   `json:"precision"`
-		RepoDatasetSize int      `json:"repoDatasetSize"`
-		Tags            []string `json:"tags"`
+		Categories                []string                `json:"categories"`
+		Cwe                       []string                `json:"cwe"`
+		ExampleCommitDescriptions []string                `json:"exampleCommitDescriptions"`
+		ExampleCommitFixes        []TypesExampleCommitFix `json:"exampleCommitFixes"`
+		Precision                 string                  `json:"precision"`
+		RepoDatasetSize           int                     `json:"repoDatasetSize"`
+		Tags                      []string                `json:"tags"`
 	} `json:"properties"`
 	ShortDescription struct {
 		Text string `json:"text"`
