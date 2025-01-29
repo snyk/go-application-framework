@@ -253,28 +253,32 @@ func mapSuppressions(res sarif.Result) *local_models.TypesSuppression {
 	}
 }
 
+func createFingerprint(scheme string, value string) (local_models.Fingerprint, error) {
+	var fp local_models.Fingerprint
+	raw := []byte(`{"scheme":"` + string(scheme) + `","value":"` + value + `"}`)
+	err := json.Unmarshal(raw, &fp)
+	return fp, err
+}
+
 func mapFingerprints(res sarif.Result) []local_models.Fingerprint {
 	var fingerprints []local_models.Fingerprint
 	if res.Fingerprints.Identity != "" {
-		var fp local_models.Fingerprint
-		rawIdentity := []byte(`{"scheme":"` + string(local_models.Identity) + `","value":"` + res.Fingerprints.Identity + `"}`)
-		if err := json.Unmarshal(rawIdentity, &fp); err != nil {
+		fp, err := createFingerprint(string(local_models.Identity), res.Fingerprints.Identity)
+		if err != nil {
 			log.Warn().Msg("Failed to unmarshal identity fingerprint")
 		} else {
 			fingerprints = append(fingerprints, fp)
 		}
 	}
 	if res.Fingerprints.Num0 != "" {
-		var fp local_models.Fingerprint
-		rawNum0 := []byte(`{"scheme":"` + string(local_models.CodeSastV0) + `","value":"` + res.Fingerprints.Num0 + `"}`)
-		if err := json.Unmarshal(rawNum0, &fp); err == nil {
+		fp, err := createFingerprint(string(local_models.CodeSastV0), res.Fingerprints.Num0)
+		if err == nil {
 			fingerprints = append(fingerprints, fp)
 		}
 	}
 	if res.Fingerprints.Num1 != "" {
-		var fp local_models.Fingerprint
-		rawNum1 := []byte(`{"scheme":"` + string(local_models.CodeSastV1) + `","value":"` + res.Fingerprints.Num1 + `"}`)
-		if err := json.Unmarshal(rawNum1, &fp); err == nil {
+		fp, err := createFingerprint(string(local_models.CodeSastV1), res.Fingerprints.Num1)
+		if err == nil {
 			fingerprints = append(fingerprints, fp)
 		}
 	}
