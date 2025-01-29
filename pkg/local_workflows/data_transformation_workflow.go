@@ -122,7 +122,7 @@ func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (
 		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
 
-	localFinding.Summary = *transformTestSummary(&testSummary, &sarifDoc)
+	localFinding.Summary = transformTestSummary(&testSummary, &sarifDoc)
 
 	rules := mapRules(sarifDoc)
 	localFinding.Rules = rules
@@ -402,7 +402,7 @@ func mapRules(sarifDoc sarif.SarifDocument) []local_models.TypesRules {
 	return rules
 }
 
-func transformTestSummary(testSummary *json_schemas.TestSummary, sarifDoc *sarif.SarifDocument) *local_models.TypesFindingsSummary {
+func transformTestSummary(testSummary *json_schemas.TestSummary, sarifDoc *sarif.SarifDocument) local_models.TypesFindingsSummary {
 	var summary local_models.TypesFindingsSummary
 	summary.Path = testSummary.Path
 	summary.Artifacts = testSummary.Artifacts
@@ -433,7 +433,7 @@ func transformTestSummary(testSummary *json_schemas.TestSummary, sarifDoc *sarif
 	}
 	summary.Coverage = coverage
 
-	return &summary
+	return summary
 }
 
 func mapLocations(res sarif.Result) []local_models.IoSnykReactiveFindingLocation {
