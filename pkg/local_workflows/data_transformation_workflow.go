@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
@@ -132,12 +131,15 @@ func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (
 	}
 	localFinding.Rules = rules
 
-	localFinding.Findings = mapFindings(sarifDoc)
+	localFinding.Findings, err = mapFindings(sarifDoc)
+	if err != nil {
+		return localFinding, fmt.Errorf("failed to map findings: %w", err)
+	}
 
 	return localFinding, err
 }
 
-func mapFindings(sarifDoc sarif.SarifDocument) []local_models.FindingResource {
+func mapFindings(sarifDoc sarif.SarifDocument) ([]local_models.FindingResource, error) {
 	var findings []local_models.FindingResource
 	for _, res := range sarifDoc.Runs[0].Results {
 		var shortDescription string
@@ -145,7 +147,10 @@ func mapFindings(sarifDoc sarif.SarifDocument) []local_models.FindingResource {
 			shortDescription = sarifDoc.Runs[0].Tool.Driver.Rules[res.RuleIndex].ShortDescription.Text
 		}
 
-		fingerprints := mapFingerprints(res)
+		fingerprints, err := mapFingerprints(res.Fingerprints)
+		if err != nil {
+			return nil, fmt.Errorf("failed to map fingerprints: %w", err)
+		}
 
 		finding := local_models.FindingResource{
 			Attributes: local_models.TypesFindingAttributes{
@@ -219,7 +224,7 @@ func mapFindings(sarifDoc sarif.SarifDocument) []local_models.FindingResource {
 
 		findings = append(findings, finding)
 	}
-	return findings
+	return findings, nil
 }
 
 func mapSuppressions(res sarif.Result) *local_models.TypesSuppression {
@@ -257,29 +262,33 @@ func createFingerprint(scheme string, value string) (local_models.Fingerprint, e
 	return fp, err
 }
 
-func mapFingerprints(res sarif.Result) []local_models.Fingerprint {
+func mapFingerprints(sfp sarif.Fingerprints) ([]local_models.Fingerprint, error) {
 	var fingerprints []local_models.Fingerprint
-	if res.Fingerprints.Identity != "" {
-		fp, err := createFingerprint(string(local_models.Identity), res.Fingerprints.Identity)
+	if sfp.Identity != "" {
+		fp, err := createFingerprint(string(local_models.Identity), sfp.Identity)
 		if err != nil {
-			log.Warn().Msg("Failed to unmarshal identity fingerprint")
+			return nil, fmt.Errorf("failed to unmarshal identity fingerprint: %w", err)
 		} else {
 			fingerprints = append(fingerprints, fp)
 		}
 	}
-	if res.Fingerprints.Num0 != "" {
-		fp, err := createFingerprint(string(local_models.CodeSastV0), res.Fingerprints.Num0)
-		if err == nil {
+	if sfp.Num0 != "" {
+		fp, err := createFingerprint(string(local_models.CodeSastV0), sfp.Num0)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal code sast v0 fingerprint: %w", err)
+		} else {
 			fingerprints = append(fingerprints, fp)
 		}
 	}
-	if res.Fingerprints.Num1 != "" {
-		fp, err := createFingerprint(string(local_models.CodeSastV1), res.Fingerprints.Num1)
-		if err == nil {
+	if sfp.Num1 != "" {
+		fp, err := createFingerprint(string(local_models.CodeSastV1), sfp.Num1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal code sast v1 fingerprint: %w", err)
+		} else {
 			fingerprints = append(fingerprints, fp)
 		}
 	}
-	return fingerprints
+	return fingerprints, nil
 }
 
 func createLocation(location sarif.PhysicalLocation) local_models.IoSnykReactiveFindingSourceLocation {
