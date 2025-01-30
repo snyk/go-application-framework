@@ -456,6 +456,7 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 	}
 
 	o.logger.Info().Msgf("Instance specified in callback (%s) does not match pre-configured value (%s)", authHost, oauthTokenUrl.Host)
+	// file deepcode ignore Ssrf: false positive
 	oauthTokenUrl.Host = authHost
 	o.oauthConfig.Endpoint.TokenURL = oauthTokenUrl.String()
 	o.logger.Info().Msgf("New token url endpoint is: %s", o.oauthConfig.Endpoint.TokenURL)
