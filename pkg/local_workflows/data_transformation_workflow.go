@@ -132,15 +132,12 @@ func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (
 	}
 	localFinding.Rules = rules
 
-	localFinding.Findings, err = mapFindings(sarifDoc)
-	if err != nil {
-		return localFinding, err
-	}
+	localFinding.Findings = mapFindings(sarifDoc)
 
 	return localFinding, err
 }
 
-func mapFindings(sarifDoc sarif.SarifDocument) ([]local_models.FindingResource, error) {
+func mapFindings(sarifDoc sarif.SarifDocument) []local_models.FindingResource {
 	var findings []local_models.FindingResource
 	for _, res := range sarifDoc.Runs[0].Results {
 		var shortDescription string
@@ -222,7 +219,7 @@ func mapFindings(sarifDoc sarif.SarifDocument) ([]local_models.FindingResource, 
 
 		findings = append(findings, finding)
 	}
-	return findings, nil
+	return findings
 }
 
 func mapSuppressions(res sarif.Result) *local_models.TypesSuppression {
@@ -255,7 +252,7 @@ func mapSuppressions(res sarif.Result) *local_models.TypesSuppression {
 
 func createFingerprint(scheme string, value string) (local_models.Fingerprint, error) {
 	var fp local_models.Fingerprint
-	raw := []byte(`{"scheme":"` + string(scheme) + `","value":"` + value + `"}`)
+	raw := []byte(`{"scheme":"` + scheme + `","value":"` + value + `"}`)
 	err := json.Unmarshal(raw, &fp)
 	return fp, err
 }
@@ -285,6 +282,16 @@ func mapFingerprints(res sarif.Result) []local_models.Fingerprint {
 	return fingerprints
 }
 
+func createLocation(location sarif.PhysicalLocation) local_models.IoSnykReactiveFindingSourceLocation {
+	return local_models.IoSnykReactiveFindingSourceLocation{
+		Filepath:            location.ArtifactLocation.URI,
+		OriginalStartLine:   location.Region.StartLine,
+		OriginalEndLine:     location.Region.EndLine,
+		OriginalStartColumn: location.Region.StartColumn,
+		OriginalEndColumn:   location.Region.EndColumn,
+	}
+}
+
 func mapCodeFlows(res sarif.Result) []local_models.TypesCodeFlow {
 	var codeFlows []local_models.TypesCodeFlow
 	for _, cf := range res.CodeFlows {
@@ -292,13 +299,7 @@ func mapCodeFlows(res sarif.Result) []local_models.TypesCodeFlow {
 		for _, tf := range cf.ThreadFlows {
 			var threadFlow local_models.TypesThreadFlow
 			for _, loc := range tf.Locations {
-				threadFlow.Locations = append(threadFlow.Locations, local_models.IoSnykReactiveFindingSourceLocation{
-					Filepath:            loc.Location.PhysicalLocation.ArtifactLocation.URI,
-					OriginalStartLine:   loc.Location.PhysicalLocation.Region.StartLine,
-					OriginalEndLine:     loc.Location.PhysicalLocation.Region.EndLine,
-					OriginalStartColumn: loc.Location.PhysicalLocation.Region.StartColumn,
-					OriginalEndColumn:   loc.Location.PhysicalLocation.Region.EndColumn,
-				})
+				threadFlow.Locations = append(threadFlow.Locations, createLocation(loc.Location.PhysicalLocation))
 			}
 			codeFlow.ThreadFlows = append(codeFlow.ThreadFlows, threadFlow)
 		}
@@ -362,14 +363,9 @@ func transformTestSummary(testSummary json_schemas.TestSummary, sarifDoc sarif.S
 func mapLocations(res sarif.Result) []local_models.IoSnykReactiveFindingLocation {
 	var locations []local_models.IoSnykReactiveFindingLocation
 	for _, location := range res.Locations {
+		loc := createLocation(location.PhysicalLocation)
 		locations = append(locations, local_models.IoSnykReactiveFindingLocation{
-			SourceLocations: &local_models.IoSnykReactiveFindingSourceLocation{
-				Filepath:            location.PhysicalLocation.ArtifactLocation.URI,
-				OriginalStartLine:   location.PhysicalLocation.Region.StartLine,
-				OriginalEndLine:     location.PhysicalLocation.Region.EndLine,
-				OriginalStartColumn: location.PhysicalLocation.Region.StartColumn,
-				OriginalEndColumn:   location.PhysicalLocation.Region.EndColumn,
-			},
+			SourceLocations: &loc,
 		})
 	}
 	return locations
