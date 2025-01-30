@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/utils/findings"
-	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -151,80 +150,67 @@ func mapFindings(sarifDoc sarif.SarifDocument) ([]local_models.FindingResource, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to map fingerprints: %w", err)
 		}
-
-		finding := local_models.FindingResource{
-			Attributes: local_models.TypesFindingAttributes{
-				ReferenceId: &local_models.TypesReferenceId{
-					Identifier: res.RuleID,
-					Index:      res.RuleIndex,
-				},
-				Fingerprint: fingerprints,
-				Component: local_models.TypesComponent{
-					Name:     ".",
-					ScanType: "sast",
-				},
-				IsAutofixable: &res.Properties.IsAutofixable,
-				Message: struct {
-					Arguments []string `json:"arguments"`
-					Header    string   `json:"header"`
-					Markdown  string   `json:"markdown"`
-					Text      string   `json:"text"`
-				}{
-					Header:    shortDescription,
-					Text:      res.Message.Text,
-					Markdown:  res.Message.Markdown,
-					Arguments: res.Message.Arguments,
-				},
-			},
-		}
-
+		opts := []local_models.FindingResourceOption{}
+		codeflows := mapCodeFlows(res)
+		locations := mapLocations(res)
 		if res.Properties.Policy != nil {
-			finding.Attributes.Policy = &local_models.TypesPolicyv1{
+			policy := &local_models.TypesPolicyv1{
 				OriginalLevel:    &res.Properties.Policy.OriginalLevel,
 				OriginalSeverity: &res.Properties.Policy.OriginalSeverity,
 				Severity:         &res.Properties.Policy.Severity,
 			}
+			opts = append(opts, local_models.WithPolicy(policy))
 		}
 
-		finding.Attributes.Rating = &local_models.TypesFindingRating{
-			Severity: struct {
-				OriginalValue *local_models.TypesFindingRatingSeverityOriginalValue `json:"original_value,omitempty"`
-				Reason        *local_models.TypesFindingRatingSeverityReason        `json:"reason,omitempty"`
-				Value         local_models.TypesFindingRatingSeverityValue          `json:"value"`
-			}{
-				Value: local_models.TypesFindingRatingSeverityValue(sarif_utils.SarifLevelToSeverity(res.Level)),
+		opts = append(opts,
+			local_models.WithRating(local_models.CreateFindingRating(res)),
+			local_models.WithCodeFlows(&codeflows),
+			local_models.WithSuggestions(&[]local_models.Suggestion{}),
+			local_models.WithLocations(&locations),
+			local_models.WithSuppression(mapSuppressions(res)),
+		)
+
+		finding := local_models.NewFindingResource(
+			&local_models.TypesReferenceId{
+				Identifier: res.RuleID,
+				Index:      res.RuleIndex,
 			},
-		}
-
-		finding.Attributes.Rating.Priority = &local_models.TypesFindingNumericalRating{
-			Score: res.Properties.PriorityScore,
-			Factors: func() (factors []local_models.RiskFactors) {
-				for _, v := range res.Properties.PriorityScoreFactors {
-					factor := &local_models.RiskFactors{}
-					err := factor.FromTypesVulnerabilityFactRiskFactor(local_models.TypesVulnerabilityFactRiskFactor{
-						Name:  v.Type,
-						Value: v.Label,
-					})
-					if err != nil {
-						return nil
-					}
-					factors = append(factors, *factor)
-				}
-				return factors
-			}(),
-		}
-
-		codeFlows := mapCodeFlows(res)
-		finding.Attributes.CodeFlows = &codeFlows
-
-		finding.Attributes.Suggestions = &[]local_models.Suggestion{}
-		finding.Attributes.Locations = &[]local_models.IoSnykReactiveFindingLocation{}
-		*finding.Attributes.Locations = append(*finding.Attributes.Locations, mapLocations(res)...)
-		finding.Attributes.Suppression = mapSuppressions(res)
+			fingerprints,
+			local_models.TypesComponent{
+				Name:     ".",
+				ScanType: "sast",
+			},
+			&res.Properties.IsAutofixable,
+			local_models.TypesFindingMessage{
+				Header:    shortDescription,
+				Text:      res.Message.Text,
+				Markdown:  res.Message.Markdown,
+				Arguments: res.Message.Arguments,
+			},
+			opts...,
+		)
 
 		findings = append(findings, finding)
 	}
 	return findings, nil
+}
+
+func mapRules(sarifRule sarif.Rule) local_models.TypesRules {
+	return local_models.NewTypesRules(
+		sarifRule.ID,
+		sarifRule.Name,
+		sarifRule.ShortDescription.Text,
+		sarifRule.DefaultConfiguration.Level,
+		sarifRule.Help.Markdown,
+		sarifRule.Help.Text,
+		local_models.WithCategories(sarifRule.Properties.Categories),
+		local_models.WithCwe(sarifRule.Properties.Cwe),
+		local_models.WithExampleCommitDescriptions(sarifRule.Properties.ExampleCommitDescriptions),
+		local_models.WithExampleCommitFixes(local_models.CreateExampleCommitFixes(sarifRule)),
+		local_models.WithPrecision(sarifRule.Properties.Precision),
+		local_models.WithRepoDatasetSize(sarifRule.Properties.RepoDatasetSize),
+		local_models.WithTags(sarifRule.Properties.Tags),
+	)
 }
 
 func mapSuppressions(res sarif.Result) *local_models.TypesSuppression {
@@ -317,24 +303,6 @@ func mapCodeFlows(res sarif.Result) []local_models.TypesCodeFlow {
 	return codeFlows
 }
 
-func mapRules(sarifRule sarif.Rule) local_models.TypesRules {
-	return local_models.NewTypesRules(
-		sarifRule.ID,
-		sarifRule.Name,
-		sarifRule.ShortDescription.Text,
-		sarifRule.DefaultConfiguration.Level,
-		sarifRule.Help.Markdown,
-		sarifRule.Help.Text,
-		local_models.WithCategories(sarifRule.Properties.Categories),
-		local_models.WithCwe(sarifRule.Properties.Cwe),
-		local_models.WithExampleCommitDescriptions(sarifRule.Properties.ExampleCommitDescriptions),
-		local_models.WithExampleCommitFixes(local_models.CreateExampleCommitFixes(sarifRule)),
-		local_models.WithPrecision(sarifRule.Properties.Precision),
-		local_models.WithRepoDatasetSize(sarifRule.Properties.RepoDatasetSize),
-		local_models.WithTags(sarifRule.Properties.Tags),
-	)
-}
-
 func transformTestSummary(testSummary json_schemas.TestSummary, sarifDoc sarif.SarifDocument) local_models.TypesFindingsSummary {
 	var summary local_models.TypesFindingsSummary
 	summary.Path = testSummary.Path
@@ -370,12 +338,12 @@ func transformTestSummary(testSummary json_schemas.TestSummary, sarifDoc sarif.S
 }
 
 func mapLocations(res sarif.Result) []local_models.IoSnykReactiveFindingLocation {
-	var locations []local_models.IoSnykReactiveFindingLocation
-	for _, location := range res.Locations {
+	locations := make([]local_models.IoSnykReactiveFindingLocation, len(res.Locations))
+	for i, location := range res.Locations {
 		loc := createLocation(location.PhysicalLocation)
-		locations = append(locations, local_models.IoSnykReactiveFindingLocation{
+		locations[i] = local_models.IoSnykReactiveFindingLocation{
 			SourceLocations: &loc,
-		})
+		}
 	}
 	return locations
 }

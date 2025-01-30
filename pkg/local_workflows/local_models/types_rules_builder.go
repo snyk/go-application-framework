@@ -1,6 +1,9 @@
 package local_models
 
-import "github.com/snyk/code-client-go/sarif"
+import (
+	"github.com/snyk/code-client-go/sarif"
+	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
+)
 
 // ExampleCommitFix defines the structure for commit fixes
 
@@ -118,4 +121,99 @@ func NewTypesRules(id, name, shortDescriptionText, level, helpMarkdown, helpText
 	}
 
 	return rule
+}
+
+// FindingResourceOption defines a type for functional options to customize FindingResource
+type FindingResourceOption func(*FindingResource)
+
+// WithPolicy sets the Policy field
+func WithPolicy(policy *TypesPolicyv1) FindingResourceOption {
+	return func(fr *FindingResource) {
+		fr.Attributes.Policy = policy
+	}
+}
+
+// WithRating sets the Rating field
+func WithRating(rating *TypesFindingRating) FindingResourceOption {
+	return func(fr *FindingResource) {
+		fr.Attributes.Rating = rating
+	}
+}
+
+// WithCodeFlows sets the CodeFlows field
+func WithCodeFlows(codeFlows *[]TypesCodeFlow) FindingResourceOption {
+	return func(fr *FindingResource) {
+		fr.Attributes.CodeFlows = codeFlows
+	}
+}
+
+// WithSuggestions sets the Suggestions field
+func WithSuggestions(suggestions *[]Suggestion) FindingResourceOption {
+	return func(fr *FindingResource) {
+		fr.Attributes.Suggestions = suggestions
+	}
+}
+
+// WithLocations sets the Locations field
+func WithLocations(locations *[]IoSnykReactiveFindingLocation) FindingResourceOption {
+	return func(fr *FindingResource) {
+		fr.Attributes.Locations = locations
+	}
+}
+
+// WithSuppression sets the Suppression field
+func WithSuppression(suppression *TypesSuppression) FindingResourceOption {
+	return func(fr *FindingResource) {
+		fr.Attributes.Suppression = suppression
+	}
+}
+
+// NewFindingResource creates a new FindingResource with the provided options
+func NewFindingResource(referenceId *TypesReferenceId, fingerprints []Fingerprint, component TypesComponent, isAutofixable *bool, message TypesFindingMessage, opts ...FindingResourceOption) FindingResource {
+	finding := FindingResource{
+		Attributes: TypesFindingAttributes{
+			ReferenceId:   referenceId,
+			Fingerprint:   fingerprints,
+			Component:     component,
+			IsAutofixable: isAutofixable,
+			Message:       message,
+		},
+	}
+
+	for _, opt := range opts {
+		opt(&finding)
+	}
+
+	return finding
+}
+
+func CreateFindingRating(res sarif.Result) *TypesFindingRating {
+	return &TypesFindingRating{
+		Severity: struct {
+			OriginalValue *TypesFindingRatingSeverityOriginalValue `json:"original_value,omitempty"`
+			Reason        *TypesFindingRatingSeverityReason        `json:"reason,omitempty"`
+			Value         TypesFindingRatingSeverityValue          `json:"value"`
+		}{
+			Value: TypesFindingRatingSeverityValue(sarif_utils.SarifLevelToSeverity(res.Level)),
+		},
+		Priority: &TypesFindingNumericalRating{
+			Score: res.Properties.PriorityScore,
+			Factors: func() (factors []RiskFactors) {
+				for _, v := range res.Properties.PriorityScoreFactors {
+					factor := &RiskFactors{}
+					err := factor.FromTypesVulnerabilityFactRiskFactor(
+						TypesVulnerabilityFactRiskFactor{
+							Name:  v.Type,
+							Value: v.Label,
+						},
+					)
+					if err != nil {
+						return nil
+					}
+					factors = append(factors, *factor)
+				}
+				return factors
+			}(),
+		},
+	}
 }

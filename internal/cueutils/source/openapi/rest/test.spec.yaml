@@ -1109,45 +1109,7 @@ components:
             For mitigation with a higher degree of confidence, remediation and fix
             relationship links should be used.
         message:
-          type: object
-          properties:
-            header:
-              type: string
-              maxLength: 100
-              description: |-
-                Short text description of finding rule.
-
-                Could be sourced from `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
-            text:
-              type: string
-              maxLength: 2000
-              description: |-
-                Full text description of the finding rule.
-
-                Mapped from `sarif.Runs.Results.Message.Text`.
-            markdown:
-              type: string
-              maxLength: 2000
-              description: |-
-                Markdown description of the finding rule.
-
-                Mapped from `sarif.Runs.Results.Message.Markdown`.
-            arguments:
-              type: array
-              items:
-                type: string
-              example:
-                - '[password_token](0)'
-              maxItems: 20
-              description: |-
-                Arguments to the finding rule.
-
-                Mapped from `sarif.Runs.Results.Message.Arguments`.
-          required:
-            - header
-            - text
-            - markdown
-            - arguments
+          $ref: '#/components/schemas/types.FindingMessage'
         rating:
           $ref: '#/components/schemas/types.FindingRating'
         suppression:
@@ -1277,6 +1239,46 @@ components:
           type: string
           format: uuid
           description: The finding identity (fingerprint). Uniquely identified in combination with a Test ID.
+    types.FindingMessage:
+      type: object
+      required:
+        - header
+        - text
+        - markdown
+        - arguments
+      properties:
+        header:
+          type: string
+          maxLength: 100
+          description: |-
+            Short text description of finding rule.
+
+            Could be sourced from `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
+        text:
+          type: string
+          maxLength: 2000
+          description: |-
+            Full text description of the finding rule.
+
+            Mapped from `sarif.Runs.Results.Message.Text`.
+        markdown:
+          type: string
+          maxLength: 2000
+          description: |-
+            Markdown description of the finding rule.
+
+            Mapped from `sarif.Runs.Results.Message.Markdown`.
+        arguments:
+          type: array
+          items:
+            type: string
+          example:
+            - '[password_token](0)'
+          maxItems: 20
+          description: |-
+            Arguments to the finding rule.
+
+            Mapped from `sarif.Runs.Results.Message.Arguments`.
     types.FindingNumericalRating:
       type: object
       required:

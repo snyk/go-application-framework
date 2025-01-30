@@ -615,28 +615,8 @@ type TypesFindingAttributes struct {
 	// be included unless the finding can only be resolved by making a change at
 	// every location.
 	Locations *[]IoSnykReactiveFindingLocation `json:"locations,omitempty"`
-	Message   struct {
-		// Arguments Arguments to the finding rule.
-		//
-		// Mapped from `sarif.Runs.Results.Message.Arguments`.
-		Arguments []string `json:"arguments"`
-
-		// Header Short text description of finding rule.
-		//
-		// Could be sourced from `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
-		Header string `json:"header"`
-
-		// Markdown Markdown description of the finding rule.
-		//
-		// Mapped from `sarif.Runs.Results.Message.Markdown`.
-		Markdown string `json:"markdown"`
-
-		// Text Full text description of the finding rule.
-		//
-		// Mapped from `sarif.Runs.Results.Message.Text`.
-		Text string `json:"text"`
-	} `json:"message"`
-	Policy *TypesPolicyv1 `json:"policy,omitempty"`
+	Message   TypesFindingMessage              `json:"message"`
+	Policy    *TypesPolicyv1                   `json:"policy,omitempty"`
 
 	// Rating The severity and risk rating of the vulnerability
 	Rating      *TypesFindingRating `json:"rating,omitempty"`
@@ -726,6 +706,29 @@ type TypesFindingCounts_CountKeyOrderAsc struct {
 	// Severity FindingCounts has a deterministic ordering for severity counts.
 	Severity             []string            `json:"severity"`
 	AdditionalProperties map[string][]string `json:"-"`
+}
+
+// TypesFindingMessage defines model for types.FindingMessage.
+type TypesFindingMessage struct {
+	// Arguments Arguments to the finding rule.
+	//
+	// Mapped from `sarif.Runs.Results.Message.Arguments`.
+	Arguments []string `json:"arguments"`
+
+	// Header Short text description of finding rule.
+	//
+	// Could be sourced from `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
+	Header string `json:"header"`
+
+	// Markdown Markdown description of the finding rule.
+	//
+	// Mapped from `sarif.Runs.Results.Message.Markdown`.
+	Markdown string `json:"markdown"`
+
+	// Text Full text description of the finding rule.
+	//
+	// Mapped from `sarif.Runs.Results.Message.Text`.
+	Text string `json:"text"`
 }
 
 // TypesFindingNumericalRating defines model for types.FindingNumericalRating.
