@@ -73,23 +73,24 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 
 		// parse response
 		userMeJSONBytes, err := json.Marshal(userMeJSON)
-		userMeData := createWorkflowData(userMeJSONBytes, "application/json", logger)
+		userMeData := createWorkflowData(userMeJSONBytes, "application/json", logger, config)
 
 		// return userme data
 		return []workflow.Data{userMeData}, err
 	}
 
-	userData := createWorkflowData(userMe, "text/plain", logger)
+	userData := createWorkflowData(userMe, "text/plain", logger, config)
 	return []workflow.Data{userData}, nil
 }
 
 // createWorkflowData creates a new workflow.Data object
-func createWorkflowData(data interface{}, contentType string, logger *zerolog.Logger) workflow.Data {
+func createWorkflowData(data interface{}, contentType string, logger *zerolog.Logger, config configuration.Configuration) workflow.Data {
 	return workflow.NewData(
 		// use new type identifier when creating new data
 		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, whoAmIworkflowName),
 		contentType,
 		data,
 		workflow.WithLogger(logger),
+		workflow.WithConfiguration(config),
 	)
 }
