@@ -250,30 +250,23 @@ func createFingerprint(scheme string, value string) (local_models.Fingerprint, e
 
 func mapFingerprints(sfp sarif.Fingerprints) ([]local_models.Fingerprint, error) {
 	var fingerprints []local_models.Fingerprint
-	if sfp.Identity != "" {
-		fp, err := createFingerprint(string(local_models.Identity), sfp.Identity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal identity fingerprint: %w", err)
-		} else {
+
+	schemeToValue := map[string]string{
+		string(local_models.Identity):   sfp.Identity,
+		string(local_models.CodeSastV0): sfp.Num0,
+		string(local_models.CodeSastV1): sfp.Num1,
+	}
+
+	for schemeStr, val := range schemeToValue {
+		if val != "" {
+			fp, err := createFingerprint(schemeStr, val)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal fingerprint (%s): %w", schemeStr, err)
+			}
 			fingerprints = append(fingerprints, fp)
 		}
 	}
-	if sfp.Num0 != "" {
-		fp, err := createFingerprint(string(local_models.CodeSastV0), sfp.Num0)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal code sast v0 fingerprint: %w", err)
-		} else {
-			fingerprints = append(fingerprints, fp)
-		}
-	}
-	if sfp.Num1 != "" {
-		fp, err := createFingerprint(string(local_models.CodeSastV1), sfp.Num1)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal code sast v1 fingerprint: %w", err)
-		} else {
-			fingerprints = append(fingerprints, fp)
-		}
-	}
+
 	return fingerprints, nil
 }
 
