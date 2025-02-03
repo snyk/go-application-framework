@@ -575,6 +575,12 @@ type TypesEpssRiskFactor struct {
 // TypesEpssRiskFactorFactor defines model for TypesEpssRiskFactor.Factor.
 type TypesEpssRiskFactorFactor string
 
+// TypesExampleCommitFix defines model for types.ExampleCommitFix.
+type TypesExampleCommitFix struct {
+	CommitUrl string      `json:"commitUrl"`
+	Lines     []TypesLine `json:"lines"`
+}
+
 // TypesFileObjectExcludeRule defines model for types.FileObjectExcludeRule.
 type TypesFileObjectExcludeRule struct {
 	Type TypesFileObjectExcludeRuleType `json:"type"`
@@ -609,28 +615,8 @@ type TypesFindingAttributes struct {
 	// be included unless the finding can only be resolved by making a change at
 	// every location.
 	Locations *[]IoSnykReactiveFindingLocation `json:"locations,omitempty"`
-	Message   struct {
-		// Arguments Arguments to the finding rule.
-		//
-		// Mapped from `sarif.Runs.Results.Message.Arguments`.
-		Arguments []string `json:"arguments"`
-
-		// Header Short text description of finding rule.
-		//
-		// Could be sourced from `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
-		Header string `json:"header"`
-
-		// Markdown Markdown description of the finding rule.
-		//
-		// Mapped from `sarif.Runs.Results.Message.Markdown`.
-		Markdown string `json:"markdown"`
-
-		// Text Full text description of the finding rule.
-		//
-		// Mapped from `sarif.Runs.Results.Message.Text`.
-		Text string `json:"text"`
-	} `json:"message"`
-	Policy *TypesPolicyv1 `json:"policy,omitempty"`
+	Message   TypesFindingMessage              `json:"message"`
+	Policy    *TypesPolicyv1                   `json:"policy,omitempty"`
 
 	// Rating The severity and risk rating of the vulnerability
 	Rating      *TypesFindingRating `json:"rating,omitempty"`
@@ -720,6 +706,29 @@ type TypesFindingCounts_CountKeyOrderAsc struct {
 	// Severity FindingCounts has a deterministic ordering for severity counts.
 	Severity             []string            `json:"severity"`
 	AdditionalProperties map[string][]string `json:"-"`
+}
+
+// TypesFindingMessage defines model for types.FindingMessage.
+type TypesFindingMessage struct {
+	// Arguments Arguments to the finding rule.
+	//
+	// Mapped from `sarif.Runs.Results.Message.Arguments`.
+	Arguments []string `json:"arguments"`
+
+	// Header Short text description of finding rule.
+	//
+	// Could be sourced from `sarif.Runs.Tool.Driver.Rules.ShortDescription.Text`.
+	Header string `json:"header"`
+
+	// Markdown Markdown description of the finding rule.
+	//
+	// Mapped from `sarif.Runs.Results.Message.Markdown`.
+	Markdown string `json:"markdown"`
+
+	// Text Full text description of the finding rule.
+	//
+	// Mapped from `sarif.Runs.Results.Message.Text`.
+	Text string `json:"text"`
 }
 
 // TypesFindingNumericalRating defines model for types.FindingNumericalRating.
@@ -969,6 +978,13 @@ type TypesLegacyDeepcodeBundleAddress struct {
 // TypesLegacyDeepcodeBundleAddressScheme defines model for TypesLegacyDeepcodeBundleAddress.Scheme.
 type TypesLegacyDeepcodeBundleAddressScheme string
 
+// TypesLine defines model for types.Line.
+type TypesLine struct {
+	Line       string `json:"line"`
+	LineChange string `json:"lineChange"`
+	LineNumber int    `json:"lineNumber"`
+}
+
 // TypesOtherObjectExcludeRule OtherObjectExcludeRule is a placeholder expansion value, for when types of exclusion rules
 // were used in testing that are not present in the called version of the API.
 type TypesOtherObjectExcludeRule struct {
@@ -1036,20 +1052,13 @@ type TypesRules struct {
 	Id         string `json:"id"`
 	Name       string `json:"name"`
 	Properties struct {
-		Categories                []string `json:"categories"`
-		Cwe                       []string `json:"cwe"`
-		ExampleCommitDescriptions []string `json:"exampleCommitDescriptions"`
-		ExampleCommitFixes        []struct {
-			CommitUrl string `json:"commitUrl"`
-			Lines     []struct {
-				Line       string `json:"line"`
-				LineNumber int    `json:"lineNumber"`
-				Linechange string `json:"linechange"`
-			} `json:"lines"`
-		} `json:"exampleCommitFixes"`
-		Precision       string   `json:"precision"`
-		RepoDatasetSize int      `json:"repoDatasetSize"`
-		Tags            []string `json:"tags"`
+		Categories                []string                `json:"categories"`
+		Cwe                       []string                `json:"cwe"`
+		ExampleCommitDescriptions []string                `json:"exampleCommitDescriptions"`
+		ExampleCommitFixes        []TypesExampleCommitFix `json:"exampleCommitFixes"`
+		Precision                 string                  `json:"precision"`
+		RepoDatasetSize           int                     `json:"repoDatasetSize"`
+		Tags                      []string                `json:"tags"`
 	} `json:"properties"`
 	ShortDescription struct {
 		Text string `json:"text"`

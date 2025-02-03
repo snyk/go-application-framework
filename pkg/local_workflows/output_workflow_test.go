@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -187,7 +189,9 @@ func sarifToLocalFinding(t *testing.T, filename string, projectPath string) (loc
 	summaryBytes, err := json.Marshal(summaryData)
 	assert.NoError(t, err)
 
-	tmp, err := TransformToLocalFindingModel(sarifBytes, summaryBytes)
+	var tmp local_models.LocalFinding
+	tmp, err = TransformSarifToLocalFindingModel(sarifBytes, summaryBytes)
+
 	return &tmp, err
 }
 
@@ -661,4 +665,62 @@ func TestLocalFindingsHandling_renderSarifFile_renderUI(t *testing.T) {
 	assert.NotEmpty(t, dataFromBuffer)
 
 	validateSarifData(t, dataFromSarifFile)
+}
+
+func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
+	t := &testing.T{}
+	logger := &zerolog.Logger{}
+	config := configuration.NewWithOpts()
+	writer := new(bytes.Buffer)
+
+	// setup mocks
+	ctrl := gomock.NewController(t)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	outputDestination := iMocks.NewMockOutputDestination(ctrl)
+
+	// invocation context mocks
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("SnykCode"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
+	outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
+
+	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+	testfile := "testdata/10000Findings.json"
+
+	b.Run("sarif to localFindings transformer", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			start := time.Now()
+			var memStart runtime.MemStats
+			var memEnd runtime.MemStats
+			runtime.ReadMemStats(&memStart)
+
+			writer.Reset()
+			localFinding, err := sarifToLocalFinding(t, testfile, "/mypath")
+			assert.Nil(t, err)
+
+			workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+
+			localFindingBytes, err := json.Marshal(localFinding)
+			assert.Nil(t, err)
+
+			sarifData := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
+			sarifData.SetContentLocation("/mypath")
+
+			// execute
+			_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+			assert.NoError(t, err)
+
+			runtime.ReadMemStats(&memEnd)
+			duration := time.Since(start)
+			b.Logf("Used Memory: %d [MB]", (memEnd.TotalAlloc-memStart.TotalAlloc)/1024/1024)
+			b.Logf("Duration: %s", duration)
+
+			// assert
+			validateSarifData(t, writer.Bytes())
+
+			if duration > 10*time.Second {
+				b.Fatalf("native transformation took too long: %s", duration)
+			}
+		}
+	})
 }

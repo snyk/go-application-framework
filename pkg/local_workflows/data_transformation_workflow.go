@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"cuelang.org/go/cue/cuecontext"
-	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
-	cueutil "github.com/snyk/go-application-framework/internal/cueutils"
+	"github.com/snyk/go-application-framework/internal/utils/findings"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -87,7 +86,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return input, err
 	}
 
-	findingsModel, err = TransformToLocalFindingModel(sarif_bytes, summary_bytes)
+	findingsModel, err = TransformSarifToLocalFindingModel(sarif_bytes, summary_bytes)
 	if err != nil {
 		logger.Err(err).Msg(err.Error())
 		return input, err
@@ -108,63 +107,236 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	return output, nil
 }
 
-func TransformToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
+func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
 	var testSummary json_schemas.TestSummary
 	err = json.Unmarshal(summaryBytes, &testSummary)
 	if err != nil {
 		return localFinding, err
 	}
 
-	input, errUnJson := cuejson.Unmarshal(sarifBytes)
-	if errUnJson != nil {
+	var sarifDoc sarif.SarifDocument
+	err = json.Unmarshal(sarifBytes, &sarifDoc)
+	if err != nil {
 		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
 
-	ctx := cuecontext.New()
-	sarif2apiTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToTestApiFromSarif)
-	if transformerError != nil {
-		return localFinding, transformerError
+	localFinding.Summary = transformTestSummary(testSummary, sarifDoc)
+	var rules []local_models.TypesRules
+	for _, run := range sarifDoc.Runs {
+		for _, rule := range run.Tool.Driver.Rules {
+			localFindingsRule := mapRules(rule)
+			rules = append(rules, localFindingsRule)
+		}
+	}
+	localFinding.Rules = rules
+
+	localFinding.Findings, err = mapFindings(sarifDoc)
+	if err != nil {
+		return localFinding, fmt.Errorf("failed to map findings: %w", err)
 	}
 
-	api2cliTransformer, transformerError := cueutil.NewTransformer(ctx, cueutil.ToCliFromTestApi)
-	if transformerError != nil {
-		return localFinding, transformerError
+	return localFinding, err
+}
+
+func mapFindings(sarifDoc sarif.SarifDocument) ([]local_models.FindingResource, error) {
+	var findings []local_models.FindingResource
+	for _, res := range sarifDoc.Runs[0].Results {
+		var shortDescription string
+		if len(sarifDoc.Runs[0].Tool.Driver.Rules) > res.RuleIndex && res.RuleIndex >= 0 {
+			shortDescription = sarifDoc.Runs[0].Tool.Driver.Rules[res.RuleIndex].ShortDescription.Text
+		}
+
+		fingerprints, err := mapFingerprints(res.Fingerprints)
+		if err != nil {
+			return nil, fmt.Errorf("failed to map fingerprints: %w", err)
+		}
+		opts := []local_models.FindingResourceOption{}
+		codeflows := mapCodeFlows(res)
+		locations := mapLocations(res)
+		if res.Properties.Policy != nil {
+			policy := &local_models.TypesPolicyv1{
+				OriginalLevel:    &res.Properties.Policy.OriginalLevel,
+				OriginalSeverity: &res.Properties.Policy.OriginalSeverity,
+				Severity:         &res.Properties.Policy.Severity,
+			}
+			opts = append(opts, local_models.WithPolicy(policy))
+		}
+
+		opts = append(opts,
+			local_models.WithRating(local_models.CreateFindingRating(res)),
+			local_models.WithCodeFlows(&codeflows),
+			local_models.WithSuggestions(&[]local_models.Suggestion{}),
+			local_models.WithLocations(&locations),
+			local_models.WithSuppression(mapSuppressions(res)),
+		)
+
+		finding := local_models.NewFindingResource(
+			&local_models.TypesReferenceId{
+				Identifier: res.RuleID,
+				Index:      res.RuleIndex,
+			},
+			fingerprints,
+			local_models.TypesComponent{
+				Name:     ".",
+				ScanType: "sast",
+			},
+			&res.Properties.IsAutofixable,
+			local_models.TypesFindingMessage{
+				Header:    shortDescription,
+				Text:      res.Message.Text,
+				Markdown:  res.Message.Markdown,
+				Arguments: res.Message.Arguments,
+			},
+			opts...,
+		)
+
+		findings = append(findings, finding)
+	}
+	return findings, nil
+}
+
+func mapRules(sarifRule sarif.Rule) local_models.TypesRules {
+	return local_models.NewTypesRules(
+		sarifRule.ID,
+		sarifRule.Name,
+		sarifRule.ShortDescription.Text,
+		sarifRule.DefaultConfiguration.Level,
+		sarifRule.Help.Markdown,
+		sarifRule.Help.Text,
+		local_models.WithCategories(sarifRule.Properties.Categories),
+		local_models.WithCwe(sarifRule.Properties.Cwe),
+		local_models.WithExampleCommitDescriptions(sarifRule.Properties.ExampleCommitDescriptions),
+		local_models.WithExampleCommitFixes(local_models.CreateExampleCommitFixes(sarifRule)),
+		local_models.WithPrecision(sarifRule.Properties.Precision),
+		local_models.WithRepoDatasetSize(sarifRule.Properties.RepoDatasetSize),
+		local_models.WithTags(sarifRule.Properties.Tags),
+	)
+}
+
+func mapSuppressions(res sarif.Result) *local_models.TypesSuppression {
+	if len(res.Suppressions) == 0 {
+		return nil
+	}
+	suppression := res.Suppressions[0]
+	expiration := ""
+	ignored_email := ""
+	if suppression.Properties.Expiration != nil {
+		expiration = *suppression.Properties.Expiration
+	}
+	if suppression.Properties.IgnoredBy.Email != nil {
+		ignored_email = *suppression.Properties.IgnoredBy.Email
+	}
+	return &local_models.TypesSuppression{
+		Details: &local_models.TypesSuppressionDetails{
+			Category:   string(suppression.Properties.Category),
+			Expiration: expiration,
+			IgnoredOn:  suppression.Properties.IgnoredOn,
+			IgnoredBy: local_models.TypesUser{
+				Name:  suppression.Properties.IgnoredBy.Name,
+				Email: ignored_email,
+			},
+		},
+		Justification: &suppression.Justification,
+		Kind:          "ignored",
+	}
+}
+
+func createFingerprint(scheme string, value string) (local_models.Fingerprint, error) {
+	var fp local_models.Fingerprint
+	raw := []byte(`{"scheme":"` + scheme + `","value":"` + value + `"}`)
+	err := json.Unmarshal(raw, &fp)
+	return fp, err
+}
+
+func mapFingerprints(sfp sarif.Fingerprints) ([]local_models.Fingerprint, error) {
+	var fingerprints []local_models.Fingerprint
+
+	schemeToValue := map[string]string{
+		string(local_models.Identity):   sfp.Identity,
+		string(local_models.CodeSastV0): sfp.Num0,
+		string(local_models.CodeSastV1): sfp.Num1,
 	}
 
-	apiOutput, applyError := sarif2apiTransformer.Apply(input)
-	if applyError != nil {
-		return localFinding, applyError
+	for schemeStr, val := range schemeToValue {
+		if val != "" {
+			fp, err := createFingerprint(schemeStr, val)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal fingerprint (%s): %w", schemeStr, err)
+			}
+			fingerprints = append(fingerprints, fp)
+		}
 	}
 
-	cliOutput, applyError := api2cliTransformer.ApplyValue(apiOutput)
-	if applyError != nil {
-		return localFinding, applyError
+	return fingerprints, nil
+}
+
+func createLocation(location sarif.PhysicalLocation) local_models.IoSnykReactiveFindingSourceLocation {
+	return local_models.IoSnykReactiveFindingSourceLocation{
+		Filepath:            location.ArtifactLocation.URI,
+		OriginalStartLine:   location.Region.StartLine,
+		OriginalEndLine:     location.Region.EndLine,
+		OriginalStartColumn: location.Region.StartColumn,
+		OriginalEndColumn:   location.Region.EndColumn,
 	}
+}
 
-	// Gate with validation before encoding?
-	encodeErr := cliOutput.Decode(&localFinding)
-
-	if encodeErr != nil {
-		return localFinding, fmt.Errorf("failed to convert to type: %w", encodeErr)
+func mapCodeFlows(res sarif.Result) []local_models.TypesCodeFlow {
+	var codeFlows []local_models.TypesCodeFlow
+	for _, cf := range res.CodeFlows {
+		var codeFlow local_models.TypesCodeFlow
+		for _, tf := range cf.ThreadFlows {
+			var threadFlow local_models.TypesThreadFlow
+			for _, loc := range tf.Locations {
+				threadFlow.Locations = append(threadFlow.Locations, createLocation(loc.Location.PhysicalLocation))
+			}
+			codeFlow.ThreadFlows = append(codeFlow.ThreadFlows, threadFlow)
+		}
+		codeFlows = append(codeFlows, codeFlow)
 	}
+	return codeFlows
+}
 
-	localFinding.Summary.Path = testSummary.Path
-	localFinding.Summary.Artifacts = testSummary.Artifacts
-	localFinding.Summary.Type = testSummary.Type
-	localFinding.Summary.Counts.CountKeyOrderAsc.Severity = testSummary.SeverityOrderAsc
-	localFinding.Summary.Counts.Count = 0
-	localFinding.Summary.Counts.CountAdjusted = 0
-	localFinding.Summary.Counts.CountSuppressed = 0
+func transformTestSummary(testSummary json_schemas.TestSummary, sarifDoc sarif.SarifDocument) local_models.TypesFindingsSummary {
+	var summary local_models.TypesFindingsSummary
+	summary.Path = testSummary.Path
+	summary.Artifacts = testSummary.Artifacts
+	summary.Type = testSummary.Type
+	summary.Counts = findings.NewFindingsCounts()
+	summary.Counts.CountKeyOrderAsc.Severity = testSummary.SeverityOrderAsc
 
 	for _, summaryResults := range testSummary.Results {
-		localFinding.Summary.Counts.CountBy.Severity[summaryResults.Severity] = uint32(summaryResults.Total)
-		localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity] = uint32(summaryResults.Open)
-		localFinding.Summary.Counts.CountBySuppressed.Severity[summaryResults.Severity] = uint32(summaryResults.Ignored)
+		summary.Counts.CountBy.Severity[summaryResults.Severity] = uint32(summaryResults.Total)
+		summary.Counts.CountByAdjusted.Severity[summaryResults.Severity] = uint32(summaryResults.Open)
+		summary.Counts.CountBySuppressed.Severity[summaryResults.Severity] = uint32(summaryResults.Ignored)
 
-		localFinding.Summary.Counts.CountAdjusted += localFinding.Summary.Counts.CountByAdjusted.Severity[summaryResults.Severity]
-		localFinding.Summary.Counts.CountSuppressed += uint32(summaryResults.Ignored)
-		localFinding.Summary.Counts.Count += uint32(summaryResults.Total)
+		summary.Counts.CountAdjusted += summary.Counts.CountByAdjusted.Severity[summaryResults.Severity]
+		summary.Counts.CountSuppressed += uint32(summaryResults.Ignored)
+		summary.Counts.Count += uint32(summaryResults.Total)
 	}
 
-	return localFinding, nil
+	var coverage []local_models.TypesCoverage
+	for _, run := range sarifDoc.Runs {
+		for _, cov := range run.Properties.Coverage {
+			coverage = append(coverage, local_models.TypesCoverage{
+				Files:       cov.Files,
+				IsSupported: cov.IsSupported,
+				Lang:        cov.Lang,
+				Type:        cov.Type,
+			})
+		}
+	}
+	summary.Coverage = coverage
+
+	return summary
+}
+
+func mapLocations(res sarif.Result) []local_models.IoSnykReactiveFindingLocation {
+	locations := make([]local_models.IoSnykReactiveFindingLocation, len(res.Locations))
+	for i, location := range res.Locations {
+		loc := createLocation(location.PhysicalLocation)
+		locations[i] = local_models.IoSnykReactiveFindingLocation{
+			SourceLocations: &loc,
+		}
+	}
+	return locations
 }

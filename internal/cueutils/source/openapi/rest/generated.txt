@@ -1,1 +1,1 @@
-2024-12-03T10:47:04Z feat/local_findings_sarif 9f1dbd7a1cef385a2a383b03137551665721a6be
+2025-01-30T12:12:32Z feat/local_findings_sarif 45d4102d736d479bd245a57537c7f9a6556f4d3e
