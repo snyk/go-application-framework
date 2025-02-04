@@ -570,6 +570,9 @@ components:
         - $ref: '#/components/schemas/types.CodeSastFingerprintV1'
         - $ref: '#/components/schemas/types.ScaProblemFingerprint'
         - $ref: '#/components/schemas/types.IdentityFingerprint'
+        - $ref: '#/components/schemas/types.FingerprintProjectV1'
+        - $ref: '#/components/schemas/types.FingerprintRepositoryV1'
+        - $ref: '#/components/schemas/types.FingerprintAssetV1'
       discriminator:
         propertyName: scheme
         mapping:
@@ -577,6 +580,9 @@ components:
           code-sast-v1: '#/components/schemas/types.CodeSastFingerprintV1'
           sca-problem: '#/components/schemas/types.ScaProblemFingerprint'
           identity: '#/components/schemas/types.IdentityFingerprint'
+          snyk/org/project/finding/v1: '#/components/schemas/types.FingerprintProjectV1'
+          snyk/org/repository/finding/v1: '#/components/schemas/types.FingerprintRepositoryV1'
+          snyk/asset/finding/v1: '#/components/schemas/types.FingerprintAssetV1'
     LinkProperty:
       oneOf:
         - $ref: '#/components/schemas/io.snyk.api.common.LinkString'
@@ -1614,6 +1620,42 @@ components:
           items:
             $ref: '#/components/schemas/types.Coverage'
       description: Summary statistics about a Test's Findings.
+    types.FingerprintAssetV1:
+      type: object
+      required:
+        - scheme
+        - value
+      properties:
+        scheme:
+          type: string
+          enum:
+            - snyk/asset/finding/v1
+        value:
+          type: string
+    types.FingerprintProjectV1:
+      type: object
+      required:
+        - scheme
+        - value
+      properties:
+        scheme:
+          type: string
+          enum:
+            - snyk/org/project/finding/v1
+        value:
+          type: string
+    types.FingerprintRepositoryV1:
+      type: object
+      required:
+        - scheme
+        - value
+      properties:
+        scheme:
+          type: string
+          enum:
+            - snyk/org/repository/finding/v1
+        value:
+          type: string
     types.GitCommit:
       type: string
       example: 23ee663c96889a1ce6f62217adf4dea2bea1b09e
