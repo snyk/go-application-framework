@@ -37,6 +37,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 	output = input
 
 	if !ff_transform_enabled {
+		logger.Info().Msg("Data transformation workflow is disabled")
 		return output, nil
 	}
 
@@ -252,9 +253,12 @@ func mapFingerprints(sfp sarif.Fingerprints) ([]local_models.Fingerprint, error)
 	var fingerprints []local_models.Fingerprint
 
 	schemeToValue := map[string]string{
-		string(local_models.Identity):   sfp.Identity,
-		string(local_models.CodeSastV0): sfp.Num0,
-		string(local_models.CodeSastV1): sfp.Num1,
+		string(local_models.Identity):                   sfp.Identity,
+		string(local_models.CodeSastV0):                 sfp.Num0,
+		string(local_models.CodeSastV1):                 sfp.Num1,
+		string(local_models.Snykassetfindingv1):         sfp.SnykAssetFindingV1,
+		string(local_models.Snykorgrepositoryfindingv1): sfp.SnykOrgRepositoryFindingV1,
+		string(local_models.Snykorgprojectfindingv1):    sfp.SnykOrgProjectFindingV1,
 	}
 
 	for schemeStr, val := range schemeToValue {

@@ -116,6 +116,21 @@ const (
 	Findings TypesFindingResourceType = "findings"
 )
 
+// Defines values for TypesFingerprintAssetV1Scheme.
+const (
+	Snykassetfindingv1 TypesFingerprintAssetV1Scheme = "snyk/asset/finding/v1"
+)
+
+// Defines values for TypesFingerprintProjectV1Scheme.
+const (
+	Snykorgprojectfindingv1 TypesFingerprintProjectV1Scheme = "snyk/org/project/finding/v1"
+)
+
+// Defines values for TypesFingerprintRepositoryV1Scheme.
+const (
+	Snykorgrepositoryfindingv1 TypesFingerprintRepositoryV1Scheme = "snyk/org/repository/finding/v1"
+)
+
 // Defines values for TypesGitSCMInputType.
 const (
 	GitScm TypesGitSCMInputType = "git-scm"
@@ -917,6 +932,33 @@ type TypesFindingsSummary struct {
 	Path      string             `json:"path"`
 	Type      string             `json:"type"`
 }
+
+// TypesFingerprintAssetV1 defines model for types.FingerprintAssetV1.
+type TypesFingerprintAssetV1 struct {
+	Scheme TypesFingerprintAssetV1Scheme `json:"scheme"`
+	Value  string                        `json:"value"`
+}
+
+// TypesFingerprintAssetV1Scheme defines model for TypesFingerprintAssetV1.Scheme.
+type TypesFingerprintAssetV1Scheme string
+
+// TypesFingerprintProjectV1 defines model for types.FingerprintProjectV1.
+type TypesFingerprintProjectV1 struct {
+	Scheme TypesFingerprintProjectV1Scheme `json:"scheme"`
+	Value  string                          `json:"value"`
+}
+
+// TypesFingerprintProjectV1Scheme defines model for TypesFingerprintProjectV1.Scheme.
+type TypesFingerprintProjectV1Scheme string
+
+// TypesFingerprintRepositoryV1 defines model for types.FingerprintRepositoryV1.
+type TypesFingerprintRepositoryV1 struct {
+	Scheme TypesFingerprintRepositoryV1Scheme `json:"scheme"`
+	Value  string                             `json:"value"`
+}
+
+// TypesFingerprintRepositoryV1Scheme defines model for TypesFingerprintRepositoryV1.Scheme.
+type TypesFingerprintRepositoryV1Scheme string
 
 // TypesGitCommit Git commit SHA.
 type TypesGitCommit = string
@@ -2339,6 +2381,90 @@ func (t *Fingerprint) MergeTypesIdentityFingerprint(v TypesIdentityFingerprint) 
 	return err
 }
 
+// AsTypesFingerprintProjectV1 returns the union data inside the Fingerprint as a TypesFingerprintProjectV1
+func (t Fingerprint) AsTypesFingerprintProjectV1() (TypesFingerprintProjectV1, error) {
+	var body TypesFingerprintProjectV1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypesFingerprintProjectV1 overwrites any union data inside the Fingerprint as the provided TypesFingerprintProjectV1
+func (t *Fingerprint) FromTypesFingerprintProjectV1(v TypesFingerprintProjectV1) error {
+	v.Scheme = "snyk/org/project/finding/v1"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypesFingerprintProjectV1 performs a merge with any union data inside the Fingerprint, using the provided TypesFingerprintProjectV1
+func (t *Fingerprint) MergeTypesFingerprintProjectV1(v TypesFingerprintProjectV1) error {
+	v.Scheme = "snyk/org/project/finding/v1"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTypesFingerprintRepositoryV1 returns the union data inside the Fingerprint as a TypesFingerprintRepositoryV1
+func (t Fingerprint) AsTypesFingerprintRepositoryV1() (TypesFingerprintRepositoryV1, error) {
+	var body TypesFingerprintRepositoryV1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypesFingerprintRepositoryV1 overwrites any union data inside the Fingerprint as the provided TypesFingerprintRepositoryV1
+func (t *Fingerprint) FromTypesFingerprintRepositoryV1(v TypesFingerprintRepositoryV1) error {
+	v.Scheme = "snyk/org/repository/finding/v1"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypesFingerprintRepositoryV1 performs a merge with any union data inside the Fingerprint, using the provided TypesFingerprintRepositoryV1
+func (t *Fingerprint) MergeTypesFingerprintRepositoryV1(v TypesFingerprintRepositoryV1) error {
+	v.Scheme = "snyk/org/repository/finding/v1"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTypesFingerprintAssetV1 returns the union data inside the Fingerprint as a TypesFingerprintAssetV1
+func (t Fingerprint) AsTypesFingerprintAssetV1() (TypesFingerprintAssetV1, error) {
+	var body TypesFingerprintAssetV1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypesFingerprintAssetV1 overwrites any union data inside the Fingerprint as the provided TypesFingerprintAssetV1
+func (t *Fingerprint) FromTypesFingerprintAssetV1(v TypesFingerprintAssetV1) error {
+	v.Scheme = "snyk/asset/finding/v1"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypesFingerprintAssetV1 performs a merge with any union data inside the Fingerprint, using the provided TypesFingerprintAssetV1
+func (t *Fingerprint) MergeTypesFingerprintAssetV1(v TypesFingerprintAssetV1) error {
+	v.Scheme = "snyk/asset/finding/v1"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t Fingerprint) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"scheme"`
@@ -2361,6 +2487,12 @@ func (t Fingerprint) ValueByDiscriminator() (interface{}, error) {
 		return t.AsTypesIdentityFingerprint()
 	case "sca-problem":
 		return t.AsTypesScaProblemFingerprint()
+	case "snyk/asset/finding/v1":
+		return t.AsTypesFingerprintAssetV1()
+	case "snyk/org/project/finding/v1":
+		return t.AsTypesFingerprintProjectV1()
+	case "snyk/org/repository/finding/v1":
+		return t.AsTypesFingerprintRepositoryV1()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}

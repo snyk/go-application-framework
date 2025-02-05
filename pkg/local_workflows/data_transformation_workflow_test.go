@@ -244,3 +244,74 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 	assert.Equal(t, 0, ignoredLowFindings)
 	assert.Equal(t, 3, ignoredFindings)
 }
+
+func parseFingerprint(fp local_models.Fingerprint) (scheme string, value string, ok bool) {
+	if assetFp, err := fp.AsTypesFingerprintAssetV1(); err == nil {
+		return string(assetFp.Scheme), assetFp.Value, true
+	}
+	if orgProjectFp, err := fp.AsTypesFingerprintProjectV1(); err == nil {
+		return string(orgProjectFp.Scheme), orgProjectFp.Value, true
+	}
+	if orgRepoFp, err := fp.AsTypesFingerprintRepositoryV1(); err == nil {
+		return string(orgRepoFp.Scheme), orgRepoFp.Value, true
+	}
+	return "", "", false
+}
+
+func Test_DataTransformation_with_V1Fingerprints(t *testing.T) {
+	invocationContext := setupMockTransformationContext(t, true)
+	logger := zerolog.Logger{}
+	sarifData := loadJsonFile(t, "single-result.json")
+	summaryData := loadJsonFile(t, "juice-shop-summary.json") // or any valid summary file
+
+	input := []workflow.Data{
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.SARIF_JSON,
+			sarifData,
+			workflow.WithLogger(&logger),
+		),
+		workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_DATATRANSFORMATION, DataTransformationWorkflowName),
+			content_type.TEST_SUMMARY,
+			summaryData,
+			workflow.WithLogger(&logger),
+		),
+	}
+
+	output, err := dataTransformationEntryPoint(invocationContext, input)
+	assert.NoError(t, err)
+	assert.Len(t, output, 2)
+
+	var localFinding local_models.LocalFinding
+	for _, data := range output {
+		if data.GetContentType() == content_type.LOCAL_FINDING_MODEL {
+			bytesPayload, ok := data.GetPayload().([]byte)
+			assert.True(t, ok)
+			assert.NoError(t, json.Unmarshal(bytesPayload, &localFinding))
+		}
+	}
+
+	assert.NotEmpty(t, localFinding.Findings)
+	firstFinding := localFinding.Findings[0]
+	assert.NotEmpty(t, firstFinding.Attributes.Fingerprint)
+
+	fingerprintTests := map[string]string{
+		string(local_models.Snykassetfindingv1):         "879770c4-b25a-44cd-bba1-1869aa0a3fa7",
+		string(local_models.Snykorgprojectfindingv1):    "6730bc02-da66-4f52-953c-50b856b20cb5",
+		string(local_models.Snykorgrepositoryfindingv1): "580770c8-bba1-44cd-825a-5fa9990a3fa5",
+	}
+
+	for scheme, expectedValue := range fingerprintTests {
+		found := false
+		for _, fp := range firstFinding.Attributes.Fingerprint {
+			s, v, ok := parseFingerprint(fp)
+			if ok && s == scheme {
+				assert.Equal(t, expectedValue, v)
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Scheme not found in fingerprint: "+scheme)
+	}
+}

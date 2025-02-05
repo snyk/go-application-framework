@@ -159,7 +159,10 @@
           ],
           "fingerprints": {
             "0": "d3e6d95802bfa65cdee1cc840eda6a7b8422f24962e436dd01730e6116e317ec",
-            "1": "93652555.4773f344.07efaa4d.9163ada2.ef9f7d82.34a4d81a.df7e59ba.d66579bf.f759b1f9.706318d0.07efaa4d.08906714.79a7d027.847dd466.0334236c.041df0b3"
+            "1": "93652555.4773f344.07efaa4d.9163ada2.ef9f7d82.34a4d81a.df7e59ba.d66579bf.f759b1f9.706318d0.07efaa4d.08906714.79a7d027.847dd466.0334236c.041df0b3",
+            "snyk/org/project/finding/v1": "6730bc02-da66-4f52-953c-50b856b20cb5",
+            "snyk/org/repository/finding/v1": "580770c8-bba1-44cd-825a-5fa9990a3fa5",
+            "snyk/asset/finding/v1": "879770c4-b25a-44cd-bba1-1869aa0a3fa7"
           },
           "codeFlows": [
             {
