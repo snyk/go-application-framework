@@ -32,6 +32,9 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 	outputConfig.Bool(configuration.FLAG_INCLUDE_IGNORES, false, "Include ignored findings in the output")
 	outputConfig.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "Severity threshold for findings to be included in the output")
 
+	// set default values for configuration values
+	engine.GetConfiguration().AddDefaultValue(output_workflow.OUTPUT_CONFIG_WRITE_EMPTY_FILE, configuration.StandardDefaultValueFunction(true))
+
 	entry, err := engine.Register(WORKFLOWID_OUTPUT_WORKFLOW, workflow.ConfigurationOptionsFromFlagset(outputConfig), outputWorkflowEntryPointImpl)
 	entry.SetVisibility(false)
 
