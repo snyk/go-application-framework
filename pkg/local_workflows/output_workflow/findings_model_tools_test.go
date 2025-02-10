@@ -59,7 +59,7 @@ func Test_getSarifFileRenderer(t *testing.T) {
 	t.Run("write empty file", func(t *testing.T) {
 		localFindings := getLocalFindingsSkeleton(t, 0)
 		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, "somefile")
+		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, t.TempDir()+"/somefile")
 		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, true)
 		renderer, err := getSarifFileRenderer(config, localFindings)
 		assert.NoError(t, err)
@@ -69,7 +69,7 @@ func Test_getSarifFileRenderer(t *testing.T) {
 	t.Run("write non empty file", func(t *testing.T) {
 		localFindings := getLocalFindingsSkeleton(t, 1)
 		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, "somefile")
+		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, t.TempDir()+"/somefile")
 		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, false)
 		renderer, err := getSarifFileRenderer(config, localFindings)
 		assert.NoError(t, err)
@@ -79,7 +79,7 @@ func Test_getSarifFileRenderer(t *testing.T) {
 	t.Run("don't write empty file", func(t *testing.T) {
 		localFindings := getLocalFindingsSkeleton(t, 0)
 		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, "somefile")
+		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, t.TempDir()+"/somefile")
 		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, false)
 		renderer, err := getSarifFileRenderer(config, localFindings)
 		assert.NoError(t, err)
