@@ -64,7 +64,7 @@ func Test_getSarifFileRenderer(t *testing.T) {
 		renderer, err := getSarifFileRenderer(config, localFindings)
 		assert.NoError(t, err)
 		assert.NotNil(t, renderer)
-		renderer.closer()
+		assert.NoError(t, renderer.closer())
 	})
 
 	t.Run("write non empty file", func(t *testing.T) {
@@ -75,7 +75,7 @@ func Test_getSarifFileRenderer(t *testing.T) {
 		renderer, err := getSarifFileRenderer(config, localFindings)
 		assert.NoError(t, err)
 		assert.NotNil(t, renderer)
-		renderer.closer()
+		assert.NoError(t, renderer.closer())
 	})
 
 	t.Run("don't write empty file", func(t *testing.T) {

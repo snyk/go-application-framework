@@ -102,10 +102,12 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 func getSarifFileRenderer(config configuration.Configuration, findings []*local_models.LocalFinding) (*WriterEntry, error) {
 	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
 	if len(outputFileName) == 0 {
+		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
 		return nil, nil
 	}
 
 	if !config.GetBool(OUTPUT_CONFIG_WRITE_EMPTY_FILE) && getTotalNumberOfFindings(findings) == 0 {
+		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
 		return nil, nil
 	}
 
@@ -121,7 +123,6 @@ func getSarifFileRenderer(config configuration.Configuration, findings []*local_
 		closer:    func() error { return file.Close() },
 	}
 	return writer, nil
-
 }
 
 func useRendererWith(name string, wEntry *WriterEntry, debugLogger *zerolog.Logger, findings []*local_models.LocalFinding, config configuration.Configuration, invocation workflow.InvocationContext) {
