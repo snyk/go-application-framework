@@ -3,6 +3,7 @@ package analytics
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -237,7 +238,7 @@ func toInteractionError(e error) *api.InteractionError {
 	if errors.As(e, &errorCatalogError) {
 		interactionError = &api.InteractionError{}
 		interactionErrorCode := fmt.Sprintf("%d", errorCatalogError.StatusCode)
-		interactionError.Id = errorCatalogError.ErrorCode
+		interactionError.Id = strings.ToLower(errorCatalogError.ErrorCode)
 		interactionError.Code = &interactionErrorCode
 	}
 
