@@ -53,7 +53,19 @@ func getListOfFindings(input []workflow.Data, debugLogger *zerolog.Logger) (find
 	return findings, remainingData
 }
 
-func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination) (map[string]*WriterEntry, error) {
+func getTotalNumberOfFindings(findings []*local_models.LocalFinding) uint32 {
+	if findings == nil {
+		return 0
+	}
+
+	var count uint32
+	for i := range findings {
+		count = count + findings[i].Summary.Counts.Count
+	}
+	return count
+}
+
+func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination, findings []*local_models.LocalFinding) (map[string]*WriterEntry, error) {
 	writerMap := map[string]*WriterEntry{
 		DEFAULT_WRITER: {
 			writer:    outputDestination.GetWriter(),
@@ -66,19 +78,13 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 		},
 	}
 
-	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
-	if len(outputFileName) > 0 {
-		file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
-		if fileErr != nil {
-			return nil, fileErr
-		}
+	sarifWriter, err := getSarifFileRenderer(config, findings)
+	if err != nil {
+		return writerMap, err
+	}
 
-		writerMap[OUTPUT_CONFIG_KEY_SARIF_FILE] = &WriterEntry{
-			writer:    file,
-			mimeType:  presenters.ApplicationSarifMimeType,
-			templates: presenters.ApplicationSarifTemplates,
-			closer:    func() error { return file.Close() },
-		}
+	if sarifWriter != nil {
+		writerMap[OUTPUT_CONFIG_KEY_SARIF_FILE] = sarifWriter
 	}
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
@@ -91,6 +97,32 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 	}
 
 	return writerMap, nil
+}
+
+func getSarifFileRenderer(config configuration.Configuration, findings []*local_models.LocalFinding) (*WriterEntry, error) {
+	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
+	if len(outputFileName) == 0 {
+		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
+		return nil, nil
+	}
+
+	if !config.GetBool(OUTPUT_CONFIG_WRITE_EMPTY_FILE) && getTotalNumberOfFindings(findings) == 0 {
+		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
+		return nil, nil
+	}
+
+	file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
+	if fileErr != nil {
+		return nil, fileErr
+	}
+
+	writer := &WriterEntry{
+		writer:    file,
+		mimeType:  presenters.ApplicationSarifMimeType,
+		templates: presenters.ApplicationSarifTemplates,
+		closer:    func() error { return file.Close() },
+	}
+	return writer, nil
 }
 
 func useRendererWith(name string, wEntry *WriterEntry, debugLogger *zerolog.Logger, findings []*local_models.LocalFinding, config configuration.Configuration, invocation workflow.InvocationContext) {
@@ -135,7 +167,7 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	threadCount := max(int64(config.GetInt(configuration.MAX_THREADS)), 1)
 	debugLogger.Info().Msgf("Thread count: %d", threadCount)
 
-	writerMap, err := getWritersToUse(config, outputDestination)
+	writerMap, err := getWritersToUse(config, outputDestination, findings)
 	if err != nil {
 		debugLogger.Err(err).Msg("Failed to initialize all required writers")
 	}
