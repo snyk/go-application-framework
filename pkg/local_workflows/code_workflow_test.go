@@ -12,7 +12,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -189,9 +188,8 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
 	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
-		assert.Equal(t, expectedPath, target.GetPath())
-		assert.Equal(t, expectedRepoUrl, target.(*scan.RepositoryTarget).GetRepositoryUrl())
+	analysisFunc := func(path string, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
+		assert.Equal(t, expectedPath, path)
 
 		response := &sarif.SarifResponse{
 			Sarif: sarif.SarifDocument{
@@ -275,7 +273,7 @@ func Test_Code_nativeImplementation_analysisFails(t *testing.T) {
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
 	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error) {
+	analysisFunc := func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error) {
 		return nil, fmt.Errorf("something went wrong")
 	}
 
@@ -296,7 +294,7 @@ func Test_Code_nativeImplementation_analysisNil(t *testing.T) {
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
 	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
+	analysisFunc := func(path string, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
 		return nil, nil //nolint:nilnil // whilst this fails linting it does represent a potential outcome state
 	}
 
@@ -321,7 +319,7 @@ func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 	invocationContext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("code"))
 	invocationContext.EXPECT().GetUserInterface().Return(ui.DefaultUi())
 
-	analysisFunc := func(target scan.Target, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
+	analysisFunc := func(path string, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, error) {
 		response := &sarif.SarifResponse{
 			Sarif: sarif.SarifDocument{
 				Runs: []sarif.Run{

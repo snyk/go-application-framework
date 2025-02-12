@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
@@ -26,7 +28,7 @@ const (
 	ConfigurationTestFLowName = "internal_code_test_flow_name"
 )
 
-type OptionalAnalysisFunctions func(scan.Target, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
+type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
 
 type ProgressTrackerFactory struct {
 	userInterface ui.UserInterface
@@ -75,19 +77,12 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	output := []workflow.Data{}
 	path := config.GetString(configuration.INPUT_DIRECTORY)
 
-	logger.Debug().Msgf("Path: %s", path)
-
 	analyzeFnc := defaultAnalyzeFunction
 	if len(opts) == 1 {
 		analyzeFnc = opts[0]
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
-	if err != nil {
-		logger.Warn().Err(err)
-	}
-
-	result, err := analyzeFnc(target, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface())
+	result, err := analyzeFnc(path, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface())
 
 	if err != nil {
 		return nil, err
@@ -132,22 +127,21 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 }
 
 // default function that uses the code-client-go library
-func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, error) {
+func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, error) {
 	var result *sarif.SarifResponse
-
-	testFlowName := config.GetString(ConfigurationTestFLowName)
-
 	interactionId, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Debug().Msgf("Interaction ID: %s", interactionId)
-
-	files, err := getFilesForPath(target.GetPath(), logger, config.GetInt(configuration.MAX_THREADS))
+	target, files, err := determineAnalyzeInput(path, config, logger)
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Debug().Msgf("Path: %s", path)
+	logger.Debug().Msgf("Target: %s", target)
+	logger.Debug().Msgf("Request ID: %s", interactionId)
 
 	changedFiles := make(map[string]bool)
 	ctx := context.Background()
@@ -169,11 +163,49 @@ func defaultAnalyzeFunction(target scan.Target, httpClientFunc func() *http.Clie
 		httpClient,
 		codeclient.WithLogger(logger),
 		codeclient.WithTrackerFactory(progressFactory),
-		codeclient.WithFlow(testFlowName),
+		codeclient.WithFlow(config.GetString(ConfigurationTestFLowName)),
 	)
 
 	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
 	return result, err
+}
+
+func determineAnalyzeInput(path string, config configuration.Configuration, logger *zerolog.Logger) (scan.Target, <-chan string, error) {
+	var files <-chan string
+
+	pathIsDirectory := false
+	if fileinfo, fileInfoErr := os.Stat(path); fileInfoErr == nil && fileinfo.IsDir() {
+		pathIsDirectory = true
+	}
+
+	if !pathIsDirectory {
+		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+		if err != nil {
+			logger.Warn().Err(err)
+		}
+
+		files = func() <-chan string {
+			var f = make(chan string)
+			go func() {
+				f <- path
+				close(f)
+			}()
+			return f
+		}()
+		return target, files, nil
+	}
+
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+	if err != nil {
+		logger.Warn().Err(err)
+	}
+
+	files, err = getFilesForPath(path, logger, config.GetInt(configuration.MAX_THREADS))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return target, files, nil
 }
 
 // Return a channel that notifies each file in the path that doesn't match the filter rules
