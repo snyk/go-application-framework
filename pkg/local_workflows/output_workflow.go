@@ -124,7 +124,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 			if err != nil {
 				return output, err
 			}
-		} else { // handle text/pain and unknown the same way
+		} else { // handle text/plain and unknown the same way
 			err := handleContentTypeOthers(input, i, mimeType, outputDestination)
 			if err != nil {
 				return output, err

@@ -43,20 +43,6 @@ func RenderError(err snyk_errors.Error) string {
 	label := lipgloss.NewStyle().Width(8)
 	value := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
 
-	if len(err.Detail) > 0 {
-		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Info:"),
-			value.Copy().Width(valueStyleWidth).Render(err.Detail),
-		))
-	}
-
-	if err.StatusCode > 0 {
-		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Status:"),
-			value.Render(strconv.Itoa(err.StatusCode)+" "+http.StatusText(err.StatusCode)),
-		))
-	}
-
 	if len(err.Description) > 0 {
 		desc := err.Description
 		re := regexp.MustCompile("\n+")
@@ -71,8 +57,16 @@ func RenderError(err snyk_errors.Error) string {
 		}
 
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Details:"),
+			label.Render(""),
 			value.Copy().Width(valueStyleWidth).Render(desc),
+		))
+	}
+
+	if len(err.Detail) > 0 {
+		detailValue := lipgloss.NewStyle().PaddingLeft(3).PaddingRight(1)
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("\n"),
+			detailValue.Copy().Width(valueStyleWidth).Render("\n"+err.Detail),
 		))
 	}
 
@@ -84,10 +78,33 @@ func RenderError(err snyk_errors.Error) string {
 		title = title + fmt.Sprintf(" (%s)", err.ErrorCode)
 	}
 
+	newln := "\n"
+	if err.StatusCode > http.StatusOK {
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render(newln+"Status:"),
+			value.Render(newln+strconv.Itoa(err.StatusCode)+" "+http.StatusText(err.StatusCode)),
+		))
+		newln = ""
+	}
+
+	if err.Meta != nil {
+		for key, val := range err.Meta {
+			if key == "interactionId" {
+				if interactionID, ok := val.(string); ok {
+					body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+						label.Render(newln+"ID:"),
+						value.Render(newln+interactionID),
+					))
+				}
+			}
+		}
+	}
+
 	if len(err.Links) > 0 {
+		links := strings.Join(err.Links, "\n")
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
 			label.Render("Docs:"),
-			value.Render(strings.Join(err.Links, "\n")),
+			value.Render(links),
 		))
 	}
 
