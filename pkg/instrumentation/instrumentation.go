@@ -47,5 +47,9 @@ func DetermineStage(isCiEnvironment bool) string {
 }
 
 func AssembleUrnFromUUID(uuid string) string {
-	return fmt.Sprintf("urn:snyk:interaction:%s", uuid)
+	urnPrefix := "urn:snyk:interaction"
+	if strings.Contains(uuid, urnPrefix) {
+		return uuid
+	}
+	return fmt.Sprintf("%s:%s", urnPrefix, uuid)
 }
