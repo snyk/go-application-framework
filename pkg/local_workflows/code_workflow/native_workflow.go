@@ -3,10 +3,14 @@ package code_workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
+	gUuid "github.com/google/uuid"
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
 	codeclient "github.com/snyk/code-client-go"
@@ -18,17 +22,35 @@ import (
 	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 const (
-	RemoteRepoUrlFlagname     = "remote-repo-url"
-	ConfigurationTestFLowName = "internal_code_test_flow_name"
+	ConfigurationRemoteRepoUrlFlagname = "remote-repo-url"
+	ConfigurationTestFLowName          = "internal_code_test_flow_name"
+	ConfigurationReportFlag            = "report"
+	ConfigurationProjectName           = "project-name"
+	ConfigurationTargetName            = "target-name"
+	ConfigurationProjectId             = "project-id"
+	ConfigurationCommitId              = "commit-id"
+	ConfigurationSastEnabled           = "internal_sast_enabled"
+	ConfigurarionSlceEnabled           = "internal_snyk_scle_enabled"
+	FfNameNativeReport                 = "snykCodeReportConsistentIgnores"
 )
 
-type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
+type reportType string
+
+const (
+	localCode  reportType = "local_code"
+	remoteCode reportType = "remote_code"
+	noReport   reportType = "no_report"
+)
+
+type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error)
 
 type ProgressTrackerFactory struct {
 	userInterface ui.UserInterface
@@ -68,11 +90,28 @@ func (p ProgressTrackerAdapter) End(message string) {
 	}
 }
 
+func trackUsage(network networking.NetworkAccess, config configuration.Configuration) {
+	apiUrl := config.GetUrl(configuration.API_URL)
+	apiUrl.Path = path.Join(apiUrl.Path, "v1/track-sast-usage/cli")
+	apiUrl.RawQuery = "org=" + config.GetString(configuration.ORGANIZATION)
+	apiUrlString := apiUrl.String()
+
+	resp, err := network.GetHttpClient().Post(apiUrlString, "application/json", nil)
+	if err != nil {
+		return
+	}
+
+	resp.Body.Close()
+}
+
 func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...OptionalAnalysisFunctions) ([]workflow.Data, error) {
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	id := invocationCtx.GetWorkflowIdentifier()
+
+	// track usage based on
+	trackUsage(invocationCtx.GetNetworkAccess(), config)
 
 	output := []workflow.Data{}
 	path := config.GetString(configuration.INPUT_DIRECTORY)
@@ -82,27 +121,17 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		analyzeFnc = opts[0]
 	}
 
-	result, err := analyzeFnc(path, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface())
-
+	result, resultMetaData, err := analyzeFnc(path, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface())
 	if err != nil {
 		return nil, err
 	}
 
-	if result == nil {
-		result = &sarif.SarifResponse{}
-	} else {
-		sarifData, sarifError := createCodeWorkflowData(
-			workflow.NewTypeIdentifier(id, "sarif"),
-			config,
-			&result.Sarif,
-			content_type.SARIF_JSON,
-			path,
-			logger)
-		if sarifError != nil {
-			return nil, sarifError
-		}
+	logger.Debug().Msgf("Result metadata: %+v", resultMetaData)
 
-		output = append(output, sarifData)
+	resultAvailable := true
+	if result == nil {
+		resultAvailable = false
+		result = &sarif.SarifResponse{}
 	}
 
 	summary := sarif2.CreateCodeSummary(&result.Sarif, config.GetString(configuration.INPUT_DIRECTORY))
@@ -123,27 +152,45 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	}
 	output = append(output, summaryData)
 
-	return output, nil
+	if resultAvailable {
+		localFindings, lfError := local_models.TransformToLocalFindingModelFromSarif(&result.Sarif, summary)
+		if lfError != nil {
+			return nil, lfError
+		}
+		if resultMetaData != nil && len(resultMetaData.WebUiUrl) > 0 {
+			localFindings.Links["report"] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
+		}
+
+		findingsData, findingsError := createCodeWorkflowData(
+			workflow.NewTypeIdentifier(id, "findings"),
+			config,
+			localFindings,
+			content_type.LOCAL_FINDING_MODEL,
+			path,
+			logger)
+		if findingsError != nil {
+			return nil, findingsError
+		}
+		output = append(output, findingsData)
+	}
+
+	return output, err
 }
 
 // default function that uses the code-client-go library
-func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, error) {
+func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error) {
 	var result *sarif.SarifResponse
-	interactionId, err := uuid.GenerateUUID()
+	var resultMetaData *scan.ResultMetaData
+	requestId, err := uuid.GenerateUUID()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	target, files, err := determineAnalyzeInput(path, config, logger)
+	reportMode, err := GetReportMode(config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	logger.Debug().Msgf("Path: %s", path)
-	logger.Debug().Msgf("Target: %s", target)
-	logger.Debug().Msgf("Request ID: %s", interactionId)
-
-	changedFiles := make(map[string]bool)
 	ctx := context.Background()
 	httpClient := codeclienthttp.NewHTTPClient(
 		httpClientFunc,
@@ -158,16 +205,53 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		logger:        logger,
 	}
 
-	codeScanner := codeclient.NewCodeScanner(
-		codeScannerConfig,
-		httpClient,
+	analysisOptions := []codeclient.AnalysisOption{}
+
+	codeScannerOptions := []codeclient.OptionFunc{
 		codeclient.WithLogger(logger),
 		codeclient.WithTrackerFactory(progressFactory),
 		codeclient.WithFlow(config.GetString(ConfigurationTestFLowName)),
+	}
+
+	codeScanner := codeclient.NewCodeScanner(
+		codeScannerConfig,
+		httpClient,
+		codeScannerOptions...,
 	)
 
-	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
-	return result, err
+	logger.Debug().Msgf("Request ID: %s", requestId)
+	logger.Debug().Msgf("Report Mode: %s", reportMode)
+
+	// use case: stateful remote code testing
+	if reportMode == remoteCode {
+		projectId, parseErr := gUuid.Parse(config.GetString(ConfigurationProjectId))
+		if parseErr != nil {
+			return nil, nil, errors.Join(errors.New("\"project-id\" must be a valid UUID"), parseErr)
+		}
+
+		option := codeclient.ReportRemoteTest(projectId, config.GetString(ConfigurationCommitId))
+		result, resultMetaData, err = codeScanner.AnalyzeRemote(ctx, option)
+		return result, resultMetaData, err
+	}
+
+	// use case: stateful local code testing
+	if reportMode == localCode {
+		option := codeclient.ReportLocalTest(config.GetString(ConfigurationProjectName), config.GetString(ConfigurationTargetName))
+		analysisOptions = append(analysisOptions, option)
+	}
+
+	target, files, err := determineAnalyzeInput(path, config, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logger.Debug().Msgf("Path: %s", path)
+	logger.Debug().Msgf("Target: %s", target)
+
+	changedFiles := make(map[string]bool)
+
+	result, _, resultMetaData, err = codeScanner.UploadAndAnalyzeWithOptions(ctx, requestId, target, files, changedFiles, analysisOptions...)
+	return result, resultMetaData, err
 }
 
 func determineAnalyzeInput(path string, config configuration.Configuration, logger *zerolog.Logger) (scan.Target, <-chan string, error) {
@@ -179,7 +263,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 	}
 
 	if !pathIsDirectory {
-		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
 		if err != nil {
 			logger.Warn().Err(err)
 		}
@@ -195,7 +279,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 		return target, files, nil
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
 	if err != nil {
 		logger.Warn().Err(err)
 	}

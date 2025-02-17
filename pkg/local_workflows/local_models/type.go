@@ -9,6 +9,7 @@ type LocalFinding struct {
 	Outcome  TestOutcome          `json:"outcome"`
 	Rules    []TypesRules         `json:"rules"`
 	Summary  TypesFindingsSummary `json:"summary"`
+	Links    map[string]string    `json:"links"`
 }
 
 type UnionInterface interface {

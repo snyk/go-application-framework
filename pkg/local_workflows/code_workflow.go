@@ -3,10 +3,12 @@ package localworkflows
 import (
 	"fmt"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/spf13/pflag"
 
-	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
@@ -15,8 +17,7 @@ import (
 )
 
 const (
-	codeWorkflowName         = "code.test"
-	ConfigurationSastEnabled = "internal_sast_enabled"
+	codeWorkflowName = "code.test"
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -25,16 +26,16 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	// add flags here
 	flagSet.Bool("sarif", false, "Output in sarif format")
 	flagSet.Bool("json", false, "Output in json format")
-	flagSet.Bool("report", false, "Share results with the Snyk Web UI")
+	flagSet.Bool(code_workflow.ConfigurationReportFlag, false, "Share results with the Snyk Web UI")
+	flagSet.String(code_workflow.ConfigurationProjectName, "", "The name of the project to test.")
+	flagSet.String(code_workflow.ConfigurationRemoteRepoUrlFlagname, "", "The URL of the remote repository to test.")
 	flagSet.String("severity-threshold", "", "Minimum severity level to report (low|medium|high)")
 	flagSet.String("sarif-file-output", "", "Save test output in SARIF format directly to the <OUTPUT_FILE_PATH> file, regardless of whether or not you use the --sarif option.")
 	flagSet.String("json-file-output", "", "Save test output in JSON format directly to the <OUTPUT_FILE_PATH> file, regardless of whether or not you use the --json option.")
-	flagSet.String("project-name", "", "The name of the project to test.")
 	flagSet.String("project-id", "", "The unique identifier of the project to test.")
 	flagSet.String("commit-id", "", "The unique identifier of the commit to test.")
-	flagSet.String("target-name", "", "The name of the target to test.")
+	flagSet.String(code_workflow.ConfigurationTargetName, "", "The name of the target to test.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
-	flagSet.String(code_workflow.RemoteRepoUrlFlagname, "", "The URL of the remote repository to test.")
 	flagSet.Bool(configuration.FLAG_EXPERIMENTAL, false, "Enable experimental code test command")
 
 	return flagSet
@@ -43,17 +44,39 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
+func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
+	config := engine.GetConfiguration()
+	org := config.GetString(configuration.ORGANIZATION)
+	key := fmt.Sprintf("CACHE_SAST_RESPONSE_%s", org)
+
+	cachedContent := config.Get(key)
+	if cachedContent != nil {
+		cachedResponse, ok := cachedContent.(*contract.SastResponse)
+		if ok {
+			return cachedResponse, nil
+		}
+	}
+
+	client := engine.GetNetworkAccess().GetHttpClient()
+	url := config.GetString(configuration.API_URL)
+	apiClient := api.NewApi(url, client)
+	tmp, err := apiClient.GetSastSettings(org)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to access settings.")
+		return &tmp, err
+	}
+
+	engine.GetConfiguration().Set(key, &tmp)
+	return &tmp, nil
+}
+
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := engine.GetConfiguration().GetString(configuration.API_URL)
-		org := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-		apiClient := api.NewApi(url, client)
-		response, err := apiClient.GetSastSettings(org)
+		response, err := getSastSettings(engine)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
 			return false, err
@@ -62,6 +85,42 @@ func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 		return response.SastEnabled, nil
 	}
 	return callback
+}
+
+func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		response, err := getSastSettings(engine)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return false, err
+		}
+
+		return response.LocalCodeEngine.Enabled, nil
+	}
+	return callback
+}
+
+func useNativeImplementation(config configuration.Configuration, logger *zerolog.Logger, sastEnabled bool) bool {
+	useConsistentIgnoresFF := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	useNativeReportFF := config.GetBool(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED)
+	reportEnabled := config.GetBool(code_workflow.ConfigurationReportFlag)
+	scleEnabled := config.GetBool(code_workflow.ConfigurarionSlceEnabled)
+
+	useLegacyReport := reportEnabled && !useNativeReportFF
+	nativeImplementationEnabled := useConsistentIgnoresFF && !useLegacyReport && !scleEnabled
+
+	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
+	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
+	logger.Debug().Msgf("SLCE enabled:       %v", scleEnabled)
+	logger.Debug().Msgf("Consistent Ignores:")
+	logger.Debug().Msgf("  FF ignores: %v", useConsistentIgnoresFF)
+	logger.Debug().Msgf("  FF report: %v", useNativeReportFF)
+
+	return nativeImplementationEnabled
 }
 
 // InitCodeWorkflow initializes the code workflow before registering it with the engine.
@@ -74,9 +133,11 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 		return err
 	}
 
-	engine.GetConfiguration().AddDefaultValue(ConfigurationSastEnabled, getSastEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastEnabled, getSastEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurarionSlceEnabled, getSlceEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
 	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_IGNORES, "snykCodeConsistentIgnores")
+	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, code_workflow.FfNameNativeReport)
 
 	return err
 }
@@ -88,34 +149,20 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	sastEnabledI, err := config.GetWithError(ConfigurationSastEnabled)
+	sastEnabledI, err := config.GetWithError(code_workflow.ConfigurationSastEnabled)
 	if err != nil {
 		return result, err
 	}
 
 	sastEnabled := utils.ToBool(sastEnabledI)
-
-	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
-	reportEnabled := config.GetBool("report")
-
-	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
-	logger.Debug().Msgf("Consistent Ignores: %v", ignoresFeatureFlag)
-	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
+	nativeImplementation := useNativeImplementation(config, logger, sastEnabled)
 
 	if !sastEnabled {
 		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
 	}
 
-	if ignoresFeatureFlag && !reportEnabled {
+	if nativeImplementation {
 		logger.Debug().Msg("Implementation: Native")
-
-		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name", "target-file"}
-		for _, v := range unsupportedParameter {
-			if config.IsSet(v) {
-				logger.Warn().Msgf("The parameter \"%s\" is not yet supported in this experimental implementation!", v)
-			}
-		}
-
 		result, err = code_workflow.EntryPointNative(invocationCtx)
 	} else {
 		logger.Debug().Msg("Implementation: legacy")

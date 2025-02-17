@@ -1,14 +1,18 @@
 package code_workflow
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/networking"
 )
 
 func writeFile(t *testing.T, filename string) {
@@ -20,7 +24,7 @@ func writeFile(t *testing.T, filename string) {
 func Test_determineAnalyzeInput(t *testing.T) {
 	logger := zerolog.Nop()
 	config := configuration.NewWithOpts()
-	config.Set(RemoteRepoUrlFlagname, "hello")
+	config.Set(ConfigurationRemoteRepoUrlFlagname, "hello")
 	config.Set(configuration.MAX_THREADS, 1)
 
 	path := t.TempDir()
@@ -64,4 +68,27 @@ func Test_determineAnalyzeInput(t *testing.T) {
 
 		assert.Equal(t, 1, count)
 	})
+}
+
+func Test_TrackUsage(t *testing.T) {
+	trackUsageCalled := false
+	org := "something"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.String(), "/v1/track-sast-usage/cli?org="+org) {
+			trackUsageCalled = true
+		}
+
+		assert.Equal(t, http.MethodPost, r.Method)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.ORGANIZATION, org)
+	config.Set(configuration.API_URL, server.URL)
+	networkAccess := networking.NewNetworkAccess(config)
+
+	// call method under test
+	trackUsage(networkAccess, config)
+
+	assert.True(t, trackUsageCalled)
 }

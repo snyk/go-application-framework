@@ -1,6 +1,7 @@
 package code_workflow
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -35,4 +36,25 @@ func (c *codeClientConfig) SnykCodeAnalysisTimeout() time.Duration {
 	}
 	timeoutInSeconds := c.localConfiguration.GetInt(configuration.TIMEOUT)
 	return time.Duration(timeoutInSeconds) * time.Second
+}
+
+func GetReportMode(config configuration.Configuration) (reportType, error) {
+	reportEnabled := config.GetBool(ConfigurationReportFlag)
+	if !reportEnabled {
+		return noReport, nil
+	}
+
+	if len(config.GetString(ConfigurationProjectId)) > 0 && len(config.GetString(ConfigurationCommitId)) == 0 {
+		return noReport, errors.New("\"commit-id\" must be provided for \"report\"")
+	}
+
+	if len(config.GetString(ConfigurationProjectId)) > 0 {
+		return remoteCode, nil
+	}
+
+	if len(config.GetString(ConfigurationProjectName)) == 0 {
+		return noReport, errors.New("\"project-name\" must be provided for \"report\"")
+	}
+
+	return localCode, nil
 }
