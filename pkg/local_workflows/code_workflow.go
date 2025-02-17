@@ -16,7 +16,6 @@ import (
 
 const (
 	codeWorkflowName         = "code.test"
-	ConfigurationSastEnabled = "internal_sast_enabled"
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -25,16 +24,16 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	// add flags here
 	flagSet.Bool("sarif", false, "Output in sarif format")
 	flagSet.Bool("json", false, "Output in json format")
-	flagSet.Bool("report", false, "Share results with the Snyk Web UI")
+	flagSet.Bool(code_workflow.ConfigurationReportFlag, false, "Share results with the Snyk Web UI")
+	flagSet.String(code_workflow.ConfigurationProjectName, "", "The name of the project to test.")
+	flagSet.String(code_workflow.ConfigurationRemoteRepoUrlFlagname, "", "The URL of the remote repository to test.")
 	flagSet.String("severity-threshold", "", "Minimum severity level to report (low|medium|high)")
 	flagSet.String("sarif-file-output", "", "Save test output in SARIF format directly to the <OUTPUT_FILE_PATH> file, regardless of whether or not you use the --sarif option.")
 	flagSet.String("json-file-output", "", "Save test output in JSON format directly to the <OUTPUT_FILE_PATH> file, regardless of whether or not you use the --json option.")
-	flagSet.String("project-name", "", "The name of the project to test.")
 	flagSet.String("project-id", "", "The unique identifier of the project to test.")
 	flagSet.String("commit-id", "", "The unique identifier of the commit to test.")
 	flagSet.String("target-name", "", "The name of the target to test.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
-	flagSet.String(code_workflow.RemoteRepoUrlFlagname, "", "The URL of the remote repository to test.")
 	flagSet.Bool(configuration.FLAG_EXPERIMENTAL, false, "Enable experimental code test command")
 
 	return flagSet
@@ -74,7 +73,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 		return err
 	}
 
-	engine.GetConfiguration().AddDefaultValue(ConfigurationSastEnabled, getSastEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastEnabled, getSastEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
 	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_IGNORES, "snykCodeConsistentIgnores")
 
@@ -88,7 +87,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	sastEnabledI, err := config.GetWithError(ConfigurationSastEnabled)
+	sastEnabledI, err := config.GetWithError(code_workflow.ConfigurationSastEnabled)
 	if err != nil {
 		return result, err
 	}
@@ -106,7 +105,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
 	}
 
-	if ignoresFeatureFlag && !reportEnabled {
+	if ignoresFeatureFlag  {
 		logger.Debug().Msg("Implementation: Native")
 
 		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name", "target-file"}

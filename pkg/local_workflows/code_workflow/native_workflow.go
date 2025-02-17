@@ -24,8 +24,20 @@ import (
 )
 
 const (
-	RemoteRepoUrlFlagname     = "remote-repo-url"
-	ConfigurationTestFLowName = "internal_code_test_flow_name"
+	ConfigurationRemoteRepoUrlFlagname = "remote-repo-url"
+	ConfigurationTestFLowName          = "internal_code_test_flow_name"
+	ConfigurationReportFlag            = "report"
+	ConfigurationProjectName           = "project-name"
+	ConfigurationSastEnabled           = "internal_sast_enabled"
+
+)
+
+type reportType string
+
+const (
+	localCode  reportType = "local_code"
+	remoteCode reportType = "remote_code"
+	noReport   reportType = "no_report"
 )
 
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
@@ -142,6 +154,8 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 	logger.Debug().Msgf("Path: %s", path)
 	logger.Debug().Msgf("Target: %s", target)
 	logger.Debug().Msgf("Request ID: %s", interactionId)
+	logger.Debug().Msgf("Report Mode: %s", GetReportMode(config))
+
 
 	changedFiles := make(map[string]bool)
 	ctx := context.Background()
@@ -166,6 +180,12 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		codeclient.WithFlow(config.GetString(ConfigurationTestFLowName)),
 	)
 
+	if GetReportMode(config) == remoteCode {
+		// for the use case: stateful remote code testing, use another code scanner method
+		return result, err
+	}
+
+
 	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
 	return result, err
 }
@@ -179,7 +199,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 	}
 
 	if !pathIsDirectory {
-		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
 		if err != nil {
 			logger.Warn().Err(err)
 		}
@@ -195,7 +215,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 		return target, files, nil
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
 	if err != nil {
 		logger.Warn().Err(err)
 	}
