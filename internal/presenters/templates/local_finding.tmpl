@@ -55,7 +55,14 @@
           {{- end}}
       {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
   {{- end}}]{{- end}}
-{{- end}} {{/* end summary */}}
+  {{- if .Links.report }}
+
+{{ "Report" | bold }}
+  {{- "\n" }}
+  Your test results are available at:
+  {{ .Links.report | bold }}
+  {{- end }}
+{{- end }} {{/* end summary */}}
 
 {{- define "main" }}
 {{- range $result := $.Results}}

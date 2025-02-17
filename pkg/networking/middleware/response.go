@@ -1,9 +1,15 @@
 package middleware
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"net/http"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -60,12 +66,64 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 		return nil
 	}
 
-	err = errFromStatusCode(res.StatusCode)
+	err = getErrorsFromResponse(res)
 	if err != nil {
 		return addRequestDataToErr(err, res)
 	}
 
 	return nil
+}
+
+func getErrorList(res *http.Response) []snyk_errors.Error {
+	// get JSONApiErrors from body
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return []snyk_errors.Error{}
+	}
+	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	errorList, err := snyk_errors.FromJSONAPIErrorBytes(bodyBytes)
+	if err != nil {
+		return []snyk_errors.Error{}
+	}
+
+	return errorList
+}
+
+func getErrorsFromResponse(res *http.Response) error {
+	if res.StatusCode >= http.StatusOK && res.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+
+	var resultError error
+	defaultError := errFromStatusCode(res.StatusCode)
+
+	// try to decode JSON API or Error Catalog Errors
+	errorList := getErrorList(res)
+	for _, actualError := range errorList {
+		if len(actualError.Title) == 0 {
+			continue
+		}
+
+		if ok, value := actualError.Meta["isErrorCatalogError"].(bool); !ok || !value { // JSON API Error
+			var tmp snyk_errors.Error
+			if ok = errors.As(defaultError, &tmp); !ok {
+				tmp = cli.NewGeneralCLIFailureError("")
+			}
+			tmp.Detail = actualError.Detail
+			tmp.StatusCode = actualError.StatusCode
+			tmp.Title = actualError.Title
+			actualError = tmp
+		}
+		resultError = errors.Join(resultError, actualError)
+	}
+
+	// default error handling from status code only
+	if resultError == nil {
+		resultError = defaultError
+	}
+
+	return resultError
 }
 
 // errFromStatusCode matches the providede status code to an Error Catalog error. If no match is found, nil is returned.
