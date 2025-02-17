@@ -43,20 +43,6 @@ func RenderError(err snyk_errors.Error) string {
 	label := lipgloss.NewStyle().Width(8)
 	value := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
 
-	if len(err.Detail) > 0 {
-		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Info:"),
-			value.Copy().Width(valueStyleWidth).Render(err.Detail),
-		))
-	}
-
-	if err.StatusCode > 0 {
-		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Status:"),
-			value.Render(strconv.Itoa(err.StatusCode)+" "+http.StatusText(err.StatusCode)),
-		))
-	}
-
 	if len(err.Description) > 0 {
 		desc := err.Description
 		re := regexp.MustCompile("\n+")
@@ -71,8 +57,15 @@ func RenderError(err snyk_errors.Error) string {
 		}
 
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Details:"),
+			label.Render(""),
 			value.Copy().Width(valueStyleWidth).Render(desc),
+		))
+	}
+
+	if len(err.Detail) > 0 {
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("\n"),
+			value.Copy().Width(valueStyleWidth).Render("\n"+err.Detail),
 		))
 	}
 
@@ -84,10 +77,31 @@ func RenderError(err snyk_errors.Error) string {
 		title = title + fmt.Sprintf(" (%s)", err.ErrorCode)
 	}
 
-	if len(err.Links) > 0 {
+	if err.StatusCode > 0 {
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render("Docs:"),
-			value.Render(strings.Join(err.Links, "\n")),
+			label.Render("\nStatus:"),
+			value.Render("\n"+strconv.Itoa(err.StatusCode)+" "+http.StatusText(err.StatusCode)),
+		))
+	}
+
+	if err.Meta != nil {
+		for key, val := range err.Meta {
+			if key == "interactionId" {
+				if interactionID, ok := val.(string); ok {
+					body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+						label.Render("\nID:"),
+						value.Render("\n"+interactionID),
+					))
+				}
+			}
+		}
+	}
+
+	if len(err.Links) > 0 {
+		links := "\n" + strings.Join(err.Links, "\n")
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("\nDocs:"),
+			value.Render(links),
 		))
 	}
 

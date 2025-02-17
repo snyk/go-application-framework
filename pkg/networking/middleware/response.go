@@ -63,7 +63,7 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 
 	err = errFromStatusCode(res.StatusCode)
 	if err != nil {
-		return addMetadataToErr(err, res)
+		return addRequestDataToErr(err, res)
 	}
 
 	return nil
@@ -83,8 +83,19 @@ func errFromStatusCode(code int) error {
 	}
 }
 
-// addMetadataToErr adds the request-id and request-url fields in the metadata map for the error.
-func addMetadataToErr(err error, res *http.Response) error {
+// addRequestDataToErr adds the request-id and request-url fields in the metadata map for the error.
+func addRequestDataToErr(err error, res *http.Response) error {
+	reqId := res.Request.Header.Get("snyk-request-id")
+	reqPath := res.Request.URL.Path
+
+	return AddMetaDataToErr(err, map[string]any{
+		"request-id":   reqId,
+		"request-path": reqPath,
+	})
+}
+
+// AddMetaDataToErr adds the provided metadata to the Error catalog error's metadata map.
+func AddMetaDataToErr(err error, meta map[string]any) error {
 	snykErr := snyk_errors.Error{}
 	if !errors.As(err, &snykErr) {
 		return err
@@ -94,8 +105,9 @@ func addMetadataToErr(err error, res *http.Response) error {
 		snykErr.Meta = make(map[string]any)
 	}
 
-	snykErr.Meta["request-id"] = res.Request.Header.Get("snyk-request-id")
-	snykErr.Meta["request-path"] = res.Request.URL.Path
+	for k, v := range meta {
+		snykErr.Meta[k] = v
+	}
 
 	return snykErr
 }
