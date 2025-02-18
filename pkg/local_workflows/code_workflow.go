@@ -76,6 +76,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastEnabled, getSastEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
 	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_IGNORES, "snykCodeConsistentIgnores")
+	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_REPORT_ENABLED, "snykCodeReportEnabled")
 
 	return err
 }
@@ -95,17 +96,19 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	sastEnabled := utils.ToBool(sastEnabledI)
 
 	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	reportFeatureFlag := config.GetBool(configuration.FF_REPORT_ENABLED)
 	reportEnabled := config.GetBool("report")
 
 	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
 	logger.Debug().Msgf("Consistent Ignores: %v", ignoresFeatureFlag)
 	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
+	logger.Debug().Msgf("Report FF enabled:  %v", reportFeatureFlag)
 
 	if !sastEnabled {
 		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
 	}
 
-	if ignoresFeatureFlag {
+	if ignoresFeatureFlag && reportFeatureFlag {
 		logger.Debug().Msg("Implementation: Native")
 
 		unsupportedParameter := []string{
