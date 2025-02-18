@@ -44,8 +44,8 @@ func GetReportMode(config configuration.Configuration) reportType {
 	}
 
 	if len(config.GetString(ConfigurationProjectName)) > 0 {
-		return remoteCode
+		return localCode
 	}
 
-	return localCode
+	return remoteCode
 }

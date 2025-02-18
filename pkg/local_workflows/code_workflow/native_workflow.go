@@ -28,6 +28,7 @@ const (
 	ConfigurationTestFLowName          = "internal_code_test_flow_name"
 	ConfigurationReportFlag            = "report"
 	ConfigurationProjectName           = "project-name"
+	ConfigurationTargetName            = "target-name"
 	ConfigurationSastEnabled           = "internal_sast_enabled"
 
 )
@@ -172,19 +173,44 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		logger:        logger,
 	}
 
-	codeScanner := codeclient.NewCodeScanner(
-		codeScannerConfig,
-		httpClient,
+	codeScannerOptions := []codeclient.OptionFunc{
 		codeclient.WithLogger(logger),
 		codeclient.WithTrackerFactory(progressFactory),
 		codeclient.WithFlow(config.GetString(ConfigurationTestFLowName)),
+	}
+
+	codeScanner := codeclient.NewCodeScanner(
+		codeScannerConfig,
+		httpClient,
+		codeScannerOptions...,
 	)
+
+	/*
+	Code test Upload (--report) consists of two different use cases (see here).
+
+	Stateful Local Code Test:
+		`snyk code test --report --project-name="PROJECT_NAME" [--target-name="TARGET_NAME"]`
+
+	Stateful Remote Code Test:
+		`snyk code test --report --project-id="<PROJECT_UUID>" --commit-id="<COMMIT_ID>"`
+	*/
 
 	if GetReportMode(config) == remoteCode {
 		// for the use case: stateful remote code testing, use another code scanner method
 		return result, err
 	}
 
+	if GetReportMode(config) == localCode {
+		var pName, tName string
+		if config.IsSet(ConfigurationProjectName) {
+			pName = config.GetString(ConfigurationProjectName)
+		}
+		if config.IsSet(ConfigurationTargetName) {
+			tName = config.GetString(ConfigurationTargetName)
+		}
+		result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles, codeclient.WithReportingConfig(&pName, &tName))
+		return result, err
+	}
 
 	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
 	return result, err

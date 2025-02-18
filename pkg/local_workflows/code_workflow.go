@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	codeWorkflowName         = "code.test"
+	codeWorkflowName = "code.test"
 )
 
 func GetCodeFlagSet() *pflag.FlagSet {
@@ -32,7 +32,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	flagSet.String("json-file-output", "", "Save test output in JSON format directly to the <OUTPUT_FILE_PATH> file, regardless of whether or not you use the --json option.")
 	flagSet.String("project-id", "", "The unique identifier of the project to test.")
 	flagSet.String("commit-id", "", "The unique identifier of the commit to test.")
-	flagSet.String("target-name", "", "The name of the target to test.")
+	flagSet.String(code_workflow.ConfigurationTargetName, "", "The name of the target to test.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
 	flagSet.Bool(configuration.FLAG_EXPERIMENTAL, false, "Enable experimental code test command")
 
@@ -105,10 +105,16 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
 	}
 
-	if ignoresFeatureFlag  {
+	if ignoresFeatureFlag {
 		logger.Debug().Msg("Implementation: Native")
 
-		unsupportedParameter := []string{"project-name", "project-id", "commit-id", "target-name", "target-file"}
+		unsupportedParameter := []string{
+			code_workflow.ConfigurationProjectName,
+			code_workflow.ConfigurationTargetName,
+			"project-id",
+			"commit-id",
+			"target-file",
+		}
 		for _, v := range unsupportedParameter {
 			if config.IsSet(v) {
 				logger.Warn().Msgf("The parameter \"%s\" is not yet supported in this experimental implementation!", v)
