@@ -2,12 +2,14 @@
 [Test_OutputError/Error_Catalog_error - 1]
 
 [41m [0m[97;41mERROR[0m[41m [0m  [1mClient request cannot be processed (SNYK-0003)[0m
-Info:    If you carry on like this you will ensure the wrath of OWASP, the God of Code  
-         Injection.                                                                     
-Status:  400 Bad Request 
-Details: The server cannot process the request due to a client error, such as malformed 
+         The server cannot process the request due to a client error, such as malformed 
          request syntax, size too large, invalid request message framing, or deceptive  
          request routing. Review the request and try again.                             
+                                                                                        
+           If you carry on like this you will ensure the wrath of OWASP, the God of     
+           Code Injection.                                                              
+                         
+Status:  400 Bad Request 
 Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0003 
          http://example.com/docs                                     
 
