@@ -47,5 +47,9 @@ func GetReportMode(config configuration.Configuration) reportType {
 		return localCode
 	}
 
-	return remoteCode
+	if len(config.GetString(ConfigurationProjectId)) > 0 && len(config.GetString(ConfigurationCommitId)) > 0 {
+		return remoteCode
+	}
+
+	return noReport
 }

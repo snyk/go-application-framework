@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	gUuid "github.com/google/uuid"
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
 	codeclient "github.com/snyk/code-client-go"
@@ -29,8 +30,9 @@ const (
 	ConfigurationReportFlag            = "report"
 	ConfigurationProjectName           = "project-name"
 	ConfigurationTargetName            = "target-name"
+	ConfigurationProjectId             = "project-id"
+	ConfigurationCommitId              = "commit-id"
 	ConfigurationSastEnabled           = "internal_sast_enabled"
-
 )
 
 type reportType string
@@ -157,7 +159,6 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 	logger.Debug().Msgf("Request ID: %s", interactionId)
 	logger.Debug().Msgf("Report Mode: %s", GetReportMode(config))
 
-
 	changedFiles := make(map[string]bool)
 	ctx := context.Background()
 	httpClient := codeclienthttp.NewHTTPClient(
@@ -186,29 +187,41 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 	)
 
 	/*
-	Code test Upload (--report) consists of two different use cases (see here).
+		Code test Upload (--report) consists of two different use cases (see here).
 
-	Stateful Local Code Test:
-		`snyk code test --report --project-name="PROJECT_NAME" [--target-name="TARGET_NAME"]`
+		Stateful Local Code Test:
+			`snyk code test --report --project-name="PROJECT_NAME" [--target-name="TARGET_NAME"]`
 
-	Stateful Remote Code Test:
-		`snyk code test --report --project-id="<PROJECT_UUID>" --commit-id="<COMMIT_ID>"`
+		Stateful Remote Code Test:
+			`snyk code test --report --project-id="<PROJECT_UUID>" --commit-id="<COMMIT_ID>"`
 	*/
 
 	if GetReportMode(config) == remoteCode {
 		// for the use case: stateful remote code testing, use another code scanner method
+		reportingConfig := make(map[string]interface{})
+		projectIdStr := config.GetString("project-id")
+		projectId, parseErr := gUuid.Parse(projectIdStr)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		reportingConfig["projectId"] = &projectId
+		commitId := config.GetString("commit-id")
+		reportingConfig["commitId"] = &commitId
+
+		result, err = codeScanner.AnalyzeRemote(ctx, interactionId, codeclient.WithReportingConfig(true, reportingConfig))
+
 		return result, err
 	}
 
 	if GetReportMode(config) == localCode {
-		var pName, tName string
+		reportingConfig := make(map[string]interface{})
 		if config.IsSet(ConfigurationProjectName) {
-			pName = config.GetString(ConfigurationProjectName)
+			reportingConfig["projectName"] = config.GetString(ConfigurationProjectName)
 		}
 		if config.IsSet(ConfigurationTargetName) {
-			tName = config.GetString(ConfigurationTargetName)
+			reportingConfig["targetName"] = config.GetString(ConfigurationTargetName)
 		}
-		result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles, codeclient.WithReportingConfig(&pName, &tName))
+		result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles, codeclient.WithReportingConfig(true, reportingConfig))
 		return result, err
 	}
 
