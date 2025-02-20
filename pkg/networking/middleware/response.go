@@ -1,13 +1,12 @@
 package middleware
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/snyk/error-catalog-golang-public/snyk"
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 type ResponseMiddleware struct {
@@ -88,26 +87,8 @@ func addRequestDataToErr(err error, res *http.Response) error {
 	reqId := res.Request.Header.Get("snyk-request-id")
 	reqPath := res.Request.URL.Path
 
-	return AddMetaDataToErr(err, map[string]any{
+	return utils.AddMetaDataToErr(err, map[string]any{
 		"request-id":   reqId,
 		"request-path": reqPath,
 	})
-}
-
-// AddMetaDataToErr adds the provided metadata to the Error catalog error's metadata map.
-func AddMetaDataToErr(err error, meta map[string]any) error {
-	snykErr := snyk_errors.Error{}
-	if !errors.As(err, &snykErr) {
-		return err
-	}
-
-	if snykErr.Meta == nil {
-		snykErr.Meta = make(map[string]any)
-	}
-
-	for k, v := range meta {
-		snykErr.Meta[k] = v
-	}
-
-	return snykErr
 }
