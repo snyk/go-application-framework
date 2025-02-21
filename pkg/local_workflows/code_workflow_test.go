@@ -389,3 +389,29 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 		assert.False(t, consistentIgnores)
 	})
 }
+
+func Test_Code_UseNativeImplementation(t *testing.T) {
+	t.Run("cci feature flag disabled, report disabled", func(t *testing.T) {
+		expected := false
+		actual := useNativeImplementation(false, true, false)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("cci feature flag disabled, report enabled", func(t *testing.T) {
+		expected := false
+		actual := useNativeImplementation(true, true, false)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("cci feature flag enabled, report enabled, cci-report feature flag disabled", func(t *testing.T) {
+		expected := false
+		actual := useNativeImplementation(true, false, true)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("cci feature flag enabled, report enabled", func(t *testing.T) {
+		expected := true
+		actual := useNativeImplementation(true, true, true)
+		assert.Equal(t, expected, actual)
+	})
+}
