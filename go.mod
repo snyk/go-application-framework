@@ -118,4 +118,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/snyk/code-client-go => ../code-client-go
+//replace github.com/snyk/code-client-go => ../code-client-go
