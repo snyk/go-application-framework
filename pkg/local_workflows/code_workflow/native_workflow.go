@@ -154,10 +154,15 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		return nil, err
 	}
 
+	reportMode, err := GetReportMode(config)
+	if err != nil {
+		return nil, err
+	}
+
 	logger.Debug().Msgf("Path: %s", path)
 	logger.Debug().Msgf("Target: %s", target)
 	logger.Debug().Msgf("Request ID: %s", interactionId)
-	logger.Debug().Msgf("Report Mode: %s", GetReportMode(config))
+	logger.Debug().Msgf("Report Mode: %s", reportMode)
 
 	changedFiles := make(map[string]bool)
 	ctx := context.Background()
@@ -196,7 +201,7 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 			`snyk code test --report --project-id="<PROJECT_UUID>" --commit-id="<COMMIT_ID>"`
 	*/
 
-	if GetReportMode(config) == remoteCode {
+	if reportMode == remoteCode {
 		// for the use case: stateful remote code testing, use another code scanner method
 		reportingConfig := make(map[string]interface{})
 		projectIdStr := config.GetString("project-id")
@@ -213,7 +218,7 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		return result, err
 	}
 
-	if GetReportMode(config) == localCode {
+	if reportMode == localCode {
 		reportingConfig := make(map[string]interface{})
 		if config.IsSet(ConfigurationProjectName) {
 			reportingConfig["projectName"] = config.GetString(ConfigurationProjectName)
