@@ -3,6 +3,7 @@ package code_workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -144,12 +145,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 // default function that uses the code-client-go library
 func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, error) {
 	var result *sarif.SarifResponse
-	interactionId, err := uuid.GenerateUUID()
-	if err != nil {
-		return nil, err
-	}
-
-	target, files, err := determineAnalyzeInput(path, config, logger)
+	requestId, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, err
 	}
@@ -159,12 +155,6 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		return nil, err
 	}
 
-	logger.Debug().Msgf("Path: %s", path)
-	logger.Debug().Msgf("Target: %s", target)
-	logger.Debug().Msgf("Request ID: %s", interactionId)
-	logger.Debug().Msgf("Report Mode: %s", reportMode)
-
-	changedFiles := make(map[string]bool)
 	ctx := context.Background()
 	httpClient := codeclienthttp.NewHTTPClient(
 		httpClientFunc,
@@ -179,6 +169,8 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		logger:        logger,
 	}
 
+	analysisOptions := []codeclient.AnalysisOption{}
+
 	codeScannerOptions := []codeclient.OptionFunc{
 		codeclient.WithLogger(logger),
 		codeclient.WithTrackerFactory(progressFactory),
@@ -191,46 +183,38 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		codeScannerOptions...,
 	)
 
-	/*
-		Code test Upload (--report) consists of two different use cases (see here).
+	logger.Debug().Msgf("Request ID: %s", requestId)
+	logger.Debug().Msgf("Report Mode: %s", reportMode)
 
-		Stateful Local Code Test:
-			`snyk code test --report --project-name="PROJECT_NAME" [--target-name="TARGET_NAME"]`
-
-		Stateful Remote Code Test:
-			`snyk code test --report --project-id="<PROJECT_UUID>" --commit-id="<COMMIT_ID>"`
-	*/
-
+	// use case: stateful remote code testing
 	if reportMode == remoteCode {
-		// for the use case: stateful remote code testing, use another code scanner method
-		reportingConfig := make(map[string]interface{})
-		projectIdStr := config.GetString("project-id")
-		projectId, parseErr := gUuid.Parse(projectIdStr)
+		projectId, parseErr := gUuid.Parse(config.GetString(ConfigurationProjectId))
 		if parseErr != nil {
-			return nil, parseErr
+			return nil, errors.Join(errors.New("\"project-id\" must be a valid UUID"), parseErr)
 		}
-		reportingConfig["projectId"] = &projectId
-		commitId := config.GetString("commit-id")
-		reportingConfig["commitId"] = &commitId
 
-		result, err = codeScanner.AnalyzeRemote(ctx, interactionId, codeclient.WithReportingConfig(true, reportingConfig))
-
+		option := codeclient.ReportRemoteTest(projectId, config.GetString(ConfigurationCommitId))
+		result, err = codeScanner.AnalyzeRemote(ctx, requestId, option)
 		return result, err
 	}
 
+	// use case: stateful local code testing
 	if reportMode == localCode {
-		reportingConfig := make(map[string]interface{})
-		if config.IsSet(ConfigurationProjectName) {
-			reportingConfig["projectName"] = config.GetString(ConfigurationProjectName)
-		}
-		if config.IsSet(ConfigurationTargetName) {
-			reportingConfig["targetName"] = config.GetString(ConfigurationTargetName)
-		}
-		result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles, codeclient.WithReportingConfig(true, reportingConfig))
-		return result, err
+		option := codeclient.ReportLocalTest(config.GetString(ConfigurationProjectName), config.GetString(ConfigurationTargetName))
+		analysisOptions = append(analysisOptions, option)
 	}
 
-	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
+	target, files, err := determineAnalyzeInput(path, config, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debug().Msgf("Path: %s", path)
+	logger.Debug().Msgf("Target: %s", target)
+
+	changedFiles := make(map[string]bool)
+
+	result, _, err = codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles, analysisOptions...)
 	return result, err
 }
 
