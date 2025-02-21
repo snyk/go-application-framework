@@ -28,6 +28,18 @@ func Test_RenderError(t *testing.T) {
 			})
 	}
 
+	t.Run("without status code", func(t *testing.T) {
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		lipgloss.SetHasDarkBackground(false)
+		err := snyk.NewBadRequestError("A short error description")
+		// no error code => no error catalog link
+		err.StatusCode = 0
+		output := RenderError(err)
+
+		assert.NotContains(t, output, "Status:")
+		snaps.MatchSnapshot(t, output)
+	})
+
 	t.Run("without links", func(t *testing.T) {
 		lipgloss.SetColorProfile(termenv.TrueColor)
 		lipgloss.SetHasDarkBackground(false)
