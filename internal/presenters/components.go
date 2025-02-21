@@ -70,6 +70,10 @@ func RenderError(err snyk_errors.Error) string {
 		))
 	}
 
+	if len(err.Detail) > 0 || len(err.Description) > 0 {
+		body = append(body, "")
+	}
+
 	title := strings.TrimSpace(err.Title)
 	if len(err.ErrorCode) > 0 {
 		fragment := "#" + strings.ToLower(err.ErrorCode)
@@ -78,13 +82,11 @@ func RenderError(err snyk_errors.Error) string {
 		title = title + fmt.Sprintf(" (%s)", err.ErrorCode)
 	}
 
-	newln := "\n"
 	if err.StatusCode > http.StatusOK {
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-			label.Render(newln+"Status:"),
-			value.Render(newln+strconv.Itoa(err.StatusCode)+" "+http.StatusText(err.StatusCode)),
+			label.Render("Status:"),
+			value.Render(strconv.Itoa(err.StatusCode)+" "+http.StatusText(err.StatusCode)),
 		))
-		newln = ""
 	}
 
 	if err.Meta != nil {
@@ -92,8 +94,8 @@ func RenderError(err snyk_errors.Error) string {
 			if key == "interactionId" {
 				if interactionID, ok := val.(string); ok {
 					body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-						label.Render(newln+"ID:"),
-						value.Render(newln+interactionID),
+						label.Render("ID:"),
+						value.Render(interactionID),
 					))
 				}
 			}
