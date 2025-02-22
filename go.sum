@@ -227,8 +227,8 @@ github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3/go.mod h1:A0bzQcvG
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/skeema/knownhosts v1.3.0 h1:AM+y0rI04VksttfwjkSTNQorvGqmwATnvnAHpSgc0LY=
 github.com/skeema/knownhosts v1.3.0/go.mod h1:sPINvnADmT/qYH1kfv+ePMmOBTH6Tbl7b5LvTDjFK7M=
-github.com/snyk/code-client-go v1.14.2-0.20250221174754-28a89161e34b h1:R5xE2Y/zJXy59Y3GzNc3jh2GU8EF/kvX+76LEON7XUU=
-github.com/snyk/code-client-go v1.14.2-0.20250221174754-28a89161e34b/go.mod h1:jMRi+hf0T4472k390nGIM5/ZA7bufXlD72TBPmuWdVQ=
+github.com/snyk/code-client-go v1.14.2-0.20250222122042-c4e2ce824b87 h1:05RW1OwjU9WFuzHHhXik5KDBlvqvZQhevfRIcLE3bYU=
+github.com/snyk/code-client-go v1.14.2-0.20250222122042-c4e2ce824b87/go.mod h1:jMRi+hf0T4472k390nGIM5/ZA7bufXlD72TBPmuWdVQ=
 github.com/snyk/error-catalog-golang-public v0.0.0-20250218074309-307ad7b38a60 h1:iB6z2BhBpfN9p0/dEZfwWvs7fpdZk3loooAih8yspS8=
 github.com/snyk/error-catalog-golang-public v0.0.0-20250218074309-307ad7b38a60/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
