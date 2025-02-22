@@ -31,7 +31,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/oapi-codegen/runtime v1.1.1
-	github.com/snyk/error-catalog-golang-public v0.0.0-20241030160523-0aa643bb7069
+	github.com/snyk/error-catalog-golang-public v0.0.0-20250218074309-307ad7b38a60
 	github.com/subosito/gotenv v1.4.1
 	golang.org/x/sync v0.10.0
 	gopkg.in/yaml.v3 v3.0.1
