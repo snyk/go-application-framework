@@ -76,16 +76,12 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 func getErrorList(res *http.Response) []snyk_errors.Error {
 	// get JSONApiErrors from body
 	bodyBytes, err := io.ReadAll(res.Body)
-
-	//nolint:nilerr // this type of error is not surfaced to the user
 	if err != nil {
 		return []snyk_errors.Error{}
 	}
 	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	errorList, err := snyk_errors.FromJSONAPIErrorBytes(bodyBytes)
-
-	//nolint:nilerr // this type of error is not surfaced to the user
 	if err != nil {
 		return []snyk_errors.Error{}
 	}
