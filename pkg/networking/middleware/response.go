@@ -1,11 +1,15 @@
 package middleware
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net/http"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
@@ -61,7 +65,7 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 		return nil
 	}
 
-	err = errFromStatusCode(res.StatusCode)
+	err = errFromStatusCode(res)
 	if err != nil {
 		return addMetadataToErr(err, res)
 	}
@@ -70,17 +74,55 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 }
 
 // errFromStatusCode matches the providede status code to an Error Catalog error. If no match is found, nil is returned.
-func errFromStatusCode(code int) error {
-	switch code {
-	case http.StatusUnauthorized:
-		return snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
-	case http.StatusBadRequest:
-		return snyk.NewBadRequestError("The request cannot be processed.")
-	case http.StatusInternalServerError:
-		return snyk.NewServerError("Internal server error.")
-	default:
+func errFromStatusCode(res *http.Response) error {
+	if res.StatusCode >= http.StatusOK && res.StatusCode < http.StatusMultipleChoices {
 		return nil
 	}
+
+	// get JSONApiErrors from body
+	bodyBytes, err := io.ReadAll(res.Body)
+
+	//nolint:nilerr // this type of error is not surfaced to the user
+	if err != nil {
+		return nil
+	}
+	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	errorList, err := snyk_errors.FromJSONAPIErrorBytes(bodyBytes)
+
+	//nolint:nilerr // this type of error is not surfaced to the user
+	if err != nil {
+		return nil
+	}
+
+	if len(errorList) == 0 {
+		return nil
+	}
+
+	// per error
+	if ok, value := errorList[0].Meta["isErrorCatalogError"].(bool); ok && value {
+		return errorList[0]
+	}
+
+	genericError := cli.NewGeneralCLIFailureError("")
+	switch res.StatusCode {
+	case http.StatusUnauthorized:
+		genericError = snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
+	case http.StatusBadRequest:
+		genericError = snyk.NewBadRequestError("The request cannot be processed.")
+	case http.StatusInternalServerError:
+		genericError = snyk.NewServerError("Internal server error.")
+	default:
+		genericError.StatusCode = errorList[0].StatusCode
+		genericError.Title = errorList[0].Title
+	}
+
+	if len(genericError.Detail) > 0 && len(errorList[0].Detail) > 0 {
+		genericError.Detail += "\n"
+	}
+	genericError.Detail += errorList[0].Detail
+
+	return genericError
 }
 
 // addMetadataToErr adds the request-id and request-url fields in the metadata map for the error.
