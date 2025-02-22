@@ -104,14 +104,9 @@ func getErrorsFromResponse(res *http.Response) error {
 		}
 
 		if ok, value := actualError.Meta["isErrorCatalogError"].(bool); !ok || !value { // JSON API Error
-			tmp := cli.NewGeneralCLIFailureError("")
+			tmp := cli.NewGeneralCLIFailureError(actualError.Detail)
 			tmp.StatusCode = actualError.StatusCode
 			tmp.Title = actualError.Title
-
-			if len(tmp.Detail) > 0 && len(actualError.Detail) > 0 {
-				tmp.Detail += "\n"
-			}
-			tmp.Detail += actualError.Detail
 			actualError = tmp
 		}
 		resultError = errors.Join(resultError, actualError)
