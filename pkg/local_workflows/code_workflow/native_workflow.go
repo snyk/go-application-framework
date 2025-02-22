@@ -3,10 +3,12 @@ package code_workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 
+	gUuid "github.com/google/uuid"
 	"github.com/hashicorp/go-uuid"
 	"github.com/rs/zerolog"
 	codeclient "github.com/snyk/code-client-go"
@@ -24,8 +26,22 @@ import (
 )
 
 const (
-	RemoteRepoUrlFlagname     = "remote-repo-url"
-	ConfigurationTestFLowName = "internal_code_test_flow_name"
+	ConfigurationRemoteRepoUrlFlagname = "remote-repo-url"
+	ConfigurationTestFLowName          = "internal_code_test_flow_name"
+	ConfigurationReportFlag            = "report"
+	ConfigurationProjectName           = "project-name"
+	ConfigurationTargetName            = "target-name"
+	ConfigurationProjectId             = "project-id"
+	ConfigurationCommitId              = "commit-id"
+	ConfigurationSastEnabled           = "internal_sast_enabled"
+)
+
+type reportType string
+
+const (
+	localCode  reportType = "local_code"
+	remoteCode reportType = "remote_code"
+	noReport   reportType = "no_report"
 )
 
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, error)
@@ -129,21 +145,16 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 // default function that uses the code-client-go library
 func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, error) {
 	var result *sarif.SarifResponse
-	interactionId, err := uuid.GenerateUUID()
+	requestId, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, err
 	}
 
-	target, files, err := determineAnalyzeInput(path, config, logger)
+	reportMode, err := GetReportMode(config)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Debug().Msgf("Path: %s", path)
-	logger.Debug().Msgf("Target: %s", target)
-	logger.Debug().Msgf("Request ID: %s", interactionId)
-
-	changedFiles := make(map[string]bool)
 	ctx := context.Background()
 	httpClient := codeclienthttp.NewHTTPClient(
 		httpClientFunc,
@@ -158,15 +169,52 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		logger:        logger,
 	}
 
-	codeScanner := codeclient.NewCodeScanner(
-		codeScannerConfig,
-		httpClient,
+	analysisOptions := []codeclient.AnalysisOption{}
+
+	codeScannerOptions := []codeclient.OptionFunc{
 		codeclient.WithLogger(logger),
 		codeclient.WithTrackerFactory(progressFactory),
 		codeclient.WithFlow(config.GetString(ConfigurationTestFLowName)),
+	}
+
+	codeScanner := codeclient.NewCodeScanner(
+		codeScannerConfig,
+		httpClient,
+		codeScannerOptions...,
 	)
 
-	result, _, err = codeScanner.UploadAndAnalyze(ctx, interactionId, target, files, changedFiles)
+	logger.Debug().Msgf("Request ID: %s", requestId)
+	logger.Debug().Msgf("Report Mode: %s", reportMode)
+
+	// use case: stateful remote code testing
+	if reportMode == remoteCode {
+		projectId, parseErr := gUuid.Parse(config.GetString(ConfigurationProjectId))
+		if parseErr != nil {
+			return nil, errors.Join(errors.New("\"project-id\" must be a valid UUID"), parseErr)
+		}
+
+		option := codeclient.ReportRemoteTest(projectId, config.GetString(ConfigurationCommitId))
+		result, err = codeScanner.AnalyzeRemote(ctx, requestId, option)
+		return result, err
+	}
+
+	// use case: stateful local code testing
+	if reportMode == localCode {
+		option := codeclient.ReportLocalTest(config.GetString(ConfigurationProjectName), config.GetString(ConfigurationTargetName))
+		analysisOptions = append(analysisOptions, option)
+	}
+
+	target, files, err := determineAnalyzeInput(path, config, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debug().Msgf("Path: %s", path)
+	logger.Debug().Msgf("Target: %s", target)
+
+	changedFiles := make(map[string]bool)
+
+	result, _, err = codeScanner.UploadAndAnalyze(ctx, requestId, target, files, changedFiles, analysisOptions...)
 	return result, err
 }
 
@@ -179,7 +227,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 	}
 
 	if !pathIsDirectory {
-		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
 		if err != nil {
 			logger.Warn().Err(err)
 		}
@@ -195,7 +243,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 		return target, files, nil
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(RemoteRepoUrlFlagname)))
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
 	if err != nil {
 		logger.Warn().Err(err)
 	}
