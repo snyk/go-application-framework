@@ -95,6 +95,7 @@ func getErrorsFromResponse(res *http.Response) error {
 	}
 
 	var resultError error
+	defaultError := errFromStatusCode(res.StatusCode)
 
 	// try to decode JSON API or Error Catalog Errors
 	errorList := getErrorList(res)
@@ -104,7 +105,11 @@ func getErrorsFromResponse(res *http.Response) error {
 		}
 
 		if ok, value := actualError.Meta["isErrorCatalogError"].(bool); !ok || !value { // JSON API Error
-			tmp := cli.NewGeneralCLIFailureError(actualError.Detail)
+			var tmp snyk_errors.Error
+			if ok = errors.As(defaultError, &tmp); !ok {
+				tmp = cli.NewGeneralCLIFailureError("")
+			}
+			tmp.Detail = actualError.Detail
 			tmp.StatusCode = actualError.StatusCode
 			tmp.Title = actualError.Title
 			actualError = tmp
@@ -114,7 +119,7 @@ func getErrorsFromResponse(res *http.Response) error {
 
 	// default error handling from status code only
 	if resultError == nil {
-		resultError = errFromStatusCode(res.StatusCode)
+		resultError = defaultError
 	}
 
 	return resultError
