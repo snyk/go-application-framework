@@ -65,7 +65,7 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 		return nil
 	}
 
-	err = errFromStatusCode(res)
+	err = getErrorsFromResponse(res)
 	if err != nil {
 		return addMetadataToErr(err, res)
 	}
@@ -73,18 +73,13 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 	return nil
 }
 
-// errFromStatusCode matches the providede status code to an Error Catalog error. If no match is found, nil is returned.
-func errFromStatusCode(res *http.Response) error {
-	if res.StatusCode >= http.StatusOK && res.StatusCode < http.StatusMultipleChoices {
-		return nil
-	}
-
+func getErrorList(res *http.Response) []snyk_errors.Error {
 	// get JSONApiErrors from body
 	bodyBytes, err := io.ReadAll(res.Body)
 
 	//nolint:nilerr // this type of error is not surfaced to the user
 	if err != nil {
-		return nil
+		return []snyk_errors.Error{}
 	}
 	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
@@ -92,37 +87,60 @@ func errFromStatusCode(res *http.Response) error {
 
 	//nolint:nilerr // this type of error is not surfaced to the user
 	if err != nil {
+		return []snyk_errors.Error{}
+	}
+
+	return errorList
+}
+
+func getErrorsFromResponse(res *http.Response) error {
+	if res.StatusCode >= http.StatusOK && res.StatusCode < http.StatusMultipleChoices {
 		return nil
 	}
 
-	if len(errorList) == 0 {
-		return nil
+	var resultError error
+
+	// try to decode JSON API or Error Catalog Errors
+	errorList := getErrorList(res)
+	for _, actualError := range errorList {
+		if len(actualError.Title) == 0 {
+			continue
+		}
+
+		if ok, value := actualError.Meta["isErrorCatalogError"].(bool); !ok || !value { // JSON API Error
+			tmp := cli.NewGeneralCLIFailureError("")
+			tmp.StatusCode = actualError.StatusCode
+			tmp.Title = actualError.Title
+
+			if len(tmp.Detail) > 0 && len(actualError.Detail) > 0 {
+				tmp.Detail += "\n"
+			}
+			tmp.Detail += actualError.Detail
+			actualError = tmp
+		}
+		resultError = errors.Join(resultError, actualError)
 	}
 
-	// per error
-	if ok, value := errorList[0].Meta["isErrorCatalogError"].(bool); ok && value {
-		return errorList[0]
+	// default error handling from status code only
+	if resultError == nil {
+		resultError = errFromStatusCode(res.StatusCode)
 	}
 
-	genericError := cli.NewGeneralCLIFailureError("")
-	switch res.StatusCode {
+	return resultError
+}
+
+// errFromStatusCode matches the providede status code to an Error Catalog error. If no match is found, nil is returned.
+func errFromStatusCode(code int) error {
+	switch code {
 	case http.StatusUnauthorized:
-		genericError = snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
+		return snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
 	case http.StatusBadRequest:
-		genericError = snyk.NewBadRequestError("The request cannot be processed.")
+		return snyk.NewBadRequestError("The request cannot be processed.")
 	case http.StatusInternalServerError:
-		genericError = snyk.NewServerError("Internal server error.")
+		return snyk.NewServerError("Internal server error.")
 	default:
-		genericError.StatusCode = errorList[0].StatusCode
-		genericError.Title = errorList[0].Title
+		return nil
 	}
-
-	if len(genericError.Detail) > 0 && len(errorList[0].Detail) > 0 {
-		genericError.Detail += "\n"
-	}
-	genericError.Detail += errorList[0].Detail
-
-	return genericError
 }
 
 // addMetadataToErr adds the request-id and request-url fields in the metadata map for the error.
