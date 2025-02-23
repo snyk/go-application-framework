@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -355,8 +356,14 @@ func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 
 func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 	response := contract.OrgFeatureFlagResponse{}
+	responseReport := contract.OrgFeatureFlagResponse{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, err := json.Marshal(response)
+
+		if strings.Contains(r.URL.Path, code_workflow.FfNameNativeReport) {
+			data, err = json.Marshal(responseReport)
+		}
+
 		assert.NoError(t, err)
 		fmt.Fprintln(w, string(data))
 	}))
@@ -364,7 +371,6 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 
 	orgId := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 	config := configuration.NewInMemory()
-	config.Set(configuration.ORGANIZATION, orgId)
 	config.Set(configuration.API_URL, ts.URL)
 
 	engine := workflow.NewWorkFlowEngine(config)
@@ -372,12 +378,14 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("Feature Flag set", func(t *testing.T) {
+		config.Set(configuration.ORGANIZATION, orgId)
 		response = contract.OrgFeatureFlagResponse{Code: http.StatusOK, Ok: true}
 		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 		assert.True(t, consistentIgnores)
 	})
 
 	t.Run("Feature Flag NOT set", func(t *testing.T) {
+		config.Set(configuration.ORGANIZATION, orgId)
 		response = contract.OrgFeatureFlagResponse{Code: http.StatusForbidden}
 		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 		assert.False(t, consistentIgnores)
@@ -388,30 +396,71 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
 		assert.False(t, consistentIgnores)
 	})
+
+	t.Run("Report Feature Flag set", func(t *testing.T) {
+		config.Set(configuration.ORGANIZATION, orgId)
+		responseReport = contract.OrgFeatureFlagResponse{Code: http.StatusOK, Ok: true}
+		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED)
+		assert.True(t, consistentIgnores)
+	})
 }
 
 func Test_Code_UseNativeImplementation(t *testing.T) {
+	logger := zerolog.Nop()
+
+	//reportEnabled bool, reportFeatureFlag bool, ignoresFeatureFlag bool
 	t.Run("cci feature flag disabled, report disabled", func(t *testing.T) {
 		expected := false
-		actual := useNativeImplementation(false, true, false)
+		config := configuration.NewWithOpts()
+		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, false)
+		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(code_workflow.ConfigurationReportFlag, false)
+		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
+		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("cci feature flag disabled, report enabled", func(t *testing.T) {
 		expected := false
-		actual := useNativeImplementation(true, true, false)
+		config := configuration.NewWithOpts()
+		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, false)
+		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(code_workflow.ConfigurationReportFlag, true)
+		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
+		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("cci feature flag enabled, report enabled, cci-report feature flag disabled", func(t *testing.T) {
 		expected := false
-		actual := useNativeImplementation(true, false, true)
+		config := configuration.NewWithOpts()
+		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
+		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, false)
+		config.Set(code_workflow.ConfigurationReportFlag, true)
+		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
+		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("cci feature flag enabled, report enabled", func(t *testing.T) {
 		expected := true
-		actual := useNativeImplementation(true, true, true)
+		config := configuration.NewWithOpts()
+		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
+		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(code_workflow.ConfigurationReportFlag, true)
+		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
+		actual := useNativeImplementation(config, &logger, true)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("cci feature flag enabled, report enabled but scle enabled", func(t *testing.T) {
+		expected := false
+		config := configuration.NewWithOpts()
+		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
+		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(code_workflow.ConfigurationReportFlag, true)
+		config.Set(code_workflow.ConfigurarionSlceEnabled, true)
+		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 }

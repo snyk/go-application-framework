@@ -3,9 +3,9 @@ package localworkflows
 import (
 	"fmt"
 
-	"github.com/spf13/pflag"
-
+	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/code"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -64,10 +64,46 @@ func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 	return callback
 }
 
-func useNativeImplementation(reportEnabled bool, reportFeatureFlag bool, ignoresFeatureFlag bool) bool {
-	legacyReport := reportEnabled && !reportFeatureFlag
-	nativeImplementation := ignoresFeatureFlag && !legacyReport
-	return nativeImplementation
+func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := engine.GetConfiguration().GetString(configuration.API_URL)
+		org := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
+		apiClient := api.NewApi(url, client)
+		response, err := apiClient.GetSastSettings(org)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return false, err
+		}
+
+		//response.LocalCodeEngine.Enabled
+
+		return response.LocalCodeEngine.Enabled, nil
+	}
+	return callback
+}
+
+func useNativeImplementation(config configuration.Configuration, logger *zerolog.Logger, sastEnabled bool) bool {
+	useConsistentIgnoresFF := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
+	useNativeReportFF := config.GetBool(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED)
+	reportEnabled := config.GetBool(code_workflow.ConfigurationReportFlag)
+	scleEnabled := config.GetBool(code_workflow.ConfigurarionSlceEnabled)
+
+	useLegacyReport := reportEnabled && !useNativeReportFF
+	nativeImplementationEnabled := useConsistentIgnoresFF && !useLegacyReport && !scleEnabled
+
+	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
+	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
+	logger.Debug().Msgf("SLCE enabled:       %v", scleEnabled)
+	logger.Debug().Msgf("Consistent Ignores:")
+	logger.Debug().Msgf("  FF ignores: %v", useConsistentIgnoresFF)
+	logger.Debug().Msgf("  FF report: %v", useNativeReportFF)
+
+	return nativeImplementationEnabled
 }
 
 // InitCodeWorkflow initializes the code workflow before registering it with the engine.
@@ -81,8 +117,10 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 	}
 
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastEnabled, getSastEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurarionSlceEnabled, getSlceEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
 	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_IGNORES, "snykCodeConsistentIgnores")
+	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, code_workflow.FfNameNativeReport)
 
 	return err
 }
@@ -100,17 +138,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	}
 
 	sastEnabled := utils.ToBool(sastEnabledI)
-
-	ignoresFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
-	reportFeatureFlag := config.GetBool(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED)
-	reportEnabled := config.GetBool("report")
-	nativeImplementation := useNativeImplementation(reportEnabled, reportFeatureFlag, ignoresFeatureFlag)
-
-	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
-	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
-	logger.Debug().Msgf("Consistent Ignores:")
-	logger.Debug().Msgf("  FF ignores: %v", ignoresFeatureFlag)
-	logger.Debug().Msgf("  FF report: %v", reportFeatureFlag)
+	nativeImplementation := useNativeImplementation(config, logger, sastEnabled)
 
 	if !sastEnabled {
 		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
