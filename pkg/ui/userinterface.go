@@ -22,6 +22,9 @@ type UserInterface interface {
 	OutputError(err error) error
 	NewProgressBar() ProgressBar
 	Input(prompt string) (string, error)
+	GetUserInterface() UserInterface
+	SetContext(opts ...Opts)
+	SetInteractionID(interactionId string)
 }
 
 func DefaultUi() UserInterface {
@@ -49,15 +52,34 @@ func newConsoleUi(in io.Reader, out io.Writer, err io.Writer) UserInterface {
 	return defaultUi
 }
 
+type Opts = func(userInterface UserInterface)
 type consoleUi struct {
 	writer             io.Writer
 	errorWriter        io.Writer
 	progressBarFactory func() ProgressBar
 	reader             *bufio.Reader
+	context            presenters.RenderContext
 }
 
 func (ui *consoleUi) Output(output string) error {
 	return utils.ErrorOf(fmt.Fprintln(ui.writer, output))
+}
+
+func WithInteractionId(interactionId string) Opts {
+	return func(userInterface UserInterface) {
+		userInterface.SetInteractionID(interactionId)
+	}
+}
+
+func (ui *consoleUi) SetContext(opts ...Opts) {
+	userInterface := ui.GetUserInterface()
+	for _, opt := range opts {
+		opt(userInterface)
+	}
+}
+
+func (ui *consoleUi) GetUserInterface() UserInterface {
+	return ui
 }
 
 func (ui *consoleUi) OutputError(err error) error {
@@ -69,7 +91,7 @@ func (ui *consoleUi) OutputError(err error) error {
 	// for simplistic handling of error catalog errors
 	var snykError snyk_errors.Error
 	if errors.As(err, &snykError) {
-		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, presenters.RenderError(snykError)))
+		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, presenters.RenderError(snykError, ui.context)))
 		if uiError != nil {
 			return uiError
 		}
@@ -98,4 +120,8 @@ func (ui *consoleUi) Input(prompt string) (string, error) {
 
 	// Trim spaces and newline characters
 	return strings.TrimSpace(input), nil
+}
+
+func (ui *consoleUi) SetInteractionID(interactionId string) {
+	ui.context.InteractionID = interactionId
 }

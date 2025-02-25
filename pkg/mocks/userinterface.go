@@ -34,6 +34,20 @@ func (m *MockUserInterface) EXPECT() *MockUserInterfaceMockRecorder {
 	return m.recorder
 }
 
+// GetUserInterface mocks base method.
+func (m *MockUserInterface) GetUserInterface() ui.UserInterface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserInterface")
+	ret0, _ := ret[0].(ui.UserInterface)
+	return ret0
+}
+
+// GetUserInterface indicates an expected call of GetUserInterface.
+func (mr *MockUserInterfaceMockRecorder) GetUserInterface() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserInterface", reflect.TypeOf((*MockUserInterface)(nil).GetUserInterface))
+}
+
 // Input mocks base method.
 func (m *MockUserInterface) Input(prompt string) (string, error) {
 	m.ctrl.T.Helper()
@@ -89,4 +103,32 @@ func (m *MockUserInterface) OutputError(err error) error {
 func (mr *MockUserInterfaceMockRecorder) OutputError(err interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputError", reflect.TypeOf((*MockUserInterface)(nil).OutputError), err)
+}
+
+// SetContext mocks base method.
+func (m *MockUserInterface) SetContext(opts ...ui.Opts) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetContext", varargs...)
+}
+
+// SetContext indicates an expected call of SetContext.
+func (mr *MockUserInterfaceMockRecorder) SetContext(opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetContext", reflect.TypeOf((*MockUserInterface)(nil).SetContext), opts...)
+}
+
+// SetInteractionID mocks base method.
+func (m *MockUserInterface) SetInteractionID(interactionId string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetInteractionID", interactionId)
+}
+
+// SetInteractionID indicates an expected call of SetInteractionID.
+func (mr *MockUserInterfaceMockRecorder) SetInteractionID(interactionId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInteractionID", reflect.TypeOf((*MockUserInterface)(nil).SetInteractionID), interactionId)
 }
