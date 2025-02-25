@@ -2,7 +2,9 @@ package presenters
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/networking"
 	"net/http"
 	"regexp"
 	"slices"
@@ -35,7 +37,7 @@ func errorLevelToStyle(errLevel string) lipgloss.Style {
 	return style
 }
 
-func RenderError(err snyk_errors.Error) string {
+func RenderError(err snyk_errors.Error, ctx context.Context) string {
 	var body []string
 
 	level := strings.ToUpper(err.Level)
@@ -89,25 +91,22 @@ func RenderError(err snyk_errors.Error) string {
 		))
 	}
 
-	if err.Meta != nil {
-		for key, val := range err.Meta {
-			if key == "interactionId" {
-				if interactionID, ok := val.(string); ok {
-					body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
-						label.Render("ID:"),
-						value.Render(interactionID),
-					))
-				}
-			}
-		}
-	}
-
 	if len(err.Links) > 0 {
-		links := strings.Join(err.Links, "\n")
+		link := err.Links[0] + "\n"
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
 			label.Render("Docs:"),
-			value.Render(links),
+			value.Render(link),
 		))
+	}
+
+	if v := ctx.Value(networking.InteractionIdKey); v != nil {
+		interactionId, ok := v.(string)
+		if ok {
+			body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+				label.Render("ID:"),
+				value.Render(interactionId),
+			))
+		}
 	}
 
 	title = renderBold(title)
