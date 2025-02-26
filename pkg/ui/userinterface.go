@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +20,7 @@ import (
 
 type UserInterface interface {
 	Output(output string) error
-	OutputError(err error) error
+	OutputError(err error, opts ...Opts) error
 	NewProgressBar() ProgressBar
 	Input(prompt string) (string, error)
 }
@@ -56,11 +57,30 @@ type consoleUi struct {
 	reader             *bufio.Reader
 }
 
+type uiConfig struct {
+	//nolint:containedctx // internal struct used to maintain backwards compatibility
+	context context.Context
+}
+
+type Opts = func(ui *uiConfig)
+
+func WithContext(ctx context.Context) Opts {
+	return func(ui *uiConfig) {
+		ui.context = ctx
+	}
+}
+
 func (ui *consoleUi) Output(output string) error {
 	return utils.ErrorOf(fmt.Fprintln(ui.writer, output))
 }
 
-func (ui *consoleUi) OutputError(err error) error {
+func (ui *consoleUi) OutputError(err error, opts ...Opts) error {
+	uiConfig := &uiConfig{
+		context: context.Background(),
+	}
+	for _, opt := range opts {
+		opt(uiConfig)
+	}
 	// nothing needs to be done if err is nil
 	if err == nil {
 		return nil
@@ -69,7 +89,7 @@ func (ui *consoleUi) OutputError(err error) error {
 	// for simplistic handling of error catalog errors
 	var snykError snyk_errors.Error
 	if errors.As(err, &snykError) {
-		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, presenters.RenderError(snykError)))
+		uiError := utils.ErrorOf(fmt.Fprintln(ui.errorWriter, presenters.RenderError(snykError, uiConfig.context)))
 		if uiError != nil {
 			return uiError
 		}

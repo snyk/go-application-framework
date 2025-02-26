@@ -78,15 +78,20 @@ func (mr *MockUserInterfaceMockRecorder) Output(output interface{}) *gomock.Call
 }
 
 // OutputError mocks base method.
-func (m *MockUserInterface) OutputError(err error) error {
+func (m *MockUserInterface) OutputError(err error, opts ...ui.Opts) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OutputError", err)
+	varargs := []interface{}{err}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OutputError", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // OutputError indicates an expected call of OutputError.
-func (mr *MockUserInterfaceMockRecorder) OutputError(err interface{}) *gomock.Call {
+func (mr *MockUserInterfaceMockRecorder) OutputError(err interface{}, opts ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputError", reflect.TypeOf((*MockUserInterface)(nil).OutputError), err)
+	varargs := append([]interface{}{err}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputError", reflect.TypeOf((*MockUserInterface)(nil).OutputError), varargs...)
 }

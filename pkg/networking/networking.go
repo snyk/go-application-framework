@@ -20,6 +20,12 @@ import (
 
 //go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
+type keyTypeString string
+
+// InteractionIdKey is the name to be used for any interaction ID keys
+// e.g. It should be used if setting the interaction ID into a context.Context
+const InteractionIdKey = keyTypeString("interactionId")
+
 // NetworkAccess is the interface for network access.
 // It provides methods to get an HTTP client with default behaviors that handle authentication headers for Snyk API calls.
 type NetworkAccess interface {
