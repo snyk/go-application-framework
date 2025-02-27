@@ -86,7 +86,7 @@ Status:  400 Bad Request
 
 [Test_RenderError/with_links - 1]
 
-[41m [0m[97;41mERROR[0m[41m [0m  [1mRequest not fulfilled due to server error (SNYK-9999)[0m
+[41m [0m[97;41mERROR[0m[41m [0m  [1mUnable to process request (SNYK-9999)[0m
          The server cannot process the request due to an unexpected error. Check Snyk   
          status, then try again.                                                        
                                                                                         
@@ -99,7 +99,7 @@ Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-9999
 
 [Test_RenderError/with_context - 1]
 
-[41m [0m[97;41mERROR[0m[41m [0m  [1mRequest not fulfilled due to server error (SNYK-9999)[0m
+[41m [0m[97;41mERROR[0m[41m [0m  [1mUnable to process request (SNYK-9999)[0m
          The server cannot process the request due to an unexpected error. Check Snyk   
          status, then try again.                                                        
                                                                                         

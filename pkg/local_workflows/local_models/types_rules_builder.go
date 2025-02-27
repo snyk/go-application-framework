@@ -5,6 +5,14 @@ import (
 	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 )
 
+func NewFindingsCounts() TypesFindingCounts {
+	return TypesFindingCounts{
+		CountBy:           TypesFindingCounts_CountBy{Severity: map[string]uint32{}},
+		CountByAdjusted:   TypesFindingCounts_CountByAdjusted{Severity: map[string]uint32{}},
+		CountBySuppressed: TypesFindingCounts_CountBySuppressed{Severity: map[string]uint32{}},
+	}
+}
+
 // ExampleCommitFix defines the structure for commit fixes
 
 // NewExampleCommitFix creates a new ExampleCommitFix with the provided parameters
