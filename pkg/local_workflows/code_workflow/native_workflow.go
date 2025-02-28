@@ -153,10 +153,13 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 	output = append(output, summaryData)
 
 	if resultAvailable {
+		// transform sarif to findings
 		localFindings, lfError := local_models.TransformToLocalFindingModelFromSarif(&result.Sarif, summary)
 		if lfError != nil {
 			return nil, lfError
 		}
+
+		// if available add a report link to the findings
 		if resultMetaData != nil && len(resultMetaData.WebUiUrl) > 0 {
 			localFindings.Links[local_models.LINKS_KEY_REPORT] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
 		}

@@ -29,6 +29,78 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+func Test_Code_entrypoint(t *testing.T) {
+	org := "1234"
+	sastSettingsCalled := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println(r.URL)
+		if strings.HasSuffix(r.URL.String(), "/v1/cli-config/settings/sast?org="+org) {
+			sastSettingsCalled++
+			sastSettings := &contract.SastResponse{
+				SastEnabled: true,
+				LocalCodeEngine: contract.LocalCodeEngine{
+					Enabled: true, /* ensures that legacycli will be called */
+				},
+			}
+
+			err := json.NewEncoder(w).Encode(sastSettings)
+			assert.NoError(t, err)
+		} else if strings.Contains(r.URL.String(), "/v1/cli-config/feature-flags/") {
+			featureFlag := contract.OrgFeatureFlagResponse{
+				Ok: true,
+			}
+
+			err := json.NewEncoder(w).Encode(featureFlag)
+			assert.NoError(t, err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	expectedData := "Hello World"
+	flagString := "--user-=bla"
+	callback1 := func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+		typeId := workflow.NewTypeIdentifier(invocation.GetWorkflowIdentifier(), "wfl1data")
+		d := workflow.NewData(typeId, "text/plain", expectedData)
+		assert.Equal(t, []string{flagString}, invocation.GetConfiguration().Get(configuration.RAW_CMD_ARGS))
+		return []workflow.Data{d}, nil
+	}
+
+	// set
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, org)
+
+	engine := workflow.NewWorkFlowEngine(config)
+
+	err := InitCodeWorkflow(engine)
+	assert.NoError(t, err)
+
+	// Create legacycli workflow
+	mockLegacyCliWorkflowId := workflow.NewWorkflowIdentifier("legacycli")
+	entry1, err := engine.Register(mockLegacyCliWorkflowId, workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("1", pflag.ExitOnError)), callback1)
+	assert.Nil(t, err)
+	assert.NotNil(t, entry1)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	// Method under test
+	wrkflw, ok := engine.GetWorkflow(WORKFLOWID_CODE)
+	assert.True(t, ok)
+	assert.NotNil(t, wrkflw)
+
+	os.Args = []string{"cmd", flagString}
+
+	rs, err := engine.InvokeWithConfig(WORKFLOWID_CODE, config)
+	assert.NoError(t, err)
+	assert.NotNil(t, rs)
+	assert.Equal(t, expectedData, rs[0].GetPayload().(string))
+	assert.Equal(t, 1, sastSettingsCalled)
+}
+
 func Test_Code_legacyImplementation_happyPath(t *testing.T) {
 	expectedData := "Hello World"
 	flagString := "--user-=bla"
