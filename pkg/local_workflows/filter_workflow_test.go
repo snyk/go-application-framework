@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/snyk/go-application-framework/internal/utils/findings"
-
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -162,7 +160,7 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
 		assert.NoError(t, err)
 
-		expectedCounts := findings.NewFindingsCounts()
+		expectedCounts := local_models.NewFindingsCounts()
 		expectedCounts.Count = 25
 		expectedCounts.CountAdjusted = 25
 		expectedCounts.CountKeyOrderAsc = local_models.TypesFindingCounts_CountKeyOrderAsc{

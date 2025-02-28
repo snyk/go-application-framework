@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/sarif"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
@@ -154,7 +153,6 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 
 func handleContentTypeJson(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
 	printJsonToCmd := config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_JSON) || config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_SARIF)
-	showToHuman := !printJsonToCmd
 
 	jsonFileName := config.GetString(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE)
 	if len(jsonFileName) == 0 {
@@ -167,21 +165,13 @@ func handleContentTypeJson(config configuration.Configuration, input []workflow.
 		return fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
 	}
 
-	// are we in human readable mode
-	// yes: do we have a presenter
-	//  yes: use presenter
-	//  no: print json to cmd
-	if showToHuman && input[i].GetContentType() == content_type.SARIF_JSON {
-		humanReadableSarifOutput(config, input, i, outputDestination, debugLogger, singleData)
-	} else {
-		// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
-		if !printJsonToCmd && !writeToFile {
-			printJsonToCmd = true
-		}
+	// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
+	if !printJsonToCmd && !writeToFile {
+		printJsonToCmd = true
+	}
 
-		if printJsonToCmd {
-			outputDestination.Println(string(singleData))
-		}
+	if printJsonToCmd {
+		outputDestination.Println(string(singleData))
 	}
 
 	if writeToFile {
@@ -203,31 +193,6 @@ func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, 
 		return fmt.Errorf("failed to write json output: %w", err)
 	}
 	return nil
-}
-
-func humanReadableSarifOutput(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger, singleData []byte) {
-	includeIgnoredFindings := config.GetBool(configuration.FLAG_INCLUDE_IGNORES)
-
-	var sarif sarif.SarifDocument
-	err := json.Unmarshal(singleData, &sarif)
-	if err != nil {
-		debugLogger.Println(err)
-	}
-
-	p := presenters.SarifTestResults(
-		sarif,
-		presenters.WithOrgName(config.GetString(configuration.ORGANIZATION_SLUG)),
-		presenters.WithTestPath(input[i].GetContentLocation()),
-		presenters.WithIgnored(includeIgnoredFindings),
-		presenters.WithSeverityThershold(config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)),
-	)
-
-	humanReadableResult, err := p.Render()
-	if err != nil {
-		debugLogger.Println(err)
-	}
-
-	outputDestination.Println(humanReadableResult)
 }
 
 func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {

@@ -14,7 +14,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/error-catalog-golang-public/code"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
@@ -23,8 +22,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
-
-	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
 	iMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -84,84 +81,6 @@ func validateSarifData(t *testing.T, data []byte) {
 			t.Log(validationError)
 		}
 		assert.True(t, validationResult.Valid(), "Sarif validation failed")
-	}
-}
-
-func getSarifInput() sarif.SarifDocument {
-	return sarif.SarifDocument{
-		Runs: []sarif.Run{
-			{
-				Results: []sarif.Result{
-					{Level: "error"},
-					{Level: "warning"},
-				},
-			},
-			{
-				Results: []sarif.Result{
-					{Level: "error",
-						RuleID: "openIssue",
-					},
-					{
-						Level:        "error",
-						Suppressions: make([]sarif.Suppression, 1),
-						RuleID:       "rule1",
-					},
-				},
-				Tool: sarif.Tool{
-					Driver: sarif.Driver{
-						Rules: []sarif.Rule{
-							{
-								ID:   "rule1",
-								Name: "Ignored rule",
-								ShortDescription: sarif.ShortDescription{
-									Text: "Ignored rule",
-								},
-								Help: sarif.Help{
-									Text: "Rule 1 help",
-								},
-								DefaultConfiguration: sarif.DefaultConfiguration{
-									Level: "error",
-								},
-								Properties: sarif.RuleProperties{
-									Tags:               []string{"tag1", "tag2"},
-									Categories:         []string{},
-									ExampleCommitFixes: []sarif.ExampleCommitFix{},
-									Precision:          "",
-									RepoDatasetSize:    0,
-									Cwe:                []string{""},
-								},
-							},
-							{
-								ID:   "openIssue",
-								Name: "This rule is open",
-								ShortDescription: sarif.ShortDescription{
-									Text: "This rule is open",
-								},
-								Help: sarif.Help{
-									Text: "",
-								},
-								DefaultConfiguration: sarif.DefaultConfiguration{
-									Level: "error",
-								},
-								Properties: sarif.RuleProperties{
-									Tags:               []string{"tag1", "tag2"},
-									Categories:         []string{},
-									ExampleCommitFixes: []sarif.ExampleCommitFix{},
-									Precision:          "",
-									RepoDatasetSize:    0,
-									Cwe:                []string{""},
-								},
-							},
-						},
-					},
-				},
-			},
-			{
-				Results: []sarif.Result{
-					{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
-				},
-			},
-		},
 	}
 }
 
@@ -462,112 +381,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, 1, len(output))
-	})
-
-	t.Run("should print human readable output for sarif data without ignored rules", func(t *testing.T) {
-		input := getSarifInput()
-
-		rawSarif, err := json.Marshal(input)
-		assert.Nil(t, err)
-
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
-		sarifData.SetContentLocation("/mypath")
-
-		// mock assertions
-		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
-			assert.Contains(t, str, "Total issues:   5")
-			assert.Contains(t, str, "✗ [MEDIUM]")
-			assert.NotContains(t, str, "Ignored rule")
-		}).Times(1)
-
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
-
-		// assert
-		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
-	})
-
-	t.Run("should print human readable output for sarif data including ignored data", func(t *testing.T) {
-		input := getSarifInput()
-
-		rawSarif, err := json.Marshal(input)
-		assert.Nil(t, err)
-
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
-		sarifData.SetContentLocation("/mypath")
-
-		// mock assertions
-		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
-			assert.Contains(t, str, "Total issues:   5")
-			assert.Contains(t, str, "Ignored rule")
-			assert.Contains(t, str, "This rule is open")
-		}).Times(1)
-
-		config.Set(configuration.FLAG_INCLUDE_IGNORES, true)
-
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
-
-		// assert
-		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
-	})
-
-	t.Run("should print human readable output excluding medium severity issues", func(t *testing.T) {
-		input := getSarifInput()
-		rawSarif, err := json.Marshal(input)
-		assert.Nil(t, err)
-
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-
-		summaryPayload, err := json.Marshal(json_schemas.TestSummary{
-			Results: []json_schemas.TestSummaryResult{{
-				Severity: "critical",
-				Total:    99,
-				Open:     97,
-				Ignored:  2,
-			}, {
-				Severity: "medium",
-				Total:    99,
-				Open:     97,
-				Ignored:  2,
-			}},
-			Type: "sast",
-		})
-		assert.Nil(t, err)
-		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, summaryPayload)
-		testSummaryData.AddError(code.NewUnsupportedProjectError(""))
-		sarifData := workflow.NewData(workflowIdentifier, content_type.SARIF_JSON, rawSarif)
-		sarifData.SetContentLocation("/mypath")
-
-		// mock assertions
-		outputDestination.EXPECT().Println(gomock.Any()).Do(func(str string) {
-			assert.Contains(t, str, "Open issues:    2")
-			assert.NotContains(t, str, "✗ [MEDIUM]")
-		}).Times(1)
-
-		config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "high")
-		defer config.Set(configuration.FLAG_SEVERITY_THRESHOLD, nil)
-
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData, testSummaryData}, outputDestination)
-		assert.Nil(t, err)
-
-		// Parse output payload
-		summary := json_schemas.NewTestSummary("", "")
-		err = json.Unmarshal(output[0].GetPayload().([]byte), &summary)
-		assert.Nil(t, err)
-		assert.Equal(t, len(output[0].GetErrorList()), 1)
-
-		// assert
-		for _, result := range summary.Results {
-			// fmt.Println(result.Severity)
-			assert.NotEqual(t, "medium", result.Severity)
-		}
 		assert.Equal(t, 1, len(output))
 	})
 
