@@ -55,13 +55,6 @@
           {{- end}}
       {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
   {{- end}}]{{- end}}
-  {{- if .Links.report }}
-
-{{ "Report" | bold }}
-  {{- "\n" }}
-  Your test results are available at:
-  {{ .Links.report | bold }}
-  {{- end }}
 {{- end }} {{/* end summary */}}
 
 {{- define "main" }}
@@ -77,7 +70,16 @@
 
     {{- box (renderToString "summary" $result)}}
 
+{{- if .Links.report }}
+
+{{ "Report" | bold }}
+  {{- "\n" }}
+  Your test results are available at:
+  {{ .Links.report | bold }}
+  {{- end }}
+
     {{- "\n    " }}
+
 
     {{- if ne (getValueFromConfig "include-ignores") "true" }}
 
