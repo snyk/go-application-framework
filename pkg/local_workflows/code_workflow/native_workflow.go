@@ -158,7 +158,7 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 			return nil, lfError
 		}
 		if resultMetaData != nil && len(resultMetaData.WebUiUrl) > 0 {
-			localFindings.Links["report"] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
+			localFindings.Links[local_models.LINKS_KEY_REPORT] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
 		}
 
 		findingsData, findingsError := createCodeWorkflowData(

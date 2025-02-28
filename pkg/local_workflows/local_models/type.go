@@ -15,3 +15,5 @@ type LocalFinding struct {
 type UnionInterface interface {
 	ValueByDiscriminator() (interface{}, error)
 }
+
+const LINKS_KEY_REPORT = "report"

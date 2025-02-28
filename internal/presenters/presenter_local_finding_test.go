@@ -235,6 +235,10 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
 	require.Nil(t, err)
 
+	expectedUrl := "https://this.url.is.exptected"
+	input.Links = make(map[string]string)
+	input.Links[local_models.LINKS_KEY_REPORT] = expectedUrl
+
 	lipgloss.SetColorProfile(termenv.Ascii)
 
 	config := configuration.NewInMemory()
@@ -254,6 +258,7 @@ func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 	require.Nil(t, err)
 	require.NotContains(t, result, "[ IGNORED ]")
 	require.Contains(t, result, "There are no ignored issues")
+	require.Contains(t, result, expectedUrl)
 
 	snaps.MatchSnapshot(t, result)
 }
