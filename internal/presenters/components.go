@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/networking"
+
+	"github.com/snyk/code-client-go/sarif"
+
 	"net/http"
 	"regexp"
 	"slices"
@@ -12,12 +14,35 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/snyk/go-application-framework/pkg/networking"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
+
+type Finding struct {
+	ID         string
+	Severity   string
+	Title      string
+	Ignored    bool
+	Properties []FindingProperty
+}
+
+type FindingProperty struct {
+	Label string
+	Value string
+}
+
+type SarifPresenter struct {
+	ShowIgnored      bool
+	Input            sarif.SarifDocument
+	OrgName          string
+	TestPath         string
+	SeverityMinLevel string
+}
 
 const valueStyleWidth = 80
 
