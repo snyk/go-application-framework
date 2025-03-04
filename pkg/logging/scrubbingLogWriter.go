@@ -131,8 +131,9 @@ func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, e
 	// lock for dict changes, but allow unlimited readers
 	w.m.RLock()
 	defer w.m.RUnlock()
-	_, err := w.writer.WriteLevel(level, scrub(p, w.scrubDict))
-	return len(p), err // we return the original length, since we don't know the length of the redacted string
+	return internalWrite(w.scrubDict, p, func(p []byte) (int, error) {
+		return w.writer.WriteLevel(level, p)
+	})
 }
 
 func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
@@ -192,8 +193,7 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 	// lock for dict changes, but allow unlimited readers
 	w.m.RLock()
 	defer w.m.RUnlock()
-	_, err := w.writer.Write(scrub(p, w.scrubDict))
-	return len(p), err // we return the original length, since we don't know the length of the redacted string
+	return internalWrite(w.scrubDict, p, w.writer.Write)
 }
 
 func scrub(p []byte, scrubDict ScrubbingDict) []byte {
@@ -207,10 +207,24 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	return []byte(s)
 }
 
-func (w *scrubbingIoWriter) Write(p []byte) (n int, err error) {
+func (w *scrubbingIoWriter) Write(p []byte) (int, error) {
 	// lock for dict changes, but allow unlimited readers
 	w.m.RLock()
 	defer w.m.RUnlock()
-	_, err = w.writer.Write(scrub(p, w.scrubDict))
-	return len(p), err // we return the original length, since we don't know the length of the redacted string
+	return internalWrite(w.scrubDict, p, w.writer.Write)
+}
+
+func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, error)) (int, error) {
+	scrubbedDataWritten := 0
+	scrubbedData := scrub(p, dict)
+
+	for scrubbedDataWritten < len(scrubbedData) {
+		written, err := writeFunc(scrubbedData[scrubbedDataWritten:])
+		if err != nil {
+			return len(p), err
+		}
+		scrubbedDataWritten += written
+	}
+
+	return len(p), nil // we return the original length, since we don't know the length of the redacted string
 }

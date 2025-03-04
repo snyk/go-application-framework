@@ -31,11 +31,18 @@ import (
 )
 
 type mockWriter struct {
-	written []byte
-	Error   error
+	written         []byte
+	Error           error
+	MaxBytesToWrite int
 }
 
 func (m *mockWriter) Write(p []byte) (n int, err error) {
+	if m.MaxBytesToWrite > 0 {
+		length := min(m.MaxBytesToWrite, len(p))
+		m.written = append(m.written, p[0:length]...)
+		return m.MaxBytesToWrite, nil
+	}
+
 	m.written = p
 	return len(p), m.Error
 }
@@ -242,4 +249,24 @@ func TestAddDefaults(t *testing.T) {
 			assert.Equal(t, test.expected, string(actual))
 		})
 	}
+}
+
+func TestScrubbingIoWriter_piecewise(t *testing.T) {
+	scrubDict := map[string]scrubStruct{
+		"token":    {0, regexp.MustCompile("token")},
+		"password": {0, regexp.MustCompile("password")},
+	}
+
+	innerWriter := &mockWriter{
+		MaxBytesToWrite: 16,
+	}
+	scrubbingWriter := NewScrubbingIoWriter(innerWriter, scrubDict)
+
+	expectedOutput := []byte("this is a *** test and also a *** test")
+	input := []byte("this is a token test and also a password test")
+	n, err := scrubbingWriter.Write(input)
+	assert.NoError(t, err)
+	assert.Equal(t, len(input), n)
+	t.Log(string(innerWriter.written))
+	assert.Equal(t, string(expectedOutput), string(innerWriter.written))
 }
