@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -218,12 +219,21 @@ func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, 
 	scrubbedDataWritten := 0
 	scrubbedData := scrub(p, dict)
 
-	for scrubbedDataWritten < len(scrubbedData) {
+	for errorsSeen := 0; scrubbedDataWritten < len(scrubbedData); {
 		written, err := writeFunc(scrubbedData[scrubbedDataWritten:])
+		scrubbedDataWritten += written
+
 		if err != nil {
+			errorsSeen++
+		}
+
+		// circuit breaker
+		if errorsSeen > 10 {
 			return len(p), err
 		}
-		scrubbedDataWritten += written
+
+		// exponential backoff
+		time.Sleep(time.Millisecond * time.Duration(errorsSeen*errorsSeen*10))
 	}
 
 	return len(p), nil // we return the original length, since we don't know the length of the redacted string
