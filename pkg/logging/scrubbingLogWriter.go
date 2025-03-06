@@ -227,7 +227,7 @@ func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, 
 		if err != nil {
 			errorsSeen++
 			// exponential backoff
-			time.Sleep(time.Millisecond * time.Duration(errorsSeen*errorsSeen*10))
+			time.Sleep(time.Millisecond * time.Duration(errorsSeen*errorsSeen))
 		}
 
 		// circuit breaker
