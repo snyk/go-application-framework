@@ -218,23 +218,25 @@ func (w *scrubbingIoWriter) Write(p []byte) (int, error) {
 func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, error)) (int, error) {
 	scrubbedDataWritten := 0
 	scrubbedData := scrub(p, dict)
-
+	var err error
+	var written int
 	for errorsSeen := 0; scrubbedDataWritten < len(scrubbedData); {
-		written, err := writeFunc(scrubbedData[scrubbedDataWritten:])
+		written, err = writeFunc(scrubbedData[scrubbedDataWritten:])
 		scrubbedDataWritten += written
 
 		if err != nil {
 			errorsSeen++
+			// exponential backoff
+			time.Sleep(time.Millisecond * time.Duration(errorsSeen*errorsSeen*10))
 		}
 
 		// circuit breaker
 		if errorsSeen > 10 {
 			return len(p), err
 		}
-
-		// exponential backoff
-		time.Sleep(time.Millisecond * time.Duration(errorsSeen*errorsSeen*10))
 	}
-
+	if scrubbedDataWritten != len(scrubbedData) {
+		return len(p), err
+	}
 	return len(p), nil // we return the original length, since we don't know the length of the redacted string
 }

@@ -40,7 +40,7 @@ func (m *mockWriter) Write(p []byte) (n int, err error) {
 	if m.MaxBytesToWrite > 0 {
 		length := min(m.MaxBytesToWrite, len(p))
 		m.written = append(m.written, p[0:length]...)
-		return m.MaxBytesToWrite, nil
+		return m.MaxBytesToWrite, m.Error
 	}
 
 	m.written = p
@@ -133,7 +133,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 		require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
 	})
 
-	t.Run("handle writer error", func(t *testing.T) {
+	t.Run("handle writer error, all written", func(t *testing.T) {
 		expectedError := fmt.Errorf("something went wrong")
 		expectedData := []byte("djalskjkads")
 		mockWriter := &mockWriter{
@@ -141,7 +141,19 @@ func TestScrubbingIoWriter(t *testing.T) {
 		}
 		writer = NewScrubbingIoWriter(mockWriter, scrubDict)
 		actualLength, actualError := writer.Write(expectedData)
-		assert.Equal(t, expectedError, actualError)
+		assert.NoError(t, actualError)
+		assert.Equal(t, len(expectedData), actualLength)
+	})
+	t.Run("handle writer error, not all written", func(t *testing.T) {
+		expectedError := fmt.Errorf("something went wrong")
+		expectedData := []byte("djalskjkadasdfs")
+		mockWriter := &mockWriter{
+			Error:           expectedError,
+			MaxBytesToWrite: 1, // expected data has more than 10 bytes, we have 10 retries, so one should be fine
+		}
+		writer = NewScrubbingIoWriter(mockWriter, scrubDict)
+		actualLength, actualError := writer.Write(expectedData)
+		assert.Error(t, actualError)
 		assert.Equal(t, len(expectedData), actualLength)
 	})
 }
