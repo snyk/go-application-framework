@@ -31,11 +31,18 @@ import (
 )
 
 type mockWriter struct {
-	written []byte
-	Error   error
+	written         []byte
+	Error           error
+	MaxBytesToWrite int
 }
 
 func (m *mockWriter) Write(p []byte) (n int, err error) {
+	if m.MaxBytesToWrite > 0 {
+		length := min(m.MaxBytesToWrite, len(p))
+		m.written = append(m.written, p[0:length]...)
+		return m.MaxBytesToWrite, m.Error
+	}
+
 	m.written = p
 	return len(p), m.Error
 }
@@ -126,15 +133,28 @@ func TestScrubbingIoWriter(t *testing.T) {
 		require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
 	})
 
-	t.Run("handle writer error", func(t *testing.T) {
+	t.Run("handle writer error, all written", func(t *testing.T) {
 		expectedError := fmt.Errorf("something went wrong")
-		expectedData := []byte("djalskjkads")
+		expectedData := make([]byte, MAX_WRITE_RETRIES-3)
 		mockWriter := &mockWriter{
 			Error: expectedError,
 		}
 		writer = NewScrubbingIoWriter(mockWriter, scrubDict)
 		actualLength, actualError := writer.Write(expectedData)
-		assert.Equal(t, expectedError, actualError)
+		assert.NoError(t, actualError)
+		assert.Equal(t, len(expectedData), actualLength)
+	})
+	t.Run("handle writer error, not all written", func(t *testing.T) {
+		expectedError := fmt.Errorf("something went wrong")
+		expectedData := make([]byte, MAX_WRITE_RETRIES*2)
+
+		mockWriter := &mockWriter{
+			Error:           expectedError,
+			MaxBytesToWrite: 1, // expected data has more than 10 bytes, we have 10 retries, so one should be fine
+		}
+		writer = NewScrubbingIoWriter(mockWriter, scrubDict)
+		actualLength, actualError := writer.Write(expectedData)
+		assert.Error(t, actualError)
 		assert.Equal(t, len(expectedData), actualLength)
 	})
 }
@@ -242,4 +262,24 @@ func TestAddDefaults(t *testing.T) {
 			assert.Equal(t, test.expected, string(actual))
 		})
 	}
+}
+
+func TestScrubbingIoWriter_piecewise(t *testing.T) {
+	scrubDict := map[string]scrubStruct{
+		"token":    {0, regexp.MustCompile("token")},
+		"password": {0, regexp.MustCompile("password")},
+	}
+
+	innerWriter := &mockWriter{
+		MaxBytesToWrite: 16,
+	}
+	scrubbingWriter := NewScrubbingIoWriter(innerWriter, scrubDict)
+
+	expectedOutput := []byte("this is a *** test and also a *** test")
+	input := []byte("this is a token test and also a password test")
+	n, err := scrubbingWriter.Write(input)
+	assert.NoError(t, err)
+	assert.Equal(t, len(input), n)
+	t.Log(string(innerWriter.written))
+	assert.Equal(t, string(expectedOutput), string(innerWriter.written))
 }
