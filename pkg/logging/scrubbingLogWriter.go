@@ -31,6 +31,7 @@ import (
 )
 
 const redactMask string = "***"
+const MAX_WRITE_RETRIES = 10
 
 type ScrubbingLogWriter interface {
 	AddTerm(term string, matchGroup int)
@@ -231,7 +232,7 @@ func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, 
 		}
 
 		// circuit breaker
-		if errorsSeen > 10 {
+		if errorsSeen > MAX_WRITE_RETRIES {
 			return len(p), err
 		}
 	}

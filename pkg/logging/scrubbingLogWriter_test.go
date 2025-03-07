@@ -135,7 +135,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 
 	t.Run("handle writer error, all written", func(t *testing.T) {
 		expectedError := fmt.Errorf("something went wrong")
-		expectedData := []byte("djalskjkads")
+		expectedData := make([]byte, MAX_WRITE_RETRIES-3)
 		mockWriter := &mockWriter{
 			Error: expectedError,
 		}
@@ -146,7 +146,8 @@ func TestScrubbingIoWriter(t *testing.T) {
 	})
 	t.Run("handle writer error, not all written", func(t *testing.T) {
 		expectedError := fmt.Errorf("something went wrong")
-		expectedData := []byte("djalskjkadasdfs")
+		expectedData := make([]byte, MAX_WRITE_RETRIES*2)
+
 		mockWriter := &mockWriter{
 			Error:           expectedError,
 			MaxBytesToWrite: 1, // expected data has more than 10 bytes, we have 10 retries, so one should be fine
