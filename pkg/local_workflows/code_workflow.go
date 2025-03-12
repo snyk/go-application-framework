@@ -35,6 +35,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	flagSet.String("project-id", "", "The unique identifier of the project to test.")
 	flagSet.String("commit-id", "", "The unique identifier of the commit to test.")
 	flagSet.String(code_workflow.ConfigurationTargetName, "", "The name of the target to test.")
+	flagSet.String(code_workflow.ConfigurationTargetReference, "", "The reference that differentiates this project, e.g. a branch name or version.")
 	flagSet.String("target-file", "", "The path to the target file to test.")
 	flagSet.Bool(configuration.FLAG_EXPERIMENTAL, false, "Enable experimental code test command")
 
