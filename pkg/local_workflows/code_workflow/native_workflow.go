@@ -35,6 +35,7 @@ const (
 	ConfigurationReportFlag            = "report"
 	ConfigurationProjectName           = "project-name"
 	ConfigurationTargetName            = "target-name"
+	ConfigurationTargetReference       = "target-reference"
 	ConfigurationProjectId             = "project-id"
 	ConfigurationCommitId              = "commit-id"
 	ConfigurationSastEnabled           = "internal_sast_enabled"
@@ -239,7 +240,7 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 
 	// use case: stateful local code testing
 	if reportMode == localCode {
-		option := codeclient.ReportLocalTest(config.GetString(ConfigurationProjectName), config.GetString(ConfigurationTargetName))
+		option := codeclient.ReportLocalTest(config.GetString(ConfigurationProjectName), config.GetString(ConfigurationTargetName), config.GetString(ConfigurationTargetReference))
 		analysisOptions = append(analysisOptions, option)
 	}
 
