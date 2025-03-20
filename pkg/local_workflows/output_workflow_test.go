@@ -150,7 +150,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("SnykCode"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("Random Application Name"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
 
 	outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
 

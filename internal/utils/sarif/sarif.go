@@ -85,3 +85,16 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 
 	return summary
 }
+
+func ConvertTypeToDriverName(s string) string {
+	switch s {
+	case "sast":
+		return "SnykCode"
+	case "container":
+		return "Snyk Container"
+	case "iac":
+		return "Snyk IaC"
+	default:
+		return "Snyk Open Source"
+	}
+}
