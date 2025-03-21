@@ -21,6 +21,14 @@ type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
 type ExtensionInit func(engine Engine) error
 
+type invokeOption struct {
+	config        configuration.Configuration
+	userInterface ui.UserInterface
+	input         []Data
+}
+
+type InvokeOptions func(*invokeOption) error
+
 // interfaces
 
 // Data is an interface that wraps the methods that are used to manage data that is passed between workflows.
@@ -69,7 +77,7 @@ type Engine interface {
 	Register(id Identifier, config ConfigurationOptions, callback Callback) (Entry, error)
 	GetWorkflows() []Identifier
 	GetWorkflow(id Identifier) (Entry, bool)
-	Invoke(id Identifier) ([]Data, error)
+	Invoke(id Identifier, options ...InvokeOptions) ([]Data, error)
 	InvokeWithInput(id Identifier, input []Data) ([]Data, error)
 	InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error)
 	InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error)

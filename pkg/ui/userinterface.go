@@ -11,6 +11,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/internal/presenters"
 
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -19,7 +20,7 @@ import (
 //go:generate $GOPATH/bin/mockgen -source=userinterface.go -destination ../mocks/userinterface.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/
 
 type UserInterface interface {
-	Output(output string) error
+	Output(output interface{}) error
 	OutputError(err error, opts ...Opts) error
 	NewProgressBar() ProgressBar
 	Input(prompt string) (string, error)
@@ -70,7 +71,8 @@ func WithContext(ctx context.Context) Opts {
 	}
 }
 
-func (ui *consoleUi) Output(output string) error {
+func (ui *consoleUi) Output(output interface{}) error {
+
 	return utils.ErrorOf(fmt.Fprintln(ui.writer, output))
 }
 

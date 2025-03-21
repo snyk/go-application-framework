@@ -211,8 +211,13 @@ func (e *EngineImpl) GetWorkflow(id Identifier) (Entry, bool) {
 }
 
 // Invoke invokes the workflow with the given identifier.
-func (e *EngineImpl) Invoke(id Identifier) ([]Data, error) {
-	return e.InvokeWithInputAndConfig(id, []Data{}, nil)
+func (e *EngineImpl) Invoke(id Identifier, options ...InvokeOptions) ([]Data, error) {
+	localOptions := invokeOption{}
+	for _, option := range options {
+		option(&localOptions)
+	}
+
+	return e.invokeInternal(id, localOptions)
 }
 
 // InvokeWithInput invokes the workflow with the given identifier and input data.
@@ -230,6 +235,18 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 	id Identifier,
 	input []Data,
 	config configuration.Configuration,
+) ([]Data, error) {
+	localOptions := invokeOption{
+		config: config,
+		input:  input,
+	}
+	return e.invokeInternal(id, localOptions)
+}
+
+// InvokeWithInputAndConfig invokes the workflow with the given identifier, input data and configuration.
+func (e *EngineImpl) invokeInternal(
+	id Identifier,
+	option invokeOption,
 ) ([]Data, error) {
 	var output []Data
 	var err error
@@ -252,20 +269,20 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			zlogger := e.logger.With().Str("ext", prefix).Logger()
 
 			// prepare configuration
-			if config == nil {
-				config = e.config.Clone()
+			if option.config == nil {
+				option.config = e.config.Clone()
 			}
 
 			// prepare networkAccess
 			networkAccess := e.networkAccess.Clone()
-			networkAccess.SetConfiguration(config)
+			networkAccess.SetConfiguration(option.config)
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, config, e, networkAccess, zlogger, e.analytics, e.ui)
+			context := NewInvocationContext(id, option.config, e, networkAccess, zlogger, e.analytics, e.ui)
 
 			// invoke workflow through its callback
 			zlogger.Printf("Workflow Start")
-			output, err = callback(context, input)
+			output, err = callback(context, option.input)
 			zlogger.Printf("Workflow End")
 		}
 	} else {
