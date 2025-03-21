@@ -277,7 +277,7 @@ func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
 
 func (n *networkImpl) GetAuthenticator() auth.Authenticator {
 	authClient := n.GetUnauthorizedHttpClient()
-	log.Logger.Info().
+	log.Logger.Trace().
 		Str("configInstance", fmt.Sprintf("%p", n.config)).
 		Str("httpClientInstance", fmt.Sprintf("%p", authClient)).
 		Str("networkInstance", fmt.Sprintf("%p", n)).
