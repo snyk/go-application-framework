@@ -3,11 +3,13 @@ package networking
 import (
 	"bytes"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
@@ -275,6 +277,11 @@ func (n *networkImpl) AddRootCAs(pemFileLocation string) error {
 
 func (n *networkImpl) GetAuthenticator() auth.Authenticator {
 	authClient := n.GetUnauthorizedHttpClient()
+	log.Logger.Info().
+		Str("configInstance", fmt.Sprintf("%p", n.config)).
+		Str("httpClientInstance", fmt.Sprintf("%p", authClient)).
+		Str("networkInstance", fmt.Sprintf("%p", n)).
+		Msg("creating authenticator")
 	return auth.CreateAuthenticator(n.config, authClient)
 }
 

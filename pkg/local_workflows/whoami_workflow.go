@@ -47,6 +47,8 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	url := config.GetString(configuration.API_URL)
 	var a = api.NewApi(url, httpClient)
 
+	logger.Trace().Str("configInstance", fmt.Sprintf("%p", config)).Str("httpClientInstance", fmt.Sprintf("%p", httpClient)).Msg("whoami workflow entry point")
+
 	// only run if experimental flag is set
 	if !config.GetBool(experimentalFlag) {
 		return nil, fmt.Errorf("set `--experimental` flag to enable whoAmI command")

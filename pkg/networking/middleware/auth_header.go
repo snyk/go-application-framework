@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -45,22 +46,33 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	return n.next.RoundTrip(newRequest)
 }
 
-func ShouldRequireAuthentication(
-	apiUrl string,
-	url *url.URL,
-	additionalSubdomains []string,
-	additionalUrls []string,
-) (matchesPattern bool, err error) {
+func ShouldRequireAuthentication(apiUrl string, url *url.URL, additionalSubdomains []string, additionalUrls []string) (matchesPattern bool, err error) {
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
+	logger := log.Logger.With().Str("method", "ShouldRequireAuthentication").Logger()
+	logger.Trace().
+		Str("apiUrl", apiUrl).
+		Str("url", url.String()).
+		Str("additionalSubdomains", strings.Join(additionalSubdomains, ",")).
+		Str("additionalUrls", strings.Join(additionalUrls, ",")).
+		Msg("called")
+
 	for _, subdomain := range subdomainsToCheck {
 		var matchesPattern bool
 		var prefixUrl, referenceUrl string
 		if len(subdomain) == 0 {
 			prefixUrl = apiUrl
 			referenceUrl, err = api.GetCanonicalApiUrl(*url)
+			if err != nil {
+				logger.Err(err).Msg("can't get canonical api url")
+			}
+			logger.Trace().Msgf("length of subdomain == 0, referenceURL: %s, prefixUrl: %s", referenceUrl, prefixUrl)
 		} else {
 			referenceUrl = url.String()
 			prefixUrl, err = api.DeriveSubdomainUrl(apiUrl, subdomain)
+			if err != nil {
+				logger.Err(err).Msg("can't derive subdomain url")
+			}
+			logger.Trace().Msgf("length of subdomain > 0, referenceURL: %s, prefixUrl: %s", referenceUrl, prefixUrl)
 		}
 
 		if err != nil {
@@ -68,6 +80,7 @@ func ShouldRequireAuthentication(
 		}
 
 		matchesPattern = strings.HasPrefix(referenceUrl, prefixUrl)
+		logger.Trace().Msgf("matchesPattern: %t, referenceUrl: %s, prefixUrl: %s", matchesPattern, referenceUrl, prefixUrl)
 		if matchesPattern {
 			return matchesPattern, nil
 		}
@@ -76,11 +89,14 @@ func ShouldRequireAuthentication(
 	// if the default check for an api didn't succeed, check additional Urls if available
 	requestUrl := url.String()
 	for _, v := range additionalUrls {
+		logger.Trace().Msgf("checking additional url: %s", v)
 		if strings.HasPrefix(requestUrl, v) {
+			logger.Trace().Msgf("found a match. requestURL starts with: %s", v)
 			return true, nil
 		}
 	}
 
+	logger.Trace().Msgf("no match found, returning false")
 	return false, nil
 }
 
