@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -31,6 +33,7 @@ const (
 
 // Configuration is an interface for managing configuration values.
 type Configuration interface {
+	fmt.Stringer
 	Clone() Configuration
 
 	Set(key string, value interface{})
@@ -92,6 +95,31 @@ type extendedViper struct {
 
 	// supportedEnvVars store the env vars that should be supported REGARDLESS of its prefix. e.g. NODE_EXTRA_CA_CERTS
 	supportedEnvVars []string
+}
+
+func (ev *extendedViper) String() string {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	return ev.string()
+}
+
+func (ev *extendedViper) string() string {
+	// clone to avoid concurrent modification of viper
+	keys := slices.Clone(ev.viper.AllKeys())
+	var output = fmt.Sprintf("%p:", ev)
+	for _, key := range keys {
+		result, err := ev.get(key)
+		if err != nil {
+			result = err
+		}
+		output += fmt.Sprintf("%s=%v\n", key, result)
+	}
+	return output
+}
+
+func (ev *extendedViper) DebugString() string {
+	return ev.String()
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -286,6 +314,22 @@ func (ev *extendedViper) Clone() Configuration {
 		clone.AddFlagSet(v)
 	}
 
+	// the private stringer func is necessary to avoid deadlocks, and it
+	// would clutter the configuration interface to add it there
+
+	type privateStringer interface {
+		string() string
+	}
+
+	cloneString := ""
+	if privateStringerConf, ok := clone.(privateStringer); ok {
+		cloneString = privateStringerConf.string()
+	}
+
+	log.Logger.Trace().Str("method", "extendedViper.Clone").
+		Str("configClone", cloneString).
+		Str("config", ev.string()).Send()
+
 	return clone
 }
 
@@ -381,6 +425,8 @@ func (ev *extendedViper) Get(key string) interface{} {
 
 // GetWithError returns a configuration value and and the potential error returned by the DefaultValueFunction for the configuration value.
 func (ev *extendedViper) GetWithError(key string) (value interface{}, err error) {
+	// this needs to be a write lock, as `get` calls `bindEnv` which is modifying the
+	// underlying viper instance.
 	ev.mutex.Lock()
 	value, err = ev.get(key)
 	defaultFunc, ok := ev.defaultValues[key]
