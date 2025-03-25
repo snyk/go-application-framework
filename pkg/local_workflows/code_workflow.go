@@ -107,19 +107,17 @@ func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 
 func useNativeImplementation(config configuration.Configuration, logger *zerolog.Logger, sastEnabled bool) bool {
 	useConsistentIgnoresFF := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
-	useNativeReportFF := config.GetBool(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED)
+	useNativeImplementationFF := config.GetBool(configuration.FF_CODE_NATIVE_IMPLEMENTATION)
 	reportEnabled := config.GetBool(code_workflow.ConfigurationReportFlag)
 	scleEnabled := config.GetBool(code_workflow.ConfigurarionSlceEnabled)
 
-	useLegacyReport := reportEnabled && !useNativeReportFF
-	nativeImplementationEnabled := useConsistentIgnoresFF && !useLegacyReport && !scleEnabled
+	nativeImplementationEnabled := useConsistentIgnoresFF && useNativeImplementationFF && !scleEnabled
 
 	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
 	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
 	logger.Debug().Msgf("SLCE enabled:       %v", scleEnabled)
-	logger.Debug().Msgf("Consistent Ignores:")
-	logger.Debug().Msgf("  FF ignores: %v", useConsistentIgnoresFF)
-	logger.Debug().Msgf("  FF report: %v", useNativeReportFF)
+	logger.Debug().Msgf("FF consistent ignores: %v", useConsistentIgnoresFF)
+	logger.Debug().Msgf("FF native implementation: %v", useNativeImplementationFF)
 
 	return nativeImplementationEnabled
 }
@@ -138,7 +136,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurarionSlceEnabled, getSlceEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
 	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_IGNORES, "snykCodeConsistentIgnores")
-	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, code_workflow.FfNameNativeReport)
+	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_NATIVE_IMPLEMENTATION, code_workflow.FfNameNativeImplementation)
 
 	return err
 }

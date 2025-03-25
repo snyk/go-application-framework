@@ -45,8 +45,8 @@ const (
 	UNKNOWN_ARGS                   string = "internal_unknown_arguments"          // arguments unknown to the current application but maybe relevant for delegated application calls
 	IN_MEMORY_THRESHOLD_BYTES      string = "internal_in_memory_threshold_bytes"  // threshold to determine where to store workflow.Data
 	// feature flags
-	FF_OAUTH_AUTH_FLOW_ENABLED        string = "internal_snyk_oauth_enabled"
-	FF_CODE_CONSISTENT_IGNORES        string = "internal_snyk_code_ignores_enabled"
-	FF_CODE_CONSISTENT_REPORT_ENABLED string = "internal_snyk_code_ignores_report_enabled"
-	FF_TRANSFORMATION_WORKFLOW        string = "internal_snyk_transformation_workflow_enabled"
+	FF_OAUTH_AUTH_FLOW_ENABLED    string = "internal_snyk_oauth_enabled"
+	FF_CODE_CONSISTENT_IGNORES    string = "internal_snyk_code_ignores_enabled"
+	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
+	FF_TRANSFORMATION_WORKFLOW    string = "internal_snyk_transformation_workflow_enabled"
 )

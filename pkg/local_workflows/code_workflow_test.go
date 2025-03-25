@@ -350,12 +350,12 @@ func Test_Code_nativeImplementation_analysisEmpty(t *testing.T) {
 
 func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 	response := contract.OrgFeatureFlagResponse{}
-	responseReport := contract.OrgFeatureFlagResponse{}
+	responseNativeImpl := contract.OrgFeatureFlagResponse{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, err := json.Marshal(response)
 
-		if strings.Contains(r.URL.Path, code_workflow.FfNameNativeReport) {
-			data, err = json.Marshal(responseReport)
+		if strings.Contains(r.URL.Path, code_workflow.FfNameNativeImplementation) {
+			data, err = json.Marshal(responseNativeImpl)
 		}
 
 		assert.NoError(t, err)
@@ -391,10 +391,10 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 		assert.False(t, consistentIgnores)
 	})
 
-	t.Run("Report Feature Flag set", func(t *testing.T) {
+	t.Run("Local Native Implementation Feature Flag set", func(t *testing.T) {
 		config.Set(configuration.ORGANIZATION, orgId)
-		responseReport = contract.OrgFeatureFlagResponse{Code: http.StatusOK, Ok: true}
-		consistentIgnores := config.GetBool(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED)
+		responseNativeImpl = contract.OrgFeatureFlagResponse{Code: http.StatusOK, Ok: true}
+		consistentIgnores := config.GetBool(configuration.FF_CODE_NATIVE_IMPLEMENTATION)
 		assert.True(t, consistentIgnores)
 	})
 }
@@ -402,12 +402,12 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 func Test_Code_UseNativeImplementation(t *testing.T) {
 	logger := zerolog.Nop()
 
-	//reportEnabled bool, reportFeatureFlag bool, ignoresFeatureFlag bool
+	//reportEnabled bool, nativeImplementationFeatureFlag bool, ignoresFeatureFlag bool
 	t.Run("cci feature flag disabled, report disabled", func(t *testing.T) {
 		expected := false
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, false)
-		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
 		config.Set(code_workflow.ConfigurationReportFlag, false)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
@@ -418,7 +418,7 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 		expected := false
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, false)
-		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
 		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
@@ -429,7 +429,7 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 		expected := false
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
-		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, false)
+		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, false)
 		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
@@ -440,7 +440,7 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 		expected := true
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
-		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
 		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
@@ -451,7 +451,7 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 		expected := false
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
-		config.Set(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, true)
+		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
 		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, true)
 		actual := useNativeImplementation(config, &logger, true)
