@@ -40,7 +40,7 @@ const (
 	ConfigurationCommitId              = "commit-id"
 	ConfigurationSastEnabled           = "internal_sast_enabled"
 	ConfigurarionSlceEnabled           = "internal_snyk_scle_enabled"
-	FfNameNativeReport                 = "snykCodeReportConsistentIgnores"
+	FfNameNativeImplementation         = "snykCodeClientNativeImplementation"
 )
 
 type reportType string
