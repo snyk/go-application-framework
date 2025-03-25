@@ -111,7 +111,7 @@ func useNativeImplementation(config configuration.Configuration, logger *zerolog
 	reportEnabled := config.GetBool(code_workflow.ConfigurationReportFlag)
 	scleEnabled := config.GetBool(code_workflow.ConfigurarionSlceEnabled)
 
-	nativeImplementationEnabled := useConsistentIgnoresFF && useNativeImplementationFF && !scleEnabled
+	nativeImplementationEnabled := (useConsistentIgnoresFF || useNativeImplementationFF) && !scleEnabled
 
 	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
 	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)

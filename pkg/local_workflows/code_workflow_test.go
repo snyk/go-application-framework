@@ -403,56 +403,51 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 	logger := zerolog.Nop()
 
 	//reportEnabled bool, nativeImplementationFeatureFlag bool, ignoresFeatureFlag bool
-	t.Run("cci feature flag disabled, report disabled", func(t *testing.T) {
+	t.Run("cci feature flag disabled, native implementation disabled", func(t *testing.T) {
 		expected := false
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, false)
-		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
-		config.Set(code_workflow.ConfigurationReportFlag, false)
+		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, false)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 
-	t.Run("cci feature flag disabled, report enabled", func(t *testing.T) {
-		expected := false
+	t.Run("cci feature flag disabled, native implementation enabled", func(t *testing.T) {
+		expected := true
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, false)
 		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
-		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 
-	t.Run("cci feature flag enabled, report enabled, cci-report feature flag disabled", func(t *testing.T) {
-		expected := false
+	t.Run("cci feature flag enabled, native implementation disabled", func(t *testing.T) {
+		expected := true
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
 		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, false)
-		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 
-	t.Run("cci feature flag enabled, report enabled", func(t *testing.T) {
+	t.Run("cci feature flag enabled, native implementation enabled", func(t *testing.T) {
 		expected := true
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
 		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
-		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, false)
 		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
 	})
 
-	t.Run("cci feature flag enabled, report enabled but scle enabled", func(t *testing.T) {
+	t.Run("cci feature flag enabled, native implementation enabled but scle enabled", func(t *testing.T) {
 		expected := false
 		config := configuration.NewWithOpts()
 		config.Set(configuration.FF_CODE_CONSISTENT_IGNORES, true)
 		config.Set(configuration.FF_CODE_NATIVE_IMPLEMENTATION, true)
-		config.Set(code_workflow.ConfigurationReportFlag, true)
 		config.Set(code_workflow.ConfigurarionSlceEnabled, true)
 		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
