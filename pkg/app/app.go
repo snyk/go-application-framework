@@ -44,6 +44,28 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	return callback
 }
 
+func defaultFuncGetSastSettings(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient := apiClientFactory(url, client)
+		orgId := config.GetString(configuration.ORGANIZATION)
+		if len(orgId) == 0 {
+			return existingValue, nil
+		}
+		response, err := apiClient.GetSastSettings(orgId)
+		if err != nil {
+			logger.Err(err).Msg("Failed to access settings.")
+			return false, err
+		}
+		return response, nil
+	}
+	return callback
+}
+
 func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
@@ -213,6 +235,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.SAST_SETTINGS, defaultFuncGetSastSettings(engine, config, logger, apiClientFactory))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) (any, error) {
 		if existingValue == nil {

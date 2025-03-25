@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
@@ -45,18 +44,9 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
-func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
+func getSastSettings(engine workflow.Engine) (*configuration.SastResponse, error) {
 	config := engine.GetConfiguration()
 	org := config.GetString(configuration.ORGANIZATION)
-	key := fmt.Sprintf("CACHE_SAST_RESPONSE_%s", org)
-
-	cachedContent := config.Get(key)
-	if cachedContent != nil {
-		cachedResponse, ok := cachedContent.(*contract.SastResponse)
-		if ok {
-			return cachedResponse, nil
-		}
-	}
 
 	client := engine.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
@@ -67,7 +57,7 @@ func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
 		return &tmp, err
 	}
 
-	engine.GetConfiguration().Set(key, &tmp)
+	engine.GetConfiguration().Set(org, &tmp)
 	return &tmp, nil
 }
 
@@ -151,6 +141,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	logger := invocationCtx.GetEnhancedLogger()
 
 	sastEnabledI, err := config.GetWithError(code_workflow.ConfigurationSastEnabled)
+
 	if err != nil {
 		return result, err
 	}

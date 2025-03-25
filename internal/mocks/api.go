@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	http "net/http"
 	reflect "reflect"
 
@@ -81,10 +82,10 @@ func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gom
 }
 
 // GetSastSettings mocks base method.
-func (m *MockApiClient) GetSastSettings(orgId string) (contract.SastResponse, error) {
+func (m *MockApiClient) GetSastSettings(orgId string) (configuration.SastResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSastSettings", orgId)
-	ret0, _ := ret[0].(contract.SastResponse)
+	ret0, _ := ret[0].(configuration.SastResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
