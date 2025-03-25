@@ -402,7 +402,7 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 func Test_Code_UseNativeImplementation(t *testing.T) {
 	logger := zerolog.Nop()
 
-	//reportEnabled bool, nativeImplementationFeatureFlag bool, ignoresFeatureFlag bool
+	// cciFeatureFlagEnabled bool, nativeImplementationFeatureFlag bool, ignoresFeatureFlag bool
 	t.Run("cci feature flag disabled, native implementation disabled", func(t *testing.T) {
 		expected := false
 		config := configuration.NewWithOpts()
