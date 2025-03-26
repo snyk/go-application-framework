@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/common"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -37,9 +38,9 @@ func Test_Code_entrypoint(t *testing.T) {
 		fmt.Println(r.URL)
 		if strings.HasSuffix(r.URL.String(), "/v1/cli-config/settings/sast?org="+org) {
 			sastSettingsCalled++
-			sastSettings := &configuration.SastResponse{
+			sastSettings := &common.SastResponse{
 				SastEnabled: true,
-				LocalCodeEngine: configuration.LocalCodeEngine{
+				LocalCodeEngine: common.LocalCodeEngine{
 					Enabled: true, /* ensures that legacycli will be called */
 				},
 			}

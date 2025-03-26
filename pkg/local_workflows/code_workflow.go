@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/common"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/code"
@@ -44,7 +45,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
-func getSastSettings(engine workflow.Engine) (*configuration.SastResponse, error) {
+func getSastSettings(engine workflow.Engine) (*common.SastResponse, error) {
 	config := engine.GetConfiguration()
 	org := config.GetString(configuration.ORGANIZATION)
 

@@ -5,7 +5,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/common"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,7 +22,7 @@ type ApiClient interface {
 	GetFeatureFlag(flagname string, origId string) (bool, error)
 	GetUserMe() (string, error)
 	GetSelf() (contract.SelfResponse, error)
-	GetSastSettings(orgId string) (configuration.SastResponse, error)
+	GetSastSettings(orgId string) (common.SastResponse, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -197,9 +197,9 @@ func (a *snykApiClient) GetSelf() (contract.SelfResponse, error) {
 	return selfData, nil
 }
 
-func (a *snykApiClient) GetSastSettings(orgId string) (configuration.SastResponse, error) {
-	var response configuration.SastResponse
-	var defaultResult configuration.SastResponse
+func (a *snykApiClient) GetSastSettings(orgId string) (common.SastResponse, error) {
+	var response common.SastResponse
+	var defaultResult common.SastResponse
 
 	endpoint := a.url + "/v1/cli-config/settings/sast?org=" + url.QueryEscape(orgId)
 	res, err := a.client.Get(endpoint)

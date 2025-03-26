@@ -1,4 +1,4 @@
-package configuration
+package common
 
 type LocalCodeEngine struct {
 	AllowCloudUpload bool   `json:"allowCloudUpload"`

@@ -3,14 +3,14 @@ package configuration
 import (
 	"context"
 	"encoding/json"
+	"github.com/snyk/go-application-framework/internal/utils"
+
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
-
-	"github.com/snyk/go-application-framework/internal/utils"
 )
 
 //go:generate $GOPATH/bin/mockgen -source=storage.go -destination ../mocks/config_storage.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
