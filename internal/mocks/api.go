@@ -5,12 +5,13 @@
 package mocks
 
 import (
-	"github.com/snyk/go-application-framework/pkg/common"
 	http "net/http"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
 	contract "github.com/snyk/go-application-framework/internal/api/contract"
+
+	"github.com/snyk/go-application-framework/pkg/common"
 )
 
 // MockApiClient is a mock of ApiClient interface.
