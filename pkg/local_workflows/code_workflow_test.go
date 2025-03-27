@@ -102,6 +102,85 @@ func Test_Code_entrypoint(t *testing.T) {
 	assert.Equal(t, 2, sastSettingsCalled)
 }
 
+func Test_Code_WithSlce(t *testing.T) {
+	org := "1234"
+	sastResponse := contract.SastResponse{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.String(), "/v1/cli-config/settings/sast?org="+org) {
+			err := json.NewEncoder(w).Encode(sastResponse)
+			assert.NoError(t, err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	baseConfig := configuration.NewWithOpts()
+	baseConfig.Set(configuration.API_URL, server.URL)
+	baseConfig.Set(configuration.ORGANIZATION, org)
+	baseConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"http://example.com"})
+
+	t.Run("scle enabled, SLCE url is added to the additinal auth urls", func(t *testing.T) {
+		sastResponse = contract.SastResponse{
+			SastEnabled: true,
+			LocalCodeEngine: contract.LocalCodeEngine{
+				Enabled: true,
+				Url:     "http://slce.example.com",
+			},
+		}
+		config := baseConfig.Clone()
+		engine := workflow.NewWorkFlowEngine(config)
+
+		settings, err := getSastSettings(engine)
+		assert.NotNil(t, settings)
+		assert.Nil(t, err)
+
+		authUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+		assert.Contains(t, authUrls,  sastResponse.LocalCodeEngine.Url)
+		assert.Contains(t, authUrls, "http://example.com")
+	})
+
+	t.Run("scle disabled, no additonal auth url is added", func(t *testing.T) {
+		sastResponse = contract.SastResponse{
+			SastEnabled: true,
+			LocalCodeEngine: contract.LocalCodeEngine{
+				Enabled: false,
+				Url:     "http://slce.example.com",
+			},
+		}
+		config := baseConfig.Clone()
+		engine := workflow.NewWorkFlowEngine(config.Clone())
+
+		settings, err := getSastSettings(engine)
+		assert.NotNil(t, settings)
+		assert.Nil(t, err)
+
+		authUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+		assert.NotContains(t, authUrls,  sastResponse.LocalCodeEngine.Url)
+		assert.Contains(t, authUrls, "http://example.com")
+	})
+
+	t.Run("sast disabled, no additonal auth url is added", func(t *testing.T) {
+		sastResponse = contract.SastResponse{
+			SastEnabled: false,
+			LocalCodeEngine: contract.LocalCodeEngine{
+				Enabled: true,
+				Url:     "http://slce.example.com",
+			},
+		}
+		config := baseConfig.Clone()
+		engine := workflow.NewWorkFlowEngine(config.Clone())
+
+		settings, err := getSastSettings(engine)
+		assert.NotNil(t, settings)
+		assert.Nil(t, err)
+
+		authUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+		assert.NotContains(t, authUrls,  sastResponse.LocalCodeEngine.Url)
+		assert.Contains(t, authUrls, "http://example.com")
+	})
+}
+
 func Test_Code_legacyImplementation_happyPath(t *testing.T) {
 	expectedData := "Hello World"
 	flagString := "--user-=bla"
