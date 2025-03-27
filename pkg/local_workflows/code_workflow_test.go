@@ -120,7 +120,7 @@ func Test_Code_WithSlce(t *testing.T) {
 	baseConfig.Set(configuration.ORGANIZATION, org)
 	baseConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"http://example.com"})
 
-	t.Run("scle enabled, SLCE url is added to the additinal auth urls", func(t *testing.T) {
+	t.Run("scle enabled, SLCE url is added to the additional auth urls", func(t *testing.T) {
 		sastResponse = contract.SastResponse{
 			SastEnabled: true,
 			LocalCodeEngine: contract.LocalCodeEngine{
@@ -140,7 +140,7 @@ func Test_Code_WithSlce(t *testing.T) {
 		assert.Contains(t, authUrls, "http://example.com")
 	})
 
-	t.Run("scle disabled, no additonal auth url is added", func(t *testing.T) {
+	t.Run("scle disabled, no additional auth url is added", func(t *testing.T) {
 		sastResponse = contract.SastResponse{
 			SastEnabled: true,
 			LocalCodeEngine: contract.LocalCodeEngine{
@@ -160,7 +160,7 @@ func Test_Code_WithSlce(t *testing.T) {
 		assert.Contains(t, authUrls, "http://example.com")
 	})
 
-	t.Run("sast disabled, no additonal auth url is added", func(t *testing.T) {
+	t.Run("sast disabled, no additional auth url is added", func(t *testing.T) {
 		sastResponse = contract.SastResponse{
 			SastEnabled: false,
 			LocalCodeEngine: contract.LocalCodeEngine{
