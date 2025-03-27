@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/common"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -45,18 +45,9 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
-func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
+func getSastSettings(engine workflow.Engine) (*common.SastResponse, error) {
 	config := engine.GetConfiguration()
 	org := config.GetString(configuration.ORGANIZATION)
-	key := fmt.Sprintf("CACHE_SAST_RESPONSE_%s", org)
-
-	cachedContent := config.Get(key)
-	if cachedContent != nil {
-		cachedResponse, ok := cachedContent.(*contract.SastResponse)
-		if ok {
-			return cachedResponse, nil
-		}
-	}
 
 	client := engine.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
@@ -67,8 +58,25 @@ func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
 		return &tmp, err
 	}
 
-	engine.GetConfiguration().Set(key, &tmp)
+	engine.GetConfiguration().Set(org, &tmp)
 	return &tmp, nil
+}
+
+func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		response, err := getSastSettings(engine)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return false, err
+		}
+
+		return *response, nil
+	}
+	return callback
 }
 
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
@@ -132,6 +140,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 		return err
 	}
 
+	engine.GetConfiguration().AddDefaultValue(configuration.SAST_SETTINGS, getSastSettingsConfig(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastEnabled, getSastEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurarionSlceEnabled, getSlceEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
