@@ -135,7 +135,7 @@ func Test_Code_WithSlce(t *testing.T) {
 		assert.Nil(t, err)
 
 		authUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-		assert.Contains(t, authUrls,  sastResponse.LocalCodeEngine.Url)
+		assert.Contains(t, authUrls, sastResponse.LocalCodeEngine.Url)
 		assert.Contains(t, authUrls, "http://example.com")
 	})
 
@@ -155,7 +155,7 @@ func Test_Code_WithSlce(t *testing.T) {
 		assert.Nil(t, err)
 
 		authUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-		assert.NotContains(t, authUrls,  sastResponse.LocalCodeEngine.Url)
+		assert.NotContains(t, authUrls, sastResponse.LocalCodeEngine.Url)
 		assert.Contains(t, authUrls, "http://example.com")
 	})
 
@@ -175,7 +175,7 @@ func Test_Code_WithSlce(t *testing.T) {
 		assert.Nil(t, err)
 
 		authUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-		assert.NotContains(t, authUrls,  sastResponse.LocalCodeEngine.Url)
+		assert.NotContains(t, authUrls, sastResponse.LocalCodeEngine.Url)
 		assert.Contains(t, authUrls, "http://example.com")
 	})
 }
