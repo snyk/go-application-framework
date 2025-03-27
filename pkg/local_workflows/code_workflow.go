@@ -68,7 +68,7 @@ func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
 	}
 
 	config.Set(key, &tmp)
-	// add SLCE url to the additonal URL list to ensure authentication info is sent
+	// add SLCE url to the additional URL list to ensure authentication info is sent
 	if tmp.SastEnabled && tmp.LocalCodeEngine.Enabled {
 		additionalURLs := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 		additionalURLs = append(additionalURLs, tmp.LocalCodeEngine.Url)
