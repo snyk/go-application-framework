@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	contract "github.com/snyk/go-application-framework/internal/api/contract"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	sast_contract "github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 // MockApiClient is a mock of ApiClient interface.
