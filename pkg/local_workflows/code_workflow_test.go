@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -37,9 +38,9 @@ func Test_Code_entrypoint(t *testing.T) {
 		fmt.Println(r.URL)
 		if strings.HasSuffix(r.URL.String(), "/v1/cli-config/settings/sast?org="+org) {
 			sastSettingsCalled++
-			sastSettings := &contract.SastResponse{
+			sastSettings := &sast_contract.SastResponse{
 				SastEnabled: true,
-				LocalCodeEngine: contract.LocalCodeEngine{
+				LocalCodeEngine: sast_contract.LocalCodeEngine{
 					Enabled: true, /* ensures that legacycli will be called */
 				},
 			}
@@ -98,7 +99,7 @@ func Test_Code_entrypoint(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, rs)
 	assert.Equal(t, expectedData, rs[0].GetPayload().(string))
-	assert.Equal(t, 1, sastSettingsCalled)
+	assert.Equal(t, 2, sastSettingsCalled)
 }
 
 func Test_Code_legacyImplementation_happyPath(t *testing.T) {

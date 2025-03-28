@@ -213,6 +213,23 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 			request.Header.Add(k, v[i])
 		}
 	}
+
+	ua := n.config.Get(configuration.USER_AGENT)
+	if ua != nil {
+		userAgent, ok := ua.(UserAgentInfo)
+		if !ok {
+			n.logger.Printf("a is not of type UserAgentInfo")
+		}
+		if userAgent.App == "snyk-ls" {
+			request.Header.Set("x-snyk-ide", userAgent.AppVersion)
+		} else if userAgent.App == "snyk-cli" {
+			request.Header.Set("x-snyk-cli-version", userAgent.AppVersion)
+		}
+		request.Header.Set(
+			"User-Agent",
+			userAgent.String(),
+		)
+	}
 }
 
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
