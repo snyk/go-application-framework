@@ -10,8 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	contract "github.com/snyk/go-application-framework/internal/api/contract"
-
-	"github.com/snyk/go-application-framework/pkg/common"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 // MockApiClient is a mock of ApiClient interface.
@@ -83,10 +82,10 @@ func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gom
 }
 
 // GetSastSettings mocks base method.
-func (m *MockApiClient) GetSastSettings(orgId string) (common.SastResponse, error) {
+func (m *MockApiClient) GetSastSettings(orgId string) (sast_contract.SastResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSastSettings", orgId)
-	ret0, _ := ret[0].(common.SastResponse)
+	ret0, _ := ret[0].(sast_contract.SastResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

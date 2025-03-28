@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/code"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/utils"
-	"github.com/snyk/go-application-framework/pkg/common"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -45,7 +45,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
-func getSastSettings(engine workflow.Engine) (*common.SastResponse, error) {
+func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error) {
 	config := engine.GetConfiguration()
 	org := config.GetString(configuration.ORGANIZATION)
 
@@ -74,7 +74,7 @@ func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFun
 			return false, err
 		}
 
-		return *response, nil
+		return response, nil
 	}
 	return callback
 }
@@ -140,7 +140,7 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 		return err
 	}
 
-	engine.GetConfiguration().AddDefaultValue(configuration.SAST_SETTINGS, getSastSettingsConfig(engine))
+	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastSettings, getSastSettingsConfig(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastEnabled, getSastEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurarionSlceEnabled, getSlceEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))

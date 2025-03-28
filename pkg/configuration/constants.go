@@ -39,7 +39,6 @@ const (
 	WORKING_DIRECTORY              string = "internal_working_dir"
 	IS_FEDRAMP                     string = "internal_is_fedramp"
 	ORGANIZATION_SLUG              string = "internal_org_slug"
-	SAST_SETTINGS                  string = "internal_sast_settings"
 	AUTHENTICATION_SUBDOMAINS      string = "internal_auth_subdomain"             // array of additional subdomains to add authentication for
 	AUTHENTICATION_ADDITIONAL_URLS string = "internal_additional_auth_urls"       // array of additional urls to add authentication for
 	ADD_TRUSTED_CA_FILE            string = "internal_additional_trusted_ca_file" // pem file location containing additional CAs to trust

@@ -1,4 +1,4 @@
-package common
+package sast_contract
 
 type LocalCodeEngine struct {
 	AllowCloudUpload bool   `json:"allowCloudUpload"`
