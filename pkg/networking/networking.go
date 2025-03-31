@@ -219,6 +219,7 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 		userAgent, ok := ua.(UserAgentInfo)
 		if !ok {
 			n.logger.Printf("a is not of type UserAgentInfo")
+			return
 		}
 		if userAgent.App == "snyk-ls" {
 			request.Header.Set("x-snyk-ide", userAgent.AppVersion)
