@@ -1,13 +1,16 @@
 package localworkflows
 
 import (
+	"github.com/go-git/go-git/v5"
 	"github.com/spf13/pflag"
 
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"strings"
 	"time"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 const (
@@ -24,13 +27,11 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	flagset := pflag.NewFlagSet(ignoreCreateWorkflowName, pflag.ExitOnError)
 	flagset.String(reasonKey, "", reasonDescription)
 	flagset.String(expirationKey, "", expirationDescription)
+	flagset.Bool("interactive", true, "")
+	flagset.String(code_workflow.ConfigurationRemoteRepoUrlFlagname, "", "")
 
 	_, err := engine.Register(WORKFLOWID_IGNORE_CREATE, workflow.ConfigurationOptionsFromFlagset(flagset), ignoreCreateWorkflowEntryPoint)
 	return err
-}
-
-func getIssueDetailsStructure() string {
-	return "[HIGH] NoSQL Injection\nPath:  routes/likeProductReviews.js, line 19\nInfo:  Unsanitized input from the HTTP request body flows into update, where it is used in an NoSQL query. This may result in an NoSQL Injection vulnerability.\nID:    b02cbdcf-965c-4fd8-92aa-a95f7c05d3ab\n\n"
 }
 
 func getIgnoreRequestDetailsStructure(expire time.Time, userName string) string {
@@ -51,31 +52,77 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	userInterface := invocationCtx.GetUserInterface()
 	config := invocationCtx.GetConfiguration()
 	enterReasonKey := "internal_snyk_enterReasonKey"
+	interactive := config.GetBool("interactive")
 
-	// add interactive default function
-	config.AddDefaultValue(reasonKey, func(existingValue interface{}) (interface{}, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-		return userInterface.Input(reasonDescription)
-	})
+	if interactive {
+		// add interactive default function
+		config.AddDefaultValue(reasonKey, func(existingValue interface{}) (interface{}, error) {
+			if existingValue != nil && existingValue != "" {
+				return existingValue, nil
+			}
+			return userInterface.Input(reasonDescription)
+		})
 
-	config.AddDefaultValue(enterReasonKey, func(existingValue interface{}) (interface{}, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-		yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
-		if inputError != nil {
-			return false, inputError
-		}
+		config.AddDefaultValue(code_workflow.ConfigurationRemoteRepoUrlFlagname, func(existingValue interface{}) (interface{}, error) {
+			if existingValue != nil && existingValue != "" {
+				return existingValue, nil
+			}
 
-		switch strings.ToLower(yesNoString) {
-		case "y", "yes":
-			return true, nil
-		default:
-			return false, nil
-		}
-	})
+			getRepoUrlFromRepo := func() (string, error) {
+				repo, err := git.PlainOpenWithOptions(config.GetString(configuration.INPUT_DIRECTORY), &git.PlainOpenOptions{
+					DetectDotGit: true,
+				})
+
+				if err != nil {
+					return "", err
+				}
+
+				remote, err := repo.Remote("origin")
+				if err != nil {
+					return "", err
+				}
+
+				// based on the docs, the first URL is being used to fetch, so this is the one we use
+				remoteConfig := remote.Config()
+				if remoteConfig == nil || len(remoteConfig.URLs) == 0 || remoteConfig.URLs[0] == "" {
+					return "", fmt.Errorf("no remote url found")
+				}
+				repoUrl := remoteConfig.URLs[0]
+				return repoUrl, nil
+			}
+
+			repoUrl, err := getRepoUrlFromRepo()
+			if err != nil {
+				return userInterface.Input("Repourl")
+			}
+
+			return repoUrl, nil
+		})
+
+		config.AddDefaultValue(enterReasonKey, func(existingValue interface{}) (interface{}, error) {
+			if existingValue != nil && existingValue != "" {
+				return existingValue, nil
+			}
+			yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
+			if inputError != nil {
+				return false, inputError
+			}
+
+			switch strings.ToLower(yesNoString) {
+			case "y", "yes":
+				return true, nil
+			default:
+				return false, nil
+			}
+		})
+	}
+
+	repourl, err := config.GetWithError(code_workflow.ConfigurationRemoteRepoUrlFlagname)
+	if err != nil {
+		return nil, err
+	}
+
+	userInterface.Output(repourl)
 
 	// get user
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
@@ -98,9 +145,10 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		}
 	}
 
-	userInterface.Output("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, and pushed to a remote origin, so the approvers are able to analyze it.\n")
-	userInterface.Output(getIssueDetailsStructure())
-	userInterface.Output(getIgnoreRequestDetailsStructure(expire, userName))
+	if interactive {
+		userInterface.Output("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, and pushed to a remote origin, so the approvers are able to analyze it.\n")
+		userInterface.Output(getIgnoreRequestDetailsStructure(expire, userName))
+	}
 
 	reason := ""
 	if !config.IsSet(reasonKey) && config.GetBool(enterReasonKey) {
@@ -112,7 +160,9 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 	sendRequest()
 
-	userInterface.Output("\nYour ignore request has been submitted for approval.")
+	if interactive {
+		userInterface.Output("\nYour ignore request has been submitted for approval.")
+	}
 
 	return output, err
 }
