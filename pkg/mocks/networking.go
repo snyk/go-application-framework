@@ -75,6 +75,18 @@ func (mr *MockNetworkAccessMockRecorder) AddHeaderField(key, value interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).AddHeaderField), key, value)
 }
 
+// RemoveHeaderField mocks base method.
+func (m *MockNetworkAccess) RemoveHeaderField(key string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RemoveHeaderField", key)
+}
+
+// RemoveHeaderField indicates an expected call of RemoveHeaderField.
+func (mr *MockNetworkAccessMockRecorder) RemoveHeaderField(key string) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveHeaderField", reflect.TypeOf((*MockNetworkAccess)(nil).RemoveHeaderField), key)
+}
+
 // AddHeaders mocks base method.
 func (m *MockNetworkAccess) AddHeaders(request *http.Request) error {
 	m.ctrl.T.Helper()

@@ -221,19 +221,6 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 			request.Header.Add(k, v[i])
 		}
 	}
-
-	ua := n.config.Get(configuration.USER_AGENT)
-	if ua != nil {
-		userAgent, ok := ua.(UserAgentInfo)
-		if !ok {
-			n.logger.Printf("a is not of type UserAgentInfo")
-			return
-		}
-		request.Header.Set(
-			"User-Agent",
-			userAgent.String(),
-		)
-	}
 }
 
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {

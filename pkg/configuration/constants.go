@@ -19,7 +19,6 @@ const (
 	AUTHENTICATION_TOKEN string = "snyk_token"
 	//nolint:gosec // not a token value, a configuration key
 	AUTHENTICATION_BEARER_TOKEN     string = "snyk_oauth_token"
-	USER_AGENT                      string = "snyk_user_agent"
 	INTEGRATION_NAME                string = "snyk_integration_name"
 	INTEGRATION_VERSION             string = "snyk_integration_version"
 	INTEGRATION_ENVIRONMENT         string = "snyk_integration_environment"

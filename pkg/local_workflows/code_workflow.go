@@ -49,7 +49,6 @@ var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWor
 func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error) {
 	config := engine.GetConfiguration()
 	org := config.GetString(configuration.ORGANIZATION)
-
 	client := engine.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	apiClient := api.NewApi(url, client)
@@ -59,7 +58,7 @@ func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error
 		return &tmp, err
 	}
 
-	engine.GetConfiguration().Set(org, &tmp)
+	engine.GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &tmp)
 	return &tmp, nil
 }
 
