@@ -5,9 +5,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
-
-	//"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 
 	"io"
 	"net/http"
@@ -15,6 +12,8 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 type ApiClient interface {

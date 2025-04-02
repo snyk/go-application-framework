@@ -2,7 +2,6 @@ package localworkflows
 
 import (
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/code"
@@ -14,6 +13,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 const (
