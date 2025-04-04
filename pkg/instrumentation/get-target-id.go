@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	git2 "github.com/snyk/go-application-framework/pkg/utils/git"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
 const (
@@ -184,7 +184,7 @@ func filesystemBaseId(path string) (*url.URL, error) {
 }
 
 func gitBaseId(path string) (*url.URL, error) {
-	repo, remoteConfig, err := git2.RepoFromDir(path)
+	repo, remoteConfig, err := git.RepoFromDir(path)
 	if err != nil {
 		return nil, err
 	}

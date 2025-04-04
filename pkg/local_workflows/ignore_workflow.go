@@ -1,12 +1,12 @@
 package localworkflows
 
 import (
-	"github.com/go-git/go-git/v5"
-	"github.com/spf13/pflag"
-
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
@@ -40,6 +40,10 @@ const (
 	enrichResponseKey = "enrich_response"
 )
 
+// TODOS:
+// Add ignore enum check
+// Add httpclient and somehow call it
+
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
 var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
 var WORKFLOWID_IGNORE_DELETE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreDeletWorkflowName)
@@ -69,7 +73,7 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	_, err = engine.Register(WORKFLOWID_IGNORE_EDIT, workflow.ConfigurationOptionsFromFlagset(editFlagset), ignoreEditWorkflowEntryPoint)
 
 	deleteFlagSet := pflag.NewFlagSet(ignoreDeletWorkflowName, pflag.ExitOnError)
-	editFlagset.String(ignoreIdKey, "", ignoreIdDescription)
+	deleteFlagSet.String(ignoreIdKey, "", ignoreIdDescription)
 	// If set to false, no response will be returned
 	deleteFlagSet.Bool(enrichResponseKey, false, "")
 	deleteFlagSet.Bool(interactiveKey, true, "")
@@ -78,13 +82,13 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	return err
 }
 
-func getIgnoreRequestDetailsStructure(expire time.Time, userName string) string {
+func getIgnoreRequestDetailsStructure(expire time.Time, userName string, ignoreType string) string {
 	expireDisplayText := "Does not expire"
 	if !expire.IsZero() {
 		expireDisplayText = expire.Format(time.DateOnly)
-
 	}
-	return fmt.Sprintf("  Requested on:  2024-08-10\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   false-positive", userName, expireDisplayText)
+
+	return fmt.Sprintf("  Requested on:  2024-08-10\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s", userName, expireDisplayText, ignoreType)
 }
 
 func sendRequest() {
@@ -109,38 +113,57 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		addDefaultCreateInteractiveValues(invocationCtx)
 	}
 
-	repoUrl, err := config.GetWithError(code_workflow.ConfigurationRemoteRepoUrlFlagname)
+	userName, _ := getUserName(invocationCtx)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	findingsId, err := config.GetStringWithError(findingsIdKey)
 	if err != nil {
 		return nil, err
 	}
+	_ = userInterface.Output(findingsId)
 
+	ignoreType, err := config.GetStringWithError(ignoreTypeKey)
+	if err != nil {
+		return nil, err
+	}
+	_ = userInterface.Output(ignoreType)
+
+	repoUrl, err := config.GetStringWithError(code_workflow.ConfigurationRemoteRepoUrlFlagname)
+	if err != nil {
+		return nil, err
+	}
 	_ = userInterface.Output(repoUrl)
-
-	// get user
-	config.Set(configuration.FLAG_EXPERIMENTAL, true)
-
-	userName, err := getUserName(invocationCtx)
-	if err != nil {
-		return nil, err
-	}
 
 	// read expiry time
 	var expire time.Time
-	if config.IsSet(expirationKey) {
-		expire, err = time.Parse(time.DateOnly, config.GetString(expirationKey))
+	if expireStr, getConfigErr := config.GetStringWithError(expirationKey); getConfigErr == nil {
+		expire, err = time.Parse(time.DateOnly, expireStr)
 		if err != nil {
-			return output, err
+			return nil, err
 		}
+	} else {
+		return nil, getConfigErr
+	}
+
+	_ = userInterface.Output(expire.Format(time.DateOnly))
+
+	reason, err := config.GetStringWithError(reasonKey)
+	if err != nil {
+		return nil, err
 	}
 
 	if interactive {
 		_ = userInterface.Output("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, and pushed to a remote origin, so the approvers are able to analyze it.\n")
-		_ = userInterface.Output(getIgnoreRequestDetailsStructure(expire, userName))
-	}
-
-	reason := ""
-	if !config.IsSet(reasonKey) && config.GetBool(enterReasonKey) {
-		reason = config.GetString(reasonKey)
+		_ = userInterface.Output(getIgnoreRequestDetailsStructure(expire, userName, ignoreType))
+		yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
+		if inputError != nil {
+			return nil, inputError
+		}
+		if strings.ToLower(yesNoString) != "y" && strings.ToLower(yesNoString) != "yes" {
+			return nil, fmt.Errorf("operation canceled by user")
+		}
 	}
 
 	logger.Printf("Reason: %s\n", reason)
@@ -222,27 +245,13 @@ func addDefaultCreateInteractiveValues(invocationCtx workflow.InvocationContext)
 
 		return repoUrl, nil
 	})
-
-	config.AddDefaultValue(reasonKey, func(existingValue interface{}) (interface{}, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-		yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
-		if inputError != nil {
-			return false, inputError
-		}
-
-		switch strings.ToLower(yesNoString) {
-		case "y", "yes":
-			return true, nil
-		default:
-			return false, nil
-		}
-	})
 }
 
 func getUserName(invocationCtx workflow.InvocationContext) (string, error) {
-	data, err := invocationCtx.GetEngine().InvokeWithConfig(WORKFLOWID_WHOAMI, invocationCtx.GetConfiguration())
+	config := invocationCtx.GetConfiguration().Clone()
+	config.Set(configuration.FLAG_EXPERIMENTAL, true)
+
+	data, err := invocationCtx.GetEngine().InvokeWithConfig(WORKFLOWID_WHOAMI, config)
 	if err != nil {
 		return "", err
 	}
