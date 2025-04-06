@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -38,6 +39,7 @@ type Configuration interface {
 	Unset(key string)
 	IsSet(key string) bool
 	GetString(key string) string
+	GetStringWithError(key string) (string, error)
 	GetStringSlice(key string) []string
 	GetBool(key string) bool
 	GetInt(key string) int
@@ -393,6 +395,18 @@ func (ev *extendedViper) GetWithError(key string) (value interface{}, err error)
 	}
 
 	return value, err
+}
+
+// GetStringWithError returns a configuration value as string.
+func (ev *extendedViper) GetStringWithError(key string) (string, error) {
+	result, err := ev.GetWithError(key)
+	if err != nil {
+		return "", err
+	}
+	if s, ok := result.(string); ok {
+		return s, nil
+	}
+	return "", fmt.Errorf("value for key %s is not a string", key)
 }
 
 // GetString returns a configuration value as string.
