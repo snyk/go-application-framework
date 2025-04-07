@@ -86,9 +86,9 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	return err
 }
 
-func getIgnoreRequestDetailsStructure(expire time.Time, userName string, ignoreType string) string {
+func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, ignoreType string) string {
 	expireDisplayText := "Does not expire"
-	if !expire.IsZero() {
+	if expire != nil {
 		expireDisplayText = expire.Format(time.DateOnly)
 	}
 	return fmt.Sprintf("  Requested on:  2024-08-10\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s", userName, expireDisplayText, ignoreType)
@@ -97,6 +97,7 @@ func getIgnoreRequestDetailsStructure(expire time.Time, userName string, ignoreT
 func ignoreEditWorkflowEntryPoint(_ workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	panic("not implemented")
 }
+
 func ignoreDeleteWorkflowEntryPoint(_ workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	panic("not implemented")
 }
@@ -110,10 +111,10 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	interactive := config.GetBool(interactiveKey)
 	if interactive {
 		// add interactive default function
-		addDefaultCreateInteractiveValues(invocationCtx)
+		addCreateIgnoreDefaultInteractiveValues(invocationCtx)
 	}
 
-	userName, err := getUserName(invocationCtx)
+	userName, err := getUser(invocationCtx)
 	if err != nil {
 		return nil, fmt.Errorf("user is not authenticated: %w", err)
 	}
@@ -132,18 +133,18 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	if err != nil {
 		return nil, err
 	}
-	_ = userInterface.Output(fmt.Sprintf("curent git repo url %s", repoUrl))
 
-	// read expiry time
-	var expire time.Time
-	if expireStr, getConfigErr := config.GetStringWithError(expirationKey); getConfigErr == nil {
-		// TODO: if we can't parse date should it be treated as non-expire?
-		expire, _ = time.Parse(time.DateOnly, expireStr)
-	} else {
-		return nil, getConfigErr
+	uiErr := userInterface.Output(fmt.Sprintf("curent git repo url %s", repoUrl))
+	if uiErr != nil {
+		logger.Print(uiErr)
 	}
 
-	_ = userInterface.Output(expire.Format(time.DateOnly))
+	// read expiry time
+	// if expiration value is empty it will be treated as no-expire by the policy endpoint
+	expire, err := getExpireValue(config)
+	if err != nil {
+		return nil, err
+	}
 
 	reason, err := config.GetStringWithError(reasonKey)
 	if err != nil {
@@ -151,8 +152,11 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		_ = userInterface.Output("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, and pushed to a remote origin, so the approvers are able to analyze it.\n")
-		_ = userInterface.Output(getIgnoreRequestDetailsStructure(expire, userName, ignoreType))
+		uiErr = userInterface.Output(fmt.Sprintf("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, "+
+			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, ignoreType)))
+		if uiErr != nil {
+			logger.Print(uiErr)
+		}
 		yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
 		if inputError != nil {
 			return nil, inputError
@@ -162,27 +166,28 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		}
 	}
 
-	url := fmt.Sprintf("%s/rest/orgs/%s/policies?version=%s", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION), policyAPIVersion)
+	url := fmt.Sprintf("%s/rest/orgs/%s/policies?version=%s", config.GetString(configuration.API_URL), config.GetString(configuration.ORGANIZATION), policyAPIVersion)
 	branchName, _ := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
-	response, err := createPolicy(invocationCtx, payload, url)
+	response, err := sendCreateIgnore(invocationCtx, payload, url)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if interactive {
-		_ = userInterface.Output("\nYour ignore request has been submitted for approval.")
+	uiErr = userInterface.Output("\nYour ignore request has been submitted for approval.")
+	if uiErr != nil {
+		logger.Print(uiErr)
 	}
 
 	if config.GetBool(enrichResponseKey) {
-		data, workFlowDataErr := createCodeWorkflowData(
+		data, workflowDataErr := createIgnoreWorkflowData(
 			workflow.NewTypeIdentifier(id, ignoreCreateWorkflowName),
 			config,
 			response,
 			logger)
-		if workFlowDataErr != nil {
-			return nil, workFlowDataErr
+		if workflowDataErr != nil {
+			return nil, workflowDataErr
 		}
 		output = append(output, data)
 	}
@@ -190,7 +195,25 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	return output, err
 }
 
-func createCodeWorkflowData(id workflow.Identifier, config configuration.Configuration, obj any, logger *zerolog.Logger) (workflow.Data, error) {
+func getExpireValue(config configuration.Configuration) (*time.Time, error) {
+	shouldParse := config.IsSet(expirationKey) || config.GetBool(interactiveKey)
+	if !shouldParse {
+		return nil, nil
+	}
+	expireStr, err := config.GetStringWithError(expirationKey)
+	if err != nil || expireStr == "" {
+		return nil, err
+	}
+
+	expireVal, parseErr := time.Parse(time.DateOnly, expireStr)
+	if parseErr != nil {
+		return nil, err
+	}
+
+	return &expireVal, nil
+}
+
+func createIgnoreWorkflowData(id workflow.Identifier, config configuration.Configuration, obj any, logger *zerolog.Logger) (workflow.Data, error) {
 	marshalledObj, err := json.Marshal(obj)
 	if err != nil {
 		return nil, err
@@ -207,7 +230,7 @@ func createCodeWorkflowData(id workflow.Identifier, config configuration.Configu
 	return data, nil
 }
 
-func createPayload(repoUrl string, branchName string, expire time.Time, ignoreType string, reason string, findingsId string) policyApi.CreatePolicyPayload {
+func createPayload(repoUrl string, branchName string, expire *time.Time, ignoreType string, reason string, findingsId string) policyApi.CreatePolicyPayload {
 	meta := policyApi.Meta{}
 	meta["repo_url"] = repoUrl
 	meta["branch_name"] = branchName
@@ -215,10 +238,11 @@ func createPayload(repoUrl string, branchName string, expire time.Time, ignoreTy
 	var payload policyApi.CreatePolicyPayload
 	payload.Data.Meta = &meta
 	payload.Data.Attributes.Action.Data = policyApi.PolicyActionIgnoreData{
-		Expires:    &expire,
+		Expires:    expire,
 		IgnoreType: policyApi.PolicyActionIgnoreDataIgnoreType(ignoreType),
 		Reason:     &reason,
 	}
+
 	payload.Data.Attributes.ActionType = policyApi.PolicyAttributesActionTypeIgnore
 	payload.Data.Attributes.ConditionsGroup = policyApi.PolicyConditionsGroup{
 		Conditions: []policyApi.PolicyCondition{
@@ -234,7 +258,7 @@ func createPayload(repoUrl string, branchName string, expire time.Time, ignoreTy
 	return payload
 }
 
-func addDefaultCreateInteractiveValues(invocationCtx workflow.InvocationContext) {
+func addCreateIgnoreDefaultInteractiveValues(invocationCtx workflow.InvocationContext) {
 	config := invocationCtx.GetConfiguration()
 	userInterface := invocationCtx.GetUserInterface()
 
@@ -249,7 +273,7 @@ func addDefaultCreateInteractiveValues(invocationCtx workflow.InvocationContext)
 		invalidIgnoreTypeErr := fmt.Errorf("invalid ignore type, valid ignore types are: %s, %s, %s",
 			policyApi.NotVulnerable, policyApi.TemporaryIgnore, policyApi.WontFix)
 		if existingValue != nil && existingValue != "" {
-			if !validIgnoreType(existingValue.(string)) {
+			if !isValidIgnoreType(existingValue.(string)) {
 				return "", invalidIgnoreTypeErr
 			}
 			return existingValue, nil
@@ -258,7 +282,7 @@ func addDefaultCreateInteractiveValues(invocationCtx workflow.InvocationContext)
 		if err != nil {
 			return "", err
 		}
-		if !validIgnoreType(ignoreType) {
+		if !isValidIgnoreType(ignoreType) {
 			return "", invalidIgnoreTypeErr
 		}
 		return ignoreType, nil
@@ -300,12 +324,12 @@ func addDefaultCreateInteractiveValues(invocationCtx workflow.InvocationContext)
 	})
 }
 
-func validIgnoreType(ignoreType string) bool {
+func isValidIgnoreType(ignoreType string) bool {
 	ignoreTypeMapped := policyApi.PolicyActionIgnoreDataIgnoreType(ignoreType)
 	return ignoreTypeMapped == policyApi.TemporaryIgnore || ignoreTypeMapped == policyApi.WontFix || ignoreTypeMapped == policyApi.NotVulnerable
 }
 
-func getUserName(invocationCtx workflow.InvocationContext) (string, error) {
+func getUser(invocationCtx workflow.InvocationContext) (string, error) {
 	config := invocationCtx.GetConfiguration().Clone()
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 
@@ -326,7 +350,7 @@ func getUserName(invocationCtx workflow.InvocationContext) (string, error) {
 	}
 }
 
-func createPolicy(invocationCtx workflow.InvocationContext, input policyApi.CreatePolicyPayload, url string) (*policyApi.PolicyResponse, error) {
+func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.CreatePolicyPayload, url string) (*policyApi.PolicyResponse, error) {
 	// Create a request
 	requestBody, err := json.Marshal(input)
 	if err != nil {

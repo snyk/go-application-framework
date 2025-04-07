@@ -96,7 +96,7 @@ func Test_getIgnoreRequestDetailsStructure(t *testing.T) {
 	userName := "test-user"
 	ignoreType := "wont-fix"
 
-	result := getIgnoreRequestDetailsStructure(expireDate, userName, ignoreType)
+	result := getIgnoreRequestDetailsStructure(&expireDate, userName, ignoreType)
 
 	assert.Contains(t, result, "2025-01-01")
 	assert.Contains(t, result, userName)
@@ -112,7 +112,7 @@ func Test_validIgnoreType(t *testing.T) {
 
 	for _, validType := range validTypes {
 		t.Run("valid: "+validType, func(t *testing.T) {
-			assert.True(t, validIgnoreType(validType), "Should be a valid ignore type")
+			assert.True(t, isValidIgnoreType(validType), "Should be a valid ignore type")
 		})
 	}
 
@@ -124,7 +124,7 @@ func Test_validIgnoreType(t *testing.T) {
 
 	for _, invalidType := range invalidTypes {
 		t.Run("invalid: "+invalidType, func(t *testing.T) {
-			assert.False(t, validIgnoreType(invalidType), "Should be an invalid ignore type")
+			assert.False(t, isValidIgnoreType(invalidType), "Should be an invalid ignore type")
 		})
 	}
 }
@@ -136,7 +136,7 @@ func Test_createPolicy(t *testing.T) {
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
 
-		result, err := createPolicy(invocationContext, input, testRepoUrl)
+		result, err := sendCreateIgnore(invocationContext, input, testRepoUrl)
 
 		assert.NoError(t, err, "Should not return an error")
 		assert.NotNil(t, result, "Should return a policy response")
@@ -150,7 +150,7 @@ func Test_createPolicy(t *testing.T) {
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
 
-		_, err := createPolicy(invocationContext, input, testRepoUrl)
+		_, err := sendCreateIgnore(invocationContext, input, testRepoUrl)
 
 		assert.Error(t, err, "Should return an error")
 		assert.Contains(t, err.Error(), "500", "Should contain status code")
@@ -164,7 +164,7 @@ func Test_createPayload(t *testing.T) {
 	reason := "Test reason"
 	findingsId := uuid.New().String()
 
-	payload := createPayload(testRepoUrl, testBranchName, expireDate, ignoreType, reason, findingsId)
+	payload := createPayload(testRepoUrl, testBranchName, &expireDate, ignoreType, reason, findingsId)
 
 	assert.Equal(t, policyApi.CreatePolicyPayloadDataTypePolicy, payload.Data.Type, "Should have correct payload type")
 	assert.Equal(t, ignoreType, string(payload.Data.Attributes.Action.Data.IgnoreType), "Should have correct ignore type")
@@ -226,7 +226,6 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		config.Set(enrichResponseKey, true)
 
 		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
-
 		assert.NoError(t, err, "Should not return an error")
 		assert.Greater(t, len(result), 0, "Should return result data")
 		payload := result[0].GetPayload()
@@ -241,6 +240,69 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, expectedReason, *policyResp.Attributes.Action.Data.Reason)
 		assert.Equal(t, policyId, policyResp.Id.String())
 		assert.Equal(t, expectedExpirationDate, *policyResp.Attributes.Action.Data.Expires)
+		assert.Equal(t, policyApi.Snykassetfindingv1, policyResp.Attributes.ConditionsGroup.Conditions[0].Field)
+		assert.Equal(t, policyApi.Includes, policyResp.Attributes.ConditionsGroup.Conditions[0].Operator)
+		assert.Equal(t, expectedFindingsId, policyResp.Attributes.ConditionsGroup.Conditions[0].Value)
+	})
+	t.Run("non-interactive mode success no expiration", func(t *testing.T) {
+		expectedFindingsId := uuid.New().String()
+		expectedIgnoreType := string(policyApi.WontFix)
+		expectedReason := "Test reason"
+		policyId := uuid.New().String()
+		responseMock := fmt.Sprintf(`{
+	  "data": {
+    "id": "%s",
+    "type": "policy",
+    "attributes": {
+      "action": {
+        "data": {
+          "ignore_type": "%s",
+          "reason": "%s"
+        }
+      },
+      "action_type": "%s",
+      "conditions_group": {
+        "conditions": [
+          {
+            "field": "%s",
+            "operator": "%s",
+            "value": "%s"
+          }
+        ],
+        "logical_operator": "%s"
+      },
+      "created_by": {
+        "email": "%s"
+      },
+      "review": "%s"
+    }
+}
+}`, policyId, expectedIgnoreType, expectedReason, policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, expectedFindingsId, policyApi.And, expectedUser, policyApi.PolicyReviewPending)
+		_, invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated, true)
+		config := invocationContext.GetConfiguration()
+		config.Set(interactiveKey, false)
+
+		config.Set(findingsIdKey, expectedFindingsId)
+		config.Set(ignoreTypeKey, expectedIgnoreType)
+		config.Set(reasonKey, expectedReason)
+		config.Set(remoteRepoUrlKey, testRepoUrl)
+		config.Set(configuration.API_URL, "https://api.snyk.io")
+		config.Set(enrichResponseKey, true)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
+		assert.NoError(t, err, "Should not return an error")
+		assert.Greater(t, len(result), 0, "Should return result data")
+		payload := result[0].GetPayload()
+		assert.NotNil(t, payload, "payload should not be nil")
+
+		// Parse the JSON payload
+		var policyResp policyApi.PolicyResponse
+		err = json.Unmarshal(payload.([]byte), &policyResp)
+		assert.NoError(t, err, "Should parse JSON response")
+		assert.Equal(t, policyApi.PolicyResponseTypePolicy, policyResp.Type)
+		assert.Equal(t, policyApi.WontFix, policyResp.Attributes.Action.Data.IgnoreType)
+		assert.Equal(t, expectedReason, *policyResp.Attributes.Action.Data.Reason)
+		assert.Equal(t, policyId, policyResp.Id.String())
 		assert.Equal(t, policyApi.Snykassetfindingv1, policyResp.Attributes.ConditionsGroup.Conditions[0].Field)
 		assert.Equal(t, policyApi.Includes, policyResp.Attributes.ConditionsGroup.Conditions[0].Operator)
 		assert.Equal(t, expectedFindingsId, policyResp.Attributes.ConditionsGroup.Conditions[0].Value)
