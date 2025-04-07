@@ -1,4 +1,4 @@
-package localworkflows
+package ignore_workflow
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -14,6 +13,7 @@ import (
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -95,14 +95,6 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	return nil
 }
 
-func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, ignoreType string) string {
-	expireDisplayText := "Does not expire"
-	if expire != nil {
-		expireDisplayText = expire.Format(time.DateOnly)
-	}
-	return fmt.Sprintf("  Requested on:  2024-08-10\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s", userName, expireDisplayText, ignoreType)
-}
-
 func ignoreEditWorkflowEntryPoint(_ workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	panic("not implemented")
 }
@@ -120,7 +112,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	interactive := config.GetBool(interactiveKey)
 	if interactive {
 		// add interactive default function
-		addCreateIgnoreDefaultInteractiveValues(invocationCtx)
+		addCreateIgnoreDefaultConfigurationValues(invocationCtx)
 	}
 
 	userName, err := getUser(invocationCtx)
@@ -185,7 +177,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		data, workflowDataErr := createIgnoreWorkflowData(
 			workflow.NewTypeIdentifier(id, ignoreCreateWorkflowName),
 			config,
-			response,
+			policyResponseToIgnoreResponse(response),
 			logger)
 		if workflowDataErr != nil {
 			return nil, workflowDataErr
@@ -194,6 +186,14 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	return output, err
+}
+
+func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, ignoreType string) string {
+	expireDisplayText := "Does not expire"
+	if expire != nil {
+		expireDisplayText = expire.Format(time.DateOnly)
+	}
+	return fmt.Sprintf("  Requested on:  2024-08-10\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s", userName, expireDisplayText, ignoreType)
 }
 
 func getExpireValue(config configuration.Configuration) (*time.Time, error) {
@@ -215,8 +215,8 @@ func getExpireValue(config configuration.Configuration) (*time.Time, error) {
 	return &expireVal, nil
 }
 
-func createIgnoreWorkflowData(id workflow.Identifier, config configuration.Configuration, obj any, logger *zerolog.Logger) (workflow.Data, error) {
-	marshalledObj, err := json.Marshal(obj)
+func createIgnoreWorkflowData(id workflow.Identifier, config configuration.Configuration, ignoreResponse *IgnoreResponseType, logger *zerolog.Logger) (workflow.Data, error) {
+	marshalledObj, err := json.Marshal(ignoreResponse)
 	if err != nil {
 		return nil, err
 	}
@@ -260,93 +260,11 @@ func createPayload(repoUrl string, branchName string, expire *time.Time, ignoreT
 	return payload
 }
 
-func addCreateIgnoreDefaultInteractiveValues(invocationCtx workflow.InvocationContext) {
-	config := invocationCtx.GetConfiguration()
-	userInterface := invocationCtx.GetUserInterface()
-
-	config.AddDefaultValue(findingsIdKey, func(existingValue interface{}) (interface{}, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-		return userInterface.Input(findingsIdDescription)
-	})
-
-	config.AddDefaultValue(ignoreTypeKey, func(existingValue interface{}) (interface{}, error) {
-		invalidIgnoreTypeErr := fmt.Errorf("invalid ignore type, valid ignore types are: %s, %s, %s",
-			policyApi.NotVulnerable, policyApi.TemporaryIgnore, policyApi.WontFix)
-		if existingValue != nil && existingValue != "" {
-			ignoreType, ok := existingValue.(string)
-			if !ok {
-				return "", invalidIgnoreTypeErr
-			}
-			if !isValidIgnoreType(ignoreType) {
-				return "", invalidIgnoreTypeErr
-			}
-			return existingValue, nil
-		}
-		ignoreType, err := userInterface.Input(ignoreTypeDescription)
-		if err != nil {
-			return "", err
-		}
-		if !isValidIgnoreType(ignoreType) {
-			return "", invalidIgnoreTypeErr
-		}
-		return ignoreType, nil
-	})
-
-	config.AddDefaultValue(reasonKey, func(existingValue interface{}) (interface{}, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-		yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
-		if inputError != nil {
-			return nil, inputError
-		}
-		if strings.ToLower(yesNoString) != "y" && strings.ToLower(yesNoString) != "yes" {
-			return nil, fmt.Errorf("operation canceled by user")
-		}
-		return userInterface.Input(reasonDescription)
-	})
-
-	config.AddDefaultValue(expirationKey, func(existingValue interface{}) (interface{}, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-		return userInterface.Input(expirationDescription)
-	})
-
-	config.AddDefaultValue(remoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
-		if existingValue != nil && existingValue != "" {
-			return existingValue, nil
-		}
-
-		getRepoUrlFromRepo := func() (string, error) {
-			repoUrl, err := git.RepoUrlFromDir(config.GetString(configuration.INPUT_DIRECTORY))
-			if err != nil {
-				return "", err
-			}
-			return repoUrl, nil
-		}
-
-		repoUrl, err := getRepoUrlFromRepo()
-		if err != nil {
-			return userInterface.Input(remoteRepoUrlDescription)
-		}
-
-		return repoUrl, nil
-	})
-}
-
-func isValidIgnoreType(ignoreType string) bool {
-	ignoreTypeMapped := policyApi.PolicyActionIgnoreDataIgnoreType(ignoreType)
-	return ignoreTypeMapped == policyApi.TemporaryIgnore || ignoreTypeMapped == policyApi.WontFix || ignoreTypeMapped == policyApi.NotVulnerable
-}
-
 func getUser(invocationCtx workflow.InvocationContext) (string, error) {
 	config := invocationCtx.GetConfiguration().Clone()
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 
-	data, err := invocationCtx.GetEngine().InvokeWithConfig(WORKFLOWID_WHOAMI, config)
+	data, err := invocationCtx.GetEngine().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, config)
 	if err != nil {
 		return "", err
 	}

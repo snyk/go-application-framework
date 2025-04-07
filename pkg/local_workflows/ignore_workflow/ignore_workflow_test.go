@@ -1,4 +1,4 @@
-package localworkflows
+package ignore_workflow
 
 import (
 	"bytes"
@@ -12,10 +12,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -60,7 +62,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int, mockCl
 	var httpClient = http.DefaultClient
 
 	if mockClient {
-		httpClient = newTestClient(func(req *http.Request) *http.Response {
+		httpClient = localworkflows.NewTestClient(func(req *http.Request) *http.Response {
 			return &http.Response{
 				StatusCode: statusCode,
 				// Send response to be tested
@@ -80,12 +82,12 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int, mockCl
 	invocationContextMock.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 	mockData := []workflow.Data{workflow.NewData(
-		workflow.NewTypeIdentifier(WORKFLOWID_WHOAMI, "whoami"),
+		workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "whoami"),
 		"text/plain",
 		expectedUser,
 		workflow.WithLogger(&logger),
 	)}
-	mockEngine.EXPECT().InvokeWithConfig(WORKFLOWID_WHOAMI, gomock.Any()).Return(mockData, nil).AnyTimes()
+	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(mockData, nil).AnyTimes()
 
 	return mockEngine, invocationContextMock
 }
@@ -232,18 +234,13 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		payload := result[0].GetPayload()
 		assert.NotNil(t, payload, "payload should not be nil")
 
-		// Parse the JSON payload
-		var policyResp policyApi.PolicyResponse
-		err = json.Unmarshal(payload.([]byte), &policyResp)
+		var policyResp IgnoreResponseType
+		data, ok := payload.([]byte)
+		assert.True(t, ok)
+		err = json.Unmarshal(data, &policyResp)
 		assert.NoError(t, err, "Should parse JSON response")
-		assert.Equal(t, policyApi.PolicyResponseTypePolicy, policyResp.Type)
-		assert.Equal(t, policyApi.TemporaryIgnore, policyResp.Attributes.Action.Data.IgnoreType)
-		assert.Equal(t, expectedReason, *policyResp.Attributes.Action.Data.Reason)
-		assert.Equal(t, policyId, policyResp.Id.String())
-		assert.Equal(t, expectedExpirationDate, *policyResp.Attributes.Action.Data.Expires)
-		assert.Equal(t, policyApi.Snykassetfindingv1, policyResp.Attributes.ConditionsGroup.Conditions[0].Field)
-		assert.Equal(t, policyApi.Includes, policyResp.Attributes.ConditionsGroup.Conditions[0].Operator)
-		assert.Equal(t, expectedFindingsId, policyResp.Attributes.ConditionsGroup.Conditions[0].Value)
+		assert.Equal(t, policyId, policyResp.IgnoreId)
+		assert.Equal(t, sarif.UnderReview, policyResp.Status)
 	})
 	t.Run("non-interactive mode success no expiration", func(t *testing.T) {
 		expectedFindingsId := uuid.New().String()
@@ -296,16 +293,12 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		payload := result[0].GetPayload()
 		assert.NotNil(t, payload, "payload should not be nil")
 
-		// Parse the JSON payload
-		var policyResp policyApi.PolicyResponse
-		err = json.Unmarshal(payload.([]byte), &policyResp)
+		var policyResp IgnoreResponseType
+		data, ok := payload.([]byte)
+		assert.True(t, ok)
+		err = json.Unmarshal(data, &policyResp)
 		assert.NoError(t, err, "Should parse JSON response")
-		assert.Equal(t, policyApi.PolicyResponseTypePolicy, policyResp.Type)
-		assert.Equal(t, policyApi.WontFix, policyResp.Attributes.Action.Data.IgnoreType)
-		assert.Equal(t, expectedReason, *policyResp.Attributes.Action.Data.Reason)
-		assert.Equal(t, policyId, policyResp.Id.String())
-		assert.Equal(t, policyApi.Snykassetfindingv1, policyResp.Attributes.ConditionsGroup.Conditions[0].Field)
-		assert.Equal(t, policyApi.Includes, policyResp.Attributes.ConditionsGroup.Conditions[0].Operator)
-		assert.Equal(t, expectedFindingsId, policyResp.Attributes.ConditionsGroup.Conditions[0].Value)
+		assert.Equal(t, policyId, policyResp.IgnoreId)
+		assert.Equal(t, sarif.UnderReview, policyResp.Status)
 	})
 }
