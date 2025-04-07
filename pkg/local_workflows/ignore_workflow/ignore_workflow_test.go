@@ -40,7 +40,7 @@ const (
 )
 
 // Setup mock context for testing
-func setupMockIgnoreContext(t *testing.T, payload string, statusCode int, mockClient bool) (workflow.Engine, workflow.InvocationContext) {
+func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) (workflow.Engine, workflow.InvocationContext) {
 	t.Helper()
 
 	// setup
@@ -61,17 +61,15 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int, mockCl
 
 	var httpClient = http.DefaultClient
 
-	if mockClient {
-		httpClient = localworkflows.NewTestClient(func(req *http.Request) *http.Response {
-			return &http.Response{
-				StatusCode: statusCode,
-				// Send response to be tested
-				Body: io.NopCloser(bytes.NewBufferString(payload)),
-				// Must be set to non-nil value or it panics
-				Header: make(http.Header),
-			}
-		})
-	}
+	httpClient = localworkflows.NewTestClient(func(req *http.Request) *http.Response {
+		return &http.Response{
+			StatusCode: statusCode,
+			// Send response to be tested
+			Body: io.NopCloser(bytes.NewBufferString(payload)),
+			// Must be set to non-nil value or it panics
+			Header: make(http.Header),
+		}
+	})
 
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -133,7 +131,7 @@ func Test_validIgnoreType(t *testing.T) {
 
 func Test_createPolicy(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
-		_, invocationContext := setupMockIgnoreContext(t, policyResponseJSON, http.StatusCreated, true)
+		_, invocationContext := setupMockIgnoreContext(t, policyResponseJSON, http.StatusCreated)
 
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
@@ -148,7 +146,7 @@ func Test_createPolicy(t *testing.T) {
 	})
 
 	t.Run("server error", func(t *testing.T) {
-		_, invocationContext := setupMockIgnoreContext(t, "Internal Server Error", http.StatusInternalServerError, true)
+		_, invocationContext := setupMockIgnoreContext(t, "Internal Server Error", http.StatusInternalServerError)
 
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
@@ -216,7 +214,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
     }
 }
 }`, policyId, expectedExpirationDate.Format(time.RFC3339), expectedIgnoreType, expectedReason, policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, expectedFindingsId, policyApi.And, expectedUser, policyApi.PolicyReviewPending)
-		_, invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated, true)
+		_, invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated)
 		config := invocationContext.GetConfiguration()
 		config.Set(interactiveKey, false)
 
@@ -276,7 +274,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
     }
 }
 }`, policyId, expectedIgnoreType, expectedReason, policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, expectedFindingsId, policyApi.And, expectedUser, policyApi.PolicyReviewPending)
-		_, invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated, true)
+		_, invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated)
 		config := invocationContext.GetConfiguration()
 		config.Set(interactiveKey, false)
 
