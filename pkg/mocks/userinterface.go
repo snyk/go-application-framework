@@ -64,7 +64,7 @@ func (mr *MockUserInterfaceMockRecorder) NewProgressBar() *gomock.Call {
 }
 
 // Output mocks base method.
-func (m *MockUserInterface) Output(output string) error {
+func (m *MockUserInterface) Output(output interface{}) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Output", output)
 	ret0, _ := ret[0].(error)
