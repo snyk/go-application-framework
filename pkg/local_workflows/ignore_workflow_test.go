@@ -44,6 +44,8 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int, mockCl
 	// setup
 	logger := zerolog.Logger{}
 	config := configuration.New()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+	config.Set(configuration.ORGANIZATION, uuid.New().String())
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
