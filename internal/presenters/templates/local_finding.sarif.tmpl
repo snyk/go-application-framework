@@ -7,7 +7,7 @@
 			{
 				"tool": {
 					"driver" : {
-						"name" : "{{- getRuntimeInfo "name" }}",
+						"name" : "{{- convertTypeToDriverName $result.Summary.Type }}",
 						"semanticVersion" : "{{- getRuntimeInfo "version" }}",
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",

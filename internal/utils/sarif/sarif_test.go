@@ -29,3 +29,18 @@ func TestSeverityLevelConverter(t *testing.T) {
 		assert.Equal(t, severity, actualSeverity)
 	}
 }
+
+func TestConvertTypeToDriverName(t *testing.T) {
+	expected := map[string]string{
+		"sast":      "SnykCode",
+		"iac":       "Snyk IaC",
+		"container": "Snyk Container",
+		"sca":       "Snyk Open Source",
+		"random":    "Snyk Open Source",
+	}
+
+	for input, expectedOutput := range expected {
+		actualOutput := ConvertTypeToDriverName(input)
+		assert.Equal(t, expectedOutput, actualOutput)
+	}
+}

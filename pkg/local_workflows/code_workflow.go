@@ -8,12 +8,13 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 const (
@@ -45,19 +46,9 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
-func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
+func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error) {
 	config := engine.GetConfiguration()
 	org := config.GetString(configuration.ORGANIZATION)
-	key := fmt.Sprintf("CACHE_SAST_RESPONSE_%s", org)
-
-	cachedContent := config.Get(key)
-	if cachedContent != nil {
-		cachedResponse, ok := cachedContent.(*contract.SastResponse)
-		if ok {
-			return cachedResponse, nil
-		}
-	}
-
 	client := engine.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	apiClient := api.NewApi(url, client)
@@ -67,8 +58,25 @@ func getSastSettings(engine workflow.Engine) (*contract.SastResponse, error) {
 		return &tmp, err
 	}
 
-	engine.GetConfiguration().Set(key, &tmp)
+	engine.GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &tmp)
 	return &tmp, nil
+}
+
+func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		response, err := getSastSettings(engine)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return false, err
+		}
+
+		return response, nil
+	}
+	return callback
 }
 
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
@@ -107,19 +115,17 @@ func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 
 func useNativeImplementation(config configuration.Configuration, logger *zerolog.Logger, sastEnabled bool) bool {
 	useConsistentIgnoresFF := config.GetBool(configuration.FF_CODE_CONSISTENT_IGNORES)
-	useNativeReportFF := config.GetBool(configuration.FF_CODE_CONSISTENT_REPORT_ENABLED)
+	useNativeImplementationFF := config.GetBool(configuration.FF_CODE_NATIVE_IMPLEMENTATION)
 	reportEnabled := config.GetBool(code_workflow.ConfigurationReportFlag)
 	scleEnabled := config.GetBool(code_workflow.ConfigurarionSlceEnabled)
 
-	useLegacyReport := reportEnabled && !useNativeReportFF
-	nativeImplementationEnabled := useConsistentIgnoresFF && !useLegacyReport && !scleEnabled
+	nativeImplementationEnabled := (useConsistentIgnoresFF || useNativeImplementationFF) && !scleEnabled
 
 	logger.Debug().Msgf("SAST Enabled:       %v", sastEnabled)
 	logger.Debug().Msgf("Report enabled:     %v", reportEnabled)
 	logger.Debug().Msgf("SLCE enabled:       %v", scleEnabled)
-	logger.Debug().Msgf("Consistent Ignores:")
-	logger.Debug().Msgf("  FF ignores: %v", useConsistentIgnoresFF)
-	logger.Debug().Msgf("  FF report: %v", useNativeReportFF)
+	logger.Debug().Msgf("FF consistent ignores: %v", useConsistentIgnoresFF)
+	logger.Debug().Msgf("FF native implementation: %v", useNativeImplementationFF)
 
 	return nativeImplementationEnabled
 }
@@ -134,11 +140,12 @@ func InitCodeWorkflow(engine workflow.Engine) error {
 		return err
 	}
 
+	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastSettings, getSastSettingsConfig(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationSastEnabled, getSastEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurarionSlceEnabled, getSlceEnabled(engine))
 	engine.GetConfiguration().AddDefaultValue(code_workflow.ConfigurationTestFLowName, configuration.StandardDefaultValueFunction("cli_test"))
 	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_IGNORES, "snykCodeConsistentIgnores")
-	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_CONSISTENT_REPORT_ENABLED, code_workflow.FfNameNativeReport)
+	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_CODE_NATIVE_IMPLEMENTATION, code_workflow.FfNameNativeImplementation)
 
 	return err
 }

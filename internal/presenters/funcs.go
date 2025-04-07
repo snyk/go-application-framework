@@ -146,6 +146,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
 		return sarif.SeverityToSarifLevel(string(s))
 	}
+	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
 	return fnMap
 }
 

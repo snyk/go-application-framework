@@ -41,6 +41,8 @@ type NetworkAccess interface {
 	AddHeaderField(key, value string)
 	// AddDynamicHeaderField adds a dynamic header field to the request.
 	AddDynamicHeaderField(key string, f DynamicHeaderFunc)
+	// RemoveHeaderField removes a static header field value from requests.
+	RemoveHeaderField(key string)
 	// AddRootCAs adds the root CAs from the given PEM file.
 	AddRootCAs(pemFileLocation string) error
 	// AddErrorHandler registers an error handler for the underlying http.RoundTripper.
@@ -170,6 +172,12 @@ func NewNetworkAccess(config configuration.Configuration) NetworkAccess {
 // For more flexibility, see AddDynamicHeaderField().
 func (n *networkImpl) AddHeaderField(key, value string) {
 	n.staticHeader.Add(key, value)
+}
+
+// RemoveHeaderField removes a static header field value from requests.
+func (n *networkImpl) RemoveHeaderField(key string) {
+	// Remove the specified header from the request
+	n.staticHeader.Del(key)
 }
 
 // AddErrorHandler registers an error handler for the underlying http.RoundTripper and registers the response middleware

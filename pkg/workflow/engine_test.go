@@ -205,8 +205,8 @@ func Test_Engine_ClonedNetworkAccess(t *testing.T) {
 }
 
 func Test_EngineInvocationConcurrent(t *testing.T) {
-	configuration := configuration.NewInMemory()
-	engine := NewWorkFlowEngine(configuration)
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
 
 	flagset := pflag.NewFlagSet("1", pflag.ExitOnError)
 	callback := func(invocation InvocationContext, input []Data) ([]Data, error) {
@@ -224,6 +224,9 @@ func Test_EngineInvocationConcurrent(t *testing.T) {
 	stop := make(chan struct{}, N)
 	for range N {
 		go func() {
+			logger := zerolog.Nop()
+			engine.SetLogger(&logger)
+			engine.SetConfiguration(configuration.NewWithOpts())
 			_, invokeErr := engine.Invoke(workflowId)
 			assert.NoError(t, invokeErr)
 			stop <- struct{}{}

@@ -11,6 +11,8 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 type ApiClient interface {
@@ -21,7 +23,7 @@ type ApiClient interface {
 	GetFeatureFlag(flagname string, origId string) (bool, error)
 	GetUserMe() (string, error)
 	GetSelf() (contract.SelfResponse, error)
-	GetSastSettings(orgId string) (contract.SastResponse, error)
+	GetSastSettings(orgId string) (sast_contract.SastResponse, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -196,9 +198,9 @@ func (a *snykApiClient) GetSelf() (contract.SelfResponse, error) {
 	return selfData, nil
 }
 
-func (a *snykApiClient) GetSastSettings(orgId string) (contract.SastResponse, error) {
-	var response contract.SastResponse
-	var defaultResult contract.SastResponse
+func (a *snykApiClient) GetSastSettings(orgId string) (sast_contract.SastResponse, error) {
+	var response sast_contract.SastResponse
+	var defaultResult sast_contract.SastResponse
 
 	endpoint := a.url + "/v1/cli-config/settings/sast?org=" + url.QueryEscape(orgId)
 	res, err := a.client.Get(endpoint)
