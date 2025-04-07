@@ -63,6 +63,9 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	createFlagset.Bool(enrichResponseKey, false, "")
 	createFlagset.Bool(interactiveKey, true, "")
 	_, err := engine.Register(WORKFLOWID_IGNORE_CREATE, workflow.ConfigurationOptionsFromFlagset(createFlagset), ignoreCreateWorkflowEntryPoint)
+	if err != nil {
+		return err
+	}
 
 	editFlagset := pflag.NewFlagSet(ignoreEditWorkflowName, pflag.ExitOnError)
 	editFlagset.String(ignoreIdKey, "", ignoreIdDescription)
@@ -75,6 +78,9 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	editFlagset.Bool(enrichResponseKey, false, "")
 	editFlagset.Bool(interactiveKey, true, "")
 	_, err = engine.Register(WORKFLOWID_IGNORE_EDIT, workflow.ConfigurationOptionsFromFlagset(editFlagset), ignoreEditWorkflowEntryPoint)
+	if err != nil {
+		return err
+	}
 
 	deleteFlagSet := pflag.NewFlagSet(ignoreDeletWorkflowName, pflag.ExitOnError)
 	deleteFlagSet.String(ignoreIdKey, "", ignoreIdDescription)
@@ -82,8 +88,11 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	deleteFlagSet.Bool(enrichResponseKey, false, "")
 	deleteFlagSet.Bool(interactiveKey, true, "")
 	_, err = engine.Register(WORKFLOWID_IGNORE_DELETE, workflow.ConfigurationOptionsFromFlagset(deleteFlagSet), ignoreDeleteWorkflowEntryPoint)
+	if err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
 
 func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, ignoreType string) string {
@@ -134,11 +143,6 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	uiErr := userInterface.Output(fmt.Sprintf("curent git repo url %s", repoUrl))
-	if uiErr != nil {
-		logger.Print(uiErr)
-	}
-
 	// read expiry time
 	// if expiration value is empty it will be treated as no-expire by the policy endpoint
 	expire, err := getExpireValue(config)
@@ -152,22 +156,19 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		uiErr = userInterface.Output(fmt.Sprintf("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, "+
+		uiErr := userInterface.Output(fmt.Sprintf("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, "+
 			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, ignoreType)))
 		if uiErr != nil {
 			logger.Print(uiErr)
 		}
-		yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
-		if inputError != nil {
-			return nil, inputError
-		}
-		if strings.ToLower(yesNoString) != "y" && strings.ToLower(yesNoString) != "yes" {
-			return nil, fmt.Errorf("operation canceled by user")
-		}
 	}
 
 	url := fmt.Sprintf("%s/rest/orgs/%s/policies?version=%s", config.GetString(configuration.API_URL), config.GetString(configuration.ORGANIZATION), policyAPIVersion)
-	branchName, _ := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
+	branchName, branchNameErr := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
+	if branchNameErr != nil {
+		logger.Print(branchNameErr)
+	}
+
 	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
 	response, err := sendCreateIgnore(invocationCtx, payload, url)
 
@@ -175,7 +176,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	uiErr = userInterface.Output("\nYour ignore request has been submitted for approval.")
+	uiErr := userInterface.Output("\n✅ Your ignore request has been submitted for approval.")
 	if uiErr != nil {
 		logger.Print(uiErr)
 	}
@@ -198,6 +199,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 func getExpireValue(config configuration.Configuration) (*time.Time, error) {
 	shouldParse := config.IsSet(expirationKey) || config.GetBool(interactiveKey)
 	if !shouldParse {
+		//nolint:nilnil // returning nil,nil here means that there is no expiration, and we didn't run into an error which is a valid case
 		return nil, nil
 	}
 	expireStr, err := config.GetStringWithError(expirationKey)
@@ -273,7 +275,11 @@ func addCreateIgnoreDefaultInteractiveValues(invocationCtx workflow.InvocationCo
 		invalidIgnoreTypeErr := fmt.Errorf("invalid ignore type, valid ignore types are: %s, %s, %s",
 			policyApi.NotVulnerable, policyApi.TemporaryIgnore, policyApi.WontFix)
 		if existingValue != nil && existingValue != "" {
-			if !isValidIgnoreType(existingValue.(string)) {
+			ignoreType, ok := existingValue.(string)
+			if !ok {
+				return "", invalidIgnoreTypeErr
+			}
+			if !isValidIgnoreType(ignoreType) {
 				return "", invalidIgnoreTypeErr
 			}
 			return existingValue, nil
@@ -292,6 +298,13 @@ func addCreateIgnoreDefaultInteractiveValues(invocationCtx workflow.InvocationCo
 		if existingValue != nil && existingValue != "" {
 			return existingValue, nil
 		}
+		yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
+		if inputError != nil {
+			return nil, inputError
+		}
+		if strings.ToLower(yesNoString) != "y" && strings.ToLower(yesNoString) != "yes" {
+			return nil, fmt.Errorf("operation canceled by user")
+		}
 		return userInterface.Input(reasonDescription)
 	})
 
@@ -299,7 +312,7 @@ func addCreateIgnoreDefaultInteractiveValues(invocationCtx workflow.InvocationCo
 		if existingValue != nil && existingValue != "" {
 			return existingValue, nil
 		}
-		return userInterface.Input(expirationKey)
+		return userInterface.Input(expirationDescription)
 	})
 
 	config.AddDefaultValue(remoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {

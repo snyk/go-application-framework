@@ -140,7 +140,8 @@ func Test_createPolicy(t *testing.T) {
 
 		assert.NoError(t, err, "Should not return an error")
 		assert.NotNil(t, result, "Should return a policy response")
-		expectedUuid, _ := uuid.Parse("12345678-1234-1234-1234-123456789012")
+		expectedUuid, err := uuid.Parse("12345678-1234-1234-1234-123456789012")
+		assert.NoError(t, err)
 		assert.Equal(t, expectedUuid, result.Id, "Should have the correct ID")
 	})
 
