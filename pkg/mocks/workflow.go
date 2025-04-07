@@ -587,23 +587,18 @@ func (mr *MockEngineMockRecorder) Init() *gomock.Call {
 }
 
 // Invoke mocks base method.
-func (m *MockEngine) Invoke(id workflow.Identifier, options ...workflow.InvokeOptions) ([]workflow.Data, error) {
+func (m *MockEngine) Invoke(id workflow.Identifier) ([]workflow.Data, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{id}
-	for _, a := range options {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "Invoke", varargs...)
+	ret := m.ctrl.Call(m, "Invoke", id)
 	ret0, _ := ret[0].([]workflow.Data)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Invoke indicates an expected call of Invoke.
-func (mr *MockEngineMockRecorder) Invoke(id interface{}, options ...interface{}) *gomock.Call {
+func (mr *MockEngineMockRecorder) Invoke(id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{id}, options...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Invoke", reflect.TypeOf((*MockEngine)(nil).Invoke), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Invoke", reflect.TypeOf((*MockEngine)(nil).Invoke), id)
 }
 
 // InvokeWithConfig mocks base method.
