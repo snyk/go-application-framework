@@ -47,8 +47,8 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/getkin/kin-openapi v0.131.0 // indirect
+	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/getkin/kin-openapi v0.128.0 // indirect
 	github.com/gkampitakis/ciinfo v0.3.0 // indirect
 	github.com/gkampitakis/go-diff v1.3.2 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
@@ -60,6 +60,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/invopop/yaml v0.3.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
@@ -80,8 +81,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
-	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
-	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/pact-foundation/pact-go/v2 v2.0.8 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect

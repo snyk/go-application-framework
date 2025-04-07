@@ -48,10 +48,6 @@ const (
 	policyAPIVersion = "2024-10-15"
 )
 
-// TODOS:
-// Add ignore enum check
-// Add httpclient and somehow call it
-
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
 var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
 var WORKFLOWID_IGNORE_DELETE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreDeletWorkflowName)
@@ -126,19 +122,17 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	if err != nil {
 		return nil, err
 	}
-	_ = userInterface.Output(findingsId)
 
 	ignoreType, err := config.GetStringWithError(ignoreTypeKey)
 	if err != nil {
 		return nil, err
 	}
-	_ = userInterface.Output(ignoreType)
 
 	repoUrl, err := config.GetStringWithError(code_workflow.ConfigurationRemoteRepoUrlFlagname)
 	if err != nil {
 		return nil, err
 	}
-	_ = userInterface.Output(repoUrl)
+	_ = userInterface.Output(fmt.Sprintf("curent git repo url %s", repoUrl))
 
 	// read expiry time
 	var expire time.Time
@@ -176,8 +170,6 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	if err != nil {
 		return nil, err
 	}
-
-	logger.Printf(string(response.Attributes.Review))
 
 	if interactive {
 		_ = userInterface.Output("\nYour ignore request has been submitted for approval.")
