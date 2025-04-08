@@ -313,18 +313,19 @@ func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.
 	if err != nil {
 		return nil, err
 	}
-
-	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("error sending request: Status %s StatusCode %d", resp.Status, resp.StatusCode)
-	}
-
-	parsedResponse, err := policyApi.ParseCreateOrgPolicyResponse(resp)
 	defer func() {
 		closeErr := resp.Body.Close()
 		if closeErr != nil {
 			err = closeErr
 		}
 	}()
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("error sending request: Status %s StatusCode %d", resp.Status, resp.StatusCode)
+	}
+
+	parsedResponse, err := policyApi.ParseCreateOrgPolicyResponse(resp)
+
 	if err != nil {
 		return nil, err
 	}
