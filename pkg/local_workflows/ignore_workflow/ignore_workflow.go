@@ -148,7 +148,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		uiErr := userInterface.Output(fmt.Sprintf("You are about to ignore the following issue:\n👉🏼 Make sure the code containing the issue is committed, "+
+		uiErr := userInterface.Output(fmt.Sprintf("👉🏼 Make sure the code containing the issue is committed, "+
 			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, ignoreType)))
 		if uiErr != nil {
 			logger.Print(uiErr)
