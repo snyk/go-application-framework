@@ -139,10 +139,6 @@ components:
           $ref: '#/components/headers/VersionServedResponseHeader'
         sunset:
           $ref: '#/components/headers/SunsetHeader'
-        x-envoy-to-remove-normalized-request-path:
-          $ref: '#/components/headers/InternalGlooNormalizedPathHeader'
-        x-envoy-to-remove-org-public-id:
-          $ref: '#/components/headers/InternalGlooOrgIdHeader'
     "400":
       content:
         application/vnd.api+json:
@@ -391,10 +387,6 @@ components:
       required:
         - version
       type: object
-      x-go-type: jsonapi.JSONAPI
-      x-go-type-import:
-        name: jsonapi
-        path: github.com/snyk/rest-go-libs/v5/jsonapi
     LinkProperty:
       example: https://example.com/api/resource
       oneOf:
@@ -414,10 +406,6 @@ components:
           required:
             - href
           type: object
-          x-go-type: jsonapi.Link
-          x-go-type-import:
-            name: jsonapi
-            path: github.com/snyk/rest-go-libs/v5/jsonapi
     Links:
       additionalProperties: false
       properties:
@@ -434,10 +422,6 @@ components:
         self:
           $ref: '#/components/schemas/LinkProperty'
       type: object
-      x-go-type: jsonapi.Links
-      x-go-type-import:
-        name: jsonapi
-        path: github.com/snyk/rest-go-libs/v5/jsonapi
     Meta:
       additionalProperties: true
       description: Free-form object that may contain non-standard information.
@@ -449,10 +433,6 @@ components:
           - array_value1
           - array_value2
       type: object
-      x-go-type: jsonapi.Meta
-      x-go-type-import:
-        name: jsonapi
-        path: github.com/snyk/rest-go-libs/v5/jsonapi
     PaginatedLinks:
       additionalProperties: false
       example:
@@ -471,10 +451,6 @@ components:
         self:
           $ref: '#/components/schemas/LinkProperty'
       type: object
-      x-go-type: jsonapi.PaginatedLinks
-      x-go-type-import:
-        name: jsonapi
-        path: github.com/snyk/rest-go-libs/v5/jsonapi
     PolicyActionIgnore:
       additionalProperties: false
       properties:
@@ -526,7 +502,7 @@ components:
         field:
           description: |
             field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
-            - `snyk/assets/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
+            - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
             The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
           enum:
             - snyk/asset/finding/v1

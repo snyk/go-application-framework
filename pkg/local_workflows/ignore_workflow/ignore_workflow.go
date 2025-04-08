@@ -1,13 +1,14 @@
 package ignore_workflow
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
@@ -48,6 +49,7 @@ const (
 	enrichResponseKey = "enrich_response"
 
 	policyAPIVersion = "2024-10-15"
+	policyApiTimeout = 5 * time.Minute
 )
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
@@ -157,14 +159,13 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		}
 	}
 
-	url := fmt.Sprintf("%s/rest/orgs/%s/policies?version=%s", config.GetString(configuration.API_URL), config.GetString(configuration.ORGANIZATION), policyAPIVersion)
 	branchName, branchNameErr := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	if branchNameErr != nil {
 		logger.Print(branchNameErr)
 	}
 
 	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
-	response, err := sendCreateIgnore(invocationCtx, payload, url)
+	response, err := sendCreateIgnore(invocationCtx, payload)
 
 	if err != nil {
 		return nil, err
@@ -243,7 +244,7 @@ func createPayload(repoUrl string, branchName string, expire *time.Time, ignoreT
 	meta["repo_url"] = repoUrl
 	meta["branch_name"] = branchName
 
-	var payload policyApi.CreatePolicyPayload
+	var payload policyApi.CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody
 	payload.Data.Meta = &meta
 	payload.Data.Attributes.Action.Data = policyApi.PolicyActionIgnoreData{
 		Expires:    expire,
@@ -287,38 +288,46 @@ func getUser(invocationCtx workflow.InvocationContext) (string, error) {
 	}
 }
 
-func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.CreatePolicyPayload, url string) (*policyApi.PolicyResponse, error) {
-	// Create a request
-	requestBody, err := json.Marshal(input)
+func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody) (*policyApi.PolicyResponse, error) {
+	config := invocationCtx.GetConfiguration()
+	host, err := url.JoinPath(config.GetString(configuration.API_URL), "rest")
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/vnd.api+json")
 
-	// Send the request
-	resp, err := invocationCtx.GetNetworkAccess().GetHttpClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	responseBody, err := io.ReadAll(resp.Body)
+	params := policyApi.CreateOrgPolicyParams{Version: policyAPIVersion}
+	orgUuid, err := uuid.Parse(config.GetString(configuration.ORGANIZATION))
 	if err != nil {
 		return nil, err
 	}
-	var responseWrapper struct {
-		Data policyApi.PolicyResponse `json:"data"`
+
+	client, err := policyApi.NewClient(host, policyApi.WithHTTPClient(invocationCtx.GetNetworkAccess().GetHttpClient()))
+	if err != nil {
+		return nil, err
 	}
 
-	err = json.Unmarshal(responseBody, &responseWrapper)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), policyApiTimeout)
+	defer cancelFunc()
 
-	if err != nil || resp.StatusCode != http.StatusCreated {
+	resp, err := client.CreateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx, orgUuid, &params, input)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("error sending request: Status %s StatusCode %d", resp.Status, resp.StatusCode)
 	}
 
-	return &responseWrapper.Data, nil
+	parsedResponse, err := policyApi.ParseCreateOrgPolicyResponse(resp)
+	defer func() {
+		closeErr := resp.Body.Close()
+		if closeErr != nil {
+			err = closeErr
+		}
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	return &parsedResponse.ApplicationvndApiJSON201.Data, err
 }

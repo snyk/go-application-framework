@@ -4,7 +4,14 @@
 package v20241015
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/oapi-codegen/runtime"
@@ -157,7 +164,6 @@ type LinkProperty struct {
 	union json.RawMessage
 }
 
-// LinkProperty0 A string containing the link’s URL
 // LinkProperty0 A string containing the link’s URL.
 type LinkProperty0 = string
 
@@ -171,9 +177,26 @@ type LinkProperty1 struct {
 }
 
 // Links defines model for Links.
+type Links struct {
+	First   *LinkProperty `json:"first,omitempty"`
+	Last    *LinkProperty `json:"last,omitempty"`
+	Next    *LinkProperty `json:"next,omitempty"`
+	Prev    *LinkProperty `json:"prev,omitempty"`
+	Related *LinkProperty `json:"related,omitempty"`
+	Self    *LinkProperty `json:"self,omitempty"`
+}
 
 // Meta Free-form object that may contain non-standard information.
 type Meta map[string]interface{}
+
+// PaginatedLinks defines model for PaginatedLinks.
+type PaginatedLinks struct {
+	First *LinkProperty `json:"first,omitempty"`
+	Last  *LinkProperty `json:"last,omitempty"`
+	Next  *LinkProperty `json:"next,omitempty"`
+	Prev  *LinkProperty `json:"prev,omitempty"`
+	Self  *LinkProperty `json:"self,omitempty"`
+}
 
 // PolicyActionIgnore defines model for PolicyActionIgnore.
 type PolicyActionIgnore struct {
@@ -204,7 +227,7 @@ type PolicyAttributesActionType string
 // PolicyCondition defines model for PolicyCondition.
 type PolicyCondition struct {
 	// Field field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
-	// - `snyk/assets/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
+	// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
 	// The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
 	Field PolicyConditionField `json:"field"`
 
@@ -218,7 +241,7 @@ type PolicyCondition struct {
 }
 
 // PolicyConditionField field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
-// - `snyk/assets/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
+// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
 // The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
 type PolicyConditionField string
 
@@ -543,4 +566,1669 @@ func (t LinkProperty) MarshalJSON() ([]byte, error) {
 func (t *LinkProperty) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
+}
+
+// RequestEditorFn  is the function signature for the RequestEditor callback function
+type RequestEditorFn func(ctx context.Context, req *http.Request) error
+
+// Doer performs HTTP requests.
+//
+// The standard http.Client implements this interface.
+type HttpRequestDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// Client which conforms to the OpenAPI3 specification for this service.
+type Client struct {
+	// The endpoint of the server conforming to this interface, with scheme,
+	// https://api.deepmap.com for example. This can contain a path relative
+	// to the server, such as https://api.deepmap.com/dev-test, and all the
+	// paths in the swagger spec will be appended to the server.
+	Server string
+
+	// Doer for performing requests, typically a *http.Client with any
+	// customized settings, such as certificate chains.
+	Client HttpRequestDoer
+
+	// A list of callbacks for modifying requests which are generated before sending over
+	// the network.
+	RequestEditors []RequestEditorFn
+}
+
+// ClientOption allows setting custom parameters during construction
+type ClientOption func(*Client) error
+
+// Creates a new Client, with reasonable defaults
+func NewClient(server string, opts ...ClientOption) (*Client, error) {
+	// create a client with sane default values
+	client := Client{
+		Server: server,
+	}
+	// mutate client and add all optional params
+	for _, o := range opts {
+		if err := o(&client); err != nil {
+			return nil, err
+		}
+	}
+	// ensure the server URL always has a trailing slash
+	if !strings.HasSuffix(client.Server, "/") {
+		client.Server += "/"
+	}
+	// create httpClient, if not already present
+	if client.Client == nil {
+		client.Client = &http.Client{}
+	}
+	return &client, nil
+}
+
+// WithHTTPClient allows overriding the default Doer, which is
+// automatically created using http.Client. This is useful for tests.
+func WithHTTPClient(doer HttpRequestDoer) ClientOption {
+	return func(c *Client) error {
+		c.Client = doer
+		return nil
+	}
+}
+
+// WithRequestEditorFn allows setting up a callback function, which will be
+// called right before sending the request. This can be used to mutate the request.
+func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
+	return func(c *Client) error {
+		c.RequestEditors = append(c.RequestEditors, fn)
+		return nil
+	}
+}
+
+// The interface specification for the client above.
+type ClientInterface interface {
+	// ListAPIVersions request
+	ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAPIVersion request
+	GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgPolicies request
+	GetOrgPolicies(ctx context.Context, orgId OrgId, params *GetOrgPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOrgPolicyWithBody request with any body
+	CreateOrgPolicyWithBody(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, body CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgPolicy request
+	DeleteOrgPolicy(ctx context.Context, orgId OrgId, policyId PolicyId, params *DeleteOrgPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgPolicy request
+	GetOrgPolicy(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrgPolicyWithBody request with any body
+	UpdateOrgPolicyWithBody(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, body UpdateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgPolicyEvents request
+	GetOrgPolicyEvents(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAPIVersionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAPIVersionRequest(c.Server, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOrgPolicies(ctx context.Context, orgId OrgId, params *GetOrgPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgPoliciesRequest(c.Server, orgId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateOrgPolicyWithBody(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrgPolicyRequestWithBody(c.Server, orgId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, body CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrgPolicyRequestWithApplicationVndAPIPlusJSONBody(c.Server, orgId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteOrgPolicy(ctx context.Context, orgId OrgId, policyId PolicyId, params *DeleteOrgPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgPolicyRequest(c.Server, orgId, policyId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOrgPolicy(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgPolicyRequest(c.Server, orgId, policyId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateOrgPolicyWithBody(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgPolicyRequestWithBody(c.Server, orgId, policyId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, body UpdateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgPolicyRequestWithApplicationVndAPIPlusJSONBody(c.Server, orgId, policyId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOrgPolicyEvents(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgPolicyEventsRequest(c.Server, orgId, policyId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NewListAPIVersionsRequest generates requests for ListAPIVersions
+func NewListAPIVersionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/openapi")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAPIVersionRequest generates requests for GetAPIVersion
+func NewGetAPIVersionRequest(server string, version string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "version", runtime.ParamLocationPath, version)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/openapi/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgPoliciesRequest generates requests for GetOrgPolicies
+func NewGetOrgPoliciesRequest(server string, orgId OrgId, params *GetOrgPoliciesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.StartingAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "starting_after", runtime.ParamLocationQuery, *params.StartingAfter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndingBefore != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ending_before", runtime.ParamLocationQuery, *params.EndingBefore); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Review != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", false, "review", runtime.ParamLocationQuery, *params.Review); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.ExpiresBefore != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "expires_before", runtime.ParamLocationQuery, *params.ExpiresBefore); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.ExpiresAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "expires_after", runtime.ParamLocationQuery, *params.ExpiresAfter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.ExpiresNever != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "expires_never", runtime.ParamLocationQuery, *params.ExpiresNever); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateOrgPolicyRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateOrgPolicy builder with application/vnd.api+json body
+func NewCreateOrgPolicyRequestWithApplicationVndAPIPlusJSONBody(server string, orgId OrgId, params *CreateOrgPolicyParams, body CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateOrgPolicyRequestWithBody(server, orgId, params, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateOrgPolicyRequestWithBody generates requests for CreateOrgPolicy with any type of body
+func NewCreateOrgPolicyRequestWithBody(server string, orgId OrgId, params *CreateOrgPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgPolicyRequest generates requests for DeleteOrgPolicy
+func NewDeleteOrgPolicyRequest(server string, orgId OrgId, policyId PolicyId, params *DeleteOrgPolicyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "policy_id", runtime.ParamLocationPath, policyId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgPolicyRequest generates requests for GetOrgPolicy
+func NewGetOrgPolicyRequest(server string, orgId OrgId, policyId PolicyId, params *GetOrgPolicyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "policy_id", runtime.ParamLocationPath, policyId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateOrgPolicyRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateOrgPolicy builder with application/vnd.api+json body
+func NewUpdateOrgPolicyRequestWithApplicationVndAPIPlusJSONBody(server string, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, body UpdateOrgPolicyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateOrgPolicyRequestWithBody(server, orgId, policyId, params, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdateOrgPolicyRequestWithBody generates requests for UpdateOrgPolicy with any type of body
+func NewUpdateOrgPolicyRequestWithBody(server string, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "policy_id", runtime.ParamLocationPath, policyId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetOrgPolicyEventsRequest generates requests for GetOrgPolicyEvents
+func NewGetOrgPolicyEventsRequest(server string, orgId OrgId, policyId PolicyId, params *GetOrgPolicyEventsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org_id", runtime.ParamLocationPath, orgId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "policy_id", runtime.ParamLocationPath, policyId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/events", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.StartingAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "starting_after", runtime.ParamLocationQuery, *params.StartingAfter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndingBefore != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ending_before", runtime.ParamLocationQuery, *params.EndingBefore); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
+	for _, r := range c.RequestEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	for _, r := range additionalEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ClientWithResponses builds on ClientInterface to offer response payloads
+type ClientWithResponses struct {
+	ClientInterface
+}
+
+// NewClientWithResponses creates a new ClientWithResponses, which wraps
+// Client with return type handling
+func NewClientWithResponses(server string, opts ...ClientOption) (*ClientWithResponses, error) {
+	client, err := NewClient(server, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &ClientWithResponses{client}, nil
+}
+
+// WithBaseURL overrides the baseURL.
+func WithBaseURL(baseURL string) ClientOption {
+	return func(c *Client) error {
+		newBaseURL, err := url.Parse(baseURL)
+		if err != nil {
+			return err
+		}
+		c.Server = newBaseURL.String()
+		return nil
+	}
+}
+
+// ClientWithResponsesInterface is the interface specification for the client with responses above.
+type ClientWithResponsesInterface interface {
+	// ListAPIVersionsWithResponse request
+	ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error)
+
+	// GetAPIVersionWithResponse request
+	GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*GetAPIVersionResponse, error)
+
+	// GetOrgPoliciesWithResponse request
+	GetOrgPoliciesWithResponse(ctx context.Context, orgId OrgId, params *GetOrgPoliciesParams, reqEditors ...RequestEditorFn) (*GetOrgPoliciesResponse, error)
+
+	// CreateOrgPolicyWithBodyWithResponse request with any body
+	CreateOrgPolicyWithBodyWithResponse(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrgPolicyResponse, error)
+
+	CreateOrgPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, body CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrgPolicyResponse, error)
+
+	// DeleteOrgPolicyWithResponse request
+	DeleteOrgPolicyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *DeleteOrgPolicyParams, reqEditors ...RequestEditorFn) (*DeleteOrgPolicyResponse, error)
+
+	// GetOrgPolicyWithResponse request
+	GetOrgPolicyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyParams, reqEditors ...RequestEditorFn) (*GetOrgPolicyResponse, error)
+
+	// UpdateOrgPolicyWithBodyWithResponse request with any body
+	UpdateOrgPolicyWithBodyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgPolicyResponse, error)
+
+	UpdateOrgPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, body UpdateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgPolicyResponse, error)
+
+	// GetOrgPolicyEventsWithResponse request
+	GetOrgPolicyEventsWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyEventsParams, reqEditors ...RequestEditorFn) (*GetOrgPolicyEventsResponse, error)
+}
+
+type ListAPIVersionsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON200                  *[]string
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAPIVersionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAPIVersionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAPIVersionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON200                  *map[string]interface{}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAPIVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAPIVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOrgPoliciesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		Data    []PolicyResponse `json:"data"`
+		Jsonapi JsonApi          `json:"jsonapi"`
+		Links   *PaginatedLinks  `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgPoliciesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgPoliciesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateOrgPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *struct {
+		Data    PolicyResponse `json:"data"`
+		Jsonapi JsonApi        `json:"jsonapi"`
+		Links   *SelfLink      `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateOrgPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateOrgPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteOrgPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON500 *N500
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOrgPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		Data    PolicyResponse `json:"data"`
+		Jsonapi JsonApi        `json:"jsonapi"`
+		Links   *Links         `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateOrgPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		Data    PolicyResponse `json:"data"`
+		Jsonapi JsonApi        `json:"jsonapi"`
+		Links   *SelfLink      `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+	ApplicationvndApiJSON409 *N409
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateOrgPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateOrgPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOrgPolicyEventsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *struct {
+		Data    []PolicyEventResponse `json:"data"`
+		Jsonapi JsonApi               `json:"jsonapi"`
+		Links   *PaginatedLinks       `json:"links,omitempty"`
+	}
+	ApplicationvndApiJSON400 *N400
+	ApplicationvndApiJSON401 *N401
+	ApplicationvndApiJSON403 *N403
+	ApplicationvndApiJSON404 *N404
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgPolicyEventsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgPolicyEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ListAPIVersionsWithResponse request returning *ListAPIVersionsResponse
+func (c *ClientWithResponses) ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error) {
+	rsp, err := c.ListAPIVersions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAPIVersionsResponse(rsp)
+}
+
+// GetAPIVersionWithResponse request returning *GetAPIVersionResponse
+func (c *ClientWithResponses) GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*GetAPIVersionResponse, error) {
+	rsp, err := c.GetAPIVersion(ctx, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAPIVersionResponse(rsp)
+}
+
+// GetOrgPoliciesWithResponse request returning *GetOrgPoliciesResponse
+func (c *ClientWithResponses) GetOrgPoliciesWithResponse(ctx context.Context, orgId OrgId, params *GetOrgPoliciesParams, reqEditors ...RequestEditorFn) (*GetOrgPoliciesResponse, error) {
+	rsp, err := c.GetOrgPolicies(ctx, orgId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgPoliciesResponse(rsp)
+}
+
+// CreateOrgPolicyWithBodyWithResponse request with arbitrary body returning *CreateOrgPolicyResponse
+func (c *ClientWithResponses) CreateOrgPolicyWithBodyWithResponse(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrgPolicyResponse, error) {
+	rsp, err := c.CreateOrgPolicyWithBody(ctx, orgId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrgPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateOrgPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId OrgId, params *CreateOrgPolicyParams, body CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrgPolicyResponse, error) {
+	rsp, err := c.CreateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx, orgId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrgPolicyResponse(rsp)
+}
+
+// DeleteOrgPolicyWithResponse request returning *DeleteOrgPolicyResponse
+func (c *ClientWithResponses) DeleteOrgPolicyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *DeleteOrgPolicyParams, reqEditors ...RequestEditorFn) (*DeleteOrgPolicyResponse, error) {
+	rsp, err := c.DeleteOrgPolicy(ctx, orgId, policyId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgPolicyResponse(rsp)
+}
+
+// GetOrgPolicyWithResponse request returning *GetOrgPolicyResponse
+func (c *ClientWithResponses) GetOrgPolicyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyParams, reqEditors ...RequestEditorFn) (*GetOrgPolicyResponse, error) {
+	rsp, err := c.GetOrgPolicy(ctx, orgId, policyId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgPolicyResponse(rsp)
+}
+
+// UpdateOrgPolicyWithBodyWithResponse request with arbitrary body returning *UpdateOrgPolicyResponse
+func (c *ClientWithResponses) UpdateOrgPolicyWithBodyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgPolicyResponse, error) {
+	rsp, err := c.UpdateOrgPolicyWithBody(ctx, orgId, policyId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateOrgPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *UpdateOrgPolicyParams, body UpdateOrgPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgPolicyResponse, error) {
+	rsp, err := c.UpdateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx, orgId, policyId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgPolicyResponse(rsp)
+}
+
+// GetOrgPolicyEventsWithResponse request returning *GetOrgPolicyEventsResponse
+func (c *ClientWithResponses) GetOrgPolicyEventsWithResponse(ctx context.Context, orgId OrgId, policyId PolicyId, params *GetOrgPolicyEventsParams, reqEditors ...RequestEditorFn) (*GetOrgPolicyEventsResponse, error) {
+	rsp, err := c.GetOrgPolicyEvents(ctx, orgId, policyId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgPolicyEventsResponse(rsp)
+}
+
+// ParseListAPIVersionsResponse parses an HTTP response from a ListAPIVersionsWithResponse call
+func ParseListAPIVersionsResponse(rsp *http.Response) (*ListAPIVersionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAPIVersionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAPIVersionResponse parses an HTTP response from a GetAPIVersionWithResponse call
+func ParseGetAPIVersionResponse(rsp *http.Response) (*GetAPIVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAPIVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgPoliciesResponse parses an HTTP response from a GetOrgPoliciesWithResponse call
+func ParseGetOrgPoliciesResponse(rsp *http.Response) (*GetOrgPoliciesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgPoliciesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data    []PolicyResponse `json:"data"`
+			Jsonapi JsonApi          `json:"jsonapi"`
+			Links   *PaginatedLinks  `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateOrgPolicyResponse parses an HTTP response from a CreateOrgPolicyWithResponse call
+func ParseCreateOrgPolicyResponse(rsp *http.Response) (*CreateOrgPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateOrgPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest struct {
+			Data    PolicyResponse `json:"data"`
+			Jsonapi JsonApi        `json:"jsonapi"`
+			Links   *SelfLink      `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgPolicyResponse parses an HTTP response from a DeleteOrgPolicyWithResponse call
+func ParseDeleteOrgPolicyResponse(rsp *http.Response) (*DeleteOrgPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgPolicyResponse parses an HTTP response from a GetOrgPolicyWithResponse call
+func ParseGetOrgPolicyResponse(rsp *http.Response) (*GetOrgPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data    PolicyResponse `json:"data"`
+			Jsonapi JsonApi        `json:"jsonapi"`
+			Links   *Links         `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateOrgPolicyResponse parses an HTTP response from a UpdateOrgPolicyWithResponse call
+func ParseUpdateOrgPolicyResponse(rsp *http.Response) (*UpdateOrgPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateOrgPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data    PolicyResponse `json:"data"`
+			Jsonapi JsonApi        `json:"jsonapi"`
+			Links   *SelfLink      `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest N409
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgPolicyEventsResponse parses an HTTP response from a GetOrgPolicyEventsWithResponse call
+func ParseGetOrgPolicyEventsResponse(rsp *http.Response) (*GetOrgPolicyEventsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgPolicyEventsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Data    []PolicyEventResponse `json:"data"`
+			Jsonapi JsonApi               `json:"jsonapi"`
+			Links   *PaginatedLinks       `json:"links,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	}
+
+	return response, nil
 }

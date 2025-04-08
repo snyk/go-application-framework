@@ -65,10 +65,11 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 			// Send response to be tested
 			Body: io.NopCloser(bytes.NewBufferString(payload)),
 			// Must be set to non-nil value or it panics
-			Header: make(http.Header),
+			Header: http.Header{
+				"Content-Type": []string{"application/vnd.api+json"},
+			},
 		}
 	})
-
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
@@ -134,7 +135,7 @@ func Test_createPolicy(t *testing.T) {
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
 
-		result, err := sendCreateIgnore(invocationContext, input, testRepoUrl)
+		result, err := sendCreateIgnore(invocationContext, input)
 
 		assert.NoError(t, err, "Should not return an error")
 		assert.NotNil(t, result, "Should return a policy response")
@@ -149,7 +150,7 @@ func Test_createPolicy(t *testing.T) {
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
 
-		_, err := sendCreateIgnore(invocationContext, input, testRepoUrl)
+		_, err := sendCreateIgnore(invocationContext, input)
 
 		assert.Error(t, err, "Should return an error")
 		assert.Contains(t, err.Error(), "500", "Should contain status code")

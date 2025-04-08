@@ -1,4 +1,5 @@
 package: v20241015
 generate:
   models: true
+  client: true
 output: policy.go
