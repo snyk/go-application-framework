@@ -71,14 +71,12 @@ func ignoreTypeDefaultFunc(existingValue interface{}, userInterface ui.UserInter
 
 	if existingValue != nil && existingValue != "" {
 		ignoreType, ok := existingValue.(string)
-		if !ok {
-			return "", invalidIgnoreTypeErr
-		}
-		if !isValidIgnoreType(ignoreType) {
+		if !ok || !isValidIgnoreType(ignoreType) {
 			return "", invalidIgnoreTypeErr
 		}
 		return existingValue, nil
 	}
+
 	ignoreType, err := userInterface.Input(ignoreTypeDescription)
 	if err != nil {
 		return "", err
