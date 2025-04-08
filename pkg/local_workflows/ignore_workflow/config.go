@@ -2,7 +2,6 @@ package ignore_workflow
 
 import (
 	"fmt"
-	"strings"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -27,7 +26,10 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 	})
 
 	config.AddDefaultValue(reasonKey, func(existingValue interface{}) (interface{}, error) {
-		return reasonDefaultFunc(existingValue, userInterface)
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return userInterface.Input(reasonDescription)
 	})
 
 	config.AddDefaultValue(expirationKey, func(existingValue interface{}) (interface{}, error) {
@@ -40,20 +42,6 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 	config.AddDefaultValue(remoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
 		return remoteRepoUrlDefaultFunc(existingValue, config, userInterface)
 	})
-}
-
-func reasonDefaultFunc(existingValue interface{}, userInterface ui.UserInterface) (interface{}, error) {
-	if existingValue != nil && existingValue != "" {
-		return existingValue, nil
-	}
-	yesNoString, inputError := userInterface.Input("\nAdd a reason for ignoring this issue [Y/N]?")
-	if inputError != nil {
-		return nil, inputError
-	}
-	if strings.ToLower(yesNoString) != "y" && strings.ToLower(yesNoString) != "yes" {
-		return nil, fmt.Errorf("operation canceled by user")
-	}
-	return userInterface.Input(reasonDescription)
 }
 
 func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration, userInterface ui.UserInterface) (interface{}, error) {

@@ -40,7 +40,7 @@ const (
 )
 
 // Setup mock context for testing
-func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) (workflow.Engine, workflow.InvocationContext) {
+func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks.MockInvocationContext {
 	t.Helper()
 
 	// setup
@@ -85,7 +85,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) (workf
 	)}
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(mockData, nil).AnyTimes()
 
-	return mockEngine, invocationContextMock
+	return invocationContextMock
 }
 
 func Test_getIgnoreRequestDetailsStructure(t *testing.T) {
@@ -129,7 +129,7 @@ func Test_validIgnoreType(t *testing.T) {
 
 func Test_createPolicy(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
-		_, invocationContext := setupMockIgnoreContext(t, policyResponseJSON, http.StatusCreated)
+		invocationContext := setupMockIgnoreContext(t, policyResponseJSON, http.StatusCreated)
 
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
@@ -144,7 +144,7 @@ func Test_createPolicy(t *testing.T) {
 	})
 
 	t.Run("server error", func(t *testing.T) {
-		_, invocationContext := setupMockIgnoreContext(t, "Internal Server Error", http.StatusInternalServerError)
+		invocationContext := setupMockIgnoreContext(t, "Internal Server Error", http.StatusInternalServerError)
 
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
@@ -212,7 +212,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
     }
 }
 }`, policyId, expectedExpirationDate.Format(time.RFC3339), expectedIgnoreType, expectedReason, policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, expectedFindingsId, policyApi.And, expectedUser, policyApi.PolicyReviewPending)
-		_, invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated)
+		invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated)
 		config := invocationContext.GetConfiguration()
 		config.Set(interactiveKey, false)
 
@@ -230,13 +230,16 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		payload := result[0].GetPayload()
 		assert.NotNil(t, payload, "payload should not be nil")
 
-		var policyResp IgnoreResponseType
+		var policyResp sarif.Suppression
 		data, ok := payload.([]byte)
 		assert.True(t, ok)
 		err = json.Unmarshal(data, &policyResp)
 		assert.NoError(t, err, "Should parse JSON response")
-		assert.Equal(t, policyId, policyResp.IgnoreId)
+		assert.Equal(t, policyId, policyResp.Guid)
+		assert.Equal(t, expectedUser, *policyResp.Properties.IgnoredBy.Email)
 		assert.Equal(t, sarif.UnderReview, policyResp.Status)
+		assert.Equal(t, expectedExpirationDate.Format(time.RFC3339), *policyResp.Properties.Expiration)
+		assert.Equal(t, expectedReason, policyResp.Justification)
 	})
 	t.Run("non-interactive mode success no expiration", func(t *testing.T) {
 		expectedFindingsId := uuid.New().String()
@@ -272,7 +275,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
     }
 }
 }`, policyId, expectedIgnoreType, expectedReason, policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, expectedFindingsId, policyApi.And, expectedUser, policyApi.PolicyReviewPending)
-		_, invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated)
+		invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated)
 		config := invocationContext.GetConfiguration()
 		config.Set(interactiveKey, false)
 
@@ -289,12 +292,15 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		payload := result[0].GetPayload()
 		assert.NotNil(t, payload, "payload should not be nil")
 
-		var policyResp IgnoreResponseType
+		var policyResp sarif.Suppression
 		data, ok := payload.([]byte)
 		assert.True(t, ok)
 		err = json.Unmarshal(data, &policyResp)
 		assert.NoError(t, err, "Should parse JSON response")
-		assert.Equal(t, policyId, policyResp.IgnoreId)
+		assert.Equal(t, policyId, policyResp.Guid)
+		assert.Equal(t, expectedUser, *policyResp.Properties.IgnoredBy.Email)
 		assert.Equal(t, sarif.UnderReview, policyResp.Status)
+		assert.Nil(t, policyResp.Properties.Expiration)
+		assert.Equal(t, expectedReason, policyResp.Justification)
 	})
 }

@@ -1,15 +1,12 @@
 package ignore_workflow
 
 import (
+	"time"
+
 	"github.com/snyk/code-client-go/sarif"
 
 	v20241015 "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 )
-
-type IgnoreResponseType struct {
-	IgnoreId string                 `json:"id"`
-	Status   sarif.SuppresionStatus `json:"reason"`
-}
 
 func policyReviewToSarifStatus(review v20241015.PolicyReview) sarif.SuppresionStatus {
 	switch review {
@@ -26,12 +23,27 @@ func policyReviewToSarifStatus(review v20241015.PolicyReview) sarif.SuppresionSt
 	}
 }
 
-func policyResponseToIgnoreResponse(policyResponse *v20241015.PolicyResponse) *IgnoreResponseType {
+// currently this is only used in the IDE. IDE needs a response to update its cache after creating an ignore.
+func policyResponseToSarifSuppression(policyResponse *v20241015.PolicyResponse) *sarif.Suppression {
 	if policyResponse == nil {
 		return nil
 	}
-	return &IgnoreResponseType{
-		IgnoreId: policyResponse.Id.String(),
-		Status:   policyReviewToSarifStatus(policyResponse.Attributes.Review),
+	var expires *string
+	if policyResponse.Attributes.Action.Data.Expires != nil {
+		expiresStr := policyResponse.Attributes.Action.Data.Expires.Format(time.RFC3339)
+		expires = &expiresStr
+	}
+	return &sarif.Suppression{
+		Guid:          policyResponse.Id.String(),
+		Justification: *policyResponse.Attributes.Action.Data.Reason,
+		Properties: sarif.SuppressionProperties{
+			Expiration: expires,
+			IgnoredOn:  policyResponse.Attributes.CreatedAt.Format(time.RFC3339),
+			IgnoredBy: sarif.IgnoredBy{
+				Name:  policyResponse.Attributes.CreatedBy.Name,
+				Email: policyResponse.Attributes.CreatedBy.Email,
+			},
+		},
+		Status: policyReviewToSarifStatus(policyResponse.Attributes.Review),
 	}
 }

@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/code-client-go/sarif"
+
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows"
@@ -177,7 +179,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		data, workflowDataErr := createIgnoreWorkflowData(
 			workflow.NewTypeIdentifier(id, ignoreCreateWorkflowName),
 			config,
-			policyResponseToIgnoreResponse(response),
+			policyResponseToSarifSuppression(response),
 			logger)
 		if workflowDataErr != nil {
 			return nil, workflowDataErr
@@ -215,7 +217,10 @@ func getExpireValue(config configuration.Configuration) (*time.Time, error) {
 	return &expireVal, nil
 }
 
-func createIgnoreWorkflowData(id workflow.Identifier, config configuration.Configuration, ignoreResponse *IgnoreResponseType, logger *zerolog.Logger) (workflow.Data, error) {
+func createIgnoreWorkflowData(id workflow.Identifier, config configuration.Configuration, ignoreResponse *sarif.Suppression, logger *zerolog.Logger) (workflow.Data, error) {
+	if ignoreResponse == nil {
+		return nil, fmt.Errorf("ignore response is nil")
+	}
 	marshalledObj, err := json.Marshal(ignoreResponse)
 	if err != nil {
 		return nil, err
