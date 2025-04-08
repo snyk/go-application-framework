@@ -59,9 +59,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) (workf
 	mockUserInterface.EXPECT().Output(gomock.Any()).Return(nil).AnyTimes()
 	mockUserInterface.EXPECT().Input(gomock.Any()).Return("", nil).AnyTimes()
 
-	var httpClient = http.DefaultClient
-
-	httpClient = localworkflows.NewTestClient(func(req *http.Request) *http.Response {
+	httpClient := localworkflows.NewTestClient(func(req *http.Request) *http.Response {
 		return &http.Response{
 			StatusCode: statusCode,
 			// Send response to be tested
