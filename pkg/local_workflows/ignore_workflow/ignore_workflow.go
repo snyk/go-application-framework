@@ -170,7 +170,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	uiErr := userInterface.Output("\n✅ Your ignore request has been submitted for approval.")
+	uiErr := userInterface.Output("\n✅ Your ignore request has been submitted.")
 	if uiErr != nil {
 		logger.Print(uiErr)
 	}
@@ -191,11 +191,12 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 }
 
 func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, ignoreType string) string {
+	requestedOn := time.Now().Format(time.DateOnly)
 	expireDisplayText := "Does not expire"
 	if expire != nil {
 		expireDisplayText = expire.Format(time.DateOnly)
 	}
-	return fmt.Sprintf("  Requested on:  2024-08-10\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s", userName, expireDisplayText, ignoreType)
+	return fmt.Sprintf("  Requested on:  %s\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s", requestedOn, userName, expireDisplayText, ignoreType)
 }
 
 func getExpireValue(config configuration.Configuration) (*time.Time, error) {
