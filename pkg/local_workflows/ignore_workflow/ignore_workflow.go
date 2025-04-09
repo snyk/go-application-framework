@@ -25,7 +25,7 @@ import (
 const (
 	ignoreCreateWorkflowName = "ignore.create"
 	ignoreEditWorkflowName   = "ignore.edit"
-	ignoreDeletWorkflowName  = "ignore.delete"
+	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "id"
 	findingsIdDescription = "Findings Id"
@@ -54,7 +54,7 @@ const (
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
 var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
-var WORKFLOWID_IGNORE_DELETE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreDeletWorkflowName)
+var WORKFLOWID_IGNORE_DELETE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreDeleteWorkflowName)
 
 func InitIgnoreWorkflows(engine workflow.Engine) error {
 	createFlagset := pflag.NewFlagSet(ignoreCreateWorkflowName, pflag.ExitOnError)
@@ -86,7 +86,7 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 		return err
 	}
 
-	deleteFlagSet := pflag.NewFlagSet(ignoreDeletWorkflowName, pflag.ExitOnError)
+	deleteFlagSet := pflag.NewFlagSet(ignoreDeleteWorkflowName, pflag.ExitOnError)
 	deleteFlagSet.String(IgnoreIdKey, "", ignoreIdDescription)
 	// If set to false, no response will be returned
 	deleteFlagSet.Bool(EnrichResponseKey, false, "")
