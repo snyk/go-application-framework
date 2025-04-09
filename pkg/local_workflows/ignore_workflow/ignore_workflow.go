@@ -27,26 +27,26 @@ const (
 	ignoreEditWorkflowName   = "ignore.edit"
 	ignoreDeletWorkflowName  = "ignore.delete"
 
-	findingsIdKey         = "id"
+	FindingsIdKey         = "id"
 	findingsIdDescription = "Findings Id"
 
-	ignoreIdKey         = "ignore-id"
+	IgnoreIdKey         = "ignore-id"
 	ignoreIdDescription = "Ignore Id"
 
-	ignoreTypeKey         = "ignore-type"
+	IgnoreTypeKey         = "ignore-type"
 	ignoreTypeDescription = "Ignore Type"
 
-	reasonKey         = "reason"
+	ReasonKey         = "reason"
 	reasonDescription = "Reason"
 
-	expirationKey         = "expires"
+	ExpirationKey         = "expires"
 	expirationDescription = "Expiration (YYYY-MM-DD)"
 
-	remoteRepoUrlKey         = code_workflow.ConfigurationRemoteRepoUrlFlagname
+	RemoteRepoUrlKey         = code_workflow.ConfigurationRemoteRepoUrlFlagname
 	remoteRepoUrlDescription = "Remote Repository URL"
 
-	interactiveKey    = "interactive"
-	enrichResponseKey = "enrich_response"
+	InteractiveKey    = "interactive"
+	EnrichResponseKey = "enrich_response"
 
 	policyAPIVersion = "2024-10-15"
 	policyApiTimeout = 5 * time.Minute
@@ -58,39 +58,39 @@ var WORKFLOWID_IGNORE_DELETE workflow.Identifier = workflow.NewWorkflowIdentifie
 
 func InitIgnoreWorkflows(engine workflow.Engine) error {
 	createFlagset := pflag.NewFlagSet(ignoreCreateWorkflowName, pflag.ExitOnError)
-	createFlagset.String(findingsIdKey, "", findingsIdDescription)
-	createFlagset.String(ignoreTypeKey, "", ignoreTypeDescription)
-	createFlagset.String(reasonKey, "", reasonDescription)
-	createFlagset.String(expirationKey, "", expirationDescription)
-	createFlagset.String(remoteRepoUrlKey, "", remoteRepoUrlDescription)
+	createFlagset.String(FindingsIdKey, "", findingsIdDescription)
+	createFlagset.String(IgnoreTypeKey, "", ignoreTypeDescription)
+	createFlagset.String(ReasonKey, "", reasonDescription)
+	createFlagset.String(ExpirationKey, "", expirationDescription)
+	createFlagset.String(RemoteRepoUrlKey, "", remoteRepoUrlDescription)
 	// If set to false, no response will be returned
-	createFlagset.Bool(enrichResponseKey, false, "")
-	createFlagset.Bool(interactiveKey, true, "")
+	createFlagset.Bool(EnrichResponseKey, false, "")
+	createFlagset.Bool(InteractiveKey, true, "")
 	_, err := engine.Register(WORKFLOWID_IGNORE_CREATE, workflow.ConfigurationOptionsFromFlagset(createFlagset), ignoreCreateWorkflowEntryPoint)
 	if err != nil {
 		return err
 	}
 
 	editFlagset := pflag.NewFlagSet(ignoreEditWorkflowName, pflag.ExitOnError)
-	editFlagset.String(ignoreIdKey, "", ignoreIdDescription)
-	editFlagset.String(findingsIdKey, "", findingsIdDescription)
-	editFlagset.String(ignoreTypeKey, "", ignoreTypeDescription)
-	editFlagset.String(reasonKey, "", reasonDescription)
-	editFlagset.String(expirationKey, "", expirationDescription)
-	editFlagset.String(remoteRepoUrlKey, "", remoteRepoUrlDescription)
+	editFlagset.String(IgnoreIdKey, "", ignoreIdDescription)
+	editFlagset.String(FindingsIdKey, "", findingsIdDescription)
+	editFlagset.String(IgnoreTypeKey, "", ignoreTypeDescription)
+	editFlagset.String(ReasonKey, "", reasonDescription)
+	editFlagset.String(ExpirationKey, "", expirationDescription)
+	editFlagset.String(RemoteRepoUrlKey, "", remoteRepoUrlDescription)
 	// If set to false, no response will be returned
-	editFlagset.Bool(enrichResponseKey, false, "")
-	editFlagset.Bool(interactiveKey, true, "")
+	editFlagset.Bool(EnrichResponseKey, false, "")
+	editFlagset.Bool(InteractiveKey, true, "")
 	_, err = engine.Register(WORKFLOWID_IGNORE_EDIT, workflow.ConfigurationOptionsFromFlagset(editFlagset), ignoreEditWorkflowEntryPoint)
 	if err != nil {
 		return err
 	}
 
 	deleteFlagSet := pflag.NewFlagSet(ignoreDeletWorkflowName, pflag.ExitOnError)
-	deleteFlagSet.String(ignoreIdKey, "", ignoreIdDescription)
+	deleteFlagSet.String(IgnoreIdKey, "", ignoreIdDescription)
 	// If set to false, no response will be returned
-	deleteFlagSet.Bool(enrichResponseKey, false, "")
-	deleteFlagSet.Bool(interactiveKey, true, "")
+	deleteFlagSet.Bool(EnrichResponseKey, false, "")
+	deleteFlagSet.Bool(InteractiveKey, true, "")
 	_, err = engine.Register(WORKFLOWID_IGNORE_DELETE, workflow.ConfigurationOptionsFromFlagset(deleteFlagSet), ignoreDeleteWorkflowEntryPoint)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	config := invocationCtx.GetConfiguration()
 	id := invocationCtx.GetWorkflowIdentifier()
 
-	interactive := config.GetBool(interactiveKey)
+	interactive := config.GetBool(InteractiveKey)
 	if interactive {
 		// add interactive default function
 		addCreateIgnoreDefaultConfigurationValues(invocationCtx)
@@ -124,12 +124,12 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, fmt.Errorf("user is not authenticated: %w", err)
 	}
 
-	findingsId, err := config.GetStringWithError(findingsIdKey)
+	findingsId, err := config.GetStringWithError(FindingsIdKey)
 	if err != nil {
 		return nil, err
 	}
 
-	ignoreType, err := config.GetStringWithError(ignoreTypeKey)
+	ignoreType, err := config.GetStringWithError(IgnoreTypeKey)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	reason, err := config.GetStringWithError(reasonKey)
+	reason, err := config.GetStringWithError(ReasonKey)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		logger.Print(uiErr)
 	}
 
-	if config.GetBool(enrichResponseKey) {
+	if config.GetBool(EnrichResponseKey) {
 		data, workflowDataErr := createIgnoreWorkflowData(
 			workflow.NewTypeIdentifier(id, ignoreCreateWorkflowName),
 			config,
@@ -201,12 +201,12 @@ func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, ignore
 }
 
 func getExpireValue(config configuration.Configuration) (*time.Time, error) {
-	shouldParse := config.IsSet(expirationKey) || config.GetBool(interactiveKey)
+	shouldParse := config.IsSet(ExpirationKey) || config.GetBool(InteractiveKey)
 	if !shouldParse {
 		//nolint:nilnil // returning nil,nil here means that there is no expiration, and we didn't run into an error which is a valid case
 		return nil, nil
 	}
-	expireStr, err := config.GetStringWithError(expirationKey)
+	expireStr, err := config.GetStringWithError(ExpirationKey)
 	if err != nil || expireStr == "" {
 		return nil, err
 	}

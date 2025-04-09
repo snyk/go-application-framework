@@ -14,32 +14,32 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 	config := invocationCtx.GetConfiguration()
 	userInterface := invocationCtx.GetUserInterface()
 
-	config.AddDefaultValue(findingsIdKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil && existingValue != "" {
 			return existingValue, nil
 		}
 		return userInterface.Input(findingsIdDescription)
 	})
 
-	config.AddDefaultValue(ignoreTypeKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(IgnoreTypeKey, func(existingValue interface{}) (interface{}, error) {
 		return ignoreTypeDefaultFunc(existingValue, userInterface)
 	})
 
-	config.AddDefaultValue(reasonKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(ReasonKey, func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil && existingValue != "" {
 			return existingValue, nil
 		}
 		return userInterface.Input(reasonDescription)
 	})
 
-	config.AddDefaultValue(expirationKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(ExpirationKey, func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil && existingValue != "" {
 			return existingValue, nil
 		}
 		return userInterface.Input(expirationDescription)
 	})
 
-	config.AddDefaultValue(remoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(RemoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
 		return remoteRepoUrlDefaultFunc(existingValue, config, userInterface)
 	})
 }
