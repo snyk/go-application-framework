@@ -27,6 +27,6 @@ git pull
 cd -
 
 # Vendor OpenAPI build artefacts for use in cue
-cp -r $API_SPEC_PATH/internal/api/rest/versions/$VERSION/spec.yaml ./internal/api/policy/$VERSION/spec.yaml
+cp $API_SPEC_PATH/internal/api/rest/versions/$VERSION/spec.yaml ./internal/api/policy/$VERSION/spec.yaml
 
 echo "Generated" $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT
