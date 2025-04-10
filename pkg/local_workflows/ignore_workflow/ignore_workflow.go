@@ -39,7 +39,7 @@ const (
 	ReasonKey         = "reason"
 	reasonDescription = "Reason"
 
-	ExpirationKey         = "expires"
+	ExpirationKey         = "expiry"
 	expirationDescription = "Expiration (YYYY-MM-DD)"
 
 	RemoteRepoUrlKey         = code_workflow.ConfigurationRemoteRepoUrlFlagname
@@ -114,10 +114,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	id := invocationCtx.GetWorkflowIdentifier()
 
 	interactive := config.GetBool(InteractiveKey)
-	if interactive {
-		// add interactive default function
-		addCreateIgnoreDefaultConfigurationValues(invocationCtx)
-	}
+	addCreateIgnoreDefaultConfigurationValues(invocationCtx, interactive)
 
 	userName, err := getUser(invocationCtx)
 	if err != nil {

@@ -10,9 +10,18 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext) {
+func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext, interactive bool) {
 	config := invocationCtx.GetConfiguration()
 	userInterface := invocationCtx.GetUserInterface()
+
+	config.AddDefaultValue(RemoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
+		return remoteRepoUrlDefaultFunc(existingValue, config, userInterface, interactive)
+	})
+
+	// all other DefaultValues are only relevant in interactive execution mode
+	if !interactive {
+		return
+	}
 
 	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil && existingValue != "" {
@@ -38,13 +47,9 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 		}
 		return userInterface.Input(expirationDescription)
 	})
-
-	config.AddDefaultValue(RemoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
-		return remoteRepoUrlDefaultFunc(existingValue, config, userInterface)
-	})
 }
 
-func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration, userInterface ui.UserInterface) (interface{}, error) {
+func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration, userInterface ui.UserInterface, interactive bool) (interface{}, error) {
 	if existingValue != nil && existingValue != "" {
 		return existingValue, nil
 	}
@@ -58,8 +63,11 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 	}
 
 	repoUrl, err := getRepoUrlFromRepo()
-	if err != nil {
+
+	if err != nil && interactive {
 		return userInterface.Input(remoteRepoUrlDescription)
+	} else if err != nil {
+		return nil, err
 	}
 
 	return repoUrl, nil
