@@ -32,7 +32,7 @@ func TestScanner_Scan_SARIF(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -159,7 +159,7 @@ func TestScanner_Scan_LocalFinding(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -288,7 +288,7 @@ func TestScanner_Scan_InvalidSARIF(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -343,7 +343,7 @@ func TestScanner_ScanWithError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockEngine := mocks.NewMockEngine(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -396,7 +396,7 @@ func TestScanner_Scan_InvalidPayloadType(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -448,7 +448,7 @@ func TestScanner_Scan_EmptyResults(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockEngine := mocks.NewMockEngine(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -486,9 +486,8 @@ func TestScanner_Scan_EmptyResults(t *testing.T) {
 	assert.Equal(t, product.ProductCode, scanData.Product, "Expected product to be Snyk Code")
 	assert.Equal(t, types.FilePath("/test/path"), scanData.Path, "Expected path to be /test/path")
 
-	// We now expect an error for empty results - this is a design change to make it more explicit
-	assert.NotNil(t, scanData.Err, "Expected error with empty results")
-	assert.Contains(t, scanData.Err.Error(), "no results", "Error should indicate no results were returned")
+	// Empty results are now acceptable - this design change ensures we handle no findings correctly
+	assert.Nil(t, scanData.Err, "Expected no error with empty results")
 	assert.Empty(t, scanData.Issues, "Expected no issues with empty results")
 }
 
@@ -500,7 +499,7 @@ func TestScanner_Scan_MultipleResults(t *testing.T) {
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData1 := mocks.NewMockData(ctrl)
 	mockData2 := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -660,7 +659,7 @@ func TestScanner_Scan_NilPayload(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -717,7 +716,7 @@ func TestScanner_Scan_InvalidSARIFStructure(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -777,7 +776,7 @@ func TestScanner_Scan_WithLogger(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -838,7 +837,7 @@ func TestScanner_Scan_SARIFTransformationError(t *testing.T) {
 
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockData := mocks.NewMockData(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -896,7 +895,7 @@ func TestScanner_Scan_ConfigurationDetails(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockEngine := mocks.NewMockEngine(ctrl)
-	mockConfig := configuration.NewInMemory()
+	mockConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	// Create a channel to capture the processed scan data
 	scanDataCh := make(chan types.ScanData, 1)
@@ -937,8 +936,26 @@ func TestScanner_Scan_ConfigurationDetails(t *testing.T) {
 	assert.Equal(t, product.ProductCode, scanData.Product, "Expected product to be Snyk Code")
 	assert.Equal(t, testPath, scanData.Path, "Expected path to match input path")
 
-	// We now expect an error for empty results - this is a design change to make it more explicit
-	assert.NotNil(t, scanData.Err, "Expected error with empty results")
-	assert.Contains(t, scanData.Err.Error(), "no results", "Error should indicate no results were returned")
+	assert.Nil(t, scanData.Err, "Expected no error when no results are returned")
 	assert.Empty(t, scanData.Issues, "Expected no issues with empty results")
+}
+
+func TestIsNilInterface(t *testing.T) {
+	// Test with nil value
+	assert.True(t, isNilInterface(nil), "Expected nil interface to be detected as nil")
+
+	// Test with a non-nil value
+	var nonNil string = "test"
+	assert.False(t, isNilInterface(nonNil), "Expected non-nil value to not be detected as nil")
+
+	// Test with a nil pointer
+	var nilPtr *string
+	assert.True(t, isNilInterface(nilPtr), "Expected nil pointer to be detected as nil")
+
+	// Test with a struct with nil fields
+	type testStruct struct {
+		Field *string
+	}
+	var structWithNilField testStruct
+	assert.False(t, isNilInterface(structWithNilField), "Expected struct with nil field to not be detected as nil")
 }

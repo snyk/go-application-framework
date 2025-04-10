@@ -561,3 +561,50 @@ func TestFindingIssueWrapper_SetMethods(t *testing.T) {
 	wrapper.SetIsNew(true)
 	assert.True(t, wrapper.GetIsNew(), "Expected GetIsNew to return true after setting")
 }
+
+func TestFindingIssueWrapper_UntestableMethods(t *testing.T) {
+	// Create a basic finding resource
+	findingId := uuid.New()
+	msg := local_models.TypesFindingMessage{
+		Header: wrapperTestMessageHeader,
+		Text:   wrapperTestMessageText,
+	}
+	component := local_models.TypesComponent{
+		Name:     wrapperTestComponentName,
+		ScanType: wrapperTestScanType,
+	}
+
+	// Create a finding resource
+	finding := local_models.FindingResource{
+		Id: findingId,
+		Attributes: local_models.TypesFindingAttributes{
+			Message:   msg,
+			Component: component,
+		},
+	}
+
+	// Create the wrapper
+	wrapper := NewFindingIssueWrapper(finding, nil, "/project")
+
+	// Test GetFormattedMessage (it returns the message text)
+	assert.Equal(t, wrapperTestMessageText, wrapper.GetFormattedMessage(), "Expected GetFormattedMessage to return the message text")
+
+	// Test GetIsIgnored (it returns false as not implemented)
+	assert.False(t, wrapper.GetIsIgnored(), "Expected GetIsIgnored to return false")
+
+	// Test GetCodelensCommands (it returns nil as not implemented)
+	assert.Nil(t, wrapper.GetCodelensCommands(), "Expected GetCodelensCommands to return nil")
+
+	// Test SetCodelensCommands (passing nil as we don't have access to the actual type)
+	wrapper.SetCodelensCommands(nil)
+	assert.Nil(t, wrapper.GetCodelensCommands(), "Expected GetCodelensCommands to still return nil after setting")
+
+	// Test SetRange (it's a no-op)
+	initialRange := wrapper.GetRange()
+	newRange := types.Range{
+		Start: types.Position{Line: 100, Character: 100},
+		End:   types.Position{Line: 200, Character: 200},
+	}
+	wrapper.SetRange(newRange)
+	assert.Equal(t, initialRange, wrapper.GetRange(), "Expected range to remain unchanged after SetRange")
+}

@@ -111,7 +111,7 @@ func (s *Scanner) Scan(ctx context.Context, path types.FilePath, processResults 
 
 	// Check if we have workflow results
 	if len(results) == 0 {
-		scanData.Err = fmt.Errorf("no results from code workflow")
+		// No results - this is acceptable as it might mean no issues were found
 		processResults(ctx, scanData)
 		return
 	}
