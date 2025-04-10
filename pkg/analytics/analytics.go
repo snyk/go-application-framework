@@ -31,6 +31,7 @@ type Analytics interface {
 	SetIntegration(name string, version string)
 	SetCommand(command string)
 	SetOperatingSystem(os string)
+	Add(name string, data any)
 	AddError(err error)
 	AddHeader(headerFunc func() http.Header)
 	SetClient(clientFunc func() *http.Client)
@@ -162,6 +163,19 @@ func (a *AnalyticsImpl) SetCommand(command string) {
 
 func (a *AnalyticsImpl) SetOperatingSystem(os string) {
 	a.os = os
+}
+
+// Add adds an analytics data point
+func (a *AnalyticsImpl) Add(name string, data any) {
+	// TODO: validate/sanitise data
+	switch v := data.(type) {
+	// the extension property only accepts the  types
+	case string, int, bool:
+		// TODO: how to ensure name is in the correct format? i.e. `[workflowName||packageName]::name`
+		a.instrumentor.AddExtension(name, v)
+	default:
+		// TODO: handle unsupported type
+	}
 }
 
 // AddError adds an error to the error list.

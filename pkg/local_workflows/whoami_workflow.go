@@ -43,9 +43,15 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	// get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
+	analytics := invocationCtx.GetAnalytics()
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	var a = api.NewApi(url, httpClient)
+
+	analytics.Add(fmt.Sprint(whoAmIworkflowName, "::testingInt"), 123)
+	analytics.Add(fmt.Sprint(whoAmIworkflowName, "::testingString"), "whoAmIWorkflow test")
+	analytics.Add(fmt.Sprint(whoAmIworkflowName, "::testingBool"), true)
+	analytics.Add(fmt.Sprint(whoAmIworkflowName, "::testingInvalidType"), 3.14)
 
 	// only run if experimental flag is set
 	if !config.GetBool(experimentalFlag) {
