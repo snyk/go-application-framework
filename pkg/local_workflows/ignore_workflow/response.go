@@ -36,14 +36,15 @@ func policyResponseToSarifSuppression(policyResponse *v20241015.PolicyResponse) 
 	return &sarif.Suppression{
 		Guid:          policyResponse.Id.String(),
 		Justification: *policyResponse.Attributes.Action.Data.Reason,
+		Status:        policyReviewToSarifStatus(policyResponse.Attributes.Review),
 		Properties: sarif.SuppressionProperties{
 			Expiration: expires,
 			IgnoredOn:  policyResponse.Attributes.CreatedAt.Format(time.RFC3339),
+			Category:   sarif.Category(policyResponse.Attributes.Action.Data.IgnoreType),
 			IgnoredBy: sarif.IgnoredBy{
 				Name:  policyResponse.Attributes.CreatedBy.Name,
 				Email: policyResponse.Attributes.CreatedBy.Email,
 			},
 		},
-		Status: policyReviewToSarifStatus(policyResponse.Attributes.Review),
 	}
 }

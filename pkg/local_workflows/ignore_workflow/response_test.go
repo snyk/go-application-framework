@@ -58,24 +58,27 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
+	expectedUserName := "Test User"
+	expectedEmail := "test@example.com"
 	t.Run("When policyResponse has all fields", func(t *testing.T) {
 		reason := "security exception"
 		now := time.Now()
 		expires := now.Add(24 * time.Hour)
 		id := uuid.New()
-
+		ignoreType := v20241015.WontFix
 		policyResponse := &v20241015.PolicyResponse{
 			Id: id,
 			Attributes: v20241015.PolicyResponseAttributes{
 				CreatedAt: now,
 				CreatedBy: &v20241015.Principal{
-					Name:  "Test User",
-					Email: stringPtr("test@example.com"),
+					Name:  expectedUserName,
+					Email: stringPtr(expectedEmail),
 				},
 				Action: v20241015.PolicyActionIgnore{
 					Data: v20241015.PolicyActionIgnoreData{
-						Reason:  &reason,
-						Expires: &expires,
+						Reason:     &reason,
+						Expires:    &expires,
+						IgnoreType: ignoreType,
 					},
 				},
 				Review: v20241015.PolicyReviewApproved,
@@ -90,8 +93,9 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 		assert.NotNil(t, result.Properties.Expiration)
 		assert.Equal(t, expires.Format(time.RFC3339), *result.Properties.Expiration)
 		assert.Equal(t, now.Format(time.RFC3339), result.Properties.IgnoredOn)
-		assert.Equal(t, "Test User", result.Properties.IgnoredBy.Name)
-		assert.Equal(t, "test@example.com", *result.Properties.IgnoredBy.Email)
+		assert.Equal(t, expectedUserName, result.Properties.IgnoredBy.Name)
+		assert.Equal(t, expectedEmail, *result.Properties.IgnoredBy.Email)
+		assert.Equal(t, string(ignoreType), string(result.Properties.Category))
 		assert.Equal(t, sarif.Accepted, result.Status)
 	})
 
@@ -105,8 +109,8 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 			Attributes: v20241015.PolicyResponseAttributes{
 				CreatedAt: now,
 				CreatedBy: &v20241015.Principal{
-					Name:  "Test User",
-					Email: stringPtr("test@example.com"),
+					Name:  expectedUserName,
+					Email: stringPtr(expectedEmail),
 				},
 				Action: v20241015.PolicyActionIgnore{
 					Data: v20241015.PolicyActionIgnoreData{
@@ -125,8 +129,8 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 		assert.Equal(t, reason, result.Justification)
 		assert.Nil(t, result.Properties.Expiration)
 		assert.Equal(t, now.Format(time.RFC3339), result.Properties.IgnoredOn)
-		assert.Equal(t, "Test User", result.Properties.IgnoredBy.Name)
-		assert.Equal(t, "test@example.com", *result.Properties.IgnoredBy.Email)
+		assert.Equal(t, expectedUserName, result.Properties.IgnoredBy.Name)
+		assert.Equal(t, expectedEmail, *result.Properties.IgnoredBy.Email)
 		assert.Equal(t, sarif.Accepted, result.Status)
 	})
 
@@ -159,8 +163,8 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 					Attributes: v20241015.PolicyResponseAttributes{
 						CreatedAt: now,
 						CreatedBy: &v20241015.Principal{
-							Name:  "Test User",
-							Email: stringPtr("test@example.com"),
+							Name:  expectedUserName,
+							Email: stringPtr(expectedEmail),
 						},
 						Action: v20241015.PolicyActionIgnore{
 							Data: v20241015.PolicyActionIgnoreData{
