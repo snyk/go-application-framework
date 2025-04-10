@@ -168,9 +168,11 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	uiErr := userInterface.Output("\n✅ Your ignore request has been submitted.")
-	if uiErr != nil {
-		logger.Print(uiErr)
+	if interactive {
+		uiErr := userInterface.Output("\n✅ Your ignore request has been submitted.")
+		if uiErr != nil {
+			logger.Print(uiErr)
+		}
 	}
 
 	if config.GetBool(EnrichResponseKey) {
