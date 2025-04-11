@@ -92,7 +92,7 @@ func setupMockContext(t *testing.T, payload string, experimental bool, json bool
 	var httpClient *http.Client = http.DefaultClient
 
 	if mockClient {
-		httpClient = newTestClient(func(req *http.Request) *http.Response {
+		httpClient = NewTestClient(func(req *http.Request) *http.Response {
 			// Test request parameters
 			assert.Equal(t, referenceUrl, req.URL.String())
 			assert.Equal(t, "GET", req.Method)
