@@ -13,6 +13,7 @@ const (
 	FLAG_EXPERIMENTAL       string = "experimental"
 	FLAG_INCLUDE_IGNORES    string = "include-ignores"
 	FLAG_SEVERITY_THRESHOLD string = "severity-threshold"
+	FLAG_REMOTE_REPO_URL    string = "remote-repo-url"
 
 	// snyk_ constants
 	API_URL              string = "snyk_api" // AKA "endpoint" in the config file
