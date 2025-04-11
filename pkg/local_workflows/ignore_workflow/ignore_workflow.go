@@ -24,14 +24,9 @@ import (
 
 const (
 	ignoreCreateWorkflowName = "ignore.create"
-	ignoreEditWorkflowName   = "ignore.edit"
-	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "id"
 	findingsIdDescription = "Findings Id"
-
-	IgnoreIdKey         = "ignore-id"
-	ignoreIdDescription = "Ignore Id"
 
 	IgnoreTypeKey         = "ignore-type"
 	ignoreTypeDescription = "Ignore Type"
@@ -49,12 +44,10 @@ const (
 	EnrichResponseKey = "enrich_response"
 
 	policyAPIVersion = "2024-10-15"
-	policyApiTimeout = 5 * time.Minute
+	policyApiTimeout = time.Minute
 )
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
-var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
-var WORKFLOWID_IGNORE_DELETE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreDeleteWorkflowName)
 
 func InitIgnoreWorkflows(engine workflow.Engine) error {
 	createFlagset := pflag.NewFlagSet(ignoreCreateWorkflowName, pflag.ExitOnError)
@@ -67,44 +60,8 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	createFlagset.Bool(EnrichResponseKey, false, "")
 	createFlagset.Bool(InteractiveKey, true, "")
 	_, err := engine.Register(WORKFLOWID_IGNORE_CREATE, workflow.ConfigurationOptionsFromFlagset(createFlagset), ignoreCreateWorkflowEntryPoint)
-	if err != nil {
-		return err
-	}
 
-	editFlagset := pflag.NewFlagSet(ignoreEditWorkflowName, pflag.ExitOnError)
-	editFlagset.String(IgnoreIdKey, "", ignoreIdDescription)
-	editFlagset.String(FindingsIdKey, "", findingsIdDescription)
-	editFlagset.String(IgnoreTypeKey, "", ignoreTypeDescription)
-	editFlagset.String(ReasonKey, "", reasonDescription)
-	editFlagset.String(ExpirationKey, "", expirationDescription)
-	editFlagset.String(RemoteRepoUrlKey, "", remoteRepoUrlDescription)
-	// If set to false, no response will be returned
-	editFlagset.Bool(EnrichResponseKey, false, "")
-	editFlagset.Bool(InteractiveKey, true, "")
-	_, err = engine.Register(WORKFLOWID_IGNORE_EDIT, workflow.ConfigurationOptionsFromFlagset(editFlagset), ignoreEditWorkflowEntryPoint)
-	if err != nil {
-		return err
-	}
-
-	deleteFlagSet := pflag.NewFlagSet(ignoreDeleteWorkflowName, pflag.ExitOnError)
-	deleteFlagSet.String(IgnoreIdKey, "", ignoreIdDescription)
-	// If set to false, no response will be returned
-	deleteFlagSet.Bool(EnrichResponseKey, false, "")
-	deleteFlagSet.Bool(InteractiveKey, true, "")
-	_, err = engine.Register(WORKFLOWID_IGNORE_DELETE, workflow.ConfigurationOptionsFromFlagset(deleteFlagSet), ignoreDeleteWorkflowEntryPoint)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func ignoreEditWorkflowEntryPoint(_ workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
-	panic("not implemented")
-}
-
-func ignoreDeleteWorkflowEntryPoint(_ workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
-	panic("not implemented")
+	return err
 }
 
 func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
@@ -118,7 +75,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 	userName, err := getUser(invocationCtx)
 	if err != nil {
-		return nil, fmt.Errorf("user is not authenticated: %w", err)
+		return nil, err
 	}
 
 	findingsId, err := config.GetStringWithError(FindingsIdKey)
@@ -131,7 +88,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	repoUrl, err := config.GetStringWithError(code_workflow.ConfigurationRemoteRepoUrlFlagname)
+	repoUrl, err := config.GetStringWithError(RemoteRepoUrlKey)
 	if err != nil {
 		return nil, err
 	}
@@ -152,13 +109,13 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		uiErr := userInterface.Output(fmt.Sprintf("👉🏼 Make sure the code containing the issue is committed, "+
 			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, ignoreType)))
 		if uiErr != nil {
-			logger.Print(uiErr)
+			logger.Warn().Err(err).Send()
 		}
 	}
 
 	branchName, branchNameErr := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	if branchNameErr != nil {
-		logger.Print(branchNameErr)
+		logger.Warn().Err(err).Send()
 	}
 
 	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
@@ -171,7 +128,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	if interactive {
 		uiErr := userInterface.Output("\n✅ Your ignore request has been submitted.")
 		if uiErr != nil {
-			logger.Print(uiErr)
+			logger.Warn().Err(err).Send()
 		}
 	}
 
@@ -275,15 +232,14 @@ func getUser(invocationCtx workflow.InvocationContext) (string, error) {
 		return "", err
 	}
 
-	noAuthErr := fmt.Errorf("user is not authenticated")
 	if len(data) > 0 {
 		user, ok := data[0].GetPayload().(string)
 		if !ok {
-			return "", noAuthErr
+			return "", fmt.Errorf("payload is not a string")
 		}
 		return user, nil
 	} else {
-		return "", noAuthErr
+		return "", fmt.Errorf("no payload found")
 	}
 }
 
