@@ -111,6 +111,11 @@ func getSarifFileRenderer(config configuration.Configuration, findings []*local_
 		return nil, nil
 	}
 
+	pathError := iUtils.CreateFilePath(outputFileName)
+	if pathError != nil {
+		return nil, pathError
+	}
+
 	file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
 	if fileErr != nil {
 		return nil, fileErr
