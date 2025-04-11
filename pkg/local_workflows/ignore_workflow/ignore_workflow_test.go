@@ -94,12 +94,13 @@ func Test_getIgnoreRequestDetailsStructure(t *testing.T) {
 	assert.NoError(t, err)
 	userName := "test-user"
 	ignoreType := "wont-fix"
-
-	result := getIgnoreRequestDetailsStructure(&expireDate, userName, ignoreType)
+	ordId := uuid.New().String()
+	result := getIgnoreRequestDetailsStructure(&expireDate, userName, ordId, ignoreType)
 
 	assert.Contains(t, result, "2025-01-01")
 	assert.Contains(t, result, userName)
 	assert.Contains(t, result, ignoreType)
+	assert.Contains(t, result, ordId)
 }
 
 func Test_validIgnoreType(t *testing.T) {
@@ -111,7 +112,8 @@ func Test_validIgnoreType(t *testing.T) {
 
 	for _, validType := range validTypes {
 		t.Run("valid: "+validType, func(t *testing.T) {
-			assert.True(t, isValidIgnoreType(validType), "Should be a valid ignore type")
+			err := isValidIgnoreType(validType)
+			assert.Nil(t, err, "Should be a valid ignore type")
 		})
 	}
 
@@ -123,7 +125,8 @@ func Test_validIgnoreType(t *testing.T) {
 
 	for _, invalidType := range invalidTypes {
 		t.Run("invalid: "+invalidType, func(t *testing.T) {
-			assert.False(t, isValidIgnoreType(invalidType), "Should be an invalid ignore type")
+			err := isValidIgnoreType(invalidType)
+			assert.NotNil(t, err, "Should be an invalid ignore type")
 		})
 	}
 }
@@ -134,8 +137,8 @@ func Test_createPolicy(t *testing.T) {
 
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
-
-		result, err := sendCreateIgnore(invocationContext, input)
+		orgId := uuid.New()
+		result, err := sendCreateIgnore(invocationContext, input, orgId)
 
 		assert.NoError(t, err, "Should not return an error")
 		assert.NotNil(t, result, "Should return a policy response")
@@ -150,7 +153,8 @@ func Test_createPolicy(t *testing.T) {
 		var input policyApi.CreatePolicyPayload
 		input.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
 
-		_, err := sendCreateIgnore(invocationContext, input)
+		orgId := uuid.New()
+		_, err := sendCreateIgnore(invocationContext, input, orgId)
 
 		assert.Error(t, err, "Should return an error")
 		assert.Contains(t, err.Error(), "500", "Should contain status code")
@@ -220,7 +224,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		config.Set(FindingsIdKey, expectedFindingsId)
 		config.Set(IgnoreTypeKey, expectedIgnoreType)
 		config.Set(ReasonKey, expectedReason)
-		config.Set(ExpirationKey, expectedExpirationDate.Format(time.RFC3339))
+		config.Set(ExpirationKey, expectedExpirationDate.Format(time.DateOnly))
 		config.Set(RemoteRepoUrlKey, testRepoUrl)
 		config.Set(configuration.API_URL, "https://api.snyk.io")
 		config.Set(EnrichResponseKey, true)

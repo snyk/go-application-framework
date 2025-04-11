@@ -17,7 +17,6 @@ import (
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -37,7 +36,7 @@ const (
 	ExpirationKey         = "expiry"
 	expirationDescription = "Expiration (YYYY-MM-DD)"
 
-	RemoteRepoUrlKey         = code_workflow.ConfigurationRemoteRepoUrlFlagname
+	RemoteRepoUrlKey         = configuration.FLAG_REMOTE_REPO_URL
 	remoteRepoUrlDescription = "Remote Repository URL"
 
 	InteractiveKey    = "interactive"
@@ -105,9 +104,14 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	if interactive {
+	orgUuid, err := uuid.Parse(config.GetString(configuration.ORGANIZATION))
+	if err != nil {
+		return nil, err
+	}
+
+	if userInterface != nil {
 		uiErr := userInterface.Output(fmt.Sprintf("👉🏼 Make sure the code containing the issue is committed, "+
-			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, ignoreType)))
+			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, orgUuid.String(), ignoreType)))
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
 		}
@@ -119,13 +123,13 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
-	response, err := sendCreateIgnore(invocationCtx, payload)
+	response, err := sendCreateIgnore(invocationCtx, payload, orgUuid)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if interactive {
+	if userInterface != nil {
 		uiErr := userInterface.Output("\n✅ Your ignore request has been submitted.")
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
@@ -147,13 +151,13 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	return output, err
 }
 
-func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, ignoreType string) string {
+func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, orgId string, ignoreType string) string {
 	requestedOn := time.Now().Format(time.DateOnly)
 	expireDisplayText := "Does not expire"
 	if expire != nil {
 		expireDisplayText = expire.Format(time.DateOnly)
 	}
-	return fmt.Sprintf("  Requested on:  %s\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s", requestedOn, userName, expireDisplayText, ignoreType)
+	return fmt.Sprintf("  Requested on:  %s\n  Requested by:  %s\n  Organization:  %s\n  Expiration:    %s\n  Ignore type:   %s", requestedOn, userName, orgId, expireDisplayText, ignoreType)
 }
 
 func getExpireValue(config configuration.Configuration) (*time.Time, error) {
@@ -243,7 +247,7 @@ func getUser(invocationCtx workflow.InvocationContext) (string, error) {
 	}
 }
 
-func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody) (*policyApi.PolicyResponse, error) {
+func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody, orgUuid uuid.UUID) (*policyApi.PolicyResponse, error) {
 	config := invocationCtx.GetConfiguration()
 	host, err := url.JoinPath(config.GetString(configuration.API_URL), "rest")
 	if err != nil {
@@ -251,10 +255,6 @@ func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.
 	}
 
 	params := policyApi.CreateOrgPolicyParams{Version: policyAPIVersion}
-	orgUuid, err := uuid.Parse(config.GetString(configuration.ORGANIZATION))
-	if err != nil {
-		return nil, err
-	}
 
 	client, err := policyApi.NewClient(host, policyApi.WithHTTPClient(invocationCtx.GetNetworkAccess().GetHttpClient()))
 	if err != nil {
