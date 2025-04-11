@@ -19,6 +19,7 @@ package logging
 import (
 	"fmt"
 	"io"
+	"os/user"
 	"regexp"
 	"strings"
 	"sync"
@@ -188,6 +189,13 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+
+	u, err := user.Current()
+	if err == nil {
+		s = fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(u.Username))
+		addTermToDict(s, 0, dict)
+	}
+
 	return dict
 }
 
