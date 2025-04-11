@@ -189,6 +189,11 @@ func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, 
 	if err := outputDestination.Remove(jsonFileName); err != nil {
 		return fmt.Errorf("failed to remove existing output file: %w", err)
 	}
+
+	if err := iUtils.CreateFilePath(jsonFileName); err != nil {
+		return fmt.Errorf("failed to create output folder: %w", err)
+	}
+
 	if err := outputDestination.WriteFile(jsonFileName, singleData, iUtils.FILEPERM_666); err != nil {
 		return fmt.Errorf("failed to write json output: %w", err)
 	}
