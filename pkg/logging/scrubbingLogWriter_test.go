@@ -19,6 +19,7 @@ package logging
 import (
 	"bytes"
 	"fmt"
+	"os/user"
 	"regexp"
 	"testing"
 
@@ -194,6 +195,8 @@ func TestScrubFunction(t *testing.T) {
 
 func TestAddDefaults(t *testing.T) {
 	dict := addMandatoryMasking(ScrubbingDict{})
+	u, uErr := user.Current()
+	assert.NoError(t, uErr)
 
 	tests := []struct {
 		name     string
@@ -254,6 +257,11 @@ func TestAddDefaults(t *testing.T) {
 			name:     "SNYK_TOKEN",
 			input:    "SNYK_TOKEN=01234567-0123-0123-0123-012345678901",
 			expected: "SNYK_TOKEN=***",
+		},
+		{
+			name:     "username",
+			input:    fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", u.Username, u.Username),
+			expected: fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", redactMask, redactMask),
 		},
 	}
 	for _, test := range tests {
