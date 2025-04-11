@@ -21,7 +21,8 @@ import (
 type UserInterface interface {
 	Output(output string) error
 	OutputError(err error, opts ...Opts) error
-	NewProgressBar() ProgressBar
+	NewProgressBar(title string, message string) ProgressBar
+	NewProgressBarInfinite(title string, message string) ProgressBarInfinite
 	Input(prompt string) (string, error)
 }
 
@@ -37,10 +38,20 @@ func newConsoleUi(in io.Reader, out io.Writer, err io.Writer) UserInterface {
 		reader:      bufio.NewReader(in),
 	}
 
-	defaultUi.progressBarFactory = func() ProgressBar {
+	defaultUi.progressBarFactory = func(title string, message string) ProgressBar {
 		if stderr, ok := err.(*os.File); ok {
 			if isatty.IsTerminal(stderr.Fd()) || isatty.IsCygwinTerminal(stderr.Fd()) {
-				return newProgressBar(err, SpinnerType, true)
+				return newProgressBar(title, message, err, false, SpinnerType, true)
+			}
+		}
+
+		return emptyProgressBar{}
+	}
+
+	defaultUi.progressBarInfiniteFactory = func(title string, message string) ProgressBarInfinite {
+		if stderr, ok := err.(*os.File); ok {
+			if isatty.IsTerminal(stderr.Fd()) || isatty.IsCygwinTerminal(stderr.Fd()) {
+				return newProgressBar(title, message, err, true, SpinnerType, true)
 			}
 		}
 
@@ -51,10 +62,11 @@ func newConsoleUi(in io.Reader, out io.Writer, err io.Writer) UserInterface {
 }
 
 type consoleUi struct {
-	writer             io.Writer
-	errorWriter        io.Writer
-	progressBarFactory func() ProgressBar
-	reader             *bufio.Reader
+	writer                     io.Writer
+	errorWriter                io.Writer
+	progressBarFactory         func(title string, message string) ProgressBar
+	progressBarInfiniteFactory func(title string, message string) ProgressBarInfinite
+	reader                     *bufio.Reader
 }
 
 type uiConfig struct {
@@ -101,8 +113,12 @@ func (ui *consoleUi) OutputError(err error, opts ...Opts) error {
 	return utils.ErrorOf(fmt.Fprintln(ui.errorWriter, err.Error()))
 }
 
-func (ui *consoleUi) NewProgressBar() ProgressBar {
-	return ui.progressBarFactory()
+func (ui *consoleUi) NewProgressBar(title string, message string) ProgressBar {
+	return ui.progressBarFactory(title, message)
+}
+
+func (ui *consoleUi) NewProgressBarInfinite(title string, message string) ProgressBarInfinite {
+	return ui.progressBarInfiniteFactory(title, message)
 }
 
 func (ui *consoleUi) Input(prompt string) (string, error) {

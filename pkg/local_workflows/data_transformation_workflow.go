@@ -12,7 +12,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
-	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -40,12 +39,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return output, nil
 	}
 
-	progress := invocationCtx.GetUserInterface().NewProgressBar()
-	progress.SetTitle("Transforming data")
-	progressError := progress.UpdateProgress(ui.InfiniteProgress)
-	if progressError != nil {
-		logger.Err(progressError).Msgf("Error when setting progress")
-	}
+	progress := invocationCtx.GetUserInterface().NewProgressBarInfinite("Transforming data", "")
 
 	defer func() {
 		localError := progress.Clear()

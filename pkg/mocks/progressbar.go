@@ -47,18 +47,6 @@ func (mr *MockProgressBarMockRecorder) Clear() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clear", reflect.TypeOf((*MockProgressBar)(nil).Clear))
 }
 
-// SetTitle mocks base method.
-func (m *MockProgressBar) SetTitle(title string) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetTitle", title)
-}
-
-// SetTitle indicates an expected call of SetTitle.
-func (mr *MockProgressBarMockRecorder) SetTitle(title interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTitle", reflect.TypeOf((*MockProgressBar)(nil).SetTitle), title)
-}
-
 // UpdateProgress mocks base method.
 func (m *MockProgressBar) UpdateProgress(progress float64) error {
 	m.ctrl.T.Helper()
@@ -71,4 +59,69 @@ func (m *MockProgressBar) UpdateProgress(progress float64) error {
 func (mr *MockProgressBarMockRecorder) UpdateProgress(progress interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProgress", reflect.TypeOf((*MockProgressBar)(nil).UpdateProgress), progress)
+}
+
+// UpdateProgressWithMessage mocks base method.
+func (m *MockProgressBar) UpdateProgressWithMessage(progress float64, message string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateProgressWithMessage", progress, message)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateProgressWithMessage indicates an expected call of UpdateProgressWithMessage.
+func (mr *MockProgressBarMockRecorder) UpdateProgressWithMessage(progress, message interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProgressWithMessage", reflect.TypeOf((*MockProgressBar)(nil).UpdateProgressWithMessage), progress, message)
+}
+
+// MockProgressBarInfinite is a mock of ProgressBarInfinite interface.
+type MockProgressBarInfinite struct {
+	ctrl     *gomock.Controller
+	recorder *MockProgressBarInfiniteMockRecorder
+}
+
+// MockProgressBarInfiniteMockRecorder is the mock recorder for MockProgressBarInfinite.
+type MockProgressBarInfiniteMockRecorder struct {
+	mock *MockProgressBarInfinite
+}
+
+// NewMockProgressBarInfinite creates a new mock instance.
+func NewMockProgressBarInfinite(ctrl *gomock.Controller) *MockProgressBarInfinite {
+	mock := &MockProgressBarInfinite{ctrl: ctrl}
+	mock.recorder = &MockProgressBarInfiniteMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockProgressBarInfinite) EXPECT() *MockProgressBarInfiniteMockRecorder {
+	return m.recorder
+}
+
+// Clear mocks base method.
+func (m *MockProgressBarInfinite) Clear() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Clear")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Clear indicates an expected call of Clear.
+func (mr *MockProgressBarInfiniteMockRecorder) Clear() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clear", reflect.TypeOf((*MockProgressBarInfinite)(nil).Clear))
+}
+
+// SetMessage mocks base method.
+func (m *MockProgressBarInfinite) SetMessage(message string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetMessage", message)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetMessage indicates an expected call of SetMessage.
+func (mr *MockProgressBarInfiniteMockRecorder) SetMessage(message interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMessage", reflect.TypeOf((*MockProgressBarInfinite)(nil).SetMessage), message)
 }

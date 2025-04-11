@@ -50,17 +50,31 @@ func (mr *MockUserInterfaceMockRecorder) Input(prompt interface{}) *gomock.Call 
 }
 
 // NewProgressBar mocks base method.
-func (m *MockUserInterface) NewProgressBar() ui.ProgressBar {
+func (m *MockUserInterface) NewProgressBar(title, message string) ui.ProgressBar {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewProgressBar")
+	ret := m.ctrl.Call(m, "NewProgressBar", title, message)
 	ret0, _ := ret[0].(ui.ProgressBar)
 	return ret0
 }
 
 // NewProgressBar indicates an expected call of NewProgressBar.
-func (mr *MockUserInterfaceMockRecorder) NewProgressBar() *gomock.Call {
+func (mr *MockUserInterfaceMockRecorder) NewProgressBar(title, message interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewProgressBar", reflect.TypeOf((*MockUserInterface)(nil).NewProgressBar))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewProgressBar", reflect.TypeOf((*MockUserInterface)(nil).NewProgressBar), title, message)
+}
+
+// NewProgressBarInfinite mocks base method.
+func (m *MockUserInterface) NewProgressBarInfinite(title, message string) ui.ProgressBarInfinite {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewProgressBarInfinite", title, message)
+	ret0, _ := ret[0].(ui.ProgressBarInfinite)
+	return ret0
+}
+
+// NewProgressBarInfinite indicates an expected call of NewProgressBarInfinite.
+func (mr *MockUserInterfaceMockRecorder) NewProgressBarInfinite(title, message interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewProgressBarInfinite", reflect.TypeOf((*MockUserInterface)(nil).NewProgressBarInfinite), title, message)
 }
 
 // Output mocks base method.

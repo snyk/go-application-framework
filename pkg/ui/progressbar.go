@@ -20,21 +20,21 @@ const (
 	currentPosition               = ">"
 	barWidth                      = 50
 	clearLine                     = "\r\033[K"
-	InfiniteProgress              = -1.0 // use UpdateProgress(InfiniteProgress) to show progress without setting a percentage
+	infiniteProgress              = float64(-1.0)
 	SpinnerType      ProgressType = "spinner"
 	BarType          ProgressType = "bar"
 )
 
 // ProgressBar is an interface for interacting with some visual progress-bar.
 // It is used to show the progress of some running task (or multiple).
-// Example (Infinite Progress without a value):
+// Example (Infinite Progress without a value): // TODO - Change.
 //
 //	var pBar ProgressBar = ui.DefaultUi().NewProgressBar()
 //	defer pBar.Clear()
 //	pBar.SetTitle("Downloading...")
-//	_ = pBar.UpdateProgress(ui.InfiniteProgress)
+//	_ = pBar.UpdateProgress(ui.InfiniteProgress) // TODO - Change.
 //
-// Example (with a value):
+// Example (with a value): // TODO - Change.
 //
 //	var pBar ProgressBar = ui.DefaultUi().NewProgressBar()
 //	defer pBar.Clear()
@@ -49,8 +49,6 @@ const (
 //	    pBar.UpdateProgress(float64(i) / 100.0)
 //	    time.Sleep(time.Millisecond * 50)
 //	}
-//
-// The title can be changed in the middle of the progress bar.
 type ProgressBar interface {
 	// UpdateProgress updates the state of the progress bar.
 	// The argument `progress` should be a float64 between 0 and 1,
@@ -58,33 +56,63 @@ type ProgressBar interface {
 	// Returns an error if the update operation fails.
 	UpdateProgress(progress float64) error
 
-	// SetTitle sets the title of the progress bar, which is displayed next to the bar.
-	// The title provides context or description for the operation that is being tracked.
-	SetTitle(title string)
+	// UpdateProgressWithMessage updates the state of the progress bar.
+	// The argument `progress` should be a float64 between 0 and 1,
+	// where 0 represents 0% completion, and 1 represents 100% completion.
+	// The argument `message` will persist on the progress bar alongside the
+	// title until UpdateProgressWithMessage is called again.
+	// Set to "" to clear the message.
+	// Returns an error if the update operation fails.
+	UpdateProgressWithMessage(progress float64, message string) error
 
-	// Clear removes the progress bar from the terminal.
+	// Clear removes the progress bar from the user interface.
+	// Returns an error if the clearing operation fails.
+	Clear() error
+}
+
+// ProgressBarInfinite is like ProgressBar, but without a reported percentage,
+// so the spinner is infinite.
+type ProgressBarInfinite interface {
+	// SetMessage updates the state of the progress bar.
+	// The argument `message` will persist on the progress bar alongside the
+	// title until SetMessage is called again.
+	// Set to "" to clear the message.
+	// Returns an error if the update operation fails.
+	SetMessage(message string) error
+
+	// Clear removes the progress bar from the user interface.
 	// Returns an error if the clearing operation fails.
 	Clear() error
 }
 
 type emptyProgressBar struct{}
 
-func (emptyProgressBar) UpdateProgress(float64) error { return nil }
-func (emptyProgressBar) SetTitle(string)              {}
-func (emptyProgressBar) Clear() error                 { return nil }
+func (emptyProgressBar) UpdateProgress(float64) error                    { return nil }
+func (emptyProgressBar) UpdateProgressWithMessage(float64, string) error { return nil }
+func (emptyProgressBar) SetMessage(string) error                         { return nil }
+func (emptyProgressBar) Clear() error                                    { return nil }
 
-func newProgressBar(writer io.Writer, t ProgressType, animated bool) *consoleProgressBar {
-	p := &consoleProgressBar{writer: writer}
-	p.active.Store(true)
-	p.animationRunning = false
-	p.progressType = t
-	p.animated = animated
+func newProgressBar(title string, message string, writer io.Writer, infinite bool, t ProgressType, animated bool) *consoleProgressBar {
+	p := &consoleProgressBar{
+		writer:       writer,
+		title:        title,
+		message:      message,
+		progressType: t,
+		animated:     animated,
+	}
+	if infinite {
+		p.progress.Store(utils.PtrOf(infiniteProgress))
+	} else {
+		p.progress.Store(utils.PtrOf(0.0))
+	}
+	p.start()
 	return p
 }
 
 type consoleProgressBar struct {
 	writer           io.Writer
 	title            string
+	message          string
 	state            int
 	progress         atomic.Pointer[float64]
 	active           atomic.Bool
@@ -95,22 +123,27 @@ type consoleProgressBar struct {
 
 func (p *consoleProgressBar) UpdateProgress(progress float64) error {
 	if !p.active.Load() {
-		return fmt.Errorf("progress not active")
+		return fmt.Errorf("progress bar not active")
 	}
 
 	p.progress.Store(&progress)
 
-	if !p.animationRunning && p.animated {
-		p.animationRunning = true
-		go p.update()
-	} else if !p.animated {
+	if !p.animated {
 		p.update()
 	}
 
 	return nil
 }
 
-func (p *consoleProgressBar) SetTitle(title string) { p.title = title }
+func (p *consoleProgressBar) UpdateProgressWithMessage(progress float64, message string) error {
+	p.message = message
+	return p.UpdateProgress(progress)
+}
+
+func (p *consoleProgressBar) SetMessage(message string) error {
+	p.message = message
+	return p.UpdateProgress(infiniteProgress)
+}
 
 func (p *consoleProgressBar) Clear() error {
 	if !p.active.Load() {
@@ -118,6 +151,16 @@ func (p *consoleProgressBar) Clear() error {
 	}
 	p.active.Store(false)
 	return utils.ErrorOf(fmt.Fprint(p.writer, clearLine))
+}
+
+func (p *consoleProgressBar) start() {
+	p.active.Store(true)
+	if p.animated {
+		p.animationRunning = true
+		go p.update()
+	} else {
+		p.update()
+	}
 }
 
 func (p *consoleProgressBar) update() {
@@ -134,13 +177,19 @@ func (p *consoleProgressBar) update() {
 
 		var progressString string
 		progress := *p.progress.Load()
-		if progress >= 0 {
+		if progress >= 0 { // quantifiable (non-infinite)
 			progress = math.Max(0, math.Min(1, progress))
 			progressString = fmt.Sprintf("%3.0f%% ", progress*100)
 		}
 
 		if len(p.title) > 0 {
 			progressString += p.title
+			if len(p.message) > 0 {
+				progressString += " - "
+			}
+		}
+		if len(p.message) > 0 {
+			progressString += p.message
 		}
 
 		p.state++

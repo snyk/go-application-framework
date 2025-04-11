@@ -16,14 +16,11 @@ func Test_ProgressBar_Spinner(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, SpinnerType, false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar("Hello", "Starting...", writer, false, SpinnerType, false)
 
-	err = bar.UpdateProgress(0)
+	err = bar.UpdateProgressWithMessage(0.3, "Running...")
 	assert.NoError(t, err)
-	err = bar.UpdateProgress(0.3)
-	assert.NoError(t, err)
-	err = bar.UpdateProgress(1.2)
+	err = bar.UpdateProgressWithMessage(1.2, "Done")
 	assert.NoError(t, err)
 
 	err = bar.Clear()
@@ -32,7 +29,7 @@ func Test_ProgressBar_Spinner(t *testing.T) {
 	err = bar.UpdateProgress(1.5)
 	assert.Error(t, err)
 
-	expected := "\r[K\\   0% Hello\r[K|  30% Hello\r[K/ 100% Hello\r\u001B[K"
+	expected := "\r[K\\   0% Hello - Starting...\r[K|  30% Hello - Running...\r[K/ 100% Hello - Done\r\u001B[K"
 	assert.Equal(t, expected, writer.String())
 }
 
@@ -40,14 +37,11 @@ func Test_ProgressBar_Spinner_Infinite(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, SpinnerType, false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar("Hello", "", writer, true, SpinnerType, false)
 
-	err = bar.UpdateProgress(InfiniteProgress)
+	err = bar.SetMessage("Taking longer than expected...")
 	assert.NoError(t, err)
-	err = bar.UpdateProgress(InfiniteProgress)
-	assert.NoError(t, err)
-	err = bar.UpdateProgress(InfiniteProgress)
+	err = bar.SetMessage("")
 	assert.NoError(t, err)
 
 	err = bar.Clear()
@@ -56,7 +50,7 @@ func Test_ProgressBar_Spinner_Infinite(t *testing.T) {
 	err = bar.UpdateProgress(1.5)
 	assert.Error(t, err)
 
-	expected := "\r[K\\ Hello\r[K| Hello\r[K/ Hello\r\u001B[K"
+	expected := "\r[K\\ Hello\r[K| Hello - Taking longer than expected...\r[K/ Hello\r\u001B[K"
 	assert.Equal(t, expected, writer.String())
 }
 
@@ -64,11 +58,8 @@ func Test_ProgressBar_Bar(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, BarType, false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar("Hello", "", writer, false, BarType, false)
 
-	err = bar.UpdateProgress(0)
-	assert.NoError(t, err)
 	err = bar.UpdateProgress(0.3)
 	assert.NoError(t, err)
 	err = bar.UpdateProgress(1.2)
@@ -88,14 +79,11 @@ func Test_ProgressBar_Unknown(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, "Unknown", false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar("Hello", "Initialising...", writer, false, "Unknown", false)
 
-	err = bar.UpdateProgress(0)
-	assert.NoError(t, err)
 	err = bar.UpdateProgress(0.3)
 	assert.NoError(t, err)
-	err = bar.UpdateProgress(1.2)
+	err = bar.UpdateProgressWithMessage(1.2, "Done")
 	assert.NoError(t, err)
 
 	err = bar.Clear()
@@ -107,7 +95,7 @@ func Test_ProgressBar_Unknown(t *testing.T) {
 	err = bar.UpdateProgress(1.5)
 	assert.Error(t, err)
 
-	expected := "\r\u001B[K  0% Hello\r\u001B[K 30% Hello\r\u001B[K100% Hello\r\u001B[K"
+	expected := "\r\u001B[K  0% Hello - Initialising...\r\u001B[K 30% Hello - Initialising...\r\u001B[K100% Hello - Done\r\u001B[K"
 	assert.Equal(t, expected, writer.String())
 }
 
@@ -120,12 +108,11 @@ func Test_DefaultUi(t *testing.T) {
 	stdin.WriteString(name + "\n")
 
 	ui := newConsoleUi(stdin, stdout, stderr)
-	bar := ui.NewProgressBar()
+	bar := ui.NewProgressBarInfinite("Hello", "")
 	assert.NotNil(t, bar)
 
 	// the bar will not render since the writer is not a TTY
-	bar.SetTitle("Hello")
-	err := bar.UpdateProgress(InfiniteProgress)
+	err := bar.SetMessage("Won't appear")
 	assert.NoError(t, err)
 
 	err = bar.Clear()
@@ -138,10 +125,10 @@ func Test_DefaultUi(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, name, in)
 
-	err = ui.OutputError(fmt.Errorf("Error!"))
+	err = ui.OutputError(fmt.Errorf("an error occurred"))
 	assert.NoError(t, err)
 
-	assert.Equal(t, "Hello\nEnter your name: Error!\n", stdout.String())
+	assert.Equal(t, "Hello\nEnter your name: an error occurred\n", stdout.String())
 	assert.Equal(t, "", stderr.String())
 }
 
@@ -161,7 +148,7 @@ func Test_OutputError(t *testing.T) {
 
 	t.Run("Error Catalog error", func(t *testing.T) {
 		err := snyk.NewBadRequestError("If you carry on like this you will ensure the wrath of OWASP, the God of Code Injection.")
-		err.Links = []string{"http://example.com/docs"}
+		err.Links = []string{"https://example.com/docs"}
 
 		lipgloss.SetColorProfile(termenv.TrueColor)
 		uiError := ui.OutputError(err)
