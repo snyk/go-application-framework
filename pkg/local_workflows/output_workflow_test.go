@@ -537,3 +537,19 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 		}
 	})
 }
+
+func TestJsonWriteToFile(t *testing.T) {
+	i := 0
+	logger := zerolog.Nop()
+	outputDi := utils.NewOutputDestination()
+	fileName := filepath.Join(t.TempDir(), "not-existing", "file.json")
+	rawData := []byte("hello world")
+	data := []workflow.Data{
+		workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output"), "content-type", rawData),
+	}
+
+	assert.NoFileExists(t, fileName)
+	err := jsonWriteToFile(&logger, data, i, rawData, fileName, outputDi)
+	assert.NoError(t, err)
+	assert.FileExists(t, fileName)
+}
