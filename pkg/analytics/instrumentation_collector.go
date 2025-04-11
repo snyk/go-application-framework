@@ -1,8 +1,10 @@
 package analytics
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os/user"
 	"time"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -123,13 +125,14 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface
 
 func GetV2InstrumentationObject(collector InstrumentationCollector) (*api.AnalyticsRequestBody, error) {
 	t, ok := collector.(*instrumentationCollectorImpl)
-	if ok {
-		return t.GetV2InstrumentationObject(), nil
+	if !ok {
+		return nil, fmt.Errorf("failed to convert collector")
 	}
-	return nil, fmt.Errorf("failed to convert collector")
+
+	return t.GetV2InstrumentationObject()
 }
 
-func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() *api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() (*api.AnalyticsRequestBody, error) {
 	a := ic.getV2Attributes()
 
 	d := api.AnalyticsData{
@@ -137,9 +140,38 @@ func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() *api.Analyt
 		Attributes: a,
 	}
 
+	// Since the `extension` attribute in the analytics payload is a value any
+	// product line potentially can contribute to, we utilize the same sanitation logic
+	// already in place for the legacy v1 analytics, to ensure the same level of PII protection.
+	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
+	if err != nil {
+		return nil, err
+	}
+
+	var sanitized []byte
+	sanitized, err = SanitizeValuesByKey(sensitiveFieldNames, sanitizeReplacementString, extension)
+	if err != nil {
+		return nil, err
+	}
+
+	u, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+
+	sanitized, err = SanitizeUsername(u.Username, u.HomeDir, sanitizeReplacementString, sanitized)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(sanitized, &d.Attributes.Interaction.Extension)
+	if err != nil {
+		return nil, err
+	}
+
 	return &api.AnalyticsRequestBody{
 		Data: d,
-	}
+	}, nil
 }
 
 func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {
