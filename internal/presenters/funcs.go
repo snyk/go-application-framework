@@ -2,6 +2,9 @@ package presenters
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -82,6 +85,14 @@ func getFieldValueFrom(data interface{}, path string) string {
 	return value.String()
 }
 
+// fieldEquals checks if a field value equals a given expected value
+func fieldEquals(path string, expectedValue any) func(obj any) bool {
+	return func(obj any) bool {
+		actualValue := getFieldValueFrom(obj, path)
+		return actualValue == expectedValue
+	}
+}
+
 func getFromConfig(config configuration.Configuration) func(key string) string {
 	return func(key string) string {
 		if config.GetBool(key) {
@@ -131,11 +142,40 @@ func sortFindingBy(path string, order []string, findings []local_models.FindingR
 	return result
 }
 
+// filteredFinding takes a filter function and applies it to a list of findings, it will return findings that match the filter function
 func filterFinding(cmpFunc func(any) bool, findings []local_models.FindingResource) (filteredFindings []local_models.FindingResource) {
 	for _, finding := range findings {
 		if cmpFunc(finding) {
 			filteredFindings = append(filteredFindings, finding)
 		}
+	}
+
+	return filteredFindings
+}
+
+// filteredFindingsOr applies multiple filter functions to findings, any findings that match any filter will be added to the filteredFindings
+func filterFindingsOr(findings []local_models.FindingResource, cmpFuncs ...func(any) bool) (filteredFindings []local_models.FindingResource) {
+	filteredFindingsMap := make(map[string]local_models.FindingResource)
+
+	for _, cmpFunc := range cmpFuncs {
+		for _, finding := range findings {
+			if cmpFunc(finding) {
+				// create hash of finding to use as map key
+				findingBytes, err := json.Marshal(finding)
+				if err != nil {
+					return
+				}
+				hash := sha256.Sum256(findingBytes)
+				filteredFindingsMap[hex.EncodeToString(hash[:])] = finding
+
+				// would be nice to use the finding ID, but this is not being sent currently
+				// filteredFindingsMap[finding.Id.String()] = finding
+			}
+		}
+	}
+
+	for _, finding := range filteredFindingsMap {
+		filteredFindings = append(filteredFindings, finding)
 	}
 
 	return filteredFindings
@@ -171,7 +211,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getValueFromConfig"] = getFromConfig(config)
 	defaultMap["sortFindingBy"] = sortFindingBy
 	defaultMap["getFieldValueFrom"] = getFieldValueFrom
+	defaultMap["fieldEquals"] = fieldEquals
 	defaultMap["filterFinding"] = filterFinding
+	defaultMap["filterFindingsOr"] = filterFindingsOr
 	defaultMap["hasField"] = hasField
 	defaultMap["notHasField"] = func(path string) func(obj any) bool {
 		return func(obj any) bool {

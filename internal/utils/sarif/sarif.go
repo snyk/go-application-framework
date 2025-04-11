@@ -62,7 +62,18 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 			resultMap[severity].Total++
 
 			// evaluate if the result is suppressed/ignored or not
+			isIgnored := false
 			if len(result.Suppressions) > 0 {
+				for _, suppression := range result.Suppressions {
+					// consistent with "legacy" ignore behaviour
+					if len(suppression.Status) == 0 || suppression.Status == "accepted" {
+						isIgnored = true
+						break
+					}
+				}
+			}
+
+			if isIgnored {
 				resultMap[severity].Ignored++
 			} else {
 				resultMap[severity].Open++

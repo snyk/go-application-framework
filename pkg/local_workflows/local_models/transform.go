@@ -112,8 +112,9 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if len(res.Suppressions) == 0 {
 		return nil
 	}
+	// TODO: iterate supporessions rather than take the first one
 	suppression := res.Suppressions[0]
-	expiration := ""
+	expiration := "Never"
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
 		expiration = *suppression.Properties.Expiration
@@ -122,6 +123,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
 	return &TypesSuppression{
+		Id: suppression.Guid,
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
 			Expiration: expiration,
@@ -132,7 +134,26 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 			},
 		},
 		Justification: &suppression.Justification,
-		Kind:          "ignored",
+		Status:        toSuppressionKind(suppression.Status, suppression.Justification),
+	}
+}
+
+func toSuppressionKind(status sarif.SuppresionStatus, justification string) TypesSuppressionStatus {
+	// this is just to test other suppression status' that are not implemented yet
+	switch justification {
+	case "underReview":
+		return "underReview"
+	case "rejected":
+		return "rejected"
+	}
+
+	switch status {
+	case sarif.Accepted, "":
+		return "accepted"
+	case sarif.UnderReview:
+		return "underReview"
+	default:
+		return "rejected"
 	}
 }
 
