@@ -3,6 +3,7 @@ package analytics
 import (
 	"encoding/json"
 	"fmt"
+	"os/user"
 	"testing"
 	"time"
 
@@ -206,6 +207,34 @@ func Test_InstrumentationCollector(t *testing.T) {
 			"strings":  "hello world",
 			"integers": 123,
 			"booleans": true,
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should sanitize potential PII data put in the extension type", func(t *testing.T) {
+		ic.AddExtension("password", "hunter2")
+
+		u, err := user.Current()
+		assert.NoError(t, err)
+
+		ic.AddExtension("pathToSomething", fmt.Sprintf("/home/%s/.config", u.Username))
+
+		mockExtension = map[string]interface{}{
+			"booleans":        true,
+			"integers":        123,
+			"strings":         "hello world",
+			"password":        "REDACTED",
+			"pathToSomething": "/home/REDACTED/.config",
 		}
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
