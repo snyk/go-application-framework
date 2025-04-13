@@ -671,6 +671,7 @@
               {
                 "justification": "False positive",
                 "kind": "inSource",
+                "status": "accepted",
                 "properties": {
                   "category": "wont-fix",
                   "expiration": "15 days",
