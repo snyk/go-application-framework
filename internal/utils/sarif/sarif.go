@@ -62,7 +62,7 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 			resultMap[severity].Total++
 
 			// evaluate if the result is suppressed/ignored or not
-			if len(result.Suppressions) > 0 {
+			if IsIgnored(result.Suppressions) {
 				resultMap[severity].Ignored++
 			} else {
 				resultMap[severity].Open++
@@ -84,6 +84,18 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 	}
 
 	return summary
+}
+
+func IsIgnored(suppressions []sarif.Suppression) bool {
+	// in case of an existing suppression Test API will always enrich the SARIF with one element.
+	// Currently, surfaced states are either "underReview" or "accepted"
+	// This logic might change in the future when the "rejected" state is surfaced
+	for _, suppression := range suppressions {
+		if suppression.Status == sarif.Accepted {
+			return true
+		}
+	}
+	return false
 }
 
 func ConvertTypeToDriverName(s string) string {
