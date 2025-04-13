@@ -23,9 +23,14 @@ import (
 
 const (
 	ignoreCreateWorkflowName = "ignore.create"
+	ignoreEditWorkflowName   = "ignore.edit"
+	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "id"
 	findingsIdDescription = "Findings Id"
+
+	IgnoreIdKey         = "ignore-id"
+	IgnoreIdDescription = "Ignore Id"
 
 	IgnoreTypeKey         = "ignore-type"
 	ignoreTypeDescription = "Ignore Type"
@@ -47,6 +52,8 @@ const (
 )
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
+var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
+var WORKFLOWID_IGNORE_DELETE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreDeleteWorkflowName)
 
 func InitIgnoreWorkflows(engine workflow.Engine) error {
 	createFlagset := pflag.NewFlagSet(ignoreCreateWorkflowName, pflag.ExitOnError)
