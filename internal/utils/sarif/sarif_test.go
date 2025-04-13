@@ -47,27 +47,27 @@ func TestConvertTypeToDriverName(t *testing.T) {
 }
 
 func TestIsIgnored(t *testing.T) {
-	assert.True(t, IsIgnored([]sarif.Suppression{
+	isIgnored, currentSuppression := GetIgnoreDetails([]sarif.Suppression{
 		{
 			Status: sarif.Accepted,
-		}}))
+		}})
 
-	assert.True(t, IsIgnored([]sarif.Suppression{
+	assert.True(t, isIgnored)
+	assert.Equal(t, currentSuppression.Status, sarif.Accepted)
+
+	isIgnored, currentSuppression = GetIgnoreDetails([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
-		},
-		{
-			Status: sarif.Accepted,
-		},
-	}))
+		}})
 
-	assert.False(t, IsIgnored([]sarif.Suppression{
+	assert.False(t, isIgnored)
+	assert.Equal(t, currentSuppression.Status, sarif.Rejected)
+
+	isIgnored, currentSuppression = GetIgnoreDetails([]sarif.Suppression{
 		{
 			Status: sarif.UnderReview,
-		}}))
+		}})
 
-	assert.False(t, IsIgnored([]sarif.Suppression{
-		{
-			Status: sarif.Rejected,
-		}}))
+	assert.False(t, isIgnored)
+	assert.Equal(t, currentSuppression.Status, sarif.UnderReview)
 }
