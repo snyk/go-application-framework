@@ -63,6 +63,7 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	return err
 }
 
+//nolint:gocyclo // to avoid repetition it's easier to read this way
 func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	logger := invocationCtx.GetEnhancedLogger()
 	userInterface := invocationCtx.GetUserInterface()
@@ -284,6 +285,8 @@ func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.
 	if err != nil {
 		return nil, err
 	}
-
+	if parsedResponse.ApplicationvndApiJSON201 == nil {
+		return nil, fmt.Errorf("error unmarshalling CreateOrgPolicyResponse response")
+	}
 	return &parsedResponse.ApplicationvndApiJSON201.Data, err
 }
