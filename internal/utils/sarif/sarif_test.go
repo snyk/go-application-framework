@@ -3,6 +3,7 @@ package sarif
 import (
 	"testing"
 
+	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,4 +44,30 @@ func TestConvertTypeToDriverName(t *testing.T) {
 		actualOutput := ConvertTypeToDriverName(input)
 		assert.Equal(t, expectedOutput, actualOutput)
 	}
+}
+
+func TestIsIgnored(t *testing.T) {
+	assert.True(t, IsIgnored([]sarif.Suppression{
+		{
+			Status: sarif.Accepted,
+		}}))
+
+	assert.True(t, IsIgnored([]sarif.Suppression{
+		{
+			Status: sarif.Rejected,
+		},
+		{
+			Status: sarif.Accepted,
+		},
+	}))
+
+	assert.False(t, IsIgnored([]sarif.Suppression{
+		{
+			Status: sarif.UnderReview,
+		}}))
+
+	assert.False(t, IsIgnored([]sarif.Suppression{
+		{
+			Status: sarif.Rejected,
+		}}))
 }
