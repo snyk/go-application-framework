@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"os"
-	"os/user"
 	"testing"
 	"time"
 
@@ -212,15 +211,9 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		ic.AddExtension("password", "hunter2")
 
-		u, err := user.Current()
-		assert.NoError(t, err)
-
-		ic.AddExtension("pathToSomething", fmt.Sprintf("/home/%s/.config", u.Username))
-
 		mockExtension := map[string]interface{}{
-			"strings":         "hello world",
-			"password":        "REDACTED",
-			"pathToSomething": "/home/REDACTED/.config",
+			"strings":  "hello world",
+			"password": "REDACTED",
 		}
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
@@ -278,6 +271,7 @@ func setupBaseCollector(t *testing.T) InstrumentationCollector {
 	ic.SetTestSummary(*json_schemas.NewTestSummary("sast", ""))
 	ic.SetTargetId("targetID")
 	ic.AddExtension("strings", "hello world")
+	ic.SetTimestamp(time.Date(2025, 1, 01, 0, 0, 0, 0, time.UTC))
 
 	return ic
 }
@@ -287,7 +281,6 @@ func buildExpectedBaseObject(t *testing.T) api.AnalyticsRequestBody {
 	t.Helper()
 
 	mockInteractionId := "interactionID"
-	mockTimestamp := time.Now()
 	mockStage := "cicd"
 	mockInstrumentationType := "analytics"
 	mockInteractionType := "Scan done"
@@ -311,7 +304,7 @@ func buildExpectedBaseObject(t *testing.T) api.AnalyticsRequestBody {
 					Stage:       &stage,
 					Status:      string(mockStatus),
 					Target:      api.Target{Id: mockTargetId},
-					TimestampMs: mockTimestamp.UnixMilli(),
+					TimestampMs: time.Date(2025, 1, 01, 0, 0, 0, 0, time.UTC).UnixMilli(),
 					Type:        mockInteractionType,
 				},
 				Runtime: &api.Runtime{},

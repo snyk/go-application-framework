@@ -226,7 +226,6 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 
 	data, err := analytics.GetV2InstrumentationObjectWithLogger(logger, ic)
 	if err != nil {
-
 		return nil, err
 	}
 
