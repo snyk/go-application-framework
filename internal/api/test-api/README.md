@@ -1,0 +1,26 @@
+# CLI API Client
+
+This CLI client is based off of the OpenAPI specification for the [unified test API](https://https://github.com/snyk/test-api-shim).
+This is a low-level integration of the new Unified Test API for Snyk Code tests.
+
+## Intent
+
+This Go client provides API-level interactions with the Test Service.  High-level tasks can be built using these API interactions; for example, fetch an asset ID and then query test outcomes for it.
+
+## Directory Contents
+
+This directory contains the following files that enable the above intent:
+
+- `cfg.yaml`: Configuration file for the `oapi-codegen` utility; defines the result package name, output file name, and which components to generate (models and client)
+- `download_spec.sh`: retrieves the OpenAPI spec for the test-api-shim from Github, writes it to `shim-api.yaml`. Requires env var `GITHUB_PRIVATE_TOKEN`.
+- `gen.go`: defines the `go:generate` step to create the API client
+- `shim-api.yaml`: OpenAPI specification for the most recent version of the Test-API-Shim API
+- `cli-client.gen.go`: Generated Go API client and models for the Test Service.
+
+## Usage
+
+- Run <repo>/scripts/pull-down-unified-test-api-spec.sh to fetch the latest Unified Test OpenAPI spec into <repo>/internal/api/test-api/unified-test-spec/unified-test-api.yaml.
+    - Note: git internal access is required to update from this repo.
+    - Note: <repo>/internal/api/test-api/unified-test-repo/ caches this repo but may be deleted after these steps.
+- cd <repo>/internal/api/test-api/
+- Run `go generate` to create the `unified-test-api.gen.go` API functions.
