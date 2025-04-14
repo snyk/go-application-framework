@@ -3,6 +3,8 @@ package analytics
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
+	"os"
 	"os/user"
 	"testing"
 	"time"
@@ -14,6 +16,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
 )
+
+var logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 
 func Test_InstrumentationCollector(t *testing.T) {
 	t.Run("it should construct a V2 instrumentation object", func(t *testing.T) {
@@ -221,7 +225,27 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
 
-		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObjectWithLogger(&logger, ic)
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		circularRef := make(map[string]interface{})
+		circularRef["self"] = circularRef
+		ic.AddExtension("circular", circularRef)
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = nil
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObjectWithLogger(&logger, ic)
 		assert.NoError(t, err)
 		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
 		assert.NoError(t, err)
