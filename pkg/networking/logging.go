@@ -12,6 +12,7 @@ import (
 )
 
 const defaultNetworkLogLevel = zerolog.DebugLevel
+const extendedNetworkLogLevel = zerolog.TraceLevel
 
 func shouldNotLog(currentLevel zerolog.Level, levelToLogAt zerolog.Level) bool {
 	// Don't log if logger level is above the threshold
@@ -103,7 +104,7 @@ func LogRequest(r *http.Request, logger *zerolog.Logger) {
 	logger.WithLevel(defaultNetworkLogLevel).Msgf("%s header: %v", logPrefixRequest, r.Header)
 
 	// additional logs for trace level logging
-	if shouldNotLog(logger.GetLevel(), zerolog.TraceLevel) {
+	if shouldNotLog(logger.GetLevel(), extendedNetworkLogLevel) {
 		return
 	}
 
@@ -121,7 +122,7 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 		logger.WithLevel(defaultNetworkLogLevel).Msgf("%s header: %v", logPrefixResponse, response.Header)
 
 		// additional logs for trace level logging and error responses
-		if !(response.StatusCode >= 400 || !shouldNotLog(logger.GetLevel(), zerolog.TraceLevel)) {
+		if !(response.StatusCode >= 400 || !shouldNotLog(logger.GetLevel(), extendedNetworkLogLevel)) {
 			return
 		}
 
