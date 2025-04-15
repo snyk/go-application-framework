@@ -224,7 +224,7 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 	ic.AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
 
-	data, err := analytics.GetV2InstrumentationObjectWithLogger(logger, ic)
+	data, err := analytics.GetV2InstrumentationObject(ic, analytics.WithLogger(logger))
 	if err != nil {
 		return nil, err
 	}
