@@ -55,11 +55,11 @@ func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error
 	tmp, err := apiClient.GetSastSettings(org)
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Failed to access settings.")
-		return &tmp, err
+		return nil, err
 	}
 
-	engine.GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &tmp)
-	return &tmp, nil
+	engine.GetConfiguration().Set(code_workflow.ConfigurationSastSettings, tmp)
+	return tmp, nil
 }
 
 func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
@@ -71,7 +71,7 @@ func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFun
 		response, err := getSastSettings(engine)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
-			return false, err
+			return nil, err
 		}
 
 		return response, nil

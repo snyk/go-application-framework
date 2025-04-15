@@ -23,7 +23,7 @@ type ApiClient interface {
 	GetFeatureFlag(flagname string, origId string) (bool, error)
 	GetUserMe() (string, error)
 	GetSelf() (contract.SelfResponse, error)
-	GetSastSettings(orgId string) (sast_contract.SastResponse, error)
+	GetSastSettings(orgId string) (*sast_contract.SastResponse, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -198,28 +198,26 @@ func (a *snykApiClient) GetSelf() (contract.SelfResponse, error) {
 	return selfData, nil
 }
 
-func (a *snykApiClient) GetSastSettings(orgId string) (sast_contract.SastResponse, error) {
-	var response sast_contract.SastResponse
-	var defaultResult sast_contract.SastResponse
-
+func (a *snykApiClient) GetSastSettings(orgId string) (*sast_contract.SastResponse, error) {
 	endpoint := a.url + "/v1/cli-config/settings/sast?org=" + url.QueryEscape(orgId)
 	res, err := a.client.Get(endpoint)
 	if err != nil {
-		return defaultResult, fmt.Errorf("unable to retrieve settings: %w", err)
+		return nil, fmt.Errorf("unable to retrieve settings: %w", err)
 	}
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return defaultResult, fmt.Errorf("unable to retrieve settings: %w", err)
+		return nil, fmt.Errorf("unable to retrieve settings: %w", err)
 	}
 
+	var response sast_contract.SastResponse
 	if err = json.Unmarshal(body, &response); err != nil {
-		return defaultResult, fmt.Errorf("unable to retrieve settings (status: %d): %w", res.StatusCode, err)
+		return nil, fmt.Errorf("unable to retrieve settings (status: %d): %w", res.StatusCode, err)
 	}
 
-	return response, err
+	return &response, err
 }
 
 // clientGet performs an HTTP GET request to the Snyk API, handling query parameters,
