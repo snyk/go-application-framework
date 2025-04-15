@@ -162,58 +162,50 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerol
 		Attributes: a,
 	}
 
-	// Since the `extension` attribute in the analytics payload is a value any
-	// product line potentially can contribute to, we utilize the same sanitation logic
-	// already in place for the legacy v1 analytics, to ensure the same level of PII protection.
+	return ic.sanitizeExtensionData(logger, d)
+}
+
+// Since the `extension` attribute in the analytics payload is a value any
+// product line potentially can contribute to, we utilize the same sanitation logic
+// already in place for the legacy v1 analytics, to ensure the same level of PII protection.
+func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Logger, d api.AnalyticsData) *api.AnalyticsRequestBody {
 	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
+	result := &api.AnalyticsRequestBody{
+		Data: d,
+	}
+	result.Data.Attributes.Interaction.Extension = nil
+
 	if err != nil {
 		logger.Printf("failed to marshal extension, removing extension object from analytics payload: %v", err)
-		d.Attributes.Interaction.Extension = nil
-		return &api.AnalyticsRequestBody{
-			Data: d,
-		}
+		return result
 	}
 
 	var sanitized []byte
 	sanitized, err = SanitizeValuesByKey(sensitiveFieldNames, sanitizeReplacementString, extension)
 	if err != nil {
 		logger.Printf("failed to sanitize extension, removing object from analytics payload as sanitzation was not possible: %v", err)
-		d.Attributes.Interaction.Extension = nil
-		return &api.AnalyticsRequestBody{
-			Data: d,
-		}
+		return result
 	}
 
 	u, err := user.Current()
 	if err != nil {
 		logger.Printf("failed to find user information while sanitizing extension payload, removing object from analytics payload as sanitzation was not possible: %v", err)
-		d.Attributes.Interaction.Extension = nil
-		return &api.AnalyticsRequestBody{
-			Data: d,
-		}
+		return result
 	}
 
 	sanitized, err = SanitizeUsername(u.Username, u.HomeDir, sanitizeReplacementString, sanitized)
 	if err != nil {
 		logger.Printf("failed to sanitize user information in extension payload, removing object from analytics payload as sanitzation was not possible: %v", err)
-		d.Attributes.Interaction.Extension = nil
-		return &api.AnalyticsRequestBody{
-			Data: d,
-		}
+		return result
 	}
 
-	err = json.Unmarshal(sanitized, &d.Attributes.Interaction.Extension)
+	err = json.Unmarshal(sanitized, &result.Data.Attributes.Interaction.Extension)
 	if err != nil {
 		logger.Printf("failed to unmarshal sanitized extension object:: %v", err)
-		d.Attributes.Interaction.Extension = nil
-		return &api.AnalyticsRequestBody{
-			Data: d,
-		}
+		return result
 	}
 
-	return &api.AnalyticsRequestBody{
-		Data: d,
-	}
+	return result
 }
 
 func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {
