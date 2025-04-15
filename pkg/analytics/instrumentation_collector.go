@@ -1,9 +1,13 @@
 package analytics
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os/user"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
@@ -60,6 +64,18 @@ type instrumentationCollectorImpl struct {
 	targetId            string
 	instrumentationErr  []error
 	extension           map[string]interface{}
+}
+
+type serializeOptions struct {
+	logger *zerolog.Logger
+}
+
+type serializeOptionFunc func(*serializeOptions)
+
+func WithLogger(logger *zerolog.Logger) serializeOptionFunc {
+	return func(o *serializeOptions) {
+		o.logger = logger
+	}
 }
 
 func (ic *instrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
@@ -121,15 +137,24 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface
 	ic.extension[key] = value
 }
 
-func GetV2InstrumentationObject(collector InstrumentationCollector) (*api.AnalyticsRequestBody, error) {
+func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...serializeOptionFunc) (*api.AnalyticsRequestBody, error) {
 	t, ok := collector.(*instrumentationCollectorImpl)
-	if ok {
-		return t.GetV2InstrumentationObject(), nil
+	if !ok {
+		return nil, fmt.Errorf("failed to convert collector")
 	}
-	return nil, fmt.Errorf("failed to convert collector")
+
+	logger := zerolog.Nop()
+	options := serializeOptions{
+		logger: &logger,
+	}
+	for _, o := range opt {
+		o(&options)
+	}
+
+	return t.getV2InstrumentationObject(options.logger), nil
 }
 
-func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() *api.AnalyticsRequestBody {
+func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerolog.Logger) *api.AnalyticsRequestBody {
 	a := ic.getV2Attributes()
 
 	d := api.AnalyticsData{
@@ -137,9 +162,50 @@ func (ic *instrumentationCollectorImpl) GetV2InstrumentationObject() *api.Analyt
 		Attributes: a,
 	}
 
-	return &api.AnalyticsRequestBody{
+	return ic.sanitizeExtensionData(logger, d)
+}
+
+// Since the `extension` attribute in the analytics payload is a value any
+// product line potentially can contribute to, we utilize the same sanitation logic
+// already in place for the legacy v1 analytics, to ensure the same level of PII protection.
+func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Logger, d api.AnalyticsData) *api.AnalyticsRequestBody {
+	extension, err := json.Marshal(d.Attributes.Interaction.Extension)
+	result := &api.AnalyticsRequestBody{
 		Data: d,
 	}
+	result.Data.Attributes.Interaction.Extension = nil
+
+	if err != nil {
+		logger.Printf("failed to marshal extension, removing extension object from analytics payload: %v", err)
+		return result
+	}
+
+	var sanitized []byte
+	sanitized, err = SanitizeValuesByKey(sensitiveFieldNames, sanitizeReplacementString, extension)
+	if err != nil {
+		logger.Printf("failed to sanitize extension, removing object from analytics payload as sanitzation was not possible: %v", err)
+		return result
+	}
+
+	u, err := user.Current()
+	if err != nil {
+		logger.Printf("failed to find user information while sanitizing extension payload, removing object from analytics payload as sanitzation was not possible: %v", err)
+		return result
+	}
+
+	sanitized, err = SanitizeUsername(u.Username, u.HomeDir, sanitizeReplacementString, sanitized)
+	if err != nil {
+		logger.Printf("failed to sanitize user information in extension payload, removing object from analytics payload as sanitzation was not possible: %v", err)
+		return result
+	}
+
+	err = json.Unmarshal(sanitized, &result.Data.Attributes.Interaction.Extension)
+	if err != nil {
+		logger.Printf("failed to unmarshal sanitized extension object:: %v", err)
+		return result
+	}
+
+	return result
 }
 
 func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttributes {
