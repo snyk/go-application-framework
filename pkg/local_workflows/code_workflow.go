@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -29,7 +28,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 	flagSet.Bool("json", false, "Output in json format")
 	flagSet.Bool(code_workflow.ConfigurationReportFlag, false, "Share results with the Snyk Web UI")
 	flagSet.String(code_workflow.ConfigurationProjectName, "", "The name of the project to test.")
-	flagSet.String(code_workflow.ConfigurationRemoteRepoUrlFlagname, "", "The URL of the remote repository to test.")
+	flagSet.String(configuration.FLAG_REMOTE_REPO_URL, "", "The URL of the remote repository to test.")
 	flagSet.String("severity-threshold", "", "Minimum severity level to report (low|medium|high)")
 	flagSet.String("sarif-file-output", "", "Save test output in SARIF format directly to the <OUTPUT_FILE_PATH> file, regardless of whether or not you use the --sarif option.")
 	flagSet.String("json-file-output", "", "Save test output in JSON format directly to the <OUTPUT_FILE_PATH> file, regardless of whether or not you use the --json option.")
@@ -157,12 +156,11 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	sastEnabledI, err := config.GetWithError(code_workflow.ConfigurationSastEnabled)
+	sastEnabled, err := config.GetBoolWithError(code_workflow.ConfigurationSastEnabled)
 	if err != nil {
 		return result, err
 	}
 
-	sastEnabled := utils.ToBool(sastEnabledI)
 	nativeImplementation := useNativeImplementation(config, logger, sastEnabled)
 
 	if !sastEnabled {
