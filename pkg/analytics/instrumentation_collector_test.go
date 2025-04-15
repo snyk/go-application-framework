@@ -32,7 +32,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent application data", func(t *testing.T) {
@@ -57,7 +57,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent environment data", func(t *testing.T) {
@@ -82,7 +82,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent integration data", func(t *testing.T) {
@@ -107,7 +107,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent platform data", func(t *testing.T) {
@@ -132,7 +132,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it sets the userAgent performance data", func(t *testing.T) {
@@ -154,7 +154,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it should collect interaction errors", func(t *testing.T) {
@@ -178,7 +178,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it should support all interaction extension types", func(t *testing.T) {
@@ -203,7 +203,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it should sanitize potential PII data put in the extension type", func(t *testing.T) {
@@ -226,7 +226,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
@@ -246,7 +246,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
 		assert.NoError(t, err)
 
-		assert.Equal(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
 	t.Run("it should get the category vector", func(t *testing.T) {
