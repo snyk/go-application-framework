@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -157,12 +156,11 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	sastEnabledI, err := config.GetWithError(code_workflow.ConfigurationSastEnabled)
+	sastEnabled, err := config.GetBoolWithError(code_workflow.ConfigurationSastEnabled)
 	if err != nil {
 		return result, err
 	}
 
-	sastEnabled := utils.ToBool(sastEnabledI)
 	nativeImplementation := useNativeImplementation(config, logger, sastEnabled)
 
 	if !sastEnabled {

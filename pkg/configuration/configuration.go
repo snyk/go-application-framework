@@ -42,6 +42,7 @@ type Configuration interface {
 	GetStringWithError(key string) (string, error)
 	GetStringSlice(key string) []string
 	GetBool(key string) bool
+	GetBoolWithError(key string) (bool, error)
 	GetInt(key string) int
 	GetFloat64(key string) float64
 	GetUrl(key string) *url.URL
@@ -419,6 +420,27 @@ func (ev *extendedViper) GetString(key string) string {
 		return s
 	}
 	return ""
+}
+
+// GetBoolWithError returns a configuration value as bool.
+func (ev *extendedViper) GetBoolWithError(key string) (bool, error) {
+	result, err := ev.GetWithError(key)
+	if err != nil || result == nil {
+		return false, err
+	}
+
+	switch v := result.(type) {
+	case bool:
+		return v, nil
+	case string:
+		boolResult, parseErr := strconv.ParseBool(v)
+		if parseErr != nil {
+			return false, parseErr
+		}
+		return boolResult, nil
+	}
+
+	return false, fmt.Errorf("value for key %s is not a bool", key)
 }
 
 // GetBool returns a configuration value as bool.
