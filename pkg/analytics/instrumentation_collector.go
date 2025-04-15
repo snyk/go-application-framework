@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
 	"os/user"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
@@ -63,6 +64,18 @@ type instrumentationCollectorImpl struct {
 	targetId            string
 	instrumentationErr  []error
 	extension           map[string]interface{}
+}
+
+type serializeOptions struct {
+	logger *zerolog.Logger
+}
+
+type serializeOptionFunc func(*serializeOptions)
+
+func WithLogger(logger *zerolog.Logger) serializeOptionFunc {
+	return func(o *serializeOptions) {
+		o.logger = logger
+	}
 }
 
 func (ic *instrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
@@ -124,22 +137,21 @@ func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface
 	ic.extension[key] = value
 }
 
-func GetV2InstrumentationObject(collector InstrumentationCollector) (*api.AnalyticsRequestBody, error) {
+func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...serializeOptionFunc) (*api.AnalyticsRequestBody, error) {
 	t, ok := collector.(*instrumentationCollectorImpl)
 	if !ok {
 		return nil, fmt.Errorf("failed to convert collector")
 	}
 
-	return t.getV2InstrumentationObject(nil), nil
-}
-
-func GetV2InstrumentationObjectWithLogger(logger *zerolog.Logger, collector InstrumentationCollector) (*api.AnalyticsRequestBody, error) {
-	t, ok := collector.(*instrumentationCollectorImpl)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert collector")
+	logger := zerolog.Nop()
+	options := serializeOptions{
+		logger: &logger,
+	}
+	for _, o := range opt {
+		o(&options)
 	}
 
-	return t.getV2InstrumentationObject(logger), nil
+	return t.getV2InstrumentationObject(options.logger), nil
 }
 
 func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerolog.Logger) *api.AnalyticsRequestBody {
@@ -148,11 +160,6 @@ func (ic *instrumentationCollectorImpl) getV2InstrumentationObject(logger *zerol
 	d := api.AnalyticsData{
 		Type:       ic.instrumentationType,
 		Attributes: a,
-	}
-
-	if logger == nil {
-		noopLogger := zerolog.Nop()
-		logger = &noopLogger
 	}
 
 	// Since the `extension` attribute in the analytics payload is a value any

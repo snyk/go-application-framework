@@ -3,10 +3,11 @@ package analytics
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
@@ -218,7 +219,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
 
-		actualV2InstrumentationObject, err := GetV2InstrumentationObjectWithLogger(&logger, ic)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
 		assert.NoError(t, err)
 		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
 		assert.NoError(t, err)
@@ -238,7 +239,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = nil
 
-		actualV2InstrumentationObject, err := GetV2InstrumentationObjectWithLogger(&logger, ic)
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
 		assert.NoError(t, err)
 		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
 		assert.NoError(t, err)
