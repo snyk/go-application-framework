@@ -174,7 +174,11 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 
 	analysisFunc := func(path string, _ func() *http.Client, _ *zerolog.Logger, _ configuration.Configuration, _ ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error) {
 		assert.Equal(t, expectedPath, path)
-
+		suppressions := []sarif.Suppression{
+			{
+				Status: sarif.Accepted,
+			},
+		}
 		response := &sarif.SarifResponse{
 			Sarif: sarif.SarifDocument{
 				Runs: []sarif.Run{
@@ -200,12 +204,12 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 					{
 						Results: []sarif.Result{
 							{Level: "error"},
-							{Level: "error", Suppressions: make([]sarif.Suppression, 1)},
+							{Level: "error", Suppressions: suppressions},
 						},
 					},
 					{
 						Results: []sarif.Result{
-							{Level: "note", Suppressions: make([]sarif.Suppression, 1)},
+							{Level: "note", Suppressions: suppressions},
 						},
 					},
 				},
