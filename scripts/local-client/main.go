@@ -84,7 +84,6 @@ func (rt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		// If we're retrying, close the response body so that we don't leak
 		// memory from failed attempts.
 		if err != nil {
-
 			fmt.Println("HTTP error: ", resp, err)
 
 			if resp != nil && resp.Body != nil {
@@ -180,7 +179,8 @@ func run() error { //nolint:gocyclo // chill it's a demo script
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
-		responseBody, err := io.ReadAll(resp.Body)
+		var responseBody []byte
+		responseBody, err = io.ReadAll(resp.Body)
 		if err != nil {
 			responseBody = fmt.Appendf(nil, "Error reading response body: %v", err)
 		}
@@ -230,7 +230,8 @@ func run() error { //nolint:gocyclo // chill it's a demo script
 		}
 
 		// Expect a 303 response
-		jobResp, err := v20241015defs.ParseGetJobResponse(resp)
+		var jobResp *v20241015defs.GetJobResponse
+		jobResp, err = v20241015defs.ParseGetJobResponse(resp)
 		if err != nil {
 			return fmt.Errorf("unable to parse get job response: %w", err)
 		}
@@ -238,7 +239,8 @@ func run() error { //nolint:gocyclo // chill it's a demo script
 		logJSON(jobRespBody)
 
 		// extract test ID to fetch findings
-		relLink, err := jobRespBody.Links.Related.AsIoSnykApiCommonLinkString()
+		var relLink string
+		relLink, err = jobRespBody.Links.Related.AsIoSnykApiCommonLinkString()
 		if err != nil {
 			return fmt.Errorf("failed to get related link: %w", err)
 		}
