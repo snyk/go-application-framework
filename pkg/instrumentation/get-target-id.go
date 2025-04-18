@@ -8,9 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-git/go-git/v5"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
 const (
@@ -185,24 +184,11 @@ func filesystemBaseId(path string) (*url.URL, error) {
 }
 
 func gitBaseId(path string) (*url.URL, error) {
-	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
-
+	repo, remoteConfig, err := git.RepoFromDir(path)
 	if err != nil {
 		return nil, err
 	}
 
-	remote, err := repo.Remote("origin")
-	if err != nil {
-		return nil, err
-	}
-
-	// based on the docs, the first URL is being used to fetch, so this is the one we use
-	remoteConfig := remote.Config()
-	if remoteConfig == nil || len(remoteConfig.URLs) == 0 || remoteConfig.URLs[0] == "" {
-		return nil, fmt.Errorf("no remote url found")
-	}
 	repoUrl := remoteConfig.URLs[0]
 
 	// ... retrieves the branch pointed by HEAD

@@ -1,7 +1,6 @@
 package networking
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
@@ -464,59 +462,6 @@ func TestNetworkImpl_Clone(t *testing.T) {
 
 	assert.NotEqual(t, req1, req2)
 	assert.NotEqual(t, network.GetConfiguration(), clonedNetwork.GetConfiguration())
-}
-
-func TestNetworkImpl_LogResponse_happyPath(t *testing.T) {
-	logBuffer := bytes.NewBuffer([]byte{})
-	logger := zerolog.New(logBuffer).Level(zerolog.DebugLevel)
-
-	expectedBody := "hello world"
-	request := &http.Request{}
-
-	response := &http.Response{}
-	response.Request = request
-	response.Header = http.Header{}
-	response.StatusCode = http.StatusBadGateway
-	response.Body = io.NopCloser(bytes.NewBufferString(expectedBody))
-
-	// invoke method under test
-	LogResponse(response, &logger)
-
-	actualLoggerContent := logBuffer.String()
-	assert.Contains(t, actualLoggerContent, "body: "+expectedBody)
-
-	// ensure the body is still existing after logging it
-	actualBody, err := io.ReadAll(response.Body)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedBody, string(actualBody))
-
-	t.Log(actualLoggerContent)
-}
-
-func TestNetworkImpl_LogResponse_nolog(t *testing.T) {
-	logBuffer := bytes.NewBuffer([]byte{})
-	logger := zerolog.New(logBuffer).Level(zerolog.TraceLevel)
-
-	t.Run("nil response", func(t *testing.T) {
-		var response *http.Response
-
-		// invoke method under test
-		LogResponse(response, &logger)
-
-		actualLoggerContent := logBuffer.String()
-		assert.Empty(t, actualLoggerContent)
-	})
-
-	t.Run("non trace level logger", func(t *testing.T) {
-		response := &http.Response{}
-		nonTraceLogger := logger.Level(zerolog.InfoLevel)
-
-		// invoke method under test
-		LogResponse(response, &nonTraceLogger)
-
-		actualLoggerContent := logBuffer.String()
-		assert.Empty(t, actualLoggerContent)
-	})
 }
 
 func TestNetworkImpl_ErrorHandler(t *testing.T) {
