@@ -54,6 +54,13 @@ const (
 
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error)
 
+func NewTrackerFactory(userInterface ui.UserInterface, logger *zerolog.Logger) scan.TrackerFactory {
+	return ProgressTrackerFactory{
+		userInterface: userInterface,
+		logger:        logger,
+	}
+}
+
 type ProgressTrackerFactory struct {
 	userInterface ui.UserInterface
 	logger        *zerolog.Logger
@@ -61,22 +68,24 @@ type ProgressTrackerFactory struct {
 
 func (p ProgressTrackerFactory) GenerateTracker() scan.Tracker {
 	return &ProgressTrackerAdapter{
-		bar:    p.userInterface.NewProgressBar(),
-		logger: p.logger,
+		userInterface: p.userInterface,
+		logger:        p.logger,
 	}
 }
 
 type ProgressTrackerAdapter struct {
-	bar    ui.ProgressBar
-	logger *zerolog.Logger
+	userInterface ui.UserInterface
+	logger        *zerolog.Logger
+	bar           ui.ProgressBar
 }
 
-func (p ProgressTrackerAdapter) Begin(title, message string) {
-	if len(message) > 0 {
-		p.bar.SetTitle(title + " - " + message)
-	} else {
-		p.bar.SetTitle(title)
+func (p *ProgressTrackerAdapter) Begin(title, message string) {
+	if p.bar != nil {
+		p.logger.Error().Msg("progress tracker already begun")
+		return
 	}
+	p.bar = p.userInterface.NewProgressBar(title)
+	p.bar.SetMessage(message)
 
 	err := p.bar.UpdateProgress(ui.InfiniteProgress)
 	if err != nil {
@@ -84,8 +93,11 @@ func (p ProgressTrackerAdapter) Begin(title, message string) {
 	}
 }
 
-func (p ProgressTrackerAdapter) End(message string) {
-	p.bar.SetTitle(message)
+func (p *ProgressTrackerAdapter) End(message string) {
+	if p.bar == nil {
+		return
+	}
+	p.bar.SetMessage(message)
 	err := p.bar.Clear()
 	if err != nil {
 		p.logger.Err(err).Msg("Failed to clear progress")
@@ -205,10 +217,7 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		localConfiguration: config,
 	}
 
-	progressFactory := ProgressTrackerFactory{
-		userInterface: userInterface,
-		logger:        logger,
-	}
+	progressFactory := NewTrackerFactory(userInterface, logger)
 
 	analysisOptions := []codeclient.AnalysisOption{}
 
