@@ -79,7 +79,7 @@ func TestHasSuppressionInStatus(t *testing.T) {
 // An empty Status is treated as Accepted.
 func TestSuppressionPrecedence(t *testing.T) {
 	// Test precedence: Accepted > UnderReview > Rejected
-	suppression := GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus := GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -92,10 +92,10 @@ func TestSuppressionPrecedence(t *testing.T) {
 	})
 
 	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.Accepted, suppression.Status)
+	assert.Equal(t, sarif.Accepted, suppressionStatus)
 
 	// Test precedence: Empty status is treated as Accepted
-	suppression = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -108,10 +108,10 @@ func TestSuppressionPrecedence(t *testing.T) {
 	})
 
 	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.SuppresionStatus(""), suppression.Status)
+	assert.Equal(t, sarif.Accepted, suppressionStatus)
 
 	// Test precedence when Accepted is missing: UnderReview > Rejected
-	suppression = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -121,10 +121,10 @@ func TestSuppressionPrecedence(t *testing.T) {
 	})
 
 	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.UnderReview, suppression.Status)
+	assert.Equal(t, sarif.UnderReview, suppressionStatus)
 
 	// Test precedence with Accepted having higher priority even if not first in the list
-	suppression = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.UnderReview,
 		},
@@ -137,15 +137,15 @@ func TestSuppressionPrecedence(t *testing.T) {
 	})
 
 	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.Accepted, suppression.Status)
+	assert.Equal(t, sarif.Accepted, suppressionStatus)
 
 	// Test when only rejected suppressions are present
-	suppression = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
 	})
 
 	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.Rejected, suppression.Status)
+	assert.Equal(t, sarif.Rejected, suppressionStatus)
 }

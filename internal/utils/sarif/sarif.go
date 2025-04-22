@@ -88,46 +88,38 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 
 // HasSuppressionInStatus returns true if the suppression with the provided status is found.
 func HasSuppressionInStatus(suppressions []sarif.Suppression, status sarif.SuppresionStatus) bool {
-	suppression := GetSuppression(suppressions)
+	suppression, suppressionStatus := GetSuppression(suppressions)
 	if suppression == nil {
 		return false
 	}
-	if status == sarif.Accepted {
-		// An empty Status is treated as Accepted.
-		return suppression.Status == sarif.Accepted || suppression.Status == ""
-	}
 
-	return suppression.Status == status
+	return suppressionStatus == status
 }
 
-// GetSuppression returns the suppression details if any.
+// GetSuppression returns the suppression details if any and its status.
 // It prioritizes suppressions based on their status: Accepted > UnderReview > Rejected.
 // If multiple suppressions exist, the one with the highest precedence is returned.
 // An empty Status is treated as Accepted.
 // If no suppressions are found, returns nil.
-func GetSuppression(suppressions []sarif.Suppression) *sarif.Suppression {
-	if len(suppressions) == 0 {
-		return nil
-	}
-
+func GetSuppression(suppressions []sarif.Suppression) (*sarif.Suppression, sarif.SuppresionStatus) {
 	for _, suppression := range suppressions {
 		if suppression.Status == sarif.Accepted || suppression.Status == "" {
-			return &suppression
+			return &suppression, sarif.Accepted
 		}
 	}
 
 	for _, suppression := range suppressions {
 		if suppression.Status == sarif.UnderReview {
-			return &suppression
+			return &suppression, sarif.UnderReview
 		}
 	}
 
 	for _, suppression := range suppressions {
 		if suppression.Status == sarif.Rejected {
-			return &suppression
+			return &suppression, sarif.Rejected
 		}
 	}
-	return nil
+	return nil, ""
 }
 
 func ConvertTypeToDriverName(s string) string {
