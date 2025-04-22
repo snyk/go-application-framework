@@ -62,9 +62,10 @@ type ProgressBar interface {
 	// SetMessage sets the message of the progress bar, which is displayed next to the bar.
 	// The message is displayed alongside the title passed in by `NewProgressBar(title string)`.
 	// The message provides context or description for the operation that is being tracked.
+	// Set to "" to clear the message.
 	SetMessage(message string)
 
-	// Clear removes the progress bar from the terminal.
+	// Clear removes the progress bar from the user interface.
 	// Returns an error if the clearing operation fails.
 	Clear() error
 }
@@ -101,7 +102,7 @@ type consoleProgressBar struct {
 
 func (p *consoleProgressBar) UpdateProgress(progress float64) error {
 	if !p.active.Load() {
-		return fmt.Errorf("progress not active")
+		return fmt.Errorf("progress bar not active")
 	}
 
 	p.progress.Store(&progress)

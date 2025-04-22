@@ -54,31 +54,31 @@ const (
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error)
 
 func NewTrackerFactory(userInterface ui.UserInterface, logger *zerolog.Logger) scan.TrackerFactory {
-	return ProgressTrackerFactory{
+	return progressTrackerFactory{
 		userInterface: userInterface,
 		logger:        logger,
 	}
 }
 
-type ProgressTrackerFactory struct {
+type progressTrackerFactory struct {
 	userInterface ui.UserInterface
 	logger        *zerolog.Logger
 }
 
-func (p ProgressTrackerFactory) GenerateTracker() scan.Tracker {
-	return &ProgressTrackerAdapter{
+func (p progressTrackerFactory) GenerateTracker() scan.Tracker {
+	return &progressTrackerAdapter{
 		userInterface: p.userInterface,
 		logger:        p.logger,
 	}
 }
 
-type ProgressTrackerAdapter struct {
+type progressTrackerAdapter struct {
 	userInterface ui.UserInterface
 	logger        *zerolog.Logger
 	bar           ui.ProgressBar
 }
 
-func (p *ProgressTrackerAdapter) Begin(title, message string) {
+func (p *progressTrackerAdapter) Begin(title, message string) {
 	if p.bar != nil {
 		p.logger.Error().Msg("progress tracker already begun")
 		return
@@ -92,7 +92,7 @@ func (p *ProgressTrackerAdapter) Begin(title, message string) {
 	}
 }
 
-func (p *ProgressTrackerAdapter) End(message string) {
+func (p *progressTrackerAdapter) End(message string) {
 	if p.bar == nil {
 		return
 	}
