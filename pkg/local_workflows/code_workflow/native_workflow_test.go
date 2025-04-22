@@ -24,7 +24,7 @@ func writeFile(t *testing.T, filename string) {
 func Test_determineAnalyzeInput(t *testing.T) {
 	logger := zerolog.Nop()
 	config := configuration.NewWithOpts()
-	config.Set(ConfigurationRemoteRepoUrlFlagname, "hello")
+	config.Set(configuration.FLAG_REMOTE_REPO_URL, "hello")
 	config.Set(configuration.MAX_THREADS, 1)
 
 	path := t.TempDir()

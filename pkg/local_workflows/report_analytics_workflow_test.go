@@ -72,7 +72,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
+	mockClient := NewTestClient(func(req *http.Request) *http.Response {
 		return &http.Response{
 			// error code!
 			StatusCode: http.StatusInternalServerError,
@@ -319,7 +319,7 @@ func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 
 func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
 	t.Helper()
-	mockClient := newTestClient(func(req *http.Request) *http.Response {
+	mockClient := NewTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
 		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2024-03-07~experimental", req.URL.String())
 		require.Equal(t, "POST", req.Method)

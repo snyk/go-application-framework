@@ -30,18 +30,17 @@ import (
 )
 
 const (
-	ConfigurationRemoteRepoUrlFlagname = "remote-repo-url"
-	ConfigurationTestFLowName          = "internal_code_test_flow_name"
-	ConfigurationReportFlag            = "report"
-	ConfigurationProjectName           = "project-name"
-	ConfigurationTargetName            = "target-name"
-	ConfigurationTargetReference       = "target-reference"
-	ConfigurationProjectId             = "project-id"
-	ConfigurationCommitId              = "commit-id"
-	ConfigurationSastEnabled           = "internal_sast_enabled"
-	ConfigurationSastSettings          = "internal_sast_settings"
-	ConfigurarionSlceEnabled           = "internal_snyk_scle_enabled"
-	FfNameNativeImplementation         = "snykCodeClientNativeImplementation"
+	ConfigurationTestFLowName    = "internal_code_test_flow_name"
+	ConfigurationReportFlag      = "report"
+	ConfigurationProjectName     = "project-name"
+	ConfigurationTargetName      = "target-name"
+	ConfigurationTargetReference = "target-reference"
+	ConfigurationProjectId       = "project-id"
+	ConfigurationCommitId        = "commit-id"
+	ConfigurationSastEnabled     = "internal_sast_enabled"
+	ConfigurationSastSettings    = "internal_sast_settings"
+	ConfigurarionSlceEnabled     = "internal_snyk_scle_enabled"
+	FfNameNativeImplementation   = "snykCodeClientNativeImplementation"
 )
 
 type reportType string
@@ -277,7 +276,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 	}
 
 	if !pathIsDirectory {
-		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
+		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)))
 		if err != nil {
 			logger.Warn().Err(err)
 		}
@@ -293,7 +292,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 		return target, files, nil
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(ConfigurationRemoteRepoUrlFlagname)))
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)))
 	if err != nil {
 		logger.Warn().Err(err)
 	}

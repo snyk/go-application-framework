@@ -17,8 +17,8 @@ func (f roundTripErrorFn) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, fmt.Errorf("yay, a test error")
 }
 
-// return *http.Client with Transport replaced to avoid making real calls
-func newTestClient(fn roundTripFn) *http.Client {
+// NewTestClient return *http.Client with Transport replaced to avoid making real calls
+func NewTestClient(fn roundTripFn) *http.Client {
 	return &http.Client{
 		Transport: fn,
 	}
