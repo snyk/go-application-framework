@@ -26,7 +26,7 @@ git pull
 # Return to project directory
 cd -
 
-# Vendor OpenAPI build artefacts for use in cue
+# Vendor OpenAPI build artefacts for use in the policy API client
 cp $API_SPEC_PATH/internal/api/rest/versions/$VERSION/spec.yaml ./internal/api/policy/$VERSION/spec.yaml
 
 echo "Generated" $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT

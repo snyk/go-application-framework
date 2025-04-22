@@ -61,7 +61,7 @@ func sortSarif(sarifDoc *sarif.SarifDocument) {
 func validateSarifData(t *testing.T, data []byte) {
 	t.Helper()
 
-	sarifSchemaPath, err := filepath.Abs("../../internal/cueutils/source/sarif-schema-2.1.0.json")
+	sarifSchemaPath, err := filepath.Abs("../../internal/local_findings/source/sarif-schema-2.1.0.json")
 	assert.NoError(t, err)
 
 	sarifSchemaFile, err := os.Open(sarifSchemaPath)
