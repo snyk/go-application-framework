@@ -47,37 +47,36 @@ func TestConvertTypeToDriverName(t *testing.T) {
 }
 
 func TestIsIgnored(t *testing.T) {
-	isIgnored, suppression := GetIgnoreDetails([]sarif.Suppression{
+	suppression := GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Accepted,
 		}})
 
-	assert.False(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.Accepted, suppression.Status)
+	assert.True(t, IsIgnored(suppression))
 
-	isIgnored, suppression = GetIgnoreDetails([]sarif.Suppression{
+	suppression = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		}})
 
-	assert.False(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.Rejected, suppression.Status)
+	assert.False(t, IsIgnored(suppression))
 
-	isIgnored, suppression = GetIgnoreDetails([]sarif.Suppression{
+	suppression = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.UnderReview,
 		}})
 
-	assert.False(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.UnderReview, suppression.Status)
 
-	isIgnored, suppression = GetIgnoreDetails([]sarif.Suppression{})
+	suppression = GetSuppression([]sarif.Suppression{})
 
-	assert.False(t, isIgnored)
 	assert.Nil(t, suppression)
+	assert.False(t, IsIgnored(suppression))
 }
 
 // TestSuppressionPrecedence tests the precedence logic when multiple suppressions exist.
@@ -85,7 +84,7 @@ func TestIsIgnored(t *testing.T) {
 // An empty Status is treated as Accepted.
 func TestSuppressionPrecedence(t *testing.T) {
 	// Test precedence: Accepted > UnderReview > Rejected
-	isIgnored, suppression := GetIgnoreDetails([]sarif.Suppression{
+	suppression := GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -97,12 +96,11 @@ func TestSuppressionPrecedence(t *testing.T) {
 		},
 	})
 
-	assert.False(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.Accepted, suppression.Status)
 
 	// Test precedence: Empty status is treated as Accepted
-	isIgnored, suppression = GetIgnoreDetails([]sarif.Suppression{
+	suppression = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -114,12 +112,11 @@ func TestSuppressionPrecedence(t *testing.T) {
 		},
 	})
 
-	assert.True(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.SuppresionStatus(""), suppression.Status)
 
 	// Test precedence when Accepted is missing: UnderReview > Rejected
-	isIgnored, suppression = GetIgnoreDetails([]sarif.Suppression{
+	suppression = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -128,12 +125,11 @@ func TestSuppressionPrecedence(t *testing.T) {
 		},
 	})
 
-	assert.False(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.UnderReview, suppression.Status)
 
 	// Test precedence with Accepted having higher priority even if not first in the list
-	isIgnored, suppression = GetIgnoreDetails([]sarif.Suppression{
+	suppression = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.UnderReview,
 		},
@@ -145,18 +141,16 @@ func TestSuppressionPrecedence(t *testing.T) {
 		},
 	})
 
-	assert.False(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.Accepted, suppression.Status)
 
 	// Test when only rejected suppressions are present
-	isIgnored, suppression = GetIgnoreDetails([]sarif.Suppression{
+	suppression = GetSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
 	})
 
-	assert.False(t, isIgnored)
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.Rejected, suppression.Status)
 }
