@@ -46,37 +46,32 @@ func TestConvertTypeToDriverName(t *testing.T) {
 	}
 }
 
-func TestIsIgnored(t *testing.T) {
-	suppression := GetSuppression([]sarif.Suppression{
+func TestHasSuppressionInStatus(t *testing.T) {
+	suppressions := []sarif.Suppression{
 		{
 			Status: sarif.Accepted,
-		}})
+		}}
+	assert.True(t, HasSuppressionInStatus(suppressions, sarif.Accepted))
 
-	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.Accepted, suppression.Status)
-	assert.True(t, IsIgnored(suppression))
-
-	suppression = GetSuppression([]sarif.Suppression{
-		{
-			Status: sarif.Rejected,
-		}})
-
-	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.Rejected, suppression.Status)
-	assert.False(t, IsIgnored(suppression))
-
-	suppression = GetSuppression([]sarif.Suppression{
+	suppressions = []sarif.Suppression{
 		{
 			Status: sarif.UnderReview,
-		}})
+		}}
+	assert.True(t, HasSuppressionInStatus(suppressions, sarif.UnderReview))
 
-	assert.NotNil(t, suppression)
-	assert.Equal(t, sarif.UnderReview, suppression.Status)
+	suppressions = []sarif.Suppression{
+		{
+			Status: sarif.Rejected,
+		}}
 
-	suppression = GetSuppression([]sarif.Suppression{})
+	assert.True(t, HasSuppressionInStatus(suppressions, sarif.Rejected))
 
-	assert.Nil(t, suppression)
-	assert.False(t, IsIgnored(suppression))
+	suppressions = []sarif.Suppression{
+		{
+			Status: "invalidState",
+		}}
+
+	assert.False(t, HasSuppressionInStatus(suppressions, sarif.Accepted))
 }
 
 // TestSuppressionPrecedence tests the precedence logic when multiple suppressions exist.
