@@ -4,7 +4,7 @@ GOARCH = $(shell go env GOARCH)
 
 GO_BIN := $(shell pwd)/.bin
 OVERRIDE_GOCI_LINT_V := v1.60.1
-SHELL := env PATH=$(GO_BIN):$(PATH) $(SHELL)
+SHELL := env PATH=$(GO_BIN):$(shell go env GOROOT)/bin:$(PATH) $(SHELL)
 
 .PHONY: format
 format:
@@ -12,7 +12,7 @@ format:
 	@gofmt -w -l -e .
 
 .PHONY: lint
-lint: $(GO_BIN)/golangci-lint $(GO_BIN)/cue
+lint: $(GO_BIN)/golangci-lint
 	@echo "Linting..."
 	@./scripts/lint.sh
 	$(GO_BIN)/golangci-lint run ./...
@@ -43,12 +43,9 @@ generate:
 	@make format
 
 .PHONY: tools
-tools: $(GO_BIN)/golangci-lint $(GO_BIN)/cue
+tools: $(GO_BIN)/golangci-lint
 	GOBIN=$(GO_BIN) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0
 	GOBIN=$(GO_BIN) go install github.com/golang/mock/mockgen@v1.6.0
-
-$(GO_BIN)/cue:
-	GOBIN=$(GO_BIN) go install cuelang.org/go/cmd/cue@v0.10.0
 
 $(GO_BIN)/golangci-lint:
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
