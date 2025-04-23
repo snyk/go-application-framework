@@ -17,6 +17,7 @@ import (
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -65,9 +66,15 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 	// If set to false, no response will be returned
 	createFlagset.Bool(EnrichResponseKey, false, "")
 	createFlagset.Bool(InteractiveKey, true, "")
-	_, err := engine.Register(WORKFLOWID_IGNORE_CREATE, workflow.ConfigurationOptionsFromFlagset(createFlagset), ignoreCreateWorkflowEntryPoint)
 
-	return err
+	_, err := engine.Register(WORKFLOWID_IGNORE_CREATE, workflow.ConfigurationOptionsFromFlagset(createFlagset), ignoreCreateWorkflowEntryPoint)
+	if err != nil {
+		return err
+	}
+
+	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_IAW_ENABLED, "ignoreApprovalWorkflow")
+
+	return nil
 }
 
 //nolint:gocyclo // to avoid repetition it's easier to read this way
@@ -76,6 +83,10 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	userInterface := invocationCtx.GetUserInterface()
 	config := invocationCtx.GetConfiguration()
 	id := invocationCtx.GetWorkflowIdentifier()
+
+	if !config.GetBool(configuration.FF_IAW_ENABLED) {
+		return nil, fmt.Errorf("ignoreApprovalWorkflow Feature flag is not enabled")
+	}
 
 	interactive := config.GetBool(InteractiveKey)
 	addCreateIgnoreDefaultConfigurationValues(invocationCtx, interactive)

@@ -50,4 +50,5 @@ const (
 	FF_CODE_CONSISTENT_IGNORES    string = "internal_snyk_code_ignores_enabled"
 	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
 	FF_TRANSFORMATION_WORKFLOW    string = "internal_snyk_transformation_workflow_enabled"
+	FF_IAW_ENABLED                string = "internal_snyk_iaw_enabled"
 )

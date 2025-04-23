@@ -48,7 +48,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
-
+	config.Set(configuration.FF_IAW_ENABLED, true)
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
@@ -307,5 +307,27 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, sarif.UnderReview, policyResp.Status)
 		assert.Nil(t, policyResp.Properties.Expiration)
 		assert.Equal(t, expectedReason, policyResp.Justification)
+	})
+	t.Run("IAW FF is disabled", func(t *testing.T) {
+		expectedFindingsId := uuid.New().String()
+		expectedIgnoreType := string(policyApi.WontFix)
+		expectedReason := "Test reason"
+
+		invocationContext := setupMockIgnoreContext(t, "{}", http.StatusCreated)
+		config := invocationContext.GetConfiguration()
+		config.Set(configuration.FF_IAW_ENABLED, false)
+
+		config.Set(InteractiveKey, false)
+
+		config.Set(FindingsIdKey, expectedFindingsId)
+		config.Set(IgnoreTypeKey, expectedIgnoreType)
+		config.Set(ReasonKey, expectedReason)
+		config.Set(RemoteRepoUrlKey, testRepoUrl)
+		config.Set(configuration.API_URL, "https://api.snyk.io")
+		config.Set(EnrichResponseKey, true)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
+		assert.NotNil(t, err, "Should return an error when IAW FF is disabled")
+		assert.Nil(t, result, "result should be nil when IAW FF is disabled")
 	})
 }

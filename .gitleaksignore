@@ -19,3 +19,7 @@ d5da1e7b3eb6676acca2021e4f3da07b1ff0d9a6:pkg/app/app_test.go:jwt:97
 5a4b6d6a75be3cbfc5122dd7d6d4ead5142b6429:pkg/app/app_test.go:jwt:95
 internal/auth/oauth_test.go:jwt:29
 d5da1e7b3eb6676acca2021e4f3da07b1ff0d9a6:pkg/auth/oauth_test.go:jwt:30
+6e8e7f338974aaf63b5974ceb29b76a1ee7867b6:internal/presenters/testdata/with-ignores-with-status.json:generic-api-key:539
+6e8e7f338974aaf63b5974ceb29b76a1ee7867b6:internal/presenters/testdata/with-ignores-with-status.json:generic-api-key:159
+6e8e7f338974aaf63b5974ceb29b76a1ee7867b6:internal/presenters/testdata/with-ignores-with-status.json:generic-api-key:224
+6e8e7f338974aaf63b5974ceb29b76a1ee7867b6:internal/presenters/testdata/with-ignores-with-status.json:generic-api-key:474
