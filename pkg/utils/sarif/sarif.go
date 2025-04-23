@@ -62,7 +62,7 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 			resultMap[severity].Total++
 
 			// evaluate if the result is suppressed/ignored or not
-			if HasSuppressionInStatus(result.Suppressions, sarif.Accepted) {
+			if IsHighestSuppressionStatus(result.Suppressions, sarif.Accepted) {
 				resultMap[severity].Ignored++
 			} else {
 				resultMap[severity].Open++
@@ -86,9 +86,9 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 	return summary
 }
 
-// HasSuppressionInStatus returns true if the suppression with the provided status is found.
-func HasSuppressionInStatus(suppressions []sarif.Suppression, status sarif.SuppresionStatus) bool {
-	suppression, suppressionStatus := GetSuppression(suppressions)
+// IsHighestSuppressionStatus returns true if the suppression with the provided status exists and has the highest precedence.
+func IsHighestSuppressionStatus(suppressions []sarif.Suppression, status sarif.SuppresionStatus) bool {
+	suppression, suppressionStatus := GetHighestSuppression(suppressions)
 	if suppression == nil {
 		return false
 	}
@@ -96,12 +96,12 @@ func HasSuppressionInStatus(suppressions []sarif.Suppression, status sarif.Suppr
 	return suppressionStatus == status
 }
 
-// GetSuppression returns the suppression details if any and its status.
+// GetHighestSuppression returns the suppression details if any and its status.
 // It prioritizes suppressions based on their status: Accepted > UnderReview > Rejected.
 // If multiple suppressions exist, the one with the highest precedence is returned.
 // An empty Status is treated as Accepted.
 // If no suppressions are found, returns nil.
-func GetSuppression(suppressions []sarif.Suppression) (*sarif.Suppression, sarif.SuppresionStatus) {
+func GetHighestSuppression(suppressions []sarif.Suppression) (*sarif.Suppression, sarif.SuppresionStatus) {
 	for _, suppression := range suppressions {
 		if suppression.Status == sarif.Accepted || suppression.Status == "" {
 			return &suppression, sarif.Accepted

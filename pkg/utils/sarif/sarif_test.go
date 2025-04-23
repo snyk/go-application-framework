@@ -51,27 +51,27 @@ func TestHasSuppressionInStatus(t *testing.T) {
 		{
 			Status: sarif.Accepted,
 		}}
-	assert.True(t, HasSuppressionInStatus(suppressions, sarif.Accepted))
+	assert.True(t, IsHighestSuppressionStatus(suppressions, sarif.Accepted))
 
 	suppressions = []sarif.Suppression{
 		{
 			Status: sarif.UnderReview,
 		}}
-	assert.True(t, HasSuppressionInStatus(suppressions, sarif.UnderReview))
+	assert.True(t, IsHighestSuppressionStatus(suppressions, sarif.UnderReview))
 
 	suppressions = []sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		}}
 
-	assert.True(t, HasSuppressionInStatus(suppressions, sarif.Rejected))
+	assert.True(t, IsHighestSuppressionStatus(suppressions, sarif.Rejected))
 
 	suppressions = []sarif.Suppression{
 		{
 			Status: "invalidState",
 		}}
 
-	assert.False(t, HasSuppressionInStatus(suppressions, sarif.Accepted))
+	assert.False(t, IsHighestSuppressionStatus(suppressions, sarif.Accepted))
 }
 
 // TestSuppressionPrecedence tests the precedence logic when multiple suppressions exist.
@@ -79,7 +79,7 @@ func TestHasSuppressionInStatus(t *testing.T) {
 // An empty Status is treated as Accepted.
 func TestSuppressionPrecedence(t *testing.T) {
 	// Test precedence: Accepted > UnderReview > Rejected
-	suppression, suppressionStatus := GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus := GetHighestSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -95,7 +95,7 @@ func TestSuppressionPrecedence(t *testing.T) {
 	assert.Equal(t, sarif.Accepted, suppressionStatus)
 
 	// Test precedence: Empty status is treated as Accepted
-	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetHighestSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -111,7 +111,7 @@ func TestSuppressionPrecedence(t *testing.T) {
 	assert.Equal(t, sarif.Accepted, suppressionStatus)
 
 	// Test precedence when Accepted is missing: UnderReview > Rejected
-	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetHighestSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
@@ -124,7 +124,7 @@ func TestSuppressionPrecedence(t *testing.T) {
 	assert.Equal(t, sarif.UnderReview, suppressionStatus)
 
 	// Test precedence with Accepted having higher priority even if not first in the list
-	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetHighestSuppression([]sarif.Suppression{
 		{
 			Status: sarif.UnderReview,
 		},
@@ -140,7 +140,7 @@ func TestSuppressionPrecedence(t *testing.T) {
 	assert.Equal(t, sarif.Accepted, suppressionStatus)
 
 	// Test when only rejected suppressions are present
-	suppression, suppressionStatus = GetSuppression([]sarif.Suppression{
+	suppression, suppressionStatus = GetHighestSuppression([]sarif.Suppression{
 		{
 			Status: sarif.Rejected,
 		},
