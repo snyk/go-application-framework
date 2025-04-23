@@ -31,6 +31,6 @@ npm run build
 # Return to project directory
 cd -
 
-# Vendor OpenAPI build artefacts for use in cue
-cp -r $API_SPEC_PATH/tsp-output/@typespec/openapi3/ ./internal/cueutils/source/openapi/rest
-echo $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT > ./internal/cueutils/source/openapi/rest/generated.txt
+# Vendor OpenAPI build artefacts for use in local_findings
+cp -r $API_SPEC_PATH/tsp-output/@typespec/openapi3/ ./internal/local_findings/source/openapi/rest
+echo $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT > ./internal/local_findings/source/openapi/rest/generated.txt
