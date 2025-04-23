@@ -231,6 +231,37 @@ func TestPresenterLocalFinding_IncludeIgnored(t *testing.T) {
 	snaps.MatchSnapshot(t, result)
 }
 
+func TestPresenterLocalFinding_IncludeIgnored_WithStatusProperty(t *testing.T) {
+	input, err := sarifToLocalFinding(t, "testdata/with-ignores-with-status.json")
+	require.Nil(t, err)
+
+	lipgloss.SetColorProfile(termenv.Ascii)
+	config := configuration.NewInMemory()
+	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+	config.Set(configuration.FLAG_INCLUDE_IGNORES, true)
+	writer := new(bytes.Buffer)
+
+	p := presenters.NewLocalFindingsRenderer(
+		[]*local_models.LocalFinding{input},
+		config,
+		writer,
+	)
+
+	err = p.RenderTemplate(presenters.DefaultTemplateFiles, presenters.DefaultMimeType)
+	result := writer.String()
+
+	require.Nil(t, err)
+
+	require.Contains(t, result, "Ignored Issues")
+	require.Contains(t, result, "[ IGNORED ] [MEDIUM]")
+	require.Contains(t, result, "src/main.ts, line 58")
+	require.Contains(t, result, "Ignores are currently managed in the Snyk Web UI.")
+	require.NotContains(t, result, "Empty ignore issues state")
+	require.NotContains(t, result, "To view ignored and open issues, use the --include-ignores option.pre")
+
+	snaps.MatchSnapshot(t, result)
+}
+
 func TestPresenterLocalFinding_IncludeIgnoredEmpty(t *testing.T) {
 	input, err := sarifToLocalFinding(t, "testdata/3-low-issues.json")
 	require.Nil(t, err)
