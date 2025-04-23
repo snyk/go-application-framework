@@ -184,6 +184,21 @@ func (mr *MockConfigurationMockRecorder) GetBool(key interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBool", reflect.TypeOf((*MockConfiguration)(nil).GetBool), key)
 }
 
+// GetBoolWithError mocks base method.
+func (m *MockConfiguration) GetBoolWithError(key string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBoolWithError", key)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBoolWithError indicates an expected call of GetBoolWithError.
+func (mr *MockConfigurationMockRecorder) GetBoolWithError(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBoolWithError", reflect.TypeOf((*MockConfiguration)(nil).GetBoolWithError), key)
+}
+
 // GetFiles mocks base method.
 func (m *MockConfiguration) GetFiles() []string {
 	m.ctrl.T.Helper()
@@ -280,6 +295,21 @@ func (m *MockConfiguration) GetStringSlice(key string) []string {
 func (mr *MockConfigurationMockRecorder) GetStringSlice(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStringSlice", reflect.TypeOf((*MockConfiguration)(nil).GetStringSlice), key)
+}
+
+// GetStringWithError mocks base method.
+func (m *MockConfiguration) GetStringWithError(key string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStringWithError", key)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStringWithError indicates an expected call of GetStringWithError.
+func (mr *MockConfigurationMockRecorder) GetStringWithError(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStringWithError", reflect.TypeOf((*MockConfiguration)(nil).GetStringWithError), key)
 }
 
 // GetSupportedEnvVarPrefixes mocks base method.
