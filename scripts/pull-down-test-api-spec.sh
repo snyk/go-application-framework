@@ -1,36 +1,37 @@
 #!/usr/bin/env bash
 
-API_SPEC_PATH=$(realpath ../dragonfly)
+TEST_API_DIR=$(realpath ./internal/api/testapi)
+
+# Data source
+API_SPEC_PATH=$(mktemp -d)
 API_SPEC_BRANCH=${API_SPEC_BRANCH:-main}
+trap "rm -rf $API_SPEC_PATH" EXIT
+
+# Outputs
+TEST_API_GENERATED=$TEST_API_DIR/2024-10-15
 GENERATE_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 echo --------------------------------------------------------
-echo Updating local findings from dragonfly!
+echo Updating local spec from unified test repo!
 echo
 echo Path:   $API_SPEC_PATH
 echo Branch: $API_SPEC_BRANCH
 echo Date:   $GENERATE_DATE
 echo --------------------------------------------------------
 
-# Check if the directory exists
-if [[ ! -d "$API_SPEC_PATH" ]]; then
-  # Create the directory if it doesn't exist
-  git clone git@github.com:snyk/dragonfly.git $API_SPEC_PATH
-fi
+# Fetch the spec's repo
+git clone git@github.com:snyk/test-api-shim.git $API_SPEC_PATH
 
 cd $API_SPEC_PATH
 git checkout $API_SPEC_BRANCH
 API_COMMIT=$(git rev-parse HEAD)
 git pull
 
-# Update dependencies
-npm ci
-# Trigger build of dragonfly project
-npm run build
-
 # Return to project directory
 cd -
 
-# Vendor OpenAPI build artefacts for use in cue
-cp -r $API_SPEC_PATH/tsp-output/@typespec/openapi3/ ./internal/cueutils/source/openapi/rest
-echo $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT > ./internal/cueutils/source/openapi/rest/generated.txt
+# place OpenAPI build artifacts
+mkdir -p $TEST_API_GENERATED
+
+cp $API_SPEC_PATH/internal/api/closed-beta/versions/2024-10-15/spec.yaml $TEST_API_GENERATED/spec.yaml
+echo $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT > $TEST_API_GENERATED/generated.txt
