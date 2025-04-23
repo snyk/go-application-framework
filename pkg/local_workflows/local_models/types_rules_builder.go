@@ -2,7 +2,8 @@ package local_models
 
 import (
 	"github.com/snyk/code-client-go/sarif"
-	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
+
+	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
 
 func NewFindingsCounts() TypesFindingCounts {

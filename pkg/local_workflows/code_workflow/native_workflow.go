@@ -19,13 +19,13 @@ import (
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/error-catalog-golang-public/code"
 
-	sarif2 "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils"
+	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 

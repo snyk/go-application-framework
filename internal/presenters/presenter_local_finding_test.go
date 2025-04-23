@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
-	sarif_utils "github.com/snyk/go-application-framework/internal/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
 
 func sarifToLocalFinding(t *testing.T, filename string) (localFinding *local_models.LocalFinding, err error) {
