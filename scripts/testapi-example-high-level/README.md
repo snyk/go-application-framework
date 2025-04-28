@@ -1,4 +1,4 @@
-# testapi-example script
+# testapi-example-high-level script
 
 This is a developer script that loads a dependency graph, runs a Snyk test on it, and displays the test findings.
 
@@ -35,7 +35,7 @@ Notes:
 This requires that you have a Snyk CLI installed -- see [public docs](https://docs.snyk.io/snyk-cli) on setting that up.
 
 ```
-./scripts/testapi-example/cli.sh <path to package manifest> [additional cli options]
+./scripts/testapi-example-high-level/cli.sh <path to package manifest> [additional cli options]
 ```
 
 This script will extract a dep-graph using the Snyk CLI and test it with the Unified Test API.

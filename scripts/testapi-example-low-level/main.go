@@ -108,7 +108,7 @@ func (rt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	return &result, nil
 }
 
-func run() error { //nolint:gocyclo // chill it's a demo script
+func run() error { //nolint:gocyclo // chill, it's a demo script
 	orgID, err := orgUUID()
 	if err != nil {
 		return fmt.Errorf("failed to get org ID: %w", err)
@@ -128,6 +128,11 @@ func run() error { //nolint:gocyclo // chill it's a demo script
 		contents, err = os.ReadFile(filepath)
 		if err != nil {
 			return fmt.Errorf("unable to load input file: %w", err)
+		}
+	} else {
+		contents, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("unable to load from stdin: %w", err)
 		}
 	}
 
