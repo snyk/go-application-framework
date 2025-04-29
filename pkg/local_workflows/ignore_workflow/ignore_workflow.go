@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/error-catalog-golang-public/cli"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -27,7 +28,7 @@ const (
 	ignoreEditWorkflowName   = "ignore.edit"
 	ignoreDeleteWorkflowName = "ignore.delete"
 
-	FindingsIdKey         = "id"
+	FindingsIdKey         = "finding-id"
 	findingsIdDescription = "Findings Id"
 
 	IgnoreIdKey         = "ignore-id"
@@ -85,7 +86,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	id := invocationCtx.GetWorkflowIdentifier()
 
 	if !config.GetBool(configuration.FF_IAW_ENABLED) {
-		return nil, fmt.Errorf("ignoreApprovalWorkflow Feature flag is not enabled")
+		return nil, cli.NewFeatureUnderDevelopmentError("")
 	}
 
 	interactive := config.GetBool(InteractiveKey)
