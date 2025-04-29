@@ -30,13 +30,13 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 		if !config.IsSet(ExpirationKey) {
 			return existingValue, nil
 		}
-		
+
 		err := isValidExpirationDate(existingValue)
 		if err != nil {
 			return "", err
 		}
 
-		return existingValue, nil	
+		return existingValue, nil
 	})
 
 	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
