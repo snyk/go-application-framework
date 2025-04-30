@@ -28,7 +28,7 @@ const (
 	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "id"
-	findingsIdDescription = "Findings Id"
+	findingsIdDescription = "Finding Id"
 
 	IgnoreIdKey         = "ignore-id"
 	IgnoreIdDescription = "Ignore Id"
