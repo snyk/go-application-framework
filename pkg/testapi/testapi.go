@@ -1,5 +1,7 @@
 package testapi
 
+//go:generate $GOPATH/bin/mockgen -source=testapi.go -destination ../mocks/testapi.go -package mocks -imports testapi=github.com/snyk/go-application-framework/pkg/testapi
+
 import (
 	"context"
 	"fmt"
@@ -87,19 +89,17 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	requestBody := TestRequestBody{
 		Data: TestDataCreate{
 			Attributes: testAttributes,
-			Type:       TestDataCreateTypeTests, // Set the type for the TestData
+			Type:       TestDataCreateTypeTests,
 		},
 	}
 
-	// Prepare parameters for the low-level client call
+	// Call the low-level client
 	createTestParams := &CreateTestParams{Version: c.config.APIVersion}
-
-	// Call the low-level client method
 	resp, err := c.lowLevelClient.CreateTestWithApplicationVndAPIPlusJSONBodyWithResponse(
 		ctx,
-		orgUUID,          // Use parsed OrgID UUID
-		createTestParams, // Pass the parameters
-		requestBody,      // Pass the constructed request body
+		orgUUID,
+		createTestParams,
+		requestBody,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send create test request: %w", err)
@@ -258,7 +258,7 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 
 			case http.StatusNotFound:
 				// Can happen due to eventual consistency; log and continue polling
-				// TODO what is our preferred logging mechanism?
+				// TODO log to injected logger
 				continue
 
 			default:
@@ -304,7 +304,7 @@ func (h *testHandle) fetchFinalTestStatus(ctx context.Context, testID uuid.UUID)
 
 	if attrs.State != nil {
 		status.State = string(attrs.State.Execution)
-		if len(*attrs.State.Errors) > 0 {
+		if attrs.State.Errors != nil && len(*attrs.State.Errors) > 0 {
 			// Aggregate error messages
 			var errorMessages []string
 			for _, apiError := range *attrs.State.Errors {
