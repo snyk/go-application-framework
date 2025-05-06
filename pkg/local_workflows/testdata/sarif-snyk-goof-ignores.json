@@ -2602,6 +2602,8 @@
           },
           "suppressions": [
             {
+              "guid":"BFFA1C3C-7D67-4EDE-B6D0-7D5208AD041D",
+              "state": "accepted",
               "justification": "Experimenting with consistent ignores capability. ",
               "properties": {
                 "category": "temporary-ignore",
@@ -2771,6 +2773,8 @@
           },
           "suppressions": [
             {
+              "guid":"BFFA1C3C-7D67-4EDE-B6D0-7D5208AD041D",
+              "state": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
@@ -2983,6 +2987,8 @@
           },
           "suppressions": [
             {
+              "guid":"BFFA1C3C-7D67-4EDE-B6D0-7D5208AD041D",
+              "state": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
