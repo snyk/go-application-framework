@@ -50,6 +50,12 @@ tools: $(GO_BIN)/golangci-lint
 $(GO_BIN)/golangci-lint:
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
 
+.PHONY: update-dragonfly
+update-dragonfly:
+	@scripts/pull-down-dragonfly-api-spec.sh
+	@make generate
+
+
 .PHONY: update-local-findings
 update-local-findings:
 	@scripts/pull-down-test-api-spec.sh
