@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -122,6 +123,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
 	return &TypesSuppression{
+		Id: uuid.MustParse(suppression.Guid),
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
 			Expiration: expiration,
@@ -132,7 +134,18 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 			},
 		},
 		Justification: &suppression.Justification,
-		Kind:          "ignored",
+		Status:        toSuppressionStatus(suppression.Status),
+	}
+}
+
+func toSuppressionStatus(status sarif.SuppresionStatus) TypesSuppressionStatus {
+	switch status {
+	case "accepted":
+		return Accepted
+	case "underReview":
+		return UnderReview
+	default:
+		return Rejected
 	}
 }
 

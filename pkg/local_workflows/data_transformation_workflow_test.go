@@ -246,13 +246,13 @@ func Test_DataTransformation_with_Sarif_and_SummaryData(t *testing.T) {
 }
 
 func parseFingerprint(fp local_models.Fingerprint) (scheme string, value string, ok bool) {
-	if assetFp, err := fp.AsTypesFingerprintAssetV1(); err == nil {
+	if assetFp, err := fp.AsTypesCodeSastFingerprintAssetV1(); err == nil {
 		return string(assetFp.Scheme), assetFp.Value, true
 	}
-	if orgProjectFp, err := fp.AsTypesFingerprintProjectV1(); err == nil {
+	if orgProjectFp, err := fp.AsTypesCodeSastFingerprintProjectV1(); err == nil {
 		return string(orgProjectFp.Scheme), orgProjectFp.Value, true
 	}
-	if orgRepoFp, err := fp.AsTypesFingerprintRepositoryV1(); err == nil {
+	if orgRepoFp, err := fp.AsTypesCodeSastFingerprintRepositoryV1(); err == nil {
 		return string(orgRepoFp.Scheme), orgRepoFp.Value, true
 	}
 	return "", "", false

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 API_SPEC_PATH=$(realpath ../dragonfly)
-API_SPEC_BRANCH=${API_SPEC_BRANCH:-main}
+API_SPEC_BRANCH=${API_SPEC_BRANCH:-feat/local_findings_sarif}
 GENERATE_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 echo --------------------------------------------------------
