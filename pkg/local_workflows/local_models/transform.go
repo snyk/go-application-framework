@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
+	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
@@ -110,10 +111,10 @@ func mapRules(sarifRule sarif.Rule) TypesRules {
 }
 
 func mapSuppressions(res sarif.Result) *TypesSuppression {
-	if len(res.Suppressions) == 0 {
+	suppression, status := sarif2.GetHighestSuppression(res.Suppressions)
+	if suppression == nil {
 		return nil
 	}
-	suppression := res.Suppressions[0]
 	expiration := ""
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
@@ -134,18 +135,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 			},
 		},
 		Justification: &suppression.Justification,
-		Status:        toSuppressionStatus(suppression.Status),
-	}
-}
-
-func toSuppressionStatus(status sarif.SuppresionStatus) TypesSuppressionStatus {
-	switch status {
-	case "accepted":
-		return Accepted
-	case "underReview":
-		return UnderReview
-	default:
-		return Rejected
+		Status:        TypesSuppressionStatus(status),
 	}
 }
 
