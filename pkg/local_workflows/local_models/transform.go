@@ -115,7 +115,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression == nil {
 		return nil
 	}
-	expiration := ""
+	expiration := "never-expire"
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
 		expiration = *suppression.Properties.Expiration
@@ -123,8 +123,9 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
-	return &TypesSuppression{
-		Id: uuid.MustParse(suppression.Guid),
+	id, _ := uuid.Parse(suppression.Guid)
+
+	typeSuppression := &TypesSuppression{
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
 			Expiration: expiration,
@@ -135,7 +136,25 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 			},
 		},
 		Justification: &suppression.Justification,
-		Status:        TypesSuppressionStatus(status),
+		Status:        fudgeStatus(TypesSuppressionStatus(status), suppression.Justification),
+	}
+	if len(id) > 0 {
+		typeSuppression.Id = id
+	}
+
+	return typeSuppression
+}
+
+// fudgeStatus used to test all possible statuses
+// DO NOT MERGE THIS
+func fudgeStatus(status TypesSuppressionStatus, justification string) TypesSuppressionStatus {
+	switch justification {
+	case "underReview":
+		return TypesSuppressionStatus("underReview")
+	case "rejected":
+		return TypesSuppressionStatus("rejected")
+	default:
+		return status
 	}
 }
 
