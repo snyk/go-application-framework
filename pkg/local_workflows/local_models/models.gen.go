@@ -29,6 +29,21 @@ const (
 	TypesBusinessCriticalityRiskFactorValueMedium TypesBusinessCriticalityRiskFactorValue = "medium"
 )
 
+// Defines values for TypesCodeSastFingerprintAssetV1Scheme.
+const (
+	Snykassetfindingv1 TypesCodeSastFingerprintAssetV1Scheme = "snyk/asset/finding/v1"
+)
+
+// Defines values for TypesCodeSastFingerprintProjectV1Scheme.
+const (
+	Snykorgprojectfindingv1 TypesCodeSastFingerprintProjectV1Scheme = "snyk/org/project/finding/v1"
+)
+
+// Defines values for TypesCodeSastFingerprintRepositoryV1Scheme.
+const (
+	Snykorgrepositoryfindingv1 TypesCodeSastFingerprintRepositoryV1Scheme = "snyk/org/repository/finding/v1"
+)
+
 // Defines values for TypesCodeSastFingerprintV0Scheme.
 const (
 	CodeSastV0 TypesCodeSastFingerprintV0Scheme = "code-sast-v0"
@@ -116,21 +131,6 @@ const (
 	Findings TypesFindingResourceType = "findings"
 )
 
-// Defines values for TypesFingerprintAssetV1Scheme.
-const (
-	Snykassetfindingv1 TypesFingerprintAssetV1Scheme = "snyk/asset/finding/v1"
-)
-
-// Defines values for TypesFingerprintProjectV1Scheme.
-const (
-	Snykorgprojectfindingv1 TypesFingerprintProjectV1Scheme = "snyk/org/project/finding/v1"
-)
-
-// Defines values for TypesFingerprintRepositoryV1Scheme.
-const (
-	Snykorgrepositoryfindingv1 TypesFingerprintRepositoryV1Scheme = "snyk/org/repository/finding/v1"
-)
-
 // Defines values for TypesGitSCMInputType.
 const (
 	GitScm TypesGitSCMInputType = "git-scm"
@@ -179,11 +179,11 @@ const (
 	True  TypesSuggestedPackageUpgradeUpgradeConflicts = true
 )
 
-// Defines values for TypesSuppressionKind.
+// Defines values for TypesSuppressionStatus.
 const (
-	TypesSuppressionKindIgnored               TypesSuppressionKind = "ignored"
-	TypesSuppressionKindOther                 TypesSuppressionKind = "other"
-	TypesSuppressionKindPendingIgnoreApproval TypesSuppressionKind = "pending_ignore_approval"
+	Accepted    TypesSuppressionStatus = "accepted"
+	Rejected    TypesSuppressionStatus = "rejected"
+	UnderReview TypesSuppressionStatus = "underReview"
 )
 
 // Defines values for TypesTestContextSdlcStage.
@@ -204,9 +204,9 @@ const (
 
 // Defines values for TypesTestOutcomeReason.
 const (
-	Other        TypesTestOutcomeReason = "other"
-	PolicyBreach TypesTestOutcomeReason = "policy_breach"
-	Timeout      TypesTestOutcomeReason = "timeout"
+	TypesTestOutcomeReasonOther        TypesTestOutcomeReason = "other"
+	TypesTestOutcomeReasonPolicyBreach TypesTestOutcomeReason = "policy_breach"
+	TypesTestOutcomeReasonTimeout      TypesTestOutcomeReason = "timeout"
 )
 
 // Defines values for TypesTestOutcomeResult.
@@ -433,6 +433,33 @@ type TypesBusinessCriticalityRiskFactorValue string
 type TypesCodeFlow struct {
 	ThreadFlows []TypesThreadFlow `json:"threadFlows"`
 }
+
+// TypesCodeSastFingerprintAssetV1 defines model for types.CodeSastFingerprintAssetV1.
+type TypesCodeSastFingerprintAssetV1 struct {
+	Scheme TypesCodeSastFingerprintAssetV1Scheme `json:"scheme"`
+	Value  string                                `json:"value"`
+}
+
+// TypesCodeSastFingerprintAssetV1Scheme defines model for TypesCodeSastFingerprintAssetV1.Scheme.
+type TypesCodeSastFingerprintAssetV1Scheme string
+
+// TypesCodeSastFingerprintProjectV1 defines model for types.CodeSastFingerprintProjectV1.
+type TypesCodeSastFingerprintProjectV1 struct {
+	Scheme TypesCodeSastFingerprintProjectV1Scheme `json:"scheme"`
+	Value  string                                  `json:"value"`
+}
+
+// TypesCodeSastFingerprintProjectV1Scheme defines model for TypesCodeSastFingerprintProjectV1.Scheme.
+type TypesCodeSastFingerprintProjectV1Scheme string
+
+// TypesCodeSastFingerprintRepositoryV1 defines model for types.CodeSastFingerprintRepositoryV1.
+type TypesCodeSastFingerprintRepositoryV1 struct {
+	Scheme TypesCodeSastFingerprintRepositoryV1Scheme `json:"scheme"`
+	Value  string                                     `json:"value"`
+}
+
+// TypesCodeSastFingerprintRepositoryV1Scheme defines model for TypesCodeSastFingerprintRepositoryV1.Scheme.
+type TypesCodeSastFingerprintRepositoryV1Scheme string
 
 // TypesCodeSastFingerprintV0 defines model for types.CodeSastFingerprintV0.
 type TypesCodeSastFingerprintV0 struct {
@@ -933,33 +960,6 @@ type TypesFindingsSummary struct {
 	Type      string             `json:"type"`
 }
 
-// TypesFingerprintAssetV1 defines model for types.FingerprintAssetV1.
-type TypesFingerprintAssetV1 struct {
-	Scheme TypesFingerprintAssetV1Scheme `json:"scheme"`
-	Value  string                        `json:"value"`
-}
-
-// TypesFingerprintAssetV1Scheme defines model for TypesFingerprintAssetV1.Scheme.
-type TypesFingerprintAssetV1Scheme string
-
-// TypesFingerprintProjectV1 defines model for types.FingerprintProjectV1.
-type TypesFingerprintProjectV1 struct {
-	Scheme TypesFingerprintProjectV1Scheme `json:"scheme"`
-	Value  string                          `json:"value"`
-}
-
-// TypesFingerprintProjectV1Scheme defines model for TypesFingerprintProjectV1.Scheme.
-type TypesFingerprintProjectV1Scheme string
-
-// TypesFingerprintRepositoryV1 defines model for types.FingerprintRepositoryV1.
-type TypesFingerprintRepositoryV1 struct {
-	Scheme TypesFingerprintRepositoryV1Scheme `json:"scheme"`
-	Value  string                             `json:"value"`
-}
-
-// TypesFingerprintRepositoryV1Scheme defines model for TypesFingerprintRepositoryV1.Scheme.
-type TypesFingerprintRepositoryV1Scheme string
-
 // TypesGitCommit Git commit SHA.
 type TypesGitCommit = string
 
@@ -1179,12 +1179,13 @@ type TypesSuggestedPackageUpgradeUpgradeConflicts bool
 type TypesSuppression struct {
 	// Details Suppression meta data
 	Details       *TypesSuppressionDetails `json:"details,omitempty"`
+	Id            openapi_types.UUID       `json:"id"`
 	Justification *string                  `json:"justification,omitempty"`
-	Kind          TypesSuppressionKind     `json:"kind"`
+	Status        TypesSuppressionStatus   `json:"status"`
 }
 
-// TypesSuppressionKind defines model for TypesSuppression.Kind.
-type TypesSuppressionKind string
+// TypesSuppressionStatus defines model for TypesSuppression.Status.
+type TypesSuppressionStatus string
 
 // TypesSuppressionDetails Suppression meta data
 type TypesSuppressionDetails struct {
@@ -2381,23 +2382,23 @@ func (t *Fingerprint) MergeTypesIdentityFingerprint(v TypesIdentityFingerprint) 
 	return err
 }
 
-// AsTypesFingerprintProjectV1 returns the union data inside the Fingerprint as a TypesFingerprintProjectV1
-func (t Fingerprint) AsTypesFingerprintProjectV1() (TypesFingerprintProjectV1, error) {
-	var body TypesFingerprintProjectV1
+// AsTypesCodeSastFingerprintProjectV1 returns the union data inside the Fingerprint as a TypesCodeSastFingerprintProjectV1
+func (t Fingerprint) AsTypesCodeSastFingerprintProjectV1() (TypesCodeSastFingerprintProjectV1, error) {
+	var body TypesCodeSastFingerprintProjectV1
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromTypesFingerprintProjectV1 overwrites any union data inside the Fingerprint as the provided TypesFingerprintProjectV1
-func (t *Fingerprint) FromTypesFingerprintProjectV1(v TypesFingerprintProjectV1) error {
+// FromTypesCodeSastFingerprintProjectV1 overwrites any union data inside the Fingerprint as the provided TypesCodeSastFingerprintProjectV1
+func (t *Fingerprint) FromTypesCodeSastFingerprintProjectV1(v TypesCodeSastFingerprintProjectV1) error {
 	v.Scheme = "snyk/org/project/finding/v1"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeTypesFingerprintProjectV1 performs a merge with any union data inside the Fingerprint, using the provided TypesFingerprintProjectV1
-func (t *Fingerprint) MergeTypesFingerprintProjectV1(v TypesFingerprintProjectV1) error {
+// MergeTypesCodeSastFingerprintProjectV1 performs a merge with any union data inside the Fingerprint, using the provided TypesCodeSastFingerprintProjectV1
+func (t *Fingerprint) MergeTypesCodeSastFingerprintProjectV1(v TypesCodeSastFingerprintProjectV1) error {
 	v.Scheme = "snyk/org/project/finding/v1"
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -2409,23 +2410,23 @@ func (t *Fingerprint) MergeTypesFingerprintProjectV1(v TypesFingerprintProjectV1
 	return err
 }
 
-// AsTypesFingerprintRepositoryV1 returns the union data inside the Fingerprint as a TypesFingerprintRepositoryV1
-func (t Fingerprint) AsTypesFingerprintRepositoryV1() (TypesFingerprintRepositoryV1, error) {
-	var body TypesFingerprintRepositoryV1
+// AsTypesCodeSastFingerprintRepositoryV1 returns the union data inside the Fingerprint as a TypesCodeSastFingerprintRepositoryV1
+func (t Fingerprint) AsTypesCodeSastFingerprintRepositoryV1() (TypesCodeSastFingerprintRepositoryV1, error) {
+	var body TypesCodeSastFingerprintRepositoryV1
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromTypesFingerprintRepositoryV1 overwrites any union data inside the Fingerprint as the provided TypesFingerprintRepositoryV1
-func (t *Fingerprint) FromTypesFingerprintRepositoryV1(v TypesFingerprintRepositoryV1) error {
+// FromTypesCodeSastFingerprintRepositoryV1 overwrites any union data inside the Fingerprint as the provided TypesCodeSastFingerprintRepositoryV1
+func (t *Fingerprint) FromTypesCodeSastFingerprintRepositoryV1(v TypesCodeSastFingerprintRepositoryV1) error {
 	v.Scheme = "snyk/org/repository/finding/v1"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeTypesFingerprintRepositoryV1 performs a merge with any union data inside the Fingerprint, using the provided TypesFingerprintRepositoryV1
-func (t *Fingerprint) MergeTypesFingerprintRepositoryV1(v TypesFingerprintRepositoryV1) error {
+// MergeTypesCodeSastFingerprintRepositoryV1 performs a merge with any union data inside the Fingerprint, using the provided TypesCodeSastFingerprintRepositoryV1
+func (t *Fingerprint) MergeTypesCodeSastFingerprintRepositoryV1(v TypesCodeSastFingerprintRepositoryV1) error {
 	v.Scheme = "snyk/org/repository/finding/v1"
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -2437,23 +2438,23 @@ func (t *Fingerprint) MergeTypesFingerprintRepositoryV1(v TypesFingerprintReposi
 	return err
 }
 
-// AsTypesFingerprintAssetV1 returns the union data inside the Fingerprint as a TypesFingerprintAssetV1
-func (t Fingerprint) AsTypesFingerprintAssetV1() (TypesFingerprintAssetV1, error) {
-	var body TypesFingerprintAssetV1
+// AsTypesCodeSastFingerprintAssetV1 returns the union data inside the Fingerprint as a TypesCodeSastFingerprintAssetV1
+func (t Fingerprint) AsTypesCodeSastFingerprintAssetV1() (TypesCodeSastFingerprintAssetV1, error) {
+	var body TypesCodeSastFingerprintAssetV1
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromTypesFingerprintAssetV1 overwrites any union data inside the Fingerprint as the provided TypesFingerprintAssetV1
-func (t *Fingerprint) FromTypesFingerprintAssetV1(v TypesFingerprintAssetV1) error {
+// FromTypesCodeSastFingerprintAssetV1 overwrites any union data inside the Fingerprint as the provided TypesCodeSastFingerprintAssetV1
+func (t *Fingerprint) FromTypesCodeSastFingerprintAssetV1(v TypesCodeSastFingerprintAssetV1) error {
 	v.Scheme = "snyk/asset/finding/v1"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeTypesFingerprintAssetV1 performs a merge with any union data inside the Fingerprint, using the provided TypesFingerprintAssetV1
-func (t *Fingerprint) MergeTypesFingerprintAssetV1(v TypesFingerprintAssetV1) error {
+// MergeTypesCodeSastFingerprintAssetV1 performs a merge with any union data inside the Fingerprint, using the provided TypesCodeSastFingerprintAssetV1
+func (t *Fingerprint) MergeTypesCodeSastFingerprintAssetV1(v TypesCodeSastFingerprintAssetV1) error {
 	v.Scheme = "snyk/asset/finding/v1"
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -2488,11 +2489,11 @@ func (t Fingerprint) ValueByDiscriminator() (interface{}, error) {
 	case "sca-problem":
 		return t.AsTypesScaProblemFingerprint()
 	case "snyk/asset/finding/v1":
-		return t.AsTypesFingerprintAssetV1()
+		return t.AsTypesCodeSastFingerprintAssetV1()
 	case "snyk/org/project/finding/v1":
-		return t.AsTypesFingerprintProjectV1()
+		return t.AsTypesCodeSastFingerprintProjectV1()
 	case "snyk/org/repository/finding/v1":
-		return t.AsTypesFingerprintRepositoryV1()
+		return t.AsTypesCodeSastFingerprintRepositoryV1()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
