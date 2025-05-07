@@ -62,7 +62,7 @@ func CreateCodeSummary(input *sarif.SarifDocument, projectPath string) *json_sch
 			resultMap[severity].Total++
 
 			// evaluate if the result is suppressed/ignored or not
-			if fudgeIsHighestSuppressionStatus(result.Suppressions, sarif.Accepted) {
+			if IsHighestSuppressionStatus(result.Suppressions, sarif.Accepted) {
 				resultMap[severity].Ignored++
 			} else {
 				resultMap[severity].Open++
@@ -133,30 +133,4 @@ func ConvertTypeToDriverName(s string) string {
 	default:
 		return "Snyk Open Source"
 	}
-}
-
-// Fudging GetHighestSuppression and IsHighestSuppressionStatus so that we can test all statuses
-// DO NOT MERGE WITH THESE IN
-func fudgeIsHighestSuppressionStatus(suppressions []sarif.Suppression, status sarif.SuppresionStatus) bool {
-	suppression, suppressionStatus := fudgeGetHighestSuppression(suppressions)
-	if suppression == nil {
-		return false
-	}
-
-	return suppressionStatus == status
-}
-func fudgeGetHighestSuppression(suppressions []sarif.Suppression) (*sarif.Suppression, sarif.SuppresionStatus) {
-	for _, suppression := range suppressions {
-		if suppression.Status == sarif.Rejected || suppression.Justification == "rejected" {
-			return &suppression, sarif.Rejected
-		}
-		if suppression.Status == sarif.UnderReview || suppression.Justification == "underReview" {
-			return &suppression, sarif.UnderReview
-		}
-		if suppression.Status == sarif.Accepted || suppression.Status == "" {
-			return &suppression, sarif.Accepted
-		}
-	}
-
-	return nil, ""
 }

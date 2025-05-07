@@ -1,8 +1,8 @@
 {{define "finding"}}
-{{- if .Attributes.Suppression }}{{if eq .Attributes.Suppression.Status "accepted" }} ! [ IGNORED ]
-{{- else if eq .Attributes.Suppression.Status "underReview" }} ! [ PENDING IGNORE... ] {{- else}}{{end -}}
-{{- else}}{{end -}}
 {{- (renderToString "severity" . | toUpperCase | renderInSeverityColor )}} {{print .Attributes.Message.Header | bold}}
+{{- if .Attributes.Suppression }}{{if eq .Attributes.Suppression.Status "accepted" }} [ IGNORED ]
+{{- else if eq .Attributes.Suppression.Status "underReview" }} [ PENDING IGNORE... ] {{- else}}{{end -}}
+{{- else}}{{end -}}
 
 {{- range $location := $.Attributes.Locations}}
    {{- if $location.SourceLocations}}
@@ -24,6 +24,6 @@
 {{end}}
 
 {{- define "severity"}}
-  {{- if or (not .Attributes.Suppression) (and (.Attributes.Suppression) (eq .Attributes.Suppression.Status "rejected"))}} ✗ {{end -}}
+  {{- if or (not .Attributes.Suppression) (and (.Attributes.Suppression) (eq .Attributes.Suppression.Status "rejected"))}} ✗ {{else}} ! {{end -}}
   [{{.Attributes.Rating.Severity.Value}}]
 {{- end}}
