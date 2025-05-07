@@ -1,14 +1,13 @@
 {{- define "details" }}
     {{- $sortedFindings := .Findings | sortFindingBy "Attributes.Rating.Severity.Value" .Summary.Counts.CountKeyOrderAsc.Severity }}
     {{- $openFindings := filterFindingsOr $sortedFindings (notHasField "Attributes.Suppression.Status") (fieldEquals "Attributes.Suppression.Status" "rejected") }}
-    {{- $sortedOpenFindings := $openFindings | sortFindingBy "Attributes.Rating.Severity.Value" .Summary.Counts.CountKeyOrderAsc.Severity }}
     {{- $pendingIgnoreFindings := $sortedFindings | filterFinding (fieldEquals "Attributes.Suppression.Status" "underReview") }}
     {{- $ignoredFindings := $sortedFindings | filterFinding (fieldEquals "Attributes.Suppression.Status" "accepted") }}
-    {{- $hasOpenFindings := gt ($sortedOpenFindings | len) 0 }}
+    {{- $hasOpenFindings := gt ($openFindings | len) 0 }}
     {{- $hasPendingIgnoreFindings := gt ($pendingIgnoreFindings | len) 0 }}
     {{- $hasIgnoredFindings := gt ($ignoredFindings | len) 0 }}
     {{- if $hasOpenFindings }}{{ "Open Issues" | title }}
-            {{- range $finding := $sortedOpenFindings }}
+            {{- range $finding := $openFindings }}
                 {{- renderToString "finding" $finding }}
 {{end }}
     {{- end }}

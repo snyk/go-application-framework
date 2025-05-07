@@ -153,29 +153,33 @@ func filterFinding(cmpFunc func(any) bool, findings []local_models.FindingResour
 	return filteredFindings
 }
 
-// filteredFindingsOr applies multiple filter functions to findings, any findings that match any filter will be added to the filteredFindings
+// filteredFindingsOr applies multiple filter functions to findings, any findings that match any filter will be added to the filteredFindings,
+// maintaining the original order.
 func filterFindingsOr(findings []local_models.FindingResource, cmpFuncs ...func(any) bool) (filteredFindings []local_models.FindingResource) {
-	filteredFindingsMap := make(map[string]local_models.FindingResource)
+	filteredFindings = make([]local_models.FindingResource, 0)
+	addedFindingsHashes := make(map[string]bool)
 
-	for _, cmpFunc := range cmpFuncs {
-		for _, finding := range findings {
+	for _, finding := range findings {
+		for _, cmpFunc := range cmpFuncs {
 			if cmpFunc(finding) {
-				// create hash of finding to use as map key
+				// would be nice to use the finding ID, but this is not being sent currently
+				// e.g. `filteredFindingsMap[finding.Id.String()] = finding`
+				// so we hash the finding and use that as the unique identifier for deduplication
+
 				findingBytes, err := json.Marshal(finding)
 				if err != nil {
 					return
 				}
-				hash := sha256.Sum256(findingBytes)
-				filteredFindingsMap[hex.EncodeToString(hash[:])] = finding
+				hashBytes := sha256.Sum256(findingBytes)
+				hashStr := hex.EncodeToString(hashBytes[:])
 
-				// would be nice to use the finding ID, but this is not being sent currently
-				// filteredFindingsMap[finding.Id.String()] = finding
+				if !addedFindingsHashes[hashStr] {
+					filteredFindings = append(filteredFindings, finding)
+					addedFindingsHashes[hashStr] = true
+				}
+				break
 			}
 		}
-	}
-
-	for _, finding := range filteredFindingsMap {
-		filteredFindings = append(filteredFindings, finding)
 	}
 
 	return filteredFindings
