@@ -938,11 +938,17 @@ components:
       description: Locally configured policy options for determining outcome of this
         specific test.
       properties:
+        risk_score_threshold:
+          description: Findings of equal or greater risk score will fail the test.
+          format: uint16
+          maximum: 1000
+          minimum: 0
+          type: integer
         severity_threshold:
           allOf:
           - $ref: '#/components/schemas/Severity'
           default: medium
-          description: Findings equal or greater than severity will fail the test.
+          description: Findings of equal or greater severity will fail the test.
         suppress_pending_ignores:
           default: false
           description: |-
@@ -1683,6 +1689,9 @@ components:
             If centrally managed policies are in scope, inline policies are overridden
             by managed policies. Policy references explain which policies were
             effective for test evaluation.
+        publish_report:
+          description: Publish findings into a report, viewable in the Snyk web UI.
+          type: boolean
         timeout:
           allOf:
           - $ref: '#/components/schemas/TimeoutSpec'
@@ -2304,10 +2313,6 @@ components:
       - type
       type: object
     snykvulndb.PackageEcosystem:
-      anyOf:
-      - $ref: '#/components/schemas/snykvulndb.BuildPackageEcosystem'
-      - $ref: '#/components/schemas/snykvulndb.OsPackageEcosystem'
-      - $ref: '#/components/schemas/snykvulndb.OtherPackageEcosystem'
       description: Describe a software package ecosystem.
       discriminator:
         mapping:
@@ -2315,6 +2320,10 @@ components:
           os: '#/components/schemas/snykvulndb.OsPackageEcosystem'
           other: '#/components/schemas/snykvulndb.OtherPackageEcosystem'
         propertyName: type
+      oneOf:
+      - $ref: '#/components/schemas/snykvulndb.BuildPackageEcosystem'
+      - $ref: '#/components/schemas/snykvulndb.OsPackageEcosystem'
+      - $ref: '#/components/schemas/snykvulndb.OtherPackageEcosystem'
     snykvulndb.ReferenceLinks:
       description: Represent links to external sources of vulnerability information.
       properties:

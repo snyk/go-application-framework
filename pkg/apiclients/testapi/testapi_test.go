@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/testapi"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
 // Basic test that underlying client throws no errors on creation
@@ -39,7 +39,7 @@ func Test_CreateClient_Defaults(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-// Create TestClient, call StartTest, get back 202 Accepted
+// Create TestClient with a custom config, call StartTest, get back 202 Accepted.
 func Test_StartTest_Success(t *testing.T) {
 	// Arrange
 	t.Parallel()
@@ -48,14 +48,17 @@ func Test_StartTest_Success(t *testing.T) {
 	assetID := uuid.New()
 	expectedJobID := uuid.New()
 	apiVersion := "2024-10-15"
+	finalTestID := uuid.New()
+	var pollCounter atomic.Int32 // Used by handler to count GET /job calls
 
+	// Create a DepGraph test
 	testSubject := newDepGraphTestSubject(t, assetID)
 	params := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
 	}
 
-	// Define the expected request body that the real StartTest should generate
+	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{Subject: params.Subject},
@@ -63,32 +66,14 @@ func Test_StartTest_Success(t *testing.T) {
 		},
 	}
 
-	// Mock response body and data (202 Accepted)
-	responseBodyBytes := mockStartTestResponse(t, expectedJobID)
-
-	// Create the httptest server
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-		expectedPath := fmt.Sprintf("/orgs/%s/tests", orgID)
-		assert.Equal(t, expectedPath, r.URL.Path)
-		assert.Equal(t, apiVersion, r.URL.Query().Get("version"))
-		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Content-Type"))
-
-		bodyBytes, bodyErr := io.ReadAll(r.Body)
-		require.NoError(t, bodyErr)
-		defer r.Body.Close()
-		expectedBodyBytes, err := json.Marshal(expectedRequestBody)
-		require.NoError(t, err, "failed to marshal expected request body: %v", err)
-		assert.JSONEq(t, string(expectedBodyBytes), string(bodyBytes))
-
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusAccepted)
-		_, writeErr := w.Write(responseBodyBytes)
-		assert.NoError(t, writeErr)
-	}
+	handler := newPassingTestServerHandler(t, orgID, expectedJobID, finalTestID, apiVersion, expectedRequestBody, &pollCounter)
 
 	// Act
-	testClient, cleanup := startMockServerAndClient(t, apiVersion, handler)
+	clientConfig := testapi.Config{
+		APIVersion:   apiVersion,
+		PollInterval: 10 * time.Millisecond, // Use a short poll interval for faster tests
+	}
+	testClient, cleanup := startMockServerAndClientWithConfig(t, clientConfig, handler)
 	defer cleanup()
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -97,10 +82,29 @@ func Test_StartTest_Success(t *testing.T) {
 	assert.NoError(t, err, "StartTest returned an unexpected error")
 	assert.NotNil(t, handle, "StartTest returned a nil handle")
 
-	// No result before Wait
+	// No result yet before Wait
 	initialResult, err := handle.Result()
 	assert.NoError(t, err)
 	assert.Equal(t, testapi.FinalStatus{}, initialResult)
+
+	// Now wait for test to complete
+	finalStatus, err := handle.Wait(ctx)
+
+	// Assert final status after Wait()
+	assert.NoError(t, err, "Wait returned an unexpected error")
+	assert.Equal(t, string(testapi.Finished), finalStatus.State)
+	require.NotNil(t, finalStatus.Outcome, "Outcome should not be nil")
+	assert.Equal(t, testapi.Pass, *finalStatus.Outcome)
+	require.NotNil(t, finalStatus.TestID, "TestID should not be nil")
+	assert.Equal(t, finalTestID, *finalStatus.TestID) // Ensure the handler-generated TestID is in the status
+	assert.Nil(t, finalStatus.OutcomeReason, "OutcomeReason should be nil for Pass")
+	assert.Empty(t, finalStatus.Message, "Message should be empty for success")
+	assert.GreaterOrEqual(t, pollCounter.Load(), int32(2), "Should have polled at least twice for the job status")
+
+	// Wait->finalStatus and Result() are the synchronous and async ways of getting the same output so they should should match.
+	resultAfterWait, err := handle.Result()
+	assert.NoError(t, err)
+	assert.Equal(t, finalStatus, resultAfterWait)
 }
 
 // StartTest fails when OrgID is not a UUID
@@ -133,7 +137,6 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	apiVersion := "2024-10-15"
 
 	// Error response body from mock server
 	errorCode := "SNYK-TEST-4001"
@@ -159,7 +162,7 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 		_, writeErr := w.Write(errorBodyBytes)
 		assert.NoError(t, writeErr)
 	}
-	testClient, cleanup := startMockServerAndClient(t, apiVersion, handler)
+	testClient, cleanup := startMockServerAndClient(t, handler)
 	defer cleanup()
 
 	// Act
@@ -209,6 +212,7 @@ func Test_StartTest_Error_Network(t *testing.T) {
 }
 
 // Synchronous Wait() - start a test, wait for 303 redirect, and check for "Pass" outcome.
+// The TestClient uses the default config.
 func Test_Wait_Synchronous_Success_Pass(t *testing.T) {
 	// Arrange
 	t.Parallel()
@@ -218,7 +222,7 @@ func Test_Wait_Synchronous_Success_Pass(t *testing.T) {
 	jobID := uuid.New()
 	testID := uuid.New()
 	apiVersion := "2024-10-15"
-	pollCount := int32(0)
+	var pollCount atomic.Int32
 
 	testSubject := newDepGraphTestSubject(t, assetID)
 	params := testapi.StartTestParams{
@@ -226,54 +230,18 @@ func Test_Wait_Synchronous_Success_Pass(t *testing.T) {
 		Subject: testSubject,
 	}
 
-	// Mock server handler
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		expectedTestPath := fmt.Sprintf("/orgs/%s/tests", orgID)
-		expectedJobPath := fmt.Sprintf("/orgs/%s/test_jobs/%s", orgID, jobID)
-		expectedResultPath := fmt.Sprintf("/orgs/%s/tests/%s", orgID, testID)
-
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == expectedTestPath:
-			// Initial StartTest call
-			startResp := mockStartTestResponse(t, jobID)
-			w.WriteHeader(http.StatusAccepted)
-			_, err := w.Write(startResp)
-			assert.NoError(t, err, "failed to write create response")
-
-		case r.Method == http.MethodGet && r.URL.Path == expectedJobPath:
-			// Polling the job status
-			count := atomic.AddInt32(&pollCount, 1)
-			if count == 1 {
-				// First poll: Pending
-				jobResp := mockJobStatusResponse(t, jobID, testapi.Pending)
-				w.WriteHeader(http.StatusOK)
-				_, err := w.Write(jobResp)
-				assert.NoError(t, err, "failed to write job response")
-			} else {
-				// Second poll: Redirect (303) to final result
-				relatedLink := fmt.Sprintf("%s%s", serverURLFromRequest(r), expectedResultPath)
-				jobResp := mockJobRedirectResponse(t, jobID, relatedLink)
-				w.Header().Set("Location", relatedLink) // Set Location header for 303
-				w.WriteHeader(http.StatusSeeOther)
-				_, err := w.Write(jobResp)
-				assert.NoError(t, err, "failed to write redirect response")
-			}
-
-		case r.Method == http.MethodGet && r.URL.Path == expectedResultPath:
-			// Fetching the final test result
-			resultResp := mockTestResultResponse(t, testID, testapi.Pass, nil)
-			w.WriteHeader(http.StatusOK)
-			_, err := w.Write(resultResp)
-			assert.NoError(t, err, "failed to write result response")
-
-		default:
-			http.Error(w, "Not Found", http.StatusNotFound)
-		}
+	// Define expected request body that StartTest should generate
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{Subject: params.Subject},
+			Type:       testapi.TestDataCreateTypeTests,
+		},
 	}
 
+	handler := newPassingTestServerHandler(t, orgID, jobID, testID, apiVersion, expectedRequestBody, &pollCount)
+
 	// Act
-	testClient, cleanup := startMockServerAndClient(t, apiVersion, handler)
+	testClient, cleanup := startMockServerAndClient(t, handler)
 	defer cleanup()
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -291,7 +259,7 @@ func Test_Wait_Synchronous_Success_Pass(t *testing.T) {
 	assert.Equal(t, testID, *finalStatus.TestID)
 	assert.Nil(t, finalStatus.OutcomeReason, "OutcomeReason should be nil for Pass")
 	assert.Empty(t, finalStatus.Message, "Message should be empty for success")
-	assert.GreaterOrEqual(t, atomic.LoadInt32(&pollCount), int32(2), "Should have polled at least twice")
+	assert.GreaterOrEqual(t, pollCount.Load(), int32(2), "Should have polled at least twice")
 }
 
 // Synchronous Wait() - start a test, wait for 303 redirect, check for "Pass" outcome,
@@ -447,7 +415,6 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
-	apiVersion := "2024-10-15"
 	pollCount := int32(0)
 	failReason := testapi.TestOutcomeReasonPolicyBreach
 
@@ -500,7 +467,7 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 	}
 
 	// Act
-	testClient, cleanup := startMockServerAndClient(t, apiVersion, handler)
+	testClient, cleanup := startMockServerAndClient(t, handler)
 	defer cleanup()
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -531,8 +498,8 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
+	var pollCount atomic.Int32
 	apiVersion := "2024-10-15"
-	pollCount := int32(0)
 
 	testSubject := newDepGraphTestSubject(t, assetID)
 	params := testapi.StartTestParams{
@@ -540,46 +507,17 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 		Subject: testSubject,
 	}
 
-	// Mock server handler (same as synchronous success pass)
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		expectedTestPath := fmt.Sprintf("/orgs/%s/tests", orgID)
-		expectedJobPath := fmt.Sprintf("/orgs/%s/test_jobs/%s", orgID, jobID)
-		expectedResultPath := fmt.Sprintf("/orgs/%s/tests/%s", orgID, testID)
-
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == expectedTestPath:
-			startResp := mockStartTestResponse(t, jobID)
-			w.WriteHeader(http.StatusAccepted)
-			_, err := w.Write(startResp)
-			assert.NoError(t, err, "failed to write create response")
-		case r.Method == http.MethodGet && r.URL.Path == expectedJobPath:
-			count := atomic.AddInt32(&pollCount, 1)
-			if count == 1 {
-				jobResp := mockJobStatusResponse(t, jobID, testapi.Pending)
-				w.WriteHeader(http.StatusOK)
-				_, err := w.Write(jobResp)
-				assert.NoError(t, err, "failed to write job response")
-			} else {
-				relatedLink := fmt.Sprintf("%s%s", serverURLFromRequest(r), expectedResultPath)
-				jobResp := mockJobRedirectResponse(t, jobID, relatedLink)
-				w.Header().Set("Location", relatedLink)
-				w.WriteHeader(http.StatusSeeOther)
-				_, err := w.Write(jobResp)
-				assert.NoError(t, err, "failed to write job redirect response")
-			}
-		case r.Method == http.MethodGet && r.URL.Path == expectedResultPath:
-			resultResp := mockTestResultResponse(t, testID, testapi.Pass, nil)
-			w.WriteHeader(http.StatusOK)
-			_, err := w.Write(resultResp)
-			assert.NoError(t, err, "failed to write result response")
-		default:
-			http.Error(w, "Not Found", http.StatusNotFound)
-		}
+	// Define expected request body that StartTest should generate
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{Subject: params.Subject},
+			Type:       testapi.TestDataCreateTypeTests,
+		},
 	}
 
 	// Act
-	testClient, cleanup := startMockServerAndClient(t, apiVersion, handler)
+	handler := newPassingTestServerHandler(t, orgID, jobID, testID, apiVersion, expectedRequestBody, &pollCount)
+	testClient, cleanup := startMockServerAndClient(t, handler)
 	defer cleanup()
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -609,7 +547,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	assert.Equal(t, testID, *finalStatus.TestID)
 	assert.Nil(t, finalStatus.OutcomeReason, "OutcomeReason should be nil for Pass")
 	assert.Empty(t, finalStatus.Message, "Message should be empty for success")
-	assert.GreaterOrEqual(t, atomic.LoadInt32(&pollCount), int32(2), "Should have polled at least twice")
+	assert.GreaterOrEqual(t, pollCount.Load(), int32(2), "Should have polled at least twice")
 }
 
 // Test that synchronous Wait() returns an error from the second GET job request.
@@ -620,7 +558,6 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 	orgID := uuid.New()
 	assetID := uuid.New()
 	jobID := uuid.New()
-	apiVersion := "2024-10-15"
 	pollCount := int32(0)
 	// Note: The job resource itself doesn't have a message field.
 	// The error comes from the Wait() function detecting the 'errored' status.
@@ -665,7 +602,7 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 	}
 
 	// Act
-	testClient, cleanup := startMockServerAndClient(t, apiVersion, handler)
+	testClient, cleanup := startMockServerAndClient(t, handler)
 	defer cleanup()
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -773,7 +710,6 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
-	apiVersion := "2024-10-15"
 	pollCount := int32(0)
 
 	testSubject := newDepGraphTestSubject(t, assetID)
@@ -823,7 +759,7 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 	}
 
 	// Act
-	testClient, cleanup := startMockServerAndClient(t, apiVersion, handler)
+	testClient, cleanup := startMockServerAndClient(t, handler)
 	defer cleanup()
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -841,6 +777,69 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 }
 
 // --- support functions ---
+
+// newMockFullPassWorkflowHandler creates an http.HandlerFunc that simulates a complete
+// successful test workflow:
+// 1. POST /tests -> 202 Accepted (returns jobIDToReturn)
+// 2. GET /test_jobs/{jobIDToReturn} (poll 1) -> 200 OK (status Pending)
+// 3. GET /test_jobs/{jobIDToReturn} (poll 2) -> 303 See Other (redirects to /tests/{testIDToReturn})
+// 4. GET /tests/{testIDToReturn} -> 200 OK (final status Pass)
+// It also asserts the request body of the initial Create Test POST to /tests.
+func newPassingTestServerHandler(
+	t *testing.T,
+	orgID, jobIDToReturn, testIDToReturn uuid.UUID,
+	apiVersion string,
+	expectedCreateTestBody testapi.TestRequestBody,
+	pollCounter *atomic.Int32,
+) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		expectedTestPath := fmt.Sprintf("/orgs/%s/tests", orgID)
+		expectedJobPath := fmt.Sprintf("/orgs/%s/test_jobs/%s", orgID, jobIDToReturn)
+		expectedResultPath := fmt.Sprintf("/orgs/%s/tests/%s", orgID, testIDToReturn)
+
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == expectedTestPath:
+			assert.Equal(t, apiVersion, r.URL.Query().Get("version"))
+			assert.Equal(t, "application/vnd.api+json", r.Header.Get("Content-Type"))
+
+			bodyBytes, bodyErr := io.ReadAll(r.Body)
+			require.NoError(t, bodyErr)
+			defer r.Body.Close()
+			expectedBodyBytes, err := json.Marshal(expectedCreateTestBody)
+			require.NoError(t, err, "failed to marshal expected request body: %v", err)
+			assert.JSONEq(t, string(expectedBodyBytes), string(bodyBytes))
+
+			startResp := mockStartTestResponse(t, jobIDToReturn)
+			w.WriteHeader(http.StatusAccepted)
+			_, err = w.Write(startResp)
+			assert.NoError(t, err, "failed to write start test response")
+		case r.Method == http.MethodGet && r.URL.Path == expectedJobPath:
+			count := pollCounter.Add(1)
+			if count == 1 { // First poll: Pending
+				jobResp := mockJobStatusResponse(t, jobIDToReturn, testapi.Pending)
+				w.WriteHeader(http.StatusOK)
+				_, err := w.Write(jobResp)
+				assert.NoError(t, err, "failed to write pending job response")
+			} else { // Subsequent polls: Redirect to final result
+				relatedLink := fmt.Sprintf("%s%s", serverURLFromRequest(r), expectedResultPath)
+				jobResp := mockJobRedirectResponse(t, jobIDToReturn, relatedLink)
+				w.Header().Set("Location", relatedLink)
+				w.WriteHeader(http.StatusSeeOther)
+				_, err := w.Write(jobResp)
+				assert.NoError(t, err, "failed to write redirect job response")
+			}
+		case r.Method == http.MethodGet && r.URL.Path == expectedResultPath:
+			resultResp := mockTestResultResponse(t, testIDToReturn, testapi.Pass, nil)
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write(resultResp)
+			assert.NoError(t, err, "failed to write final test result response")
+		default:
+			http.Error(w, fmt.Sprintf("Mock server: Unexpected request: %s %s", r.Method, r.URL.Path), http.StatusNotFound)
+		}
+	}
+}
 
 // Parses a sample JSON string and returns the depGraph part.
 // Fails the test immediately if unmarshalling fails.
@@ -905,8 +904,9 @@ func newDepGraphTestSubject(t *testing.T, assetID openapi_types.UUID) testapi.Te
 
 // Sets up an httptest server with the given handler and returns a
 // testapi.Client configured to use it, along with a cleanup function.
-func startMockServerAndClient(t *testing.T, apiVersion string, handler http.HandlerFunc) (testapi.TestClient, func()) {
+func startMockServerAndClient(t *testing.T, handler http.HandlerFunc) (testapi.TestClient, func()) {
 	t.Helper()
+	apiVersion := "2024-10-15"
 	clientConfig := testapi.Config{
 		APIVersion:   apiVersion,
 		PollInterval: 10 * time.Millisecond, // Use short poll interval for tests

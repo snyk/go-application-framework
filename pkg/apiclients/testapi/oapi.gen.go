@@ -612,7 +612,10 @@ type LinkProperty1 struct {
 
 // LocalPolicy Locally configured policy options for determining outcome of this specific test.
 type LocalPolicy struct {
-	// SeverityThreshold Findings equal or greater than severity will fail the test.
+	// RiskScoreThreshold Findings of equal or greater risk score will fail the test.
+	RiskScoreThreshold *uint16 `json:"risk_score_threshold,omitempty"`
+
+	// SeverityThreshold Findings of equal or greater severity will fail the test.
 	SeverityThreshold *Severity `json:"severity_threshold,omitempty"`
 
 	// SuppressPendingIgnores Suppress ignores pending approval, so that they do not fail the test. If
@@ -1062,6 +1065,9 @@ type TestConfiguration struct {
 	// by managed policies. Policy references explain which policies were
 	// effective for test evaluation.
 	LocalPolicy *LocalPolicy `json:"local_policy,omitempty"`
+
+	// PublishReport Publish findings into a report, viewable in the Snyk web UI.
+	PublishReport *bool `json:"publish_report,omitempty"`
 
 	// Timeout Maximum test time in seconds, after which execution will be cancelled and
 	// the test will fail with reason "timeout".

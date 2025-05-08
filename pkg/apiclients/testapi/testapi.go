@@ -1,6 +1,6 @@
 package testapi
 
-//go:generate $GOPATH/bin/mockgen -source=testapi.go -destination ../mocks/testapi.go -package mocks -imports testapi=github.com/snyk/go-application-framework/pkg/testapi
+//go:generate $GOPATH/bin/mockgen -source=testapi.go -destination ../mocks/testapi.go -package mocks -imports testapi=github.com/snyk/go-application-framework/pkg/apiclients/testapi
 
 import (
 	"context"
