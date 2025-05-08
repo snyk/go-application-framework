@@ -177,6 +177,19 @@ func WithSuppressions(suppressions *[]TypesSuppression) FindingResourceOption {
 	}
 }
 
+func WithHighestSuppression(result sarif.Result) FindingResourceOption {
+	return func(fr *FindingResource) {
+		suppression, _ := sarif_utils.GetHighestSuppression(result.Suppressions)
+		if suppression == nil {
+			fr.Attributes.HighestSuppression = nil
+		} else {
+			supp := mapSuppression(*suppression)
+			supp.Status = Accepted
+			fr.Attributes.HighestSuppression = &supp
+		}
+	}
+}
+
 // NewFindingResource creates a new FindingResource with the provided options
 func NewFindingResource(referenceId *TypesReferenceId, fingerprints []Fingerprint, component TypesComponent, isAutofixable *bool, message TypesFindingMessage, opts ...FindingResourceOption) FindingResource {
 	finding := FindingResource{

@@ -1,7 +1,7 @@
 {{define "finding"}}
 {{- (renderToString "severity" . | toUpperCase | renderInSeverityColor )}} {{print .Attributes.Message.Header | bold}}
-{{- if .Attributes.Suppression }}{{if eq .Attributes.Suppression.Status "accepted" }} [ IGNORED ]
-{{- else if eq .Attributes.Suppression.Status "underReview" }} [ PENDING IGNORE... ] {{- else}}{{end -}}
+{{- if .Attributes.HighestSuppression }}{{if eq .Attributes.HighestSuppression.Status "accepted" }} [ IGNORED ]
+{{- else if eq .Attributes.HighestSuppression.Status "underReview" }} [ PENDING IGNORE... ] {{- else}}{{end -}}
 {{- else}}{{end -}}
 
 {{- range $location := $.Attributes.Locations}}
@@ -11,19 +11,19 @@
 {{- end }}
    Info: {{.Attributes.Message.Text}}
 
-   {{- if .Attributes.Suppression}}
-   {{- if or (eq .Attributes.Suppression.Status "accepted") (eq .Attributes.Suppression.Status "underReview")}}
+   {{- if .Attributes.HighestSuppression}}
+   {{- if or (eq .Attributes.HighestSuppression.Status "accepted") (eq .Attributes.HighestSuppression.Status "underReview")}}
 
-   Expiration: {{ formatDatetime .Attributes.Suppression.Details.Expiration "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
-   Category:   {{ .Attributes.Suppression.Details.Category }}
-   Ignored on: {{ formatDatetime .Attributes.Suppression.Details.IgnoredOn "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
-   Ignored by: {{ .Attributes.Suppression.Details.IgnoredBy.Name }}
-   Reason:     {{ .Attributes.Suppression.Justification }}
+   Expiration: {{ formatDatetime .Attributes.HighestSuppression.Details.Expiration "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
+   Category:   {{ .Attributes.HighestSuppression.Details.Category }}
+   Ignored on: {{ formatDatetime .Attributes.HighestSuppression.Details.IgnoredOn "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
+   Ignored by: {{ .Attributes.HighestSuppression.Details.IgnoredBy.Name }}
+   Reason:     {{ .Attributes.HighestSuppression.Justification }}
    {{- end}}
    {{- end}}
 {{end}}
 
 {{- define "severity"}}
-  {{- if or (not .Attributes.Suppression) (and (.Attributes.Suppression) (eq .Attributes.Suppression.Status "rejected"))}} ✗ {{else}} ! {{end -}}
+  {{- if or (not .Attributes.HighestSuppression) (and (.Attributes.HighestSuppression) (eq .Attributes.HighestSuppression.Status "rejected"))}} ✗ {{else}} ! {{end -}}
   [{{.Attributes.Rating.Severity.Value}}]
 {{- end}}

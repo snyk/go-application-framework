@@ -671,6 +671,7 @@ type TypesFindingAttributes struct {
 	// relationship links should be used.
 	Suggestions  *[]Suggestion       `json:"suggestions,omitempty"`
 	Suppressions *[]TypesSuppression `json:"suppressions,omitempty"`
+	HighestSuppression *TypesSuppression `json:"highestSuppression,omitempty"`
 }
 
 // TypesFindingAttributesDelta Represent whether a finding is net new (introduced), removed, or preserved

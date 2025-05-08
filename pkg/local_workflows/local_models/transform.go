@@ -64,6 +64,7 @@ func mapFindings(sarifDoc *sarif.SarifDocument) ([]FindingResource, error) {
 			WithSuggestions(&[]Suggestion{}),
 			WithLocations(&locations),
 			WithSuppressions(mapSuppressions(res)),
+			WithHighestSuppression(res),
 		)
 
 		finding := NewFindingResource(
@@ -123,7 +124,7 @@ func mapSuppressions(res sarif.Result) *[]TypesSuppression {
 }
 
 func mapSuppression(suppression sarif.Suppression) TypesSuppression {
-	expiration := ""
+	expiration := "never"
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
 		expiration = *suppression.Properties.Expiration
@@ -131,9 +132,9 @@ func mapSuppression(suppression sarif.Suppression) TypesSuppression {
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
-	
-	return TypesSuppression{
-		Id: uuid.MustParse(suppression.Guid),
+
+	typeSuppression := TypesSuppression{
+		Id: uuid.UUID{},
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
 			Expiration: expiration,
@@ -146,16 +147,23 @@ func mapSuppression(suppression sarif.Suppression) TypesSuppression {
 		Justification: &suppression.Justification,
 		Status:        mapSuppressionStatus(suppression.Status),
 	}
+
+	id, err := uuid.Parse(suppression.Guid)
+	if err == nil {
+		typeSuppression.Id = id
+	}
+
+	return typeSuppression
 }
 
 func mapSuppressionStatus(status sarif.SuppresionStatus) TypesSuppressionStatus {
 	switch status {
-	case "accepted":
-		return Accepted
+	case "rejected":
+		return Rejected
 	case "underReview":
 		return UnderReview
 	default:
-		return Rejected
+		return Accepted
 	}
 }
 
