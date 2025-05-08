@@ -1154,8 +1154,10 @@ components:
           $ref: '#/components/schemas/types.FindingMessage'
         rating:
           $ref: '#/components/schemas/types.FindingRating'
-        suppression:
-          $ref: '#/components/schemas/types.Suppression'
+        suppressions:
+          type: array
+          items:
+            $ref: '#/components/schemas/types.Suppression'
         codeFlows:
           type: array
           items:

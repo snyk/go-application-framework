@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
-	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
@@ -64,7 +63,7 @@ func mapFindings(sarifDoc *sarif.SarifDocument) ([]FindingResource, error) {
 			WithCodeFlows(&codeflows),
 			WithSuggestions(&[]Suggestion{}),
 			WithLocations(&locations),
-			WithSuppression(mapSuppressions(res)),
+			WithSuppressions(mapSuppressions(res)),
 		)
 
 		finding := NewFindingResource(
@@ -110,11 +109,20 @@ func mapRules(sarifRule sarif.Rule) TypesRules {
 	)
 }
 
-func mapSuppressions(res sarif.Result) *TypesSuppression {
-	suppression, status := sarif2.GetHighestSuppression(res.Suppressions)
-	if suppression == nil {
+func mapSuppressions(res sarif.Result) *[]TypesSuppression {
+	if len(res.Suppressions) == 0 {
 		return nil
 	}
+
+	mappedSuppressions := make([]TypesSuppression, len(res.Suppressions))
+	for i, s := range res.Suppressions {
+		mappedSuppressions[i] = mapSuppression(s)
+	}
+
+	return &mappedSuppressions
+}
+
+func mapSuppression(suppression sarif.Suppression) TypesSuppression {
 	expiration := ""
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
@@ -123,7 +131,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
-	return &TypesSuppression{
+	return TypesSuppression{
 		Id: uuid.MustParse(suppression.Guid),
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
@@ -135,7 +143,18 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 			},
 		},
 		Justification: &suppression.Justification,
-		Status:        TypesSuppressionStatus(status),
+		Status:        mapSuppressionStatus(suppression.Status),
+	}
+}
+
+func mapSuppressionStatus(status sarif.SuppresionStatus) TypesSuppressionStatus {
+	switch status {
+	case "accepted":
+		return Accepted
+	case "underReview":
+		return UnderReview
+	default:
+		return Rejected
 	}
 }
 
@@ -253,7 +272,8 @@ func UpdateFindingSummary(findingsModel *LocalFinding) {
 		updatedFindingCounts.CountBy.Severity[severity]++
 		updatedFindingCounts.Count++
 
-		if finding.Attributes.Suppression != nil {
+		// TODO: look at this counters
+		if finding.Attributes.Suppressions != nil {
 			updatedFindingCounts.CountBySuppressed.Severity[severity]++
 			updatedFindingCounts.CountSuppressed++
 		} else {

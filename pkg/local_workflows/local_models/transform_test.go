@@ -17,10 +17,10 @@ func Test_mapSuppressions(t *testing.T) {
 	validUUID2 := "4c4c8d1d-8c2f-5c1f-9c1b-1c1c1c1c1c1c"
 
 	tests := []struct {
-		name            string
-		inputResult     sarif.Result
-		expectedSupp    *TypesSuppression
-		expectPanic     bool
+		name         string
+		inputResult  sarif.Result
+		expectedSupp *TypesSuppression
+		expectPanic  bool
 	}{
 		{
 			name:         "no suppressions in result",
@@ -105,7 +105,7 @@ func Test_mapSuppressions(t *testing.T) {
 					},
 				},
 			},
-			expectPanic:   true,
+			expectPanic: true,
 		},
 		{
 			name: "multiple suppressions, GetHighestSuppression picks 'accepted' over 'rejected'",
