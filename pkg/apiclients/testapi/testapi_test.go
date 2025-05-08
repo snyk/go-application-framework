@@ -625,7 +625,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	// Arrange
 	t.Parallel()
 	// Short context timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	orgID := uuid.New()
@@ -656,7 +656,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == expectedJobPath:
 			atomic.AddInt32(&pollCount, 1)
 			// Simulate delay longer than context timeout to ensure cancellation happens during wait
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 			jobResp := mockJobStatusResponse(t, jobID, testapi.Pending)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(jobResp)
