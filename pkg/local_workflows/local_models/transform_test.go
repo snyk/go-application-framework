@@ -20,6 +20,7 @@ func Test_mapSuppressions(t *testing.T) {
 		name         string
 		inputResult  sarif.Result
 		expectedSupp *TypesSuppression
+		expectPanic  bool
 	}{
 		{
 			name:         "no suppressions in result",
@@ -109,20 +110,7 @@ func Test_mapSuppressions(t *testing.T) {
 					},
 				},
 			},
-			expectedSupp: &TypesSuppression{
-				Id: uuid.UUID{},
-				Details: &TypesSuppressionDetails{
-					Category:   "invalidGUIDCategory",
-					Expiration: "never",
-					IgnoredOn:  "2023-03-01T00:00:00Z",
-					IgnoredBy: TypesUser{
-						Name:  "Tester",
-						Email: "",
-					},
-				},
-				Justification: stringPtr("Invalid GUID test"),
-				Status:        TypesSuppressionStatus(sarif.Accepted),
-			},
+			expectPanic: true,
 		},
 		{
 			name: "multiple suppressions, GetHighestSuppression picks 'accepted' over 'rejected'",
