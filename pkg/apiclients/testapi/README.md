@@ -20,7 +20,7 @@ This directory contains the following files that enable the above intent:
 
 ## Usage
 
-- Run `./scripts/pull-down-test-api-spec.sh` to fetch the latest Unified Test OpenAPI spec into <repo>/internal/api/test-api/unified-test-spec/spec.yaml.
+- Run `./scripts/pull-down-test-api-spec.sh` to fetch the latest Unified Test OpenAPI spec into <repo>/pkg/apiclients/testapi/<version>/spec.yaml.
     - Note: read access to the internal Unified Test API repo is required.
-- `cd <repo>/internal/api/test-api/`
+- `cd <repo>/pkg/apiclients/testapi/`
 - Run `go generate` to create the `unified-test-api.gen.go` API functions.
