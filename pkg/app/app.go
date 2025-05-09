@@ -22,6 +22,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -148,7 +149,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 	return callback
 }
 
-func defaultPreviewFeaturesEnabled(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
@@ -162,11 +163,24 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine, logger *zerolog.Logge
 		version := ri.GetVersion()
 
 		if strings.Contains(version, "-preview") || strings.Contains(version, "-dev") {
-			logger.Warn().Msg("Using a preview feature!")
 			return true, nil
 		}
 
 		return false, nil
+	}
+	return callback
+}
+
+func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		if engine.GetConfiguration().GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
+			return 3, nil
+		}
+		return 1, nil
 	}
 	return callback
 }
@@ -231,8 +245,9 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	})
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
-	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine, logger))
+	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
+	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts(engine))
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
