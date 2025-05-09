@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os/user"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -24,6 +26,7 @@ const (
 type Status string
 
 type InstrumentationCollector interface {
+	SetPrefix(p string)
 	SetUserAgent(ua networking.UserAgentInfo)
 	SetInteractionId(id string)
 	SetTimestamp(t time.Time)
@@ -38,6 +41,7 @@ type InstrumentationCollector interface {
 	SetTestSummary(s json_schemas.TestSummary)
 	SetTargetId(t string) // maybe use package-url library and types
 	AddError(err error)
+	// AddExtension adds a new datapoint to the instrumenation's extension property, datapoints must be of type: string, bool, int
 	AddExtension(key string, value interface{})
 }
 
@@ -63,6 +67,8 @@ type instrumentationCollectorImpl struct {
 	targetId            string
 	instrumentationErr  []error
 	extension           map[string]interface{}
+	prefix              string
+	mu                  sync.Mutex
 }
 
 type serializeOptions struct {
@@ -75,6 +81,12 @@ func WithLogger(logger *zerolog.Logger) serializeOptionFunc {
 	return func(o *serializeOptions) {
 		o.logger = logger
 	}
+}
+
+func (ic *instrumentationCollectorImpl) SetPrefix(p string) {
+	ic.mu.Lock()
+	defer ic.mu.Unlock()
+	ic.prefix = p
 }
 
 func (ic *instrumentationCollectorImpl) SetUserAgent(ua networking.UserAgentInfo) {
@@ -133,6 +145,22 @@ func (ic *instrumentationCollectorImpl) AddError(err error) {
 }
 
 func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) {
+	// ensure that extension only contains string, bool, int
+	switch value.(type) {
+	case bool, string, int:
+	default:
+		return
+	}
+
+	ic.mu.Lock()
+	currentPrefix := ic.prefix
+	ic.mu.Unlock()
+
+	hasPrefix := strings.HasPrefix(key, fmt.Sprintf("%s:", currentPrefix))
+	if len(currentPrefix) > 0 && !hasPrefix {
+		key = fmt.Sprintf("%s:%s", currentPrefix, key)
+	}
+
 	ic.extension[key] = value
 }
 

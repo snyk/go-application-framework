@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -77,7 +78,12 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	return callback
 }
 
-func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultFuncApiUrl(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	// TODO: implement proper caching
+	// cache check needed in case an invalid PAT is already configured in env var or config file
+	is_pat_valid_key := fmt.Sprintf("%s_%s", auth.CACHED_PAT_IS_VALID_KEY_PREFIX, config.GetString(configuration.AUTHENTICATION_TOKEN))
+	// initial state assumes it's valid
+	config.Set(is_pat_valid_key, true)
 	callback := func(existingValue interface{}) (interface{}, error) {
 		urlString := constants.SNYK_DEFAULT_API_URL
 
@@ -88,8 +94,28 @@ func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logge
 
 		if len(urlFromOauthToken) > 0 && len(urlFromOauthToken[0]) > 0 {
 			urlString = urlFromOauthToken[0]
+		} else if auth.IsAuthTypePAT(config.GetString(configuration.AUTHENTICATION_TOKEN)) { // derive url from PAT
+			if !config.GetBool(is_pat_valid_key) {
+				logger.Warn().Msg("the configured token is not valid; errors expected")
+			} else {
+				regions := config.GetStringSlice(configuration.SNYK_REGION_URLS)
+				supportedPatRegions := auth.FilterSupportedPatRegions(regions, auth.UnsupportedPatRegions)
+				for _, region := range auth.ShuffleStrings(supportedPatRegions) {
+					tmp, patEndpointErr := auth.DeriveEndpointFromPAT(config.GetString(configuration.AUTHENTICATION_TOKEN), config, engine.GetNetworkAccess().GetUnauthorizedHttpClient(), region)
+					if patEndpointErr != nil {
+						logger.Warn().Err(err).Str(configuration.API_URL, urlString).Msg("failed to get api url from pat")
+						config.Set(is_pat_valid_key, false)
+						continue
+					}
+					if len(tmp) > 0 {
+						urlString = tmp
+						break
+					}
+				}
+			}
 		} else if existingValue != nil { // configured value takes precedence
 			if temp, ok := existingValue.(string); ok {
+				logger.Debug().Msgf("derived url from existing value: %s", temp)
 				urlString = temp
 			}
 		}
@@ -188,6 +214,25 @@ func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.Defaul
 	return callback
 }
 
+func defaultRegionUrls() configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			if existingString, ok := existingValue.(string); ok {
+				return strings.Split(existingString, ","), nil
+			}
+			return existingValue, nil
+		}
+
+		// get Region URL string from localworkflows.Regions
+		snykRegionUrls := make([]string, 0, len(localworkflows.Regions))
+		for _, region := range localworkflows.Regions {
+			snykRegionUrls = append(snykRegionUrls, region.Url)
+		}
+		return snykRegionUrls, nil
+	}
+	return callback
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
 	if logger == nil {
@@ -213,9 +258,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
 	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(`^api(\.(.+))?\.snyk|snykgov\.io$`))
 
+	config.AddDefaultValue(configuration.SNYK_REGION_URLS, defaultRegionUrls())
+
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
+	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(engine, config, logger))
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) (any, error) {
