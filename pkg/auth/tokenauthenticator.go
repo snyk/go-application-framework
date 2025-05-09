@@ -3,6 +3,12 @@ package auth
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/google/uuid"
+)
+
+const (
+	AUTH_TYPE_TOKEN = "token"
 )
 
 var _ Authenticator = (*tokenAuthenticator)(nil)
@@ -37,4 +43,11 @@ func (t *tokenAuthenticator) AddAuthenticationHeader(request *http.Request) erro
 
 func (t *tokenAuthenticator) IsSupported() bool {
 	return true
+}
+
+func IsAuthTypeToken(token string) bool {
+	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
+		return true
+	}
+	return false
 }
