@@ -77,7 +77,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	return callback
 }
 
-func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultFuncApiUrl(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) (interface{}, error) {
 		urlString := constants.SNYK_DEFAULT_API_URL
 
@@ -88,7 +88,20 @@ func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logge
 
 		if len(urlFromOauthToken) > 0 && len(urlFromOauthToken[0]) > 0 {
 			urlString = urlFromOauthToken[0]
-		} else if existingValue != nil { // configured value takes precedence
+		} else if auth.IsAuthTypePAT(config.GetString(configuration.AUTHENTICATION_TOKEN)) {
+			regionUrls := config.GetStringSlice(configuration.SNYK_REGION_URLS)
+			// prefer the existing value
+			if val, ok := existingValue.(string); ok {
+				regionUrls = []string{val}
+			}
+			apiUrl, endpointErr := auth.DeriveEndpointFromPAT(config.GetString(configuration.AUTHENTICATION_TOKEN), config, engine.GetNetworkAccess().GetUnauthorizedHttpClient(), regionUrls)
+			if endpointErr != nil {
+				logger.Warn().Err(endpointErr).Msg("failed to get api url from pat")
+			}
+			if len(apiUrl) > 0 {
+				urlString = apiUrl
+			}
+		} else if existingValue != nil { // try the configured value as last resort
 			if temp, ok := existingValue.(string); ok {
 				urlString = temp
 			}
@@ -188,6 +201,19 @@ func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.Defaul
 	return callback
 }
 
+func defaultRegionUrls() configuration.DefaultValueFunction {
+	callback := func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			if existingString, ok := existingValue.(string); ok {
+				return strings.Split(existingString, ","), nil
+			}
+		}
+
+		return []string{constants.SNYK_DEFAULT_API_URL}, nil
+	}
+	return callback
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
 	if logger == nil {
@@ -213,9 +239,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
 	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(`^api(\.(.+))?\.snyk|snykgov\.io$`))
 
+	config.AddDefaultValue(configuration.SNYK_REGION_URLS, defaultRegionUrls())
+
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
+	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(engine, config, logger))
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) (any, error) {
