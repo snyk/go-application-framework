@@ -123,7 +123,7 @@ func mapSuppressions(res sarif.Result) *[]TypesSuppression {
 }
 
 func mapSuppression(suppression sarif.Suppression) TypesSuppression {
-	expiration := ""
+	expiration := "never"
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
 		expiration = *suppression.Properties.Expiration
@@ -131,8 +131,12 @@ func mapSuppression(suppression sarif.Suppression) TypesSuppression {
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
+	id, err := uuid.Parse(suppression.Guid)
+	if err != nil {
+		id = uuid.UUID{}
+	}
 	return TypesSuppression{
-		Id: uuid.MustParse(suppression.Guid),
+		Id: id,
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
 			Expiration: expiration,
@@ -149,12 +153,12 @@ func mapSuppression(suppression sarif.Suppression) TypesSuppression {
 
 func mapSuppressionStatus(status sarif.SuppresionStatus) TypesSuppressionStatus {
 	switch status {
-	case "accepted":
-		return Accepted
+	case "rejected":
+		return Rejected
 	case "underReview":
 		return UnderReview
 	default:
-		return Rejected
+		return Accepted
 	}
 }
 
