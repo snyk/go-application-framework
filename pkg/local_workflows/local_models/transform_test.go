@@ -16,6 +16,11 @@ func Test_mapSuppressions(t *testing.T) {
 	validUUID1 := "3b3b7c0c-7b1e-4b0e-8b0a-0b0b0b0b0b0b"
 	validUUID2 := "4c4c8d1d-8c2f-5c1f-9c1b-1c1c1c1c1c1c"
 
+	uuidPtr := func(uuidStr string) *uuid.UUID {
+		uuidValue := uuid.MustParse(uuidStr)
+		return &uuidValue
+	}
+
 	tests := []struct {
 		name         string
 		inputResult  sarif.Result
@@ -47,7 +52,7 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id: uuid.MustParse(validUUID1),
+				Id: uuidPtr(validUUID1),
 				Details: &TypesSuppressionDetails{
 					Category:   "testCategory",
 					Expiration: "never",
@@ -79,7 +84,7 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id: uuid.MustParse(validUUID2),
+				Id: uuidPtr(validUUID2),
 				Details: &TypesSuppressionDetails{
 					Category:   "fullCategory",
 					Expiration: "2024-12-31T23:59:59Z",
@@ -110,7 +115,7 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id: uuid.UUID{},
+				Id: nil,
 				Details: &TypesSuppressionDetails{
 					Category:   "invalidGUIDCategory",
 					Expiration: "never",
@@ -133,7 +138,7 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id:            uuid.MustParse(validUUID2),
+				Id:            uuidPtr(validUUID2),
 				Justification: stringPtr("Accepted"),
 				Details: &TypesSuppressionDetails{
 					Category:   "cat2",
@@ -152,7 +157,7 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id:            uuid.MustParse(validUUID1),
+				Id:            uuidPtr(validUUID1),
 				Justification: stringPtr("Under review"),
 				Details: &TypesSuppressionDetails{
 					Category:   "reviewCategory",
