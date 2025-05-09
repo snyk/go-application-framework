@@ -17,10 +17,9 @@ func Test_mapSuppressions(t *testing.T) {
 	validUUID2 := "4c4c8d1d-8c2f-5c1f-9c1b-1c1c1c1c1c1c"
 
 	tests := []struct {
-		name            string
-		inputResult     sarif.Result
-		expectedSupp    *TypesSuppression
-		expectPanic     bool
+		name         string
+		inputResult  sarif.Result
+		expectedSupp *TypesSuppression
 	}{
 		{
 			name:         "no suppressions in result",
@@ -39,7 +38,6 @@ func Test_mapSuppressions(t *testing.T) {
 					{
 						Guid:          validUUID1,
 						Justification: "Test justification",
-						Status:        sarif.Accepted,
 						Properties: sarif.SuppressionProperties{
 							Category:  "testCategory",
 							IgnoredOn: "2023-01-01T00:00:00Z",
@@ -52,7 +50,7 @@ func Test_mapSuppressions(t *testing.T) {
 				Id: uuid.MustParse(validUUID1),
 				Details: &TypesSuppressionDetails{
 					Category:   "testCategory",
-					Expiration: "",
+					Expiration: "never",
 					IgnoredOn:  "2023-01-01T00:00:00Z",
 					IgnoredBy: TypesUser{
 						Name:  "User",
@@ -96,16 +94,35 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 		},
 		{
-			name: "suppression with invalid GUID causes panic",
+			name: "suppression with invalid GUID results in zero UUID for Id",
 			inputResult: sarif.Result{
 				Suppressions: []sarif.Suppression{
 					{
-						Guid:   "not-a-valid-uuid",
-						Status: sarif.Accepted,
+						Guid:          "not-a-valid-uuid",
+						Justification: "Invalid GUID test",
+						Status:        sarif.Accepted,
+						Properties: sarif.SuppressionProperties{
+							Category:  "invalidGUIDCategory",
+							IgnoredOn: "2023-03-01T00:00:00Z",
+							IgnoredBy: sarif.IgnoredBy{Name: "Tester"},
+						},
 					},
 				},
 			},
-			expectPanic:   true,
+			expectedSupp: &TypesSuppression{
+				Id: uuid.UUID{},
+				Details: &TypesSuppressionDetails{
+					Category:   "invalidGUIDCategory",
+					Expiration: "never",
+					IgnoredOn:  "2023-03-01T00:00:00Z",
+					IgnoredBy: TypesUser{
+						Name:  "Tester",
+						Email: "",
+					},
+				},
+				Justification: stringPtr("Invalid GUID test"),
+				Status:        TypesSuppressionStatus(sarif.Accepted),
+			},
 		},
 		{
 			name: "multiple suppressions, GetHighestSuppression picks 'accepted' over 'rejected'",
@@ -117,9 +134,14 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 			expectedSupp: &TypesSuppression{
 				Id:            uuid.MustParse(validUUID2),
-				Details:       &TypesSuppressionDetails{Category: "cat2"},
 				Justification: stringPtr("Accepted"),
-				Status:        TypesSuppressionStatus(sarif.Accepted),
+				Details: &TypesSuppressionDetails{
+					Category:   "cat2",
+					Expiration: "never",
+					IgnoredOn:  "",
+					IgnoredBy:  TypesUser{Name: "", Email: ""},
+				},
+				Status: TypesSuppressionStatus(sarif.Accepted),
 			},
 		},
 		{
@@ -131,23 +153,22 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 			expectedSupp: &TypesSuppression{
 				Id:            uuid.MustParse(validUUID1),
-				Details:       &TypesSuppressionDetails{Category: "reviewCategory"},
 				Justification: stringPtr("Under review"),
-				Status:        TypesSuppressionStatus(sarif.UnderReview),
+				Details: &TypesSuppressionDetails{
+					Category:   "reviewCategory",
+					Expiration: "never",
+					IgnoredOn:  "",
+					IgnoredBy:  TypesUser{Name: "", Email: ""},
+				},
+				Status: TypesSuppressionStatus(sarif.UnderReview),
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.expectPanic {
-				assert.Panics(t, func() {
-					mapSuppressions(tt.inputResult)
-				}, "Expected a panic due to invalid GUID")
-			} else {
-				actualSupp := mapSuppressions(tt.inputResult)
-				assert.Equal(t, tt.expectedSupp, actualSupp)
-			}
+			actualSupp := mapSuppressions(tt.inputResult)
+			assert.Equal(t, tt.expectedSupp, actualSupp)
 		})
 	}
 }
