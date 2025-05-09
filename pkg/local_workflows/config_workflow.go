@@ -23,15 +23,20 @@ const (
 	defaultRegion         = "snyk-us-01"
 )
 
-var regions = []SnykRegion{
-	{alias: "snyk-us-01", url: "https://api.snyk.io"},
-	{alias: "snyk-us-02", url: "https://api.us.snyk.io"},
-	{alias: "snyk-au-01", url: "https://api.au.snyk.io"},
-	{alias: "snyk-eu-01", url: "https://api.eu.snyk.io"},
-	{alias: "snyk-gov-01", url: "https://api.snykgov.io"},
+var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIdentifier(configEnvWorkflowName)
+
+type SnykRegion struct {
+	alias string
+	Url   string
 }
 
-var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIdentifier(configEnvWorkflowName)
+var Regions = []SnykRegion{
+	{alias: "snyk-us-01", Url: "https://api.snyk.io"},
+	{alias: "snyk-us-02", Url: "https://api.us.snyk.io"},
+	{alias: "snyk-au-01", Url: "https://api.au.snyk.io"},
+	{alias: "snyk-eu-01", Url: "https://api.eu.snyk.io"},
+	{alias: "snyk-gov-01", Url: "https://api.snykgov.io"},
+}
 
 func InitConfigWorkflow(engine workflow.Engine) error {
 	// map environmentAlias to an existing value
@@ -44,19 +49,14 @@ func InitConfigWorkflow(engine workflow.Engine) error {
 	return err
 }
 
-type SnykRegion struct {
-	alias string
-	url   string
-}
-
 func DetermineRegionFromUrl(url string) (string, error) {
 	if len(url) == 0 {
 		return "", fmt.Errorf("url must not be empty")
 	}
 
 	// Loop through each region and check for a match in the URL host
-	for _, region := range regions {
-		if strings.HasPrefix(url, region.url) {
+	for _, region := range Regions {
+		if strings.HasPrefix(url, region.Url) {
 			return region.alias, nil
 		}
 	}
@@ -82,9 +82,9 @@ func determineUrlFromAlias(alias string) (string, error) {
 		alias = defaultRegion
 	}
 
-	for _, region := range regions {
-		if region.alias == strings.ToLower(alias) {
-			return region.url, nil
+	for _, region := range Regions {
+		if region.alias == strings.ToLower(alias) { // fix region.Url undefined (type SnykRegion has no field or method url, but does have field Url)
+			return region.Url, nil
 		}
 	}
 
@@ -150,7 +150,7 @@ func configEnvironmentWorkflowEntryPoint(invocationCtx workflow.InvocationContex
 	currentUrl := config.GetString(configuration.API_URL)
 	newEnvUrl, err := determineUrlFromAlias(envAlias)
 
-	logger.Print("Alias: ", envAlias)
+	logger.Print("alias: ", envAlias)
 	logger.Print("Previous Environment: ", currentUrl)
 	logger.Print("New Environment: ", newEnvUrl)
 	logger.Print("Fail on Sanity Check: ", failOnCheck)
