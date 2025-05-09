@@ -160,25 +160,32 @@
 							}{{if lt $index $clSize}},{{end}}
 							{{- end }}
 						],
-						{{- if $finding.Attributes.Suppression }}
+						{{- if $finding.Attributes.Suppressions }}
 						"suppressions" : [
+							{{- $suppressionsLen := sub (len $finding.Attributes.Suppressions) 1 }}
+							{{- range $sIndex, $suppression := $finding.Attributes.Suppressions }}
 							{
-								"guid": "{{ $finding.Attributes.Suppression.Id }}",
-								"state": "{{ $finding.Attributes.Suppression.Status }}",
-								{{- if $finding.Attributes.Suppression.Justification }}
-								"justification": {{ getQuotedString $finding.Attributes.Suppression.Justification }},{{- end }}
-								"kind": "external"{{- if $finding.Attributes.Suppression.Details }},
+								"guid": "{{ $suppression.Id }}",
+								"state": "{{ $suppression.Status }}",
+								{{- if $suppression.Justification }}
+								"justification": {{ getQuotedString $suppression.Justification }},
+								{{- end }}
+								"kind": "external"
+								{{- if $suppression.Details }},
 								"properties": {
-									"category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
-									{{- if $finding.Attributes.Suppression.Details.Expiration }}"expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",{{- end }}
-									"ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
+									"category": {{ getQuotedString $suppression.Details.Category }},
+									{{- if $suppression.Details.Expiration }}
+									"expiration": "{{ $suppression.Details.Expiration }}",
+									{{- end }}
+									"ignoredOn": "{{ $suppression.Details.IgnoredOn }}",
 									"ignoredBy": {
-										  "name": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Name }},
-										  "email": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Email }}
+										  "name": {{ getQuotedString $suppression.Details.IgnoredBy.Name }},
+										  "email": {{ getQuotedString $suppression.Details.IgnoredBy.Email }}
 									}
 								}
 								{{- end }}
-							}
+							}{{if lt $sIndex $suppressionsLen}},{{end}}
+							{{- end }}
 						],
 						{{- end }}
 						"properties": {

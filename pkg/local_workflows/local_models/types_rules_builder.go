@@ -171,9 +171,9 @@ func WithLocations(locations *[]IoSnykReactiveFindingLocation) FindingResourceOp
 }
 
 // WithSuppression sets the Suppression field
-func WithSuppression(suppression *TypesSuppression) FindingResourceOption {
+func WithSuppressions(suppressions *[]TypesSuppression) FindingResourceOption {
 	return func(fr *FindingResource) {
-		fr.Attributes.Suppression = suppression
+		fr.Attributes.Suppressions = suppressions
 	}
 }
 

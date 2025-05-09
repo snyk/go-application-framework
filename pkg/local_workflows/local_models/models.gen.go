@@ -669,10 +669,8 @@ type TypesFindingAttributes struct {
 	//
 	// For mitigation with a higher degree of confidence, remediation and fix
 	// relationship links should be used.
-	Suggestions *[]Suggestion `json:"suggestions,omitempty"`
-
-	// Suppression Reasons for why a Finding can be suppressed from a Test result. This MAY NOT be required at all, given the presentation
-	Suppression *TypesSuppression `json:"suppression,omitempty"`
+	Suggestions  *[]Suggestion       `json:"suggestions,omitempty"`
+	Suppressions *[]TypesSuppression `json:"suppressions,omitempty"`
 }
 
 // TypesFindingAttributesDelta Represent whether a finding is net new (introduced), removed, or preserved
