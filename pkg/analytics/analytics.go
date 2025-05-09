@@ -2,6 +2,8 @@ package analytics
 
 import (
 	"bytes"
+	"sync"
+
 	//nolint:gosec // insecure sha1 used for legacy identifier
 	"crypto/sha1"
 	"encoding/json"
@@ -24,6 +26,7 @@ import (
 
 // Analytics is an interface for managing analytics.
 type Analytics interface {
+	SetPrefix(p string)
 	SetCmdArguments(args []string)
 	SetOrg(org string)
 	SetVersion(version string)
@@ -39,6 +42,8 @@ type Analytics interface {
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
 	GetInstrumentation() InstrumentationCollector
+	// AddExtension adds a new datapoint to the instrumenation's extension property, datapoints must be of type: string, bool, int
+	AddExtension(key string, value interface{}) error
 }
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
@@ -47,6 +52,7 @@ type AnalyticsImpl struct {
 	headerFunc func() http.Header
 	apiUrl     string
 
+	prefix             string
 	org                string
 	version            string
 	created            time.Time
@@ -57,6 +63,7 @@ type AnalyticsImpl struct {
 	os                 string
 	command            string
 	instrumentor       InstrumentationCollector
+	mu                 sync.Mutex
 
 	userCurrent func() (*user.User, error)
 }
@@ -171,6 +178,29 @@ func (a *AnalyticsImpl) AddError(err error) {
 	if a.instrumentor != nil {
 		a.instrumentor.AddError(err)
 	}
+}
+
+func (a *AnalyticsImpl) SetPrefix(p string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.prefix = p
+}
+
+func (a *AnalyticsImpl) AddExtension(key string, value interface{}) error {
+	a.mu.Lock()
+	currentPrefix := a.prefix
+	a.mu.Unlock()
+
+	hasPrefix := strings.HasPrefix(key, fmt.Sprintf("%s:", currentPrefix))
+	if len(currentPrefix) > 0 && !hasPrefix {
+		key = fmt.Sprintf("%s:%s", currentPrefix, key)
+	}
+
+	if a.instrumentor != nil {
+		return a.instrumentor.AddExtension(key, value)
+	}
+
+	return nil
 }
 
 // AddHeader adds a header to the request.
