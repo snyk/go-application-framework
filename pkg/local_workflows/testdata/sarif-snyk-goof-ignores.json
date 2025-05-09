@@ -2778,7 +2778,7 @@
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
-                "expiration": null,
+                "expiration": "never",
                 "ignoredOn": "2024-10-08T09:33:05.933Z",
                 "ignoredBy": {
                   "name": "JSON",
@@ -2992,7 +2992,7 @@
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
-                "expiration": null,
+                "expiration": "never",
                 "ignoredOn": "2024-10-08T09:33:05.933Z",
                 "ignoredBy": {
                   "name": "JSON",

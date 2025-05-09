@@ -115,7 +115,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression == nil {
 		return nil
 	}
-	expiration := ""
+	expiration := "never"
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
 		expiration = *suppression.Properties.Expiration
@@ -123,8 +123,8 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
-	return &TypesSuppression{
-		Id: uuid.MustParse(suppression.Guid),
+
+	typeSuppression := &TypesSuppression{
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
 			Expiration: expiration,
@@ -137,6 +137,13 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 		Justification: &suppression.Justification,
 		Status:        TypesSuppressionStatus(status),
 	}
+
+	id, err := uuid.Parse(suppression.Guid)
+	if err == nil {
+		typeSuppression.Id = id
+	}
+
+	return typeSuppression
 }
 
 func createFingerprint(scheme string, value string) (Fingerprint, error) {
