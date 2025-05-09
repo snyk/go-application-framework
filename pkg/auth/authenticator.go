@@ -21,6 +21,7 @@ type Authenticator interface {
 
 func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	var authenticator Authenticator
+	authType := GetAuthType(config)
 
 	// try oauth authenticator
 	tmpAuthenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
@@ -28,8 +29,13 @@ func CreateAuthenticator(config configuration.Configuration, httpClient *http.Cl
 		authenticator = tmpAuthenticator
 	}
 
+	// try pat authenticator
+	if authType == configuration.AUTHENTICATION_PAT_TOKEN {
+		authenticator = NewPATAuthenticator(func() string { return GetAuthHeader(config) })
+	}
+
 	// create token authenticator
-	if authenticator == nil {
+	if authType == configuration.AUTHENTICATION_TOKEN {
 		authenticator = NewTokenAuthenticator(func() string { return GetAuthHeader(config) })
 	}
 

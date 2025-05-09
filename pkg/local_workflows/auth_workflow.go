@@ -11,6 +11,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/auth_workflow"
 	pgk_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -21,6 +22,7 @@ const (
 	authTypeParameter = "auth-type"
 	authTypeOAuth     = "oauth"
 	authTypeToken     = "token"
+	authTypePAT       = "pat"
 )
 
 var authTypeDescription = fmt.Sprint("Authentication type (", authTypeToken, ", ", authTypeOAuth, ")")
@@ -71,7 +73,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	)
 
-	err = entryPointDI(config, logger, engine, authenticator)
+	err = entryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
 }
 
@@ -82,6 +84,8 @@ func autoDetectAuthType(config configuration.Configuration) string {
 		return authTypeToken
 	}
 
+	// currently the auth workflow defaults to traditional token auth when an IDE environment is detected
+	// this will need to change if IDEs want to invoke this workflow for oauth/PAT
 	integration := config.GetString(configuration.INTEGRATION_NAME)
 	if pgk_utils.IsSnykIde(integration) {
 		return authTypeToken
@@ -90,7 +94,8 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	return authTypeOAuth
 }
 
-func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+	config := invocationCtx.GetConfiguration()
 	authType := config.GetString(authTypeParameter)
 	if len(authType) == 0 {
 		authType = autoDetectAuthType(config)
@@ -111,6 +116,17 @@ func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, en
 		}
 
 		fmt.Println(auth.AUTHENTICATED_MESSAGE)
+	} else if strings.EqualFold(authType, authTypePAT) { // PAT flow
+		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
+		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)
+		config.Unset(configuration.AUTHENTICATION_TOKEN)
+
+		_, err := auth_workflow.EntryPointPAT(invocationCtx)
+		if err != nil {
+			return err
+		}
+
 	} else { // LEGACY flow
 		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
 		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
