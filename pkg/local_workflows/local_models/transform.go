@@ -123,8 +123,13 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
+	var idPtr *uuid.UUID
+	if id, err := uuid.Parse(suppression.Guid); err == nil {
+		idPtr = &id
+	}
 
-	typeSuppression := &TypesSuppression{
+	return &TypesSuppression{
+		Id: idPtr,
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
 			Expiration: expiration,
@@ -137,13 +142,6 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 		Justification: &suppression.Justification,
 		Status:        TypesSuppressionStatus(status),
 	}
-
-	id, err := uuid.Parse(suppression.Guid)
-	if err == nil {
-		typeSuppression.Id = id
-	}
-
-	return typeSuppression
 }
 
 func createFingerprint(scheme string, value string) (Fingerprint, error) {

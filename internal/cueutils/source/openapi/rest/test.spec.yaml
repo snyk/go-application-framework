@@ -1992,7 +1992,6 @@ components:
     types.Suppression:
       type: object
       required:
-        - id
         - status
       properties:
         id:
