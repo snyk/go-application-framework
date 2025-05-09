@@ -1179,7 +1179,7 @@ type TypesSuggestedPackageUpgradeUpgradeConflicts bool
 type TypesSuppression struct {
 	// Details Suppression meta data
 	Details       *TypesSuppressionDetails `json:"details,omitempty"`
-	Id            openapi_types.UUID       `json:"id"`
+	Id            *openapi_types.UUID      `json:"id,omitempty"`
 	Justification *string                  `json:"justification,omitempty"`
 	Status        TypesSuppressionStatus   `json:"status"`
 }
