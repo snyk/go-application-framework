@@ -40,6 +40,7 @@ const (
 	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
 	PARAMETER_CLIENT_ID            string = "client-id"
 	PARAMETER_CLIENT_SECRET        string = "client-secret"
+	AUTH_TYPE_OAUTH                       = "oauth"
 )
 
 type GrantType int
@@ -57,14 +58,19 @@ var globalRefreshMutex sync.Mutex
 //go:embed errorresponse.html
 var errorResponsePage string
 
+// TODO: extract this out so PAT authenticator can sue
+type common struct {
+	httpClient *http.Client
+	config     configuration.Configuration
+	logger     *zerolog.Logger
+}
+
 type oAuth2Authenticator struct {
-	httpClient         *http.Client
-	config             configuration.Configuration
+	common
 	oauthConfig        *oauth2.Config
 	token              *oauth2.Token
 	headless           bool
 	grantType          GrantType
-	logger             *zerolog.Logger
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)

@@ -14,8 +14,28 @@ func GetAuthHeader(config configuration.Configuration) string {
 	}
 
 	token := config.GetString(configuration.AUTHENTICATION_TOKEN)
-	if len(token) > 0 {
+	authType := getAuthType(token)
+	// validate token is Snyk PAT
+	if len(token) > 0 && authType == AUTH_TYPE_PAT {
+		return fmt.Sprintf("Bearer %s", token)
+	}
+
+	// otherwise validate that it is Snyk API
+	if len(token) > 0 && authType == AUTH_TYPE_TOKEN {
 		return fmt.Sprintf("token %s", token)
+	}
+
+	return ""
+}
+
+// getAuthType returns the authentication type (token/PAT) based on token input
+func getAuthType(token string) string {
+	if IsAuthTypePAT(token) {
+		return AUTH_TYPE_PAT
+	}
+
+	if IsAuthTypeToken(token) {
+		return AUTH_TYPE_TOKEN
 	}
 
 	return ""
