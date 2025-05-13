@@ -40,11 +40,6 @@ func (rm ResponseMiddleware) RoundTrip(req *http.Request) (*http.Response, error
 
 	err = rm.errHandler(err, res.Request.Context())
 
-	// RoundTrip should return one or the other.
-	if err != nil {
-		res = nil
-	}
-
 	return res, err
 }
 

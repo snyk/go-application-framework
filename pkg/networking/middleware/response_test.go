@@ -77,7 +77,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 			req := buildRequest(url)
 			res, err := rt.RoundTrip(req)
 
-			assert.Nil(t, res)
+			assert.NotNil(t, res)
 			assert.ErrorAs(t, err, &snykErr)
 			assert.Equal(t, code, snykErr.StatusCode)
 
@@ -121,7 +121,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		req := buildRequest(server.URL + "/jsonapi-SNYK-0003")
 		res, err := rt.RoundTrip(req)
 
-		assert.Nil(t, res)
+		assert.NotNil(t, res)
 		assert.Error(t, err)
 
 		actual := snyk_errors.Error{}
@@ -138,7 +138,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		req := buildRequest(server.URL + "/jsonapi-SNYK-0000")
 		res, err := rt.RoundTrip(req)
 
-		assert.Nil(t, res)
+		assert.NotNil(t, res)
 		assert.Error(t, err)
 
 		actual := snyk_errors.Error{}
@@ -155,7 +155,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		req := buildRequest(server.URL + "/error-catalog")
 		res, err := rt.RoundTrip(req)
 
-		assert.Nil(t, res)
+		assert.NotNil(t, res)
 		assert.Error(t, err)
 
 		expected := snyk.NewBadGatewayError("")
