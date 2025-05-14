@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -203,6 +204,50 @@ func Test_ResponseMiddleware(t *testing.T) {
 		assert.NotNil(t, res)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, res.StatusCode)
+	})
+
+	t.Run("response body should be consumable after roundtrip", func(t *testing.T) {
+		testCases := []struct {
+			name        string
+			urlPath     string
+			expectError bool
+		}{
+			{
+				name:        "no error",
+				urlPath:     "",
+				expectError: false,
+			},
+			{
+				name:        "with error",
+				urlPath:     "/error-catalog",
+				expectError: true,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				config := getBaseConfig()
+				config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+
+				rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+				req := buildRequest(server.URL + tc.urlPath)
+				res, err := rt.RoundTrip(req)
+
+				assert.NotNil(t, res)
+				if tc.expectError {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
+
+				bodyBytes, err := io.ReadAll(res.Body)
+				assert.NoError(t, err, "Body should be readable")
+				assert.NotNil(t, bodyBytes, "Should be able to read body")
+
+				err = res.Body.Close()
+				assert.NoError(t, err, "Body should close without errors")
+			})
+		}
 	})
 }
 

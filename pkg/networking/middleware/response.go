@@ -31,7 +31,6 @@ func NewReponseMiddleware(roundTriper http.RoundTripper, config configuration.Co
 
 func (rm ResponseMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	res, err := rm.next.RoundTrip(req)
-
 	if err != nil {
 		return res, err
 	}
@@ -43,7 +42,7 @@ func (rm ResponseMiddleware) RoundTrip(req *http.Request) (*http.Response, error
 	return res, err
 }
 
-// HandleResponse maps the response param to the eror catalog error.
+// HandleResponse maps the response param to the error catalog error.
 func HandleResponse(res *http.Response, config configuration.Configuration) error {
 	if res == nil {
 		return nil
@@ -75,6 +74,7 @@ func getErrorList(res *http.Response) []snyk_errors.Error {
 	if err != nil {
 		return []snyk_errors.Error{}
 	}
+
 	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	errorList, err := snyk_errors.FromJSONAPIErrorBytes(bodyBytes)
