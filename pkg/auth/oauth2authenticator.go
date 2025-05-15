@@ -58,19 +58,14 @@ var globalRefreshMutex sync.Mutex
 //go:embed errorresponse.html
 var errorResponsePage string
 
-// TODO: extract this out so PAT authenticator can sue
-type common struct {
-	httpClient *http.Client
-	config     configuration.Configuration
-	logger     *zerolog.Logger
-}
-
 type oAuth2Authenticator struct {
-	common
+	httpClient         *http.Client
+	config             configuration.Configuration
 	oauthConfig        *oauth2.Config
 	token              *oauth2.Token
 	headless           bool
 	grantType          GrantType
+	logger             *zerolog.Logger
 	openBrowserFunc    func(authUrl string)
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)

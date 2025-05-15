@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -33,4 +34,8 @@ func CreateAuthenticator(config configuration.Configuration, httpClient *http.Cl
 	}
 
 	return authenticator
+}
+
+func IsKnownOAuthEndpoint(endpoint string) bool {
+	return api.IsFedramp(endpoint)
 }
