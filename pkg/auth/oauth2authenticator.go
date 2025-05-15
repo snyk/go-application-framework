@@ -40,6 +40,7 @@ const (
 	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
 	PARAMETER_CLIENT_ID            string = "client-id"
 	PARAMETER_CLIENT_SECRET        string = "client-secret"
+	AUTH_TYPE_OAUTH                       = "oauth"
 )
 
 type GrantType int
