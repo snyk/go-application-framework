@@ -47,6 +47,8 @@ func Test_ResponseMiddleware(t *testing.T) {
 			assert.Nil(t, err)
 		default:
 			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte("hello"))
+			assert.Nil(t, err)
 		}
 	})
 	server := httptest.NewServer(handler)
@@ -242,7 +244,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 
 				bodyBytes, err := io.ReadAll(res.Body)
 				assert.NoError(t, err, "Body should be readable")
-				assert.NotNil(t, bodyBytes, "Should be able to read body")
+				assert.NotEmpty(t, bodyBytes, "Should be able to read body")
 
 				err = res.Body.Close()
 				assert.NoError(t, err, "Body should close without errors")
