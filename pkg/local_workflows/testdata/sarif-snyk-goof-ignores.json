@@ -2602,6 +2602,8 @@
           },
           "suppressions": [
             {
+              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "state": "accepted",
               "justification": "Experimenting with consistent ignores capability. ",
               "properties": {
                 "category": "temporary-ignore",
@@ -2771,10 +2773,12 @@
           },
           "suppressions": [
             {
+              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "state": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
-                "expiration": null,
+                "expiration": "never",
                 "ignoredOn": "2024-10-08T09:33:05.933Z",
                 "ignoredBy": {
                   "name": "JSON",
@@ -2983,10 +2987,12 @@
           },
           "suppressions": [
             {
+              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "state": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
-                "expiration": null,
+                "expiration": "never",
                 "ignoredOn": "2024-10-08T09:33:05.933Z",
                 "ignoredBy": {
                   "name": "JSON",
