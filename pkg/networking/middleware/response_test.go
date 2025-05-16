@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,6 +47,8 @@ func Test_ResponseMiddleware(t *testing.T) {
 			assert.Nil(t, err)
 		default:
 			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte("hello"))
+			assert.Nil(t, err)
 		}
 	})
 	server := httptest.NewServer(handler)
@@ -77,7 +80,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 			req := buildRequest(url)
 			res, err := rt.RoundTrip(req)
 
-			assert.Nil(t, res)
+			assert.NotNil(t, res)
 			assert.ErrorAs(t, err, &snykErr)
 			assert.Equal(t, code, snykErr.StatusCode)
 
@@ -121,7 +124,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		req := buildRequest(server.URL + "/jsonapi-SNYK-0003")
 		res, err := rt.RoundTrip(req)
 
-		assert.Nil(t, res)
+		assert.NotNil(t, res)
 		assert.Error(t, err)
 
 		actual := snyk_errors.Error{}
@@ -138,7 +141,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		req := buildRequest(server.URL + "/jsonapi-SNYK-0000")
 		res, err := rt.RoundTrip(req)
 
-		assert.Nil(t, res)
+		assert.NotNil(t, res)
 		assert.Error(t, err)
 
 		actual := snyk_errors.Error{}
@@ -155,7 +158,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		req := buildRequest(server.URL + "/error-catalog")
 		res, err := rt.RoundTrip(req)
 
-		assert.Nil(t, res)
+		assert.NotNil(t, res)
 		assert.Error(t, err)
 
 		expected := snyk.NewBadGatewayError("")
@@ -203,6 +206,50 @@ func Test_ResponseMiddleware(t *testing.T) {
 		assert.NotNil(t, res)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, res.StatusCode)
+	})
+
+	t.Run("response body should be consumable after roundtrip", func(t *testing.T) {
+		testCases := []struct {
+			name        string
+			urlPath     string
+			expectError bool
+		}{
+			{
+				name:        "no error",
+				urlPath:     "",
+				expectError: false,
+			},
+			{
+				name:        "with error",
+				urlPath:     "/error-catalog",
+				expectError: true,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				config := getBaseConfig()
+				config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+
+				rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+				req := buildRequest(server.URL + tc.urlPath)
+				res, err := rt.RoundTrip(req)
+
+				assert.NotNil(t, res)
+				if tc.expectError {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
+
+				bodyBytes, err := io.ReadAll(res.Body)
+				assert.NoError(t, err, "Body should be readable")
+				assert.NotEmpty(t, bodyBytes, "Should be able to read body")
+
+				err = res.Body.Close()
+				assert.NoError(t, err, "Body should close without errors")
+			})
+		}
 	})
 }
 
