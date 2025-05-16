@@ -16,8 +16,7 @@ func Test_ProgressBar_Spinner(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, SpinnerType, false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar(writer, "Hello", SpinnerType, false)
 
 	err = bar.UpdateProgress(0)
 	assert.NoError(t, err)
@@ -40,8 +39,7 @@ func Test_ProgressBar_Spinner_Infinite(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, SpinnerType, false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar(writer, "Hello", SpinnerType, false)
 
 	err = bar.UpdateProgress(InfiniteProgress)
 	assert.NoError(t, err)
@@ -64,8 +62,7 @@ func Test_ProgressBar_Bar(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, BarType, false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar(writer, "Hello", BarType, false)
 
 	err = bar.UpdateProgress(0)
 	assert.NoError(t, err)
@@ -88,8 +85,7 @@ func Test_ProgressBar_Unknown(t *testing.T) {
 	var err error
 	writer := &bytes.Buffer{}
 
-	bar := newProgressBar(writer, "Unknown", false)
-	bar.SetTitle("Hello")
+	bar := newProgressBar(writer, "Hello", "Unknown", false)
 
 	err = bar.UpdateProgress(0)
 	assert.NoError(t, err)
@@ -120,11 +116,10 @@ func Test_DefaultUi(t *testing.T) {
 	stdin.WriteString(name + "\n")
 
 	ui := newConsoleUi(stdin, stdout, stderr)
-	bar := ui.NewProgressBar()
+	bar := ui.NewProgressBar("A Title")
 	assert.NotNil(t, bar)
 
 	// the bar will not render since the writer is not a TTY
-	bar.SetTitle("Hello")
 	err := bar.UpdateProgress(InfiniteProgress)
 	assert.NoError(t, err)
 
@@ -161,7 +156,7 @@ func Test_OutputError(t *testing.T) {
 
 	t.Run("Error Catalog error", func(t *testing.T) {
 		err := snyk.NewBadRequestError("If you carry on like this you will ensure the wrath of OWASP, the God of Code Injection.")
-		err.Links = []string{"http://example.com/docs"}
+		err.Links = []string{"https://example.com/docs"}
 
 		lipgloss.SetColorProfile(termenv.TrueColor)
 		uiError := ui.OutputError(err)

@@ -47,16 +47,16 @@ func (mr *MockProgressBarMockRecorder) Clear() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clear", reflect.TypeOf((*MockProgressBar)(nil).Clear))
 }
 
-// SetTitle mocks base method.
-func (m *MockProgressBar) SetTitle(title string) {
+// SetMessage mocks base method.
+func (m *MockProgressBar) SetMessage(message string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetTitle", title)
+	m.ctrl.Call(m, "SetMessage", message)
 }
 
-// SetTitle indicates an expected call of SetTitle.
-func (mr *MockProgressBarMockRecorder) SetTitle(title interface{}) *gomock.Call {
+// SetMessage indicates an expected call of SetMessage.
+func (mr *MockProgressBarMockRecorder) SetMessage(message interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTitle", reflect.TypeOf((*MockProgressBar)(nil).SetTitle), title)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMessage", reflect.TypeOf((*MockProgressBar)(nil).SetMessage), message)
 }
 
 // UpdateProgress mocks base method.
