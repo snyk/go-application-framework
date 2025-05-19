@@ -55,7 +55,7 @@ func Test_mapSuppressions(t *testing.T) {
 				Id: uuidPtr(validUUID1),
 				Details: &TypesSuppressionDetails{
 					Category:   "testCategory",
-					Expiration: "never",
+					Expiration: "does not expire",
 					IgnoredOn:  "2023-01-01T00:00:00Z",
 					IgnoredBy: TypesUser{
 						Name:  "User",
@@ -118,7 +118,7 @@ func Test_mapSuppressions(t *testing.T) {
 				Id: nil,
 				Details: &TypesSuppressionDetails{
 					Category:   "invalidGUIDCategory",
-					Expiration: "never",
+					Expiration: "does not expire",
 					IgnoredOn:  "2023-03-01T00:00:00Z",
 					IgnoredBy: TypesUser{
 						Name:  "Tester",
@@ -142,7 +142,7 @@ func Test_mapSuppressions(t *testing.T) {
 				Justification: stringPtr("Accepted"),
 				Details: &TypesSuppressionDetails{
 					Category:   "cat2",
-					Expiration: "never",
+					Expiration: "does not expire",
 					IgnoredOn:  "",
 					IgnoredBy:  TypesUser{Name: "", Email: ""},
 				},
@@ -161,7 +161,7 @@ func Test_mapSuppressions(t *testing.T) {
 				Justification: stringPtr("Under review"),
 				Details: &TypesSuppressionDetails{
 					Category:   "reviewCategory",
-					Expiration: "never",
+					Expiration: "does not expire",
 					IgnoredOn:  "",
 					IgnoredBy:  TypesUser{Name: "", Email: ""},
 				},

@@ -11,6 +11,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
+const (
+	DefaultSuppressionExpiry = "does not expire"
+)
+
 func TransformToLocalFindingModelFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary) (localFinding LocalFinding, err error) {
 	localFinding.Links = make(map[string]string)
 	localFinding.Summary = transformTestSummary(testSummary, sarifDoc)
@@ -115,7 +119,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression == nil {
 		return nil
 	}
-	expiration := "never"
+	expiration := DefaultSuppressionExpiry
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
 		expiration = *suppression.Properties.Expiration
