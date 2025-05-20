@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 )
@@ -17,7 +18,7 @@ func NewTokenAuthenticator(tokenFunc func() string) Authenticator {
 	}
 }
 
-func (t *tokenAuthenticator) Authenticate() error {
+func (t *tokenAuthenticator) Authenticate(_ context.Context) error {
 	return nil
 }
 

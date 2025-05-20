@@ -262,20 +262,19 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) error {
 	return nil
 }
 
-func (o *oAuth2Authenticator) Authenticate() error {
+func (o *oAuth2Authenticator) Authenticate(ctx context.Context) error {
 	var err error
 
 	if o.grantType == ClientCredentialsGrant {
-		err = o.authenticateWithClientCredentialsGrant()
+		err = o.authenticateWithClientCredentialsGrant(ctx)
 	} else {
-		err = o.authenticateWithAuthorizationCode()
+		err = o.authenticateWithAuthorizationCode(ctx)
 	}
 
 	return err
 }
 
-func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant() error {
-	ctx := context.Background()
+func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant(ctx context.Context) error {
 	config := getOAuthConfigurationClientCredentials(o.oauthConfig)
 
 	// Use the custom HTTP client when requesting a token.
@@ -293,7 +292,7 @@ func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant() error {
 	return err
 }
 
-func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
+func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Context) error {
 	var responseCode string
 	var responseState string
 	var responseError string
@@ -308,7 +307,6 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	}
 	state := string(stateBytes)
 	codeChallenge := getCodeChallenge(verifier)
-	ctx := context.Background()
 
 	if o.headless {
 		return errors.New("headless mode not supported")
@@ -359,6 +357,14 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		// launch browser
 		go o.openBrowserFunc(authCodeUrl)
 
+		// Handle context cancellation
+		canceled := false
+		go func() {
+			<-ctx.Done()
+			canceled = true
+			o.shutdownServerFunc(srv)
+		}()
+
 		timedOut := false
 		timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
 			timedOut = true
@@ -366,6 +372,9 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		})
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
+			if canceled {
+				return nil // No need to error, the user canceled this auth request
+			}
 			if timedOut {
 				return errors.New("authentication failed (timeout)")
 			}
@@ -389,11 +398,12 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	}
 
 	// Use the custom HTTP client when requesting a token.
+	exchangeCtx := ctx
 	if o.httpClient != nil {
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
+		exchangeCtx = context.WithValue(exchangeCtx, oauth2.HTTPClient, o.httpClient)
 	}
 
-	token, err := o.oauthConfig.Exchange(ctx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
+	token, err := o.oauthConfig.Exchange(exchangeCtx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
 	if err != nil {
 		return err
 	}
