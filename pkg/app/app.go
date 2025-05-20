@@ -173,14 +173,17 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.Default
 
 func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.DefaultValueFunction {
 	callback := func(existingValue interface{}) (interface{}, error) {
+		const multipleAttempts = 3 // three here is chosen based on other places in the application
+		const singleAttempt = 1
+
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
 		if engine.GetConfiguration().GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
-			return 3, nil
+			return multipleAttempts, nil
 		}
-		return 1, nil
+		return singleAttempt, nil
 	}
 	return callback
 }

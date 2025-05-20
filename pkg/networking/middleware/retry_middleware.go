@@ -120,6 +120,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// if retries fail to resolve the issue, we need to unset the locally used error type to not return it from the RoundTripper
 	if errors.Is(finalError, errRetryNecessary) {
+		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", maxAttempts)
 		finalError = nil
 	}
 
