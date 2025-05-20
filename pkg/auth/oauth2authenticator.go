@@ -336,6 +336,43 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 		go o.shutdownServerFunc(srv)
 	})
 
+	err, success := o.serveAndListen(ctx, srv, state, codeChallenge)
+	if err != nil {
+		return err
+	} else if !success {
+		return nil // not a success, but not an error
+	}
+
+	if len(responseError) > 0 {
+		return fmt.Errorf("authentication error: %s", responseError)
+	}
+
+	// check the response state before continuing
+	if state != responseState {
+		return fmt.Errorf("incorrect response state: %s != %s", responseState, state)
+	}
+
+	modifyTokenErr := o.modifyTokenUrl(responseInstance)
+	if modifyTokenErr != nil {
+		return modifyTokenErr
+	}
+
+	// Use the custom HTTP client when requesting a token.
+	exchangeCtx := ctx
+	if o.httpClient != nil {
+		exchangeCtx = context.WithValue(exchangeCtx, oauth2.HTTPClient, o.httpClient)
+	}
+
+	token, err := o.oauthConfig.Exchange(exchangeCtx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
+	if err != nil {
+		return err
+	}
+
+	err = o.persistToken(token)
+	return err
+}
+
+func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Server, state string, codeChallenge string) (error, bool) {
 	// iterate over different known ports if one fails
 	for _, port := range acceptedCallbackPorts {
 		srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
@@ -373,43 +410,17 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
 			if canceled {
-				return nil // No need to error, the user canceled this auth request
+				return nil, false // No need to error, the user canceled this auth request
 			}
 			if timedOut {
-				return errors.New("authentication failed (timeout)")
+				return errors.New("authentication failed (timeout)"), false
 			}
 			timer.Stop()
-			break
+			return nil, true // success
 		}
+		return nil, false // maybe not a success, but we already opened the browser once, so we can't do that again
 	}
-
-	if len(responseError) > 0 {
-		return fmt.Errorf("authentication error: %s", responseError)
-	}
-
-	// check the response state before continuing
-	if state != responseState {
-		return fmt.Errorf("incorrect response state: %s != %s", responseState, state)
-	}
-
-	modifyTokenErr := o.modifyTokenUrl(responseInstance)
-	if modifyTokenErr != nil {
-		return modifyTokenErr
-	}
-
-	// Use the custom HTTP client when requesting a token.
-	exchangeCtx := ctx
-	if o.httpClient != nil {
-		exchangeCtx = context.WithValue(exchangeCtx, oauth2.HTTPClient, o.httpClient)
-	}
-
-	token, err := o.oauthConfig.Exchange(exchangeCtx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
-	if err != nil {
-		return err
-	}
-
-	err = o.persistToken(token)
-	return err
+	return errors.New("authentication failed (no available port)"), false
 }
 
 func writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
