@@ -54,9 +54,13 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 		return existingValue, nil
 	}
 
+	isInteractive := config.GetBool(InteractiveKey)
+
 	repoUrl, err := git.RepoUrlFromDir(config.GetString(configuration.INPUT_DIRECTORY))
-	if err != nil {
-		return "", nil // Question: Should we prompt for this if not found?
+	if err != nil && isInteractive {
+		return "", nil
+	} else if err != nil {
+		return "", err
 	}
 
 	return repoUrl, nil
