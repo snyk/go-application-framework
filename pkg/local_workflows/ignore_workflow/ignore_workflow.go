@@ -29,12 +29,14 @@ const (
 	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "finding-id"
+	findingsIdPromptHelp  = "Enter the Finding ID of the issue you want to ignore.\n"
 	findingsIdDescription = "Finding Id"
 
 	IgnoreIdKey         = "ignore-id"
 	IgnoreIdDescription = "Ignore Id"
 
 	IgnoreTypeKey         = "ignore-type"
+	ignoreTypePromptHelp  = "Enter the ignore type: [not-vulnerable, temporary-ignore, wont-fix].\n"
 	ignoreTypeDescription = "Ignore Type"
 
 	ReasonKey         = "reason"
@@ -44,6 +46,7 @@ const (
 	expirationDescription = "Expiration (YYYY-MM-DD)"
 
 	RemoteRepoUrlKey         = configuration.FLAG_REMOTE_REPO_URL
+	remoteRepoUrlPromptHelp  = "Provide the remote repository URL.\n"
 	remoteRepoUrlDescription = "Remote Repository URL"
 
 	InteractiveKey    = "interactive"
@@ -52,6 +55,12 @@ const (
 	policyAPIVersion = "2024-10-15"
 	policyApiTimeout = time.Minute
 )
+
+var reasonPromptHelpMap = map[string]string{
+	string(policyApi.WontFix):         "Provide a reason for why this issue won't be fixed.\n",
+	string(policyApi.TemporaryIgnore): "Provide a reason for why this issue is temporary ignored.\n",
+	string(policyApi.NotVulnerable):   "Provide a reason for why this issue is not vulnerable.\n",
+}
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
 var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
@@ -130,22 +139,26 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		findingsId, err = promptIfEmpty(findingsId, userInterface, findingsIdDescription, isValidUuid)
+		findingIdPrompt := findingsIdPromptHelp + findingsIdDescription
+		findingsId, err = promptIfEmpty(findingsId, userInterface, findingIdPrompt, isValidUuid)
 		if err != nil {
 			return nil, err
 		}
 
-		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypeDescription, isValidIgnoreType)
+		ignoreTypePrompt := ignoreTypePromptHelp + ignoreTypeDescription
+		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypePrompt, isValidIgnoreType)
 		if err != nil {
 			return nil, err
 		}
 
-		repoUrl, err = promptIfEmpty(repoUrl, userInterface, remoteRepoUrlDescription, isValidRepoUrl)
+		repoUrlPrompt := remoteRepoUrlPromptHelp + remoteRepoUrlDescription
+		repoUrl, err = promptIfEmpty(repoUrl, userInterface, repoUrlPrompt, isValidRepoUrl)
 		if err != nil {
 			return nil, err
 		}
 
-		reason, err = promptIfEmpty(reason, userInterface, reasonDescription, isValidReason)
+		reasonPrompt := reasonPromptHelpMap[ignoreType] + reasonDescription
+		reason, err = promptIfEmpty(reason, userInterface, reasonPrompt, isValidReason)
 		if err != nil {
 			return nil, err
 		}
