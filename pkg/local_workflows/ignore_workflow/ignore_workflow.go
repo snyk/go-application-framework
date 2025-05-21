@@ -90,7 +90,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	interactive := config.GetBool(InteractiveKey)
-	addCreateIgnoreDefaultConfigurationValues(invocationCtx, interactive)
+	addCreateIgnoreDefaultConfigurationValues(invocationCtx)
 
 	userName, err := getUser(invocationCtx)
 	if err != nil {
@@ -130,6 +130,26 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
+		findingsId, err = promptIfEmpty(findingsId, userInterface, findingsIdDescription, isValidUuid)
+		if err != nil {
+			return nil, err
+		}
+
+		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypeDescription, isValidIgnoreType)
+		if err != nil {
+			return nil, err
+		}
+
+		repoUrl, err = promptIfEmpty(repoUrl, userInterface, remoteRepoUrlDescription, isValidRepoUrl)
+		if err != nil {
+			return nil, err
+		}
+
+		reason, err = promptIfEmpty(reason, userInterface, reasonDescription, isValidReason)
+		if err != nil {
+			return nil, err
+		}
+
 		uiErr := userInterface.Output(fmt.Sprintf("👉🏼 Make sure the code containing the issue is committed, "+
 			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, orgUuid.String(), ignoreType)))
 		if uiErr != nil {

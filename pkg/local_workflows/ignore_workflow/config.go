@@ -13,17 +13,16 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext, interactive bool) {
+func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext) {
 	config := invocationCtx.GetConfiguration()
-	userInterface := invocationCtx.GetUserInterface()
 
 	config.AddDefaultValue(RemoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
-		return remoteRepoUrlDefaultFunc(existingValue, config, userInterface, interactive)
+		return remoteRepoUrlDefaultFunc(existingValue, config)
 	})
 
 	config.AddDefaultValue(IgnoreTypeKey, func(existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(IgnoreTypeKey)
-		return defaultFuncWithValidator(existingValue, userInterface, interactive, isSet, ignoreTypeDescription, isValidIgnoreType)
+		return defaultFuncWithValidator(existingValue, isSet, isValidIgnoreType)
 	})
 
 	config.AddDefaultValue(ExpirationKey, func(existingValue interface{}) (interface{}, error) {
@@ -41,16 +40,16 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 
 	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(FindingsIdKey)
-		return defaultFuncWithValidator(existingValue, userInterface, interactive, isSet, findingsIdDescription, isValidUuid)
+		return defaultFuncWithValidator(existingValue, isSet, isValidUuid)
 	})
 
 	config.AddDefaultValue(ReasonKey, func(existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(ReasonKey)
-		return defaultFuncWithValidator(existingValue, userInterface, interactive, isSet, reasonDescription, isValidReason)
+		return defaultFuncWithValidator(existingValue, isSet, isValidReason)
 	})
 }
 
-func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration, userInterface ui.UserInterface, interactive bool) (interface{}, error) {
+func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration) (interface{}, error) {
 	if existingValue != nil && existingValue != "" {
 		return existingValue, nil
 	}
@@ -64,17 +63,14 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 	}
 
 	repoUrl, err := getRepoUrlFromRepo()
-
-	if err != nil && interactive {
-		return userInterface.Input(remoteRepoUrlDescription)
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 
 	return repoUrl, nil
 }
 
-func defaultFuncWithValidator(existingValue interface{}, userInterface ui.UserInterface, interactive bool, isFlagSet bool, inputDescription string, validatorFunc func(interface{}) error) (interface{}, error) {
+func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validatorFunc func(interface{}) error) (interface{}, error) {
 	if isFlagSet {
 		err := validatorFunc(existingValue)
 		if err != nil {
@@ -83,19 +79,24 @@ func defaultFuncWithValidator(existingValue interface{}, userInterface ui.UserIn
 		return existingValue, nil
 	}
 
-	if !interactive {
-		return "", fmt.Errorf("no value provided and interactive flag is false")
+	return "", nil
+}
+
+func promptIfEmpty(value string, userInterface ui.UserInterface, promptText string, validator func(interface{}) error) (string, error) {
+	if value != "" {
+		return value, nil
 	}
 
-	input, err := userInterface.Input(inputDescription)
+	input, err := userInterface.Input(promptText)
 	if err != nil {
 		return "", err
 	}
 
-	err = validatorFunc(input)
+	err = validator(input)
 	if err != nil {
 		return "", err
 	}
+
 	return input, nil
 }
 
@@ -150,4 +151,15 @@ func isValidExpirationDate(input interface{}) error {
 
 	_, parseErr := time.Parse(time.DateOnly, dateStr)
 	return parseErr
+}
+
+func isValidRepoUrl(input interface{}) error {
+	repoUrl, ok := input.(string)
+	if !ok {
+		return fmt.Errorf("invalid repo url")
+	}
+	if repoUrl == "" {
+		return fmt.Errorf("repo url cannot be empty")
+	}
+	return nil
 }
