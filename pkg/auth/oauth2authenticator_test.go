@@ -349,7 +349,7 @@ func Test_Authenticate_CredentialsGrant(t *testing.T) {
 	config.Set(configuration.API_URL, srv.URL)
 
 	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
-	err := authenticator.Authenticate()
+	err := authenticator.Authenticate(context.Background())
 	assert.Nil(t, err)
 
 	token := config.GetString(CONFIG_KEY_OAUTH_TOKEN)
@@ -399,7 +399,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate()
+		err := authenticator.Authenticate(context.Background())
 		assert.Nil(t, err)
 
 		assert.Equal(t, "{\"access_token\":\"a\",\"token_type\":\"b\",\"expiry\":\"0001-01-01T00:00:00Z\"}", config.GetString(CONFIG_KEY_OAUTH_TOKEN))
@@ -425,7 +425,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate()
+		err := authenticator.Authenticate(context.Background())
 		assert.NoError(t, err)
 		assert.Equal(t, "{\"access_token\":\"a\",\"token_type\":\"b\",\"expiry\":\"0001-01-01T00:00:00Z\"}", config.GetString(CONFIG_KEY_OAUTH_TOKEN))
 	})
@@ -449,7 +449,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate()
+		err := authenticator.Authenticate(context.Background())
 		assert.ErrorContains(t, err, "invalid host")
 	})
 
@@ -471,7 +471,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate()
+		err := authenticator.Authenticate(context.Background())
 		assert.ErrorContains(t, err, "incorrect response state")
 	})
 }

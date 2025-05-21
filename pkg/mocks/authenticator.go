@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	http "net/http"
 	reflect "reflect"
 
@@ -49,17 +50,17 @@ func (mr *MockAuthenticatorMockRecorder) AddAuthenticationHeader(request interfa
 }
 
 // Authenticate mocks base method.
-func (m *MockAuthenticator) Authenticate() error {
+func (m *MockAuthenticator) Authenticate(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Authenticate")
+	ret := m.ctrl.Call(m, "Authenticate", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Authenticate indicates an expected call of Authenticate.
-func (mr *MockAuthenticatorMockRecorder) Authenticate() *gomock.Call {
+func (mr *MockAuthenticatorMockRecorder) Authenticate(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authenticate", reflect.TypeOf((*MockAuthenticator)(nil).Authenticate))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authenticate", reflect.TypeOf((*MockAuthenticator)(nil).Authenticate), ctx)
 }
 
 // IsSupported mocks base method.

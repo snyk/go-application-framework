@@ -262,20 +262,19 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) error {
 	return nil
 }
 
-func (o *oAuth2Authenticator) Authenticate() error {
+func (o *oAuth2Authenticator) Authenticate(ctx context.Context) error {
 	var err error
 
 	if o.grantType == ClientCredentialsGrant {
-		err = o.authenticateWithClientCredentialsGrant()
+		err = o.authenticateWithClientCredentialsGrant(ctx)
 	} else {
-		err = o.authenticateWithAuthorizationCode()
+		err = o.authenticateWithAuthorizationCode(ctx)
 	}
 
 	return err
 }
 
-func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant() error {
-	ctx := context.Background()
+func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant(ctx context.Context) error {
 	config := getOAuthConfigurationClientCredentials(o.oauthConfig)
 
 	// Use the custom HTTP client when requesting a token.
@@ -293,7 +292,7 @@ func (o *oAuth2Authenticator) authenticateWithClientCredentialsGrant() error {
 	return err
 }
 
-func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
+func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Context) error {
 	var responseCode string
 	var responseState string
 	var responseError string
@@ -308,7 +307,6 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	}
 	state := string(stateBytes)
 	codeChallenge := getCodeChallenge(verifier)
-	ctx := context.Background()
 
 	if o.headless {
 		return errors.New("headless mode not supported")
@@ -323,7 +321,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 	mux.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
-			if writeCallbackErrorResponse(w, r.URL.Query(), responseError) {
+			if o.writeCallbackErrorResponse(w, r.URL.Query(), responseError) {
 				return
 			}
 		} else {
@@ -331,12 +329,58 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
 			responseInstance = html.EscapeString(r.URL.Query().Get("instance"))
+			o.logger.Debug().
+				Str("responseCode", responseCode).
+				Str("responseState", responseState).
+				Str("responseInstance", responseInstance).
+				Msg("OAuth2 response callback received, re-directing user to /authenticated")
 			w.Header().Add("Location", appUrl+"/authenticated?type=oauth")
 			w.WriteHeader(http.StatusMovedPermanently)
 		}
 
 		go o.shutdownServerFunc(srv)
 	})
+
+	err, success := o.serveAndListen(ctx, srv, state, codeChallenge)
+	if err != nil {
+		return err
+	} else if !success {
+		return nil // not a success, but not an error
+	}
+
+	if len(responseError) > 0 {
+		return fmt.Errorf("authentication error: %s", responseError)
+	}
+
+	// check the response state before continuing
+	if state != responseState {
+		return fmt.Errorf("incorrect response state: %s != %s", responseState, state)
+	}
+
+	modifyTokenErr := o.modifyTokenUrl(responseInstance)
+	if modifyTokenErr != nil {
+		return modifyTokenErr
+	}
+
+	// Use the custom HTTP client when requesting a token.
+	exchangeCtx := ctx
+	if o.httpClient != nil {
+		exchangeCtx = context.WithValue(exchangeCtx, oauth2.HTTPClient, o.httpClient)
+	}
+
+	token, err := o.oauthConfig.Exchange(exchangeCtx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
+	if err != nil {
+		return err
+	}
+
+	err = o.persistToken(token)
+	return err
+}
+
+func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Server, state string, codeChallenge string) (error, bool) {
+	// Timeout used to cancel listening for an auth response
+	ctx, cancelFunc := context.WithTimeout(ctx, TIMEOUT_SECONDS)
+	defer cancelFunc()
 
 	// iterate over different known ports if one fails
 	for _, port := range acceptedCallbackPorts {
@@ -359,50 +403,40 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode() error {
 		// launch browser
 		go o.openBrowserFunc(authCodeUrl)
 
+		// Handle context cancellation
 		timedOut := false
-		timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
-			timedOut = true
+		canceled := false
+		go func() {
+			<-ctx.Done()
+			switch err := ctx.Err(); {
+			case errors.Is(err, context.DeadlineExceeded):
+				timedOut = true
+			case errors.Is(err, context.Canceled):
+				canceled = true
+			}
 			o.shutdownServerFunc(srv)
-		})
+		}()
+
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
-			if timedOut {
-				return errors.New("authentication failed (timeout)")
+			if canceled {
+				o.logger.Info().Msg("OAuth2 request canceled.")
+				return nil, false // No need to error, the user canceled this auth request
 			}
-			timer.Stop()
-			break
+			if timedOut {
+				o.logger.Warn().Msg("OAuth2 request timed out.")
+				return errors.New("authentication failed (timeout)"), false
+			}
+			return nil, true // success
 		}
+		o.logger.Error().Err(listenErr).Msg("OAuth2 unexpected http.Server.Serve() error.")
+		return nil, false // maybe not a success, but we already opened the browser once, so we can't do that again
 	}
-
-	if len(responseError) > 0 {
-		return fmt.Errorf("authentication error: %s", responseError)
-	}
-
-	// check the response state before continuing
-	if state != responseState {
-		return fmt.Errorf("incorrect response state: %s != %s", responseState, state)
-	}
-
-	modifyTokenErr := o.modifyTokenUrl(responseInstance)
-	if modifyTokenErr != nil {
-		return modifyTokenErr
-	}
-
-	// Use the custom HTTP client when requesting a token.
-	if o.httpClient != nil {
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, o.httpClient)
-	}
-
-	token, err := o.oauthConfig.Exchange(ctx, responseCode, oauth2.SetAuthURLParam("code_verifier", string(verifier)))
-	if err != nil {
-		return err
-	}
-
-	err = o.persistToken(token)
-	return err
+	o.logger.Error().Msg("OAuth2 had no available ports to use.")
+	return errors.New("authentication failed (no available port)"), false
 }
 
-func writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
+func (o *oAuth2Authenticator) writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
 	tmpl := template.New("")
 	tmpl, tmplError := tmpl.Parse(errorResponsePage)
 	if tmplError != nil {
@@ -416,6 +450,11 @@ func writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseErr
 		Reason:      responseError,
 		Description: html.EscapeString(q.Get("error_description")),
 	}
+
+	o.logger.Error().
+		Str("responseError", responseError).
+		Str("responseErrorDescription", data.Description).
+		Msg("Received an error in the OAuth2 callback request.")
 
 	tmplError = tmpl.Execute(w, data)
 
