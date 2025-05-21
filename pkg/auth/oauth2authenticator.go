@@ -378,6 +378,10 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 }
 
 func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Server, state string, codeChallenge string) (error, bool) {
+	// Timeout used to cancel listening for an auth response
+	ctx, cancelFunc := context.WithTimeout(ctx, TIMEOUT_SECONDS)
+	defer cancelFunc()
+
 	// iterate over different known ports if one fails
 	for _, port := range acceptedCallbackPorts {
 		srv.Addr = fmt.Sprintf("%s:%d", CALLBACK_HOSTNAME, port)
@@ -400,18 +404,19 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 		go o.openBrowserFunc(authCodeUrl)
 
 		// Handle context cancellation
+		timedOut := false
 		canceled := false
 		go func() {
 			<-ctx.Done()
-			canceled = true
+			switch err := ctx.Err(); {
+			case errors.Is(err, context.DeadlineExceeded):
+				timedOut = true
+			case errors.Is(err, context.Canceled):
+				canceled = true
+			}
 			o.shutdownServerFunc(srv)
 		}()
 
-		timedOut := false
-		timer := time.AfterFunc(TIMEOUT_SECONDS, func() {
-			timedOut = true
-			o.shutdownServerFunc(srv)
-		})
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
 			if canceled {
@@ -422,7 +427,6 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 				o.logger.Warn().Msg("OAuth2 request timed out.")
 				return errors.New("authentication failed (timeout)"), false
 			}
-			timer.Stop()
 			return nil, true // success
 		}
 		o.logger.Error().Err(listenErr).Msg("OAuth2 unexpected http.Server.Serve() error.")
