@@ -54,17 +54,9 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 		return existingValue, nil
 	}
 
-	getRepoUrlFromRepo := func() (string, error) {
-		repoUrl, err := git.RepoUrlFromDir(config.GetString(configuration.INPUT_DIRECTORY))
-		if err != nil {
-			return "", err
-		}
-		return repoUrl, nil
-	}
-
-	repoUrl, err := getRepoUrlFromRepo()
+	repoUrl, err := git.RepoUrlFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	if err != nil {
-		return nil, err
+		return "", nil // Question: Should we prompt for this if not found?
 	}
 
 	return repoUrl, nil
@@ -91,6 +83,7 @@ func promptIfEmpty(value string, userInterface ui.UserInterface, promptText stri
 	if err != nil {
 		return "", err
 	}
+	userInterface.Output("") // new line between prompts
 
 	err = validator(input)
 	if err != nil {
