@@ -4,6 +4,7 @@ package testapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
 
 type Config struct {
@@ -18,6 +21,16 @@ type Config struct {
 	PollTimeout  time.Duration // Max total time for polling. Default: 30 min.
 	APIVersion   string
 }
+
+// Predefined errors for findings operations
+var (
+	ErrInvalidStateForFindings = errors.New("cannot fetch findings: test ID or internal handle is missing")
+	ErrFindingsFetchCanceled   = errors.New("findings fetch operation was canceled")
+	ErrFindingsPageRequest     = errors.New("failed to request a page of findings")
+	ErrFindingsPageResponse    = errors.New("unexpected API response when fetching findings page")
+	ErrFindingsPageData        = errors.New("invalid data in findings page API response")
+	ErrFindingsNextPageCursor  = errors.New("failed to determine next findings page cursor from API response")
+)
 
 type client struct {
 	lowLevelClient ClientWithResponsesInterface
@@ -38,7 +51,7 @@ type testHandle struct {
 
 	runOnce  sync.Once
 	doneChan chan struct{}
-	mu       sync.Mutex // protects result and err
+	mu       sync.Mutex // protects result
 	result   *Result
 
 	// final test ID once discovered during polling
@@ -52,6 +65,7 @@ type TestClient interface {
 const (
 	DefaultPollInterval = 2 * time.Second
 	MinPollInterval     = 1 * time.Second
+	MaxFindingsPerPage  = 100
 )
 
 // StartTestParams defines parameters for the high-level StartTest function.
@@ -139,12 +153,12 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 
 	// Extract and return the Job ID from the 202 Accepted response
 	if resp.ApplicationvndApiJSON202 == nil {
-		return nil, fmt.Errorf("received status %d instead of 202 with job ID", resp.StatusCode())
+		return nil, handleUnexpectedResponse(resp.StatusCode(), resp.Body, "creating test", orgUUID.String())
 	}
 
 	jobID := resp.ApplicationvndApiJSON202.Data.Id
 	if jobID == uuid.Nil {
-		return nil, fmt.Errorf("received status %d but job ID in response is nil", resp.StatusCode())
+		return nil, fmt.Errorf("create test: job ID in response is nil (status %d)", resp.StatusCode())
 	}
 
 	// Create and return the test handle
@@ -159,26 +173,28 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 }
 
 // Poll the test to completion and return its status
+// Returns nil on subsequent calls.
 func (h *testHandle) Wait(ctx context.Context) error {
 	errChan := make(chan error, 1) // hold a single error from the wait worker
+	var firstRun bool
 
 	h.runOnce.Do(func() {
 		defer close(h.doneChan)
 		var localErr error
+		firstRun = true
 
 		finalTestID, err := h.pollJobToCompletion(ctx)
 		h.finalTestID = finalTestID
 		// Store the error from polling, but continue if got a test ID anyway
 		if err != nil {
-			localErr = fmt.Errorf("polling job %s failed: %w", h.jobID, err)
+			localErr = fmt.Errorf("polling job failed: %w", err)
 			errChan <- localErr
 			return
 		}
-		// h.finalTestID is already set if err is nil
 
 		result, err := h.fetchResultStatus(ctx, *finalTestID)
 		if err != nil {
-			localErr = fmt.Errorf("failed to fetch final test status for %s: %w", *finalTestID, err)
+			localErr = fmt.Errorf("failed to fetch final test status: %w", err)
 			errChan <- localErr
 			return
 		}
@@ -186,6 +202,10 @@ func (h *testHandle) Wait(ctx context.Context) error {
 		h.setResult(result)
 		errChan <- nil
 	})
+
+	if !firstRun {
+		return fmt.Errorf("wait operation was already initiated; result was/will be returned by the first call")
+	}
 
 	// Wait until the polling goroutine (started by runOnce.Do) finishes.
 	<-h.doneChan
@@ -199,38 +219,54 @@ func handleJobInProgress(resp *GetJobResponse, jobID uuid.UUID) (stopPolling boo
 	if resp.ApplicationvndApiJSON200 != nil {
 		status := resp.ApplicationvndApiJSON200.Data.Attributes.Status
 		if status == Errored {
-			return true, fmt.Errorf("job %s reported status 'errored'", jobID)
+			return true, fmt.Errorf("job reported status 'errored' (jobID: %s)", jobID)
 		}
 	}
 	return false, nil
 }
 
 // Process a 303 See Other response from GetJob, extracting final Test ID from the Relationships.Test field.
-// Returns testID on success, or an error if testID is not found.
+// Returns testID on success, or an error if testID is not found. (jobID: %s for context)
 func handleJobRedirect(resp *GetJobResponse, jobID uuid.UUID) (*uuid.UUID, error) {
 	if resp.ApplicationvndApiJSON303 != nil && resp.ApplicationvndApiJSON303.Data.Relationships != nil {
 		testID := resp.ApplicationvndApiJSON303.Data.Relationships.Test.Data.Id
 		if testID == uuid.Nil {
-			return nil, fmt.Errorf("job %s completed (303) but the final Test ID was missing in the response", jobID)
+			return nil, fmt.Errorf("job completed (303) but the final Test ID was missing in the response (jobID: %s)", jobID)
 		}
 		return &testID, nil
 	} else {
-		return nil, fmt.Errorf("job %s completed (303) but the final Test ID path was incomplete in the response", jobID)
+		return nil, fmt.Errorf("job completed (303) but the final Test ID path was incomplete in the response (jobID: %s)", jobID)
 	}
 }
 
-// Create a detailed error message for unexpected HTTP statuses during polling.
-func formatUnexpectedJobStatusError(resp *GetJobResponse, jobID uuid.UUID) error {
-	errorBodyBytes := resp.Body
-	errMsg := fmt.Sprintf("unexpected status code %d polling job %s", resp.StatusCode(), jobID)
-	// Attempt to get more detail from structured error response
-	if resp.ApplicationvndApiJSON400 != nil && len(resp.ApplicationvndApiJSON400.Errors) > 0 {
-		errMsg = fmt.Sprintf("%s: %s", errMsg, resp.ApplicationvndApiJSON400.Errors[0].Detail)
-	} else if len(errorBodyBytes) > 0 {
-		// Fallback to raw body if no structured error
-		errMsg = fmt.Sprintf("%s, response: %s", errMsg, string(errorBodyBytes))
+func withUnexpected() snyk_errors.Option {
+	return func(e *snyk_errors.Error) {
+		e.Classification = "UNEXPECTED"
 	}
-	return fmt.Errorf("%s", errMsg)
+}
+
+// handleUnexpectedResponse creates a detailed error from an HTTP response,
+// attempting to parse Snyk-specific errors from the body.
+// operationContext describes the action being performed (e.g., "creating test").
+// identifier (optional) provides a specific ID (e.g., OrgID, JobID, TestID).
+func handleUnexpectedResponse(statusCode int, body []byte, operationContext string, identifier string) error {
+	detailMsg := fmt.Sprintf("unexpected response %s (status: %d)", operationContext, statusCode)
+	if identifier != "" {
+		detailMsg = fmt.Sprintf("unexpected response %s for ID %s (status: %d)", operationContext, identifier, statusCode)
+	}
+	baseErr := snyk.NewBadRequestError(detailMsg, withUnexpected())
+
+	if len(body) > 0 {
+		snykErrorList, parseErr := snyk_errors.FromJSONAPIErrorBytes(body)
+		if parseErr == nil && len(snykErrorList) > 0 {
+			errsToJoin := []error{baseErr}
+			for i := range snykErrorList {
+				errsToJoin = append(errsToJoin, snykErrorList[i])
+			}
+			return errors.Join(errsToJoin...)
+		}
+	}
+	return baseErr
 }
 
 // Query the job endpoint until we're redirected to its 'related' link containing results
@@ -243,12 +279,13 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("context canceled while polling job %s: %w", h.jobID, ctx.Err())
+			//TODO Operation Canceled - new error catalog error
+			return nil, fmt.Errorf("context canceled while polling job: %w", ctx.Err())
 		case <-ticker.C:
 			resp, err := h.client.lowLevelClient.GetJobWithResponse(ctx, h.orgID, h.jobID, getJobParams)
 			if err != nil {
 				// Consider whether network errors should be retried
-				return nil, fmt.Errorf("polling job %s request failed: %w", h.jobID, err)
+				return nil, fmt.Errorf("polling job request failed: %w", err)
 			}
 
 			switch resp.StatusCode() {
@@ -273,8 +310,7 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 				continue
 
 			default:
-				// Unexpected status code
-				return nil, formatUnexpectedJobStatusError(resp, h.jobID)
+				return nil, handleUnexpectedResponse(resp.StatusCode(), resp.Body, "polling job", h.jobID.String())
 			}
 		}
 	}
@@ -287,11 +323,11 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (*
 	getTestParams := &GetTestParams{Version: h.client.config.APIVersion}
 	resp, err := h.client.lowLevelClient.GetTestWithResponse(ctx, h.orgID, testID, getTestParams)
 	if err != nil {
-		return nil, fmt.Errorf("get test %s request failed: %w", testID, err)
+		return nil, fmt.Errorf("get test request failed (testID: %s): %w", testID, err)
 	}
 
 	if resp.ApplicationvndApiJSON200 == nil {
-		return nil, fmt.Errorf("test %s had unexpected status %d or wrong response body format", testID, resp.StatusCode())
+		return nil, handleUnexpectedResponse(resp.StatusCode(), resp.Body, "fetching test result", testID.String())
 	}
 
 	testData := resp.ApplicationvndApiJSON200.Data
@@ -300,7 +336,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (*
 		TestID:           testData.Id,
 		EffectiveSummary: attrs.EffectiveSummary,
 		RawSummary:       attrs.RawSummary,
-		handle:           h, // Populate the handle field
+		handle:           h,
 	}
 
 	if attrs.State != nil {
@@ -346,11 +382,8 @@ func (h *testHandle) setResult(status *Result) {
 //     'resultFindings' may be partial.
 //   - err: Any error encountered during the fetching process.
 func (r *Result) Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error) {
-	if r.TestID == nil {
-		return nil, false, fmt.Errorf("TestID is nil, cannot fetch findings")
-	}
-	if r.handle == nil {
-		return nil, false, fmt.Errorf("internal error: handle not set in Result, cannot access client/orgID for findings")
+	if r.TestID == nil || r.handle == nil {
+		return nil, false, ErrInvalidStateForFindings
 	}
 
 	r.findingsOnce.Do(func() {
@@ -362,8 +395,9 @@ func (r *Result) Findings(ctx context.Context) (resultFindings []FindingData, co
 	return r.findings, r.findingsComplete, r.findingsError
 }
 
-// fetchFindingsInternal is an unexported method on Result that contains the actual
-// pagination and fetching logic.
+// Logic to fetch Findings with pagination.
+// Returns full or partial findings, true if all pages of findings were successfully fetched,
+// and an error if one occurred.
 func (r *Result) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool, error) {
 	if r.TestID == nil {
 		return nil, false, fmt.Errorf("cannot fetch findings, TestID is nil in internal method")
@@ -374,13 +408,14 @@ func (r *Result) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool
 
 	listParams := &ListFindingsParams{
 		Version: r.handle.client.config.APIVersion,
-		Limit:   ptr(int8(100)), // Use max limit
+		Limit:   ptr(int8(MaxFindingsPerPage)),
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			return allFindings, false, fmt.Errorf("context canceled while fetching findings for test %s: %w", testID, ctx.Err())
+			//TODO Operation Canceled - new error catalog error
+			return r.handleFindingsError(ErrFindingsFetchCanceled, allFindings)
 		default:
 			// Continue fetching
 		}
@@ -388,10 +423,10 @@ func (r *Result) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool
 		listParams.StartingAfter = startingAfter
 		resp, err := r.handle.client.lowLevelClient.ListFindingsWithResponse(ctx, r.handle.orgID, testID, listParams)
 		if err != nil {
-			return r.handleFindingsError(fmt.Errorf("failed to list findings for test %s (page starting after %v): %w", testID, startingAfter, err), allFindings)
+			return r.handleFindingsError(fmt.Errorf("%w: %w", ErrFindingsPageRequest, err), allFindings)
 		}
 
-		pageData, nextCursor, err := r.processFindingsPage(resp, testID, startingAfter)
+		pageData, nextCursor, err := r.processFindingsPage(resp)
 		if err != nil {
 			return r.handleFindingsError(err, allFindings)
 		}
@@ -409,56 +444,66 @@ func (r *Result) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool
 
 // processFindingsPage processes a single page of findings response.
 // It returns the data from the page, the next cursor, or an error.
-func (r *Result) processFindingsPage(resp *ListFindingsResponse, testID uuid.UUID, currentStartingAfter *string) ([]FindingData, *string, error) {
+func (r *Result) processFindingsPage(resp *ListFindingsResponse) ([]FindingData, *string, error) {
 	if resp.ApplicationvndApiJSON200 == nil {
-		return nil, nil, fmt.Errorf("unexpected status %d or wrong response body when fetching findings for test %s (page starting after %v)", resp.StatusCode(), testID, currentStartingAfter)
+		return nil, nil, ErrFindingsPageResponse
 	}
 
 	responseData := resp.ApplicationvndApiJSON200
 	if responseData.Data == nil && responseData.Links.Next != nil {
-		return nil, nil, fmt.Errorf("response body has nil Data but a 'next' link for test %s (page starting after %v)", testID, currentStartingAfter)
+		// This indicates an inconsistent API response (e.g., claims there's a next page but provides no data for current)
+		return nil, nil, ErrFindingsPageData
 	}
 
 	if responseData.Links.Next == nil {
 		return responseData.Data, nil, nil // No more pages
 	}
 
-	nextCursor, err := r.extractNextCursor(responseData.Links.Next, testID)
+	nextCursor, err := r.extractNextCursor(responseData.Links.Next)
 	if err != nil {
-		return responseData.Data, nil, err // Return data we got so far from this page, plus the error
+		return responseData.Data, nil, err // fetch error but potentially with Findings
 	}
 
 	return responseData.Data, nextCursor, nil
 }
 
 // extractNextCursor parses the 'next' link and returns the 'starting_after' cursor.
-func (r *Result) extractNextCursor(nextLink *IoSnykApiCommonLinkProperty, testID uuid.UUID) (*string, error) {
+// Any failure in this function will return ErrFindingsNextPageCursor.
+func (r *Result) extractNextCursor(nextLink *IoSnykApiCommonLinkProperty) (*string, error) {
 	if nextLink == nil {
-		return nil, fmt.Errorf("cannot extract next cursor: nextLink is nil for test %s", testID)
+		return nil, ErrFindingsNextPageCursor
 	}
 
-	nextLinkStr, errLinkStr := nextLink.AsIoSnykApiCommonLinkString()
-	if errLinkStr != nil {
+	var nextLinkStr string
+	linkStr, errLinkStr := nextLink.AsIoSnykApiCommonLinkString()
+	if errLinkStr == nil {
+		nextLinkStr = linkStr
+	} else {
 		linkObj, errObj := nextLink.AsIoSnykApiCommonLinkObject()
 		if errObj != nil {
-			return nil, fmt.Errorf("failed to parse 'next' link as string or object for test %s: %w / %w", testID, errLinkStr, errObj)
+			// Failed to parse as string or object
+			return nil, ErrFindingsNextPageCursor
 		}
 		nextLinkStr = linkObj.Href
 	}
 
+	if nextLinkStr == "" { // Ensure Href was not empty if it was an object
+		return nil, ErrFindingsNextPageCursor
+	}
+
 	parsedNext, errParse := url.Parse(nextLinkStr)
 	if errParse != nil {
-		return nil, fmt.Errorf("failed to parse next link URL '%s' for test %s: %w", nextLinkStr, testID, errParse)
+		return nil, ErrFindingsNextPageCursor
 	}
 
 	cursor := parsedNext.Query().Get("starting_after")
 	if cursor == "" {
-		return nil, fmt.Errorf("next link present for test %s but 'starting_after' cursor is missing or empty in URL '%s'", testID, nextLinkStr)
+		return nil, ErrFindingsNextPageCursor
 	}
 	return &cursor, nil
 }
 
-// handleFindingsError is a helper to consistently format errors and decide whether to return partial results.
+// Helper to consistently format errors and decide whether to return partial results.
 func (r *Result) handleFindingsError(err error, partialFindings []FindingData) ([]FindingData, bool, error) {
 	if len(partialFindings) > 0 {
 		return partialFindings, false, fmt.Errorf("%w, returning partial results", err)

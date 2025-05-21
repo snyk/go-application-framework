@@ -2,6 +2,7 @@ package testapi_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
@@ -175,9 +177,14 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 	handle, err := testClient.StartTest(ctx, params)
 
 	// Assert - check the 400 err
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, handle)
-	assert.Contains(t, err.Error(), "received status 400 instead of 202 with job ID")
+	assert.Contains(t, err.Error(), "Client request cannot be processed")
+
+	var sErr snyk_errors.Error
+	require.True(t, errors.As(err, &sErr))
+	assert.Contains(t, sErr.Detail, "unexpected response creating test")
+	assert.Contains(t, sErr.Detail, "status: 400")
 }
 
 // Calling StartTest with a non-listening server returns an error
@@ -479,8 +486,8 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 
 	// Assert
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), fmt.Sprintf("job %s reported status 'errored'", jobID))
-	assert.Contains(t, err.Error(), fmt.Sprintf("polling job %s failed", jobID))
+	assert.Contains(t, err.Error(), fmt.Sprintf("job reported status 'errored' (jobID: %s)", jobID))
+	assert.Contains(t, err.Error(), "polling job failed")
 	assert.Nil(t, result)
 	assert.GreaterOrEqual(t, pollCount.Load(), int32(2))
 }
@@ -621,8 +628,12 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 
 	// Assert - Wait returns an error
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to fetch final test status")
-	assert.Contains(t, err.Error(), "had unexpected status 404")
+	assert.Contains(t, err.Error(), "failed to fetch final test status: Client request cannot be processed")
+
+	var sErr snyk_errors.Error
+	require.True(t, errors.As(err, &sErr))
+	assert.Contains(t, sErr.Detail, "fetching test result")
+	assert.Contains(t, sErr.Detail, "status: 404")
 	assert.Nil(t, result)
 	assert.GreaterOrEqual(t, pollCount.Load(), int32(2))
 }
