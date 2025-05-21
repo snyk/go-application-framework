@@ -94,13 +94,15 @@ func Test_getIgnoreRequestDetailsStructure(t *testing.T) {
 	assert.NoError(t, err)
 	userName := "test-user"
 	ignoreType := "wont-fix"
-	ordId := uuid.New().String()
-	result := getIgnoreRequestDetailsStructure(&expireDate, userName, ordId, ignoreType)
+	reason := "Test reason"
+	orgName := "test-org"
+	result := getIgnoreRequestDetailsStructure(&expireDate, userName, orgName, ignoreType, reason)
 
 	assert.Contains(t, result, "2025-01-01")
 	assert.Contains(t, result, userName)
 	assert.Contains(t, result, ignoreType)
-	assert.Contains(t, result, ordId)
+	assert.Contains(t, result, orgName)
+	assert.Contains(t, result, reason)
 }
 
 func Test_validIgnoreType(t *testing.T) {
