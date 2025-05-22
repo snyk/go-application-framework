@@ -239,34 +239,48 @@ func handleJobRedirect(resp *GetJobResponse, jobID uuid.UUID) (*uuid.UUID, error
 	}
 }
 
-func withUnexpected() snyk_errors.Option {
+// Modify error catalog entry with an unexpected status code
+func asUnexpected(statusCode int) snyk_errors.Option {
 	return func(e *snyk_errors.Error) {
 		e.Classification = "UNEXPECTED"
+		e.StatusCode = statusCode
 	}
 }
 
-// handleUnexpectedResponse creates a detailed error from an HTTP response,
-// attempting to parse Snyk-specific errors from the body.
-// operationContext describes the action being performed (e.g., "creating test").
-// identifier (optional) provides a specific ID (e.g., OrgID, JobID, TestID).
-func handleUnexpectedResponse(statusCode int, body []byte, operationContext string, identifier string) error {
-	detailMsg := fmt.Sprintf("unexpected response %s (status: %d)", operationContext, statusCode)
-	if identifier != "" {
-		detailMsg = fmt.Sprintf("unexpected response %s for ID %s (status: %d)", operationContext, identifier, statusCode)
+// Modify error catalog entry to be a warning with no HTTP status (issued locally)
+func asCanceled() snyk_errors.Option {
+	return func(e *snyk_errors.Error) {
+		e.StatusCode = 0
+		e.Level = "warn"
 	}
-	baseErr := snyk.NewBadRequestError(detailMsg, withUnexpected())
+}
 
+// Combine remote errors from the JSON body, if present. Otherwise return an unexpected error with the given status code.
+func handleUnexpectedResponse(statusCode int, body []byte, operationContext string, identifier string) error {
 	if len(body) > 0 {
 		snykErrorList, parseErr := snyk_errors.FromJSONAPIErrorBytes(body)
 		if parseErr == nil && len(snykErrorList) > 0 {
-			errsToJoin := []error{baseErr}
+			errsToJoin := []error{}
 			for i := range snykErrorList {
 				errsToJoin = append(errsToJoin, snykErrorList[i])
 			}
 			return errors.Join(errsToJoin...)
 		}
 	}
-	return baseErr
+
+	detailMsg := fmt.Sprintf("unexpected response %s (status: %d)", operationContext, statusCode)
+	if identifier != "" {
+		detailMsg = fmt.Sprintf("unexpected response %s for ID %s (status: %d)", operationContext, identifier, statusCode)
+	}
+	return snyk.NewBadRequestError(detailMsg, asUnexpected(statusCode))
+}
+
+func contextCanceledError(operationDescription string, contextError error) error {
+	detailMsg := operationDescription
+	if contextError != nil {
+		detailMsg = fmt.Sprintf("%s: %s", detailMsg, contextError.Error())
+	}
+	return snyk.NewBadRequestError(detailMsg, asCanceled())
 }
 
 // Query the job endpoint until we're redirected to its 'related' link containing results
@@ -279,8 +293,7 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 	for {
 		select {
 		case <-ctx.Done():
-			//TODO Operation Canceled - new error catalog error
-			return nil, fmt.Errorf("context canceled while polling job: %w", ctx.Err())
+			return nil, contextCanceledError("context canceled while polling job", ctx.Err())
 		case <-ticker.C:
 			resp, err := h.client.lowLevelClient.GetJobWithResponse(ctx, h.orgID, h.jobID, getJobParams)
 			if err != nil {
@@ -414,8 +427,8 @@ func (r *Result) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool
 	for {
 		select {
 		case <-ctx.Done():
-			//TODO Operation Canceled - new error catalog error
-			return r.handleFindingsError(ErrFindingsFetchCanceled, allFindings)
+			contextErr := contextCanceledError(ErrFindingsFetchCanceled.Error(), ctx.Err())
+			return r.handleFindingsError(contextErr, allFindings)
 		default:
 			// Continue fetching
 		}

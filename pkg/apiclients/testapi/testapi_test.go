@@ -179,12 +179,12 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 	// Assert - check the 400 err
 	require.Error(t, err)
 	assert.Nil(t, handle)
-	assert.Contains(t, err.Error(), "Client request cannot be processed")
 
 	var sErr snyk_errors.Error
 	require.True(t, errors.As(err, &sErr))
-	assert.Contains(t, sErr.Detail, "unexpected response creating test")
-	assert.Contains(t, sErr.Detail, "status: 400")
+	assert.Contains(t, sErr.Detail, "Invalid subject provided")
+	assert.Equal(t, "SNYK-TEST-4001", sErr.ErrorCode)
+	assert.Equal(t, 400, sErr.StatusCode)
 }
 
 // Calling StartTest with a non-listening server returns an error
