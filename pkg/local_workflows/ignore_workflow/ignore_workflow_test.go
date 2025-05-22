@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -94,13 +95,15 @@ func Test_getIgnoreRequestDetailsStructure(t *testing.T) {
 	assert.NoError(t, err)
 	userName := "test-user"
 	ignoreType := "wont-fix"
-	ordId := uuid.New().String()
-	result := getIgnoreRequestDetailsStructure(&expireDate, userName, ordId, ignoreType)
+	reason := "Test reason"
+	orgName := "test-org"
+	result := getIgnoreRequestDetailsStructure(&expireDate, userName, orgName, ignoreType, reason)
 
 	assert.Contains(t, result, "2025-01-01")
 	assert.Contains(t, result, userName)
 	assert.Contains(t, result, ignoreType)
-	assert.Contains(t, result, ordId)
+	assert.Contains(t, result, orgName)
+	assert.Contains(t, result, reason)
 }
 
 func Test_validIgnoreType(t *testing.T) {
@@ -329,5 +332,265 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
 		assert.NotNil(t, err, "Should return an error when IAW FF is disabled")
 		assert.Nil(t, result, "result should be nil when IAW FF is disabled")
+	})
+}
+
+func getSuccessfulPolicyResponseForInteractive(policyIdStr, findingId, ignoreType, reason, userEmail string, expiration *time.Time) string {
+	expirationStr := "null"
+	if expiration != nil {
+		expirationStr = `"` + expiration.Format(time.RFC3339) + `"`
+	}
+	return fmt.Sprintf(`{
+      "data": {
+        "id": "%s",
+        "type": "policy",
+        "attributes": {
+          "action": {
+            "data": {
+              "expires": %s,
+              "ignore_type": "%s",
+              "reason": "%s"
+            },
+			"created_at": "2024-01-01T00:00:00Z",
+			"updated_at": "2024-01-01T00:00:00Z"
+          },
+          "action_type": "%s",
+          "conditions_group": {
+            "conditions": [
+              {
+                "field": "%s",
+                "operator": "%s",
+                "value": "%s"
+              }
+            ],
+            "logical_operator": "%s"
+          },
+          "created_by": {
+            "name": "Test User",
+            "email": "%s"
+          },
+          "review": "%s",
+		  "name": "Generated Policy"
+        }
+    }
+}`, policyIdStr, expirationStr, ignoreType, reason,
+		policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, findingId,
+		policyApi.And, userEmail, policyApi.PolicyReviewPending)
+}
+
+func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiStatusCode int) (*mocks.MockInvocationContext, *mocks.MockUserInterface) {
+	t.Helper()
+
+	logger := zerolog.Logger{}
+	config := configuration.New()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+	config.Set(configuration.ORGANIZATION, uuid.New().String())
+	config.Set(configuration.FF_IAW_ENABLED, true)
+	config.Set(InteractiveKey, true) // Always interactive
+	config.Set(EnrichResponseKey, true)
+	config.Set(configuration.ORGANIZATION_SLUG, "some-org")
+	tempDir := t.TempDir()
+	config.Set(configuration.INPUT_DIRECTORY, tempDir) // no inferred remote url
+
+	ctrl := gomock.NewController(t)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	mockUserInterface := mocks.NewMockUserInterface(ctrl)
+	mockEngine := mocks.NewMockEngine(ctrl)
+
+	mockUserInterface.EXPECT().Output(gomock.Any()).Return(nil).AnyTimes()
+
+	httpClient := localworkflows.NewTestClient(func(req *http.Request) *http.Response {
+		return &http.Response{
+			StatusCode: mockApiStatusCode,
+			Body:       io.NopCloser(bytes.NewBufferString(mockApiResponse)),
+			Header:     http.Header{"Content-Type": []string{"application/vnd.api+json"}},
+		}
+	})
+
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	invocationContextMock.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
+	invocationContextMock.EXPECT().GetUserInterface().Return(mockUserInterface).AnyTimes()
+	invocationContextMock.EXPECT().GetWorkflowIdentifier().Return(WORKFLOWID_IGNORE_CREATE).AnyTimes()
+	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+
+	mockWhoamiData := []workflow.Data{workflow.NewData(
+		workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "whoami"),
+		"text/plain",
+		expectedUser,
+		workflow.WithLogger(&logger),
+	)}
+	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(mockWhoamiData, nil).AnyTimes()
+
+	return invocationContextMock, mockUserInterface
+}
+
+func Test_InteractiveIgnoreWorkflow(t *testing.T) {
+	faint := lipgloss.NewStyle().Faint(true)
+	policyId := uuid.New()
+	email := "test@email.com"
+	findingId := "11111111-1111-1111-1111-111111111111"
+	ignoreType := string(policyApi.TemporaryIgnore)
+	reason := "Test interactive reason"
+	repoUrl := "https://github.com/example/test-repo"
+	expiration := "2025-12-31"
+	expirationDate, err := time.Parse(time.DateOnly, expiration)
+	assert.NoError(t, err)
+
+	t.Run("all flags provided, no prompts expected", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(ReasonKey, reason)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, expiration)
+
+		mockUI.EXPECT().Input(gomock.Any()).Times(0)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+		assert.Greater(t, len(result), 0, "Should return result data")
+
+		var policyResp sarif.Suppression
+		data, ok := result[0].GetPayload().([]byte)
+		assert.True(t, ok)
+		err = json.Unmarshal(data, &policyResp)
+		assert.NoError(t, err, "Should parse JSON response")
+		assert.Equal(t, policyId.String(), policyResp.Guid)
+		assert.Equal(t, email, *policyResp.Properties.IgnoredBy.Email)
+		assert.Equal(t, sarif.UnderReview, policyResp.Status)
+		assert.Equal(t, expirationDate.Format(time.RFC3339), *policyResp.Properties.Expiration)
+	})
+
+	t.Run("finding-id not provided, prompts for finding-id", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, nil)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(ReasonKey, reason)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, "")
+
+		expectedPrompt := faint.Render(findingsIdPromptHelp) + "\n" + findingsIdDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(findingId, nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("ignore-type not provided, prompts for ignore-type", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, nil)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(ReasonKey, reason)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, "")
+
+		expectedPrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(ignoreType, nil).Times(1)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+
+		var policyResp sarif.Suppression
+		data, ok := result[0].GetPayload().([]byte)
+		assert.True(t, ok)
+		err = json.Unmarshal(data, &policyResp)
+		assert.NoError(t, err, "Should parse JSON response")
+		assert.Equal(t, policyId.String(), policyResp.Guid)
+		assert.Equal(t, ignoreType, string(policyResp.Properties.Category))
+	})
+
+	t.Run("reason not provided, prompts for reason", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, nil)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, "")
+
+		expectedPrompt := faint.Render(reasonPromptHelpMap[ignoreType]) + "\n" + reasonDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(expectedPrompt, nil).Times(1)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+
+		var policyResp sarif.Suppression
+		data, ok := result[0].GetPayload().([]byte)
+		assert.True(t, ok)
+		err = json.Unmarshal(data, &policyResp)
+		assert.NoError(t, err, "Should parse JSON response")
+		assert.Equal(t, policyId.String(), policyResp.Guid)
+		assert.Equal(t, reason, policyResp.Justification)
+	})
+
+	t.Run("remote-repo-url not provided, prompts for remote-repo-url", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(ReasonKey, reason)
+		config.Set(ExpirationKey, expiration)
+
+		expectedPrompt := faint.Render(remoteRepoUrlPromptHelp) + "\n" + remoteRepoUrlDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(repoUrl, nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("prompt for ignore-type and reason", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, expiration)
+
+		expectedIgnoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedIgnoreTypePrompt)).Return(ignoreType, nil).Times(1)
+
+		expectedReasonPrompt := faint.Render(reasonPromptHelpMap[ignoreType]) + "\n" + reasonDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedReasonPrompt)).Return(reason, nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("prompt for ignore-type - invalid value", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, expiration)
+
+		expectedIgnoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedIgnoreTypePrompt)).Return("I'm not a valid ignore type", nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.Error(t, err, "Expected to have an error regarding invalid ignore type")
+	})
+
+	t.Run("prompt for ignore-type - server error", func(t *testing.T) {
+		mockResponse := "Internal Server Error"
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusInternalServerError)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, expiration)
+
+		expectedIgnoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedIgnoreTypePrompt)).Return("I'm not a valid ignore type", nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.Error(t, err, "Expected to have an error regarding invalid ignore type")
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
@@ -29,12 +30,14 @@ const (
 	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "finding-id"
-	findingsIdDescription = "Finding Id"
+	findingsIdPromptHelp  = "Enter the Finding ID of the issue you want to ignore."
+	findingsIdDescription = "Finding ID"
 
 	IgnoreIdKey         = "ignore-id"
-	IgnoreIdDescription = "Ignore Id"
+	IgnoreIdDescription = "Ignore ID"
 
 	IgnoreTypeKey         = "ignore-type"
+	ignoreTypePromptHelp  = "Enter the ignore type: [not-vulnerable, wont-fix, temporary-ignore]."
 	ignoreTypeDescription = "Ignore Type"
 
 	ReasonKey         = "reason"
@@ -44,6 +47,7 @@ const (
 	expirationDescription = "Expiration (YYYY-MM-DD)"
 
 	RemoteRepoUrlKey         = configuration.FLAG_REMOTE_REPO_URL
+	remoteRepoUrlPromptHelp  = "Provide the remote repository URL."
 	remoteRepoUrlDescription = "Remote Repository URL"
 
 	InteractiveKey    = "interactive"
@@ -51,7 +55,16 @@ const (
 
 	policyAPIVersion = "2024-10-15"
 	policyApiTimeout = time.Minute
+
+	interactiveEnsureVersionControlMessage    = "👉🏼 Ensure the code containing the issue is committed and pushed to remote origin, so approvers can review it."
+	interactiveIgnoreRequestSubmissionMessage = "✅ Your ignore request has been submitted."
 )
+
+var reasonPromptHelpMap = map[string]string{
+	string(policyApi.WontFix):         "Provide a reason for why this issue won't be fixed.",
+	string(policyApi.TemporaryIgnore): "Provide a reason for why this issue is temporarily ignored.",
+	string(policyApi.NotVulnerable):   "Provide a reason for why this issue is not vulnerable.",
+}
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
 var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
@@ -90,7 +103,15 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	interactive := config.GetBool(InteractiveKey)
-	addCreateIgnoreDefaultConfigurationValues(invocationCtx, interactive)
+	faint := lipgloss.NewStyle().Faint(true)
+	addCreateIgnoreDefaultConfigurationValues(invocationCtx)
+
+	if interactive {
+		uiErr := userInterface.Output("\n" + interactiveEnsureVersionControlMessage + "\n")
+		if uiErr != nil {
+			logger.Warn().Err(err).Send()
+		}
+	}
 
 	userName, err := getUser(invocationCtx)
 	if err != nil {
@@ -130,8 +151,33 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		uiErr := userInterface.Output(fmt.Sprintf("👉🏼 Make sure the code containing the issue is committed, "+
-			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, orgUuid.String(), ignoreType)))
+		findingIdPrompt := faint.Render(findingsIdPromptHelp) + "\n" + findingsIdDescription
+		findingsId, err = promptIfEmpty(findingsId, userInterface, findingIdPrompt, isValidUuid)
+		if err != nil {
+			return nil, err
+		}
+
+		ignoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
+		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypePrompt, isValidIgnoreType)
+		if err != nil {
+			return nil, err
+		}
+
+		reasonPrompt := faint.Render(reasonPromptHelpMap[ignoreType]) + "\n" + reasonDescription
+		reason, err = promptIfEmpty(reason, userInterface, reasonPrompt, isValidReason)
+		if err != nil {
+			return nil, err
+		}
+
+		repoUrlPrompt := faint.Render(remoteRepoUrlPromptHelp) + "\n" + remoteRepoUrlDescription
+		repoUrl, err = promptIfEmpty(repoUrl, userInterface, repoUrlPrompt, isValidRepoUrl)
+		if err != nil {
+			return nil, err
+		}
+
+		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
+
+		uiErr := userInterface.Output(getIgnoreRequestDetailsStructure(expire, userName, orgName, ignoreType, reason))
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
 		}
@@ -150,7 +196,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		uiErr := userInterface.Output("\n✅ Your ignore request has been submitted.")
+		uiErr := userInterface.Output("\n  " + interactiveIgnoreRequestSubmissionMessage + "\n")
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
 		}
@@ -171,13 +217,13 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	return output, err
 }
 
-func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, orgId string, ignoreType string) string {
+func getIgnoreRequestDetailsStructure(expire *time.Time, userName, orgName, ignoreType, reason string) string {
 	requestedOn := time.Now().Format(time.DateOnly)
 	expireDisplayText := "Does not expire"
 	if expire != nil {
 		expireDisplayText = expire.Format(time.DateOnly)
 	}
-	return fmt.Sprintf("  Requested on:  %s\n  Requested by:  %s\n  Organization:  %s\n  Expiration:    %s\n  Ignore type:   %s", requestedOn, userName, orgId, expireDisplayText, ignoreType)
+	return fmt.Sprintf("  Requested on:  %s\n  Requested by:  %s\n  Organization:  %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", requestedOn, userName, orgName, expireDisplayText, ignoreType, reason)
 }
 
 func getExpireValue(config configuration.Configuration) (*time.Time, error) {
