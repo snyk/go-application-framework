@@ -390,7 +390,7 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 	config.Set(EnrichResponseKey, true)
 	config.Set(configuration.ORGANIZATION_SLUG, "some-org")
 	tempDir := t.TempDir()
-	config.Set(configuration.INPUT_DIRECTORY, tempDir) // no infered remote url
+	config.Set(configuration.INPUT_DIRECTORY, tempDir) // no inferred remote url
 
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
@@ -567,6 +567,21 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 	t.Run("prompt for ignore-type - invalid value", func(t *testing.T) {
 		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+		config.Set(ExpirationKey, expiration)
+
+		expectedIgnoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
+		mockUI.EXPECT().Input(gomock.Eq(expectedIgnoreTypePrompt)).Return("I'm not a valid ignore type", nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.Error(t, err, "Expected to have an error regarding invalid ignore type")
+	})
+
+	t.Run("prompt for ignore-type - server error", func(t *testing.T) {
+		mockResponse := "Internal Server Error"
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusInternalServerError)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
 		config.Set(RemoteRepoUrlKey, repoUrl)
