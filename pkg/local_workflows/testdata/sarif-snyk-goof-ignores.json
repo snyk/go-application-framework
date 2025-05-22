@@ -1,5 +1,5 @@
 {
-  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/csprd01/schemas/sarif-schema-2.1.0.json",
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
   "version": "2.1.0",
   "runs": [
     {
@@ -2066,8 +2066,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         },
         {
           "ruleId": "javascript/NoRateLimitingForExpensiveWebOperation",
@@ -2169,8 +2168,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         },
         {
           "ruleId": "javascript/NoRateLimitingForExpensiveWebOperation",
@@ -2272,8 +2270,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         },
         {
           "ruleId": "javascript/NoSqli",
@@ -2444,8 +2441,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         },
         {
           "ruleId": "javascript/NoSqli",
@@ -2603,7 +2599,7 @@
           "suppressions": [
             {
               "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
-              "state": "accepted",
+              "status": "accepted",
               "justification": "Experimenting with consistent ignores capability. ",
               "properties": {
                 "category": "temporary-ignore",
@@ -2774,7 +2770,7 @@
           "suppressions": [
             {
               "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
-              "state": "accepted",
+              "status": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
@@ -2884,8 +2880,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         },
         {
           "ruleId": "javascript/DisablePoweredBy",
@@ -2987,7 +2982,7 @@
           "suppressions": [
             {
               "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
-              "state": "accepted",
+              "status": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
@@ -3082,8 +3077,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         },
         {
           "ruleId": "javascript/UseCsurfForExpress",
@@ -3163,8 +3157,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         },
         {
           "ruleId": "javascript/NoHardcodedPasswords",
@@ -3244,8 +3237,7 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          },
-          "suppressions": null
+          }
         }
       ],
       "properties": {

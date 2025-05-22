@@ -1,6 +1,6 @@
 {{define "main" }}
 	{
-		"$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/csprd01/schemas/sarif-schema-2.1.0.json",
+		"$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
 		"version": "2.1.0",
 		"runs": [
 		{{- range $result := $.Results}}
@@ -166,7 +166,7 @@
 								{{- if $finding.Attributes.Suppression.Id }}
 								"guid": "{{ $finding.Attributes.Suppression.Id }}",
 								{{- end }}
-								"state": "{{ $finding.Attributes.Suppression.Status }}",
+								"status": "{{ $finding.Attributes.Suppression.Status }}",
 								{{- if $finding.Attributes.Suppression.Justification }}
 								"justification": {{ getQuotedString $finding.Attributes.Suppression.Justification }},{{- end }}
 								"kind": "external"{{- if $finding.Attributes.Suppression.Details }},
