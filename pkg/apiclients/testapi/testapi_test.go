@@ -45,7 +45,6 @@ func Test_StartTest_Success(t *testing.T) {
 	orgID := uuid.New()
 	assetID := uuid.New()
 	expectedJobID := uuid.New()
-	apiVersion := "2024-10-15"
 	finalTestID := uuid.New()
 	var pollCounter atomic.Int32 // Used by handler to count GET /job calls
 	var findingsEndpointCalled atomic.Bool
@@ -68,7 +67,7 @@ func Test_StartTest_Success(t *testing.T) {
 		OrgID:                  orgID,
 		JobID:                  expectedJobID,
 		TestID:                 finalTestID,
-		APIVersion:             apiVersion,
+		APIVersion:             testapi.DefaultAPIVersion,
 		ExpectedCreateTestBody: &expectedRequestBody,
 		PollCounter:            &pollCounter,
 		JobPollResponses: []JobPollResponseConfig{
@@ -77,7 +76,7 @@ func Test_StartTest_Success(t *testing.T) {
 		},
 		FinalTestResult: FinalTestResultConfig{Outcome: testapi.Pass},
 		FindingsConfig: &FindingsHandlerConfig{
-			APIVersion:         apiVersion,
+			APIVersion:         testapi.DefaultAPIVersion,
 			PageCounter:        &findingsPageCount,
 			EndpointCalled:     &findingsEndpointCalled,
 			TotalFindingsPages: 0, // Simulate 0 pages of findings
@@ -92,7 +91,6 @@ func Test_StartTest_Success(t *testing.T) {
 	// Create our test client
 	testHTTPClient := newTestHTTPClient(t, server)
 	clientConfig := testapi.Config{
-		APIVersion:   apiVersion,
 		PollInterval: 1 * time.Second, // short poll interval for faster tests
 	}
 	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
@@ -199,9 +197,8 @@ func Test_StartTest_Error_Network(t *testing.T) {
 	// Act
 
 	// Point to a non-listening port
-	clientConfig := testapi.Config{APIVersion: "2024-10-15"}
-	testClient, err := testapi.NewTestClient("http://127.0.0.1:1", clientConfig)
-	require.NoError(t, err)
+	testClient, err := testapi.NewTestClient("http://127.0.0.1:1", testapi.Config{})
+	require.NoError(t, err, "NewTestClient should not error for a non-listening port if HTTPClient is not immediately used")
 
 	testSubject := newDepGraphTestSubject(t, uuid.New())
 	params := testapi.StartTestParams{OrgID: uuid.New().String(), Subject: testSubject}
@@ -227,7 +224,6 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
-	apiVersion := "2024-10-15"
 	var pollCount atomic.Int32
 	var findingsEndpointCalled atomic.Bool
 	var findingsPageCount atomic.Int32 // To track pagination calls
@@ -243,7 +239,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 		OrgID:       orgID,
 		JobID:       jobID,
 		TestID:      testID,
-		APIVersion:  apiVersion,
+		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: &pollCount,
 		JobPollResponses: []JobPollResponseConfig{
 			{Status: testapi.Pending}, // First poll
@@ -253,7 +249,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 			Outcome: testapi.Pass, // Final outcome is Pass
 		},
 		FindingsConfig: &FindingsHandlerConfig{
-			APIVersion:         apiVersion,
+			APIVersion:         testapi.DefaultAPIVersion,
 			PageCounter:        &findingsPageCount,
 			EndpointCalled:     &findingsEndpointCalled,
 			TotalFindingsPages: 1, // Simulate 1 page of findings, then an empty page (handler will manage nextLink logic)
@@ -267,10 +263,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 
 	testHTTPClient := newTestHTTPClient(t, server)
 
-	clientConfig := testapi.Config{
-		APIVersion:   apiVersion,
-		PollInterval: 1 * time.Second,
-	}
+	clientConfig := testapi.Config{PollInterval: 1 * time.Second}
 	hlClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 
@@ -316,7 +309,7 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 		OrgID:       orgID,
 		JobID:       jobID,
 		TestID:      testID,
-		APIVersion:  "2024-10-15",
+		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: &pollCount,
 		JobPollResponses: []JobPollResponseConfig{
 			{Status: testapi.Pending}, // First poll
@@ -333,8 +326,7 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 
 	// Act - start test and wait for results with a Fail outcome
 	testHTTPClient := newTestHTTPClient(t, server)
-	clientConfig := testapi.Config{APIVersion: "2024-10-15"} // Ensure client version matches handler
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -364,7 +356,6 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	var pollCount atomic.Int32
 	var findingsEndpointCalled atomic.Bool
 	var findingsPageCount atomic.Int32
-	apiVersion := "2024-10-15"
 
 	testSubject := newDepGraphTestSubject(t, assetID)
 	params := testapi.StartTestParams{
@@ -384,7 +375,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 		OrgID:                  orgID,
 		JobID:                  jobID,
 		TestID:                 testID,
-		APIVersion:             apiVersion,
+		APIVersion:             testapi.DefaultAPIVersion,
 		ExpectedCreateTestBody: &expectedRequestBody,
 		PollCounter:            &pollCount,
 		JobPollResponses: []JobPollResponseConfig{
@@ -393,7 +384,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 		},
 		FinalTestResult: FinalTestResultConfig{Outcome: testapi.Pass},
 		FindingsConfig: &FindingsHandlerConfig{
-			APIVersion:         apiVersion,
+			APIVersion:         testapi.DefaultAPIVersion,
 			PageCounter:        &findingsPageCount,
 			EndpointCalled:     &findingsEndpointCalled,
 			TotalFindingsPages: 0, // Simulate 0 pages of findings
@@ -405,7 +396,10 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 
 	// Act - start a test
 	testHTTPClient := newTestHTTPClient(t, server)
-	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
+	clientConfig := testapi.Config{
+		PollInterval: 1 * time.Second, // Keep poll interval short for tests
+	}
+	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -427,7 +421,6 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	}
 
 	// Assert - state: Finished, outcome: Pass
-	// waitErr was asserted NoError before this block
 	require.NotNil(t, result, "Result should not be nil after successful Wait()/Done()")
 	assertTestOutcomePass(t, result, testID)
 	assert.GreaterOrEqual(t, pollCount.Load(), int32(2))
@@ -458,7 +451,7 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 		OrgID:       orgID,
 		JobID:       jobID,
 		TestID:      uuid.New(), // unused in this test but required
-		APIVersion:  "2024-10-15",
+		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: &pollCount,
 		JobPollResponses: []JobPollResponseConfig{
 			{Status: testapi.Pending}, // First poll
@@ -472,8 +465,7 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 
 	// Act - start a test and Wait() returns a polling error
 	testHTTPClient := newTestHTTPClient(t, server)
-	clientConfig := testapi.Config{APIVersion: "2024-10-15"} // Ensure client version matches handler
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -504,7 +496,6 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	orgID := uuid.New()
 	assetID := uuid.New()
 	jobID := uuid.New()
-	apiVersion := "2024-10-15"
 	var pollCount atomic.Int32
 
 	testSubject := newDepGraphTestSubject(t, assetID)
@@ -518,7 +509,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 		OrgID:       orgID,
 		JobID:       jobID,
 		TestID:      uuid.New(), // Not reached in this test
-		APIVersion:  apiVersion,
+		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: &pollCount,
 		JobPollResponses: []JobPollResponseConfig{
 			{ // First poll: slow it down so Wait() can time out first
@@ -539,7 +530,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	defer cleanup()
 
 	// Act - start a test client with short poll interval
-	clientConfig := testapi.Config{APIVersion: apiVersion, PollInterval: 1 * time.Second}
+	clientConfig := testapi.Config{PollInterval: 1 * time.Second}
 	testHTTPClient := newTestHTTPClient(t, server)
 	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
 	require.NoError(t, err)
@@ -595,15 +586,15 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 		OrgID:       orgID,
 		JobID:       jobID,
 		TestID:      testID,
-		APIVersion:  "2024-10-15",
-		PollCounter: &pollCount, // Pass the address of pollCount
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: &pollCount,
 		JobPollResponses: []JobPollResponseConfig{
 			{Status: testapi.Pending}, // First poll: Pending
 			{ShouldRedirect: true},    // Second poll: Redirect
 		},
 		FinalTestResult: FinalTestResultConfig{
 			CustomHandler: func(w http.ResponseWriter, r *http.Request) {
-				// This custom handler for the final result simulates a 404
+				// final result simulates a 404
 				http.Error(w, "Test Result Not Found by CustomHandler", http.StatusNotFound)
 			},
 		},
@@ -614,8 +605,7 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 
 	// Act - start a test but get 404 when waiting on it
 	testHTTPClient := newTestHTTPClient(t, server)
-	clientConfig := testapi.Config{APIVersion: "2024-10-15"}
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -648,7 +638,6 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 	jobID := uuid.New()
 	testID := uuid.New()
 	var pollCount atomic.Int32
-	apiVersion := "2024-10-15"
 
 	expectedAPIErrors := &[]testapi.IoSnykApiCommonError{
 		{Detail: "Test error 1", Status: "500", Code: ptr("SNYK-ERROR-4001")},
@@ -671,7 +660,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 		OrgID:       orgID,
 		JobID:       jobID,
 		TestID:      testID,
-		APIVersion:  apiVersion,
+		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: &pollCount,
 		JobPollResponses: []JobPollResponseConfig{
 			{Status: testapi.Pending},
@@ -690,7 +679,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 
 	// Act - start a test but get 404 when waiting on it
 	testHTTPClient := newTestHTTPClient(t, server)
-	clientConfig := testapi.Config{APIVersion: apiVersion, PollInterval: 1 * time.Second}
+	clientConfig := testapi.Config{PollInterval: 1 * time.Second}
 	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 

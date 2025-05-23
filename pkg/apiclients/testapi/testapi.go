@@ -22,16 +22,6 @@ type Config struct {
 	APIVersion   string
 }
 
-// Predefined errors for findings operations
-var (
-	ErrInvalidStateForFindings = errors.New("cannot fetch findings: test ID or internal handle is missing")
-	ErrFindingsFetchCanceled   = errors.New("findings fetch operation was canceled")
-	ErrFindingsPageRequest     = errors.New("failed to request a page of findings")
-	ErrFindingsPageResponse    = errors.New("unexpected API response when fetching findings page")
-	ErrFindingsPageData        = errors.New("invalid data in findings page API response")
-	ErrFindingsNextPageCursor  = errors.New("failed to determine next findings page cursor from API response")
-)
-
 type client struct {
 	lowLevelClient ClientWithResponsesInterface
 	config         Config
@@ -66,6 +56,17 @@ const (
 	DefaultPollInterval = 2 * time.Second
 	MinPollInterval     = 1 * time.Second
 	MaxFindingsPerPage  = 100
+	DefaultAPIVersion   = "2024-10-15"
+)
+
+// Predefined errors for findings operations
+var (
+	ErrInvalidStateForFindings = errors.New("cannot fetch findings: test ID or internal handle is missing")
+	ErrFindingsFetchCanceled   = errors.New("findings fetch operation was canceled")
+	ErrFindingsPageRequest     = errors.New("failed to request a page of findings")
+	ErrFindingsPageResponse    = errors.New("unexpected API response when fetching findings page")
+	ErrFindingsPageData        = errors.New("invalid data in findings page API response")
+	ErrFindingsNextPageCursor  = errors.New("failed to determine next findings page cursor from API response")
 )
 
 // StartTestParams defines parameters for the high-level StartTest function.
@@ -74,7 +75,7 @@ type StartTestParams struct {
 	Subject TestSubjectCreate
 }
 
-// High-level results and status of a completed test.
+// Summary and findings data of a completed test.
 type Result struct {
 	State            string // e.g., "finished", "errored"
 	Errors           *[]IoSnykApiCommonError
@@ -108,7 +109,7 @@ func NewTestClient(serverBaseUrl string, cfg Config, opts ...ClientOption) (Test
 	}
 
 	if cfg.APIVersion == "" {
-		cfg.APIVersion = "2024-10-15"
+		cfg.APIVersion = DefaultAPIVersion
 	}
 
 	return &client{
