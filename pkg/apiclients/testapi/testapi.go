@@ -27,11 +27,24 @@ type client struct {
 	config         Config
 }
 
+// TestResult defines the contract for accessing test result information.
+type TestResult interface {
+	GetState() string
+	GetErrors() *[]IoSnykApiCommonError
+	GetWarnings() *[]IoSnykApiCommonError
+	GetTestID() *uuid.UUID
+	GetOutcome() *PassFail
+	GetOutcomeReason() *TestOutcomeReason
+	GetEffectiveSummary() *FindingSummary
+	GetRawSummary() *FindingSummary
+	Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error)
+}
+
 // TestHandle allows for starting a test and waiting on its response
 type TestHandle interface {
 	Wait(ctx context.Context) error
 	Done() <-chan struct{}
-	Result() *Result
+	Result() TestResult
 }
 
 type testHandle struct {
@@ -42,7 +55,7 @@ type testHandle struct {
 	runOnce  sync.Once
 	doneChan chan struct{}
 	mu       sync.Mutex // protects result
-	result   *Result
+	result   TestResult
 
 	// final test ID once discovered during polling
 	finalTestID *uuid.UUID
@@ -75,8 +88,9 @@ type StartTestParams struct {
 	Subject TestSubjectCreate
 }
 
-// Summary and findings data of a completed test.
-type Result struct {
+// testResult is the concrete implementation of the TestResult interface for
+// accessing summary and findings data of a completed test.
+type testResult struct {
 	State            string // e.g., "finished", "errored"
 	Errors           *[]IoSnykApiCommonError
 	Warnings         *[]IoSnykApiCommonError
@@ -92,8 +106,32 @@ type Result struct {
 	findingsOnce     sync.Once     // Ensures findings are fetched only once
 
 	// Unexported reference to the parent handle to access client and orgID for fetching
-	handle *testHandle // Populated when Result is created
+	handle *testHandle // Populated when testResult is created
 }
+
+// GetState returns the execution state of the test.
+func (r *testResult) GetState() string { return r.State }
+
+// GetErrors returns any API errors encountered during the test execution.
+func (r *testResult) GetErrors() *[]IoSnykApiCommonError { return r.Errors }
+
+// GetWarnings returns any API warnings encountered during the test execution.
+func (r *testResult) GetWarnings() *[]IoSnykApiCommonError { return r.Warnings }
+
+// GetTestID returns the final Test ID.
+func (r *testResult) GetTestID() *uuid.UUID { return r.TestID }
+
+// GetOutcome returns the pass/fail outcome of the test.
+func (r *testResult) GetOutcome() *PassFail { return r.Outcome }
+
+// GetOutcomeReason returns the reason for the test outcome.
+func (r *testResult) GetOutcomeReason() *TestOutcomeReason { return r.OutcomeReason }
+
+// GetEffectiveSummary returns the summary excluding suppressed findings.
+func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveSummary }
+
+// GetRawSummary returns the summary including suppressed findings.
+func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
 
 // Return a new instance of the test client.
 func NewTestClient(serverBaseUrl string, cfg Config, opts ...ClientOption) (TestClient, error) {
@@ -193,14 +231,21 @@ func (h *testHandle) Wait(ctx context.Context) error {
 			return
 		}
 
-		result, err := h.fetchResultStatus(ctx, *finalTestID)
+		// Check if finalTestID is nil before dereferencing
+		if finalTestID == nil {
+			localErr = fmt.Errorf("polling job completed without a final test ID")
+			errChan <- localErr
+			return
+		}
+
+		resultData, err := h.fetchResultStatus(ctx, *finalTestID)
 		if err != nil {
 			localErr = fmt.Errorf("failed to fetch final test status: %w", err)
 			errChan <- localErr
 			return
 		}
 
-		h.setResult(result)
+		h.setResult(resultData)
 		errChan <- nil
 	})
 
@@ -330,10 +375,10 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 	}
 }
 
-// Get the test result outcome from polling and populate Result.
+// Get the test result outcome from polling and populate testResult.
 // Errors returned here are for the API interaction (e.g., bad response), not the test itself.
-// Test state is captured in Result's State, Errors, and Warnings.
-func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (*Result, error) {
+// Test state is captured in testResult's State, Errors, and Warnings.
+func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (TestResult, error) {
 	getTestParams := &GetTestParams{Version: h.client.config.APIVersion}
 	resp, err := h.client.lowLevelClient.GetTestWithResponse(ctx, h.orgID, testID, getTestParams)
 	if err != nil {
@@ -346,7 +391,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (*
 
 	testData := resp.ApplicationvndApiJSON200.Data
 	attrs := testData.Attributes
-	status := &Result{
+	status := &testResult{
 		TestID:           testData.Id,
 		EffectiveSummary: attrs.EffectiveSummary,
 		RawSummary:       attrs.RawSummary,
@@ -376,13 +421,13 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (*
 // Returns a channel signaling completion of Wait()
 func (h *testHandle) Done() <-chan struct{} { return h.doneChan }
 
-func (h *testHandle) Result() *Result {
+func (h *testHandle) Result() TestResult {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.result
 }
 
-func (h *testHandle) setResult(status *Result) {
+func (h *testHandle) setResult(status TestResult) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.result = status
@@ -395,8 +440,8 @@ func (h *testHandle) setResult(status *Result) {
 //     occurred during pagination or if the context was canceled, in which case
 //     'resultFindings' may be partial.
 //   - err: Any error encountered during the fetching process.
-func (r *Result) Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error) {
-	if r.TestID == nil || r.handle == nil {
+func (r *testResult) Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error) {
+	if r.GetTestID() == nil || r.handle == nil {
 		return nil, false, ErrInvalidStateForFindings
 	}
 
@@ -412,7 +457,7 @@ func (r *Result) Findings(ctx context.Context) (resultFindings []FindingData, co
 // Logic to fetch Findings with pagination.
 // Returns full or partial findings, true if all pages of findings were successfully fetched,
 // and an error if one occurred.
-func (r *Result) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool, error) {
+func (r *testResult) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool, error) {
 	if r.TestID == nil {
 		return nil, false, fmt.Errorf("cannot fetch findings, TestID is nil in internal method")
 	}
@@ -458,7 +503,7 @@ func (r *Result) fetchFindingsInternal(ctx context.Context) ([]FindingData, bool
 
 // processFindingsPage processes a single page of findings response.
 // It returns the data from the page, the next cursor, or an error.
-func (r *Result) processFindingsPage(resp *ListFindingsResponse) ([]FindingData, *string, error) {
+func (r *testResult) processFindingsPage(resp *ListFindingsResponse) ([]FindingData, *string, error) {
 	if resp.ApplicationvndApiJSON200 == nil {
 		return nil, nil, ErrFindingsPageResponse
 	}
@@ -483,7 +528,7 @@ func (r *Result) processFindingsPage(resp *ListFindingsResponse) ([]FindingData,
 
 // extractNextCursor parses the 'next' link and returns the 'starting_after' cursor.
 // Any failure in this function will return ErrFindingsNextPageCursor.
-func (r *Result) extractNextCursor(nextLink *IoSnykApiCommonLinkProperty) (*string, error) {
+func (r *testResult) extractNextCursor(nextLink *IoSnykApiCommonLinkProperty) (*string, error) {
 	if nextLink == nil {
 		return nil, ErrFindingsNextPageCursor
 	}
@@ -518,7 +563,7 @@ func (r *Result) extractNextCursor(nextLink *IoSnykApiCommonLinkProperty) (*stri
 }
 
 // Helper to consistently format errors and decide whether to return partial results.
-func (r *Result) handleFindingsError(err error, partialFindings []FindingData) ([]FindingData, bool, error) {
+func (r *testResult) handleFindingsError(err error, partialFindings []FindingData) ([]FindingData, bool, error) {
 	if len(partialFindings) > 0 {
 		return partialFindings, false, fmt.Errorf("%w, returning partial results", err)
 	}

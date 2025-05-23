@@ -412,7 +412,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 		assert.NoError(t, waitErr)
 	}()
 
-	var result *testapi.Result
+	var result testapi.TestResult
 	select {
 	case <-handle.Done():
 		result = handle.Result()
@@ -547,7 +547,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 		close(errChannel)
 	}()
 
-	var result *testapi.Result
+	var result testapi.TestResult
 	select {
 	case <-handle.Done():
 		result = handle.Result()
@@ -699,30 +699,30 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 }
 
 // Helper function to assert a "Pass" outcome for a test result.
-func assertTestOutcomePass(t *testing.T, result *testapi.Result, expectedTestID uuid.UUID) {
+func assertTestOutcomePass(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID) {
 	t.Helper()
-	assert.Equal(t, string(testapi.Finished), result.State)
-	require.NotNil(t, result.Outcome)
-	assert.Equal(t, testapi.Pass, *result.Outcome)
-	require.NotNil(t, result.TestID)
-	assert.Equal(t, expectedTestID, *result.TestID)
-	assert.Nil(t, result.OutcomeReason)
-	assert.Nil(t, result.Errors)
-	assert.Nil(t, result.Warnings)
+	assert.Equal(t, string(testapi.Finished), result.GetState())
+	require.NotNil(t, result.GetOutcome())
+	assert.Equal(t, testapi.Pass, *result.GetOutcome())
+	require.NotNil(t, result.GetTestID())
+	assert.Equal(t, expectedTestID, *result.GetTestID())
+	assert.Nil(t, result.GetOutcomeReason())
+	assert.Nil(t, result.GetErrors())
+	assert.Nil(t, result.GetWarnings())
 }
 
 // Helper function to assert a "Fail" outcome for a test result.
-func assertTestOutcomeFail(t *testing.T, result *testapi.Result, expectedTestID uuid.UUID, expectedReason testapi.TestOutcomeReason) {
+func assertTestOutcomeFail(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID, expectedReason testapi.TestOutcomeReason) {
 	t.Helper()
-	assert.Equal(t, string(testapi.Finished), result.State)
-	require.NotNil(t, result.Outcome)
-	assert.Equal(t, testapi.Fail, *result.Outcome)
-	require.NotNil(t, result.TestID)
-	assert.Equal(t, expectedTestID, *result.TestID)
-	require.NotNil(t, result.OutcomeReason)
-	assert.Equal(t, expectedReason, *result.OutcomeReason)
-	assert.Nil(t, result.Errors)
-	assert.Nil(t, result.Warnings)
+	assert.Equal(t, string(testapi.Finished), result.GetState())
+	require.NotNil(t, result.GetOutcome())
+	assert.Equal(t, testapi.Fail, *result.GetOutcome())
+	require.NotNil(t, result.GetTestID())
+	assert.Equal(t, expectedTestID, *result.GetTestID())
+	require.NotNil(t, result.GetOutcomeReason())
+	assert.Equal(t, expectedReason, *result.GetOutcomeReason())
+	assert.Nil(t, result.GetErrors())
+	assert.Nil(t, result.GetWarnings())
 }
 
 // Helper function to assert that there are no findings.
@@ -767,32 +767,32 @@ func assertTestOneHighSeverityFinding(t *testing.T, findingsResult []testapi.Fin
 }
 
 // Helper function to assert a finished test with specific outcome, errors, and warnings.
-func assertTestFinishedWithOutcomeErrorsAndWarnings(t *testing.T, result *testapi.Result, expectedTestID uuid.UUID, expectedOutcome testapi.PassFail, expectedReason *testapi.TestOutcomeReason, expectedErrors *[]testapi.IoSnykApiCommonError, expectedWarnings *[]testapi.IoSnykApiCommonError) {
+func assertTestFinishedWithOutcomeErrorsAndWarnings(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID, expectedOutcome testapi.PassFail, expectedReason *testapi.TestOutcomeReason, expectedErrors *[]testapi.IoSnykApiCommonError, expectedWarnings *[]testapi.IoSnykApiCommonError) {
 	t.Helper()
-	assert.Equal(t, string(testapi.Finished), result.State)
-	require.NotNil(t, result.Outcome)
-	assert.Equal(t, expectedOutcome, *result.Outcome)
-	require.NotNil(t, result.TestID)
-	assert.Equal(t, expectedTestID, *result.TestID)
+	assert.Equal(t, string(testapi.Finished), result.GetState())
+	require.NotNil(t, result.GetOutcome())
+	assert.Equal(t, expectedOutcome, *result.GetOutcome())
+	require.NotNil(t, result.GetTestID())
+	assert.Equal(t, expectedTestID, *result.GetTestID())
 
 	if expectedReason != nil {
-		require.NotNil(t, result.OutcomeReason)
-		assert.Equal(t, *expectedReason, *result.OutcomeReason)
+		require.NotNil(t, result.GetOutcomeReason())
+		assert.Equal(t, *expectedReason, *result.GetOutcomeReason())
 	} else {
-		assert.Nil(t, result.OutcomeReason)
+		assert.Nil(t, result.GetOutcomeReason())
 	}
 
 	if expectedErrors != nil {
-		require.NotNil(t, result.Errors)
-		assert.Equal(t, *expectedErrors, *result.Errors)
+		require.NotNil(t, result.GetErrors())
+		assert.Equal(t, *expectedErrors, *result.GetErrors())
 	} else {
-		assert.Nil(t, result.Errors)
+		assert.Nil(t, result.GetErrors())
 	}
 
 	if expectedWarnings != nil {
-		require.NotNil(t, result.Warnings)
-		assert.Equal(t, *expectedWarnings, *result.Warnings)
+		require.NotNil(t, result.GetWarnings())
+		assert.Equal(t, *expectedWarnings, *result.GetWarnings())
 	} else {
-		assert.Nil(t, result.Warnings)
+		assert.Nil(t, result.GetWarnings())
 	}
 }
