@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-TEST_API_DIR=$(realpath ./internal/api/testapi)
+TEST_API_DIR=$(realpath ./pkg/apiclients/testapi)
 
 # Data source
 API_SPEC_PATH=$(mktemp -d)

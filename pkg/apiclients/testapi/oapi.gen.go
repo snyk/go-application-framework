@@ -82,6 +82,11 @@ const (
 	TestJobs JobDataType = "test_jobs"
 )
 
+// Defines values for JobRelationshipFieldDataType.
+const (
+	JobRelationshipFieldDataTypeTests JobRelationshipFieldDataType = "tests"
+)
+
 // Defines values for OtherEvidenceSource.
 const (
 	OtherEvidenceSourceOther OtherEvidenceSource = "other"
@@ -172,7 +177,7 @@ const (
 
 // Defines values for TestDataCreateType.
 const (
-	TestDataCreateTypeTests TestDataCreateType = "tests"
+	Tests TestDataCreateType = "tests"
 )
 
 // Defines values for TestExecutionStates.
@@ -240,15 +245,10 @@ type CweProblem struct {
 // CweProblemSource defines model for CweProblem.Source.
 type CweProblemSource string
 
-// DeepcodeBundleSubject Asset expression representing source code uploaded to Snyk using DeepCode
+// DeepcodeBundleSubject Test subject representing source code uploaded to Snyk using DeepCode
 // bundle APIs.
 type DeepcodeBundleSubject struct {
-	// AssetId The Asset provides policy context to Test.
-	//
-	// A common use case is the integration Git SCM repository from which the
-	// local copy was cloned and branched. This allows developers to test
-	// according to the same policy locally, that their work will also be subject
-	// to in PR checks and CI/CD pipelines.
+	// AssetId Asset associated with the tested content.
 	AssetId openapi_types.UUID `json:"asset_id"`
 
 	// BundleId Deepcode Bundle ID. These IDs are sha256 digests (32 bytes or 64 hex digits).
@@ -263,14 +263,9 @@ type DeepcodeBundleSubject struct {
 // DeepcodeBundleSubjectType defines model for DeepcodeBundleSubject.Type.
 type DeepcodeBundleSubjectType string
 
-// DepGraphSubject Asset expression representing a Snyk dependency graph (a legacy SBOM format).
+// DepGraphSubject Test subject representing a Snyk dependency graph (a legacy SBOM format).
 type DepGraphSubject struct {
-	// AssetId The Asset provides policy context to Test.
-	//
-	// A common use case is the integration Git SCM repository from which the
-	// local copy was cloned and branched. This allows developers to test
-	// according to the same policy locally, that their work will also be subject
-	// to in PR checks and CI/CD pipelines.
+	// AssetId Asset associated with the tested content.
 	AssetId openapi_types.UUID `json:"asset_id"`
 
 	// SourceFiles Source file paths within the asset's contents from which the SBOM was derived.
@@ -284,19 +279,14 @@ type DepGraphSubject struct {
 // DepGraphSubjectType defines model for DepGraphSubject.Type.
 type DepGraphSubjectType string
 
-// DepGraphSubjectCreate Asset expression representing a Snyk dependency graph (a legacy SBOM format).
+// DepGraphSubjectCreate Test subject representing a Snyk dependency graph (a legacy SBOM format).
 type DepGraphSubjectCreate struct {
-	// AssetId The Asset provides policy context to Test.
-	//
-	// A common use case is the integration Git SCM repository from which the
-	// local copy was cloned and branched. This allows developers to test
-	// according to the same policy locally, that their work will also be subject
-	// to in PR checks and CI/CD pipelines.
+	// AssetId Asset associated with the tested content.
 	AssetId openapi_types.UUID `json:"asset_id"`
 
 	// DepGraph When creating a test, provide the dep-graph contents inline to the request.
 	//
-	// This attribute is only provided when creating a new Test.
+	// This attribute is only available when creating a new Test.
 	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
 
 	// SourceFiles Source file paths within the asset's contents from which the SBOM was derived.
@@ -530,27 +520,19 @@ type FindingSummary struct {
 // FindingType Type of Finding which was discovered.
 type FindingType string
 
-// GitURLCoordinatesSubject Asset expression representing a source tree located in a Git repository that
+// GitURLCoordinatesSubject Test subject representing a source tree located in a Git repository that
 // has a Snyk SCM integration.
-//
-// The SCM integration is used to materialize the source code during the test.
 type GitURLCoordinatesSubject struct {
-	// AssetId The Asset provides policy context to Test.
-	//
-	// A common use case is the integration Git SCM repository from which the
-	// local copy was cloned and branched. This allows developers to test
-	// according to the same policy locally, that their work will also be subject
-	// to in PR checks and CI/CD pipelines.
+	// AssetId Asset associated with the tested content.
 	AssetId openapi_types.UUID `json:"asset_id"`
 
-	// IntegrationId Integration ID. UUID referencing the integration that has
-	// access to this repository.
+	// IntegrationId Integration used to access the Git SCM repository in order to retrieve its source contents.
 	IntegrationId openapi_types.UUID `json:"integration_id"`
 
-	// RepoUrl Repo URL. The URL that points to the location of the repo.
+	// RepoUrl Repo URL is the location of the Git SCM repository to test.
 	RepoUrl string `json:"repo_url"`
 
-	// Revision Revision. A git hash to test specifically in the repo.
+	// Revision Revision is the specific Git commit in the repository to test.
 	Revision string                       `json:"revision"`
 	Type     GitURLCoordinatesSubjectType `json:"type"`
 }
@@ -579,13 +561,30 @@ type JobAttributes struct {
 // JobData JobData represents a Job resource object.
 type JobData struct {
 	// Attributes JobAttributes represents the attributes of a Job resource
-	Attributes JobAttributes      `json:"attributes"`
-	Id         openapi_types.UUID `json:"id"`
-	Type       JobDataType        `json:"type"`
+	Attributes    JobAttributes      `json:"attributes"`
+	Id            openapi_types.UUID `json:"id"`
+	Relationships *JobRelationships  `json:"relationships,omitempty"`
+	Type          JobDataType        `json:"type"`
 }
 
 // JobDataType defines model for JobData.Type.
 type JobDataType string
+
+// JobRelationshipField defines model for JobRelationshipField.
+type JobRelationshipField struct {
+	Data struct {
+		Id   openapi_types.UUID           `json:"id"`
+		Type JobRelationshipFieldDataType `json:"type"`
+	} `json:"data"`
+}
+
+// JobRelationshipFieldDataType defines model for JobRelationshipField.Data.Type.
+type JobRelationshipFieldDataType string
+
+// JobRelationships defines model for JobRelationships.
+type JobRelationships struct {
+	Test JobRelationshipField `json:"test"`
+}
 
 // JsonApi defines model for JsonApi.
 type JsonApi struct {
@@ -612,7 +611,10 @@ type LinkProperty1 struct {
 
 // LocalPolicy Locally configured policy options for determining outcome of this specific test.
 type LocalPolicy struct {
-	// SeverityThreshold Findings equal or greater than severity will fail the test.
+	// RiskScoreThreshold Findings of equal or greater risk score will fail the test.
+	RiskScoreThreshold *uint16 `json:"risk_score_threshold,omitempty"`
+
+	// SeverityThreshold Findings of equal or greater severity will fail the test.
 	SeverityThreshold *Severity `json:"severity_threshold,omitempty"`
 
 	// SuppressPendingIgnores Suppress ignores pending approval, so that they do not fail the test. If
@@ -659,9 +661,9 @@ type OtherProblem struct {
 // OtherProblemSource defines model for OtherProblem.Source.
 type OtherProblemSource string
 
-// OtherSubject OtherAsset represents any Asset we don't yet have a way to express,
-// or in some cases the lack of an asset to express.
+// OtherSubject OtherSubject represents any subject we don't yet have a way to express.
 type OtherSubject struct {
+	// AssetId Asset associated with the tested content.
 	AssetId *openapi_types.UUID `json:"asset_id,omitempty"`
 	Type    OtherSubjectType    `json:"type"`
 }
@@ -753,14 +755,9 @@ type RiskScore struct {
 	Value uint16 `json:"value"`
 }
 
-// SBOMReachabilitySubject Asset expression for SBOM test with reachability analysis.
+// SBOMReachabilitySubject Test subject for SBOM test with reachability analysis.
 type SBOMReachabilitySubject struct {
-	// AssetId The Asset provides policy context to Test.
-	//
-	// A common use case is the integration Git SCM repository from which the
-	// local copy was cloned and branched. This allows developers to test
-	// according to the same policy locally, that their work will also be subject
-	// to in PR checks and CI/CD pipelines.
+	// AssetId Asset associated with the tested content.
 	AssetId openapi_types.UUID `json:"asset_id"`
 
 	// CodeBundleId Source code to inspect for the reach of the vulnerable dependencies.
@@ -1063,6 +1060,9 @@ type TestConfiguration struct {
 	// effective for test evaluation.
 	LocalPolicy *LocalPolicy `json:"local_policy,omitempty"`
 
+	// PublishReport Publish findings into a report, viewable in the Snyk web UI.
+	PublishReport *bool `json:"publish_report,omitempty"`
+
 	// Timeout Maximum test time in seconds, after which execution will be cancelled and
 	// the test will fail with reason "timeout".
 	Timeout *TimeoutSpec `json:"timeout,omitempty"`
@@ -1132,16 +1132,22 @@ type TestState struct {
 	//
 	// Completion is no guarantee of an outcome in the event of fatal errors.
 	Execution TestExecutionStates `json:"execution"`
+
+	// Warnings Non-fatal errors which occurred during the execution of a test.
+	//
+	// Execution state and warnings are not linked; any of passed/failed/
+	// errored tests can have warnings.
+	Warnings *[]IoSnykApiCommonError `json:"warnings,omitempty"`
 }
 
-// TestSubject Asset expressions reference the asset that is being tested, and any
-// additional references to its contents that may be required in order to test.
+// TestSubject The subject of a test, which identifies the asset and content references
+// necessary to conduct a security test.
 type TestSubject struct {
 	union json.RawMessage
 }
 
-// TestSubjectCreate Asset expressions reference the asset that is being tested, and any
-// additional references to its contents that may be required in order to test.
+// TestSubjectCreate The subject of a test, which identifies the asset and content references
+// necessary to conduct a security test.
 type TestSubjectCreate struct {
 	union json.RawMessage
 }

@@ -250,17 +250,11 @@ components:
       type: object
     DeepcodeBundleSubject:
       description: |-
-        Asset expression representing source code uploaded to Snyk using DeepCode
+        Test subject representing source code uploaded to Snyk using DeepCode
         bundle APIs.
       properties:
         asset_id:
-          description: |-
-            The Asset provides policy context to Test.
-
-            A common use case is the integration Git SCM repository from which the
-            local copy was cloned and branched. This allows developers to test
-            according to the same policy locally, that their work will also be subject
-            to in PR checks and CI/CD pipelines.
+          description: Asset associated with the tested content.
           format: uuid
           type: string
         bundle_id:
@@ -269,6 +263,7 @@ components:
           pattern: ^[a-fA-F0-9]{64}$
           type: string
         path:
+          default: .
           description: |-
             Path of the uploaded file or directory, relative to the client's current
             working directory.
@@ -284,17 +279,11 @@ components:
       - asset_id
       type: object
     DepGraphSubject:
-      description: Asset expression representing a Snyk dependency graph (a legacy
-        SBOM format).
+      description: Test subject representing a Snyk dependency graph (a legacy SBOM
+        format).
       properties:
         asset_id:
-          description: |-
-            The Asset provides policy context to Test.
-
-            A common use case is the integration Git SCM repository from which the
-            local copy was cloned and branched. This allows developers to test
-            according to the same policy locally, that their work will also be subject
-            to in PR checks and CI/CD pipelines.
+          description: Asset associated with the tested content.
           format: uuid
           type: string
         source_files:
@@ -316,17 +305,11 @@ components:
       - asset_id
       type: object
     DepGraphSubjectCreate:
-      description: Asset expression representing a Snyk dependency graph (a legacy
-        SBOM format).
+      description: Test subject representing a Snyk dependency graph (a legacy SBOM
+        format).
       properties:
         asset_id:
-          description: |-
-            The Asset provides policy context to Test.
-
-            A common use case is the integration Git SCM repository from which the
-            local copy was cloned and branched. This allows developers to test
-            according to the same policy locally, that their work will also be subject
-            to in PR checks and CI/CD pipelines.
+          description: Asset associated with the tested content.
           format: uuid
           type: string
         dep_graph:
@@ -335,7 +318,7 @@ components:
           description: |-
             When creating a test, provide the dep-graph contents inline to the request.
 
-            This attribute is only provided when creating a new Test.
+            This attribute is only available when creating a new Test.
         source_files:
           description: |-
             Source file paths within the asset's contents from which the SBOM was derived.
@@ -815,34 +798,25 @@ components:
       type: string
     GitURLCoordinatesSubject:
       description: |-
-        Asset expression representing a source tree located in a Git repository that
+        Test subject representing a source tree located in a Git repository that
         has a Snyk SCM integration.
-
-        The SCM integration is used to materialize the source code during the test.
       properties:
         asset_id:
-          description: |-
-            The Asset provides policy context to Test.
-
-            A common use case is the integration Git SCM repository from which the
-            local copy was cloned and branched. This allows developers to test
-            according to the same policy locally, that their work will also be subject
-            to in PR checks and CI/CD pipelines.
+          description: Asset associated with the tested content.
           format: uuid
           type: string
         integration_id:
-          description: |-
-            Integration ID. UUID referencing the integration that has
-            access to this repository.
+          description: Integration used to access the Git SCM repository in order
+            to retrieve its source contents.
           format: uuid
           type: string
         repo_url:
-          description: Repo URL. The URL that points to the location of the repo.
+          description: Repo URL is the location of the Git SCM repository to test.
           format: uri
           type: string
         revision:
-          description: Revision. A git hash to test specifically in the repo.
-          pattern: ^[a-f0-9]{40}$
+          description: Revision is the specific Git commit in the repository to test.
+          pattern: ^[a-f0-9]{40,}$
           type: string
         type:
           enum:
@@ -893,6 +867,8 @@ components:
         id:
           format: uuid
           type: string
+        relationships:
+          $ref: '#/components/schemas/JobRelationships'
         type:
           enum:
           - test_jobs
@@ -901,6 +877,31 @@ components:
       - id
       - attributes
       - type
+      type: object
+    JobRelationshipField:
+      properties:
+        data:
+          properties:
+            id:
+              format: uuid
+              type: string
+            type:
+              enum:
+              - tests
+              type: string
+          required:
+          - id
+          - type
+          type: object
+      required:
+      - data
+      type: object
+    JobRelationships:
+      properties:
+        test:
+          $ref: '#/components/schemas/JobRelationshipField'
+      required:
+      - test
       type: object
     JsonApi:
       additionalProperties: false
@@ -938,11 +939,17 @@ components:
       description: Locally configured policy options for determining outcome of this
         specific test.
       properties:
+        risk_score_threshold:
+          description: Findings of equal or greater risk score will fail the test.
+          format: uint16
+          maximum: 1000
+          minimum: 0
+          type: integer
         severity_threshold:
           allOf:
           - $ref: '#/components/schemas/Severity'
           default: medium
-          description: Findings equal or greater than severity will fail the test.
+          description: Findings of equal or greater severity will fail the test.
         suppress_pending_ignores:
           default: false
           description: |-
@@ -1012,11 +1019,11 @@ components:
       - source
       type: object
     OtherSubject:
-      description: |-
-        OtherAsset represents any Asset we don't yet have a way to express,
-        or in some cases the lack of an asset to express.
+      description: OtherSubject represents any subject we don't yet have a way to
+        express.
       properties:
         asset_id:
+          description: Asset associated with the tested content.
           format: uuid
           type: string
         type:
@@ -1170,16 +1177,10 @@ components:
       - value
       type: object
     SBOMReachabilitySubject:
-      description: Asset expression for SBOM test with reachability analysis.
+      description: Test subject for SBOM test with reachability analysis.
       properties:
         asset_id:
-          description: |-
-            The Asset provides policy context to Test.
-
-            A common use case is the integration Git SCM repository from which the
-            local copy was cloned and branched. This allows developers to test
-            according to the same policy locally, that their work will also be subject
-            to in PR checks and CI/CD pipelines.
+          description: Asset associated with the tested content.
           format: uuid
           type: string
         code_bundle_id:
@@ -1683,6 +1684,9 @@ components:
             If centrally managed policies are in scope, inline policies are overridden
             by managed policies. Policy references explain which policies were
             effective for test evaluation.
+        publish_report:
+          description: Publish findings into a report, viewable in the Snyk web UI.
+          type: boolean
         timeout:
           allOf:
           - $ref: '#/components/schemas/TimeoutSpec'
@@ -1793,13 +1797,22 @@ components:
             ("completed" or "errored") when waiting for a test result.
 
             Completion is no guarantee of an outcome in the event of fatal errors.
+        warnings:
+          description: |-
+            Non-fatal errors which occurred during the execution of a test.
+
+            Execution state and warnings are not linked; any of passed/failed/
+            errored tests can have warnings.
+          items:
+            $ref: '#/components/schemas/io.snyk.api.common.Error'
+          type: array
       required:
       - execution
       type: object
     TestSubject:
       description: |-
-        Asset expressions reference the asset that is being tested, and any
-        additional references to its contents that may be required in order to test.
+        The subject of a test, which identifies the asset and content references
+        necessary to conduct a security test.
       discriminator:
         mapping:
           deepcode_bundle: '#/components/schemas/DeepcodeBundleSubject'
@@ -1816,8 +1829,8 @@ components:
       - $ref: '#/components/schemas/OtherSubject'
     TestSubjectCreate:
       description: |-
-        Asset expressions reference the asset that is being tested, and any
-        additional references to its contents that may be required in order to test.
+        The subject of a test, which identifies the asset and content references
+        necessary to conduct a security test.
       discriminator:
         mapping:
           deepcode_bundle: '#/components/schemas/DeepcodeBundleSubject'
@@ -2304,10 +2317,6 @@ components:
       - type
       type: object
     snykvulndb.PackageEcosystem:
-      anyOf:
-      - $ref: '#/components/schemas/snykvulndb.BuildPackageEcosystem'
-      - $ref: '#/components/schemas/snykvulndb.OsPackageEcosystem'
-      - $ref: '#/components/schemas/snykvulndb.OtherPackageEcosystem'
       description: Describe a software package ecosystem.
       discriminator:
         mapping:
@@ -2315,6 +2324,10 @@ components:
           os: '#/components/schemas/snykvulndb.OsPackageEcosystem'
           other: '#/components/schemas/snykvulndb.OtherPackageEcosystem'
         propertyName: type
+      oneOf:
+      - $ref: '#/components/schemas/snykvulndb.BuildPackageEcosystem'
+      - $ref: '#/components/schemas/snykvulndb.OsPackageEcosystem'
+      - $ref: '#/components/schemas/snykvulndb.OtherPackageEcosystem'
     snykvulndb.ReferenceLinks:
       description: Represent links to external sources of vulnerability information.
       properties:
