@@ -527,7 +527,7 @@ func Test_Configuration_Locking(t *testing.T) {
 		var wg sync.WaitGroup
 		N := 100
 
-		config := NewWithOpts(WithSupportedEnvVarPrefixes("test_"))
+		config := NewWithOpts(WithSupportedEnvVarPrefixes("test_"), WithCachingEnabled(1*time.Minute, 2*time.Minute))
 
 		for i := range N {
 			wg.Add(1)
@@ -535,6 +535,7 @@ func Test_Configuration_Locking(t *testing.T) {
 				defer wg.Done()
 
 				key := fmt.Sprintf("test_%d", i)
+				config.AddDefaultValue(key, StandardDefaultValueFunction(2))
 				_ = config.Get(key)
 			}()
 		}
@@ -789,4 +790,51 @@ func Test_Configuration_envVarSupport(t *testing.T) {
 
 		cleanUpEnvVars()
 	})
+}
+
+func Test_Configuration_caching_enabled(t *testing.T) {
+	myKey := "some"
+	myValue := 42
+	defaultFuncCalled := 0
+	cacheDuration := 10 * time.Minute
+	cleanupInterval := 20 * time.Minute
+
+	config := NewWithOpts(WithCachingEnabled(cacheDuration, cleanupInterval))
+	config.AddDefaultValue(myKey, func(existingValue interface{}) (interface{}, error) {
+		defaultFuncCalled++
+
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		return defaultFuncCalled, nil
+	})
+
+	assert.False(t, config.GetBool(CONFIG_CACHE_DISABLED))
+	assert.Equal(t, cacheDuration, config.GetDuration(CONFIG_CACHE_DURATION))
+	assert.Equal(t, cleanupInterval, config.GetDuration(CONFIG_CACHE_CLEANUP_INTERVAL))
+
+	// get uncached value
+	actual1 := config.GetInt(myKey)
+	assert.Equal(t, defaultFuncCalled, actual1)
+
+	// get cached value
+	actual2 := config.GetInt(myKey)
+	assert.Equal(t, actual1, actual2)
+
+	// set explicit value and invalidate cache
+	config.Set(myKey, myValue)
+	actual3 := config.GetInt(myKey)
+	assert.Equal(t, 2, defaultFuncCalled)
+	assert.Equal(t, myValue, actual3)
+
+	// get cached value
+	actual4 := config.GetInt(myKey)
+	assert.Equal(t, myValue, actual4)
+
+	clonedConfig := config.Clone()
+	actual4Cloned := clonedConfig.GetInt(myKey)
+	assert.Equal(t, myValue, actual4Cloned)
+
+	assert.Equal(t, 2, defaultFuncCalled)
 }
