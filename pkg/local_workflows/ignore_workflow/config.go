@@ -27,8 +27,16 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 	})
 
 	config.AddDefaultValue(ExpirationKey, func(existingValue interface{}) (interface{}, error) {
-		isSet := config.IsSet(ExpirationKey)
-		return defaultFuncWithValidator(existingValue, userInterface, interactive, isSet, expirationDescription, isValidExpirationDate)
+		if !config.IsSet(ExpirationKey) {
+			return existingValue, nil
+		}
+
+		err := isValidExpirationDate(existingValue)
+		if err != nil {
+			return "", err
+		}
+
+		return existingValue, nil
 	})
 
 	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {

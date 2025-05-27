@@ -13,7 +13,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
-	github.com/snyk/code-client-go v1.20.1
+	github.com/snyk/code-client-go v1.21.3
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -24,12 +24,14 @@ require (
 )
 
 require (
+	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/gofrs/flock v0.12.1
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/oapi-codegen/runtime v1.1.1
-	github.com/snyk/error-catalog-golang-public v0.0.0-20250218074309-307ad7b38a60
+	github.com/snyk/error-catalog-golang-public v0.0.0-20250429130542-564b0605020e
 	github.com/subosito/gotenv v1.4.1
 	golang.org/x/sync v0.13.0
 	gopkg.in/yaml.v3 v3.0.1
