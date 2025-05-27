@@ -176,9 +176,9 @@ func WithCachingEnabled(cacheDuration time.Duration, cleanupInterval time.Durati
 	return func(c Configuration) {
 		localCache := cache.New(cacheDuration, cleanupInterval)
 		c.setCache(localCache)
-		c.AddDefaultValue(CONFIG_CACHE_DISABLED, StandardDefaultValueFunction(false))
-		c.AddDefaultValue(CONFIG_CACHE_DURATION, StandardDefaultValueFunction(cacheDuration))
-		c.AddDefaultValue(CONFIG_CACHE_CLEANUP_INTERVAL, StandardDefaultValueFunction(cleanupInterval))
+		c.Set(CONFIG_CACHE_DISABLED, false)
+		c.Set(CONFIG_CACHE_DURATION, cacheDuration)
+		c.Set(CONFIG_CACHE_CLEANUP_INTERVAL, cleanupInterval)
 	}
 }
 
@@ -424,7 +424,11 @@ func (ev *extendedViper) GetWithError(key string) (interface{}, error) {
 	defaultFunc = ev.defaultValues[key]
 
 	// if enabled use cache
-	cacheEnabled, cacheDuration = ev.getCacheSettings()
+	cacheEnabled, cacheDuration, err = ev.getCacheSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache settings %w", err)
+	}
+
 	if cacheEnabled {
 		localDefaultCache = ev.defaultCache
 		cachedValue, valueIsCached := localDefaultCache.Get(key)
@@ -797,34 +801,41 @@ func (ev *extendedViper) setCache(c *cache.Cache) {
 }
 
 // return true if enabled and a caching duration
-func (ev *extendedViper) getCacheSettings() (bool, time.Duration) {
+func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
 	if ev.defaultCache == nil {
-		return false, 0
+		return false, 0, nil
 	}
 
 	disabledRaw, err := ev.get(CONFIG_CACHE_DISABLED)
 	if err != nil {
-		return false, 0
+		return false, 0, err
 	}
 
 	durationRaw, err := ev.get(CONFIG_CACHE_DURATION)
 	if err != nil {
-		return false, 0
+		return false, 0, err
 	}
 
 	enabled := true
 	duration := time.Duration(0)
 	if disabledRaw != nil {
 		disabled, boolError := toBool(disabledRaw)
-		enabled = boolError == nil && !disabled
+		if boolError != nil {
+			return false, 0, boolError
+		}
+
+		enabled = !disabled
 	}
 
 	if durationRaw != nil {
-		duration, err = toDuration(durationRaw)
-		enabled = err == nil
+		tmp, durError := toDuration(durationRaw)
+		if durError != nil {
+			return false, 0, durError
+		}
+		duration = tmp
 	}
 
-	return enabled, duration
+	return enabled, duration, nil
 }
 
 func toBool(result interface{}) (bool, error) {

@@ -810,10 +810,6 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 		return defaultFuncCalled, nil
 	})
 
-	assert.False(t, config.GetBool(CONFIG_CACHE_DISABLED))
-	assert.Equal(t, cacheDuration, config.GetDuration(CONFIG_CACHE_DURATION))
-	assert.Equal(t, cleanupInterval, config.GetDuration(CONFIG_CACHE_CLEANUP_INTERVAL))
-
 	// get uncached value
 	actual1 := config.GetInt(myKey)
 	assert.Equal(t, defaultFuncCalled, actual1)
@@ -841,4 +837,19 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 	actual4Cloned := clonedConfig.GetInt(myKey)
 	assert.Equal(t, myValue, actual4Cloned)
 	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
+}
+func Test_extendedViper_cacheSettings(t *testing.T) {
+	cacheDuration := 10 * time.Minute
+	cleanupInterval := 20 * time.Minute
+
+	config := NewWithOpts(WithCachingEnabled(cacheDuration, cleanupInterval))
+	assert.False(t, config.GetBool(CONFIG_CACHE_DISABLED))
+	assert.Equal(t, cacheDuration, config.GetDuration(CONFIG_CACHE_DURATION))
+	assert.Equal(t, cleanupInterval, config.GetDuration(CONFIG_CACHE_CLEANUP_INTERVAL))
+
+	ev := config.(*extendedViper)
+	enabled, duration, err := ev.getCacheSettings()
+	assert.NoError(t, err)
+	assert.True(t, enabled)
+	assert.Equal(t, cacheDuration, duration)
 }
