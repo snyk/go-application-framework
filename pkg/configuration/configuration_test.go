@@ -819,22 +819,26 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 	assert.Equal(t, defaultFuncCalled, actual1)
 
 	// get cached value
+	defaultFuncCalledBefore := defaultFuncCalled
 	actual2 := config.GetInt(myKey)
+	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
 	assert.Equal(t, actual1, actual2)
 
 	// set explicit value and invalidate cache
 	config.Set(myKey, myValue)
 	actual3 := config.GetInt(myKey)
-	assert.Equal(t, 2, defaultFuncCalled)
+	assert.Equal(t, defaultFuncCalledBefore+1, defaultFuncCalled)
 	assert.Equal(t, myValue, actual3)
 
 	// get cached value
+	defaultFuncCalledBefore = defaultFuncCalled
 	actual4 := config.GetInt(myKey)
 	assert.Equal(t, myValue, actual4)
+	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
 
+	// create a clone and ensure to still access the cached values
 	clonedConfig := config.Clone()
 	actual4Cloned := clonedConfig.GetInt(myKey)
 	assert.Equal(t, myValue, actual4Cloned)
-
-	assert.Equal(t, 2, defaultFuncCalled)
+	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
 }
