@@ -78,12 +78,18 @@ func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validat
 	return "", nil
 }
 
-func promptIfEmpty(value string, userInterface ui.UserInterface, promptText string, validator func(interface{}) error) (string, error) {
+func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp string, prompt string, validator func(interface{}) error) (string, error) {
 	if value != "" {
 		return value, nil
 	}
 
-	input, err := userInterface.Input(promptText)
+	helperText := "<p class='prompt-help'>" + promptHelp + "</p><br></br>"
+	err := userInterface.Output(helperText)
+	if err != nil {
+		return "", err
+	}
+
+	input, err := userInterface.Input(prompt)
 	if err != nil {
 		return "", err
 	}
