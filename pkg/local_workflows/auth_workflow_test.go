@@ -33,7 +33,7 @@ func Test_auth_oauth(t *testing.T) {
 
 	t.Run("happy", func(t *testing.T) {
 		config.Set(authTypeParameter, nil)
-		authenticator.EXPECT().Authenticate(gomock.Any()).Times(1).Return(nil)
+		authenticator.EXPECT().Authenticate().Times(1).Return(nil)
 		err = entryPointDI(config, &logger, engine, authenticator)
 		assert.NoError(t, err)
 	})
@@ -41,7 +41,7 @@ func Test_auth_oauth(t *testing.T) {
 	t.Run("unhappy", func(t *testing.T) {
 		config.Set(authTypeParameter, nil)
 		expectedErr := fmt.Errorf("someting went wrong")
-		authenticator.EXPECT().Authenticate(gomock.Any()).Times(1).Return(expectedErr)
+		authenticator.EXPECT().Authenticate().Times(1).Return(expectedErr)
 		err = entryPointDI(config, &logger, engine, authenticator)
 		assert.Equal(t, expectedErr, err)
 	})

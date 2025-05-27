@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -18,10 +19,10 @@ import (
 func headlessOpenBrowserFunc(t *testing.T) func(url string) {
 	t.Helper()
 	return func(url string) {
-		fmt.Printf("Mock opening browser... %s", url)
+		fmt.Printf("Mock opening browser... %s\n", url)
 		_, err := http.DefaultClient.Get(url)
 		if err != nil {
-			fmt.Printf("Error opening browser: %s", err)
+			fmt.Printf("Error opening browser: %s\n", err)
 		}
 	}
 }
@@ -349,7 +350,7 @@ func Test_Authenticate_CredentialsGrant(t *testing.T) {
 	config.Set(configuration.API_URL, srv.URL)
 
 	authenticator := NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(http.DefaultClient))
-	err := authenticator.Authenticate(context.Background())
+	err := authenticator.Authenticate()
 	assert.Nil(t, err)
 
 	token := config.GetString(CONFIG_KEY_OAUTH_TOKEN)
@@ -399,7 +400,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate(context.Background())
+		err := authenticator.Authenticate()
 		assert.Nil(t, err)
 
 		assert.Equal(t, "{\"access_token\":\"a\",\"token_type\":\"b\",\"expiry\":\"0001-01-01T00:00:00Z\"}", config.GetString(CONFIG_KEY_OAUTH_TOKEN))
@@ -425,7 +426,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate(context.Background())
+		err := authenticator.Authenticate()
 		assert.NoError(t, err)
 		assert.Equal(t, "{\"access_token\":\"a\",\"token_type\":\"b\",\"expiry\":\"0001-01-01T00:00:00Z\"}", config.GetString(CONFIG_KEY_OAUTH_TOKEN))
 	})
@@ -449,7 +450,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate(context.Background())
+		err := authenticator.Authenticate()
 		assert.ErrorContains(t, err, "invalid host")
 	})
 
@@ -471,7 +472,59 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 			WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		)
 
-		err := authenticator.Authenticate(context.Background())
+		err := authenticator.Authenticate()
 		assert.ErrorContains(t, err, "incorrect response state")
 	})
+}
+
+func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	// Setup
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	authCtx, cancelAuthCtx := context.WithCancel(context.Background())
+	defer cancelAuthCtx() // For safety to prevent resource leaks
+	authCtxCancelled := false
+
+	mockMux := http.NewServeMux()
+	mockMux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+		cancelAuthCtx()
+		authCtxCancelled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	mockExternalOAuthServer := httptest.NewServer(mockMux)
+	defer mockExternalOAuthServer.Close()
+
+	config.Set(configuration.API_URL, mockExternalOAuthServer.URL)
+	config.Set(configuration.WEB_APP_URL, mockExternalOAuthServer.URL)
+
+	authenticator := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+		WithShutdownServerFunc(ShutdownServer),
+	).(*oAuth2Authenticator)
+	require.Equal(t, AuthorizationCodeGrant, authenticator.grantType, "Authenticator should be in AuthorizationCodeGrant mode")
+
+	// Act
+
+	// Run the auth async and post the result on a channel, so we can set a timeout.
+	authErrChannel := make(chan error, 1)
+	go func() {
+		authErrChannel <- authenticator.CancellableAuthenticate(authCtx) // authCtx will be cancelled by the mock server.
+	}()
+	var authErr error
+	select {
+	case authErr = <-authErrChannel:
+		// CancellableAuthenticate returned, hopefully it was cancelled, we shall check below.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Test timed out after 2 seconds waiting for CancellableAuthenticate to return, which should have been cancelled.")
+	}
+
+	// Assert
+
+	assert.NoError(t, authErr, "CancellableAuthenticate should return nil on graceful cancellation.")
+	assert.True(t, authCtxCancelled)
 }

@@ -1,7 +1,6 @@
 package localworkflows
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -106,7 +105,7 @@ func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, en
 		headless := config.GetBool(headlessFlag)
 		logger.Printf("Headless: %v", headless)
 
-		err = authenticator.Authenticate(context.Background())
+		err = authenticator.Authenticate()
 		if err != nil {
 			return err
 		}

@@ -12,8 +12,18 @@ import (
 
 type Authenticator interface {
 	// Authenticate authenticates the user and returns an error if the authentication failed.
+	Authenticate() error
+	// AddAuthenticationHeader adds the authentication header to the request.
+	AddAuthenticationHeader(request *http.Request) error
+	// IsSupported returns true if the authenticator is ready for use.
+	// If false is returned, it is not possible to add authentication headers/env vars.
+	IsSupported() bool
+}
+
+type CancellableAuthenticator interface {
+	// CancellableAuthenticate authenticates the user and returns an error if the authentication failed.
 	// Takes a context which can be used to interrupt the authentication.
-	Authenticate(ctx context.Context) error
+	CancellableAuthenticate(ctx context.Context) error
 	// AddAuthenticationHeader adds the authentication header to the request.
 	AddAuthenticationHeader(request *http.Request) error
 	// IsSupported returns true if the authenticator is ready for use.

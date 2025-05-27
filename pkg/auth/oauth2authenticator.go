@@ -50,6 +50,7 @@ const (
 )
 
 var _ Authenticator = (*oAuth2Authenticator)(nil)
+var _ CancellableAuthenticator = (*oAuth2Authenticator)(nil)
 
 var acceptedCallbackPorts = []int{8080, 18081, 28082, 38083, 48084}
 var globalRefreshMutex sync.Mutex
@@ -262,7 +263,11 @@ func (o *oAuth2Authenticator) persistToken(token *oauth2.Token) error {
 	return nil
 }
 
-func (o *oAuth2Authenticator) Authenticate(ctx context.Context) error {
+func (o *oAuth2Authenticator) Authenticate() error {
+	return o.CancellableAuthenticate(context.Background())
+}
+
+func (o *oAuth2Authenticator) CancellableAuthenticate(ctx context.Context) error {
 	var err error
 
 	if o.grantType == ClientCredentialsGrant {
@@ -450,11 +455,6 @@ func (o *oAuth2Authenticator) writeCallbackErrorResponse(w http.ResponseWriter, 
 		Reason:      responseError,
 		Description: html.EscapeString(q.Get("error_description")),
 	}
-
-	o.logger.Error().
-		Str("responseError", responseError).
-		Str("responseErrorDescription", data.Description).
-		Msg("Received an error in the OAuth2 callback request.")
 
 	tmplError = tmpl.Execute(w, data)
 
