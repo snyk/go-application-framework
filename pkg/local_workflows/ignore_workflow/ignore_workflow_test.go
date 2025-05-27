@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -428,7 +427,6 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 }
 
 func Test_InteractiveIgnoreWorkflow(t *testing.T) {
-	faint := lipgloss.NewStyle().Faint(true)
 	policyId := uuid.New()
 	email := "test@email.com"
 	findingId := "11111111-1111-1111-1111-111111111111"
@@ -475,8 +473,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		config.Set(RemoteRepoUrlKey, repoUrl)
 		config.Set(ExpirationKey, "")
 
-		expectedPrompt := faint.Render(findingsIdPromptHelp) + "\n" + findingsIdDescription
-		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(findingId, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(findingsIdDescription)).Return(findingId, nil).Times(1)
 
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.NoError(t, err)
@@ -491,8 +488,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		config.Set(RemoteRepoUrlKey, repoUrl)
 		config.Set(ExpirationKey, "")
 
-		expectedPrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
-		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(ignoreType, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(ignoreTypeDescription)).Return(ignoreType, nil).Times(1)
 
 		result, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.NoError(t, err)
@@ -515,8 +511,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		config.Set(RemoteRepoUrlKey, repoUrl)
 		config.Set(ExpirationKey, "")
 
-		expectedPrompt := faint.Render(reasonPromptHelpMap[ignoreType]) + "\n" + reasonDescription
-		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(expectedPrompt, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(reasonDescription)).Return(reason, nil).Times(1)
 
 		result, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.NoError(t, err)
@@ -539,8 +534,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		config.Set(ReasonKey, reason)
 		config.Set(ExpirationKey, expiration)
 
-		expectedPrompt := faint.Render(remoteRepoUrlPromptHelp) + "\n" + remoteRepoUrlDescription
-		mockUI.EXPECT().Input(gomock.Eq(expectedPrompt)).Return(repoUrl, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(remoteRepoUrlDescription)).Return(repoUrl, nil).Times(1)
 
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.NoError(t, err)
@@ -554,10 +548,9 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		config.Set(RemoteRepoUrlKey, repoUrl)
 		config.Set(ExpirationKey, expiration)
 
-		expectedIgnoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
-		mockUI.EXPECT().Input(gomock.Eq(expectedIgnoreTypePrompt)).Return(ignoreType, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(ignoreTypeDescription)).Return(ignoreType, nil).Times(1)
 
-		expectedReasonPrompt := faint.Render(reasonPromptHelpMap[ignoreType]) + "\n" + reasonDescription
+		expectedReasonPrompt := reasonDescription
 		mockUI.EXPECT().Input(gomock.Eq(expectedReasonPrompt)).Return(reason, nil).Times(1)
 
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
@@ -572,8 +565,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		config.Set(RemoteRepoUrlKey, repoUrl)
 		config.Set(ExpirationKey, expiration)
 
-		expectedIgnoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
-		mockUI.EXPECT().Input(gomock.Eq(expectedIgnoreTypePrompt)).Return("I'm not a valid ignore type", nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(ignoreTypeDescription)).Return("I'm not a valid ignore type", nil).Times(1)
 
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.Error(t, err, "Expected to have an error regarding invalid ignore type")
@@ -587,7 +579,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		config.Set(RemoteRepoUrlKey, repoUrl)
 		config.Set(ExpirationKey, expiration)
 
-		expectedIgnoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
+		expectedIgnoreTypePrompt := ignoreTypeDescription
 		mockUI.EXPECT().Input(gomock.Eq(expectedIgnoreTypePrompt)).Return("I'm not a valid ignore type", nil).Times(1)
 
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)

@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
@@ -20,6 +19,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -103,7 +103,6 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	interactive := config.GetBool(InteractiveKey)
-	faint := lipgloss.NewStyle().Faint(true)
 	addCreateIgnoreDefaultConfigurationValues(invocationCtx)
 
 	if interactive {
@@ -151,26 +150,22 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		findingIdPrompt := faint.Render(findingsIdPromptHelp) + "\n" + findingsIdDescription
-		findingsId, err = promptIfEmpty(findingsId, userInterface, findingIdPrompt, isValidUuid)
+		findingsId, err = promptIfEmpty(findingsId, userInterface, findingsIdPromptHelp, findingsIdDescription, isValidUuid)
 		if err != nil {
 			return nil, err
 		}
 
-		ignoreTypePrompt := faint.Render(ignoreTypePromptHelp) + "\n" + ignoreTypeDescription
-		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypePrompt, isValidIgnoreType)
+		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypePromptHelp, ignoreTypeDescription, isValidIgnoreType)
 		if err != nil {
 			return nil, err
 		}
 
-		reasonPrompt := faint.Render(reasonPromptHelpMap[ignoreType]) + "\n" + reasonDescription
-		reason, err = promptIfEmpty(reason, userInterface, reasonPrompt, isValidReason)
+		reason, err = promptIfEmpty(reason, userInterface, reasonPromptHelpMap[ignoreType], reasonDescription, isValidReason)
 		if err != nil {
 			return nil, err
 		}
 
-		repoUrlPrompt := faint.Render(remoteRepoUrlPromptHelp) + "\n" + remoteRepoUrlDescription
-		repoUrl, err = promptIfEmpty(repoUrl, userInterface, repoUrlPrompt, isValidRepoUrl)
+		repoUrl, err = promptIfEmpty(repoUrl, userInterface, remoteRepoUrlPromptHelp, remoteRepoUrlDescription, isValidRepoUrl)
 		if err != nil {
 			return nil, err
 		}
@@ -219,7 +214,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 func getIgnoreRequestDetailsStructure(expire *time.Time, userName, orgName, ignoreType, reason string) string {
 	requestedOn := time.Now().Format(time.DateOnly)
-	expireDisplayText := "Does not expire"
+	expireDisplayText := local_models.DefaultSuppressionExpiry
 	if expire != nil {
 		expireDisplayText = expire.Format(time.DateOnly)
 	}
