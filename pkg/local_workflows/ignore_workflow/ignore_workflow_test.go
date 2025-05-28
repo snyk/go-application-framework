@@ -3,6 +3,7 @@ package ignore_workflow
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
@@ -569,6 +571,9 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.Error(t, err, "Expected to have an error regarding invalid ignore type")
+		snykErr := snyk_errors.Error{}
+		assert.True(t, errors.As(err, &snykErr))
+		assert.Equal(t, snykErr.ErrorCode, "SNYK-CLI-0010")
 	})
 
 	t.Run("prompt for ignore-type - server error", func(t *testing.T) {

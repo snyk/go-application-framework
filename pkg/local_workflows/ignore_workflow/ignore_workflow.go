@@ -41,6 +41,7 @@ const (
 	ignoreTypeDescription = "Ignore Type"
 
 	ReasonKey         = "reason"
+	reasonPromptHelp  = "Provide a reason for why this ignore was created."
 	reasonDescription = "Reason"
 
 	ExpirationKey         = "expiry"
@@ -150,7 +151,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		findingsId, err = promptIfEmpty(findingsId, userInterface, findingsIdPromptHelp, findingsIdDescription, isValidUuid)
+		findingsId, err = promptIfEmpty(findingsId, userInterface, findingsIdPromptHelp, findingsIdDescription, isValidFindingsId)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +161,11 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 			return nil, err
 		}
 
-		reason, err = promptIfEmpty(reason, userInterface, reasonPromptHelpMap[ignoreType], reasonDescription, isValidReason)
+		reasonHelp, ok := reasonPromptHelpMap[ignoreType]
+		if !ok {
+			reasonHelp = reasonPromptHelp
+		}
+		reason, err = promptIfEmpty(reason, userInterface, reasonHelp, reasonDescription, isValidReason)
 		if err != nil {
 			return nil, err
 		}

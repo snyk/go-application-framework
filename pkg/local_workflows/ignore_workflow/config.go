@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -40,7 +41,7 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 
 	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(FindingsIdKey)
-		return defaultFuncWithValidator(existingValue, isSet, isValidUuid)
+		return defaultFuncWithValidator(existingValue, isSet, isValidFindingsId)
 	})
 
 	config.AddDefaultValue(ReasonKey, func(existingValue interface{}) (interface{}, error) {
@@ -83,7 +84,7 @@ func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp stri
 		return value, nil
 	}
 
-	helperText := "<p class='prompt-help'>" + promptHelp + "</p><br></br>"
+	helperText := "<p class='prompt-help'>" + promptHelp + "</p>"
 	err := userInterface.Output(helperText)
 	if err != nil {
 		return "", err
@@ -110,46 +111,51 @@ func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp stri
 func isValidIgnoreType(input interface{}) error {
 	ignoreType, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid ignore type, expected string")
+		return cli.NewValidationFailureError("Ignore type must be a string. Ensure the provided value is a string.")
 	}
 
 	ignoreTypeMapped := policyApi.PolicyActionIgnoreDataIgnoreType(ignoreType)
 	validIgnoreType := ignoreTypeMapped == policyApi.TemporaryIgnore || ignoreTypeMapped == policyApi.WontFix || ignoreTypeMapped == policyApi.NotVulnerable
 	if !validIgnoreType {
-		return fmt.Errorf("invalid ignore type, valid ignore types are: %s, %s, %s",
-			policyApi.NotVulnerable, policyApi.TemporaryIgnore, policyApi.WontFix)
+		errMsg := fmt.Sprintf("Invalid ignore type: '%s'. Valid types are: %s, %s, or %s.",
+			ignoreType,
+			policyApi.NotVulnerable, policyApi.WontFix, policyApi.TemporaryIgnore)
+		return cli.NewValidationFailureError(errMsg)
 	}
 	return nil
 }
 
-func isValidUuid(input interface{}) error {
+func isValidFindingsId(input interface{}) error {
 	uuidStr, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid uuid input, expected string")
+		return cli.NewValidationFailureError("Finding ID must be a string. Provide a valid UUID as the Finding ID.")
 	}
 	_, err := uuid.Parse(uuidStr)
-	return err
+	if err != nil {
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid Finding ID format: '%s'. Ensure the Finding ID is a valid UUID.", uuidStr))
+	}
+	return nil
 }
 
 func isValidReason(input interface{}) error {
 	reasonStr, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid uuid input, expected string")
+		return cli.NewValidationFailureError("Reason must be a string. Provide a textual reason for the ignore.")
 	}
 	if reasonStr == "" {
-		return fmt.Errorf("reason cannot be empty")
+		return cli.NewValidationFailureError("The ignore reason cannot be empty. Provide a justification for ignoring this finding.")
 	}
 	return nil
 }
 
 func isValidExpirationDate(input interface{}) error {
-	// if date is nil we treat it as a valid case as a no-expire case
+	// if date is nil, we treat it as a valid case (no-expire)
 	if input == nil {
 		return nil
 	}
 	dateStr, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid expiration date, expected string")
+		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format, or leave empty for no expiration.")
 	}
 	// if date is empty we treat it as a valid case as a no-expire case
 	if dateStr == "" {
@@ -157,16 +163,19 @@ func isValidExpirationDate(input interface{}) error {
 	}
 
 	_, parseErr := time.Parse(time.DateOnly, dateStr)
-	return parseErr
+	if parseErr != nil {
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format, or leave empty if the ignore should not expire.", dateStr))
+	}
+	return nil
 }
 
 func isValidRepoUrl(input interface{}) error {
 	repoUrl, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid repo url")
+		return cli.NewValidationFailureError("Repository URL must be a string. Provide a valid repository URL.")
 	}
 	if repoUrl == "" {
-		return fmt.Errorf("repo url cannot be empty")
+		return cli.NewValidationFailureError("The repository URL cannot be empty. Provide the URL for the remote repository.")
 	}
 	return nil
 }
