@@ -59,14 +59,16 @@ var globalRefreshMutex sync.Mutex
 var errorResponsePage string
 
 type oAuth2Authenticator struct {
-	httpClient         *http.Client
-	config             configuration.Configuration
-	oauthConfig        *oauth2.Config
-	token              *oauth2.Token
-	headless           bool
-	grantType          GrantType
-	logger             *zerolog.Logger
-	openBrowserFunc    func(authUrl string)
+	httpClient      *http.Client
+	config          configuration.Configuration
+	oauthConfig     *oauth2.Config
+	token           *oauth2.Token
+	headless        bool
+	grantType       GrantType
+	logger          *zerolog.Logger
+	openBrowserFunc func(authUrl string)
+	// shutdownServerFunc must be/call a function which is race condition safe with server.Server if it is called first
+	// and will result in server.Server exiting immediately when called.
 	shutdownServerFunc func(server *http.Server)
 	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
 }
@@ -78,6 +80,8 @@ func OpenBrowser(authUrl string) {
 
 func ShutdownServer(server *http.Server) {
 	time.Sleep(500)
+	// server.Shutdown is race condition with server.Serve safe, as it sets (and keeps set) `inShutdown`,
+	// which server.Serve checks in its processing loop.
 	//nolint:errcheck // breaking api change needed to fix this
 	_ = server.Shutdown(context.Background())
 }
@@ -419,6 +423,8 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 			case errors.Is(err, context.Canceled):
 				canceled = true
 			}
+			// We impose that o.shutdownServerFunc is/calls a server function that is safe to be called before srv.Server
+			// and will result in srv.Server exiting immediately when called.
 			o.shutdownServerFunc(srv)
 		}()
 

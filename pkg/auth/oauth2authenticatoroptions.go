@@ -16,6 +16,9 @@ func WithOpenBrowserFunc(openBrowserFunc func(string)) OAuth2AuthenticatorOption
 	}
 }
 
+// WithShutdownServerFunc sets the function that is called on server shutdown.
+// shutdownServerFunc must be/call a function which is race condition safe with server.Server if it is called first
+// and will result in server.Server exiting immediately when called.
 func WithShutdownServerFunc(shutdownServerFunc func(server *http.Server)) OAuth2AuthenticatorOption {
 	return func(authenticator *oAuth2Authenticator) {
 		authenticator.shutdownServerFunc = shutdownServerFunc
