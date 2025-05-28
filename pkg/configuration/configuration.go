@@ -265,9 +265,11 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 
 // Clone creates a copy of the current configuration.
 func (ev *extendedViper) Clone() Configuration {
+	// these lookups need to happen outside the critical section to avoid dealocks
 	cacheDuration := ev.GetDuration(CONFIG_CACHE_DURATION)
 	cacheCleanupInterval := ev.GetDuration(CONFIG_CACHE_CLEANUP_INTERVAL)
 
+	// start critical section
 	ev.mutex.RLock()
 	defer ev.mutex.RUnlock()
 
