@@ -847,7 +847,8 @@ func Test_extendedViper_cacheSettings(t *testing.T) {
 	assert.Equal(t, cacheDuration, config.GetDuration(CONFIG_CACHE_DURATION))
 	assert.Equal(t, cleanupInterval, config.GetDuration(CONFIG_CACHE_CLEANUP_INTERVAL))
 
-	ev := config.(*extendedViper)
+	ev, ok := config.(*extendedViper)
+	assert.True(t, ok)
 	enabled, duration, err := ev.getCacheSettings()
 	assert.NoError(t, err)
 	assert.True(t, enabled)
