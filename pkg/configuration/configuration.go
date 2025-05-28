@@ -857,6 +857,10 @@ func toDuration(result interface{}) (time.Duration, error) {
 	switch v := result.(type) {
 	case time.Duration:
 		return v, nil
+	case int:
+		return time.Duration(v), nil
+	case int64:
+		return time.Duration(v), nil
 	case string:
 		return time.ParseDuration(v)
 	}

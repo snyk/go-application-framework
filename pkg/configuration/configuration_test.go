@@ -838,6 +838,7 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 	assert.Equal(t, myValue, actual4Cloned)
 	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
 }
+
 func Test_extendedViper_cacheSettings(t *testing.T) {
 	cacheDuration := 10 * time.Minute
 	cleanupInterval := 20 * time.Minute
@@ -853,4 +854,41 @@ func Test_extendedViper_cacheSettings(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, enabled)
 	assert.Equal(t, cacheDuration, duration)
+}
+
+func Test_toDuration(t *testing.T) {
+	testcases := []struct {
+		name     string
+		input    interface{}
+		expected time.Duration
+	}{
+		{
+			name:     "string",
+			input:    "10s",
+			expected: 10 * time.Second,
+		},
+		{
+			name:     "duration",
+			input:    10 * time.Minute,
+			expected: 10 * time.Minute,
+		},
+		{
+			name:     "int",
+			input:    10,
+			expected: 10 * time.Nanosecond,
+		},
+		{
+			name:     "int64",
+			input:    int64(10000),
+			expected: 10000 * time.Nanosecond,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			actual, err := toDuration(tcase.input)
+			assert.NoError(t, err)
+			assert.Equal(t, actual, tcase.expected)
+		})
+	}
 }
