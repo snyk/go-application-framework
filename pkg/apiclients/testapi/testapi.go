@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
@@ -20,11 +21,13 @@ type Config struct {
 	PollInterval time.Duration // Default: 2000ms, Min: 1000ms
 	PollTimeout  time.Duration // Max total time for polling. Default: 30 min.
 	APIVersion   string
+	Logger       *zerolog.Logger
 }
 
 type client struct {
 	lowLevelClient ClientWithResponsesInterface
 	config         Config
+	logger         zerolog.Logger
 }
 
 // TestResult defines the contract for accessing test result information.
@@ -150,9 +153,17 @@ func NewTestClient(serverBaseUrl string, cfg Config, opts ...ClientOption) (Test
 		cfg.APIVersion = DefaultAPIVersion
 	}
 
+	var clLogger zerolog.Logger
+	if cfg.Logger != nil {
+		clLogger = *cfg.Logger
+	} else {
+		clLogger = zerolog.Nop()
+	}
+
 	return &client{
 		lowLevelClient: llClient,
-		config:         cfg}, nil
+		config:         cfg,
+		logger:         clLogger}, nil
 }
 
 // Create the initial test and return a handle to poll it
@@ -364,8 +375,10 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 				return testID, nil
 
 			case http.StatusNotFound:
-				// Can happen due to eventual consistency; log and continue polling
-				// TODO log to injected logger
+				h.client.logger.Warn().
+					Str("orgID", h.orgID.String()).
+					Str("jobID", h.jobID.String()).
+					Msg("Job polling returned 404 Not Found, continuing polling in case of delayed job creation")
 				continue
 
 			default:
