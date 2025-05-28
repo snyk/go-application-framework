@@ -2066,7 +2066,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         },
         {
           "ruleId": "javascript/NoRateLimitingForExpensiveWebOperation",
@@ -2168,7 +2169,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         },
         {
           "ruleId": "javascript/NoRateLimitingForExpensiveWebOperation",
@@ -2270,7 +2272,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         },
         {
           "ruleId": "javascript/NoSqli",
@@ -2441,7 +2444,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         },
         {
           "ruleId": "javascript/NoSqli",
@@ -2880,7 +2884,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         },
         {
           "ruleId": "javascript/DisablePoweredBy",
@@ -3077,7 +3082,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         },
         {
           "ruleId": "javascript/UseCsurfForExpress",
@@ -3157,7 +3163,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         },
         {
           "ruleId": "javascript/NoHardcodedPasswords",
@@ -3237,7 +3244,8 @@
               "severity": "high",
               "originalSeverity": "low"
             }
-          }
+          },
+          "suppressions": null
         }
       ],
       "properties": {
