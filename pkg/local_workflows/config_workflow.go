@@ -23,12 +23,12 @@ const (
 	defaultRegion         = "snyk-us-01"
 )
 
-var regions = []SnykRegion{
-	{alias: "snyk-us-01", url: "https://api.snyk.io"},
-	{alias: "snyk-us-02", url: "https://api.us.snyk.io"},
-	{alias: "snyk-au-01", url: "https://api.au.snyk.io"},
-	{alias: "snyk-eu-01", url: "https://api.eu.snyk.io"},
-	{alias: "snyk-gov-01", url: "https://api.snykgov.io"},
+var Regions = []SnykRegion{
+	{alias: "snyk-us-01", Url: "https://api.snyk.io"},
+	{alias: "snyk-us-02", Url: "https://api.us.snyk.io"},
+	{alias: "snyk-au-01", Url: "https://api.au.snyk.io"},
+	{alias: "snyk-eu-01", Url: "https://api.eu.snyk.io"},
+	{alias: "snyk-gov-01", Url: "https://api.snykgov.io"},
 }
 
 var WORKFLOWID_CONFIG_ENVIRONMENT workflow.Identifier = workflow.NewWorkflowIdentifier(configEnvWorkflowName)
@@ -46,7 +46,7 @@ func InitConfigWorkflow(engine workflow.Engine) error {
 
 type SnykRegion struct {
 	alias string
-	url   string
+	Url   string
 }
 
 func DetermineRegionFromUrl(url string) (string, error) {
@@ -55,8 +55,8 @@ func DetermineRegionFromUrl(url string) (string, error) {
 	}
 
 	// Loop through each region and check for a match in the URL host
-	for _, region := range regions {
-		if strings.HasPrefix(url, region.url) {
+	for _, region := range Regions {
+		if strings.HasPrefix(url, region.Url) {
 			return region.alias, nil
 		}
 	}
@@ -82,9 +82,9 @@ func determineUrlFromAlias(alias string) (string, error) {
 		alias = defaultRegion
 	}
 
-	for _, region := range regions {
+	for _, region := range Regions {
 		if region.alias == strings.ToLower(alias) {
-			return region.url, nil
+			return region.Url, nil
 		}
 	}
 

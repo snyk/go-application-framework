@@ -229,17 +229,44 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
-	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
+	t.Run("it should exclude datapoint from extension object if type is not valid", func(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
-		circularRef := make(map[string]interface{})
-		circularRef["self"] = circularRef
-		ic.AddExtension("circular", circularRef)
+		ic.AddExtension("thisIsNotAValidType", []string{"invalid", "type"})
+		ic.AddExtension("perfectlyValidInt", 1)
+		ic.AddExtension("perfectlyValidBool", true)
 
-		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = nil
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &map[string]interface{}{
+			"strings":            "hello world",
+			"perfectlyValidInt":  1,
+			"perfectlyValidBool": true,
+		}
 
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		icImpl, ok := ic.(*instrumentationCollectorImpl)
+		assert.True(t, ok)
+		icImpl.extension = map[string]interface{}{
+			"string": "This is a valid string",
+			"int":    12345,
+			"fail":   func() { fmt.Println("I cause problems for JSON marshaling!") },
+		}
+
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = nil
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(icImpl, WithLogger(&logger))
 		assert.NoError(t, err)
 		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
 		assert.NoError(t, err)

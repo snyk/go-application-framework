@@ -255,6 +255,8 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 
 			localUi := e.ui
 			localAnalytics := e.analytics
+			localAnalytics.GetInstrumentation().SetPrefix(id.Host)
+			defer func() { localAnalytics.GetInstrumentation().SetPrefix("") }()
 
 			// prepare configuration
 			if config == nil {

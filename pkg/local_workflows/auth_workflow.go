@@ -1,11 +1,11 @@
 package localworkflows
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
@@ -19,11 +19,9 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	authTypeParameter = "auth-type"
-	authTypeOAuth     = "oauth"
-	authTypeToken     = "token"
 )
 
-var authTypeDescription = fmt.Sprint("Authentication type (", authTypeToken, ", ", authTypeOAuth, ")")
+var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
 
 const templateConsoleMessage = `
 Now redirecting you to our auth page, go ahead and log in,
@@ -71,26 +69,35 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	)
 
-	err = entryPointDI(config, logger, engine, authenticator)
+	err = entryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
 }
 
 func autoDetectAuthType(config configuration.Configuration) string {
 	// testing if an API token was specified
 	token := config.GetString(ConfigurationNewAuthenticationToken)
-	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
-		return authTypeToken
+	if len(token) > 0 && auth.IsAuthTypeToken(token) {
+		return auth.AUTH_TYPE_TOKEN
 	}
 
+	// currently the auth workflow defaults to traditional token auth when an IDE environment is detected
+	// this will need to change if IDEs want to invoke this workflow for oauth/PAT
 	integration := config.GetString(configuration.INTEGRATION_NAME)
 	if pgk_utils.IsSnykIde(integration) {
-		return authTypeToken
+		return auth.AUTH_TYPE_TOKEN
 	}
 
-	return authTypeOAuth
+	// check if auth type is PAT
+	if len(token) > 0 && auth.IsAuthTypePAT(token) {
+		return auth.AUTH_TYPE_PAT
+	}
+
+	return auth.AUTH_TYPE_OAUTH
 }
 
-func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+	instrumentation := invocationCtx.GetAnalytics().GetInstrumentation()
+	config := invocationCtx.GetConfiguration()
 	authType := config.GetString(authTypeParameter)
 	if len(authType) == 0 {
 		authType = autoDetectAuthType(config)
@@ -98,7 +105,9 @@ func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, en
 
 	logger.Printf("Authentication Type: %s", authType)
 
-	if strings.EqualFold(authType, authTypeOAuth) { // OAUTH flow
+	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
+		instrumentation.AddExtension(authTypeParameter, auth.AUTH_TYPE_OAUTH)
+
 		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)
 		config.Unset(configuration.AUTHENTICATION_TOKEN)
 
@@ -111,7 +120,36 @@ func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, en
 		}
 
 		fmt.Println(auth.AUTHENTICATED_MESSAGE)
+	} else if strings.EqualFold(authType, auth.AUTH_TYPE_PAT) { // PAT flow
+		instrumentation.AddExtension(authTypeParameter, auth.AUTH_TYPE_PAT)
+
+		pat := config.GetString(ConfigurationNewAuthenticationToken)
+
+		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
+		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+
+		config.Set(configuration.AUTHENTICATION_TOKEN, "") // clear token to avoid using it during authentication
+
+		regions := config.GetStringSlice(configuration.SNYK_REGION_URLS)
+		supportedPatRegions := auth.FilterSupportedPatRegions(regions, auth.UnsupportedPatRegions)
+		for _, region := range auth.ShuffleStrings(supportedPatRegions) {
+			// TODO: we're using global config here (engine.GetConfiguration()) instead of the sandboxed workflow config as a way to pass state
+			// this needs a proper solution (caching)
+			_, patEndpointErr := auth.DeriveEndpointFromPAT(pat, engine.GetConfiguration(), invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), region)
+			if patEndpointErr != nil {
+				err = errors.Join(err, patEndpointErr)
+				continue
+			}
+			logger.Print("Set pat credentials in config")
+			config.PersistInStorage(auth.CONFIG_KEY_TOKEN)
+			config.Set(auth.CONFIG_KEY_TOKEN, pat)
+
+			fmt.Println(auth.AUTHENTICATED_MESSAGE)
+			break
+		}
 	} else { // LEGACY flow
+		instrumentation.AddExtension(authTypeParameter, auth.AUTH_TYPE_TOKEN)
+
 		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
 		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
