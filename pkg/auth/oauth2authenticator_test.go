@@ -478,7 +478,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 	})
 }
 
-func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCancelled(t *testing.T) {
+func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCanceled(t *testing.T) {
 	t.Parallel()
 
 	// Setup
@@ -488,12 +488,12 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCancelled(t *tes
 
 	authCtx, cancelAuthCtx := context.WithCancel(context.Background())
 	defer cancelAuthCtx() // For safety to prevent resource leaks
-	var authCtxCancelled atomic.Bool
+	var authCtxCanceled atomic.Bool
 
 	mockMux := http.NewServeMux()
 	mockMux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
 		cancelAuthCtx()
-		authCtxCancelled.Store(true)
+		authCtxCanceled.Store(true)
 		w.WriteHeader(http.StatusOK)
 	})
 	mockExternalOAuthServer := httptest.NewServer(mockMux)
@@ -502,11 +502,12 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCancelled(t *tes
 	config.Set(configuration.API_URL, mockExternalOAuthServer.URL)
 	config.Set(configuration.WEB_APP_URL, mockExternalOAuthServer.URL)
 
-	authenticator := NewOAuth2AuthenticatorWithOpts(
+	authenticator, ok := NewOAuth2AuthenticatorWithOpts(
 		config,
 		WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
 		WithShutdownServerFunc(ShutdownServer),
 	).(*oAuth2Authenticator)
+	require.True(t, ok, "Expected to create an oAuth2Authenticator")
 	require.Equal(t, AuthorizationCodeGrant, authenticator.grantType, "Authenticator should be in AuthorizationCodeGrant mode")
 
 	// Act
@@ -514,18 +515,18 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCancelled(t *tes
 	// Run the auth async and post the result on a channel, so we can set a timeout.
 	authErrChannel := make(chan error, 1)
 	go func() {
-		authErrChannel <- authenticator.CancellableAuthenticate(authCtx) // authCtx will be cancelled by the mock server.
+		authErrChannel <- authenticator.CancelableAuthenticate(authCtx) // authCtx will be canceled by the mock server.
 	}()
 	var authErr error
 	select {
 	case authErr = <-authErrChannel:
-		// CancellableAuthenticate returned, hopefully it was cancelled, we shall check below.
+		// CancellableAuthenticate returned, hopefully it was canceled, we shall check below.
 	case <-time.After(2 * time.Second):
-		t.Fatal("Test timed out after 2 seconds waiting for CancellableAuthenticate to return, which should have been cancelled.")
+		t.Fatal("Test timed out after 2 seconds waiting for CancellableAuthenticate to return, which should have been canceled.")
 	}
 
 	// Assert
 
 	assert.NoError(t, authErr, "CancellableAuthenticate should return nil on graceful cancellation.")
-	assert.True(t, authCtxCancelled.Load())
+	assert.True(t, authCtxCanceled.Load())
 }

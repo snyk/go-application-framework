@@ -20,10 +20,10 @@ type Authenticator interface {
 	IsSupported() bool
 }
 
-type CancellableAuthenticator interface {
-	// CancellableAuthenticate authenticates the user and returns an error if the authentication failed.
+type CancelableAuthenticator interface {
+	// CancelableAuthenticate authenticates the user and returns an error if the authentication failed.
 	// Takes a context which can be used to interrupt the authentication.
-	CancellableAuthenticate(ctx context.Context) error
+	CancelableAuthenticate(ctx context.Context) error
 	// AddAuthenticationHeader adds the authentication header to the request.
 	AddAuthenticationHeader(request *http.Request) error
 	// IsSupported returns true if the authenticator is ready for use.
