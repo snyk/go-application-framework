@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -18,10 +20,10 @@ import (
 func headlessOpenBrowserFunc(t *testing.T) func(url string) {
 	t.Helper()
 	return func(url string) {
-		fmt.Printf("Mock opening browser... %s", url)
+		fmt.Printf("Mock opening browser... %s\n", url)
 		_, err := http.DefaultClient.Get(url)
 		if err != nil {
-			fmt.Printf("Error opening browser: %s", err)
+			fmt.Printf("Error opening browser: %s\n", err)
 		}
 	}
 }
@@ -474,4 +476,57 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 		err := authenticator.Authenticate()
 		assert.ErrorContains(t, err, "incorrect response state")
 	})
+}
+
+func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
+	// Setup
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	authCtx, cancelAuthCtx := context.WithCancel(context.Background())
+	defer cancelAuthCtx() // For safety to prevent resource leaks
+	var authCtxCanceled atomic.Bool
+
+	mockMux := http.NewServeMux()
+	mockMux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+		cancelAuthCtx()
+		authCtxCanceled.Store(true)
+		w.WriteHeader(http.StatusOK)
+	})
+	mockExternalOAuthServer := httptest.NewServer(mockMux)
+	defer mockExternalOAuthServer.Close()
+
+	config.Set(configuration.API_URL, mockExternalOAuthServer.URL)
+	config.Set(configuration.WEB_APP_URL, mockExternalOAuthServer.URL)
+
+	authenticator, ok := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+		WithShutdownServerFunc(ShutdownServer),
+	).(*oAuth2Authenticator)
+	require.True(t, ok, "Expected to create an oAuth2Authenticator")
+	require.Equal(t, AuthorizationCodeGrant, authenticator.grantType, "Authenticator should be in AuthorizationCodeGrant mode")
+
+	// Act
+
+	// Run the auth async and post the result on a channel, so we can set a timeout.
+	authErrChannel := make(chan error, 1)
+	go func() {
+		authErrChannel <- authenticator.CancelableAuthenticate(authCtx) // authCtx will be canceled by the mock server.
+	}()
+	var authErr error
+	select {
+	case authErr = <-authErrChannel:
+		// CancellableAuthenticate returned, hopefully it was canceled, we shall check below.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Test timed out after 2 seconds waiting for CancellableAuthenticate to return, which should have been canceled.")
+	}
+
+	// Assert
+
+	assert.NoError(t, authErr, "CancellableAuthenticate should return nil on graceful cancellation.")
+	assert.True(t, authCtxCanceled.Load())
 }
