@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/browser"
@@ -413,15 +414,15 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 		go o.openBrowserFunc(authCodeUrl)
 
 		// Handle context cancellation
-		timedOut := false
-		canceled := false
+		var timedOut atomic.Bool
+		var canceled atomic.Bool
 		go func() {
 			<-ctx.Done()
 			switch err := ctx.Err(); {
 			case errors.Is(err, context.DeadlineExceeded):
-				timedOut = true
+				timedOut.Store(true)
 			case errors.Is(err, context.Canceled):
-				canceled = true
+				canceled.Store(true)
 			}
 			// We impose that o.shutdownServerFunc is/calls a server function that is safe to be called before srv.Server
 			// and will result in srv.Server exiting immediately when called.
@@ -430,11 +431,11 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
-			if canceled {
+			if canceled.Load() {
 				o.logger.Info().Msg("OAuth2 request canceled.")
 				return nil, false // No need to error, the user canceled this auth request
 			}
-			if timedOut {
+			if timedOut.Load() {
 				o.logger.Warn().Msg("OAuth2 request timed out.")
 				return errors.New("authentication failed (timeout)"), false
 			}

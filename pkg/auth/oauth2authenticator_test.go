@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -487,12 +488,12 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCancelled(t *tes
 
 	authCtx, cancelAuthCtx := context.WithCancel(context.Background())
 	defer cancelAuthCtx() // For safety to prevent resource leaks
-	authCtxCancelled := false
+	var authCtxCancelled atomic.Bool
 
 	mockMux := http.NewServeMux()
 	mockMux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
 		cancelAuthCtx()
-		authCtxCancelled = true
+		authCtxCancelled.Store(true)
 		w.WriteHeader(http.StatusOK)
 	})
 	mockExternalOAuthServer := httptest.NewServer(mockMux)
@@ -526,5 +527,5 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCancelled(t *tes
 	// Assert
 
 	assert.NoError(t, authErr, "CancellableAuthenticate should return nil on graceful cancellation.")
-	assert.True(t, authCtxCancelled)
+	assert.True(t, authCtxCancelled.Load())
 }
