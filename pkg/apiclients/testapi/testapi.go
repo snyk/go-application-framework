@@ -18,10 +18,68 @@ import (
 )
 
 type Config struct {
-	PollInterval time.Duration // Default: 2000ms, Min: 1000ms
-	PollTimeout  time.Duration // Max total time for polling. Default: 30 min.
-	APIVersion   string
-	Logger       *zerolog.Logger
+	PollInterval          time.Duration // Default: 2000ms, Min: 1000ms
+	PollTimeout           time.Duration // Max total time for polling. Default: 30 min.
+	APIVersion            string
+	Logger                *zerolog.Logger
+	lowLevelClientOptions []ClientOption // Options for the oapi-codegen client
+}
+
+// ConfigOption allows setting custom parameters during construction
+type ConfigOption func(c *Config)
+
+// WithPollInterval sets the poll interval for the test client.
+func WithPollInterval(d time.Duration) ConfigOption {
+	return func(c *Config) {
+		if d <= 0 {
+			c.PollInterval = DefaultPollInterval
+		} else {
+			c.PollInterval = max(d, MinPollInterval)
+		}
+	}
+}
+
+// WithPollTimeout sets the maximum total time for polling.
+func WithPollTimeout(d time.Duration) ConfigOption {
+	return func(c *Config) {
+		c.PollTimeout = d
+	}
+}
+
+// WithAPIVersion sets the API version for the test client.
+func WithAPIVersion(v string) ConfigOption {
+	return func(c *Config) {
+		if v == "" {
+			c.APIVersion = DefaultAPIVersion
+		} else {
+			c.APIVersion = v
+		}
+	}
+}
+
+// WithLogger sets the logger for the test client.
+func WithLogger(l *zerolog.Logger) ConfigOption {
+	return func(c *Config) {
+		c.Logger = l
+	}
+}
+
+// WithCustomHTTPClient allows overriding the default Doer, which is
+// automatically created using http.Client. This is useful for tests.
+func WithCustomHTTPClient(doer HttpRequestDoer) ConfigOption {
+	return func(c *Config) {
+		opt := WithHTTPClient(doer)
+		c.lowLevelClientOptions = append(c.lowLevelClientOptions, opt)
+	}
+}
+
+// WithCustomRequestEditorFn allows setting up a callback function, which will be
+// called right before sending the request. This can be used to mutate the request.
+func WithCustomRequestEditorFn(fn RequestEditorFn) ConfigOption {
+	return func(c *Config) {
+		opt := WithRequestEditorFn(fn)
+		c.lowLevelClientOptions = append(c.lowLevelClientOptions, opt)
+	}
 }
 
 type client struct {
@@ -136,21 +194,20 @@ func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveS
 // GetRawSummary returns the summary including suppressed findings.
 func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
 
-// Return a new instance of the test client.
-func NewTestClient(serverBaseUrl string, cfg Config, opts ...ClientOption) (TestClient, error) {
-	llClient, err := NewClientWithResponses(serverBaseUrl, opts...)
+// NewTestClient returns a new instance of the test client, configured with the provided options.
+func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, error) {
+	cfg := Config{
+		PollInterval: DefaultPollInterval,
+		APIVersion:   DefaultAPIVersion,
+	}
+
+	for _, opt := range options {
+		opt(&cfg)
+	}
+
+	llClient, err := NewClientWithResponses(serverBaseUrl, cfg.lowLevelClientOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create test client: %w", err)
-	}
-
-	if cfg.PollInterval <= 0 {
-		cfg.PollInterval = DefaultPollInterval
-	} else if cfg.PollInterval < MinPollInterval {
-		cfg.PollInterval = MinPollInterval
-	}
-
-	if cfg.APIVersion == "" {
-		cfg.APIVersion = DefaultAPIVersion
+		return nil, fmt.Errorf("failed to create low-level test client: %w", err)
 	}
 
 	var clLogger *zerolog.Logger
@@ -164,7 +221,8 @@ func NewTestClient(serverBaseUrl string, cfg Config, opts ...ClientOption) (Test
 	return &client{
 		lowLevelClient: llClient,
 		config:         cfg,
-		logger:         clLogger}, nil
+		logger:         clLogger,
+	}, nil
 }
 
 // Create the initial test and return a handle to poll it
