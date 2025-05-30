@@ -41,11 +41,12 @@ const (
 	ignoreTypeDescription = "Ignore Type"
 
 	ReasonKey         = "reason"
-	reasonPromptHelp  = "Provide a reason for why this ignore was created."
+	reasonPromptHelp  = "Provide a reason for why this issue is ignored."
 	reasonDescription = "Reason"
 
-	ExpirationKey         = "expiry"
-	expirationDescription = "Expiration (YYYY-MM-DD)"
+	ExpirationKey         = "expiration"
+	expirationPromptHelp  = "Enter the expiration date in YYYY-MM-DD format or leave empty for no expiration."
+	expirationDescription = "Expiration"
 
 	RemoteRepoUrlKey         = configuration.FLAG_REMOTE_REPO_URL
 	remoteRepoUrlPromptHelp  = "Provide the remote repository URL."
@@ -133,9 +134,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	// read expiry time
-	// if expiration value is empty it will be treated as no-expire by the policy endpoint
-	expire, err := getExpireValue(config)
+	expireStr, err := config.GetStringWithError(ExpirationKey)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +160,15 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 			return nil, err
 		}
 
+		expireStr, err = promptIfEmpty(expireStr, userInterface, expirationPromptHelp, expirationDescription, isValidInteractiveExpiration)
+		if err != nil {
+			return nil, err
+		}
+		// an empty expiration means the ignores never expires
+		if expireStr == "" {
+			expireStr = local_models.DefaultSuppressionExpiration
+		}
+
 		reasonHelp, ok := reasonPromptHelpMap[ignoreType]
 		if !ok {
 			reasonHelp = reasonPromptHelp
@@ -177,15 +185,40 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
 
-		uiErr := userInterface.Output(getIgnoreRequestDetailsStructure(expire, userName, orgName, ignoreType, reason))
+		uiErr := userInterface.Output(getIgnoreRequestDetailsStructure(expireStr, userName, orgName, ignoreType, reason))
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
+		}
+	} else {
+		if findingsId == "" {
+			return nil, cli.NewEmptyFlagOptionError("The finding-id is required. Provide it using the --finding-id flag.")
+		}
+
+		if ignoreType == "" {
+			return nil, cli.NewEmptyFlagOptionError("The ignore-type is required cannot be empty. Provide it using the --ignore-type flag. Valid values are: not-vulnerable, wont-fix, temporary-ignore.")
+		}
+
+		if expireStr == "" {
+			return nil, cli.NewEmptyFlagOptionError("The expiration flag is required and cannot be empty. Provide it using the --expiration flag. The date format is YYYY-MM-DD or 'never' for no expiration.")
+		}
+
+		if reason == "" {
+			return nil, cli.NewEmptyFlagOptionError("The reason flag is required and cannot be empty. Provide it using the --reason flag.")
+		}
+
+		if repoUrl == "" {
+			return nil, cli.NewEmptyFlagOptionError("The remote repository URL could not be automatically detected. Provide it using the --remote-repo-url flag.")
 		}
 	}
 
 	branchName, branchNameErr := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	if branchNameErr != nil {
 		logger.Warn().Err(err).Send()
+	}
+
+	expire, err := getExpireValue(expireStr)
+	if err != nil {
+		return nil, err
 	}
 
 	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
@@ -217,29 +250,19 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	return output, err
 }
 
-func getIgnoreRequestDetailsStructure(expire *time.Time, userName, orgName, ignoreType, reason string) string {
+func getIgnoreRequestDetailsStructure(expire, userName, orgName, ignoreType, reason string) string {
 	requestedOn := time.Now().Format(time.DateOnly)
-	expireDisplayText := local_models.DefaultSuppressionExpiry
-	if expire != nil {
-		expireDisplayText = expire.Format(time.DateOnly)
-	}
-	return fmt.Sprintf("  Requested on:  %s\n  Requested by:  %s\n  Organization:  %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", requestedOn, userName, orgName, expireDisplayText, ignoreType, reason)
+	return fmt.Sprintf("  Organization:  %s\n  Requested on:  %s\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", orgName, requestedOn, userName, expire, ignoreType, reason)
 }
 
-func getExpireValue(config configuration.Configuration) (*time.Time, error) {
-	shouldParse := config.IsSet(ExpirationKey) || config.GetBool(InteractiveKey)
-	if !shouldParse {
-		//nolint:nilnil // returning nil,nil here means that there is no expiration, and we didn't run into an error which is a valid case
+func getExpireValue(expiryString string) (*time.Time, error) {
+	if expiryString == local_models.DefaultSuppressionExpiration {
 		return nil, nil
 	}
-	expireStr, err := config.GetStringWithError(ExpirationKey)
-	if err != nil || expireStr == "" {
-		return nil, err
-	}
 
-	expireVal, parseErr := time.Parse(time.DateOnly, expireStr)
+	expireVal, parseErr := time.Parse(time.DateOnly, expiryString)
 	if parseErr != nil {
-		return nil, err
+		return nil, parseErr
 	}
 
 	return &expireVal, nil
