@@ -36,6 +36,8 @@ const (
 	RAW_CMD_ARGS                   string = "internal_raw_cmd_args"
 	WEB_APP_URL                    string = "internal_snyk_app"
 	MAX_THREADS                    string = "internal_max_thread_count"
+	CONFIG_CACHE_TTL               string = "internal_config_cache_ttl"
+	CONFIG_CACHE_DISABLED          string = "internal_config_cache_disabled"
 	WORKING_DIRECTORY              string = "internal_working_dir"
 	IS_FEDRAMP                     string = "internal_is_fedramp"
 	ORGANIZATION_SLUG              string = "internal_org_slug"
