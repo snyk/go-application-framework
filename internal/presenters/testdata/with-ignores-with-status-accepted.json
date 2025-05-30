@@ -670,9 +670,9 @@
             "suppressions": [
               {
                 "guid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-                "status":"accepted",
                 "justification": "False positive",
                 "kind": "inSource",
+                "status": "accepted",
                 "properties": {
                   "category": "wont-fix",
                   "expiration": "15 days",
