@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DefaultSuppressionExpiry = "does not expire"
+	DefaultSuppressionExpiration = "never"
 )
 
 func TransformToLocalFindingModelFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary) (localFinding LocalFinding, err error) {
@@ -119,7 +119,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression == nil {
 		return nil
 	}
-	expiration := DefaultSuppressionExpiry
+	expiration := DefaultSuppressionExpiration
 	ignored_email := ""
 	if suppression.Properties.Expiration != nil {
 		expiration = *suppression.Properties.Expiration
