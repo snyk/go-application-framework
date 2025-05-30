@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -13,68 +14,52 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext, interactive bool) {
+func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext) {
 	config := invocationCtx.GetConfiguration()
-	userInterface := invocationCtx.GetUserInterface()
 
 	config.AddDefaultValue(RemoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
-		return remoteRepoUrlDefaultFunc(existingValue, config, userInterface, interactive)
+		return remoteRepoUrlDefaultFunc(existingValue, config)
 	})
 
 	config.AddDefaultValue(IgnoreTypeKey, func(existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(IgnoreTypeKey)
-		return defaultFuncWithValidator(existingValue, userInterface, interactive, isSet, ignoreTypeDescription, isValidIgnoreType)
+		return defaultFuncWithValidator(existingValue, isSet, isValidIgnoreType)
 	})
 
 	config.AddDefaultValue(ExpirationKey, func(existingValue interface{}) (interface{}, error) {
-		if !config.IsSet(ExpirationKey) {
-			return existingValue, nil
-		}
-
-		err := isValidExpirationDate(existingValue)
-		if err != nil {
-			return "", err
-		}
-
-		return existingValue, nil
+		isSet := config.IsSet(ExpirationKey)
+		return defaultFuncWithValidator(existingValue, isSet, isValidExpirationDate)
 	})
 
 	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(FindingsIdKey)
-		return defaultFuncWithValidator(existingValue, userInterface, interactive, isSet, findingsIdDescription, isValidUuid)
+		return defaultFuncWithValidator(existingValue, isSet, isValidFindingsId)
 	})
 
 	config.AddDefaultValue(ReasonKey, func(existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(ReasonKey)
-		return defaultFuncWithValidator(existingValue, userInterface, interactive, isSet, reasonDescription, isValidReason)
+		return defaultFuncWithValidator(existingValue, isSet, isValidReason)
 	})
 }
 
-func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration, userInterface ui.UserInterface, interactive bool) (interface{}, error) {
+func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration) (interface{}, error) {
 	if existingValue != nil && existingValue != "" {
 		return existingValue, nil
 	}
 
-	getRepoUrlFromRepo := func() (string, error) {
-		repoUrl, err := git.RepoUrlFromDir(config.GetString(configuration.INPUT_DIRECTORY))
-		if err != nil {
-			return "", err
-		}
-		return repoUrl, nil
-	}
+	isInteractive := config.GetBool(InteractiveKey)
 
-	repoUrl, err := getRepoUrlFromRepo()
-
-	if err != nil && interactive {
-		return userInterface.Input(remoteRepoUrlDescription)
+	repoUrl, err := git.RepoUrlFromDir(config.GetString(configuration.INPUT_DIRECTORY))
+	if err != nil && isInteractive {
+		return "", nil
 	} else if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return repoUrl, nil
 }
 
-func defaultFuncWithValidator(existingValue interface{}, userInterface ui.UserInterface, interactive bool, isFlagSet bool, inputDescription string, validatorFunc func(interface{}) error) (interface{}, error) {
+func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validatorFunc func(interface{}) error) (interface{}, error) {
 	if isFlagSet {
 		err := validatorFunc(existingValue)
 		if err != nil {
@@ -83,71 +68,125 @@ func defaultFuncWithValidator(existingValue interface{}, userInterface ui.UserIn
 		return existingValue, nil
 	}
 
-	if !interactive {
-		return "", fmt.Errorf("no value provided and interactive flag is false")
+	return "", nil
+}
+
+func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp string, prompt string, validator func(interface{}) error) (string, error) {
+	if value != "" {
+		return value, nil
 	}
 
-	input, err := userInterface.Input(inputDescription)
+	helperText := "<p class='prompt-help'>" + promptHelp + "</p>"
+	err := userInterface.Output(helperText)
 	if err != nil {
 		return "", err
 	}
 
-	err = validatorFunc(input)
+	input, err := userInterface.Input(prompt)
 	if err != nil {
 		return "", err
 	}
+
+	err = userInterface.Output("") // new line between prompts
+	if err != nil {
+		return "", err
+	}
+
+	err = validator(input)
+	if err != nil {
+		return "", err
+	}
+
 	return input, nil
 }
 
 func isValidIgnoreType(input interface{}) error {
 	ignoreType, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid ignore type, expected string")
+		return cli.NewValidationFailureError("Ignore type must be a string. Ensure the provided value is a string.")
 	}
 
 	ignoreTypeMapped := policyApi.PolicyActionIgnoreDataIgnoreType(ignoreType)
 	validIgnoreType := ignoreTypeMapped == policyApi.TemporaryIgnore || ignoreTypeMapped == policyApi.WontFix || ignoreTypeMapped == policyApi.NotVulnerable
 	if !validIgnoreType {
-		return fmt.Errorf("invalid ignore type, valid ignore types are: %s, %s, %s",
-			policyApi.NotVulnerable, policyApi.TemporaryIgnore, policyApi.WontFix)
+		errMsg := fmt.Sprintf("Invalid ignore type: '%s'. Valid types are: %s, %s, or %s.",
+			ignoreType,
+			policyApi.NotVulnerable, policyApi.WontFix, policyApi.TemporaryIgnore)
+		return cli.NewValidationFailureError(errMsg)
 	}
 	return nil
 }
 
-func isValidUuid(input interface{}) error {
+func isValidFindingsId(input interface{}) error {
 	uuidStr, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid uuid input, expected string")
+		return cli.NewValidationFailureError("Finding ID must be a string. Provide a valid UUID as the Finding ID.")
 	}
 	_, err := uuid.Parse(uuidStr)
-	return err
+	if err != nil {
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid Finding ID format: '%s'. Ensure the Finding ID is a valid UUID.", uuidStr))
+	}
+	return nil
 }
 
 func isValidReason(input interface{}) error {
 	reasonStr, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid uuid input, expected string")
+		return cli.NewValidationFailureError("Reason must be a string. Provide a textual reason for the ignore.")
 	}
 	if reasonStr == "" {
-		return fmt.Errorf("reason cannot be empty")
+		return cli.NewValidationFailureError("The ignore reason cannot be empty. Provide a justification for ignoring this finding.")
 	}
 	return nil
 }
 
 func isValidExpirationDate(input interface{}) error {
-	// if date is nil we treat it as a valid case as a no-expire case
-	if input == nil {
-		return nil
-	}
 	dateStr, ok := input.(string)
 	if !ok {
-		return fmt.Errorf("invalid expiration date, expected string")
+		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format or use 'never' for no expiration.")
 	}
-	// if date is empty we treat it as a valid case as a no-expire case
+
+	if dateStr == "" {
+		return cli.NewValidationFailureError("The expiriration date cannot be empty. Use YYYY-MM-DD format or use 'never' for no expiration.")
+	}
+
+	if dateStr == "never" {
+		return nil
+	}
+
+	_, parseErr := time.Parse(time.DateOnly, dateStr)
+	if parseErr != nil {
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or use 'never' for no expiration.", dateStr))
+	}
+	return nil
+}
+
+func isValidInteractiveExpiration(input interface{}) error {
+	dateStr, ok := input.(string)
+	if !ok {
+		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format or leave empty for no expiration.")
+	}
+
+	// in interactive mode an empty user prompt means no expiration date
 	if dateStr == "" {
 		return nil
 	}
 
 	_, parseErr := time.Parse(time.DateOnly, dateStr)
-	return parseErr
+	if parseErr != nil {
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or leave empty for no expiration.", dateStr))
+	}
+
+	return nil
+}
+
+func isValidRepoUrl(input interface{}) error {
+	repoUrl, ok := input.(string)
+	if !ok {
+		return cli.NewValidationFailureError("Repository URL must be a string. Provide a valid repository URL.")
+	}
+	if repoUrl == "" {
+		return cli.NewValidationFailureError("The repository URL cannot be empty. Provide the URL for the remote repository.")
+	}
+	return nil
 }
