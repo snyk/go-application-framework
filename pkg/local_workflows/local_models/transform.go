@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	DefaultSuppressionExpiry = "does not expire"
+	DefaultSuppressionExpiration = "never"
 )
 
 func TransformToLocalFindingModelFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary) (localFinding LocalFinding, err error) {
