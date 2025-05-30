@@ -257,6 +257,7 @@ func getIgnoreRequestDetailsStructure(expire, userName, orgName, ignoreType, rea
 
 func getExpireValue(expiryString string) (*time.Time, error) {
 	if expiryString == local_models.DefaultSuppressionExpiration {
+		//nolint:nilnil // we are returning a pointer or an error, in this case the nil pointer means the ignore never expires
 		return nil, nil
 	}
 
