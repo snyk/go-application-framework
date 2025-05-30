@@ -27,16 +27,8 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 	})
 
 	config.AddDefaultValue(ExpirationKey, func(existingValue interface{}) (interface{}, error) {
-		if !config.IsSet(ExpirationKey) {
-			return existingValue, nil
-		}
-
-		err := isValidExpirationDate(existingValue)
-		if err != nil {
-			return "", err
-		}
-
-		return existingValue, nil
+		isSet := config.IsSet(ExpirationKey)
+		return defaultFuncWithValidator(existingValue, isSet, isValidExpirationDate)
 	})
 
 	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
@@ -149,23 +141,42 @@ func isValidReason(input interface{}) error {
 }
 
 func isValidExpirationDate(input interface{}) error {
-	// if date is nil, we treat it as a valid case (no-expire)
-	if input == nil {
-		return nil
-	}
 	dateStr, ok := input.(string)
 	if !ok {
-		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format, or leave empty for no expiration.")
+		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format or use 'never' for no expiration.")
 	}
-	// if date is empty we treat it as a valid case as a no-expire case
+
+	if dateStr == "" {
+		return cli.NewValidationFailureError("The expiriration date cannot be empty. Use YYYY-MM-DD format or use 'never' for no expiration.")
+	}
+
+	if dateStr == "never" {
+		return nil
+	}
+
+	_, parseErr := time.Parse(time.DateOnly, dateStr)
+	if parseErr != nil {
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or use 'never' for no expiration.", dateStr))
+	}
+	return nil
+}
+
+func isValidInteractiveExpiration(input interface{}) error {
+	dateStr, ok := input.(string)
+	if !ok {
+		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format or leave empty for no expiration.")
+	}
+
+	// in interactive mode an empty user prompt means no expiration date
 	if dateStr == "" {
 		return nil
 	}
 
 	_, parseErr := time.Parse(time.DateOnly, dateStr)
 	if parseErr != nil {
-		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format, or leave empty if the ignore should not expire.", dateStr))
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or leave empty for no expiration.", dateStr))
 	}
+
 	return nil
 }
 

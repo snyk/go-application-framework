@@ -20,6 +20,7 @@ import (
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -92,13 +93,12 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 }
 
 func Test_getIgnoreRequestDetailsStructure(t *testing.T) {
-	expireDate, err := time.Parse(time.DateOnly, "2025-01-01")
-	assert.NoError(t, err)
+	expireDate := "2025-01-01"
 	userName := "test-user"
 	ignoreType := "wont-fix"
 	reason := "Test reason"
 	orgName := "test-org"
-	result := getIgnoreRequestDetailsStructure(&expireDate, userName, orgName, ignoreType, reason)
+	result := getIgnoreRequestDetailsStructure(expireDate, userName, orgName, ignoreType, reason)
 
 	assert.Contains(t, result, "2025-01-01")
 	assert.Contains(t, result, userName)
@@ -296,21 +296,8 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		config.Set(EnrichResponseKey, true)
 
 		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
-		assert.NoError(t, err, "Should not return an error")
-		assert.Greater(t, len(result), 0, "Should return result data")
-		payload := result[0].GetPayload()
-		assert.NotNil(t, payload, "payload should not be nil")
-
-		var policyResp sarif.Suppression
-		data, ok := payload.([]byte)
-		assert.True(t, ok)
-		err = json.Unmarshal(data, &policyResp)
-		assert.NoError(t, err, "Should parse JSON response")
-		assert.Equal(t, policyId, policyResp.Guid)
-		assert.Equal(t, expectedUser, *policyResp.Properties.IgnoredBy.Email)
-		assert.Equal(t, sarif.UnderReview, policyResp.Status)
-		assert.Nil(t, policyResp.Properties.Expiration)
-		assert.Equal(t, expectedReason, policyResp.Justification)
+		assert.Error(t, err, "Should return an error")
+		assert.Nil(t, result, "payload be nil")
 	})
 	t.Run("IAW FF is disabled", func(t *testing.T) {
 		expectedFindingsId := uuid.New().String()
@@ -334,49 +321,6 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.NotNil(t, err, "Should return an error when IAW FF is disabled")
 		assert.Nil(t, result, "result should be nil when IAW FF is disabled")
 	})
-}
-
-func getSuccessfulPolicyResponseForInteractive(policyIdStr, findingId, ignoreType, reason, userEmail string, expiration *time.Time) string {
-	expirationStr := "null"
-	if expiration != nil {
-		expirationStr = `"` + expiration.Format(time.RFC3339) + `"`
-	}
-	return fmt.Sprintf(`{
-      "data": {
-        "id": "%s",
-        "type": "policy",
-        "attributes": {
-          "action": {
-            "data": {
-              "expires": %s,
-              "ignore_type": "%s",
-              "reason": "%s"
-            },
-			"created_at": "2024-01-01T00:00:00Z",
-			"updated_at": "2024-01-01T00:00:00Z"
-          },
-          "action_type": "%s",
-          "conditions_group": {
-            "conditions": [
-              {
-                "field": "%s",
-                "operator": "%s",
-                "value": "%s"
-              }
-            ],
-            "logical_operator": "%s"
-          },
-          "created_by": {
-            "name": "Test User",
-            "email": "%s"
-          },
-          "review": "%s",
-		  "name": "Generated Policy"
-        }
-    }
-}`, policyIdStr, expirationStr, ignoreType, reason,
-		policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, findingId,
-		policyApi.And, userEmail, policyApi.PolicyReviewPending)
 }
 
 func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiStatusCode int) (*mocks.MockInvocationContext, *mocks.MockUserInterface) {
@@ -440,7 +384,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("all flags provided, no prompts expected", func(t *testing.T) {
-		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
@@ -467,13 +411,13 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 	})
 
 	t.Run("finding-id not provided, prompts for finding-id", func(t *testing.T) {
-		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, nil)
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, nil)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
 		config := invocationCtx.GetConfiguration()
 		config.Set(IgnoreTypeKey, ignoreType)
 		config.Set(ReasonKey, reason)
 		config.Set(RemoteRepoUrlKey, repoUrl)
-		config.Set(ExpirationKey, "")
+		config.Set(ExpirationKey, expiration)
 
 		mockUI.EXPECT().Input(gomock.Eq(findingsIdDescription)).Return(findingId, nil).Times(1)
 
@@ -482,13 +426,13 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 	})
 
 	t.Run("ignore-type not provided, prompts for ignore-type", func(t *testing.T) {
-		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, nil)
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, nil)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
 		config.Set(ReasonKey, reason)
 		config.Set(RemoteRepoUrlKey, repoUrl)
-		config.Set(ExpirationKey, "")
+		config.Set(ExpirationKey, local_models.DefaultSuppressionExpiration)
 
 		mockUI.EXPECT().Input(gomock.Eq(ignoreTypeDescription)).Return(ignoreType, nil).Times(1)
 
@@ -505,13 +449,13 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 	})
 
 	t.Run("reason not provided, prompts for reason", func(t *testing.T) {
-		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, nil)
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, nil)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
 		config.Set(IgnoreTypeKey, ignoreType)
 		config.Set(RemoteRepoUrlKey, repoUrl)
-		config.Set(ExpirationKey, "")
+		config.Set(ExpirationKey, local_models.DefaultSuppressionExpiration)
 
 		mockUI.EXPECT().Input(gomock.Eq(reasonDescription)).Return(reason, nil).Times(1)
 
@@ -528,7 +472,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 	})
 
 	t.Run("remote-repo-url not provided, prompts for remote-repo-url", func(t *testing.T) {
-		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
@@ -543,7 +487,7 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 	})
 
 	t.Run("prompt for ignore-type and reason", func(t *testing.T) {
-		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
@@ -559,8 +503,56 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("prompt for expiration", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(ReasonKey, reason)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+
+		mockUI.EXPECT().Input(gomock.Eq(expirationDescription)).Return(expiration, nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("prompt for expiration - never expiry", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(ReasonKey, reason)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+
+		mockUI.EXPECT().Input(gomock.Eq(expirationDescription)).Return("", nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("prompt for expiration - invalid value", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(FindingsIdKey, findingId)
+		config.Set(IgnoreTypeKey, ignoreType)
+		config.Set(ReasonKey, reason)
+		config.Set(RemoteRepoUrlKey, repoUrl)
+
+		mockUI.EXPECT().Input(gomock.Eq(expirationDescription)).Return("invalid-date", nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.Error(t, err, "Expected to have an error regarding invalid expiration date")
+		snykErr := snyk_errors.Error{}
+		assert.True(t, errors.As(err, &snykErr))
+		assert.Equal(t, snykErr.ErrorCode, "SNYK-CLI-0010")
+	})
+
 	t.Run("prompt for ignore-type - invalid value", func(t *testing.T) {
-		mockResponse := getSuccessfulPolicyResponseForInteractive(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, reason, email, &expirationDate)
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
@@ -576,8 +568,8 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		assert.Equal(t, snykErr.ErrorCode, "SNYK-CLI-0010")
 	})
 
-	t.Run("prompt for ignore-type - server error", func(t *testing.T) {
-		mockResponse := "Internal Server Error"
+	t.Run("prompt for ignore-type - bad request error", func(t *testing.T) {
+		mockResponse := get400PolicyResponse()
 		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusInternalServerError)
 		config := invocationCtx.GetConfiguration()
 		config.Set(FindingsIdKey, findingId)
@@ -589,5 +581,123 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.Error(t, err, "Expected to have an error regarding invalid ignore type")
+	})
+}
+
+func getSuccessfulPolicyResponse(policyIdStr, findingId, ignoreTypeStr, reasonStr, userEmailStr string, expiration *time.Time) string {
+	policyUUID, _ := uuid.Parse(policyIdStr)
+	fixedTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	policyName := "Generated Policy"
+	createdByName := "Test User"
+
+	response := &policyApi.CreateOrgPolicyResponse{
+		ApplicationvndApiJSON201: &struct {
+			Data    policyApi.PolicyResponse `json:"data"`
+			Jsonapi policyApi.JsonApi        `json:"jsonapi"`
+			Links   *policyApi.SelfLink      `json:"links,omitempty"`
+		}{
+			Data: policyApi.PolicyResponse{
+				Id:   policyUUID,
+				Type: policyApi.PolicyResponseTypePolicy,
+				Attributes: policyApi.PolicyResponseAttributes{
+					Name:      policyName,
+					CreatedAt: fixedTime,
+					UpdatedAt: fixedTime,
+					Action: policyApi.PolicyActionIgnore{
+						Data: policyApi.PolicyActionIgnoreData{
+							Expires:    expiration,
+							IgnoreType: policyApi.PolicyActionIgnoreDataIgnoreType(ignoreTypeStr),
+							Reason:     &reasonStr,
+						},
+					},
+					ActionType: policyApi.PolicyResponseAttributesActionTypeIgnore,
+					ConditionsGroup: policyApi.PolicyConditionsGroup{
+						Conditions: []policyApi.PolicyCondition{
+							{
+								Field:    policyApi.Snykassetfindingv1,
+								Operator: policyApi.Includes,
+								Value:    findingId,
+							},
+						},
+						LogicalOperator: policyApi.And,
+					},
+					CreatedBy: &policyApi.Principal{
+						Name:  createdByName,
+						Email: &userEmailStr,
+					},
+					Review: policyApi.PolicyReviewPending,
+				},
+			},
+			Jsonapi: policyApi.JsonApi{Version: "1.0"},
+		},
+	}
+	strResponse, err := json.Marshal(response.ApplicationvndApiJSON201)
+	if err != nil {
+		panic(err)
+	}
+	return string(strResponse)
+}
+
+func get400PolicyResponse() string {
+	id := uuid.New()
+	code := "BAD_REQ"
+	title := "Bad Request"
+	response := &policyApi.CreateOrgPolicyResponse{
+		ApplicationvndApiJSON400: &policyApi.N400{
+			Jsonapi: policyApi.JsonApi{Version: "1.0"},
+			Errors: []policyApi.Error{
+				{
+					Id:     &id,
+					Status: "400",
+					Code:   &code,
+					Title:  &title,
+					Detail: "Invalid input provided.",
+				},
+			},
+		},
+	}
+	strResponse, err := json.Marshal(response.ApplicationvndApiJSON400)
+	if err != nil {
+		panic(err)
+	}
+	return string(strResponse)
+}
+
+func Test_getExpireValue(t *testing.T) {
+	t.Run("valid date format", func(t *testing.T) {
+		dateStr := "2025-12-31"
+		expectedTime, _ := time.Parse(time.DateOnly, dateStr)
+		result, err := getExpireValue(dateStr)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, expectedTime, *result)
+	})
+
+	t.Run("invalid date format", func(t *testing.T) {
+		dateStr := "31-12-2025"
+		result, err := getExpireValue(dateStr)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("'never' value", func(t *testing.T) {
+		dateStr := local_models.DefaultSuppressionExpiration
+		result, err := getExpireValue(dateStr)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("empty string", func(t *testing.T) {
+		dateStr := ""
+		result, err := getExpireValue(dateStr)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("other invalid value", func(t *testing.T) {
+		dateStr := "invalid"
+		result, err := getExpireValue(dateStr)
+		assert.Error(t, err)
+		assert.Nil(t, result)
 	})
 }
