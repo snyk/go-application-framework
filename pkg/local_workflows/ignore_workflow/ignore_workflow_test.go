@@ -585,7 +585,10 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 }
 
 func getSuccessfulPolicyResponse(policyIdStr, findingId, ignoreTypeStr, reasonStr, userEmailStr string, expiration *time.Time) string {
-	policyUUID, _ := uuid.Parse(policyIdStr)
+	policyUUID, err := uuid.Parse(policyIdStr)
+	if err != nil {
+		panic(err)
+	}
 	fixedTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	policyName := "Generated Policy"
 	createdByName := "Test User"
@@ -666,7 +669,8 @@ func get400PolicyResponse() string {
 func Test_getExpireValue(t *testing.T) {
 	t.Run("valid date format", func(t *testing.T) {
 		dateStr := "2025-12-31"
-		expectedTime, _ := time.Parse(time.DateOnly, dateStr)
+		expectedTime, err := time.Parse(time.DateOnly, dateStr)
+		assert.NoError(t, err)
 		result, err := getExpireValue(dateStr)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
