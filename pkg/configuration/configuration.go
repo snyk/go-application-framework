@@ -25,6 +25,7 @@ type DefaultValueFunction func(existingValue interface{}) (interface{}, error)
 type configType string
 type KeyType int
 
+const defaultCacheCleanupInterval = 1 * time.Minute
 const inMemory configType = "in-memory"
 const jsonFile configType = "json"
 const (
@@ -172,13 +173,12 @@ func WithFiles(files ...string) Opts {
 	}
 }
 
-func WithCachingEnabled(cacheDuration time.Duration, cleanupInterval time.Duration) Opts {
+func WithCachingEnabled(cacheDuration time.Duration) Opts {
 	return func(c Configuration) {
-		localCache := cache.New(cacheDuration, cleanupInterval)
+		localCache := cache.New(cacheDuration, defaultCacheCleanupInterval)
 		c.setCache(localCache)
 		c.Set(CONFIG_CACHE_DISABLED, false)
-		c.Set(CONFIG_CACHE_DURATION, cacheDuration)
-		c.Set(CONFIG_CACHE_CLEANUP_INTERVAL, cleanupInterval)
+		c.Set(CONFIG_CACHE_TTL, cacheDuration)
 	}
 }
 
@@ -266,10 +266,9 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 // Clone creates a copy of the current configuration.
 func (ev *extendedViper) Clone() Configuration {
 	// these lookups need to happen outside the critical section to avoid dealocks
-	cacheDuration := ev.GetDuration(CONFIG_CACHE_DURATION)
-	cacheCleanupInterval := ev.GetDuration(CONFIG_CACHE_CLEANUP_INTERVAL)
+	cacheTTL := ev.GetDuration(CONFIG_CACHE_TTL)
 
-	// start critical section
+	// start critical section, everything within needs to be synchronized to safely clone.
 	ev.mutex.RLock()
 	defer ev.mutex.RUnlock()
 
@@ -313,7 +312,7 @@ func (ev *extendedViper) Clone() Configuration {
 
 	if ev.defaultCache != nil {
 		items := ev.defaultCache.Items()
-		clonedCache := cache.NewFrom(cacheDuration, cacheCleanupInterval, items)
+		clonedCache := cache.NewFrom(cacheTTL, defaultCacheCleanupInterval, items)
 		clone.setCache(clonedCache)
 	}
 
@@ -813,7 +812,7 @@ func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
 		return false, 0, err
 	}
 
-	durationRaw, err := ev.get(CONFIG_CACHE_DURATION)
+	durationRaw, err := ev.get(CONFIG_CACHE_TTL)
 	if err != nil {
 		return false, 0, err
 	}

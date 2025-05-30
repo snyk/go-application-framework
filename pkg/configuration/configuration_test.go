@@ -527,7 +527,7 @@ func Test_Configuration_Locking(t *testing.T) {
 		var wg sync.WaitGroup
 		N := 100
 
-		config := NewWithOpts(WithSupportedEnvVarPrefixes("test_"), WithCachingEnabled(1*time.Minute, 2*time.Minute))
+		config := NewWithOpts(WithSupportedEnvVarPrefixes("test_"), WithCachingEnabled(3*time.Second))
 
 		for i := range N {
 			wg.Add(1)
@@ -797,9 +797,8 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 	myValue := 42
 	defaultFuncCalled := 0
 	cacheDuration := 10 * time.Minute
-	cleanupInterval := 20 * time.Minute
 
-	config := NewWithOpts(WithCachingEnabled(cacheDuration, cleanupInterval))
+	config := NewWithOpts(WithCachingEnabled(cacheDuration))
 	config.AddDefaultValue(myKey, func(existingValue interface{}) (interface{}, error) {
 		defaultFuncCalled++
 
@@ -841,12 +840,10 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 
 func Test_extendedViper_cacheSettings(t *testing.T) {
 	cacheDuration := 10 * time.Minute
-	cleanupInterval := 20 * time.Minute
 
-	config := NewWithOpts(WithCachingEnabled(cacheDuration, cleanupInterval))
+	config := NewWithOpts(WithCachingEnabled(cacheDuration))
 	assert.False(t, config.GetBool(CONFIG_CACHE_DISABLED))
-	assert.Equal(t, cacheDuration, config.GetDuration(CONFIG_CACHE_DURATION))
-	assert.Equal(t, cleanupInterval, config.GetDuration(CONFIG_CACHE_CLEANUP_INTERVAL))
+	assert.Equal(t, cacheDuration, config.GetDuration(CONFIG_CACHE_TTL))
 
 	ev, ok := config.(*extendedViper)
 	assert.True(t, ok)
