@@ -7,8 +7,10 @@ package mocks
 import (
 	url "net/url"
 	reflect "reflect"
+	time "time"
 
 	gomock "github.com/golang/mock/gomock"
+	cache "github.com/patrickmn/go-cache"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	pflag "github.com/spf13/pflag"
 )
@@ -98,6 +100,18 @@ func (m *MockConfiguration) AutomaticEnv() {
 func (mr *MockConfigurationMockRecorder) AutomaticEnv() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AutomaticEnv", reflect.TypeOf((*MockConfiguration)(nil).AutomaticEnv))
+}
+
+// ClearCache mocks base method.
+func (m *MockConfiguration) ClearCache() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ClearCache")
+}
+
+// ClearCache indicates an expected call of ClearCache.
+func (mr *MockConfigurationMockRecorder) ClearCache() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearCache", reflect.TypeOf((*MockConfiguration)(nil).ClearCache))
 }
 
 // Clone mocks base method.
@@ -197,6 +211,35 @@ func (m *MockConfiguration) GetBoolWithError(key string) (bool, error) {
 func (mr *MockConfigurationMockRecorder) GetBoolWithError(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBoolWithError", reflect.TypeOf((*MockConfiguration)(nil).GetBoolWithError), key)
+}
+
+// GetDuration mocks base method.
+func (m *MockConfiguration) GetDuration(key string) time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDuration", key)
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// GetDuration indicates an expected call of GetDuration.
+func (mr *MockConfigurationMockRecorder) GetDuration(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDuration", reflect.TypeOf((*MockConfiguration)(nil).GetDuration), key)
+}
+
+// GetDurationWithError mocks base method.
+func (m *MockConfiguration) GetDurationWithError(key string) (time.Duration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDurationWithError", key)
+	ret0, _ := ret[0].(time.Duration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDurationWithError indicates an expected call of GetDurationWithError.
+func (mr *MockConfigurationMockRecorder) GetDurationWithError(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDurationWithError", reflect.TypeOf((*MockConfiguration)(nil).GetDurationWithError), key)
 }
 
 // GetFiles mocks base method.
@@ -491,4 +534,16 @@ func (m *MockConfiguration) Unset(key string) {
 func (mr *MockConfigurationMockRecorder) Unset(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unset", reflect.TypeOf((*MockConfiguration)(nil).Unset), key)
+}
+
+// setCache mocks base method.
+func (m *MockConfiguration) setCache(c *cache.Cache) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "setCache", c)
+}
+
+// setCache indicates an expected call of setCache.
+func (mr *MockConfigurationMockRecorder) setCache(c interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setCache", reflect.TypeOf((*MockConfiguration)(nil).setCache), c)
 }
