@@ -836,6 +836,13 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 	actual4Cloned := clonedConfig.GetInt(myKey)
 	assert.Equal(t, myValue, actual4Cloned)
 	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
+
+	// clear cache
+	clonedConfig.ClearCache()
+
+	actual5Cloned := clonedConfig.GetInt(myKey)
+	assert.Equal(t, myValue, actual5Cloned)
+	assert.Equal(t, defaultFuncCalledBefore+1, defaultFuncCalled, "Default function should be called after clearing the cache")
 }
 
 func Test_extendedViper_cacheSettings(t *testing.T) {

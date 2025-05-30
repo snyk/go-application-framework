@@ -76,6 +76,7 @@ type Configuration interface {
 	SetFiles(files ...string)
 	GetFiles() []string
 	ReloadConfig() error
+	ClearCache()
 
 	setCache(c *cache.Cache)
 }
@@ -795,6 +796,12 @@ func (ev *extendedViper) GetFiles() []string {
 
 func (ev *extendedViper) ReloadConfig() error {
 	return ev.viper.ReadInConfig()
+}
+
+func (ev *extendedViper) ClearCache() {
+	if ev.defaultCache != nil {
+		ev.defaultCache.Flush()
+	}
 }
 
 func (ev *extendedViper) setCache(c *cache.Cache) {
