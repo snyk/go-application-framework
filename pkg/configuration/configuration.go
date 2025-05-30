@@ -25,6 +25,7 @@ type DefaultValueFunction func(existingValue interface{}) (interface{}, error)
 type configType string
 type KeyType int
 
+const NoCacheExpiration time.Duration = -1
 const defaultCacheCleanupInterval = 1 * time.Minute
 const inMemory configType = "in-memory"
 const jsonFile configType = "json"
@@ -173,6 +174,7 @@ func WithFiles(files ...string) Opts {
 	}
 }
 
+// WithCachingEnabled can be used to enable TTL based caching. Use NoCacheExpiration to keep values cached indefinitely.
 func WithCachingEnabled(cacheDuration time.Duration) Opts {
 	return func(c Configuration) {
 		localCache := cache.New(cacheDuration, defaultCacheCleanupInterval)
