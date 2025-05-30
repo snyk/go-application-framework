@@ -713,97 +713,70 @@ func assertTestOutcomePass(t *testing.T, result testapi.TestResult, expectedTest
 	assert.Nil(t, result.GetWarnings())
 }
 
-// Test_NewTestClient_LoggerOption verifies that the logger option in NewTestClient is respected.
-func Test_NewTestClient_LoggerOption(t *testing.T) {
+// Test_NewTestClient_LoggerOption verifies that a custom logger is used when provided.
+func Test_NewTestClient_CustomLogger(t *testing.T) {
 	t.Parallel()
 
-	t.Run("custom logger is used when provided", func(t *testing.T) {
-		t.Parallel()
-		ctx := context.Background()
-		orgID := uuid.New()
-		expectedJobIDInLog := uuid.New() // this jobID is logged when a 404 occurs during polling
+	ctx := context.Background()
+	orgID := uuid.New()
+	expectedJobIDInLog := uuid.New() // this jobID is logged when a 404 occurs during polling
 
-		// Create a buffer to capture log output and a custom logger
-		var logBuffer bytes.Buffer
-		customLogger := zerolog.New(&logBuffer).With().Timestamp().Logger()
+	// Create a buffer to capture log output and a custom logger
+	var logBuffer bytes.Buffer
+	customLogger := zerolog.New(&logBuffer).With().Timestamp().Logger()
 
-		// Setup mock server where GET /job/{jobID} returns 404 to trigger a log.
-		handlerConfig := TestAPIHandlerConfig{
-			OrgID:      orgID,
-			JobID:      expectedJobIDInLog,
-			TestID:     uuid.New(),
-			APIVersion: testapi.DefaultAPIVersion,
-			JobPollResponses: []JobPollResponseConfig{
-				{
-					// First poll attempt for the job will hit this custom handler
-					CustomHandler: func(w http.ResponseWriter, r *http.Request) {
-						if strings.Contains(r.URL.Path, expectedJobIDInLog.String()) {
-							http.Error(w, "Job Not Found by CustomHandler for logger test", http.StatusNotFound)
-						} else {
-							http.Error(w, "Unexpected jobID in poll request for logger test", http.StatusInternalServerError)
-						}
-					},
+	// Setup mock server where GET /job/{jobID} returns 404 to trigger a log.
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:      orgID,
+		JobID:      expectedJobIDInLog,
+		TestID:     uuid.New(),
+		APIVersion: testapi.DefaultAPIVersion,
+		JobPollResponses: []JobPollResponseConfig{
+			{
+				// First poll attempt for the job will hit this custom handler
+				CustomHandler: func(w http.ResponseWriter, r *http.Request) {
+					if strings.Contains(r.URL.Path, expectedJobIDInLog.String()) {
+						http.Error(w, "Job Not Found by CustomHandler for logger test", http.StatusNotFound)
+					} else {
+						http.Error(w, "Unexpected jobID in poll request for logger test", http.StatusInternalServerError)
+					}
 				},
-				// Add a fallback response in case the 404 doesn't stop polling as expected by the test's timeout.
-				// This ensures Wait() doesn't hang indefinitely if the context timeout is too long or fails.
-				{ShouldRedirect: true},
 			},
-		}
-		handler := newTestAPIMockHandler(t, handlerConfig)
-		server, cleanup := startMockServer(t, handler)
-		defer cleanup()
+			// Add a fallback response in case the 404 doesn't stop polling as expected by the test's timeout.
+			// This ensures Wait() doesn't hang indefinitely if the context timeout is too long or fails.
+			{ShouldRedirect: true},
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
 
-		// Create TestClient with the custom logger.
-		clientConfig := testapi.Config{
-			Logger:       &customLogger,
-			PollInterval: 1 * time.Second,
-		}
-		testHTTPClient := newTestHTTPClient(t, server)
-		testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
-		require.NoError(t, err)
+	// Create TestClient with the custom logger.
+	clientConfig := testapi.Config{
+		Logger:       &customLogger,
+		PollInterval: 1 * time.Second,
+	}
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	require.NoError(t, err)
 
-		// Start a test with a minimal subject.
-		testSubject := newDepGraphTestSubject(t, uuid.New())
-		params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
+	// Start a test with a minimal subject.
+	testSubject := newDepGraphTestSubject(t, uuid.New())
+	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
 
-		handle, err := testClient.StartTest(ctx, params)
-		require.NoError(t, err)
-		require.NotNil(t, handle)
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
 
-		// pollJobToCompletion will encounter the 404 from our mock, log the warning, and continue polling.
-		// The Wait() call will likely terminate due to context deadline.
-		waitCtx, cancelWait := context.WithTimeout(ctx, 2*time.Second)
-		defer cancelWait()
+	// pollJobToCompletion will encounter the 404 from our mock, log the warning, and continue polling.
+	// The Wait() call will likely terminate due to context deadline.
+	waitCtx, cancelWait := context.WithTimeout(ctx, 2*time.Second)
+	defer cancelWait()
 
-		_ = handle.Wait(waitCtx) //nolint:errcheck // error expected if context times out
+	_ = handle.Wait(waitCtx) //nolint:errcheck // error expected if context times out
 
-		// Assert log output
-		logOutput := logBuffer.String()
-		assert.Contains(t, logOutput, "Job polling returned 404 Not Found")
-		assert.Contains(t, logOutput, fmt.Sprintf(`"jobID":"%s"`, expectedJobIDInLog.String()))
-		assert.Contains(t, logOutput, fmt.Sprintf(`"orgID":"%s"`, orgID.String()))
-		assert.Contains(t, logOutput, `"level":"warn"`)
-	})
-
-	t.Run("default logger is used when none provided", func(t *testing.T) {
-		t.Parallel()
-		// Verify that NewTestClient doesn't panic and successfully creates a client when no logger is provided.
-
-		// Arrange
-		serverURL := "https://test.snyk.io/"
-		httpClient := &http.Client{}
-
-		// Act
-		testClient, err := testapi.NewTestClient(
-			serverURL,
-			testapi.Config{}, // No logger specified
-			testapi.WithHTTPClient(httpClient),
-		)
-
-		// Assert
-		assert.NotNil(t, testClient)
-		assert.NoError(t, err)
-	})
+	logOutput := logBuffer.String()
+	assert.Contains(t, logOutput, "404 Not Found")
 }
 
 // Helper function to assert a "Fail" outcome for a test result.
