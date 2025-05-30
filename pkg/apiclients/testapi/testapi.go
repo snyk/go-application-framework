@@ -27,7 +27,7 @@ type Config struct {
 type client struct {
 	lowLevelClient ClientWithResponsesInterface
 	config         Config
-	logger         zerolog.Logger
+	logger         *zerolog.Logger
 }
 
 // TestResult defines the contract for accessing test result information.
@@ -153,11 +153,12 @@ func NewTestClient(serverBaseUrl string, cfg Config, opts ...ClientOption) (Test
 		cfg.APIVersion = DefaultAPIVersion
 	}
 
-	var clLogger zerolog.Logger
+	var clLogger *zerolog.Logger
 	if cfg.Logger != nil {
-		clLogger = *cfg.Logger
+		clLogger = cfg.Logger
 	} else {
-		clLogger = zerolog.Nop()
+		nopLogger := zerolog.Nop()
+		clLogger = &nopLogger
 	}
 
 	return &client{
