@@ -10,7 +10,6 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	cache "github.com/patrickmn/go-cache"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	pflag "github.com/spf13/pflag"
 )
@@ -534,16 +533,4 @@ func (m *MockConfiguration) Unset(key string) {
 func (mr *MockConfigurationMockRecorder) Unset(key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unset", reflect.TypeOf((*MockConfiguration)(nil).Unset), key)
-}
-
-// setCache mocks base method.
-func (m *MockConfiguration) setCache(c *cache.Cache) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "setCache", c)
-}
-
-// setCache indicates an expected call of setCache.
-func (mr *MockConfigurationMockRecorder) setCache(c interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setCache", reflect.TypeOf((*MockConfiguration)(nil).setCache), c)
 }

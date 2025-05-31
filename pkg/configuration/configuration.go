@@ -77,8 +77,6 @@ type Configuration interface {
 	GetFiles() []string
 	ReloadConfig() error
 	ClearCache()
-
-	setCache(c *cache.Cache)
 }
 
 // extendedViper is a wrapper around the viper library.
@@ -178,10 +176,15 @@ func WithFiles(files ...string) Opts {
 // WithCachingEnabled can be used to enable TTL based caching. Use NoCacheExpiration to keep values cached indefinitely.
 func WithCachingEnabled(cacheDuration time.Duration) Opts {
 	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			panic("configuration must be used with WithCachingEnabled()")
+		}
+
 		localCache := cache.New(cacheDuration, defaultCacheCleanupInterval)
-		c.setCache(localCache)
-		c.Set(CONFIG_CACHE_DISABLED, false)
-		c.Set(CONFIG_CACHE_TTL, cacheDuration)
+		ev.setCache(localCache)
+		ev.Set(CONFIG_CACHE_DISABLED, false)
+		ev.Set(CONFIG_CACHE_TTL, cacheDuration)
 	}
 }
 
@@ -314,9 +317,14 @@ func (ev *extendedViper) Clone() Configuration {
 	}
 
 	if ev.defaultCache != nil {
+		evClone, ok := clone.(*extendedViper)
+		if !ok {
+			panic("cloned configuration is of different type")
+		}
+
 		items := ev.defaultCache.Items()
 		clonedCache := cache.NewFrom(cacheTTL, defaultCacheCleanupInterval, items)
-		clone.setCache(clonedCache)
+		evClone.setCache(clonedCache)
 	}
 
 	return clone
