@@ -346,7 +346,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 		go o.shutdownServerFunc(srv)
 	})
 
-	err, success := o.serveAndListen(ctx, srv, state, codeChallenge)
+	success, err := o.serveAndListen(ctx, srv, state, codeChallenge)
 	if err != nil {
 		return err
 	} else if !success {
@@ -382,7 +382,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 	return err
 }
 
-func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Server, state string, codeChallenge string) (error, bool) {
+func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Server, state string, codeChallenge string) (bool, error) {
 	// Timeout used to cancel listening for an auth response
 	ctx, cancelFunc := context.WithTimeout(ctx, TIMEOUT_SECONDS)
 	defer cancelFunc()
@@ -427,16 +427,16 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
 			if canceled.Load() {
-				return nil, false // No need to error, the user canceled this auth request
+				return false, nil // No need to error, the user canceled this auth request
 			}
 			if timedOut.Load() {
-				return errors.New("authentication failed (timeout)"), false
+				return false, errors.New("authentication failed (timeout)")
 			}
-			return nil, true // success
+			return true, nil // success
 		}
-		return nil, false // maybe not a success, but we already opened the browser once, so we can't do that again
+		return false, nil // maybe not a success, but we already opened the browser once, so we can't do that again
 	}
-	return errors.New("authentication failed (no available port)"), false
+	return false, errors.New("authentication failed (no available port)")
 }
 
 func writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
