@@ -17,7 +17,8 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
 
-type Config struct {
+// config holds configuration for the test API client, set using ConfigOption functions.
+type config struct {
 	PollInterval          time.Duration // Default: 2000ms, Min: 1000ms
 	PollTimeout           time.Duration // Max total time for polling. Default: 30 min.
 	APIVersion            string
@@ -26,11 +27,13 @@ type Config struct {
 }
 
 // ConfigOption allows setting custom parameters during construction
-type ConfigOption func(c *Config)
+type ConfigOption func(c *config)
 
 // WithPollInterval sets the poll interval for the test client.
+// Defaults to 2 seconds if unset or <= 0.
+// Minimum interval is 1 second.
 func WithPollInterval(d time.Duration) ConfigOption {
-	return func(c *Config) {
+	return func(c *config) {
 		if d <= 0 {
 			c.PollInterval = DefaultPollInterval
 		} else {
@@ -41,14 +44,14 @@ func WithPollInterval(d time.Duration) ConfigOption {
 
 // WithPollTimeout sets the maximum total time for polling.
 func WithPollTimeout(d time.Duration) ConfigOption {
-	return func(c *Config) {
+	return func(c *config) {
 		c.PollTimeout = d
 	}
 }
 
 // WithAPIVersion sets the API version for the test client.
 func WithAPIVersion(v string) ConfigOption {
-	return func(c *Config) {
+	return func(c *config) {
 		if v == "" {
 			c.APIVersion = DefaultAPIVersion
 		} else {
@@ -59,7 +62,7 @@ func WithAPIVersion(v string) ConfigOption {
 
 // WithLogger sets the logger for the test client.
 func WithLogger(l *zerolog.Logger) ConfigOption {
-	return func(c *Config) {
+	return func(c *config) {
 		c.Logger = l
 	}
 }
@@ -67,7 +70,7 @@ func WithLogger(l *zerolog.Logger) ConfigOption {
 // WithCustomHTTPClient allows overriding the default Doer, which is
 // automatically created using http.Client. This is useful for tests.
 func WithCustomHTTPClient(doer HttpRequestDoer) ConfigOption {
-	return func(c *Config) {
+	return func(c *config) {
 		opt := WithHTTPClient(doer)
 		c.lowLevelClientOptions = append(c.lowLevelClientOptions, opt)
 	}
@@ -76,7 +79,7 @@ func WithCustomHTTPClient(doer HttpRequestDoer) ConfigOption {
 // WithCustomRequestEditorFn allows setting up a callback function, which will be
 // called right before sending the request. This can be used to mutate the request.
 func WithCustomRequestEditorFn(fn RequestEditorFn) ConfigOption {
-	return func(c *Config) {
+	return func(c *config) {
 		opt := WithRequestEditorFn(fn)
 		c.lowLevelClientOptions = append(c.lowLevelClientOptions, opt)
 	}
@@ -84,7 +87,7 @@ func WithCustomRequestEditorFn(fn RequestEditorFn) ConfigOption {
 
 type client struct {
 	lowLevelClient ClientWithResponsesInterface
-	config         Config
+	config         config
 	logger         *zerolog.Logger
 }
 
@@ -196,7 +199,7 @@ func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
 
 // NewTestClient returns a new instance of the test client, configured with the provided options.
 func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, error) {
-	cfg := Config{
+	cfg := config{
 		PollInterval: DefaultPollInterval,
 		APIVersion:   DefaultAPIVersion,
 	}
