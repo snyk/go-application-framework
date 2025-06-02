@@ -87,6 +87,11 @@ const (
 	JobRelationshipFieldDataTypeTests JobRelationshipFieldDataType = "tests"
 )
 
+// Defines values for LocalPathLocatorType.
+const (
+	LocalPath LocalPathLocatorType = "local_path"
+)
+
 // Defines values for OtherEvidenceSource.
 const (
 	OtherEvidenceSourceOther OtherEvidenceSource = "other"
@@ -95,6 +100,11 @@ const (
 // Defines values for OtherLocationType.
 const (
 	OtherLocationTypeOther OtherLocationType = "other"
+)
+
+// Defines values for OtherLocatorType.
+const (
+	OtherLocatorTypeOther OtherLocatorType = "other"
 )
 
 // Defines values for OtherProblemSource.
@@ -123,9 +133,24 @@ const (
 	PolicyRef0LocalPolicy PolicyRef0 = "local_policy"
 )
 
+// Defines values for ProjectEntityLocatorType.
+const (
+	ProjectEntity ProjectEntityLocatorType = "project_entity"
+)
+
+// Defines values for ProjectNameLocatorType.
+const (
+	ProjectName ProjectNameLocatorType = "project_name"
+)
+
 // Defines values for SBOMReachabilitySubjectType.
 const (
 	SbomReachability SBOMReachabilitySubjectType = "sbom_reachability"
+)
+
+// Defines values for ScmRepoLocatorType.
+const (
+	ScmRepo ScmRepoLocatorType = "scm_repo"
 )
 
 // Defines values for Severity.
@@ -219,7 +244,7 @@ const (
 
 // Defines values for SnykvulndbOtherPackageEcosystemType.
 const (
-	SnykvulndbOtherPackageEcosystemTypeOther SnykvulndbOtherPackageEcosystemType = "other"
+	Other SnykvulndbOtherPackageEcosystemType = "other"
 )
 
 // ActualVersion Resolved API version
@@ -248,16 +273,12 @@ type CweProblemSource string
 // DeepcodeBundleSubject Test subject representing source code uploaded to Snyk using DeepCode
 // bundle APIs.
 type DeepcodeBundleSubject struct {
-	// AssetId Asset associated with the tested content.
-	AssetId openapi_types.UUID `json:"asset_id"`
-
 	// BundleId Deepcode Bundle ID. These IDs are sha256 digests (32 bytes or 64 hex digits).
 	BundleId string `json:"bundle_id"`
 
-	// Path Path of the uploaded file or directory, relative to the client's current
-	// working directory.
-	Path string                    `json:"path"`
-	Type DeepcodeBundleSubjectType `json:"type"`
+	// Locator Locate local paths from which the source code bundle was derived.
+	Locator LocalPathLocator          `json:"locator"`
+	Type    DeepcodeBundleSubjectType `json:"type"`
 }
 
 // DeepcodeBundleSubjectType defines model for DeepcodeBundleSubject.Type.
@@ -265,15 +286,12 @@ type DeepcodeBundleSubjectType string
 
 // DepGraphSubject Test subject representing a Snyk dependency graph (a legacy SBOM format).
 type DepGraphSubject struct {
-	// AssetId Asset associated with the tested content.
-	AssetId openapi_types.UUID `json:"asset_id"`
-
-	// SourceFiles Source file paths within the asset's contents from which the SBOM was derived.
+	// Locator Source file(s) from which the dependency graph was derived.
 	//
 	// For some managed package ecosystems (examples: Maven, Yarn workspaces),
-	// Snyk might derive an SBOM from many files.
-	SourceFiles []string            `json:"source_files"`
-	Type        DepGraphSubjectType `json:"type"`
+	// Snyk might derive a dependency graph from several files.
+	Locator LocalPathLocator    `json:"locator"`
+	Type    DepGraphSubjectType `json:"type"`
 }
 
 // DepGraphSubjectType defines model for DepGraphSubject.Type.
@@ -281,20 +299,17 @@ type DepGraphSubjectType string
 
 // DepGraphSubjectCreate Test subject representing a Snyk dependency graph (a legacy SBOM format).
 type DepGraphSubjectCreate struct {
-	// AssetId Asset associated with the tested content.
-	AssetId openapi_types.UUID `json:"asset_id"`
-
 	// DepGraph When creating a test, provide the dep-graph contents inline to the request.
 	//
 	// This attribute is only available when creating a new Test.
 	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
 
-	// SourceFiles Source file paths within the asset's contents from which the SBOM was derived.
+	// Locator Source file(s) from which the dependency graph was derived.
 	//
 	// For some managed package ecosystems (examples: Maven, Yarn workspaces),
-	// Snyk might derive an SBOM from many files.
-	SourceFiles []string                  `json:"source_files"`
-	Type        DepGraphSubjectCreateType `json:"type"`
+	// Snyk might derive a dependency graph from several files.
+	Locator LocalPathLocator          `json:"locator"`
+	Type    DepGraphSubjectCreateType `json:"type"`
 }
 
 // DepGraphSubjectCreateType defines model for DepGraphSubjectCreate.Type.
@@ -523,18 +538,17 @@ type FindingType string
 // GitURLCoordinatesSubject Test subject representing a source tree located in a Git repository that
 // has a Snyk SCM integration.
 type GitURLCoordinatesSubject struct {
-	// AssetId Asset associated with the tested content.
-	AssetId openapi_types.UUID `json:"asset_id"`
+	// CommitId Commit ID of the Git commit from which content will be retrieved for the
+	// test.
+	CommitId string `json:"commit_id"`
 
 	// IntegrationId Integration used to access the Git SCM repository in order to retrieve its source contents.
 	IntegrationId openapi_types.UUID `json:"integration_id"`
 
-	// RepoUrl Repo URL is the location of the Git SCM repository to test.
-	RepoUrl string `json:"repo_url"`
-
-	// Revision Revision is the specific Git commit in the repository to test.
-	Revision string                       `json:"revision"`
-	Type     GitURLCoordinatesSubjectType `json:"type"`
+	// Locator Locate the SCM repository from which content will be retrieved for the
+	// test.
+	Locator ScmRepoLocator               `json:"locator"`
+	Type    GitURLCoordinatesSubjectType `json:"type"`
 }
 
 // GitURLCoordinatesSubjectType defines model for GitURLCoordinatesSubject.Type.
@@ -609,6 +623,17 @@ type LinkProperty1 struct {
 	Meta *Meta `json:"meta,omitempty"`
 }
 
+// LocalPathLocator LocalPathLocator locates a test subject by local file paths, relative to the
+// working copy top-level directory of the source code.
+type LocalPathLocator struct {
+	// Paths Local file paths.
+	Paths []string             `json:"paths"`
+	Type  LocalPathLocatorType `json:"type"`
+}
+
+// LocalPathLocatorType defines model for LocalPathLocator.Type.
+type LocalPathLocatorType string
+
 // LocalPolicy Locally configured policy options for determining outcome of this specific test.
 type LocalPolicy struct {
 	// RiskScoreThreshold Findings of equal or greater risk score will fail the test.
@@ -651,6 +676,15 @@ type OtherLocation struct {
 // OtherLocationType defines model for OtherLocation.Type.
 type OtherLocationType string
 
+// OtherLocator OtherLocator represents any locator that this version of the API is not
+// capable of expressing.
+type OtherLocator struct {
+	Type OtherLocatorType `json:"type"`
+}
+
+// OtherLocatorType defines model for OtherLocator.Type.
+type OtherLocatorType string
+
 // OtherProblem Problem which this API version is not capable of expressing.
 //
 // This problem may be available in a newer version of this API.
@@ -661,11 +695,10 @@ type OtherProblem struct {
 // OtherProblemSource defines model for OtherProblem.Source.
 type OtherProblemSource string
 
-// OtherSubject OtherSubject represents any subject we don't yet have a way to express.
+// OtherSubject OtherSubject represents any subject that this version of the API is not
+// capable of expressing.
 type OtherSubject struct {
-	// AssetId Asset associated with the tested content.
-	AssetId *openapi_types.UUID `json:"asset_id,omitempty"`
-	Type    OtherSubjectType    `json:"type"`
+	Type OtherSubjectType `json:"type"`
 }
 
 // OtherSubjectType defines model for OtherSubject.Type.
@@ -734,6 +767,31 @@ type Problem struct {
 	union json.RawMessage
 }
 
+// ProjectEntityLocator ProjectEntityLocator locates a Snyk Project by its public ID.
+type ProjectEntityLocator struct {
+	// ProjectId Public ID of the Snyk Project.
+	ProjectId openapi_types.UUID       `json:"project_id"`
+	Type      ProjectEntityLocatorType `json:"type"`
+}
+
+// ProjectEntityLocatorType defines model for ProjectEntityLocator.Type.
+type ProjectEntityLocatorType string
+
+// ProjectNameLocator ProjectNameLocator locates a Snyk Project by its name.
+type ProjectNameLocator struct {
+	// ProjectName Name of the Snyk Project.
+	ProjectName string `json:"project_name"`
+
+	// TargetReference Target reference which differentiates this project, for example, with a
+	// branch name or version. Projects having the same reference can be grouped
+	// based on that reference.
+	TargetReference *string                `json:"target_reference,omitempty"`
+	Type            ProjectNameLocatorType `json:"type"`
+}
+
+// ProjectNameLocatorType defines model for ProjectNameLocator.Type.
+type ProjectNameLocatorType string
+
 // QueryVersion Requested API version
 type QueryVersion = string
 
@@ -757,11 +815,11 @@ type RiskScore struct {
 
 // SBOMReachabilitySubject Test subject for SBOM test with reachability analysis.
 type SBOMReachabilitySubject struct {
-	// AssetId Asset associated with the tested content.
-	AssetId openapi_types.UUID `json:"asset_id"`
-
 	// CodeBundleId Source code to inspect for the reach of the vulnerable dependencies.
 	CodeBundleId string `json:"code_bundle_id"`
+
+	// Locator Locate the local paths from which the SBOM and source code were derived.
+	Locator LocalPathLocator `json:"locator"`
 
 	// SbomBundleId The SBOM to test for vulnerable dependencies.
 	SbomBundleId string                      `json:"sbom_bundle_id"`
@@ -770,6 +828,22 @@ type SBOMReachabilitySubject struct {
 
 // SBOMReachabilitySubjectType defines model for SBOMReachabilitySubject.Type.
 type SBOMReachabilitySubjectType string
+
+// ScmRepoLocator ScmRepoLocator locates a test subject by SCM repository coordinates.
+type ScmRepoLocator struct {
+	// BranchName Branch name, if known and applicable to locating the test subject.
+	//
+	// If not specified, the branch name can be assumed to be the "default
+	// integration branch" of the repository.
+	BranchName *string            `json:"branch_name,omitempty"`
+	Type       ScmRepoLocatorType `json:"type"`
+
+	// Url URL of the SCM repository.
+	Url string `json:"url"`
+}
+
+// ScmRepoLocatorType defines model for ScmRepoLocator.Type.
+type ScmRepoLocatorType string
 
 // Severity Indicate the severity of a finding discovered by a Test.
 type Severity string
@@ -1039,6 +1113,13 @@ type TestAttributes struct {
 
 	// Subject The subject of a test.
 	Subject TestSubject `json:"subject"`
+
+	// SubjectLocators Additional locators which may help locate the test subject across test workflows.
+	//
+	// Test subjects generally will have a primary locator. Additional locators
+	// may be provided to help link the test to existing projects and/or assets in
+	// the Snyk platform.
+	SubjectLocators *[]TestSubjectLocator `json:"subject_locators,omitempty"`
 }
 
 // TestAttributesCreate TestAttributes represents the attributes of a Test resource.
@@ -1049,6 +1130,13 @@ type TestAttributesCreate struct {
 
 	// Subject The subject of a test.
 	Subject TestSubjectCreate `json:"subject"`
+
+	// SubjectLocators Additional locators which may help locate the test subject across test workflows.
+	//
+	// Test subjects generally will have a primary locator. Additional locators
+	// may be provided to help link the test to existing projects and/or assets in
+	// the Snyk platform.
+	SubjectLocators *[]TestSubjectLocator `json:"subject_locators,omitempty"`
 }
 
 // TestConfiguration Test configuration.
@@ -1149,6 +1237,11 @@ type TestSubject struct {
 // TestSubjectCreate The subject of a test, which identifies the asset and content references
 // necessary to conduct a security test.
 type TestSubjectCreate struct {
+	union json.RawMessage
+}
+
+// TestSubjectLocator defines model for TestSubjectLocator.
+type TestSubjectLocator struct {
 	union json.RawMessage
 }
 
@@ -3313,6 +3406,185 @@ func (t TestSubjectCreate) MarshalJSON() ([]byte, error) {
 }
 
 func (t *TestSubjectCreate) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsProjectEntityLocator returns the union data inside the TestSubjectLocator as a ProjectEntityLocator
+func (t TestSubjectLocator) AsProjectEntityLocator() (ProjectEntityLocator, error) {
+	var body ProjectEntityLocator
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProjectEntityLocator overwrites any union data inside the TestSubjectLocator as the provided ProjectEntityLocator
+func (t *TestSubjectLocator) FromProjectEntityLocator(v ProjectEntityLocator) error {
+	v.Type = "project_entity"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProjectEntityLocator performs a merge with any union data inside the TestSubjectLocator, using the provided ProjectEntityLocator
+func (t *TestSubjectLocator) MergeProjectEntityLocator(v ProjectEntityLocator) error {
+	v.Type = "project_entity"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsProjectNameLocator returns the union data inside the TestSubjectLocator as a ProjectNameLocator
+func (t TestSubjectLocator) AsProjectNameLocator() (ProjectNameLocator, error) {
+	var body ProjectNameLocator
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromProjectNameLocator overwrites any union data inside the TestSubjectLocator as the provided ProjectNameLocator
+func (t *TestSubjectLocator) FromProjectNameLocator(v ProjectNameLocator) error {
+	v.Type = "project_name"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeProjectNameLocator performs a merge with any union data inside the TestSubjectLocator, using the provided ProjectNameLocator
+func (t *TestSubjectLocator) MergeProjectNameLocator(v ProjectNameLocator) error {
+	v.Type = "project_name"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsScmRepoLocator returns the union data inside the TestSubjectLocator as a ScmRepoLocator
+func (t TestSubjectLocator) AsScmRepoLocator() (ScmRepoLocator, error) {
+	var body ScmRepoLocator
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScmRepoLocator overwrites any union data inside the TestSubjectLocator as the provided ScmRepoLocator
+func (t *TestSubjectLocator) FromScmRepoLocator(v ScmRepoLocator) error {
+	v.Type = "scm_repo"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScmRepoLocator performs a merge with any union data inside the TestSubjectLocator, using the provided ScmRepoLocator
+func (t *TestSubjectLocator) MergeScmRepoLocator(v ScmRepoLocator) error {
+	v.Type = "scm_repo"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsLocalPathLocator returns the union data inside the TestSubjectLocator as a LocalPathLocator
+func (t TestSubjectLocator) AsLocalPathLocator() (LocalPathLocator, error) {
+	var body LocalPathLocator
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromLocalPathLocator overwrites any union data inside the TestSubjectLocator as the provided LocalPathLocator
+func (t *TestSubjectLocator) FromLocalPathLocator(v LocalPathLocator) error {
+	v.Type = "local_path"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeLocalPathLocator performs a merge with any union data inside the TestSubjectLocator, using the provided LocalPathLocator
+func (t *TestSubjectLocator) MergeLocalPathLocator(v LocalPathLocator) error {
+	v.Type = "local_path"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsOtherLocator returns the union data inside the TestSubjectLocator as a OtherLocator
+func (t TestSubjectLocator) AsOtherLocator() (OtherLocator, error) {
+	var body OtherLocator
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOtherLocator overwrites any union data inside the TestSubjectLocator as the provided OtherLocator
+func (t *TestSubjectLocator) FromOtherLocator(v OtherLocator) error {
+	v.Type = "other"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeOtherLocator performs a merge with any union data inside the TestSubjectLocator, using the provided OtherLocator
+func (t *TestSubjectLocator) MergeOtherLocator(v OtherLocator) error {
+	v.Type = "other"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t TestSubjectLocator) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t TestSubjectLocator) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "local_path":
+		return t.AsLocalPathLocator()
+	case "other":
+		return t.AsOtherLocator()
+	case "project_entity":
+		return t.AsProjectEntityLocator()
+	case "project_name":
+		return t.AsProjectNameLocator()
+	case "scm_repo":
+		return t.AsScmRepoLocator()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t TestSubjectLocator) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *TestSubjectLocator) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
