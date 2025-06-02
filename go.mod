@@ -25,11 +25,13 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/gofrs/flock v0.12.1
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/oapi-codegen/runtime v1.1.1
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/snyk/error-catalog-golang-public v0.0.0-20250429130542-564b0605020e
 	github.com/subosito/gotenv v1.4.1
 	golang.org/x/sync v0.13.0

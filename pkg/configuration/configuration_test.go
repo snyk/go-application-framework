@@ -527,7 +527,7 @@ func Test_Configuration_Locking(t *testing.T) {
 		var wg sync.WaitGroup
 		N := 100
 
-		config := NewWithOpts(WithSupportedEnvVarPrefixes("test_"))
+		config := NewWithOpts(WithSupportedEnvVarPrefixes("test_"), WithCachingEnabled(3*time.Second))
 
 		for i := range N {
 			wg.Add(1)
@@ -535,6 +535,7 @@ func Test_Configuration_Locking(t *testing.T) {
 				defer wg.Done()
 
 				key := fmt.Sprintf("test_%d", i)
+				config.AddDefaultValue(key, StandardDefaultValueFunction(2))
 				_ = config.Get(key)
 			}()
 		}
@@ -789,4 +790,109 @@ func Test_Configuration_envVarSupport(t *testing.T) {
 
 		cleanUpEnvVars()
 	})
+}
+
+func Test_Configuration_caching_enabled(t *testing.T) {
+	myKey := "some"
+	myValue := 42
+	defaultFuncCalled := 0
+	cacheDuration := 10 * time.Minute
+
+	config := NewWithOpts(WithCachingEnabled(cacheDuration))
+	config.AddDefaultValue(myKey, func(existingValue interface{}) (interface{}, error) {
+		defaultFuncCalled++
+
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		return defaultFuncCalled, nil
+	})
+
+	// get uncached value
+	actual1 := config.GetInt(myKey)
+	assert.Equal(t, defaultFuncCalled, actual1)
+
+	// get cached value
+	defaultFuncCalledBefore := defaultFuncCalled
+	actual2 := config.GetInt(myKey)
+	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
+	assert.Equal(t, actual1, actual2)
+
+	// set explicit value and invalidate cache
+	config.Set(myKey, myValue)
+	actual3 := config.GetInt(myKey)
+	assert.Equal(t, defaultFuncCalledBefore+1, defaultFuncCalled)
+	assert.Equal(t, myValue, actual3)
+
+	// get cached value
+	defaultFuncCalledBefore = defaultFuncCalled
+	actual4 := config.GetInt(myKey)
+	assert.Equal(t, myValue, actual4)
+	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
+
+	// create a clone and ensure to still access the cached values
+	clonedConfig := config.Clone()
+	actual4Cloned := clonedConfig.GetInt(myKey)
+	assert.Equal(t, myValue, actual4Cloned)
+	assert.Equal(t, defaultFuncCalledBefore, defaultFuncCalled, "Default function should not be called when using cached value")
+
+	// clear cache
+	clonedConfig.ClearCache()
+
+	actual5Cloned := clonedConfig.GetInt(myKey)
+	assert.Equal(t, myValue, actual5Cloned)
+	assert.Equal(t, defaultFuncCalledBefore+1, defaultFuncCalled, "Default function should be called after clearing the cache")
+}
+
+func Test_extendedViper_cacheSettings(t *testing.T) {
+	cacheDuration := 10 * time.Minute
+
+	config := NewWithOpts(WithCachingEnabled(cacheDuration))
+	assert.False(t, config.GetBool(CONFIG_CACHE_DISABLED))
+	assert.Equal(t, cacheDuration, config.GetDuration(CONFIG_CACHE_TTL))
+
+	ev, ok := config.(*extendedViper)
+	assert.True(t, ok)
+	enabled, duration, err := ev.getCacheSettings()
+	assert.NoError(t, err)
+	assert.True(t, enabled)
+	assert.Equal(t, cacheDuration, duration)
+}
+
+func Test_toDuration(t *testing.T) {
+	testcases := []struct {
+		name     string
+		input    interface{}
+		expected time.Duration
+	}{
+		{
+			name:     "string",
+			input:    "10s",
+			expected: 10 * time.Second,
+		},
+		{
+			name:     "duration",
+			input:    10 * time.Minute,
+			expected: 10 * time.Minute,
+		},
+		{
+			name:     "int",
+			input:    10,
+			expected: 10 * time.Nanosecond,
+		},
+		{
+			name:     "int64",
+			input:    int64(10000),
+			expected: 10000 * time.Nanosecond,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			actual, err := toDuration(tcase.input)
+			assert.NoError(t, err)
+			assert.Equal(t, actual, tcase.expected)
+		})
+	}
 }

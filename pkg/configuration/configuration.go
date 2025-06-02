@@ -11,7 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -23,6 +25,8 @@ type DefaultValueFunction func(existingValue interface{}) (interface{}, error)
 type configType string
 type KeyType int
 
+const NoCacheExpiration time.Duration = -1
+const defaultCacheCleanupInterval = 1 * time.Minute
 const inMemory configType = "in-memory"
 const jsonFile configType = "json"
 const (
@@ -43,6 +47,8 @@ type Configuration interface {
 	GetStringSlice(key string) []string
 	GetBool(key string) bool
 	GetBoolWithError(key string) (bool, error)
+	GetDuration(key string) time.Duration
+	GetDurationWithError(key string) (time.Duration, error)
 	GetInt(key string) int
 	GetFloat64(key string) float64
 	GetUrl(key string) *url.URL
@@ -70,6 +76,7 @@ type Configuration interface {
 	SetFiles(files ...string)
 	GetFiles() []string
 	ReloadConfig() error
+	ClearCache()
 }
 
 // extendedViper is a wrapper around the viper library.
@@ -84,6 +91,7 @@ type extendedViper struct {
 	mutex               sync.RWMutex
 	automaticEnvEnabled bool
 	configFiles         []string
+	defaultCache        *cache.Cache
 
 	// persistedKeys stores the keys that need to be persisted to storage when Set is called.
 	// Only specific keys are persisted, so viper's native functionality is not used.
@@ -162,6 +170,21 @@ func WithSupportedEnvVarPrefixes(prefixes ...string) Opts {
 func WithFiles(files ...string) Opts {
 	return func(c Configuration) {
 		c.SetFiles(files...)
+	}
+}
+
+// WithCachingEnabled can be used to enable TTL based caching. Use NoCacheExpiration to keep values cached indefinitely.
+func WithCachingEnabled(cacheDuration time.Duration) Opts {
+	return func(c Configuration) {
+		ev, ok := c.(*extendedViper)
+		if !ok {
+			panic("configuration must be used with WithCachingEnabled()")
+		}
+
+		localCache := cache.New(cacheDuration, defaultCacheCleanupInterval)
+		ev.setCache(localCache)
+		ev.Set(CONFIG_CACHE_DISABLED, false)
+		ev.Set(CONFIG_CACHE_TTL, cacheDuration)
 	}
 }
 
@@ -248,6 +271,10 @@ func readConfigFilesIntoViper(files []string, config *extendedViper) {
 
 // Clone creates a copy of the current configuration.
 func (ev *extendedViper) Clone() Configuration {
+	// these lookups need to happen outside the critical section to avoid dealocks
+	cacheTTL := ev.GetDuration(CONFIG_CACHE_TTL)
+
+	// start critical section, everything within needs to be synchronized to safely clone.
 	ev.mutex.RLock()
 	defer ev.mutex.RUnlock()
 
@@ -289,6 +316,17 @@ func (ev *extendedViper) Clone() Configuration {
 		clone.AddFlagSet(v)
 	}
 
+	if ev.defaultCache != nil {
+		evClone, ok := clone.(*extendedViper)
+		if !ok {
+			panic("cloned configuration is of different type")
+		}
+
+		items := ev.defaultCache.Items()
+		clonedCache := cache.NewFrom(cacheTTL, defaultCacheCleanupInterval, items)
+		evClone.setCache(clonedCache)
+	}
+
 	return clone
 }
 
@@ -298,6 +336,9 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	localStorage := ev.storage
 	isPersisted := ev.persistedKeys[key]
 	ev.viper.Set(key, value)
+	if ev.defaultCache != nil {
+		ev.defaultCache.Delete(key)
+	}
 	ev.mutex.Unlock()
 
 	if localStorage != nil && isPersisted {
@@ -382,17 +423,48 @@ func (ev *extendedViper) Get(key string) interface{} {
 	return value
 }
 
-// GetWithError returns a configuration value and and the potential error returned by the DefaultValueFunction for the configuration value.
-func (ev *extendedViper) GetWithError(key string) (value interface{}, err error) {
+// GetWithError returns a configuration value and the potential error returned by the DefaultValueFunction for the configuration value.
+func (ev *extendedViper) GetWithError(key string) (interface{}, error) {
+	var err error
+	var defaultFunc DefaultValueFunction
+	var value interface{}
+	var cacheDuration time.Duration
+	var cacheEnabled bool
+	var localDefaultCache *cache.Cache
+
 	ev.mutex.Lock()
+	defaultFunc = ev.defaultValues[key]
+
+	// if enabled use cache
+	cacheEnabled, cacheDuration, err = ev.getCacheSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache settings %w", err)
+	}
+
+	if cacheEnabled {
+		localDefaultCache = ev.defaultCache
+		cachedValue, valueIsCached := localDefaultCache.Get(key)
+
+		// return cached value if found
+		if valueIsCached {
+			ev.mutex.Unlock()
+			return cachedValue, nil
+		}
+	}
+
 	value, err = ev.get(key)
-	defaultFunc, ok := ev.defaultValues[key]
 	ev.mutex.Unlock()
 
-	if ok && defaultFunc != nil {
+	// if nothing was found in the cache, try to execute the default function
+	if defaultFunc != nil {
 		var defErr error
 		value, defErr = defaultFunc(value)
 		err = errors.Join(err, defErr)
+
+		// if enabled and no error occurred, store value in cache
+		if cacheEnabled && err == nil {
+			localDefaultCache.Set(key, value, cacheDuration)
+		}
 	}
 
 	return value, err
@@ -429,39 +501,31 @@ func (ev *extendedViper) GetBoolWithError(key string) (bool, error) {
 		return false, err
 	}
 
-	switch v := result.(type) {
-	case bool:
-		return v, nil
-	case string:
-		boolResult, parseErr := strconv.ParseBool(v)
-		if parseErr != nil {
-			return false, parseErr
-		}
-		return boolResult, nil
-	}
-
-	return false, fmt.Errorf("value for key %s is not a bool", key)
+	return toBool(result)
 }
 
 // GetBool returns a configuration value as bool.
 func (ev *extendedViper) GetBool(key string) bool {
-	result := ev.Get(key)
-	if result == nil {
-		return false
+	//nolint:errcheck // discarded error for callers who don't care
+	result, _ := ev.GetBoolWithError(key)
+	return result
+}
+
+// GetDurationWithError returns a configuration value as time.Duration.
+func (ev *extendedViper) GetDurationWithError(key string) (time.Duration, error) {
+	result, err := ev.GetWithError(key)
+	if err != nil || result == nil {
+		return 0, err
 	}
 
-	switch v := result.(type) {
-	case bool:
-		return v
-	case string:
-		boolResult, err := strconv.ParseBool(v)
-		if err != nil {
-			return false
-		}
-		return boolResult
-	}
+	return toDuration(result)
+}
 
-	return false
+// GetDuration returns a configuration value as time.Duration.
+func (ev *extendedViper) GetDuration(key string) time.Duration {
+	//nolint:errcheck // discarded error for callers who don't care
+	result, _ := ev.GetDurationWithError(key)
+	return result
 }
 
 // GetInt returns a configuration value as int.
@@ -740,4 +804,84 @@ func (ev *extendedViper) GetFiles() []string {
 
 func (ev *extendedViper) ReloadConfig() error {
 	return ev.viper.ReadInConfig()
+}
+
+func (ev *extendedViper) ClearCache() {
+	if ev.defaultCache != nil {
+		ev.defaultCache.Flush()
+	}
+}
+
+func (ev *extendedViper) setCache(c *cache.Cache) {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+	ev.defaultCache = c
+}
+
+// return true if enabled and a caching duration
+func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
+	if ev.defaultCache == nil {
+		return false, 0, nil
+	}
+
+	disabledRaw, err := ev.get(CONFIG_CACHE_DISABLED)
+	if err != nil {
+		return false, 0, err
+	}
+
+	durationRaw, err := ev.get(CONFIG_CACHE_TTL)
+	if err != nil {
+		return false, 0, err
+	}
+
+	enabled := true
+	duration := time.Duration(0)
+	if disabledRaw != nil {
+		disabled, boolError := toBool(disabledRaw)
+		if boolError != nil {
+			return false, 0, boolError
+		}
+
+		enabled = !disabled
+	}
+
+	if durationRaw != nil {
+		tmp, durError := toDuration(durationRaw)
+		if durError != nil {
+			return false, 0, durError
+		}
+		duration = tmp
+	}
+
+	return enabled, duration, nil
+}
+
+func toBool(result interface{}) (bool, error) {
+	switch v := result.(type) {
+	case bool:
+		return v, nil
+	case string:
+		boolResult, parseErr := strconv.ParseBool(v)
+		if parseErr != nil {
+			return false, parseErr
+		}
+		return boolResult, nil
+	}
+
+	return false, fmt.Errorf("value is not a bool")
+}
+
+func toDuration(result interface{}) (time.Duration, error) {
+	switch v := result.(type) {
+	case time.Duration:
+		return v, nil
+	case int:
+		return time.Duration(v), nil
+	case int64:
+		return time.Duration(v), nil
+	case string:
+		return time.ParseDuration(v)
+	}
+
+	return 0, fmt.Errorf("value is not of type duration")
 }
