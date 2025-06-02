@@ -331,7 +331,7 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 	mux.HandleFunc(CALLBACK_PATH, func(w http.ResponseWriter, r *http.Request) {
 		responseError = html.EscapeString(r.URL.Query().Get("error"))
 		if len(responseError) > 0 {
-			if o.writeCallbackErrorResponse(w, r.URL.Query(), responseError) {
+			if writeCallbackErrorResponse(w, r.URL.Query(), responseError) {
 				return
 			}
 		} else {
@@ -339,11 +339,6 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
 			responseInstance = html.EscapeString(r.URL.Query().Get("instance"))
-			o.logger.Debug().
-				Str("responseCode", responseCode).
-				Str("responseState", responseState).
-				Str("responseInstance", responseInstance).
-				Msg("OAuth2 response callback received, re-directing user to /authenticated")
 			w.Header().Add("Location", appUrl+"/authenticated?type=oauth")
 			w.WriteHeader(http.StatusMovedPermanently)
 		}
@@ -432,23 +427,19 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
 			if canceled.Load() {
-				o.logger.Info().Msg("OAuth2 request canceled.")
 				return nil, false // No need to error, the user canceled this auth request
 			}
 			if timedOut.Load() {
-				o.logger.Warn().Msg("OAuth2 request timed out.")
 				return errors.New("authentication failed (timeout)"), false
 			}
 			return nil, true // success
 		}
-		o.logger.Error().Err(listenErr).Msg("OAuth2 unexpected http.Server.Serve() error.")
 		return nil, false // maybe not a success, but we already opened the browser once, so we can't do that again
 	}
-	o.logger.Error().Msg("OAuth2 had no available ports to use.")
 	return errors.New("authentication failed (no available port)"), false
 }
 
-func (o *oAuth2Authenticator) writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
+func writeCallbackErrorResponse(w http.ResponseWriter, q url.Values, responseError string) bool {
 	tmpl := template.New("")
 	tmpl, tmplError := tmpl.Parse(errorResponsePage)
 	if tmplError != nil {
