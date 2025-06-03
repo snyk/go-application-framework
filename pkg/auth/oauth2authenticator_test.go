@@ -519,7 +519,7 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCanceled(t *test
 
 	select {
 	case authErr := <-authErrChannel:
-		assert.NoError(t, authErr, "CancellableAuthenticate should return nil on graceful cancellation.")
+		assert.ErrorIs(t, authErr, ErrAuthCanceled)
 		assert.ErrorIs(t, authCtx.Err(), context.Canceled, "CancellableAuthenticate may not have \"opened the browser\" to trigger the cancel.")
 	case <-time.After(2 * time.Second):
 		t.Fatal("Test timed out after 2 seconds waiting for CancellableAuthenticate to return, which should have been canceled.")

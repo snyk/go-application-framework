@@ -416,11 +416,11 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 
 		listenErr = srv.Serve(listener)
 		if errors.Is(listenErr, http.ErrServerClosed) { // if the server was shutdown normally, there is no need to iterate further
-			switch err := ctx.Err(); {
-			case errors.Is(err, context.Canceled):
-				return false, nil // No need to error, the user canceled this auth request
-			case errors.Is(err, context.DeadlineExceeded):
-				return false, errors.New("authentication failed (timeout)")
+			switch ctxErr := ctx.Err(); {
+			case errors.Is(ctxErr, context.Canceled):
+				return false, ErrAuthCanceled
+			case errors.Is(ctxErr, context.DeadlineExceeded):
+				return false, ErrAuthTimedOut
 			}
 			return true, nil // success
 		}
