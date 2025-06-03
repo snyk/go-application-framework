@@ -49,7 +49,6 @@ const (
 	AuthorizationCodeGrant
 )
 
-var _ Authenticator = (*oAuth2Authenticator)(nil)
 var _ CancelableAuthenticator = (*oAuth2Authenticator)(nil)
 
 var acceptedCallbackPorts = []int{8080, 18081, 28082, 38083, 48084}
@@ -199,11 +198,11 @@ func determineGrantType(config configuration.Configuration) GrantType {
 }
 
 //goland:noinspection GoUnusedExportedFunction
-func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
+func NewOAuth2Authenticator(config configuration.Configuration, httpClient *http.Client) CancelableAuthenticator {
 	return NewOAuth2AuthenticatorWithOpts(config, WithHttpClient(httpClient))
 }
 
-func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...OAuth2AuthenticatorOption) Authenticator {
+func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...OAuth2AuthenticatorOption) CancelableAuthenticator {
 	o := &oAuth2Authenticator{}
 	nopLogger := zerolog.Nop()
 

@@ -21,14 +21,10 @@ type Authenticator interface {
 }
 
 type CancelableAuthenticator interface {
+	Authenticator
 	// CancelableAuthenticate authenticates the user and returns an error if the authentication failed.
 	// Takes a context which can be used to interrupt the authentication.
 	CancelableAuthenticate(ctx context.Context) error
-	// AddAuthenticationHeader adds the authentication header to the request.
-	AddAuthenticationHeader(request *http.Request) error
-	// IsSupported returns true if the authenticator is ready for use.
-	// If false is returned, it is not possible to add authentication headers/env vars.
-	IsSupported() bool
 }
 
 func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
