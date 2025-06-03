@@ -487,7 +487,7 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCanceled(t *test
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	authCtx, cancelAuthCtx := context.WithCancel(context.Background())
-	defer cancelAuthCtx() // For safety to prevent resource leaks
+	t.Cleanup(cancelAuthCtx) // For safety to prevent resource leaks
 	var authCtxCanceled atomic.Bool
 
 	mockMux := http.NewServeMux()
