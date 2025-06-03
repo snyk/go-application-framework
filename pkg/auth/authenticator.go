@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"net/http"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -11,6 +13,7 @@ import (
 
 type Authenticator interface {
 	// Authenticate authenticates the user and returns an error if the authentication failed.
+	// Returns ErrAuthTimedOut if the underlying request times out.
 	Authenticate() error
 	// AddAuthenticationHeader adds the authentication header to the request.
 	AddAuthenticationHeader(request *http.Request) error
@@ -18,6 +21,22 @@ type Authenticator interface {
 	// If false is returned, it is not possible to add authentication headers/env vars.
 	IsSupported() bool
 }
+
+type CancelableAuthenticator interface {
+	Authenticator
+	// CancelableAuthenticate authenticates the user and returns an error if the authentication failed.
+	// Takes a context that can be used to interrupt the authentication.
+	// Returns ErrAuthCanceled when interrupted due to a context cancellation.
+	// Returns ErrAuthTimedOut if the underlying request times out.
+	CancelableAuthenticate(ctx context.Context) error
+}
+
+var (
+	// ErrAuthCanceled is returned when an auth request is canceled by the calling context.
+	ErrAuthCanceled = errors.New("authentication failed (canceled)")
+	// ErrAuthTimedOut is returned when an auth request times out.
+	ErrAuthTimedOut = errors.New("authentication failed (timeout)")
+)
 
 func CreateAuthenticator(config configuration.Configuration, httpClient *http.Client) Authenticator {
 	var authenticator Authenticator
