@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -113,7 +112,7 @@ func Test_getToken(t *testing.T) {
 	expectedTokenString, err := json.Marshal(expectedToken)
 	assert.NoError(t, err)
 
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, string(expectedTokenString))
 
 	// method under test
@@ -126,7 +125,7 @@ func Test_getToken(t *testing.T) {
 }
 
 func Test_getToken_NoToken_ReturnsNil(t *testing.T) {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, "")
 
 	// method under test
@@ -137,7 +136,7 @@ func Test_getToken_NoToken_ReturnsNil(t *testing.T) {
 }
 
 func Test_getToken_BadToken_ReturnsError(t *testing.T) {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(CONFIG_KEY_OAUTH_TOKEN, "something else")
 
 	// method under test
@@ -151,7 +150,7 @@ func Test_getOAuthConfiguration(t *testing.T) {
 	webapp := "https://app.fedramp-alpha.snykgov.io"
 	api := "https://api.fedramp-alpha.snykgov.io"
 
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(configuration.WEB_APP_URL, webapp)
 	config.Set(configuration.API_URL, api)
 
@@ -172,7 +171,7 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 		Expiry:       time.Now().Add(60 * time.Second).UTC(),
 	}
 
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
 	err := authenticator.(*oAuth2Authenticator).persistToken(newToken)
 	assert.NoError(t, err)
@@ -217,7 +216,7 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 		Expiry:       time.Now().Add(60 * time.Second).UTC(),
 	}
 
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
 	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
 	assert.NoError(t, err)
@@ -261,7 +260,7 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 		Expiry:       time.Now().Add(60 * time.Second).UTC(),
 	}
 
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
 	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
 	assert.NoError(t, err)
@@ -296,14 +295,14 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 }
 
 func Test_determineGrantType_empty(t *testing.T) {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	expected := AuthorizationCodeGrant
 	actual := determineGrantType(config)
 	assert.Equal(t, expected, actual)
 }
 
 func Test_determineGrantType_secret_only(t *testing.T) {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(PARAMETER_CLIENT_SECRET, "secret")
 	expected := AuthorizationCodeGrant
 	actual := determineGrantType(config)
@@ -311,7 +310,7 @@ func Test_determineGrantType_secret_only(t *testing.T) {
 }
 
 func Test_determineGrantType_id_only(t *testing.T) {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(PARAMETER_CLIENT_ID, "id")
 	expected := AuthorizationCodeGrant
 	actual := determineGrantType(config)
@@ -319,7 +318,7 @@ func Test_determineGrantType_id_only(t *testing.T) {
 }
 
 func Test_determineGrantType_both(t *testing.T) {
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(PARAMETER_CLIENT_ID, "id")
 	config.Set(PARAMETER_CLIENT_SECRET, "secret")
 	expected := ClientCredentialsGrant
@@ -345,7 +344,7 @@ func Test_Authenticate_CredentialsGrant(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(PARAMETER_CLIENT_SECRET, "secret")
 	config.Set(PARAMETER_CLIENT_ID, "id")
 	config.Set(configuration.API_URL, srv.URL)
@@ -417,7 +416,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 		initialAuthServer := httptest.NewServer(mux)
 		defer initialAuthServer.Close()
 
-		config := configuration.NewInMemory()
+		config := configuration.NewWithOpts()
 		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, ".*")
 		config.Set(configuration.API_URL, initialAuthServer.URL)
 		config.Set(configuration.WEB_APP_URL, initialAuthServer.URL)
@@ -433,7 +432,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 	})
 
 	t.Run("does not redirect to invalid instance", func(t *testing.T) {
-		config := configuration.NewInMemory()
+		config := configuration.NewWithOpts()
 		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, `^api(\.(.+))?\.snyk|snykgov\.io$`)
 
 		// Create mock server for successful oauth2 flow
@@ -456,7 +455,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 	})
 
 	t.Run("fails with malformed state", func(t *testing.T) {
-		config := configuration.NewInMemory()
+		config := configuration.NewWithOpts()
 
 		// Create mock server for unsuccessful oauth2 flow
 		mux := http.NewServeMux()
@@ -483,17 +482,15 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCanceled(t *test
 
 	// Setup
 
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
 	authCtx, cancelAuthCtx := context.WithCancel(context.Background())
 	t.Cleanup(cancelAuthCtx) // For safety to prevent resource leaks
-	var authCtxCanceled atomic.Bool
 
 	mockMux := http.NewServeMux()
 	mockMux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
 		cancelAuthCtx()
-		authCtxCanceled.Store(true)
 		w.WriteHeader(http.StatusOK)
 	})
 	mockExternalOAuthServer := httptest.NewServer(mockMux)
@@ -517,16 +514,14 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCanceled(t *test
 	go func() {
 		authErrChannel <- authenticator.CancelableAuthenticate(authCtx) // authCtx will be canceled by the mock server.
 	}()
-	var authErr error
+
+	// Wait and assert
+
 	select {
-	case authErr = <-authErrChannel:
-		// CancellableAuthenticate returned, hopefully it was canceled, we shall check below.
+	case authErr := <-authErrChannel:
+		assert.NoError(t, authErr, "CancellableAuthenticate should return nil on graceful cancellation.")
+		assert.ErrorIs(t, authCtx.Err(), context.Canceled, "CancellableAuthenticate may not have \"opened the browser\" to trigger the cancel.")
 	case <-time.After(2 * time.Second):
 		t.Fatal("Test timed out after 2 seconds waiting for CancellableAuthenticate to return, which should have been canceled.")
 	}
-
-	// Assert
-
-	assert.NoError(t, authErr, "CancellableAuthenticate should return nil on graceful cancellation.")
-	assert.True(t, authCtxCanceled.Load())
 }
