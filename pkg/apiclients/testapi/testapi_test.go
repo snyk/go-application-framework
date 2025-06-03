@@ -30,8 +30,7 @@ func Test_CreateClient_Defaults(t *testing.T) {
 	// Act
 	testClient, err := testapi.NewTestClient(
 		serverURL,
-		testapi.Config{},
-		testapi.WithHTTPClient(httpClient),
+		testapi.WithCustomHTTPClient(httpClient),
 	)
 
 	// Assert
@@ -92,10 +91,10 @@ func Test_StartTest_Success(t *testing.T) {
 
 	// Create our test client
 	testHTTPClient := newTestHTTPClient(t, server)
-	clientConfig := testapi.Config{
-		PollInterval: 1 * time.Second, // short poll interval for faster tests
-	}
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second), // short poll interval for faster tests
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -134,7 +133,7 @@ func Test_StartTest_Error_InvalidOrgID(t *testing.T) {
 	}
 
 	// Act: OrgID error occurs before network setup so client can point anywhere
-	testClient, err := testapi.NewTestClient("http://localhost:12345", testapi.Config{})
+	testClient, err := testapi.NewTestClient("http://localhost:12345")
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -168,7 +167,7 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 
 	// Act - fail to run StartTest()
 	testHTTPClient := newTestHTTPClient(t, server)
-	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL, testapi.WithCustomHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 
 	testSubject := newDepGraphTestSubject(t, uuid.New())
@@ -199,7 +198,7 @@ func Test_StartTest_Error_Network(t *testing.T) {
 	// Act
 
 	// Point to a non-listening port
-	testClient, err := testapi.NewTestClient("http://127.0.0.1:1", testapi.Config{})
+	testClient, err := testapi.NewTestClient("http://127.0.0.1:1")
 	require.NoError(t, err, "NewTestClient should not error for a non-listening port if HTTPClient is not immediately used")
 
 	testSubject := newDepGraphTestSubject(t, uuid.New())
@@ -265,8 +264,10 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 
 	testHTTPClient := newTestHTTPClient(t, server)
 
-	clientConfig := testapi.Config{PollInterval: 1 * time.Second}
-	hlClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	hlClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	// Start the test using the high-level client
@@ -328,7 +329,9 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 
 	// Act - start test and wait for results with a Fail outcome
 	testHTTPClient := newTestHTTPClient(t, server)
-	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -398,10 +401,10 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 
 	// Act - start a test
 	testHTTPClient := newTestHTTPClient(t, server)
-	clientConfig := testapi.Config{
-		PollInterval: 1 * time.Second, // Keep poll interval short for tests
-	}
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second), // Keep poll interval short for tests
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -467,7 +470,9 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 
 	// Act - start a test and Wait() returns a polling error
 	testHTTPClient := newTestHTTPClient(t, server)
-	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -532,9 +537,11 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	defer cleanup()
 
 	// Act - start a test client with short poll interval
-	clientConfig := testapi.Config{PollInterval: 1 * time.Second}
 	testHTTPClient := newTestHTTPClient(t, server)
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	// StartTest is on a background context so it's not affected by ctx's short timeout
@@ -607,7 +614,9 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 
 	// Act - start a test but get 404 when waiting on it
 	testHTTPClient := newTestHTTPClient(t, server)
-	testClient, err := testapi.NewTestClient(server.URL, testapi.Config{}, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -681,8 +690,10 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 
 	// Act - start a test but get 404 when waiting on it
 	testHTTPClient := newTestHTTPClient(t, server)
-	clientConfig := testapi.Config{PollInterval: 1 * time.Second}
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -752,12 +763,12 @@ func Test_NewTestClient_CustomLogger(t *testing.T) {
 	defer cleanup()
 
 	// Create TestClient with the custom logger.
-	clientConfig := testapi.Config{
-		Logger:       &customLogger,
-		PollInterval: 1 * time.Second,
-	}
 	testHTTPClient := newTestHTTPClient(t, server)
-	testClient, err := testapi.NewTestClient(server.URL, clientConfig, testapi.WithHTTPClient(testHTTPClient))
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithLogger(&customLogger),
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
 	require.NoError(t, err)
 
 	// Start a test with a minimal subject.
