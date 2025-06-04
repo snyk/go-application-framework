@@ -3,7 +3,6 @@ package local_models
 import (
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,11 +14,7 @@ func stringPtr(s string) *string {
 func Test_mapSuppressions(t *testing.T) {
 	validUUID1 := "3b3b7c0c-7b1e-4b0e-8b0a-0b0b0b0b0b0b"
 	validUUID2 := "4c4c8d1d-8c2f-5c1f-9c1b-1c1c1c1c1c1c"
-
-	uuidPtr := func(uuidStr string) *uuid.UUID {
-		uuidValue := uuid.MustParse(uuidStr)
-		return &uuidValue
-	}
+	expirationDate := "2024-12-31T23:59:59Z"
 
 	tests := []struct {
 		name         string
@@ -52,10 +47,10 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id: uuidPtr(validUUID1),
+				Id: &validUUID1,
 				Details: &TypesSuppressionDetails{
 					Category:   "testCategory",
-					Expiration: "never",
+					Expiration: nil,
 					IgnoredOn:  "2023-01-01T00:00:00Z",
 					IgnoredBy: TypesUser{
 						Name:  "User",
@@ -76,7 +71,7 @@ func Test_mapSuppressions(t *testing.T) {
 						Status:        sarif.Accepted,
 						Properties: sarif.SuppressionProperties{
 							Category:   "fullCategory",
-							Expiration: stringPtr("2024-12-31T23:59:59Z"),
+							Expiration: &expirationDate,
 							IgnoredOn:  "2023-02-01T00:00:00Z",
 							IgnoredBy:  sarif.IgnoredBy{Name: "Admin User", Email: stringPtr("admin@example.com")},
 						},
@@ -84,10 +79,10 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id: uuidPtr(validUUID2),
+				Id: &validUUID2,
 				Details: &TypesSuppressionDetails{
 					Category:   "fullCategory",
-					Expiration: "2024-12-31T23:59:59Z",
+					Expiration: &expirationDate,
 					IgnoredOn:  "2023-02-01T00:00:00Z",
 					IgnoredBy: TypesUser{
 						Name:  "Admin User",
@@ -99,11 +94,10 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 		},
 		{
-			name: "suppression with invalid GUID results in zero UUID for Id",
+			name: "suppression with without a GUID",
 			inputResult: sarif.Result{
 				Suppressions: []sarif.Suppression{
 					{
-						Guid:          "not-a-valid-uuid",
 						Justification: "Invalid GUID test",
 						Status:        sarif.Accepted,
 						Properties: sarif.SuppressionProperties{
@@ -118,7 +112,7 @@ func Test_mapSuppressions(t *testing.T) {
 				Id: nil,
 				Details: &TypesSuppressionDetails{
 					Category:   "invalidGUIDCategory",
-					Expiration: "never",
+					Expiration: nil,
 					IgnoredOn:  "2023-03-01T00:00:00Z",
 					IgnoredBy: TypesUser{
 						Name:  "Tester",
@@ -138,11 +132,11 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id:            uuidPtr(validUUID2),
+				Id:            &validUUID2,
 				Justification: stringPtr("Accepted"),
 				Details: &TypesSuppressionDetails{
 					Category:   "cat2",
-					Expiration: "never",
+					Expiration: nil,
 					IgnoredOn:  "",
 					IgnoredBy:  TypesUser{Name: "", Email: ""},
 				},
@@ -157,11 +151,11 @@ func Test_mapSuppressions(t *testing.T) {
 				},
 			},
 			expectedSupp: &TypesSuppression{
-				Id:            uuidPtr(validUUID1),
+				Id:            &validUUID1,
 				Justification: stringPtr("Under review"),
 				Details: &TypesSuppressionDetails{
 					Category:   "reviewCategory",
-					Expiration: "never",
+					Expiration: nil,
 					IgnoredOn:  "",
 					IgnoredBy:  TypesUser{Name: "", Email: ""},
 				},
