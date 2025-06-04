@@ -194,6 +194,17 @@ func filterFindingsOr(findings []local_models.FindingResource, cmpFuncs ...func(
 	return filteredFindings
 }
 
+func formatIgnoreExpiration(expiration *string) string {
+	if expiration == nil {
+		return "never"
+	}
+	expirationTime, err := time.Parse(time.RFC3339, *expiration)
+	if err != nil {
+		return *expiration
+	}
+	return expirationTime.Format("January 02, 2006")
+}
+
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
@@ -215,6 +226,7 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["divider"] = RenderDivider
 	fnMap["title"] = RenderTitle
 	fnMap["renderToString"] = renderTemplateToString(tmpl)
+	fnMap["formatIgnoreExpiration"] = formatIgnoreExpiration
 	return fnMap
 }
 
