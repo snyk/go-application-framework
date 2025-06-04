@@ -44,7 +44,6 @@ func Test_StartTest_Success(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	assetID := uuid.New()
 	expectedJobID := uuid.New()
 	finalTestID := uuid.New()
 	var pollCounter atomic.Int32 // Used by handler to count GET /job calls
@@ -52,7 +51,7 @@ func Test_StartTest_Success(t *testing.T) {
 	var findingsPageCount atomic.Int32
 
 	// Create a DepGraph to test
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
 
 	// Define expected request body that StartTest should generate
@@ -126,7 +125,7 @@ func Test_StartTest_Error_InvalidOrgID(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testSubject := newDepGraphTestSubject(t, uuid.New())
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   "not-a-valid-uuid",
 		Subject: testSubject,
@@ -170,7 +169,7 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 	testClient, err := testapi.NewTestClient(server.URL, testapi.WithCustomHTTPClient(testHTTPClient))
 	require.NoError(t, err)
 
-	testSubject := newDepGraphTestSubject(t, uuid.New())
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -201,7 +200,7 @@ func Test_StartTest_Error_Network(t *testing.T) {
 	testClient, err := testapi.NewTestClient("http://127.0.0.1:1")
 	require.NoError(t, err, "NewTestClient should not error for a non-listening port if HTTPClient is not immediately used")
 
-	testSubject := newDepGraphTestSubject(t, uuid.New())
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{OrgID: uuid.New().String(), Subject: testSubject}
 
 	handle, err := testClient.StartTest(ctx, params)
@@ -222,14 +221,13 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
 	var pollCount atomic.Int32
 	var findingsEndpointCalled atomic.Bool
 	var findingsPageCount atomic.Int32 // To track pagination calls
 
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	startParams := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
@@ -295,13 +293,12 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
 	var pollCount atomic.Int32
 	failReason := testapi.TestOutcomeReasonPolicyBreach
 
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
@@ -355,14 +352,13 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
 	var pollCount atomic.Int32
 	var findingsEndpointCalled atomic.Bool
 	var findingsPageCount atomic.Int32
 
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
@@ -441,11 +437,10 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	assetID := uuid.New()
 	jobID := uuid.New()
 	var pollCount atomic.Int32
 
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
@@ -501,11 +496,10 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	defer cancel()
 
 	orgID := uuid.New()
-	assetID := uuid.New()
 	jobID := uuid.New()
 	var pollCount atomic.Int32
 
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
@@ -579,12 +573,11 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
 	var pollCount atomic.Int32
 
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
@@ -645,7 +638,6 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	orgID := uuid.New()
-	assetID := uuid.New()
 	jobID := uuid.New()
 	testID := uuid.New()
 	var pollCount atomic.Int32
@@ -660,7 +652,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 	}
 	failReason := testapi.TestOutcomeReasonPolicyBreach
 
-	testSubject := newDepGraphTestSubject(t, assetID)
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   orgID.String(),
 		Subject: testSubject,
@@ -772,7 +764,7 @@ func Test_NewTestClient_CustomLogger(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start a test with a minimal subject.
-	testSubject := newDepGraphTestSubject(t, uuid.New())
+	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
 
 	handle, err := testClient.StartTest(ctx, params)

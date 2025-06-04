@@ -253,21 +253,15 @@ components:
         Test subject representing source code uploaded to Snyk using DeepCode
         bundle APIs.
       properties:
-        asset_id:
-          description: Asset associated with the tested content.
-          format: uuid
-          type: string
         bundle_id:
           description: Deepcode Bundle ID. These IDs are sha256 digests (32 bytes
             or 64 hex digits).
           pattern: ^[a-fA-F0-9]{64}$
           type: string
-        path:
-          default: .
-          description: |-
-            Path of the uploaded file or directory, relative to the client's current
-            working directory.
-          type: string
+        locator:
+          allOf:
+          - $ref: '#/components/schemas/LocalPathLocator'
+          description: Locate local paths from which the source code bundle was derived.
         type:
           enum:
           - deepcode_bundle
@@ -275,43 +269,32 @@ components:
       required:
       - type
       - bundle_id
-      - path
-      - asset_id
+      - locator
       type: object
     DepGraphSubject:
       description: Test subject representing a Snyk dependency graph (a legacy SBOM
         format).
       properties:
-        asset_id:
-          description: Asset associated with the tested content.
-          format: uuid
-          type: string
-        source_files:
+        locator:
+          allOf:
+          - $ref: '#/components/schemas/LocalPathLocator'
           description: |-
-            Source file paths within the asset's contents from which the SBOM was derived.
+            Source file(s) from which the dependency graph was derived.
 
             For some managed package ecosystems (examples: Maven, Yarn workspaces),
-            Snyk might derive an SBOM from many files.
-          items:
-            type: string
-          type: array
+            Snyk might derive a dependency graph from several files.
         type:
           enum:
           - dep_graph
           type: string
       required:
       - type
-      - source_files
-      - asset_id
+      - locator
       type: object
     DepGraphSubjectCreate:
       description: Test subject representing a Snyk dependency graph (a legacy SBOM
         format).
       properties:
-        asset_id:
-          description: Asset associated with the tested content.
-          format: uuid
-          type: string
         dep_graph:
           allOf:
           - $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.DepGraph'
@@ -319,15 +302,14 @@ components:
             When creating a test, provide the dep-graph contents inline to the request.
 
             This attribute is only available when creating a new Test.
-        source_files:
+        locator:
+          allOf:
+          - $ref: '#/components/schemas/LocalPathLocator'
           description: |-
-            Source file paths within the asset's contents from which the SBOM was derived.
+            Source file(s) from which the dependency graph was derived.
 
             For some managed package ecosystems (examples: Maven, Yarn workspaces),
-            Snyk might derive an SBOM from many files.
-          items:
-            type: string
-          type: array
+            Snyk might derive a dependency graph from several files.
         type:
           enum:
           - dep_graph
@@ -335,8 +317,7 @@ components:
       required:
       - type
       - dep_graph
-      - source_files
-      - asset_id
+      - locator
       type: object
     DependencyPathEvidence:
       description: |-
@@ -801,23 +782,23 @@ components:
         Test subject representing a source tree located in a Git repository that
         has a Snyk SCM integration.
       properties:
-        asset_id:
-          description: Asset associated with the tested content.
-          format: uuid
+        commit_id:
+          description: |-
+            Commit ID of the Git commit from which content will be retrieved for the
+            test.
+          pattern: ^[a-f0-9]{40,}$
           type: string
         integration_id:
           description: Integration used to access the Git SCM repository in order
             to retrieve its source contents.
           format: uuid
           type: string
-        repo_url:
-          description: Repo URL is the location of the Git SCM repository to test.
-          format: uri
-          type: string
-        revision:
-          description: Revision is the specific Git commit in the repository to test.
-          pattern: ^[a-f0-9]{40,}$
-          type: string
+        locator:
+          allOf:
+          - $ref: '#/components/schemas/ScmRepoLocator'
+          description: |-
+            Locate the SCM repository from which content will be retrieved for the
+            test.
         type:
           enum:
           - git_url_coordinates
@@ -825,9 +806,8 @@ components:
       required:
       - type
       - integration_id
-      - repo_url
-      - revision
-      - asset_id
+      - commit_id
+      - locator
       type: object
     GithubSecurityAdvisoryProblem:
       description: Github Security Advisory associated with this finding.
@@ -935,6 +915,25 @@ components:
         required:
         - href
         type: object
+    LocalPathLocator:
+      description: |-
+        LocalPathLocator locates a test subject by local file paths, relative to the
+        working copy top-level directory of the source code.
+      properties:
+        paths:
+          description: Local file paths.
+          items:
+            type: string
+          minItems: 1
+          type: array
+        type:
+          enum:
+          - local_path
+          type: string
+      required:
+      - type
+      - paths
+      type: object
     LocalPolicy:
       description: Locally configured policy options for determining outcome of this
         specific test.
@@ -1005,6 +1004,18 @@ components:
       required:
       - type
       type: object
+    OtherLocator:
+      description: |-
+        OtherLocator represents any locator that this version of the API is not
+        capable of expressing.
+      properties:
+        type:
+          enum:
+          - other
+          type: string
+      required:
+      - type
+      type: object
     OtherProblem:
       description: |-
         Problem which this API version is not capable of expressing.
@@ -1019,13 +1030,10 @@ components:
       - source
       type: object
     OtherSubject:
-      description: OtherSubject represents any subject we don't yet have a way to
-        express.
+      description: |-
+        OtherSubject represents any subject that this version of the API is not
+        capable of expressing.
       properties:
-        asset_id:
-          description: Asset associated with the tested content.
-          format: uuid
-          type: string
         type:
           enum:
           - other
@@ -1142,6 +1150,41 @@ components:
       - $ref: '#/components/schemas/SnykCloudRuleProblem'
       - $ref: '#/components/schemas/GithubSecurityAdvisoryProblem'
       - $ref: '#/components/schemas/OtherProblem'
+    ProjectEntityLocator:
+      description: ProjectEntityLocator locates a Snyk Project by its public ID.
+      properties:
+        project_id:
+          description: Public ID of the Snyk Project.
+          format: uuid
+          type: string
+        type:
+          enum:
+          - project_entity
+          type: string
+      required:
+      - type
+      - project_id
+      type: object
+    ProjectNameLocator:
+      description: ProjectNameLocator locates a Snyk Project by its name.
+      properties:
+        project_name:
+          description: Name of the Snyk Project.
+          type: string
+        target_reference:
+          description: |-
+            Target reference which differentiates this project, for example, with a
+            branch name or version. Projects having the same reference can be grouped
+            based on that reference.
+          type: string
+        type:
+          enum:
+          - project_name
+          type: string
+      required:
+      - type
+      - project_name
+      type: object
     QueryVersion:
       description: Requested API version
       pattern: ^(wip|work-in-progress|experimental|beta|((([0-9]{4})-([0-1][0-9]))-((3[01])|(0[1-9])|([12][0-9]))(~(wip|work-in-progress|experimental|beta))?))$
@@ -1179,14 +1222,15 @@ components:
     SBOMReachabilitySubject:
       description: Test subject for SBOM test with reachability analysis.
       properties:
-        asset_id:
-          description: Asset associated with the tested content.
-          format: uuid
-          type: string
         code_bundle_id:
           description: Source code to inspect for the reach of the vulnerable dependencies.
           pattern: ^[a-fA-F0-9]{64}$
           type: string
+        locator:
+          allOf:
+          - $ref: '#/components/schemas/LocalPathLocator'
+          description: Locate the local paths from which the SBOM and source code
+            were derived.
         sbom_bundle_id:
           description: The SBOM to test for vulnerable dependencies.
           pattern: ^[a-fA-F0-9]{64}$
@@ -1199,7 +1243,29 @@ components:
       - type
       - sbom_bundle_id
       - code_bundle_id
-      - asset_id
+      - locator
+      type: object
+    ScmRepoLocator:
+      description: ScmRepoLocator locates a test subject by SCM repository coordinates.
+      properties:
+        branch_name:
+          description: |-
+            Branch name, if known and applicable to locating the test subject.
+
+            If not specified, the branch name can be assumed to be the "default
+            integration branch" of the repository.
+          type: string
+        type:
+          enum:
+          - scm_repo
+          type: string
+        url:
+          description: URL of the SCM repository.
+          format: uri
+          type: string
+      required:
+      - type
+      - url
       type: object
     Severity:
       description: Indicate the severity of a finding discovered by a Test.
@@ -1651,6 +1717,20 @@ components:
           allOf:
           - $ref: '#/components/schemas/TestSubject'
           description: The subject of a test.
+        subject_locators:
+          description: |-
+            Additional locators which may help locate the test subject across test workflows.
+
+            Test subjects generally will have a primary locator. Additional locators
+            may be provided to help link the test to existing projects and/or assets in
+            the Snyk platform.
+          example:
+          - paths:
+            - package.json
+            type: local_path
+          items:
+            $ref: '#/components/schemas/TestSubjectLocator'
+          type: array
       required:
       - subject
       - created_at
@@ -1669,6 +1749,20 @@ components:
           allOf:
           - $ref: '#/components/schemas/TestSubjectCreate'
           description: The subject of a test.
+        subject_locators:
+          description: |-
+            Additional locators which may help locate the test subject across test workflows.
+
+            Test subjects generally will have a primary locator. Additional locators
+            may be provided to help link the test to existing projects and/or assets in
+            the Snyk platform.
+          example:
+          - paths:
+            - package.json
+            type: local_path
+          items:
+            $ref: '#/components/schemas/TestSubjectLocator'
+          type: array
       required:
       - subject
       type: object
@@ -1845,6 +1939,21 @@ components:
       - $ref: '#/components/schemas/GitURLCoordinatesSubject'
       - $ref: '#/components/schemas/SBOMReachabilitySubject'
       - $ref: '#/components/schemas/OtherSubject'
+    TestSubjectLocator:
+      discriminator:
+        mapping:
+          local_path: '#/components/schemas/LocalPathLocator'
+          other: '#/components/schemas/OtherLocator'
+          project_entity: '#/components/schemas/ProjectEntityLocator'
+          project_name: '#/components/schemas/ProjectNameLocator'
+          scm_repo: '#/components/schemas/ScmRepoLocator'
+        propertyName: type
+      oneOf:
+      - $ref: '#/components/schemas/ProjectEntityLocator'
+      - $ref: '#/components/schemas/ProjectNameLocator'
+      - $ref: '#/components/schemas/ScmRepoLocator'
+      - $ref: '#/components/schemas/LocalPathLocator'
+      - $ref: '#/components/schemas/OtherLocator'
     TimeoutSpec:
       description: |-
         Specification for a test timeout policy. If the test does not complete within
@@ -2584,7 +2693,7 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/test-api-shim-core-team'
+      - '@snyk/productinfra_devsec-governance-platform'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -2711,7 +2820,7 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/test-api-shim-core-team'
+      - '@snyk/productinfra_devsec-governance-platform'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -2812,7 +2921,7 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/test-api-shim-core-team'
+      - '@snyk/productinfra_devsec-governance-platform'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -2911,7 +3020,7 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/test-api-shim-core-team'
+      - '@snyk/productinfra_devsec-governance-platform'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests

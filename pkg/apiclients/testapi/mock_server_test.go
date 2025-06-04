@@ -271,14 +271,16 @@ func depGraphFromJSON(t *testing.T) testapi.IoSnykApiV1testdepgraphRequestDepGra
 }
 
 // Return a depGraph to run a test on
-func newDepGraphTestSubject(t *testing.T, assetID openapi_types.UUID) testapi.TestSubjectCreate {
+func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 	t.Helper()
 	testSubject := testapi.TestSubjectCreate{}
 	err := testSubject.FromDepGraphSubjectCreate(testapi.DepGraphSubjectCreate{
-		Type:        testapi.DepGraphSubjectCreateTypeDepGraph,
-		AssetId:     assetID,
-		DepGraph:    depGraphFromJSON(t),
-		SourceFiles: []string{"package.json"},
+		Type:     testapi.DepGraphSubjectCreateTypeDepGraph,
+		DepGraph: depGraphFromJSON(t),
+		Locator: testapi.LocalPathLocator{
+			Paths: []string{"package.json"},
+			Type:  testapi.LocalPath,
+		},
 	})
 	require.NoError(t, err)
 	return testSubject
