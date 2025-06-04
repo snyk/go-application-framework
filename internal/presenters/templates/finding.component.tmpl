@@ -20,7 +20,7 @@
    {{- if .Attributes.Suppression}}
    {{- if or (eq .Attributes.Suppression.Status "accepted") (eq .Attributes.Suppression.Status "underReview")}}
 
-   Expiration: {{ formatDatetime .Attributes.Suppression.Details.Expiration "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
+   Expiration: {{ formatIgnoreExpiration .Attributes.Suppression.Details.Expiration }}
    Category:   {{ .Attributes.Suppression.Details.Category }}
    Ignored on: {{ formatDatetime .Attributes.Suppression.Details.IgnoredOn "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
    Ignored by: {{ .Attributes.Suppression.Details.IgnoredBy.Name }}
