@@ -1179,7 +1179,7 @@ type TypesSuggestedPackageUpgradeUpgradeConflicts bool
 type TypesSuppression struct {
 	// Details Suppression meta data
 	Details       *TypesSuppressionDetails `json:"details,omitempty"`
-	Id            *openapi_types.UUID      `json:"id,omitempty"`
+	Id            *string                  `json:"id,omitempty"`
 	Justification *string                  `json:"justification,omitempty"`
 	Status        TypesSuppressionStatus   `json:"status"`
 }
@@ -1189,8 +1189,8 @@ type TypesSuppressionStatus string
 
 // TypesSuppressionDetails Suppression meta data
 type TypesSuppressionDetails struct {
-	Category   string `json:"category"`
-	Expiration string `json:"expiration"`
+	Category   string  `json:"category"`
+	Expiration *string `json:"expiration,omitempty"`
 
 	// IgnoredBy User definition
 	IgnoredBy TypesUser `json:"ignoredBy"`

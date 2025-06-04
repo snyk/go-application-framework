@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/snyk/code-client-go/sarif"
 	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
@@ -115,24 +114,19 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression == nil {
 		return nil
 	}
-	expiration := "never"
 	ignored_email := ""
-	if suppression.Properties.Expiration != nil {
-		expiration = *suppression.Properties.Expiration
-	}
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
-	var idPtr *uuid.UUID
-	if id, err := uuid.Parse(suppression.Guid); err == nil {
-		idPtr = &id
+	var id *string
+	if suppression.Guid != "" {
+		id = &suppression.Guid
 	}
-
 	return &TypesSuppression{
-		Id: idPtr,
+		Id: id,
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
-			Expiration: expiration,
+			Expiration: suppression.Properties.Expiration,
 			IgnoredOn:  suppression.Properties.IgnoredOn,
 			IgnoredBy: TypesUser{
 				Name:  suppression.Properties.IgnoredBy.Name,
