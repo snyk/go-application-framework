@@ -8,8 +8,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 )
 
+const analyticsPrefixSeparator = "::"
+
 func NewAnalyticsWrapper(a analytics.Analytics, prefix string) analytics.Analytics {
-	return &analyticsWrapper{a, prefix}
+	return &analyticsWrapper{next: a, prefix: fmt.Sprintf("%s%s", prefix, analyticsPrefixSeparator)}
 }
 
 type analyticsWrapper struct {
@@ -74,9 +76,9 @@ func (a *analyticsWrapper) GetInstrumentation() analytics.InstrumentationCollect
 }
 
 func (a *analyticsWrapper) AddExtension(key string, value interface{}) error {
-	hasPrefix := strings.HasPrefix(key, fmt.Sprintf("%s:", a.prefix))
+	hasPrefix := strings.HasPrefix(key, a.prefix)
 	if len(a.prefix) > 0 && !hasPrefix {
-		key = fmt.Sprintf("%s:%s", a.prefix, key)
+		key = fmt.Sprintf("%s%s", a.prefix, key)
 	}
 
 	return a.next.AddExtension(key, value)
