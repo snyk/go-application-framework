@@ -222,7 +222,13 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetCategory(categories)
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
-	ic.AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
+	err = invocationCtx.GetAnalytics().AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
+	if err != nil {
+		logger.Debug().Err(err).Msg("Failed to add 'device_id' to instrumentation")
+	}
+	if err != nil {
+		logger.Debug().Err(err).Msg("Failed to add 'device_id' to instrumentation")
+	}
 
 	data, err := analytics.GetV2InstrumentationObject(ic, analytics.WithLogger(logger))
 	if err != nil {

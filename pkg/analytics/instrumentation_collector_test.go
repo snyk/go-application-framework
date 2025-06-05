@@ -185,8 +185,10 @@ func Test_InstrumentationCollector(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
-		ic.AddExtension("integers", 123)
-		ic.AddExtension("booleans", true)
+		e := ic.AddExtension("integers", 123)
+		assert.NoError(t, e)
+		e = ic.AddExtension("booleans", true)
+		assert.NoError(t, e)
 
 		mockExtension := map[string]interface{}{
 			"strings":  "hello world",
@@ -210,7 +212,8 @@ func Test_InstrumentationCollector(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
-		ic.AddExtension("password", "hunter2")
+		e := ic.AddExtension("password", "hunter2")
+		assert.NoError(t, e)
 
 		mockExtension := map[string]interface{}{
 			"strings":  "hello world",
@@ -229,17 +232,47 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
-	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
+	t.Run("it should exclude datapoint from extension object if type is not valid", func(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
-		circularRef := make(map[string]interface{})
-		circularRef["self"] = circularRef
-		ic.AddExtension("circular", circularRef)
+		e := ic.AddExtension("thisIsNotAValidType", []string{"invalid", "type"})
+		assert.Error(t, e)
+		e = ic.AddExtension("perfectlyValidInt", 1)
+		assert.NoError(t, e)
+		e = ic.AddExtension("perfectlyValidBool", true)
+		assert.NoError(t, e)
 
-		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = nil
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &map[string]interface{}{
+			"strings":            "hello world",
+			"perfectlyValidInt":  1,
+			"perfectlyValidBool": true,
+		}
 
 		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
+		assert.NoError(t, err)
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
+
+	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		icImpl, ok := ic.(*instrumentationCollectorImpl)
+		assert.True(t, ok)
+		icImpl.extension = map[string]interface{}{
+			"string": "This is a valid string",
+			"int":    12345,
+			"fail":   func() { fmt.Println("I cause problems for JSON marshaling!") },
+		}
+
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = nil
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(icImpl, WithLogger(&logger))
 		assert.NoError(t, err)
 		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
 		assert.NoError(t, err)
@@ -271,7 +304,8 @@ func setupBaseCollector(t *testing.T) InstrumentationCollector {
 	ic.SetStatus(Success)
 	ic.SetTestSummary(*json_schemas.NewTestSummary("sast", ""))
 	ic.SetTargetId("targetID")
-	ic.AddExtension("strings", "hello world")
+	e := ic.AddExtension("strings", "hello world")
+	assert.NoError(t, e)
 	ic.SetTimestamp(time.Date(2025, 1, 01, 0, 0, 0, 0, time.UTC))
 
 	return ic

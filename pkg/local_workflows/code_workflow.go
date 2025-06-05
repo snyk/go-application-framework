@@ -168,9 +168,11 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	}
 
 	if nativeImplementation {
+		invocationCtx.GetAnalytics().AddExtension("impl", "native")
 		logger.Debug().Msg("Implementation: Native")
 		result, err = code_workflow.EntryPointNative(invocationCtx)
 	} else {
+		invocationCtx.GetAnalytics().AddExtension("impl", "legacy")
 		logger.Debug().Msg("Implementation: legacy")
 		result, err = code_workflow.EntryPointLegacy(invocationCtx)
 	}

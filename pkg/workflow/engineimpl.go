@@ -254,7 +254,7 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			zlogger := e.logger.With().Str("ext", prefix).Logger()
 
 			localUi := e.ui
-			localAnalytics := e.analytics
+			localAnalytics := NewAnalyticsWrapper(e.analytics, id.Host)
 
 			// prepare configuration
 			if config == nil {
