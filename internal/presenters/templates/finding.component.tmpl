@@ -20,7 +20,7 @@
    {{- if .Attributes.Suppression}}
    {{- if or (eq .Attributes.Suppression.Status "accepted") (eq .Attributes.Suppression.Status "underReview")}}
 
-   Expiration: {{ formatIgnoreExpiration .Attributes.Suppression.Details.Expiration }}
+   Expiration: {{- if .Attributes.Suppression.Details.Expiration }} {{ formatDatetime .Attributes.Suppression.Details.Expiration "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }} {{- else }} never {{- end }}
    Category:   {{ .Attributes.Suppression.Details.Category }}
    Ignored on: {{ formatDatetime .Attributes.Suppression.Details.IgnoredOn "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
    Ignored by: {{ .Attributes.Suppression.Details.IgnoredBy.Name }}
@@ -30,6 +30,6 @@
 {{end}}
 
 {{- define "severity"}}
-  {{- if or (not .Attributes.Suppression) (and (.Attributes.Suppression) (eq .Attributes.Suppression.Status "rejected"))}} ✗ {{else}} ! {{end -}}
+  {{- if not (hasSuppression .) }} ✗ {{ else }} ! {{ end -}}
   [{{.Attributes.Rating.Severity.Value}}]
 {{- end}}

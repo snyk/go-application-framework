@@ -194,15 +194,42 @@ func filterFindingsOr(findings []local_models.FindingResource, cmpFuncs ...func(
 	return filteredFindings
 }
 
-func formatIgnoreExpiration(expiration *string) string {
-	if expiration == nil {
-		return "never"
+func isOpenFinding() func(obj any) bool {
+	return func(obj any) bool {
+		finding, ok := obj.(local_models.FindingResource)
+		if !ok {
+			return false
+		}
+		return finding.Attributes.Suppression == nil || finding.Attributes.Suppression.Status == local_models.Rejected
 	}
-	expirationTime, err := time.Parse(time.RFC3339, *expiration)
-	if err != nil {
-		return *expiration
+}
+
+func isPendingFinding() func(obj any) bool {
+	return func(obj any) bool {
+		finding, ok := obj.(local_models.FindingResource)
+		if !ok {
+			return false
+		}
+		return finding.Attributes.Suppression != nil && finding.Attributes.Suppression.Status == local_models.UnderReview
 	}
-	return expirationTime.Format("January 02, 2006")
+}
+
+func isIgnoredFinding() func(obj any) bool {
+	return func(obj any) bool {
+		finding, ok := obj.(local_models.FindingResource)
+		if !ok {
+			return false
+		}
+		return finding.Attributes.Suppression != nil && finding.Attributes.Suppression.Status == local_models.Accepted
+	}
+}
+
+func hasSuppression(finding local_models.FindingResource) bool {
+	if finding.Attributes.Suppression == nil {
+		return false
+	}
+
+	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
 func getSarifTemplateFuncMap() template.FuncMap {
@@ -226,7 +253,10 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["divider"] = RenderDivider
 	fnMap["title"] = RenderTitle
 	fnMap["renderToString"] = renderTemplateToString(tmpl)
-	fnMap["formatIgnoreExpiration"] = formatIgnoreExpiration
+	fnMap["isOpenFinding"] = isOpenFinding
+	fnMap["isPendingFinding"] = isPendingFinding
+	fnMap["isIgnoredFinding"] = isIgnoredFinding
+	fnMap["hasSuppression"] = hasSuppression
 	return fnMap
 }
 

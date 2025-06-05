@@ -1,8 +1,8 @@
 {{- define "details" }}
     {{- $sortedFindings := .Findings | sortFindingBy "Attributes.Rating.Severity.Value" .Summary.Counts.CountKeyOrderAsc.Severity }}
-    {{- $openFindings := filterFindingsOr $sortedFindings (notHasField "Attributes.Suppression.Status") (fieldEquals "Attributes.Suppression.Status" "rejected") }}
-    {{- $pendingIgnoreFindings := $sortedFindings | filterFinding (fieldEquals "Attributes.Suppression.Status" "underReview") }}
-    {{- $ignoredFindings := $sortedFindings | filterFinding (fieldEquals "Attributes.Suppression.Status" "accepted") }}
+    {{- $openFindings :=  $sortedFindings | filterFinding (isOpenFinding) }}
+    {{- $pendingIgnoreFindings := $sortedFindings | filterFinding (isPendingFinding) }}
+    {{- $ignoredFindings := $sortedFindings | filterFinding (isIgnoredFinding) }}
     {{- $hasOpenFindings := gt ($openFindings | len) 0 }}
     {{- $hasPendingIgnoreFindings := gt ($pendingIgnoreFindings | len) 0 }}
     {{- $hasIgnoredFindings := gt ($ignoredFindings | len) 0 }}
