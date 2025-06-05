@@ -145,6 +145,31 @@ func Test_DefaultUi(t *testing.T) {
 	assert.Equal(t, "", stderr.String())
 }
 
+func Test_DefaultUi_Html(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	name := "Hans"
+	stdin.WriteString(name + "\n")
+	ui := newConsoleUi(stdin, stdout, stderr)
+
+	err := ui.Output("<h1>Hello</h1>")
+	assert.NoError(t, err)
+
+	in, err := ui.Input("Enter your <div class='prompt-help'>name</div>")
+	assert.NoError(t, err)
+	assert.Equal(t, name, in)
+
+	err = ui.OutputError(fmt.Errorf("Error!"))
+	assert.NoError(t, err)
+
+	faint := lipgloss.NewStyle().Faint(true)
+	assert.Equal(t, "Hello\nEnter your "+faint.Render("name")+": Error!\n", stdout.String())
+	assert.Equal(t, "", stderr.String())
+}
+
 func Test_OutputError(t *testing.T) {
 	stdin := &bytes.Buffer{}
 	stdout := &bytes.Buffer{}

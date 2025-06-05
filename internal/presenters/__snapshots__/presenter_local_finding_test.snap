@@ -727,7 +727,7 @@ Open Issues
    Path: src/main.ts, line 58
    Info: http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.
 
-   Expiration: 15 days
+   Expiration: never
    Category:   wont-fix
    Ignored on: February 23, 2024
    Ignored by: Neil M
