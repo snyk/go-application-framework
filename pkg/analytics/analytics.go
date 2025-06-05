@@ -2,7 +2,6 @@ package analytics
 
 import (
 	"bytes"
-	"sync"
 
 	//nolint:gosec // insecure sha1 used for legacy identifier
 	"crypto/sha1"
@@ -26,7 +25,6 @@ import (
 
 // Analytics is an interface for managing analytics.
 type Analytics interface {
-	SetPrefix(p string)
 	SetCmdArguments(args []string)
 	SetOrg(org string)
 	SetVersion(version string)
@@ -38,7 +36,6 @@ type Analytics interface {
 	AddHeader(headerFunc func() http.Header)
 	SetClient(clientFunc func() *http.Client)
 	IsCiEnvironment() bool
-	GetOutputData() *analyticsOutput
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
 	GetInstrumentation() InstrumentationCollector
@@ -52,7 +49,6 @@ type AnalyticsImpl struct {
 	headerFunc func() http.Header
 	apiUrl     string
 
-	prefix             string
 	org                string
 	version            string
 	created            time.Time
@@ -63,10 +59,11 @@ type AnalyticsImpl struct {
 	os                 string
 	command            string
 	instrumentor       InstrumentationCollector
-	mu                 sync.Mutex
 
 	userCurrent func() (*user.User, error)
 }
+
+var _ Analytics = (*AnalyticsImpl)(nil)
 
 // metadataOutput defines the metadataOutput payload.
 type metadataOutput struct {
@@ -180,26 +177,10 @@ func (a *AnalyticsImpl) AddError(err error) {
 	}
 }
 
-func (a *AnalyticsImpl) SetPrefix(p string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.prefix = p
-}
-
 func (a *AnalyticsImpl) AddExtension(key string, value interface{}) error {
-	a.mu.Lock()
-	currentPrefix := a.prefix
-	a.mu.Unlock()
-
-	hasPrefix := strings.HasPrefix(key, fmt.Sprintf("%s:", currentPrefix))
-	if len(currentPrefix) > 0 && !hasPrefix {
-		key = fmt.Sprintf("%s:%s", currentPrefix, key)
-	}
-
 	if a.instrumentor != nil {
 		return a.instrumentor.AddExtension(key, value)
 	}
-
 	return nil
 }
 
