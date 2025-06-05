@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/snyk/code-client-go/sarif"
+	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
@@ -109,22 +110,23 @@ func mapRules(sarifRule sarif.Rule) TypesRules {
 }
 
 func mapSuppressions(res sarif.Result) *TypesSuppression {
-	if len(res.Suppressions) == 0 {
+	suppression, status := sarif2.GetHighestSuppression(res.Suppressions)
+	if suppression == nil {
 		return nil
 	}
-	suppression := res.Suppressions[0]
-	expiration := ""
 	ignored_email := ""
-	if suppression.Properties.Expiration != nil {
-		expiration = *suppression.Properties.Expiration
-	}
 	if suppression.Properties.IgnoredBy.Email != nil {
 		ignored_email = *suppression.Properties.IgnoredBy.Email
 	}
+	var id *string
+	if suppression.Guid != "" {
+		id = &suppression.Guid
+	}
 	return &TypesSuppression{
+		Id: id,
 		Details: &TypesSuppressionDetails{
 			Category:   string(suppression.Properties.Category),
-			Expiration: expiration,
+			Expiration: suppression.Properties.Expiration,
 			IgnoredOn:  suppression.Properties.IgnoredOn,
 			IgnoredBy: TypesUser{
 				Name:  suppression.Properties.IgnoredBy.Name,
@@ -132,7 +134,7 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 			},
 		},
 		Justification: &suppression.Justification,
-		Kind:          "ignored",
+		Status:        TypesSuppressionStatus(status),
 	}
 }
 
