@@ -286,7 +286,7 @@ func TestPresenterLocalFinding_WithStatusPropertyUnderReview(t *testing.T) {
 	require.Contains(t, result, "! [MEDIUM] Cleartext Transmission of Sensitive Information [ PENDING IGNORE... ]")
 	require.NotContains(t, result, "[ IGNORED ]")
 	require.Contains(t, result, "There are no ignored issues")
-	require.Contains(t, result, "never")
+	require.Contains(t, result, local_models.DefaultSuppressionExpiration)
 
 	snaps.MatchSnapshot(t, result)
 }

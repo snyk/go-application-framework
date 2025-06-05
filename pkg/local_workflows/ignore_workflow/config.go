@@ -9,6 +9,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/cli"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -150,7 +151,7 @@ func isValidExpirationDate(input interface{}) error {
 		return cli.NewValidationFailureError("The expiriration date cannot be empty. Use YYYY-MM-DD format or use 'never' for no expiration.")
 	}
 
-	if dateStr == "never" {
+	if dateStr == local_models.DefaultSuppressionExpiration {
 		return nil
 	}
 
