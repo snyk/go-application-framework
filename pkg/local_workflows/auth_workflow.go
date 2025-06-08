@@ -100,7 +100,7 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 	}
 
 	logger.Printf("Authentication Type: %s", authType)
-	err = analytics.AddExtension(authTypeParameter, authType)
+	analytics.AddExtensionStringValue(authTypeParameter, authType)
 
 	if strings.EqualFold(authType, authTypeOAuth) { // OAUTH flow
 		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)

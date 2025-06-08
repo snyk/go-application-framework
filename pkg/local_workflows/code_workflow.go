@@ -167,13 +167,17 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		return result, code.NewFeatureIsNotEnabledError(fmt.Sprintf("Snyk Code is not supported for your current organization: `%s`.", config.GetString(configuration.ORGANIZATION_SLUG)))
 	}
 
+	implementationName := "legacy"
 	if nativeImplementation {
-		invocationCtx.GetAnalytics().AddExtension("impl", "native")
-		logger.Debug().Msg("Implementation: Native")
+		implementationName = "native"
+	}
+
+	invocationCtx.GetAnalytics().AddExtensionStringValue("impl", implementationName)
+	logger.Debug().Msgf("Implementation: %s", implementationName)
+
+	if nativeImplementation {
 		result, err = code_workflow.EntryPointNative(invocationCtx)
 	} else {
-		invocationCtx.GetAnalytics().AddExtension("impl", "legacy")
-		logger.Debug().Msg("Implementation: legacy")
 		result, err = code_workflow.EntryPointLegacy(invocationCtx)
 	}
 

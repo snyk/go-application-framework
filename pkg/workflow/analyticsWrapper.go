@@ -75,11 +75,25 @@ func (a *analyticsWrapper) GetInstrumentation() analytics.InstrumentationCollect
 	return a.next.GetInstrumentation()
 }
 
-func (a *analyticsWrapper) AddExtension(key string, value interface{}) error {
+func (a *analyticsWrapper) AddExtensionIntegerValue(key string, value int) {
+	key = a.getPrefix(key)
+	a.next.AddExtensionIntegerValue(key, value)
+}
+
+func (a *analyticsWrapper) AddExtensionStringValue(key string, value string) {
+	key = a.getPrefix(key)
+	a.next.AddExtensionStringValue(key, value)
+}
+
+func (a *analyticsWrapper) AddExtensionBoolValue(key string, value bool) {
+	key = a.getPrefix(key)
+	a.next.AddExtensionBoolValue(key, value)
+}
+
+func (a *analyticsWrapper) getPrefix(key string) string {
 	hasPrefix := strings.HasPrefix(key, a.prefix)
 	if len(a.prefix) > 0 && !hasPrefix {
 		key = fmt.Sprintf("%s%s", a.prefix, key)
 	}
-
-	return a.next.AddExtension(key, value)
+	return key
 }

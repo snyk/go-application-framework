@@ -185,10 +185,8 @@ func Test_InstrumentationCollector(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
-		e := ic.AddExtension("integers", 123)
-		assert.NoError(t, e)
-		e = ic.AddExtension("booleans", true)
-		assert.NoError(t, e)
+		ic.AddExtension("integers", 123)
+		ic.AddExtension("booleans", true)
 
 		mockExtension := map[string]interface{}{
 			"strings":  "hello world",
@@ -212,8 +210,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
-		e := ic.AddExtension("password", "hunter2")
-		assert.NoError(t, e)
+		ic.AddExtension("password", "hunter2")
 
 		mockExtension := map[string]interface{}{
 			"strings":  "hello world",
@@ -236,12 +233,12 @@ func Test_InstrumentationCollector(t *testing.T) {
 		ic := setupBaseCollector(t)
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
 
-		e := ic.AddExtension("thisIsNotAValidType", []string{"invalid", "type"})
-		assert.Error(t, e)
-		e = ic.AddExtension("perfectlyValidInt", 1)
-		assert.NoError(t, e)
-		e = ic.AddExtension("perfectlyValidBool", true)
-		assert.NoError(t, e)
+		assert.Panics(t, func() {
+			ic.AddExtension("thisIsNotAValidType", []string{"invalid", "type"})
+		})
+
+		ic.AddExtension("perfectlyValidInt", 1)
+		ic.AddExtension("perfectlyValidBool", true)
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &map[string]interface{}{
 			"strings":            "hello world",
@@ -304,8 +301,7 @@ func setupBaseCollector(t *testing.T) InstrumentationCollector {
 	ic.SetStatus(Success)
 	ic.SetTestSummary(*json_schemas.NewTestSummary("sast", ""))
 	ic.SetTargetId("targetID")
-	e := ic.AddExtension("strings", "hello world")
-	assert.NoError(t, e)
+	ic.AddExtension("strings", "hello world")
 	ic.SetTimestamp(time.Date(2025, 1, 01, 0, 0, 0, 0, time.UTC))
 
 	return ic

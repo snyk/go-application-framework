@@ -39,8 +39,9 @@ type Analytics interface {
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
 	GetInstrumentation() InstrumentationCollector
-	// AddExtension adds a new datapoint to the instrumenation's extension property, datapoints must be of type: string, bool, int
-	AddExtension(key string, value interface{}) error
+	AddExtensionIntegerValue(key string, value int)
+	AddExtensionStringValue(key string, value string)
+	AddExtensionBoolValue(key string, value bool)
 }
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
@@ -177,11 +178,22 @@ func (a *AnalyticsImpl) AddError(err error) {
 	}
 }
 
-func (a *AnalyticsImpl) AddExtension(key string, value interface{}) error {
+func (a *AnalyticsImpl) AddExtensionIntegerValue(key string, value int) {
 	if a.instrumentor != nil {
-		return a.instrumentor.AddExtension(key, value)
+		a.instrumentor.AddExtension(key, value)
 	}
-	return nil
+}
+
+func (a *AnalyticsImpl) AddExtensionStringValue(key string, value string) {
+	if a.instrumentor != nil {
+		a.instrumentor.AddExtension(key, value)
+	}
+}
+
+func (a *AnalyticsImpl) AddExtensionBoolValue(key string, value bool) {
+	if a.instrumentor != nil {
+		a.instrumentor.AddExtension(key, value)
+	}
 }
 
 // AddHeader adds a header to the request.

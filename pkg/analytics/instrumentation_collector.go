@@ -39,7 +39,7 @@ type InstrumentationCollector interface {
 	SetTargetId(t string) // maybe use package-url library and types
 	AddError(err error)
 	// AddExtension adds a new datapoint to the instrumenation's extension property, datapoints must be of type: string, bool, int
-	AddExtension(key string, value interface{}) error
+	AddExtension(key string, value interface{})
 }
 
 var _ InstrumentationCollector = (*instrumentationCollectorImpl)(nil)
@@ -133,17 +133,15 @@ func (ic *instrumentationCollectorImpl) AddError(err error) {
 	ic.instrumentationErr = append(ic.instrumentationErr, err)
 }
 
-func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) error {
+func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) {
 	// ensure that extension only contains string, bool, int
 	switch value.(type) {
 	case bool, string, int:
 	default:
-		return fmt.Errorf("extension types must be of type: string, bool, int")
+		panic("extension types must be of type: string, bool, int")
 	}
 
 	ic.extension[key] = value
-
-	return nil
 }
 
 func GetV2InstrumentationObject(collector InstrumentationCollector, opt ...serializeOptionFunc) (*api.AnalyticsRequestBody, error) {
