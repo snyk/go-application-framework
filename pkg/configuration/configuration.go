@@ -438,6 +438,7 @@ func (ev *extendedViper) GetWithError(key string) (interface{}, error) {
 	// if enabled use cache
 	cacheEnabled, cacheDuration, err = ev.getCacheSettings()
 	if err != nil {
+		ev.mutex.Unlock()
 		return nil, fmt.Errorf("failed to read cache settings %w", err)
 	}
 
