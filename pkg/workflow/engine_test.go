@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
@@ -25,6 +26,7 @@ func callback1(invocation InvocationContext, input []Data) ([]Data, error) {
 	d := NewDataFromInput(input[0], typeId, "application/json", nil)
 	expectedDataIdentifier[0] = d.GetIdentifier()
 	invocation.GetLogger().Println("callback1", d)
+	invocation.GetAnalytics().AddExtensionStringValue("hello", "callback1")
 	return []Data{d}, nil
 }
 
@@ -34,6 +36,7 @@ func callback2(invocation InvocationContext, input []Data) ([]Data, error) {
 	d := NewData(typeId, "application/json", nil)
 	expectedDataIdentifier[1] = d.GetIdentifier()
 	invocation.GetLogger().Println("callback2", d)
+	invocation.GetAnalytics().AddExtensionStringValue("hello", "callback2")
 	return []Data{d}, nil
 }
 
@@ -113,6 +116,14 @@ func Test_EngineBasics(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Nil(t, actualData4)
 	fmt.Printf("%#v\n", err)
+
+	obj, err := analytics.GetV2InstrumentationObject(engine.GetAnalytics().GetInstrumentation())
+	assert.NoError(t, err)
+	assert.NotNil(t, obj)
+
+	extension := *obj.Data.Attributes.Interaction.Extension
+	assert.Equal(t, "callback1", extension["cmd1::hello"])
+	assert.Equal(t, "callback2", extension["cmd2::hello"])
 }
 
 func Test_EngineRegisterErrorHandling(t *testing.T) {
