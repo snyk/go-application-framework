@@ -52,13 +52,29 @@ func Test_StartTest_Success(t *testing.T) {
 
 	// Create a DepGraph to test
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
+
+	// Define LocalPolicy
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	params := testapi.StartTestParams{
+		OrgID:       orgID.String(),
+		Subject:     testSubject,
+		LocalPolicy: localPolicy,
+	}
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
-			Attributes: testapi.TestAttributesCreate{Subject: params.Subject},
-			Type:       testapi.Tests,
+			Attributes: testapi.TestAttributesCreate{
+				Subject: params.Subject,
+				Config: &testapi.TestConfiguration{
+					LocalPolicy: localPolicy,
+				},
+			},
+			Type: testapi.Tests,
 		},
 	}
 

@@ -148,8 +148,9 @@ var (
 
 // StartTestParams defines parameters for the high-level StartTest function.
 type StartTestParams struct {
-	OrgID   string
-	Subject TestSubjectCreate
+	OrgID       string
+	Subject     TestSubjectCreate
+	LocalPolicy *LocalPolicy
 }
 
 // testResult is the concrete implementation of the TestResult interface for
@@ -230,7 +231,6 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 
 // Create the initial test and return a handle to poll it
 func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
-	// Validate params
 	if len(params.Subject.union) == 0 {
 		return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
 	}
@@ -244,6 +244,11 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 
 	// Create test body
 	testAttributes := TestAttributesCreate{Subject: params.Subject}
+	if params.LocalPolicy != nil {
+		testAttributes.Config = &TestConfiguration{
+			LocalPolicy: params.LocalPolicy,
+		}
+	}
 	requestBody := TestRequestBody{
 		Data: TestDataCreate{
 			Attributes: testAttributes,
