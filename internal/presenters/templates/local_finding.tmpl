@@ -87,6 +87,11 @@
         {{- "\n" }}
     {{- end }}
 
+    {{- if and (eq .Summary.Type "sast") .Links.report (or (not .GitContext) (eq .GitContext.RepositoryUrl "")) }}
+        {{ tip "Some capabilities, including the ability to apply ignores, are unavailable. Retest the project with the --remote-repo-url parameter or from within a repository to enable full functionality."}}
+        {{- "\n" }}
+    {{- end }}
+
 {{- end }}
 
 {{- end }} {{/* end main */}}

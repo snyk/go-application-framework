@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -51,7 +52,19 @@ const (
 	noReport   reportType = "no_report"
 )
 
-type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error)
+// codeAnalysisDependencies holds functions that can be injected for testing or alternative implementations.
+type codeAnalysisDependencies struct {
+	determineAnalyzeInputFunc func(path string, config configuration.Configuration, logger *zerolog.Logger) (scan.Target, <-chan string, error)
+	getReportModeFunc         func(config configuration.Configuration) (reportType, error)
+}
+
+type AnalysisResult struct {
+	SarifResponse  *sarif.SarifResponse
+	ResultMetaData *scan.ResultMetaData
+	GitContext     *local_models.GitContext
+}
+
+type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface, codeAnalysisDependencies) (*AnalysisResult, error)
 
 type ProgressTrackerFactory struct {
 	userInterface ui.UserInterface
@@ -122,20 +135,31 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		analyzeFnc = opts[0]
 	}
 
-	result, resultMetaData, err := analyzeFnc(path, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface())
+	deps := codeAnalysisDependencies{
+		determineAnalyzeInputFunc: determineAnalyzeInput,
+		getReportModeFunc:         GetReportMode,
+	}
+
+	result, err := analyzeFnc(path, invocationCtx.GetNetworkAccess().GetHttpClient, logger, config, invocationCtx.GetUserInterface(), deps)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Debug().Msgf("Result metadata: %+v", resultMetaData)
+	logger.Debug().Msgf("Result metadata: %+v", result.ResultMetaData)
 
 	resultAvailable := true
-	if result == nil {
+	if result == nil || result.SarifResponse == nil {
 		resultAvailable = false
-		result = &sarif.SarifResponse{}
+		if result == nil {
+			result = &AnalysisResult{
+				SarifResponse: &sarif.SarifResponse{},
+			}
+		} else {
+			result.SarifResponse = &sarif.SarifResponse{}
+		}
 	}
 
-	summary := sarif2.CreateCodeSummary(&result.Sarif, config.GetString(configuration.INPUT_DIRECTORY))
+	summary := sarif2.CreateCodeSummary(&result.SarifResponse.Sarif, config.GetString(configuration.INPUT_DIRECTORY))
 	summaryData, err := createCodeWorkflowData(
 		workflow.NewTypeIdentifier(id, "summary"),
 		config,
@@ -155,14 +179,14 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 
 	if resultAvailable {
 		// transform sarif to findings
-		localFindings, lfError := local_models.TransformToLocalFindingModelFromSarif(&result.Sarif, summary)
+		localFindings, lfError := local_models.TransformToLocalFindingModelFromSarifWithGitContext(&result.SarifResponse.Sarif, summary, result.GitContext)
 		if lfError != nil {
 			return nil, lfError
 		}
 
 		// if available add a report link to the findings
-		if resultMetaData != nil && len(resultMetaData.WebUiUrl) > 0 {
-			localFindings.Links[local_models.LINKS_KEY_REPORT] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
+		if result.ResultMetaData != nil && len(result.ResultMetaData.WebUiUrl) > 0 {
+			localFindings.Links[local_models.LINKS_KEY_REPORT] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), result.ResultMetaData.WebUiUrl)
 		}
 
 		findingsData, findingsError := createCodeWorkflowData(
@@ -182,17 +206,18 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 }
 
 // default function that uses the code-client-go library
-func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error) {
-	var result *sarif.SarifResponse
-	var resultMetaData *scan.ResultMetaData
+func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, logger *zerolog.Logger, config configuration.Configuration, userInterface ui.UserInterface, deps codeAnalysisDependencies) (*AnalysisResult, error) {
+	var result *AnalysisResult
+	var err error
+
 	requestId, err := uuid.GenerateUUID()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	reportMode, err := GetReportMode(config)
+	reportMode, err := deps.getReportModeFunc(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	ctx := context.Background()
@@ -230,12 +255,19 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 	if reportMode == remoteCode {
 		projectId, parseErr := gUuid.Parse(config.GetString(ConfigurationProjectId))
 		if parseErr != nil {
-			return nil, nil, errors.Join(errors.New("\"project-id\" must be a valid UUID"), parseErr)
+			return nil, errors.Join(errors.New("\"project-id\" must be a valid UUID"), parseErr)
 		}
 
 		option := codeclient.ReportRemoteTest(projectId, config.GetString(ConfigurationCommitId))
-		result, resultMetaData, err = codeScanner.AnalyzeRemote(ctx, option)
-		return result, resultMetaData, err
+		sarifResponse, resultMetaData, err := codeScanner.AnalyzeRemote(ctx, option)
+		if err != nil {
+			return nil, err
+		}
+		result = &AnalysisResult{
+			SarifResponse:  sarifResponse,
+			ResultMetaData: resultMetaData,
+		}
+		return result, err
 	}
 
 	// use case: stateful local code testing
@@ -244,9 +276,9 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		analysisOptions = append(analysisOptions, option)
 	}
 
-	target, files, err := determineAnalyzeInput(path, config, logger)
+	target, files, err := deps.determineAnalyzeInputFunc(path, config, logger)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	logger.Debug().Msgf("Path: %s", path)
@@ -254,8 +286,50 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 
 	changedFiles := make(map[string]bool)
 
-	result, _, resultMetaData, err = codeScanner.UploadAndAnalyzeWithOptions(ctx, requestId, target, files, changedFiles, analysisOptions...)
-	return result, resultMetaData, err
+	sarifResponse, _, resultMetaData, err := codeScanner.UploadAndAnalyzeWithOptions(ctx, requestId, target, files, changedFiles, analysisOptions...)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Create git context from target information
+	var gitContext *local_models.GitContext
+	if target != nil {
+		if repoTarget, ok := target.(*scan.RepositoryTarget); ok {
+			logger.Debug().Msgf("Extracting git context from repository target: %s", repoTarget.GetPath())
+			
+			branch, err := git.BranchNameFromDir(repoTarget.GetPath())
+			if err != nil {
+				logger.Debug().Err(err).Msg("Failed to get current branch")
+			} else {
+				logger.Debug().Msgf("Current branch: %s", branch)
+			}
+
+			commitHash, err := git.CommitHashFromDir(repoTarget.GetPath())
+			if err != nil {
+				logger.Debug().Err(err).Msg("Failed to get current commit hash")
+			} else {
+				logger.Debug().Msgf("Current commit hash: %s", commitHash)
+			}
+
+			gitContext = &local_models.GitContext{
+				RepositoryUrl: repoTarget.GetRepositoryUrl(),
+				Branch:        branch,
+				CommitHash:    commitHash,
+			}
+			logger.Debug().Msgf("Created git context: %+v", gitContext)
+		} else {
+			logger.Debug().Msgf("Target is not a RepositoryTarget, type: %T", target)
+		}
+	} else {
+		logger.Debug().Msg("Target is nil, cannot determine git context - repository context tip will be shown")
+	}
+
+	result = &AnalysisResult{
+		SarifResponse:  sarifResponse,
+		ResultMetaData: resultMetaData,
+		GitContext:     gitContext,
+	}
+	return result, err
 }
 
 func determineAnalyzeInput(path string, config configuration.Configuration, logger *zerolog.Logger) (scan.Target, <-chan string, error) {
