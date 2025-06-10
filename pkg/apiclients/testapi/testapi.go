@@ -231,14 +231,6 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 
 // Create the initial test and return a handle to poll it
 func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
-	// Validate params
-	if params.LocalPolicy != nil && params.LocalPolicy.RiskScoreThreshold != nil {
-		threshold := *params.LocalPolicy.RiskScoreThreshold
-		if threshold > 1000 { // uint16 cannot be < 0
-			return nil, fmt.Errorf("RiskScoreThreshold must be between 0 and 1000, got %d", threshold)
-		}
-	}
-
 	if len(params.Subject.union) == 0 {
 		return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
 	}
