@@ -67,9 +67,9 @@ const (
 	FindingTypeSca   FindingType = "sca"
 )
 
-// Defines values for GitURLCoordinatesSubjectType.
+// Defines values for GitUrlCoordinatesSubjectType.
 const (
-	GitUrlCoordinates GitURLCoordinatesSubjectType = "git_url_coordinates"
+	GitUrlCoordinates GitUrlCoordinatesSubjectType = "git_url_coordinates"
 )
 
 // Defines values for GithubSecurityAdvisoryProblemSource.
@@ -117,9 +117,9 @@ const (
 	OtherSubjectTypeOther OtherSubjectType = "other"
 )
 
-// Defines values for PackageDependencyType.
+// Defines values for PackageLocationType.
 const (
-	PackageDependencyTypePackageDependency PackageDependencyType = "package_dependency"
+	PackageLocationTypePackage PackageLocationType = "package"
 )
 
 // Defines values for PassFail.
@@ -143,9 +143,9 @@ const (
 	ProjectName ProjectNameLocatorType = "project_name"
 )
 
-// Defines values for SBOMReachabilitySubjectType.
+// Defines values for SbomReachabilitySubjectType.
 const (
-	SbomReachability SBOMReachabilitySubjectType = "sbom_reachability"
+	SbomReachability SbomReachabilitySubjectType = "sbom_reachability"
 )
 
 // Defines values for ScmRepoLocatorType.
@@ -183,9 +183,9 @@ const (
 	SnykVuln SnykVulnProblemSource = "snyk_vuln"
 )
 
-// Defines values for SourceFileLocationType.
+// Defines values for SourceLocationType.
 const (
-	SourceFile SourceFileLocationType = "source_file"
+	Source SourceLocationType = "source"
 )
 
 // Defines values for SuppressionStatus.
@@ -322,8 +322,8 @@ type DependencyPathEvidence struct {
 	// Path Series of component identifiers starting from the top-level component tested,
 	// and ending in the vulnerable software component.
 	//
-	// The identifiers are domain-specific and determined by the SBOM Asset under test.
-	Path   []string                     `json:"path"`
+	// The identifiers are domain-specific and determined by the test subject.
+	Path   []Package                    `json:"path"`
 	Source DependencyPathEvidenceSource `json:"source"`
 }
 
@@ -383,24 +383,36 @@ type Evidence struct {
 	union json.RawMessage
 }
 
-// ExecutableLocation A location within an asset's contents that can be executed, as part of a
-// program flow.
-type ExecutableLocation struct {
-	union json.RawMessage
-}
-
 // ExecutionFlowEvidence Indicate a program flow of execution as additional evidence for the finding.
 type ExecutionFlowEvidence struct {
-	// Locations Sequence of locations within this flow of execution.
+	// Flow Sequence of locations within this flow of execution.
 	//
 	// For example, a sequence of locations connecting the "source" location
 	// where input data is obtained, to a "sink" location where it is used.
-	Locations []ExecutableLocation        `json:"locations"`
-	Source    ExecutionFlowEvidenceSource `json:"source"`
+	Flow   []FileRegion                `json:"flow"`
+	Source ExecutionFlowEvidenceSource `json:"source"`
 }
 
 // ExecutionFlowEvidenceSource defines model for ExecutionFlowEvidence.Source.
 type ExecutionFlowEvidenceSource string
+
+// FileRegion FileRegion models a location where vulnerable code is found.
+type FileRegion struct {
+	// FilePath File path for the code snippet.
+	FilePath string `json:"file_path"`
+
+	// FromColumn Column on which the snippet starts.
+	FromColumn *int `json:"from_column,omitempty"`
+
+	// FromLine Line in the file where the code snippet starts.
+	FromLine int `json:"from_line"`
+
+	// ToColumn Column at which the code snippet ends.
+	ToColumn *int `json:"to_column,omitempty"`
+
+	// ToLine Line on which the code snippet ends.
+	ToLine *int `json:"to_line,omitempty"`
+}
 
 // FindingAttributes FindingAttributes represent the attributes of a Finding resource.
 type FindingAttributes struct {
@@ -514,7 +526,7 @@ type FindingData struct {
 // FindingDataType defines model for FindingData.Type.
 type FindingDataType string
 
-// FindingLocation Location within an Asset's contents where the finding was discovered.
+// FindingLocation Location within an Subject's contents where the finding was discovered.
 type FindingLocation struct {
 	union json.RawMessage
 }
@@ -535,9 +547,9 @@ type FindingSummary struct {
 // FindingType Type of Finding which was discovered.
 type FindingType string
 
-// GitURLCoordinatesSubject Test subject representing a source tree located in a Git repository that
+// GitUrlCoordinatesSubject Test subject representing a source tree located in a Git repository that
 // has a Snyk SCM integration.
-type GitURLCoordinatesSubject struct {
+type GitUrlCoordinatesSubject struct {
 	// CommitId Commit ID of the Git commit from which content will be retrieved for the
 	// test.
 	CommitId string `json:"commit_id"`
@@ -548,11 +560,11 @@ type GitURLCoordinatesSubject struct {
 	// Locator Locate the SCM repository from which content will be retrieved for the
 	// test.
 	Locator ScmRepoLocator               `json:"locator"`
-	Type    GitURLCoordinatesSubjectType `json:"type"`
+	Type    GitUrlCoordinatesSubjectType `json:"type"`
 }
 
-// GitURLCoordinatesSubjectType defines model for GitURLCoordinatesSubject.Type.
-type GitURLCoordinatesSubjectType string
+// GitUrlCoordinatesSubjectType defines model for GitUrlCoordinatesSubject.Type.
+type GitUrlCoordinatesSubjectType string
 
 // GithubSecurityAdvisoryProblem Github Security Advisory associated with this finding.
 type GithubSecurityAdvisoryProblem struct {
@@ -704,17 +716,26 @@ type OtherSubject struct {
 // OtherSubjectType defines model for OtherSubject.Type.
 type OtherSubjectType string
 
-// PackageDependency Package dependency version.
-//
-// Finding type: SCA
-type PackageDependency struct {
-	Name    string                `json:"name"`
-	Type    PackageDependencyType `json:"type"`
-	Version string                `json:"version"`
+// Package Dependency models a package dependency.
+type Package struct {
+	// Name Name is the name of the package.
+	Name string `json:"name"`
+
+	// Version Version is the version of the named package.
+	Version string `json:"version"`
 }
 
-// PackageDependencyType defines model for PackageDependency.Type.
-type PackageDependencyType string
+// PackageLocation Package dependency version.
+//
+// Finding type: SCA
+type PackageLocation struct {
+	// Package Dependency models a package dependency.
+	Package Package             `json:"package"`
+	Type    PackageLocationType `json:"type"`
+}
+
+// PackageLocationType defines model for PackageLocation.Type.
+type PackageLocationType string
 
 // PassFail Indicate whether a Test passes or fails.
 type PassFail string
@@ -813,8 +834,8 @@ type RiskScore struct {
 	Value uint16 `json:"value"`
 }
 
-// SBOMReachabilitySubject Test subject for SBOM test with reachability analysis.
-type SBOMReachabilitySubject struct {
+// SbomReachabilitySubject Test subject for SBOM test with reachability analysis.
+type SbomReachabilitySubject struct {
 	// CodeBundleId Source code to inspect for the reach of the vulnerable dependencies.
 	CodeBundleId string `json:"code_bundle_id"`
 
@@ -823,11 +844,11 @@ type SBOMReachabilitySubject struct {
 
 	// SbomBundleId The SBOM to test for vulnerable dependencies.
 	SbomBundleId string                      `json:"sbom_bundle_id"`
-	Type         SBOMReachabilitySubjectType `json:"type"`
+	Type         SbomReachabilitySubjectType `json:"type"`
 }
 
-// SBOMReachabilitySubjectType defines model for SBOMReachabilitySubject.Type.
-type SBOMReachabilitySubjectType string
+// SbomReachabilitySubjectType defines model for SbomReachabilitySubject.Type.
+type SbomReachabilitySubjectType string
 
 // ScmRepoLocator ScmRepoLocator locates a test subject by SCM repository coordinates.
 type ScmRepoLocator struct {
@@ -1043,20 +1064,29 @@ type SnykVulnProblem struct {
 // SnykVulnProblemSource defines model for SnykVulnProblem.Source.
 type SnykVulnProblemSource string
 
-// SourceFileLocation Source file location.
+// SourceLocation Source file location.
 //
 // Finding types: SCA, SAST
-type SourceFileLocation struct {
-	FilePath   string                 `json:"file_path"`
-	FromColumn *int32                 `json:"from_column,omitempty"`
-	FromLine   int32                  `json:"from_line"`
-	ToColumn   *int32                 `json:"to_column,omitempty"`
-	ToLine     *int32                 `json:"to_line,omitempty"`
-	Type       SourceFileLocationType `json:"type"`
+type SourceLocation struct {
+	// FilePath File path for the code snippet.
+	FilePath string `json:"file_path"`
+
+	// FromColumn Column on which the snippet starts.
+	FromColumn *int `json:"from_column,omitempty"`
+
+	// FromLine Line in the file where the code snippet starts.
+	FromLine int `json:"from_line"`
+
+	// ToColumn Column at which the code snippet ends.
+	ToColumn *int `json:"to_column,omitempty"`
+
+	// ToLine Line on which the code snippet ends.
+	ToLine *int               `json:"to_line,omitempty"`
+	Type   SourceLocationType `json:"type"`
 }
 
-// SourceFileLocationType defines model for SourceFileLocation.Type.
-type SourceFileLocationType string
+// SourceLocationType defines model for SourceLocation.Type.
+type SourceLocationType string
 
 // Suppression Details about a finding's suppression in test results.
 //
@@ -1228,13 +1258,13 @@ type TestState struct {
 	Warnings *[]IoSnykApiCommonError `json:"warnings,omitempty"`
 }
 
-// TestSubject The subject of a test, which identifies the asset and content references
+// TestSubject The subject of a test, which identifies the asset/project and content references
 // necessary to conduct a security test.
 type TestSubject struct {
 	union json.RawMessage
 }
 
-// TestSubjectCreate The subject of a test, which identifies the asset and content references
+// TestSubjectCreate The subject of a test, which identifies the asset/project and content references
 // necessary to conduct a security test.
 type TestSubjectCreate struct {
 	union json.RawMessage
@@ -1252,6 +1282,9 @@ type TimeoutSpec struct {
 	Outcome PassFail `json:"outcome"`
 	Seconds uint32   `json:"seconds"`
 }
+
+// Uuid defines model for Uuid.
+type Uuid = openapi_types.UUID
 
 // IoSnykApiCommonError defines model for io.snyk.api.common.Error.
 type IoSnykApiCommonError struct {
@@ -1572,9 +1605,6 @@ type SnykvulndbVulnerableFunctionId struct {
 	FunctionName string `json:"function_name"`
 }
 
-// Uuid defines model for uuid.
-type Uuid = openapi_types.UUID
-
 // JobIdParam defines model for JobIdParam.
 type JobIdParam = openapi_types.UUID
 
@@ -1593,10 +1623,10 @@ type IoSnykApiRequestPaginatedRequestLimit = int8
 // IoSnykApiRequestPaginatedRequestStartingAfter defines model for io.snyk.api.request.PaginatedRequest.starting_after.
 type IoSnykApiRequestPaginatedRequestStartingAfter = string
 
-// IoSnykApiRequestSnykApiRequestInteractionId defines model for io.snyk.api.request.SnykApiRequest.interactionId.
+// IoSnykApiRequestSnykApiRequestInteractionId defines model for io.snyk.api.request.SnykApiRequest.interaction_id.
 type IoSnykApiRequestSnykApiRequestInteractionId = string
 
-// IoSnykApiRequestSnykApiRequestRequestId defines model for io.snyk.api.request.SnykApiRequest.requestId.
+// IoSnykApiRequestSnykApiRequestRequestId defines model for io.snyk.api.request.SnykApiRequest.request_id.
 type IoSnykApiRequestSnykApiRequestRequestId = openapi_types.UUID
 
 // IoSnykApiRequestSnykApiRequestVersion defines model for io.snyk.api.request.SnykApiRequest.version.
@@ -2451,24 +2481,24 @@ func (t *Evidence) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsSourceFileLocation returns the union data inside the ExecutableLocation as a SourceFileLocation
-func (t ExecutableLocation) AsSourceFileLocation() (SourceFileLocation, error) {
-	var body SourceFileLocation
+// AsPackageLocation returns the union data inside the FindingLocation as a PackageLocation
+func (t FindingLocation) AsPackageLocation() (PackageLocation, error) {
+	var body PackageLocation
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromSourceFileLocation overwrites any union data inside the ExecutableLocation as the provided SourceFileLocation
-func (t *ExecutableLocation) FromSourceFileLocation(v SourceFileLocation) error {
-	v.Type = "source_file"
+// FromPackageLocation overwrites any union data inside the FindingLocation as the provided PackageLocation
+func (t *FindingLocation) FromPackageLocation(v PackageLocation) error {
+	v.Type = "package"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeSourceFileLocation performs a merge with any union data inside the ExecutableLocation, using the provided SourceFileLocation
-func (t *ExecutableLocation) MergeSourceFileLocation(v SourceFileLocation) error {
-	v.Type = "source_file"
+// MergePackageLocation performs a merge with any union data inside the FindingLocation, using the provided PackageLocation
+func (t *FindingLocation) MergePackageLocation(v PackageLocation) error {
+	v.Type = "package"
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2479,113 +2509,24 @@ func (t *ExecutableLocation) MergeSourceFileLocation(v SourceFileLocation) error
 	return err
 }
 
-// AsOtherLocation returns the union data inside the ExecutableLocation as a OtherLocation
-func (t ExecutableLocation) AsOtherLocation() (OtherLocation, error) {
-	var body OtherLocation
+// AsSourceLocation returns the union data inside the FindingLocation as a SourceLocation
+func (t FindingLocation) AsSourceLocation() (SourceLocation, error) {
+	var body SourceLocation
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromOtherLocation overwrites any union data inside the ExecutableLocation as the provided OtherLocation
-func (t *ExecutableLocation) FromOtherLocation(v OtherLocation) error {
-	v.Type = "other"
+// FromSourceLocation overwrites any union data inside the FindingLocation as the provided SourceLocation
+func (t *FindingLocation) FromSourceLocation(v SourceLocation) error {
+	v.Type = "source"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeOtherLocation performs a merge with any union data inside the ExecutableLocation, using the provided OtherLocation
-func (t *ExecutableLocation) MergeOtherLocation(v OtherLocation) error {
-	v.Type = "other"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ExecutableLocation) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t ExecutableLocation) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "other":
-		return t.AsOtherLocation()
-	case "source_file":
-		return t.AsSourceFileLocation()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t ExecutableLocation) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ExecutableLocation) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsPackageDependency returns the union data inside the FindingLocation as a PackageDependency
-func (t FindingLocation) AsPackageDependency() (PackageDependency, error) {
-	var body PackageDependency
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromPackageDependency overwrites any union data inside the FindingLocation as the provided PackageDependency
-func (t *FindingLocation) FromPackageDependency(v PackageDependency) error {
-	v.Type = "package_dependency"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergePackageDependency performs a merge with any union data inside the FindingLocation, using the provided PackageDependency
-func (t *FindingLocation) MergePackageDependency(v PackageDependency) error {
-	v.Type = "package_dependency"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsSourceFileLocation returns the union data inside the FindingLocation as a SourceFileLocation
-func (t FindingLocation) AsSourceFileLocation() (SourceFileLocation, error) {
-	var body SourceFileLocation
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromSourceFileLocation overwrites any union data inside the FindingLocation as the provided SourceFileLocation
-func (t *FindingLocation) FromSourceFileLocation(v SourceFileLocation) error {
-	v.Type = "source_file"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeSourceFileLocation performs a merge with any union data inside the FindingLocation, using the provided SourceFileLocation
-func (t *FindingLocation) MergeSourceFileLocation(v SourceFileLocation) error {
-	v.Type = "source_file"
+// MergeSourceLocation performs a merge with any union data inside the FindingLocation, using the provided SourceLocation
+func (t *FindingLocation) MergeSourceLocation(v SourceLocation) error {
+	v.Type = "source"
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -2640,10 +2581,10 @@ func (t FindingLocation) ValueByDiscriminator() (interface{}, error) {
 	switch discriminator {
 	case "other":
 		return t.AsOtherLocation()
-	case "package_dependency":
-		return t.AsPackageDependency()
-	case "source_file":
-		return t.AsSourceFileLocation()
+	case "package":
+		return t.AsPackageLocation()
+	case "source":
+		return t.AsSourceLocation()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
@@ -3108,23 +3049,23 @@ func (t *TestSubject) MergeDepGraphSubject(v DepGraphSubject) error {
 	return err
 }
 
-// AsGitURLCoordinatesSubject returns the union data inside the TestSubject as a GitURLCoordinatesSubject
-func (t TestSubject) AsGitURLCoordinatesSubject() (GitURLCoordinatesSubject, error) {
-	var body GitURLCoordinatesSubject
+// AsGitUrlCoordinatesSubject returns the union data inside the TestSubject as a GitUrlCoordinatesSubject
+func (t TestSubject) AsGitUrlCoordinatesSubject() (GitUrlCoordinatesSubject, error) {
+	var body GitUrlCoordinatesSubject
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromGitURLCoordinatesSubject overwrites any union data inside the TestSubject as the provided GitURLCoordinatesSubject
-func (t *TestSubject) FromGitURLCoordinatesSubject(v GitURLCoordinatesSubject) error {
+// FromGitUrlCoordinatesSubject overwrites any union data inside the TestSubject as the provided GitUrlCoordinatesSubject
+func (t *TestSubject) FromGitUrlCoordinatesSubject(v GitUrlCoordinatesSubject) error {
 	v.Type = "git_url_coordinates"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeGitURLCoordinatesSubject performs a merge with any union data inside the TestSubject, using the provided GitURLCoordinatesSubject
-func (t *TestSubject) MergeGitURLCoordinatesSubject(v GitURLCoordinatesSubject) error {
+// MergeGitUrlCoordinatesSubject performs a merge with any union data inside the TestSubject, using the provided GitUrlCoordinatesSubject
+func (t *TestSubject) MergeGitUrlCoordinatesSubject(v GitUrlCoordinatesSubject) error {
 	v.Type = "git_url_coordinates"
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -3136,23 +3077,23 @@ func (t *TestSubject) MergeGitURLCoordinatesSubject(v GitURLCoordinatesSubject) 
 	return err
 }
 
-// AsSBOMReachabilitySubject returns the union data inside the TestSubject as a SBOMReachabilitySubject
-func (t TestSubject) AsSBOMReachabilitySubject() (SBOMReachabilitySubject, error) {
-	var body SBOMReachabilitySubject
+// AsSbomReachabilitySubject returns the union data inside the TestSubject as a SbomReachabilitySubject
+func (t TestSubject) AsSbomReachabilitySubject() (SbomReachabilitySubject, error) {
+	var body SbomReachabilitySubject
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromSBOMReachabilitySubject overwrites any union data inside the TestSubject as the provided SBOMReachabilitySubject
-func (t *TestSubject) FromSBOMReachabilitySubject(v SBOMReachabilitySubject) error {
+// FromSbomReachabilitySubject overwrites any union data inside the TestSubject as the provided SbomReachabilitySubject
+func (t *TestSubject) FromSbomReachabilitySubject(v SbomReachabilitySubject) error {
 	v.Type = "sbom_reachability"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeSBOMReachabilitySubject performs a merge with any union data inside the TestSubject, using the provided SBOMReachabilitySubject
-func (t *TestSubject) MergeSBOMReachabilitySubject(v SBOMReachabilitySubject) error {
+// MergeSbomReachabilitySubject performs a merge with any union data inside the TestSubject, using the provided SbomReachabilitySubject
+func (t *TestSubject) MergeSbomReachabilitySubject(v SbomReachabilitySubject) error {
 	v.Type = "sbom_reachability"
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -3211,11 +3152,11 @@ func (t TestSubject) ValueByDiscriminator() (interface{}, error) {
 	case "dep_graph":
 		return t.AsDepGraphSubject()
 	case "git_url_coordinates":
-		return t.AsGitURLCoordinatesSubject()
+		return t.AsGitUrlCoordinatesSubject()
 	case "other":
 		return t.AsOtherSubject()
 	case "sbom_reachability":
-		return t.AsSBOMReachabilitySubject()
+		return t.AsSbomReachabilitySubject()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
@@ -3287,23 +3228,23 @@ func (t *TestSubjectCreate) MergeDepGraphSubjectCreate(v DepGraphSubjectCreate) 
 	return err
 }
 
-// AsGitURLCoordinatesSubject returns the union data inside the TestSubjectCreate as a GitURLCoordinatesSubject
-func (t TestSubjectCreate) AsGitURLCoordinatesSubject() (GitURLCoordinatesSubject, error) {
-	var body GitURLCoordinatesSubject
+// AsGitUrlCoordinatesSubject returns the union data inside the TestSubjectCreate as a GitUrlCoordinatesSubject
+func (t TestSubjectCreate) AsGitUrlCoordinatesSubject() (GitUrlCoordinatesSubject, error) {
+	var body GitUrlCoordinatesSubject
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromGitURLCoordinatesSubject overwrites any union data inside the TestSubjectCreate as the provided GitURLCoordinatesSubject
-func (t *TestSubjectCreate) FromGitURLCoordinatesSubject(v GitURLCoordinatesSubject) error {
+// FromGitUrlCoordinatesSubject overwrites any union data inside the TestSubjectCreate as the provided GitUrlCoordinatesSubject
+func (t *TestSubjectCreate) FromGitUrlCoordinatesSubject(v GitUrlCoordinatesSubject) error {
 	v.Type = "git_url_coordinates"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeGitURLCoordinatesSubject performs a merge with any union data inside the TestSubjectCreate, using the provided GitURLCoordinatesSubject
-func (t *TestSubjectCreate) MergeGitURLCoordinatesSubject(v GitURLCoordinatesSubject) error {
+// MergeGitUrlCoordinatesSubject performs a merge with any union data inside the TestSubjectCreate, using the provided GitUrlCoordinatesSubject
+func (t *TestSubjectCreate) MergeGitUrlCoordinatesSubject(v GitUrlCoordinatesSubject) error {
 	v.Type = "git_url_coordinates"
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -3315,23 +3256,23 @@ func (t *TestSubjectCreate) MergeGitURLCoordinatesSubject(v GitURLCoordinatesSub
 	return err
 }
 
-// AsSBOMReachabilitySubject returns the union data inside the TestSubjectCreate as a SBOMReachabilitySubject
-func (t TestSubjectCreate) AsSBOMReachabilitySubject() (SBOMReachabilitySubject, error) {
-	var body SBOMReachabilitySubject
+// AsSbomReachabilitySubject returns the union data inside the TestSubjectCreate as a SbomReachabilitySubject
+func (t TestSubjectCreate) AsSbomReachabilitySubject() (SbomReachabilitySubject, error) {
+	var body SbomReachabilitySubject
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromSBOMReachabilitySubject overwrites any union data inside the TestSubjectCreate as the provided SBOMReachabilitySubject
-func (t *TestSubjectCreate) FromSBOMReachabilitySubject(v SBOMReachabilitySubject) error {
+// FromSbomReachabilitySubject overwrites any union data inside the TestSubjectCreate as the provided SbomReachabilitySubject
+func (t *TestSubjectCreate) FromSbomReachabilitySubject(v SbomReachabilitySubject) error {
 	v.Type = "sbom_reachability"
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeSBOMReachabilitySubject performs a merge with any union data inside the TestSubjectCreate, using the provided SBOMReachabilitySubject
-func (t *TestSubjectCreate) MergeSBOMReachabilitySubject(v SBOMReachabilitySubject) error {
+// MergeSbomReachabilitySubject performs a merge with any union data inside the TestSubjectCreate, using the provided SbomReachabilitySubject
+func (t *TestSubjectCreate) MergeSbomReachabilitySubject(v SbomReachabilitySubject) error {
 	v.Type = "sbom_reachability"
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -3390,11 +3331,11 @@ func (t TestSubjectCreate) ValueByDiscriminator() (interface{}, error) {
 	case "dep_graph":
 		return t.AsDepGraphSubjectCreate()
 	case "git_url_coordinates":
-		return t.AsGitURLCoordinatesSubject()
+		return t.AsGitUrlCoordinatesSubject()
 	case "other":
 		return t.AsOtherSubject()
 	case "sbom_reachability":
-		return t.AsSBOMReachabilitySubject()
+		return t.AsSbomReachabilitySubject()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
