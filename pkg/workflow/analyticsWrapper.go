@@ -11,7 +11,7 @@ import (
 const analyticsPrefixSeparator = "::"
 
 func NewAnalyticsWrapper(a analytics.Analytics, prefix string) analytics.Analytics {
-	return &analyticsWrapper{next: a, prefix: fmt.Sprintf("%s%s", prefix, analyticsPrefixSeparator)}
+	return &analyticsWrapper{next: a, prefix: fmt.Sprintf("%s%s", strings.ToLower(prefix), analyticsPrefixSeparator)}
 }
 
 type analyticsWrapper struct {
@@ -93,7 +93,7 @@ func (a *analyticsWrapper) AddExtensionBoolValue(key string, value bool) {
 func (a *analyticsWrapper) getPrefix(key string) string {
 	hasPrefix := strings.HasPrefix(key, a.prefix)
 	if len(a.prefix) > 0 && !hasPrefix {
-		key = fmt.Sprintf("%s%s", a.prefix, key)
+		key = fmt.Sprintf("%s%s", a.prefix, strings.ToLower(key))
 	}
 	return key
 }
