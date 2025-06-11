@@ -11,89 +11,89 @@ import (
 const analyticsPrefixSeparator = "::"
 
 func NewAnalyticsWrapper(a analytics.Analytics, prefix string) analytics.Analytics {
-	return &analyticsWrapper{next: a, prefix: fmt.Sprintf("%s%s", strings.ToLower(prefix), analyticsPrefixSeparator)}
+	return &analyticsWrapper{wrappedAnalytics: a, prefix: fmt.Sprintf("%s%s", prefix, analyticsPrefixSeparator)}
 }
 
 type analyticsWrapper struct {
-	next   analytics.Analytics
-	prefix string
+	wrappedAnalytics analytics.Analytics
+	prefix           string
 }
 
 func (a *analyticsWrapper) SetCmdArguments(args []string) {
-	a.next.SetCmdArguments(args)
+	a.wrappedAnalytics.SetCmdArguments(args)
 }
 
 func (a *analyticsWrapper) SetOrg(org string) {
-	a.next.SetOrg(org)
+	a.wrappedAnalytics.SetOrg(org)
 }
 
 func (a *analyticsWrapper) SetVersion(version string) {
-	a.next.SetVersion(version)
+	a.wrappedAnalytics.SetVersion(version)
 }
 
 func (a *analyticsWrapper) SetApiUrl(apiUrl string) {
-	a.next.SetApiUrl(apiUrl)
+	a.wrappedAnalytics.SetApiUrl(apiUrl)
 }
 
 func (a *analyticsWrapper) SetIntegration(name string, version string) {
-	a.next.SetIntegration(name, version)
+	a.wrappedAnalytics.SetIntegration(name, version)
 }
 
 func (a *analyticsWrapper) SetCommand(command string) {
-	a.next.SetCommand(command)
+	a.wrappedAnalytics.SetCommand(command)
 }
 
 func (a *analyticsWrapper) SetOperatingSystem(os string) {
-	a.next.SetOperatingSystem(os)
+	a.wrappedAnalytics.SetOperatingSystem(os)
 }
 
 func (a *analyticsWrapper) AddError(err error) {
-	a.next.AddError(err)
+	a.wrappedAnalytics.AddError(err)
 }
 
 func (a *analyticsWrapper) AddHeader(headerFunc func() http.Header) {
-	a.next.AddHeader(headerFunc)
+	a.wrappedAnalytics.AddHeader(headerFunc)
 }
 
 func (a *analyticsWrapper) SetClient(clientFunc func() *http.Client) {
-	a.next.SetClient(clientFunc)
+	a.wrappedAnalytics.SetClient(clientFunc)
 }
 
 func (a *analyticsWrapper) IsCiEnvironment() bool {
-	return a.next.IsCiEnvironment()
+	return a.wrappedAnalytics.IsCiEnvironment()
 }
 
 func (a *analyticsWrapper) GetRequest() (*http.Request, error) {
-	return a.next.GetRequest()
+	return a.wrappedAnalytics.GetRequest()
 }
 
 func (a *analyticsWrapper) Send() (*http.Response, error) {
-	return a.next.Send()
+	return a.wrappedAnalytics.Send()
 }
 
 func (a *analyticsWrapper) GetInstrumentation() analytics.InstrumentationCollector {
-	return a.next.GetInstrumentation()
+	return a.wrappedAnalytics.GetInstrumentation()
 }
 
 func (a *analyticsWrapper) AddExtensionIntegerValue(key string, value int) {
 	key = a.getPrefix(key)
-	a.next.AddExtensionIntegerValue(key, value)
+	a.wrappedAnalytics.AddExtensionIntegerValue(key, value)
 }
 
 func (a *analyticsWrapper) AddExtensionStringValue(key string, value string) {
 	key = a.getPrefix(key)
-	a.next.AddExtensionStringValue(key, value)
+	a.wrappedAnalytics.AddExtensionStringValue(key, value)
 }
 
 func (a *analyticsWrapper) AddExtensionBoolValue(key string, value bool) {
 	key = a.getPrefix(key)
-	a.next.AddExtensionBoolValue(key, value)
+	a.wrappedAnalytics.AddExtensionBoolValue(key, value)
 }
 
 func (a *analyticsWrapper) getPrefix(key string) string {
 	hasPrefix := strings.HasPrefix(key, a.prefix)
 	if len(a.prefix) > 0 && !hasPrefix {
-		key = fmt.Sprintf("%s%s", a.prefix, strings.ToLower(key))
+		key = fmt.Sprintf("%s%s", a.prefix, key)
 	}
 	return key
 }

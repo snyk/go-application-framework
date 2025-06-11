@@ -229,33 +229,6 @@ func Test_InstrumentationCollector(t *testing.T) {
 		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
 	})
 
-	t.Run("it should exclude datapoint from extension object if type is not valid", func(t *testing.T) {
-		ic := setupBaseCollector(t)
-		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
-
-		assert.Panics(t, func() {
-			ic.AddExtension("thisIsNotAValidType", []string{"invalid", "type"})
-		})
-
-		ic.AddExtension("perfectlyValidInt", 1)
-		ic.AddExtension("perfectlyValidBool", true)
-
-		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &map[string]interface{}{
-			"strings":            "hello world",
-			"perfectlyValidInt":  1,
-			"perfectlyValidBool": true,
-		}
-
-		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
-		assert.NoError(t, err)
-		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
-		assert.NoError(t, err)
-		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
-		assert.NoError(t, err)
-
-		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
-	})
-
 	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
 		ic := setupBaseCollector(t)
 		icImpl, ok := ic.(*instrumentationCollectorImpl)

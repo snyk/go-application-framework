@@ -18,7 +18,7 @@ func TestNewAnalyticsWrapper(t *testing.T) {
 	obj, err := analytics.GetV2InstrumentationObject(baseAnalytics.GetInstrumentation())
 	assert.NoError(t, err)
 	extension := *obj.Data.Attributes.Interaction.Extension
-	assert.Equal(t, "Bar", extension["myprefix::foo"])
-	assert.Equal(t, true, extension["myprefix::booleanvalue"])
-	assert.Equal(t, 2, int(extension["myprefix::num"].(float64))) // there is a bit of type confusion in this test, as an internal json representation loses track of the exact type and assumes float
+	assert.Equal(t, "Bar", extension["MyPrefix::FOO"])
+	assert.Equal(t, true, extension["MyPrefix::booleanValue"])
+	assert.Equal(t, 2, int(extension["MyPrefix::num"].(float64))) // there is a bit of type confusion in this test, as an internal json representation loses track of the exact type and assumes float
 }
