@@ -38,7 +38,6 @@ type InstrumentationCollector interface {
 	SetTestSummary(s json_schemas.TestSummary)
 	SetTargetId(t string) // maybe use package-url library and types
 	AddError(err error)
-	// AddExtension adds a new datapoint to the instrumenation's extension property, datapoints must be of type: string, bool, int
 	AddExtension(key string, value interface{})
 }
 

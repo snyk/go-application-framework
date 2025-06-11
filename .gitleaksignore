@@ -35,4 +35,3 @@ d5da1e7b3eb6676acca2021e4f3da07b1ff0d9a6:pkg/auth/oauth_test.go:jwt:30
 57ac8440ab40cf8cf6eaa6600c3c5acd1b0272d2:internal/presenters/testdata/with-ignores-with-status.json:generic-api-key:474
 57ac8440ab40cf8cf6eaa6600c3c5acd1b0272d2:internal/presenters/testdata/with-ignores-with-status.json:generic-api-key:539
 57ac8440ab40cf8cf6eaa6600c3c5acd1b0272d2:internal/presenters/testdata/with-ignores-with-status.json:generic-api-key:159
-pkg/auth/tokenauthenticator_test.go:generic-api-key:33
