@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"bytes"
+
 	//nolint:gosec // insecure sha1 used for legacy identifier
 	"crypto/sha1"
 	"encoding/json"
@@ -35,10 +36,12 @@ type Analytics interface {
 	AddHeader(headerFunc func() http.Header)
 	SetClient(clientFunc func() *http.Client)
 	IsCiEnvironment() bool
-	GetOutputData() *analyticsOutput
 	GetRequest() (*http.Request, error)
 	Send() (*http.Response, error)
 	GetInstrumentation() InstrumentationCollector
+	AddExtensionIntegerValue(key string, value int)
+	AddExtensionStringValue(key string, value string)
+	AddExtensionBoolValue(key string, value bool)
 }
 
 // AnalyticsImpl is the default implementation of the Analytics interface.
@@ -60,6 +63,8 @@ type AnalyticsImpl struct {
 
 	userCurrent func() (*user.User, error)
 }
+
+var _ Analytics = (*AnalyticsImpl)(nil)
 
 // metadataOutput defines the metadataOutput payload.
 type metadataOutput struct {
@@ -170,6 +175,24 @@ func (a *AnalyticsImpl) AddError(err error) {
 
 	if a.instrumentor != nil {
 		a.instrumentor.AddError(err)
+	}
+}
+
+func (a *AnalyticsImpl) AddExtensionIntegerValue(key string, value int) {
+	if a.instrumentor != nil {
+		a.instrumentor.AddExtension(key, value)
+	}
+}
+
+func (a *AnalyticsImpl) AddExtensionStringValue(key string, value string) {
+	if a.instrumentor != nil {
+		a.instrumentor.AddExtension(key, value)
+	}
+}
+
+func (a *AnalyticsImpl) AddExtensionBoolValue(key string, value bool) {
+	if a.instrumentor != nil {
+		a.instrumentor.AddExtension(key, value)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 )
@@ -20,6 +21,7 @@ func Test_auth_oauth(t *testing.T) {
 	logger := zerolog.New(logContent)
 	engine := mocks.NewMockEngine(mockCtl)
 	authenticator := mocks.NewMockAuthenticator(mockCtl)
+	analytics := analytics.New()
 	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
 
 	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
@@ -33,8 +35,13 @@ func Test_auth_oauth(t *testing.T) {
 
 	t.Run("happy", func(t *testing.T) {
 		config.Set(authTypeParameter, nil)
-		authenticator.EXPECT().Authenticate().Times(1).Return(nil)
-		err = entryPointDI(config, &logger, engine, authenticator)
+		authenticator.EXPECT().Authenticate().Times(2).Return(nil)
+		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.NoError(t, err)
 	})
 
@@ -42,7 +49,11 @@ func Test_auth_oauth(t *testing.T) {
 		config.Set(authTypeParameter, nil)
 		expectedErr := fmt.Errorf("someting went wrong")
 		authenticator.EXPECT().Authenticate().Times(1).Return(expectedErr)
-		err = entryPointDI(config, &logger, engine, authenticator)
+		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.Equal(t, expectedErr, err)
 	})
 }
@@ -51,6 +62,7 @@ func Test_auth_token(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	logContent := &bytes.Buffer{}
 	config := configuration.NewInMemory()
+	analytics := analytics.New()
 	logger := zerolog.New(logContent)
 	engine := mocks.NewMockEngine(mockCtl)
 	authenticator := mocks.NewMockAuthenticator(mockCtl)
@@ -67,7 +79,11 @@ func Test_auth_token(t *testing.T) {
 	t.Run("happy", func(t *testing.T) {
 		config.Set(authTypeParameter, authTypeToken)
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
-		err = entryPointDI(config, &logger, engine, authenticator)
+		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.NoError(t, err)
 	})
 
@@ -75,7 +91,11 @@ func Test_auth_token(t *testing.T) {
 		config.Set(authTypeParameter, nil)
 		config.Set(ConfigurationNewAuthenticationToken, "00000000-0000-0000-0000-000000000000")
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
-		err = entryPointDI(config, &logger, engine, authenticator)
+		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.NoError(t, err)
 	})
 }

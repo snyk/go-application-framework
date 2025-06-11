@@ -71,7 +71,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	)
 
-	err = entryPointDI(config, logger, engine, authenticator)
+	err = entryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
 }
 
@@ -90,13 +90,17 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	return authTypeOAuth
 }
 
-func entryPointDI(config configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+	analytics := invocationCtx.GetAnalytics()
+	config := invocationCtx.GetConfiguration()
+
 	authType := config.GetString(authTypeParameter)
 	if len(authType) == 0 {
 		authType = autoDetectAuthType(config)
 	}
 
 	logger.Printf("Authentication Type: %s", authType)
+	analytics.AddExtensionStringValue(authTypeParameter, authType)
 
 	if strings.EqualFold(authType, authTypeOAuth) { // OAUTH flow
 		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)
