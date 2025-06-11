@@ -231,18 +231,15 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 	t.Run("it should remove the extension object gracefully if sanitation fails ", func(t *testing.T) {
 		ic := setupBaseCollector(t)
-		icImpl, ok := ic.(*instrumentationCollectorImpl)
-		assert.True(t, ok)
-		icImpl.extension = map[string]interface{}{
-			"string": "This is a valid string",
-			"int":    12345,
-			"fail":   func() { fmt.Println("I cause problems for JSON marshaling!") },
-		}
-
 		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		circularRef := make(map[string]interface{})
+		circularRef["self"] = circularRef
+		ic.AddExtension("circular", circularRef)
+
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = nil
 
-		actualV2InstrumentationObject, err := GetV2InstrumentationObject(icImpl, WithLogger(&logger))
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic, WithLogger(&logger))
 		assert.NoError(t, err)
 		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
 		assert.NoError(t, err)
