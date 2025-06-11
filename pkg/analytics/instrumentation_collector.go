@@ -134,13 +134,6 @@ func (ic *instrumentationCollectorImpl) AddError(err error) {
 }
 
 func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) {
-	// ensure that extension only contains string, bool, int
-	switch value.(type) {
-	case bool, string, int:
-	default:
-		panic("extension types must be of type: string, bool, int")
-	}
-
 	ic.extension[key] = value
 }
 
