@@ -172,7 +172,7 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 		implementationName = "native"
 	}
 
-	invocationCtx.GetAnalytics().AddExtensionStringValue("impl", implementationName)
+	invocationCtx.GetAnalytics().AddExtensionStringValue("implementation", implementationName)
 	logger.Debug().Msgf("Implementation: %s", implementationName)
 
 	if nativeImplementation {
