@@ -30,26 +30,26 @@ const (
 	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "finding-id"
-	findingsIdPromptHelp  = "Enter the Finding ID of the issue you want to ignore."
+	findingsIdPromptHelp  = "\nEnter the Finding ID of the issue you want to ignore."
 	findingsIdDescription = "Finding ID"
 
 	IgnoreIdKey         = "ignore-id"
 	IgnoreIdDescription = "Ignore ID"
 
 	IgnoreTypeKey         = "ignore-type"
-	ignoreTypePromptHelp  = "Enter the ignore type: [not-vulnerable, wont-fix, temporary-ignore]."
+	ignoreTypePromptHelp  = "\nEnter the ignore type: [not-vulnerable, wont-fix, temporary-ignore]."
 	ignoreTypeDescription = "Ignore Type"
 
 	ReasonKey         = "reason"
-	reasonPromptHelp  = "Provide a reason for why this issue is ignored."
+	reasonPromptHelp  = "\nProvide a reason for why this issue is ignored."
 	reasonDescription = "Reason"
 
 	ExpirationKey         = "expiration"
-	expirationPromptHelp  = "Enter the expiration date in YYYY-MM-DD format or leave empty for no expiration."
+	expirationPromptHelp  = "\nEnter the expiration date in YYYY-MM-DD format or leave empty for no expiration."
 	expirationDescription = "Expiration"
 
 	RemoteRepoUrlKey         = configuration.FLAG_REMOTE_REPO_URL
-	remoteRepoUrlPromptHelp  = "Provide the remote repository URL."
+	remoteRepoUrlPromptHelp  = "\nProvide the remote repository URL."
 	remoteRepoUrlDescription = "Remote Repository URL"
 
 	InteractiveKey    = "interactive"
@@ -63,9 +63,9 @@ const (
 )
 
 var reasonPromptHelpMap = map[string]string{
-	string(policyApi.WontFix):         "Provide a reason for why this issue won't be fixed.",
-	string(policyApi.TemporaryIgnore): "Provide a reason for why this issue is temporarily ignored.",
-	string(policyApi.NotVulnerable):   "Provide a reason for why this issue is not vulnerable.",
+	string(policyApi.WontFix):         "\nProvide a reason for why this issue won't be fixed.",
+	string(policyApi.TemporaryIgnore): "\nProvide a reason for why this issue is temporarily ignored.",
+	string(policyApi.NotVulnerable):   "\nProvide a reason for why this issue is not vulnerable.",
 }
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
@@ -108,7 +108,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	addCreateIgnoreDefaultConfigurationValues(invocationCtx)
 
 	if interactive {
-		uiErr := userInterface.Output("\n" + interactiveEnsureVersionControlMessage + "\n")
+		uiErr := userInterface.Output("\n" + interactiveEnsureVersionControlMessage)
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
 		}
@@ -252,7 +252,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 func getIgnoreRequestDetailsStructure(expire, userName, orgName, ignoreType, reason string) string {
 	requestedOn := time.Now().Format(time.DateOnly)
-	return fmt.Sprintf("  Organization:  %s\n  Requested on:  %s\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", orgName, requestedOn, userName, expire, ignoreType, reason)
+	return fmt.Sprintf("\n  Organization:  %s\n  Requested on:  %s\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", orgName, requestedOn, userName, expire, ignoreType, reason)
 }
 
 func getExpireValue(expiryString string) (*time.Time, error) {

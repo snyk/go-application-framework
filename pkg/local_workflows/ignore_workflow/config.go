@@ -88,11 +88,6 @@ func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp stri
 		return "", err
 	}
 
-	err = userInterface.Output("") // new line between prompts
-	if err != nil {
-		return "", err
-	}
-
 	err = validator(input)
 	if err != nil {
 		return "", err
