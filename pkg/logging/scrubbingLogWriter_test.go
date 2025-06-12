@@ -229,6 +229,11 @@ func TestAddDefaults(t *testing.T) {
 			expected: "Token ***\" asdf",
 		},
 		{
+			name:     "Basic header with value",
+			input:    "basic dXM0000=\" asdf",
+			expected: "basic ***\" asdf",
+		},
+		{
 			name:     "github pat (classic)",
 			input:    "GITHUB_PRIVATE_TOKEN=ghp_012345678901234567890123456789012345",
 			expected: "GITHUB_PRIVATE_TOKEN=ghp_***",
