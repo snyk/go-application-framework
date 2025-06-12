@@ -60,9 +60,14 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 	return repoUrl, nil
 }
 
-func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validatorFunc func(interface{}) error) (interface{}, error) {
+func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validatorFunc func(string) error) (interface{}, error) {
 	if isFlagSet {
-		err := validatorFunc(existingValue)
+		value, ok := existingValue.(string)
+		if !ok {
+			return "", cli.NewValidationFailureError("Value must be a string. Ensure the provided value is a string.")
+		}
+
+		err := validatorFunc(value)
 		if err != nil {
 			return "", err
 		}
@@ -72,7 +77,7 @@ func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validat
 	return "", nil
 }
 
-func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp string, prompt string, validator func(interface{}) error) (string, error) {
+func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp string, prompt string, validator func(string) error) (string, error) {
 	if value != "" {
 		return value, nil
 	}
@@ -96,92 +101,65 @@ func promptIfEmpty(value string, userInterface ui.UserInterface, promptHelp stri
 	return input, nil
 }
 
-func isValidIgnoreType(input interface{}) error {
-	ignoreType, ok := input.(string)
-	if !ok {
-		return cli.NewValidationFailureError("Ignore type must be a string. Ensure the provided value is a string.")
-	}
-
-	ignoreTypeMapped := policyApi.PolicyActionIgnoreDataIgnoreType(ignoreType)
+func isValidIgnoreType(input string) error {
+	ignoreTypeMapped := policyApi.PolicyActionIgnoreDataIgnoreType(input)
 	validIgnoreType := ignoreTypeMapped == policyApi.TemporaryIgnore || ignoreTypeMapped == policyApi.WontFix || ignoreTypeMapped == policyApi.NotVulnerable
 	if !validIgnoreType {
 		errMsg := fmt.Sprintf("Invalid ignore type: '%s'. Valid types are: %s, %s, or %s.",
-			ignoreType,
+			input,
 			policyApi.NotVulnerable, policyApi.WontFix, policyApi.TemporaryIgnore)
 		return cli.NewValidationFailureError(errMsg)
 	}
 	return nil
 }
 
-func isValidFindingsId(input interface{}) error {
-	uuidStr, ok := input.(string)
-	if !ok {
-		return cli.NewValidationFailureError("Finding ID must be a string. Provide a valid UUID as the Finding ID.")
-	}
-	_, err := uuid.Parse(uuidStr)
+func isValidFindingsId(input string) error {
+	_, err := uuid.Parse(input)
 	if err != nil {
-		return cli.NewValidationFailureError(fmt.Sprintf("Invalid Finding ID format: '%s'. Ensure the Finding ID is a valid UUID.", uuidStr))
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid Finding ID format: '%s'. Ensure the Finding ID is a valid UUID.", input))
 	}
 	return nil
 }
 
-func isValidReason(input interface{}) error {
-	reasonStr, ok := input.(string)
-	if !ok {
-		return cli.NewValidationFailureError("Reason must be a string. Provide a textual reason for the ignore.")
-	}
-	if reasonStr == "" {
+func isValidReason(input string) error {
+	if input == "" {
 		return cli.NewValidationFailureError("The ignore reason cannot be empty. Provide a justification for ignoring this finding.")
 	}
 	return nil
 }
 
-func isValidExpirationDate(input interface{}) error {
-	dateStr, ok := input.(string)
-	if !ok {
-		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format or use 'never' for no expiration.")
-	}
-
-	if dateStr == "" {
+func isValidExpirationDate(input string) error {
+	if input == "" {
 		return cli.NewValidationFailureError("The expiriration date cannot be empty. Use YYYY-MM-DD format or use 'never' for no expiration.")
 	}
 
-	if dateStr == local_models.DefaultSuppressionExpiration {
+	if input == local_models.DefaultSuppressionExpiration {
 		return nil
 	}
 
-	_, parseErr := time.Parse(time.DateOnly, dateStr)
+	_, parseErr := time.Parse(time.DateOnly, input)
 	if parseErr != nil {
-		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or use 'never' for no expiration.", dateStr))
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or use 'never' for no expiration.", input))
 	}
 	return nil
 }
 
-func isValidInteractiveExpiration(input interface{}) error {
-	dateStr, ok := input.(string)
-	if !ok {
-		return cli.NewValidationFailureError("Expiration date must be a string. Use YYYY-MM-DD format or leave empty for no expiration.")
-	}
-
+func isValidInteractiveExpiration(input string) error {
 	// in interactive mode an empty user prompt means no expiration date
-	if dateStr == "" {
+	if input == "" {
 		return nil
 	}
 
-	_, parseErr := time.Parse(time.DateOnly, dateStr)
+	_, parseErr := time.Parse(time.DateOnly, input)
 	if parseErr != nil {
-		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or leave empty for no expiration.", dateStr))
+		return cli.NewValidationFailureError(fmt.Sprintf("Invalid expiration date format: '%s'. Use YYYY-MM-DD format or leave empty for no expiration.", input))
 	}
 
 	return nil
 }
 
-func isValidRepoUrl(input interface{}) error {
-	repoUrl, ok := input.(string)
-	if !ok {
-		return cli.NewValidationFailureError("Repository URL must be a string. Provide a valid repository URL.")
-	}
-	if repoUrl == "" {
+func isValidRepoUrl(input string) error {
+	if input == "" {
 		return cli.NewValidationFailureError("The repository URL cannot be empty. Provide the URL for the remote repository.")
 	}
 	return nil
