@@ -10,6 +10,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
+const (
+	DefaultSuppressionExpiration = "never"
+)
+
 func TransformToLocalFindingModelFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary) (localFinding LocalFinding, err error) {
 	localFinding.Links = make(map[string]string)
 	localFinding.Summary = transformTestSummary(testSummary, sarifDoc)

@@ -166,7 +166,7 @@
 								{{- if $finding.Attributes.Suppression.Id }}
 								"guid": "{{ $finding.Attributes.Suppression.Id }}",
 								{{- end }}
-								"state": "{{ $finding.Attributes.Suppression.Status }}",
+								"status": "{{ $finding.Attributes.Suppression.Status }}",
 								{{- if $finding.Attributes.Suppression.Justification }}
 								"justification": {{ getQuotedString $finding.Attributes.Suppression.Justification }},{{- end }}
 								"kind": "external"{{- if $finding.Attributes.Suppression.Details }},

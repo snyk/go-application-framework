@@ -19,6 +19,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -29,21 +30,26 @@ const (
 	ignoreDeleteWorkflowName = "ignore.delete"
 
 	FindingsIdKey         = "finding-id"
-	findingsIdDescription = "Finding Id"
+	findingsIdPromptHelp  = "\nEnter the Finding ID of the issue you want to ignore."
+	findingsIdDescription = "Finding ID"
 
 	IgnoreIdKey         = "ignore-id"
-	IgnoreIdDescription = "Ignore Id"
+	IgnoreIdDescription = "Ignore ID"
 
 	IgnoreTypeKey         = "ignore-type"
+	ignoreTypePromptHelp  = "\nEnter the ignore type: [not-vulnerable, wont-fix, temporary-ignore]."
 	ignoreTypeDescription = "Ignore Type"
 
 	ReasonKey         = "reason"
+	reasonPromptHelp  = "\nProvide a reason for why this issue is ignored."
 	reasonDescription = "Reason"
 
-	ExpirationKey         = "expiry"
-	expirationDescription = "Expiration (YYYY-MM-DD)"
+	ExpirationKey         = "expiration"
+	expirationPromptHelp  = "\nEnter the expiration date in YYYY-MM-DD format or leave empty for no expiration."
+	expirationDescription = "Expiration"
 
 	RemoteRepoUrlKey         = configuration.FLAG_REMOTE_REPO_URL
+	remoteRepoUrlPromptHelp  = "\nProvide the remote repository URL."
 	remoteRepoUrlDescription = "Remote Repository URL"
 
 	InteractiveKey    = "interactive"
@@ -51,7 +57,16 @@ const (
 
 	policyAPIVersion = "2024-10-15"
 	policyApiTimeout = time.Minute
+
+	interactiveEnsureVersionControlMessage    = "👉🏼 Ensure the code containing the issue is committed and pushed to remote origin, so approvers can review it."
+	interactiveIgnoreRequestSubmissionMessage = "✅ Your ignore request has been submitted."
 )
+
+var reasonPromptHelpMap = map[string]string{
+	string(policyApi.WontFix):         "\nProvide a reason for why this issue won't be fixed.",
+	string(policyApi.TemporaryIgnore): "\nProvide a reason for why this issue is temporarily ignored.",
+	string(policyApi.NotVulnerable):   "\nProvide a reason for why this issue is not vulnerable.",
+}
 
 var WORKFLOWID_IGNORE_CREATE workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)
 var WORKFLOWID_IGNORE_EDIT workflow.Identifier = workflow.NewWorkflowIdentifier(ignoreEditWorkflowName)
@@ -90,7 +105,14 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	interactive := config.GetBool(InteractiveKey)
-	addCreateIgnoreDefaultConfigurationValues(invocationCtx, interactive)
+	addCreateIgnoreDefaultConfigurationValues(invocationCtx)
+
+	if interactive {
+		uiErr := userInterface.Output("\n" + interactiveEnsureVersionControlMessage)
+		if uiErr != nil {
+			logger.Warn().Err(err).Send()
+		}
+	}
 
 	userName, err := getUser(invocationCtx)
 	if err != nil {
@@ -112,9 +134,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	// read expiry time
-	// if expiration value is empty it will be treated as no-expire by the policy endpoint
-	expire, err := getExpireValue(config)
+	expireStr, err := config.GetStringWithError(ExpirationKey)
 	if err != nil {
 		return nil, err
 	}
@@ -130,16 +150,75 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		uiErr := userInterface.Output(fmt.Sprintf("👉🏼 Make sure the code containing the issue is committed, "+
-			"and pushed to a remote origin, so the approvers are able to analyze it.\n%s", getIgnoreRequestDetailsStructure(expire, userName, orgUuid.String(), ignoreType)))
+		findingsId, err = promptIfEmpty(findingsId, userInterface, findingsIdPromptHelp, findingsIdDescription, isValidFindingsId)
+		if err != nil {
+			return nil, err
+		}
+
+		ignoreType, err = promptIfEmpty(ignoreType, userInterface, ignoreTypePromptHelp, ignoreTypeDescription, isValidIgnoreType)
+		if err != nil {
+			return nil, err
+		}
+
+		expireStr, err = promptIfEmpty(expireStr, userInterface, expirationPromptHelp, expirationDescription, isValidInteractiveExpiration)
+		if err != nil {
+			return nil, err
+		}
+		// an empty expiration means the ignores never expires
+		if expireStr == "" {
+			expireStr = local_models.DefaultSuppressionExpiration
+		}
+
+		reasonHelp, ok := reasonPromptHelpMap[ignoreType]
+		if !ok {
+			reasonHelp = reasonPromptHelp
+		}
+		reason, err = promptIfEmpty(reason, userInterface, reasonHelp, reasonDescription, isValidReason)
+		if err != nil {
+			return nil, err
+		}
+
+		repoUrl, err = promptIfEmpty(repoUrl, userInterface, remoteRepoUrlPromptHelp, remoteRepoUrlDescription, isValidRepoUrl)
+		if err != nil {
+			return nil, err
+		}
+
+		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
+
+		uiErr := userInterface.Output(getIgnoreRequestDetailsStructure(expireStr, userName, orgName, ignoreType, reason))
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
+		}
+	} else {
+		if findingsId == "" {
+			return nil, cli.NewEmptyFlagOptionError("The finding-id is required. Provide it using the --finding-id flag.")
+		}
+
+		if ignoreType == "" {
+			return nil, cli.NewEmptyFlagOptionError("The ignore-type is required cannot be empty. Provide it using the --ignore-type flag. Valid values are: not-vulnerable, wont-fix, temporary-ignore.")
+		}
+
+		if expireStr == "" {
+			return nil, cli.NewEmptyFlagOptionError("The expiration flag is required and cannot be empty. Provide it using the --expiration flag. The date format is YYYY-MM-DD or 'never' for no expiration.")
+		}
+
+		if reason == "" {
+			return nil, cli.NewEmptyFlagOptionError("The reason flag is required and cannot be empty. Provide it using the --reason flag.")
+		}
+
+		if repoUrl == "" {
+			return nil, cli.NewEmptyFlagOptionError("The remote repository URL could not be automatically detected. Provide it using the --remote-repo-url flag.")
 		}
 	}
 
 	branchName, branchNameErr := git.BranchNameFromDir(config.GetString(configuration.INPUT_DIRECTORY))
 	if branchNameErr != nil {
 		logger.Warn().Err(err).Send()
+	}
+
+	expire, err := getExpireValue(expireStr)
+	if err != nil {
+		return nil, err
 	}
 
 	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
@@ -150,7 +229,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	}
 
 	if interactive {
-		uiErr := userInterface.Output("\n✅ Your ignore request has been submitted.")
+		uiErr := userInterface.Output("\n  " + interactiveIgnoreRequestSubmissionMessage + "\n")
 		if uiErr != nil {
 			logger.Warn().Err(err).Send()
 		}
@@ -171,29 +250,20 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	return output, err
 }
 
-func getIgnoreRequestDetailsStructure(expire *time.Time, userName string, orgId string, ignoreType string) string {
+func getIgnoreRequestDetailsStructure(expire, userName, orgName, ignoreType, reason string) string {
 	requestedOn := time.Now().Format(time.DateOnly)
-	expireDisplayText := "Does not expire"
-	if expire != nil {
-		expireDisplayText = expire.Format(time.DateOnly)
-	}
-	return fmt.Sprintf("  Requested on:  %s\n  Requested by:  %s\n  Organization:  %s\n  Expiration:    %s\n  Ignore type:   %s", requestedOn, userName, orgId, expireDisplayText, ignoreType)
+	return fmt.Sprintf("\n  Organization:  %s\n  Requested on:  %s\n  Requested by:  %s\n  Expiration:    %s\n  Ignore type:   %s\n  Reason:        %s", orgName, requestedOn, userName, expire, ignoreType, reason)
 }
 
-func getExpireValue(config configuration.Configuration) (*time.Time, error) {
-	shouldParse := config.IsSet(ExpirationKey) || config.GetBool(InteractiveKey)
-	if !shouldParse {
-		//nolint:nilnil // returning nil,nil here means that there is no expiration, and we didn't run into an error which is a valid case
+func getExpireValue(expiryString string) (*time.Time, error) {
+	if expiryString == local_models.DefaultSuppressionExpiration {
+		//nolint:nilnil // we are returning a pointer or an error, in this case the nil pointer means the ignore never expires
 		return nil, nil
 	}
-	expireStr, err := config.GetStringWithError(ExpirationKey)
-	if err != nil || expireStr == "" {
-		return nil, err
-	}
 
-	expireVal, parseErr := time.Parse(time.DateOnly, expireStr)
+	expireVal, parseErr := time.Parse(time.DateOnly, expiryString)
 	if parseErr != nil {
-		return nil, err
+		return nil, parseErr
 	}
 
 	return &expireVal, nil
