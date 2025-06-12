@@ -32,7 +32,7 @@ func Test_mapSuppressions(t *testing.T) {
 			expectedSupp: nil,
 		},
 		{
-			name: "single suppression with valid GUID and minimal details",
+			name: "single suppression with no status field - accepted",
 			inputResult: sarif.Result{
 				Suppressions: []sarif.Suppression{
 					{
@@ -62,7 +62,7 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 		},
 		{
-			name: "single suppression with valid GUID and full details",
+			name: "single suppression with accepted status field",
 			inputResult: sarif.Result{
 				Suppressions: []sarif.Suppression{
 					{
@@ -94,14 +94,14 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 		},
 		{
-			name: "suppression with without a GUID",
+			name: "suppression with accepted status field but without id",
 			inputResult: sarif.Result{
 				Suppressions: []sarif.Suppression{
 					{
-						Justification: "Invalid GUID test",
+						Justification: "Missing GUID test",
 						Status:        sarif.Accepted,
 						Properties: sarif.SuppressionProperties{
-							Category:  "invalidGUIDCategory",
+							Category:  "missingGUIDtest",
 							IgnoredOn: "2023-03-01T00:00:00Z",
 							IgnoredBy: sarif.IgnoredBy{Name: "Tester"},
 						},
@@ -111,7 +111,7 @@ func Test_mapSuppressions(t *testing.T) {
 			expectedSupp: &TypesSuppression{
 				Id: nil,
 				Details: &TypesSuppressionDetails{
-					Category:   "invalidGUIDCategory",
+					Category:   "missingGUIDtest",
 					Expiration: nil,
 					IgnoredOn:  "2023-03-01T00:00:00Z",
 					IgnoredBy: TypesUser{
@@ -119,12 +119,12 @@ func Test_mapSuppressions(t *testing.T) {
 						Email: "",
 					},
 				},
-				Justification: stringPtr("Invalid GUID test"),
+				Justification: stringPtr("Missing GUID test"),
 				Status:        TypesSuppressionStatus(sarif.Accepted),
 			},
 		},
 		{
-			name: "multiple suppressions, GetHighestSuppression picks 'accepted' over 'rejected'",
+			name: "multiple suppressions - picking 'accepted' over 'rejected'",
 			inputResult: sarif.Result{
 				Suppressions: []sarif.Suppression{
 					{Guid: validUUID1, Justification: "Rejected", Status: sarif.Rejected, Properties: sarif.SuppressionProperties{Category: "cat1"}},
@@ -160,6 +160,25 @@ func Test_mapSuppressions(t *testing.T) {
 					IgnoredBy:  TypesUser{Name: "", Email: ""},
 				},
 				Status: TypesSuppressionStatus(sarif.UnderReview),
+			},
+		},
+		{
+			name: "suppression with 'rejected' status",
+			inputResult: sarif.Result{
+				Suppressions: []sarif.Suppression{
+					{Guid: validUUID1, Justification: "Rejected", Status: sarif.Rejected, Properties: sarif.SuppressionProperties{Category: "rejectedCategory"}},
+				},
+			},
+			expectedSupp: &TypesSuppression{
+				Id:            &validUUID1,
+				Justification: stringPtr("Rejected"),
+				Details: &TypesSuppressionDetails{
+					Category:   "rejectedCategory",
+					Expiration: nil,
+					IgnoredOn:  "",
+					IgnoredBy:  TypesUser{Name: "", Email: ""},
+				},
+				Status: TypesSuppressionStatus(sarif.Rejected),
 			},
 		},
 	}
