@@ -1,5 +1,5 @@
 {
-  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/csprd01/schemas/sarif-schema-2.1.0.json",
   "version": "2.1.0",
   "runs": [
     {
@@ -28,9 +28,7 @@
                   "NoRateLimitingForExpensiveWebOperation",
                   "Security"
                 ],
-                "categories": [
-                  "Security"
-                ],
+                "categories": ["Security"],
                 "exampleCommitFixes": [
                   {
                     "commitURL": "https://github.com/natsukagami/themis-web-interface/commit/e1ef34f8b95e7eefab54c204b78fbdee70169a6d?diff=split#diff-cd0e12b228a7dea99a7346adf68cfc7a6a2c321846cc8a90fc6cd92cf8066d5eL-1",
@@ -443,12 +441,10 @@
                     ]
                   }
                 ],
-                "exampleCommitDescriptions": ["1","2"],
+                "exampleCommitDescriptions": ["1", "2"],
                 "precision": "very-high",
                 "repoDatasetSize": 27,
-                "cwe": [
-                  "CWE-770"
-                ]
+                "cwe": ["CWE-770"]
               }
             },
             {
@@ -473,9 +469,7 @@
                   "SourceHttpBody",
                   "Taint"
                 ],
-                "categories": [
-                  "Security"
-                ],
+                "categories": ["Security"],
                 "exampleCommitFixes": [
                   {
                     "commitURL": "https://github.com/afuh/pinstagram/commit/776a6b63f84b3bc9d38963933ff511b319b73ac5?diff=split#diff-fb901db253d2190ed5dec3508eb32e99524e0b4dcacdaea322a50f2619ae2d99L-1",
@@ -566,9 +560,7 @@
                 "exampleCommitDescriptions": [],
                 "precision": "very-high",
                 "repoDatasetSize": 30,
-                "cwe": [
-                  "CWE-943"
-                ]
+                "cwe": ["CWE-943"]
               }
             },
             {
@@ -585,14 +577,8 @@
                 "text": ""
               },
               "properties": {
-                "tags": [
-                  "javascript",
-                  "HardcodedNonCryptoSecret",
-                  "Security"
-                ],
-                "categories": [
-                  "Security"
-                ],
+                "tags": ["javascript", "HardcodedNonCryptoSecret", "Security"],
+                "categories": ["Security"],
                 "exampleCommitFixes": [
                   {
                     "commitURL": "https://github.com/markstock7/FileManager/commit/50572778825dea6b6fdb34c9ae950d9915743e4c?diff=split#diff-408990876524f4737b49693cedc52fd267e31f665d0a7f71792dcb986d6a8268L-1",
@@ -653,9 +639,7 @@
                 "exampleCommitDescriptions": [],
                 "precision": "very-high",
                 "repoDatasetSize": 68,
-                "cwe": [
-                  "CWE-547"
-                ]
+                "cwe": ["CWE-547"]
               }
             },
             {
@@ -672,14 +656,8 @@
                 "text": ""
               },
               "properties": {
-                "tags": [
-                  "javascript",
-                  "DisablePoweredBy",
-                  "Security"
-                ],
-                "categories": [
-                  "Security"
-                ],
+                "tags": ["javascript", "DisablePoweredBy", "Security"],
+                "categories": ["Security"],
                 "exampleCommitFixes": [
                   {
                     "commitURL": "https://github.com/lucasweng/yelp-camp/commit/f4e907734aea3ec98000d61f5d49c729a95cb77c?diff=split#diff-e07d531ac040ce3f40e0ce632ac2a059d7cd60f20e61f78268ac3be015b3b28fL-1",
@@ -1155,9 +1133,7 @@
                 "exampleCommitDescriptions": [],
                 "precision": "very-high",
                 "repoDatasetSize": 416,
-                "cwe": [
-                  "CWE-200"
-                ]
+                "cwe": ["CWE-200"]
               }
             },
             {
@@ -1174,14 +1150,8 @@
                 "text": ""
               },
               "properties": {
-                "tags": [
-                  "javascript",
-                  "HttpToHttps",
-                  "Security"
-                ],
-                "categories": [
-                  "Security"
-                ],
+                "tags": ["javascript", "HttpToHttps", "Security"],
+                "categories": ["Security"],
                 "exampleCommitFixes": [
                   {
                     "commitURL": "https://github.com/eserozvataf/apibone/commit/bbac9343971a20f4fee124b6f0a2f6a80895fb35?diff=split#diff-8b733ca241b0609b1fc0f2e60d14f911b3a82997a939e7eb01fe6c25b759c234L-1",
@@ -1257,9 +1227,7 @@
                 "exampleCommitDescriptions": [],
                 "precision": "very-high",
                 "repoDatasetSize": 122,
-                "cwe": [
-                  "CWE-319"
-                ]
+                "cwe": ["CWE-319"]
               }
             },
             {
@@ -1276,14 +1244,8 @@
                 "text": ""
               },
               "properties": {
-                "tags": [
-                  "javascript",
-                  "UseCsurfForExpress",
-                  "Security"
-                ],
-                "categories": [
-                  "Security"
-                ],
+                "tags": ["javascript", "UseCsurfForExpress", "Security"],
+                "categories": ["Security"],
                 "exampleCommitFixes": [
                   {
                     "commitURL": "https://github.com/ruderngespra/socialnetwork/commit/06b5f8bd68460526666b4e3af546fa5150ab15b5?diff=split#diff-e727e4bdf3657fd1d798edcd6b099d6e092f8573cba266154583a746bba0f346L-1",
@@ -1749,9 +1711,7 @@
                 "exampleCommitDescriptions": [],
                 "precision": "very-high",
                 "repoDatasetSize": 66,
-                "cwe": [
-                  "CWE-352"
-                ]
+                "cwe": ["CWE-352"]
               }
             },
             {
@@ -1768,14 +1728,8 @@
                 "text": ""
               },
               "properties": {
-                "tags": [
-                  "javascript",
-                  "NoHardcodedPasswords",
-                  "Security"
-                ],
-                "categories": [
-                  "Security"
-                ],
+                "tags": ["javascript", "NoHardcodedPasswords", "Security"],
+                "categories": ["Security"],
                 "exampleCommitFixes": [
                   {
                     "commitURL": "https://github.com/Gitualize/Gitualize/commit/f6de5689d637dc41abd4b43eea40371fd1088d33?diff=split#diff-273ae97b30b3f18c1d3fc9bf418b55be30c6e4a19f3f51953362cfa762980c63L-1",
@@ -1956,10 +1910,7 @@
                 "exampleCommitDescriptions": [],
                 "precision": "very-high",
                 "repoDatasetSize": 44,
-                "cwe": [
-                  "CWE-798",
-                  "CWE-259"
-                ]
+                "cwe": ["CWE-798", "CWE-259"]
               }
             }
           ]
@@ -2602,8 +2553,8 @@
           },
           "suppressions": [
             {
-              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
-              "status": "accepted",
+              "guid": "bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "state": "accepted",
               "justification": "Experimenting with consistent ignores capability. ",
               "properties": {
                 "category": "temporary-ignore",
@@ -2773,12 +2724,13 @@
           },
           "suppressions": [
             {
-              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
-              "status": "accepted",
+              "guid": "bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "state": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
                 "ignoredOn": "2024-10-08T09:33:05.933Z",
+                "expiration": null,
                 "ignoredBy": {
                   "name": "JSON",
                   "email": "jason.luong@snyk.io"
@@ -2795,10 +2747,7 @@
           "message": {
             "text": "Avoid hardcoding values that are meant to be secret. Found a hardcoded string used in here.",
             "markdown": "Avoid hardcoding values that are meant to be secret. Found {0} used in {1}.",
-            "arguments": [
-              "[a hardcoded string](0)",
-              "[here](1)"
-            ]
+            "arguments": ["[a hardcoded string](0)", "[here](1)"]
           },
           "locations": [
             {
@@ -2894,9 +2843,7 @@
           "message": {
             "text": "Disable X-Powered-By header for your Express app (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.",
             "markdown": "Disable X-Powered-By header for your {0} (consider using Helmet middleware), because it exposes information about the used framework to potential attackers.",
-            "arguments": [
-              "[Express app](0)"
-            ]
+            "arguments": ["[Express app](0)"]
           },
           "locations": [
             {
@@ -2986,8 +2933,8 @@
           },
           "suppressions": [
             {
-              "guid":"bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
-              "status": "accepted",
+              "guid": "bffa1c3c-7d67-4ede-b6d0-7d5208ad041d",
+              "state": "accepted",
               "justification": "",
               "properties": {
                 "category": "not-vulnerable",
@@ -3008,9 +2955,7 @@
           "message": {
             "text": "http.createServer uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.",
             "markdown": "{0} uses HTTP which is an insecure protocol and should not be used in code due to cleartext transmission of information. Data in cleartext in a communication channel can be sniffed by unauthorized actors. Consider using the https module instead.",
-            "arguments": [
-              "[http.createServer](0)"
-            ]
+            "arguments": ["[http.createServer](0)"]
           },
           "locations": [
             {
@@ -3092,9 +3037,7 @@
           "message": {
             "text": "CSRF protection is disabled for your Express app. This allows the attackers to execute requests on a user's behalf.",
             "markdown": "CSRF protection is disabled for your {0}. This allows the attackers to execute requests on a user's behalf.",
-            "arguments": [
-              "[Express app](0)"
-            ]
+            "arguments": ["[Express app](0)"]
           },
           "locations": [
             {
@@ -3173,9 +3116,7 @@
           "message": {
             "text": "Do not hardcode passwords in code. Found hardcoded password used in password.",
             "markdown": "Do not hardcode passwords in code. Found hardcoded password used in {0}.",
-            "arguments": [
-              "[password](0)"
-            ]
+            "arguments": ["[password](0)"]
           },
           "locations": [
             {

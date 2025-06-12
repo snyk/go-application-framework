@@ -670,12 +670,12 @@
             "suppressions": [
               {
                 "guid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-                "status":"accepted",
                 "justification": "False positive",
                 "kind": "inSource",
+                "status": "underReview",
                 "properties": {
                   "category": "wont-fix",
-                  "expiration": "15 days",
+                  "expiration":null,
                   "ignoredOn": "2024-02-23T16:08:25Z",
                   "ignoredBy": {
                     "name": "Neil M",
