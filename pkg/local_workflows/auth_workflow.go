@@ -5,12 +5,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	pgk_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -19,11 +19,9 @@ const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
 	authTypeParameter = "auth-type"
-	authTypeOAuth     = "oauth"
-	authTypeToken     = "token"
 )
 
-var authTypeDescription = fmt.Sprint("Authentication type (", authTypeToken, ", ", authTypeOAuth, ")")
+var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
 
 const templateConsoleMessage = `
 Now redirecting you to our auth page, go ahead and log in,
@@ -71,26 +69,33 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	)
 
-	err = entryPointDI(invocationCtx, logger, engine, authenticator)
+	err = entryPointDI(invocationCtx, logger, engine, authenticator, auth.DeriveEndpointFromPAT)
 	return nil, err
 }
 
 func autoDetectAuthType(config configuration.Configuration) string {
 	// testing if an API token was specified
 	token := config.GetString(ConfigurationNewAuthenticationToken)
-	if _, uuidErr := uuid.Parse(token); uuidErr == nil {
-		return authTypeToken
+	if len(token) > 0 && auth.IsAuthTypeToken(token) {
+		return auth.AUTH_TYPE_TOKEN
 	}
 
+	// currently the auth workflow defaults to traditional token auth when an IDE environment is detected
+	// this will need to change if IDEs want to invoke this workflow for oauth/PAT
 	integration := config.GetString(configuration.INTEGRATION_NAME)
 	if pgk_utils.IsSnykIde(integration) {
-		return authTypeToken
+		return auth.AUTH_TYPE_TOKEN
 	}
 
-	return authTypeOAuth
+	// check if auth type is PAT
+	if len(token) > 0 && auth.IsAuthTypePAT(token) {
+		return auth.AUTH_TYPE_PAT
+	}
+
+	return auth.AUTH_TYPE_OAUTH
 }
 
-func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator, deriveEndpointFn auth.DeriveEndpointFn) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	config := invocationCtx.GetConfiguration()
 
@@ -102,7 +107,7 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(authTypeParameter, authType)
 
-	if strings.EqualFold(authType, authTypeOAuth) { // OAUTH flow
+	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)
 		config.Unset(configuration.AUTHENTICATION_TOKEN)
 
@@ -114,7 +119,41 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 			return err
 		}
 
-		fmt.Println(auth.AUTHENTICATED_MESSAGE)
+		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
+		if err != nil {
+			logger.Debug().Err(err).Msg("Failed to output authenticated message")
+		}
+	} else if strings.EqualFold(authType, auth.AUTH_TYPE_PAT) { // PAT flow
+		pat := config.GetString(ConfigurationNewAuthenticationToken)
+
+		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
+		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+		config.Set(configuration.AUTHENTICATION_TOKEN, "") // clear token to avoid using it during authentication
+
+		regions := config.GetStringSlice(configuration.SNYK_REGION_URLS)
+		// prefer the configured API URL
+		if config.IsSet(configuration.API_URL) {
+			regions = []string{config.GetString(configuration.API_URL)}
+		}
+		apiUrl, endpointErr := deriveEndpointFn(pat, config, invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), regions)
+
+		if endpointErr != nil {
+			return endpointErr
+		}
+
+		if len(apiUrl) > 0 {
+			logger.Print("Set pat credentials in config")
+			engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_TOKEN)
+			engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_ENDPOINT)
+
+			engine.GetConfiguration().Set(auth.CONFIG_KEY_TOKEN, pat)
+			engine.GetConfiguration().Set(auth.CONFIG_KEY_ENDPOINT, apiUrl)
+
+			err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
+			if err != nil {
+				logger.Debug().Err(err).Msg("Failed to output authenticated message")
+			}
+		}
 	} else { // LEGACY flow
 		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
 		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
