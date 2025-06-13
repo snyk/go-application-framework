@@ -15,8 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
-	"strings"
+
 	"sync"
 	"time"
 
@@ -25,8 +24,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 const (
@@ -40,6 +39,7 @@ const (
 	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
 	PARAMETER_CLIENT_ID            string = "client-id"
 	PARAMETER_CLIENT_SECRET        string = "client-secret"
+	AUTH_TYPE_OAUTH                       = "oauth"
 )
 
 type GrantType int
@@ -463,7 +463,7 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 
 	redirectAuthHostRE := o.config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
 	o.logger.Info().Msgf("Validating with regexp: \"%s\"", redirectAuthHostRE)
-	isValidHost, err := isValidAuthHost(authHost, redirectAuthHostRE)
+	isValidHost, err := utils.MatchesRegex(authHost, redirectAuthHostRE)
 	if err != nil {
 		return err
 	}
@@ -489,38 +489,6 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 	o.logger.Info().Msgf("New token url endpoint is: %s", o.oauthConfig.Endpoint.TokenURL)
 
 	return nil
-}
-
-func redirectAuthHost(instance string) (string, error) {
-	// handle both cases if instance is a URL or just a host
-	if !strings.HasPrefix(instance, "http") {
-		instance = "https://" + instance
-	}
-
-	instanceUrl, err := url.Parse(instance)
-	if err != nil {
-		return "", err
-	}
-
-	canonicalizedInstanceUrl, err := api.GetCanonicalApiAsUrl(*instanceUrl)
-	if err != nil {
-		return "", err
-	}
-
-	return canonicalizedInstanceUrl.Host, nil
-}
-
-func isValidAuthHost(authHost string, hostRegularExpression string) (bool, error) {
-	if len(hostRegularExpression) == 0 {
-		return false, fmt.Errorf("regular expression to check host names must not be empty")
-	}
-
-	r, err := regexp.Compile(hostRegularExpression)
-	if err != nil {
-		return false, err
-	}
-
-	return r.MatchString(authHost), nil
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
