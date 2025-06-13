@@ -494,7 +494,7 @@ func mockListFindingsResponse(t *testing.T, nextLink *string, hasData bool) []by
 	findingDesc := "Finding example high sev"
 	cveID := "CVE-2024-12345"
 	filePath := "package-lock.json"
-	lineNum := int32(42)
+	lineNum := int(42)
 
 	// Create a mock Problem (CVE)
 	var problem testapi.Problem
@@ -506,10 +506,10 @@ func mockListFindingsResponse(t *testing.T, nextLink *string, hasData bool) []by
 
 	// Create a mock Location (SourceFile)
 	var location testapi.FindingLocation
-	err = location.FromSourceFileLocation(testapi.SourceFileLocation{
+	err = location.FromSourceLocation(testapi.SourceLocation{
 		FilePath: filePath,
 		FromLine: lineNum,
-		Type:     testapi.SourceFile,
+		Type:     testapi.Source,
 	})
 	require.NoError(t, err)
 

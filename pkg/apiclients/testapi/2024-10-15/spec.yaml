@@ -67,7 +67,7 @@ components:
         format: uuid
         type: string
     TestIdParam:
-      description: The asset id
+      description: The test id
       in: path
       name: test_id
       required: true
@@ -99,7 +99,7 @@ components:
       name: starting_after
       schema:
         type: string
-    io.snyk.api.request.SnykApiRequest.interactionId:
+    io.snyk.api.request.SnykApiRequest.interaction_id:
       description: |-
         Identifies the Snyk client interaction in which this API request occurs.
 
@@ -112,7 +112,7 @@ components:
         maxLength: 128
         minLength: 36
         type: string
-    io.snyk.api.request.SnykApiRequest.requestId:
+    io.snyk.api.request.SnykApiRequest.request_id:
       description: |-
         A unique ID assigned to each API request, for tracing and troubleshooting.
 
@@ -330,14 +330,9 @@ components:
             Series of component identifiers starting from the top-level component tested,
             and ending in the vulnerable software component.
 
-            The identifiers are domain-specific and determined by the SBOM Asset under test.
-          example:
-          - my-tested-package@1.0.0
-          - prop-types@15.7.2
-          - loose-envify@1.4.0
-          - js-tokens@4.0.0
+            The identifiers are domain-specific and determined by the test subject.
           items:
-            type: string
+            $ref: '#/components/schemas/Package'
           type: array
         source:
           enum:
@@ -460,30 +455,18 @@ components:
       - $ref: '#/components/schemas/DependencyPathEvidence'
       - $ref: '#/components/schemas/ExecutionFlowEvidence'
       - $ref: '#/components/schemas/OtherEvidence'
-    ExecutableLocation:
-      description: |-
-        A location within an asset's contents that can be executed, as part of a
-        program flow.
-      discriminator:
-        mapping:
-          other: '#/components/schemas/OtherLocation'
-          source_file: '#/components/schemas/SourceFileLocation'
-        propertyName: type
-      oneOf:
-      - $ref: '#/components/schemas/SourceFileLocation'
-      - $ref: '#/components/schemas/OtherLocation'
     ExecutionFlowEvidence:
       description: Indicate a program flow of execution as additional evidence for
         the finding.
       properties:
-        locations:
+        flow:
           description: |-
             Sequence of locations within this flow of execution.
 
             For example, a sequence of locations connecting the "source" location
             where input data is obtained, to a "sink" location where it is used.
           items:
-            $ref: '#/components/schemas/ExecutableLocation'
+            $ref: '#/components/schemas/FileRegion'
           minItems: 1
           type: array
         source:
@@ -492,7 +475,29 @@ components:
           type: string
       required:
       - source
-      - locations
+      - flow
+      type: object
+    FileRegion:
+      description: FileRegion models a location where vulnerable code is found.
+      properties:
+        file_path:
+          description: File path for the code snippet.
+          type: string
+        from_column:
+          description: Column on which the snippet starts.
+          type: integer
+        from_line:
+          description: Line in the file where the code snippet starts.
+          type: integer
+        to_column:
+          description: Column at which the code snippet ends.
+          type: integer
+        to_line:
+          description: Line on which the code snippet ends.
+          type: integer
+      required:
+      - file_path
+      - from_line
       type: object
     FindingAttributes:
       description: FindingAttributes represent the attributes of a Finding resource.
@@ -510,8 +515,8 @@ components:
             other security domains and systems, lacking a well-known identifier.
           example:
           - path:
-            - my-app:1.0.0
-            - log4j:2.4.1
+            - name: my-app:1.0.0
+              version: log4j:2.4.1
             source: dependency_path
           items:
             $ref: '#/components/schemas/Evidence'
@@ -725,16 +730,16 @@ components:
       - attributes
       type: object
     FindingLocation:
-      description: Location within an Asset's contents where the finding was discovered.
+      description: Location within an Subject's contents where the finding was discovered.
       discriminator:
         mapping:
           other: '#/components/schemas/OtherLocation'
-          package_dependency: '#/components/schemas/PackageDependency'
-          source_file: '#/components/schemas/SourceFileLocation'
+          package: '#/components/schemas/PackageLocation'
+          source: '#/components/schemas/SourceLocation'
         propertyName: type
       oneOf:
-      - $ref: '#/components/schemas/PackageDependency'
-      - $ref: '#/components/schemas/SourceFileLocation'
+      - $ref: '#/components/schemas/PackageLocation'
+      - $ref: '#/components/schemas/SourceLocation'
       - $ref: '#/components/schemas/OtherLocation'
     FindingSummary:
       description: Summary of findings found by the Test.
@@ -777,7 +782,7 @@ components:
       - dast
       - other
       type: string
-    GitURLCoordinatesSubject:
+    GitUrlCoordinatesSubject:
       description: |-
         Test subject representing a source tree located in a Git repository that
         has a Snyk SCM integration.
@@ -963,7 +968,7 @@ components:
       description: Reference to a managed policy.
       properties:
         id:
-          $ref: '#/components/schemas/uuid'
+          $ref: '#/components/schemas/Uuid'
       required:
       - id
       type: object
@@ -1041,28 +1046,41 @@ components:
       required:
       - type
       type: object
-    PackageDependency:
+    Package:
+      description: Dependency models a package dependency.
+      properties:
+        name:
+          description: Name is the name of the package.
+          example: lodash
+          type: string
+        version:
+          description: Version is the version of the named package.
+          example: 1.2.3
+          type: string
+      required:
+      - name
+      - version
+      type: object
+    PackageLocation:
       description: |-
         Package dependency version.
 
         Finding type: SCA
       example:
-        name: log4j
-        type: package_dependency
-        version: 2.4.1
+        package:
+          name: log4j
+          version: 2.4.1
+        type: package
       properties:
-        name:
-          type: string
+        package:
+          $ref: '#/components/schemas/Package'
         type:
           enum:
-          - package_dependency
-          type: string
-        version:
+          - package
           type: string
       required:
       - type
-      - name
-      - version
+      - package
       type: object
     PassFail:
       description: Indicate whether a Test passes or fails.
@@ -1107,7 +1125,7 @@ components:
       properties:
         ids:
           items:
-            $ref: '#/components/schemas/uuid'
+            $ref: '#/components/schemas/Uuid'
           type: array
         local_policy:
           type: boolean
@@ -1219,7 +1237,7 @@ components:
       required:
       - value
       type: object
-    SBOMReachabilitySubject:
+    SbomReachabilitySubject:
       description: Test subject for SBOM test with reachability analysis.
       properties:
         code_bundle_id:
@@ -1493,8 +1511,8 @@ components:
           - $ref: '#/components/schemas/snykvulndb.ExploitDetails'
           description: Details about the maturity of exploits for this vulnerability.
         id:
-          example: SNYK-JAVA-ORGAPACHELOGGINGLOG4J-2314720
-          pattern: ^SNYK(-[^-]+)+[-][0-9]+$
+          example: npm:jsonwebtoken:20150331
+          pattern: (^SNYK(-[^-]+)+[-][0-9]+$)|(^[^:]+(:[^:]+)+$)
           type: string
         initially_fixed_in_versions:
           description: |-
@@ -1596,7 +1614,7 @@ components:
       - modified_at
       - references
       type: object
-    SourceFileLocation:
+    SourceLocation:
       description: |-
         Source file location.
 
@@ -1607,26 +1625,26 @@ components:
         from_line: 24
         to_column: 36
         to_line: 24
-        type: source_file
+        type: source
       properties:
         file_path:
+          description: File path for the code snippet.
           type: string
         from_column:
-          default: 0
-          format: int32
+          description: Column on which the snippet starts.
           type: integer
         from_line:
-          format: int32
+          description: Line in the file where the code snippet starts.
           type: integer
         to_column:
-          format: int32
+          description: Column at which the code snippet ends.
           type: integer
         to_line:
-          format: int32
+          description: Line on which the code snippet ends.
           type: integer
         type:
           enum:
-          - source_file
+          - source
           type: string
       required:
       - type
@@ -1905,39 +1923,39 @@ components:
       type: object
     TestSubject:
       description: |-
-        The subject of a test, which identifies the asset and content references
+        The subject of a test, which identifies the asset/project and content references
         necessary to conduct a security test.
       discriminator:
         mapping:
           deepcode_bundle: '#/components/schemas/DeepcodeBundleSubject'
           dep_graph: '#/components/schemas/DepGraphSubject'
-          git_url_coordinates: '#/components/schemas/GitURLCoordinatesSubject'
+          git_url_coordinates: '#/components/schemas/GitUrlCoordinatesSubject'
           other: '#/components/schemas/OtherSubject'
-          sbom_reachability: '#/components/schemas/SBOMReachabilitySubject'
+          sbom_reachability: '#/components/schemas/SbomReachabilitySubject'
         propertyName: type
       oneOf:
       - $ref: '#/components/schemas/DeepcodeBundleSubject'
       - $ref: '#/components/schemas/DepGraphSubject'
-      - $ref: '#/components/schemas/GitURLCoordinatesSubject'
-      - $ref: '#/components/schemas/SBOMReachabilitySubject'
+      - $ref: '#/components/schemas/GitUrlCoordinatesSubject'
+      - $ref: '#/components/schemas/SbomReachabilitySubject'
       - $ref: '#/components/schemas/OtherSubject'
     TestSubjectCreate:
       description: |-
-        The subject of a test, which identifies the asset and content references
+        The subject of a test, which identifies the asset/project and content references
         necessary to conduct a security test.
       discriminator:
         mapping:
           deepcode_bundle: '#/components/schemas/DeepcodeBundleSubject'
           dep_graph: '#/components/schemas/DepGraphSubjectCreate'
-          git_url_coordinates: '#/components/schemas/GitURLCoordinatesSubject'
+          git_url_coordinates: '#/components/schemas/GitUrlCoordinatesSubject'
           other: '#/components/schemas/OtherSubject'
-          sbom_reachability: '#/components/schemas/SBOMReachabilitySubject'
+          sbom_reachability: '#/components/schemas/SbomReachabilitySubject'
         propertyName: type
       oneOf:
       - $ref: '#/components/schemas/DeepcodeBundleSubject'
       - $ref: '#/components/schemas/DepGraphSubjectCreate'
-      - $ref: '#/components/schemas/GitURLCoordinatesSubject'
-      - $ref: '#/components/schemas/SBOMReachabilitySubject'
+      - $ref: '#/components/schemas/GitUrlCoordinatesSubject'
+      - $ref: '#/components/schemas/SbomReachabilitySubject'
       - $ref: '#/components/schemas/OtherSubject'
     TestSubjectLocator:
       discriminator:
@@ -1968,6 +1986,9 @@ components:
       - seconds
       - outcome
       type: object
+    Uuid:
+      format: uuid
+      type: string
     io.snyk.api.common.Error:
       properties:
         code:
@@ -2481,9 +2502,6 @@ components:
       required:
       - function_name
       type: object
-    uuid:
-      format: uuid
-      type: string
 info:
   title: test-api-shim
   version: 3.0.0
@@ -2555,8 +2573,8 @@ paths:
       description: Get a test job.
       operationId: getJob
       parameters:
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
       - $ref: '#/components/parameters/OrgIdParam'
       - $ref: '#/components/parameters/JobIdParam'
@@ -2694,6 +2712,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@cmars'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -2705,8 +2724,8 @@ paths:
       description: Create a new test.
       operationId: createTest
       parameters:
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
       - $ref: '#/components/parameters/OrgIdParam'
       requestBody:
@@ -2821,6 +2840,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@cmars'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -2832,8 +2852,8 @@ paths:
       description: Get a test.
       operationId: getTest
       parameters:
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
       - $ref: '#/components/parameters/OrgIdParam'
       - $ref: '#/components/parameters/TestIdParam'
@@ -2922,6 +2942,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@cmars'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -2933,8 +2954,8 @@ paths:
       description: List findings for a test.
       operationId: listFindings
       parameters:
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.requestId'
-      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interactionId'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
+      - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.interaction_id'
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.version'
       - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.starting_after'
       - $ref: '#/components/parameters/io.snyk.api.request.PaginatedRequest.ending_before'
@@ -3021,6 +3042,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@cmars'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
