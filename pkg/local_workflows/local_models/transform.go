@@ -10,8 +10,14 @@ import (
 )
 
 func TransformToLocalFindingModelFromSarif(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary) (localFinding LocalFinding, err error) {
+	return TransformToLocalFindingModelFromSarifWithGitContext(sarifDoc, testSummary, nil)
+}
+
+func TransformToLocalFindingModelFromSarifWithGitContext(sarifDoc *sarif.SarifDocument, testSummary *json_schemas.TestSummary, gitContext *GitContext) (localFinding LocalFinding, err error) {
 	localFinding.Links = make(map[string]string)
 	localFinding.Summary = transformTestSummary(testSummary, sarifDoc)
+	localFinding.GitContext = gitContext
+	
 	var rules []TypesRules
 	for _, run := range sarifDoc.Runs {
 		for _, rule := range run.Tool.Driver.Rules {

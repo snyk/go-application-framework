@@ -32,6 +32,18 @@ func BranchNameFromDir(inputDir string) (string, error) {
 	return "", nil
 }
 
+func CommitHashFromDir(inputDir string) (string, error) {
+	repo, _, err := RepoFromDir(inputDir)
+	if err != nil {
+		return "", err
+	}
+	ref, err := repo.Head()
+	if err != nil {
+		return "", err
+	}
+	return ref.Hash().String(), nil
+}
+
 func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error) {
 	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
 		DetectDotGit: true,

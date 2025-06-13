@@ -108,6 +108,10 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 }
 
 func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (localFinding local_models.LocalFinding, err error) {
+	return TransformSarifToLocalFindingModelWithGitContext(sarifBytes, summaryBytes, nil)
+}
+
+func TransformSarifToLocalFindingModelWithGitContext(sarifBytes []byte, summaryBytes []byte, gitContext *local_models.GitContext) (localFinding local_models.LocalFinding, err error) {
 	var testSummary json_schemas.TestSummary
 	err = json.Unmarshal(summaryBytes, &testSummary)
 	if err != nil {
@@ -120,5 +124,5 @@ func TransformSarifToLocalFindingModel(sarifBytes []byte, summaryBytes []byte) (
 		return localFinding, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
 
-	return local_models.TransformToLocalFindingModelFromSarif(&sarifDoc, &testSummary)
+	return local_models.TransformToLocalFindingModelFromSarifWithGitContext(&sarifDoc, &testSummary, gitContext)
 }
