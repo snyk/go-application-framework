@@ -300,7 +300,10 @@ func (e *EngineImpl) Invoke(
 			networkAccess := e.networkAccess.Clone()
 			networkAccess.SetConfiguration(options.config)
 
-			localEngine := &engineWrapper{WrappedEngine: e}
+			localEngine := &engineWrapper{
+				WrappedEngine:                   e,
+				defaultInstrumentationCollector: options.ic,
+			}
 			e.mu.Unlock()
 
 			// create a context object for the invocation

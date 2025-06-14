@@ -11,7 +11,8 @@ import (
 )
 
 type engineWrapper struct {
-	WrappedEngine Engine
+	WrappedEngine                   Engine
+	defaultInstrumentationCollector analytics.InstrumentationCollector
 }
 
 var _ Engine = (*engineWrapper)(nil)
@@ -37,19 +38,29 @@ func (e *engineWrapper) GetWorkflow(id Identifier) (Entry, bool) {
 }
 
 func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Data, error) {
+	options := &engineRuntimeConfig{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	// if no InstrumentationCollector is specified, and a default is available, the default be used
+	if options.ic == nil && e.defaultInstrumentationCollector != nil {
+		opts = append(opts, WithInstrumentationCollector(e.defaultInstrumentationCollector))
+	}
+
 	return e.WrappedEngine.Invoke(id, opts...)
 }
 
 func (e *engineWrapper) InvokeWithInput(id Identifier, input []Data) ([]Data, error) {
-	return e.WrappedEngine.InvokeWithInput(id, input)
+	return e.Invoke(id, WithInput(input))
 }
 
 func (e *engineWrapper) InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error) {
-	return e.WrappedEngine.InvokeWithConfig(id, config)
+	return e.Invoke(id, WithConfig(config))
 }
 
 func (e *engineWrapper) InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error) {
-	return e.WrappedEngine.InvokeWithInputAndConfig(id, input, config)
+	return e.Invoke(id, WithInput(input), WithConfig(config))
 }
 
 func (e *engineWrapper) GetAnalytics() analytics.Analytics {
