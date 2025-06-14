@@ -64,41 +64,41 @@ func (e *engineWrapper) InvokeWithInputAndConfig(id Identifier, input []Data, co
 }
 
 func (e *engineWrapper) GetAnalytics() analytics.Analytics {
-	return e.GetAnalytics()
+	return e.WrappedEngine.GetAnalytics()
 }
 
 func (e *engineWrapper) GetNetworkAccess() networking.NetworkAccess {
-	return e.GetNetworkAccess()
+	return e.WrappedEngine.GetNetworkAccess()
 }
 
 func (e *engineWrapper) GetConfiguration() configuration.Configuration {
-	return e.GetConfiguration()
+	return e.WrappedEngine.GetConfiguration()
 }
 
 func (e *engineWrapper) SetLogger(logger *zerolog.Logger) {
-	e.SetLogger(logger)
+	e.WrappedEngine.SetLogger(logger)
 }
 
 func (e *engineWrapper) SetConfiguration(config configuration.Configuration) {
-	e.SetConfiguration(config)
+	e.WrappedEngine.SetConfiguration(config)
 }
 
 func (e *engineWrapper) GetLogger() *zerolog.Logger {
-	return e.GetLogger()
+	return e.WrappedEngine.GetLogger()
 }
 
 func (e *engineWrapper) GetUserInterface() ui.UserInterface {
-	return e.GetUserInterface()
+	return e.WrappedEngine.GetUserInterface()
 }
 
 func (e *engineWrapper) SetUserInterface(ui ui.UserInterface) {
-	e.SetUserInterface(ui)
+	e.WrappedEngine.SetUserInterface(ui)
 }
 
 func (e *engineWrapper) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
-	return e.GetRuntimeInfo()
+	return e.WrappedEngine.GetRuntimeInfo()
 }
 
 func (e *engineWrapper) SetRuntimeInfo(ri runtimeinfo.RuntimeInfo) {
-	e.SetRuntimeInfo(ri)
+	e.WrappedEngine.SetRuntimeInfo(ri)
 }
