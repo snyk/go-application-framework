@@ -36,8 +36,8 @@ func (e *engineWrapper) GetWorkflow(id Identifier) (Entry, bool) {
 	return e.WrappedEngine.GetWorkflow(id)
 }
 
-func (e *engineWrapper) Invoke(id Identifier) ([]Data, error) {
-	return e.WrappedEngine.Invoke(id)
+func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Data, error) {
+	return e.WrappedEngine.Invoke(id, opts...)
 }
 
 func (e *engineWrapper) InvokeWithInput(id Identifier, input []Data) ([]Data, error) {
