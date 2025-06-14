@@ -281,7 +281,6 @@ func (e *EngineImpl) Invoke(
 			options := engineRuntimeConfig{
 				config: e.config.Clone(),
 				input:  []Data{},
-				ic:     e.analytics.GetInstrumentation(),
 			}
 
 			// override default options based on optional parameters
@@ -294,7 +293,15 @@ func (e *EngineImpl) Invoke(
 			localLogger := e.logger.With().Str("ext", prefix).Logger()
 
 			localUi := e.ui
-			localAnalytics := NewAnalyticsWrapper(e.analytics, id.Host)
+
+			var localAnalytics analytics.Analytics
+			if options.ic != nil {
+				tmpAnalytics := &analytics.AnalyticsImpl{}
+				tmpAnalytics.SetInstrumentation(options.ic)
+				localAnalytics = NewAnalyticsWrapper(tmpAnalytics, id.Host)
+			} else {
+				localAnalytics = NewAnalyticsWrapper(e.analytics, id.Host)
+			}
 
 			// prepare networkAccess
 			localNetworkAccess := e.networkAccess.Clone()
