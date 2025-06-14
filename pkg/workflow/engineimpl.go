@@ -264,10 +264,12 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			// prepare networkAccess
 			networkAccess := e.networkAccess.Clone()
 			networkAccess.SetConfiguration(config)
+
+			localEngine := &engineWrapper{WrappedEngine: e}
 			e.mu.Unlock()
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, config, e, networkAccess, zlogger, localAnalytics, localUi)
+			context := NewInvocationContext(id, config, localEngine, networkAccess, zlogger, localAnalytics, localUi)
 
 			// invoke workflow through its callback
 			zlogger.Printf("Workflow Start")
