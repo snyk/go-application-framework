@@ -39,6 +39,7 @@ var _ Engine = (*EngineImpl)(nil)
 type engineRuntimeConfig struct {
 	config configuration.Configuration
 	input  []Data
+	ic     analytics.InstrumentationCollector
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -52,6 +53,12 @@ func WithConfig(config configuration.Configuration) EngineInvokeOption {
 func WithInput(input []Data) EngineInvokeOption {
 	return func(e *engineRuntimeConfig) {
 		e.input = input
+	}
+}
+
+func WithInstrumentationCollector(ic analytics.InstrumentationCollector) EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.ic = ic
 	}
 }
 
@@ -270,11 +277,14 @@ func (e *EngineImpl) Invoke(
 			e.mu.Lock()
 			e.invocationCounter++
 
+			// create default options
 			options := engineRuntimeConfig{
 				config: e.config.Clone(),
 				input:  []Data{},
+				ic:     e.analytics.GetInstrumentation(),
 			}
 
+			// override default options based on optional parameters
 			for _, opt := range opts {
 				opt(&options)
 			}
