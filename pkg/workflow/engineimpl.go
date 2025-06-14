@@ -291,14 +291,14 @@ func (e *EngineImpl) Invoke(
 
 			// prepare logger
 			prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
-			zlogger := e.logger.With().Str("ext", prefix).Logger()
+			localLogger := e.logger.With().Str("ext", prefix).Logger()
 
 			localUi := e.ui
 			localAnalytics := NewAnalyticsWrapper(e.analytics, id.Host)
 
 			// prepare networkAccess
-			networkAccess := e.networkAccess.Clone()
-			networkAccess.SetConfiguration(options.config)
+			localNetworkAccess := e.networkAccess.Clone()
+			localNetworkAccess.SetConfiguration(options.config)
 
 			localEngine := &engineWrapper{
 				WrappedEngine:                   e,
@@ -307,12 +307,12 @@ func (e *EngineImpl) Invoke(
 			e.mu.Unlock()
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, options.config, localEngine, networkAccess, zlogger, localAnalytics, localUi)
+			context := NewInvocationContext(id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
 
 			// invoke workflow through its callback
-			zlogger.Printf("Workflow Start")
+			localLogger.Printf("Workflow Start")
 			output, err = callback(context, options.input)
-			zlogger.Printf("Workflow End")
+			localLogger.Printf("Workflow End")
 		}
 	} else {
 		err = fmt.Errorf("workflow '%v' not found", id)
