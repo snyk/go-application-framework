@@ -1,5 +1,0 @@
-package: v20240319
-generate:
-  models: true
-  client: true
-output: pat.go
