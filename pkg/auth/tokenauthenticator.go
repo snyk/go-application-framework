@@ -66,3 +66,101 @@ func IsAuthTypePAT(token string) bool {
 	}
 	return false
 }
+<<<<<<< HEAD
+=======
+
+type DeriveEndpointFn func(pat string, config configuration.Configuration, client *http.Client, regions []string) (string, error)
+
+var _ DeriveEndpointFn = DeriveEndpointFromPAT
+
+// DeriveEndpointFromPAT iterates a list of Snyk region URLs and tries to make an authenticated request to the Snyk PAT API
+// on success, it will return the correct Snyk endpoint from the given PAT
+func DeriveEndpointFromPAT(pat string, config configuration.Configuration, client *http.Client, regionUrls []string) (string, error) {
+	var (
+		err      error
+		errs     error
+		endpoint string
+	)
+
+	// include the default region as a fallback
+	if !slices.Contains(regionUrls, constants.SNYK_DEFAULT_API_URL) {
+		regionUrls = append(regionUrls, constants.SNYK_DEFAULT_API_URL)
+	}
+
+	for _, url := range regionUrls {
+		endpoint, err = deriveEndpoint(pat, config, client, url)
+		if err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+		break
+	}
+
+	if errs != nil && len(endpoint) == 0 {
+		return "", errs
+	}
+
+	return endpoint, nil
+}
+
+// deriveEndpoint makes an authenticated request to the Snyk PAT API and returns the correct Snyk endpoint from the given PAT
+func deriveEndpoint(token string, config configuration.Configuration, client *http.Client, snykRegionUrl string) (string, error) {
+	apiBaseUrl := snykRegionUrl
+	if len(apiBaseUrl) == 0 {
+		apiBaseUrl = constants.SNYK_DEFAULT_API_URL
+	}
+
+	if !strings.HasPrefix(apiBaseUrl, "hidden") {
+		apiBaseUrl = fmt.Sprintf("%s/hidden", apiBaseUrl)
+	}
+
+	patApiClient, err := patAPI.NewClientWithResponses(apiBaseUrl, patAPI.WithHTTPClient(client))
+	if err != nil {
+		return "", fmt.Errorf("failed to create PAT API client: %w", err)
+	}
+
+	params := &patAPI.GetPatMetadataParams{
+		Version: patAPIVersion,
+	}
+
+	reqEditors := []patAPI.RequestEditorFn{
+		func(ctx context.Context, req *http.Request) error {
+			req.Header.Set("Authorization", fmt.Sprintf("token %s", token))
+			return nil
+		},
+	}
+
+	resp, err := patApiClient.GetPatMetadataWithResponse(context.Background(), params, reqEditors...)
+	if err != nil {
+		return "", snykError.NewUnauthorisedError("failed to validate PAT; either missing or invalid PAT")
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return "", snykError.NewUnauthorisedError(fmt.Sprintf("failed to get PAT metadata (status: %d): %s", resp.StatusCode(), string(resp.Body)))
+	}
+
+	patMetadataBody := resp.ApplicationvndApiJSON200
+	if patMetadataBody == nil || patMetadataBody.Data.Attributes.Hostname == nil {
+		return "", fmt.Errorf("failed to decode PAT metadata response or missing hostname")
+	}
+
+	hostname := *patMetadataBody.Data.Attributes.Hostname
+	if hostname == "" {
+		return "", fmt.Errorf("invalid empty hostname")
+	}
+
+	authHost, err := redirectAuthHost(hostname)
+	if err != nil {
+		return "", err
+	}
+
+	validHostRegex := config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
+	if isValid, err := utils.MatchesRegex(authHost, validHostRegex); err != nil || !isValid {
+		return "", fmt.Errorf("invalid hostname: %s", authHost)
+	}
+
+	endpoint := fmt.Sprintf("https://%s", authHost)
+
+	return endpoint, nil
+}
+>>>>>>> 4607496 (fix(auth): auth failure when provided multiple pat regions with a valid region)
