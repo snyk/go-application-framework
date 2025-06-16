@@ -107,9 +107,10 @@ func DeriveEndpointFromPAT(pat string, config configuration.Configuration, clien
 		break
 	}
 
-	if errs != nil {
+	if errs != nil && len(endpoint) == 0 {
 		return "", errs
 	}
+
 	return endpoint, nil
 }
 

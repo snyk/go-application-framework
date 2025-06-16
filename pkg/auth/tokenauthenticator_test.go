@@ -61,6 +61,12 @@ func TestDeriveEndpointFromPAT(t *testing.T) {
 		assert.Equal(t, "https://api.snyk.io", endpoint)
 	})
 
+	t.Run("Multiple regions", func(t *testing.T) {
+		endpoint, err := DeriveEndpointFromPAT("valid_pat", config, client, []string{"https://someRandomUrl.com", server.URL, "https://someOtherRandomUrl.com"})
+		assert.NoError(t, err)
+		assert.Equal(t, "https://api.snyk.io", endpoint)
+	})
+
 	t.Run("Valid EU PAT", func(t *testing.T) {
 		endpoint, err := DeriveEndpointFromPAT("valid_eu_pat", config, client, []string{server.URL})
 		assert.NoError(t, err)
@@ -77,6 +83,12 @@ func TestDeriveEndpointFromPAT(t *testing.T) {
 		_, err := DeriveEndpointFromPAT("empty_pat", config, client, []string{server.URL})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid empty hostname")
+	})
+
+	t.Run("Bad URL", func(t *testing.T) {
+		_, err := DeriveEndpointFromPAT("empty_pat", config, client, []string{"https://someRandomUrl.com"})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Authentication error")
 	})
 }
 
