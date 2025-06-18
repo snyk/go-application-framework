@@ -20,6 +20,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/code"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -164,6 +165,12 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 		if resultMetaData != nil && len(resultMetaData.WebUiUrl) > 0 {
 			localFindings.Links[local_models.LINKS_KEY_REPORT] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
 		}
+
+		targetId, targetIdError := instrumentation.GetTargetId(config.GetString(configuration.INPUT_DIRECTORY), instrumentation.AutoDetectedTargetId, instrumentation.WithConfiguredRepository(config))
+		if targetIdError != nil {
+			logger.Printf("Failed to derive target id, %v", targetIdError)
+		}
+		localFindings.Links["targetid"] = targetId
 
 		findingsData, findingsError := createCodeWorkflowData(
 			workflow.NewTypeIdentifier(id, "findings"),
