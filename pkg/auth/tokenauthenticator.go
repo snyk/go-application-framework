@@ -1,11 +1,22 @@
 package auth
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
+	snykError "github.com/snyk/error-catalog-golang-public/snyk"
+	patAPI "github.com/snyk/go-application-framework/internal/api/personal_access_tokens/2024-03-19"
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 const (
@@ -16,6 +27,23 @@ const (
 	CONFIG_KEY_TOKEN               = "api"      // the snyk config key for api token
 	CONFIG_KEY_ENDPOINT            = "endpoint" // the snyk config key for api endpoint
 )
+
+const (
+	patAPIVersion = "2024-03-19"
+	delimiter     = "."
+)
+
+// Claims represents the structure of the PATs claims, it does not represent all the claims; only the ones we need
+type Claims struct {
+	// PAT ID
+	JWTID string `json:"j,omitempty"`
+	// PAT subject ID
+	Subject string `json:"s,omitempty"`
+	// PAT expiry
+	Expiration int64 `json:"e,omitempty"`
+	// Hostname PAT is valid for
+	Hostname string `json:"h,omitempty"`
+}
 
 var _ Authenticator = (*tokenAuthenticator)(nil)
 
@@ -66,8 +94,6 @@ func IsAuthTypePAT(token string) bool {
 	}
 	return false
 }
-<<<<<<< HEAD
-=======
 
 type DeriveEndpointFn func(pat string, config configuration.Configuration, client *http.Client, regions []string) (string, error)
 
@@ -99,7 +125,6 @@ func DeriveEndpointFromPAT(pat string, config configuration.Configuration, clien
 	if errs != nil && len(endpoint) == 0 {
 		return "", errs
 	}
-
 	return endpoint, nil
 }
 
@@ -163,4 +188,28 @@ func deriveEndpoint(token string, config configuration.Configuration, client *ht
 
 	return endpoint, nil
 }
->>>>>>> 4607496 (fix(auth): auth failure when provided multiple pat regions with a valid region)
+
+// ExtractClaimsFromPAT accepts a raw PAT string and returns the PAT claims
+func ExtractClaimsFromPAT(raw string) (*Claims, error) {
+	parts := strings.Split(raw, delimiter)
+	if len(parts) != 4 {
+		return nil, fmt.Errorf("invalid number of segments: %d", len(parts))
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode payload: %w", err)
+	}
+
+	var c Claims
+	if err = json.Unmarshal(payload, &c); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	return &Claims{
+		Expiration: c.Expiration,
+		Hostname:   c.Hostname,
+		JWTID:      c.JWTID,
+		Subject:    c.Subject,
+	}, nil
+}
