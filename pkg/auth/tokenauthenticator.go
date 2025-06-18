@@ -1,11 +1,20 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
+	snykError "github.com/snyk/error-catalog-golang-public/snyk"
+	patAPI "github.com/snyk/go-application-framework/internal/api/personal_access_tokens/2024-03-19"
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 const (
@@ -15,6 +24,10 @@ const (
 	CACHED_PAT_IS_VALID_KEY_PREFIX = "cached_pat_is_valid"
 	CONFIG_KEY_TOKEN               = "api"      // the snyk config key for api token
 	CONFIG_KEY_ENDPOINT            = "endpoint" // the snyk config key for api endpoint
+)
+
+const (
+	patAPIVersion = "2024-03-19"
 )
 
 var _ Authenticator = (*tokenAuthenticator)(nil)
@@ -66,8 +79,6 @@ func IsAuthTypePAT(token string) bool {
 	}
 	return false
 }
-<<<<<<< HEAD
-=======
 
 type DeriveEndpointFn func(pat string, config configuration.Configuration, client *http.Client, regions []string) (string, error)
 
@@ -99,7 +110,6 @@ func DeriveEndpointFromPAT(pat string, config configuration.Configuration, clien
 	if errs != nil && len(endpoint) == 0 {
 		return "", errs
 	}
-
 	return endpoint, nil
 }
 
@@ -163,4 +173,3 @@ func deriveEndpoint(token string, config configuration.Configuration, client *ht
 
 	return endpoint, nil
 }
->>>>>>> 4607496 (fix(auth): auth failure when provided multiple pat regions with a valid region)

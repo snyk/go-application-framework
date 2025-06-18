@@ -1,9 +1,15 @@
 package auth
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	pat "github.com/snyk/go-application-framework/internal/api/personal_access_tokens/2024-03-19"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 func TestIsAuthTypeToken(t *testing.T) {
@@ -67,6 +73,12 @@ func TestDeriveEndpointFromPAT(t *testing.T) {
 		assert.Equal(t, "https://api.eu.snyk.io", endpoint)
 	})
 
+	t.Run("Bad URL", func(t *testing.T) {
+		_, err := DeriveEndpointFromPAT("empty_pat", config, client, []string{"https://someRandomUrl.com"})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Authentication error")
+	})
+
 	t.Run("Unauthorized PAT", func(t *testing.T) {
 		_, err := DeriveEndpointFromPAT("invalid_pat", config, client, []string{server.URL})
 		expectedError := "invalid hostname: api.invalid.hostname.io"
@@ -77,12 +89,6 @@ func TestDeriveEndpointFromPAT(t *testing.T) {
 		_, err := DeriveEndpointFromPAT("empty_pat", config, client, []string{server.URL})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid empty hostname")
-	})
-
-	t.Run("Bad URL", func(t *testing.T) {
-		_, err := DeriveEndpointFromPAT("empty_pat", config, client, []string{"https://someRandomUrl.com"})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Authentication error")
 	})
 }
 
