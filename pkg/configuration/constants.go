@@ -47,7 +47,6 @@ const (
 	PREVIEW_FEATURES_ENABLED       string = "internal_preview_features_enabled"   // boolean indicates if preview features shall be enabled
 	UNKNOWN_ARGS                   string = "internal_unknown_arguments"          // arguments unknown to the current application but maybe relevant for delegated application calls
 	IN_MEMORY_THRESHOLD_BYTES      string = "internal_in_memory_threshold_bytes"  // threshold to determine where to store workflow.Data
-	SNYK_REGION_URLS               string = "internal_snyk_region_urls"           // comma delimited string of snyk region URLs e.g. `https://api.snyk.io,https://api.eu.snyk.io'
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED    string = "internal_snyk_oauth_enabled"
