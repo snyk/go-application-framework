@@ -145,6 +145,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 		assert.NoError(t, actualError)
 		assert.Equal(t, len(expectedData), actualLength)
 	})
+
 	t.Run("handle writer error, not all written", func(t *testing.T) {
 		expectedError := fmt.Errorf("something went wrong")
 		expectedData := make([]byte, MAX_WRITE_RETRIES*2)
@@ -267,6 +268,65 @@ func TestAddDefaults(t *testing.T) {
 			name:     "username",
 			input:    fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", u.Username, u.Username),
 			expected: fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", redactMask, redactMask),
+		},
+		{
+			name: "username/password passed as an argument somewhere in the log",
+			input: `
+			{
+				_: [ 'test' ],
+				password: 'password-set',
+				'password=foobar': true,
+				'-u user',
+				'-p 1234',
+				u: true,
+				debug: true,
+				'log-level': 'trace',
+				"REGISTRY_USERNAME": "user",
+				"REGISTRY_PASSWORD": "foobar",
+				"API": "https://api.snyk.io",
+				"INTEGRATION_NAME": "CLI_V1_PLUGIN"
+			}`,
+			expected: `
+			{
+				_: [ 'test' ],
+				password: '***',
+				'password=***': true,
+				'-u ***',
+				'-p ***',
+				u: true,
+				debug: true,
+				'log-level': 'trace',
+				"REGISTRY_USERNAME": "***",
+				"REGISTRY_PASSWORD": "***",
+				"API": "https://api.snyk.io",
+				"INTEGRATION_NAME": "CLI_V1_PLUGIN"
+			}`,
+		},
+		{
+			name: "Various authentication request/response combinations",
+			input: `
+		{
+			"access_token": "super_secret_token",
+			"expires_in": 3599,
+			"refresh_expires_in": 15552000,
+			"refresh_token": "super_secret_refresh_token",
+			"scope": "org.read",
+			"token_type": "bearer"
+		}`,
+			expected: `
+		{
+			"access_token": "***",
+			"expires_in": 3599,
+			"refresh_expires_in": 15552000,
+			"refresh_token": "***",
+			"scope": "org.read",
+			"token_type": "bearer"
+		}`,
+		},
+		{
+			name:     "Various passed arguments",
+			input:    "Arguments:[container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --u=johndoe --p=hunter2 --log-level=trace -d]",
+			expected: "Arguments:[container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --u=*** --p=*** --log-level=trace -d]",
 		},
 	}
 	for _, test := range tests {
