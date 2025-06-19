@@ -90,12 +90,12 @@ func TestScrubbingWriter_WriteLevel(t *testing.T) {
 
 func TestScrubbingIoWriter(t *testing.T) {
 	scrubDict := map[string]scrubStruct{
-		"token":    {0, regexp.MustCompile("token")},
-		"password": {0, regexp.MustCompile("password")},
+		"token":  {0, regexp.MustCompile("token")},
+		"secret": {0, regexp.MustCompile("secret")},
 	}
 
 	pattern := "%s for my account, including my %s"
-	patternWithSecret := fmt.Sprintf(pattern, "password", "token")
+	patternWithSecret := fmt.Sprintf(pattern, "secret", "token")
 	patternWithMaskedSecret := fmt.Sprintf(pattern, redactMask, redactMask)
 
 	bufioWriter := bytes.NewBufferString("")
@@ -105,7 +105,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 	n, err := writer.Write([]byte(patternWithSecret))
 	require.NoError(t, err)
 	require.Equal(t, len(patternWithSecret), n)
-	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "password should be scrubbed")
+	require.Equal(t, patternWithMaskedSecret, bufioWriter.String(), "secret should be scrubbed")
 
 	// now remove term token from dict and test again
 	t.Run("now remove term token from dict and test again", func(t *testing.T) {
@@ -113,7 +113,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 		writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
 
 		writer.(ScrubbingLogWriter).RemoveTerm("token")
-		writer.(ScrubbingLogWriter).RemoveTerm("password")
+		writer.(ScrubbingLogWriter).RemoveTerm("secret")
 
 		n, err = writer.Write([]byte(patternWithSecret))
 		require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 		bufioWriter = bytes.NewBufferString("")
 		writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
 		writer.(ScrubbingLogWriter).AddTerm("token", 0)
-		writer.(ScrubbingLogWriter).AddTerm("password", 0)
+		writer.(ScrubbingLogWriter).AddTerm("secret", 0)
 
 		n, err = writer.Write([]byte(patternWithSecret))
 		require.NoError(t, err)
@@ -306,6 +306,7 @@ func TestAddDefaults(t *testing.T) {
 			name: "Various authentication request/response combinations",
 			input: `
 		{
+			"token": "super_secret_token",
 			"access_token": "super_secret_token",
 			"expires_in": 3599,
 			"refresh_expires_in": 15552000,
@@ -315,6 +316,7 @@ func TestAddDefaults(t *testing.T) {
 		}`,
 			expected: `
 		{
+			"token": "***",
 			"access_token": "***",
 			"expires_in": 3599,
 			"refresh_expires_in": 15552000,

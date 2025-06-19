@@ -182,7 +182,8 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
-	s = fmt.Sprintf(`("token":)"(%s)"`, charGroup)
+
+	s = fmt.Sprintf(`(token[\\="\s:]+)(%s)&?`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
@@ -195,13 +196,13 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// Scrub all kinds of "username/password" combinations sent to the log in various cases and with or without equal signs, etc.
-	s = `(?i)(\b\w*username\b|\-u)["'=:\s]+([\S\s]*?)[",'\s]`
+	s = `(?im)(\b\w*username\b|\-u)["'=:\s]+([\S\s]*?)["'\s]`
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = `(?i)(\b\w*password\b|\-p)["'=:\s]+([\S\s]*?)[",'\s]`
+	s = `(?im)(\b\w*password\b|\-p)["'=:\s]+([\S\s]*?)["'\s]`
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
