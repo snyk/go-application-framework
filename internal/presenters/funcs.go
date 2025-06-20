@@ -196,6 +196,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 
 		return result
 	}
+	defaultMap["hasPrefix"] = strings.HasPrefix
 	defaultMap["getQuotedString"] = func(input string) string {
 		return strconv.Quote(input)
 	}

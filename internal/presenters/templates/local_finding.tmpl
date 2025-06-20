@@ -87,7 +87,14 @@
         {{- "\n" }}
     {{- end }}
 
+{{- if .Links.targetid }}
+{{- if not (hasPrefix .Links.targetid "pkg:git") }}
+{{ tip "Some capabilities, including the ability to apply ignores, are unavailable. Retest the project with the --remote-repo-url parameter or from within a repository to enable full functionality."}}
 {{- end }}
+{{- end }}
+
+{{- end }}
+
 
 {{- end }} {{/* end main */}}
 
