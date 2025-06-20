@@ -2,6 +2,8 @@ package analytics
 
 import (
 	"bytes"
+	"github.com/snyk/go-application-framework/pkg/logging"
+
 	//nolint:gosec // insecure sha1 used for legacy identifier
 	"crypto/sha1"
 	"encoding/json"
@@ -98,22 +100,8 @@ type dataOutput struct {
 	Data analyticsOutput `json:"data"`
 }
 
-var (
-	// sensitiveFieldNames is a list of field names that should be sanitized.
-	// data sanitization is used to prevent sensitive data from being sent to the analytics server.
-	sensitiveFieldNames = []string{
-		"headers",
-		"user",
-		"passw",
-		"token",
-		"key",
-		"secret",
-	}
-)
-
 const (
-	sanitizeReplacementString string = "REDACTED"
-	apiEndpoint               string = "/v1/analytics/cli"
+	apiEndpoint string = "/v1/analytics/cli"
 )
 
 // New creates a new Analytics instance.
@@ -243,7 +231,7 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 		return nil, err
 	}
 
-	outputJson, err = SanitizeValuesByKey(sensitiveFieldNames, sanitizeReplacementString, outputJson)
+	outputJson, err = SanitizeValuesByKey(logging.SENSITIVE_FIELD_NAMES, logging.SANITIZE_REPLACEMENT_STRING, outputJson)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +240,7 @@ func (a *AnalyticsImpl) GetRequest() (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	outputJson, err = SanitizeUsername(user.Username, user.HomeDir, sanitizeReplacementString, outputJson)
+	outputJson, err = SanitizeUsername(user.Username, user.HomeDir, logging.SANITIZE_REPLACEMENT_STRING, outputJson)
 	if err != nil {
 		return nil, err
 	}

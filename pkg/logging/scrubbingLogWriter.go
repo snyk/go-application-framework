@@ -32,8 +32,18 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-const redactMask string = "***"
 const MAX_WRITE_RETRIES = 10
+const SANITIZE_REPLACEMENT_STRING string = "***"
+
+// SENSITIVE_FIELD_NAMES is a list of field names that should be sanitized.
+var SENSITIVE_FIELD_NAMES = []string{
+	"headers",
+	"user",
+	"passw",
+	"token",
+	"key",
+	"secret",
+}
 
 type ScrubbingLogWriter interface {
 	AddTerm(term string, matchGroup int)
@@ -147,37 +157,44 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		groupToRedact: 3,
 		regex:         regexp.MustCompile(s),
 	}
+
 	s = fmt.Sprintf(`([t|T]oken )(%s)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+
 	s = fmt.Sprintf(`([b|B]earer )(%s)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+
 	s = fmt.Sprintf(`([b|B]asic )(%s)`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+
 	s = fmt.Sprintf("(gh[ps])_(%s)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+
 	s = fmt.Sprintf("(github_pat_)(%s)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+
 	// github
 	s = fmt.Sprintf(`(access_token[\\="\s:]+)(%s)&?`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
+
 	s = fmt.Sprintf(`(refresh_token[\\="\s:]+)(%s)&?`, charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
@@ -196,56 +213,70 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
-	// JSON structure specific scrubbing
-	kw := []string{
-		"token", // Should cover "access_token", "refresh_token", etc.
-		"username",
-		"password",
-		"secret",
+	// Hide whatever is the current username
+	u, err := user.Current()
+	if err == nil {
+		s = fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(u.Username))
+		addTermToDict(s, 0, dict)
 	}
-	kws := strings.Join(kw, "|")
-	s = fmt.Sprintf(`(?i)"[^"]*(%s)[^"]*"\s*:\s*"([^"]*)"`, kws)
+
+	// The legacy CLI's snyk-config package prints the entire configuration in debug mode.
+	// It begins with some pseudo-JSON structure, which we can redact.
+	s = `(?s)_:\s*\[(?<everything_inside_hard_brackets>.*)\]`
+	dict[s] = scrubStruct{
+		groupToRedact: 1,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// JSON-formatted data, in general
+	kws := strings.Join(SENSITIVE_FIELD_NAMES, "|")
+	s = fmt.Sprintf(`(?i)"[^"]*(?<json_key>%s)[^"]*"\s*:\s*"(?<json_value>[^"]*)"`, kws)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// CLI argument mapping from the snyk-config debug logging
+	// I.e., if --argument=value is passed, it will be logged as { 'argument=value': true }
+	s = fmt.Sprintf(`(?im)(%s)[^=]*=(?P<value>.*)['"]`, kws)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// Same as above, only with short form
+	shorts := []string{"p", "u"}
+	shortForm := strings.Join(shorts, "")
+	s = fmt.Sprintf(`(?im)'[%s]=(?<value>.*)'`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
 	// Specific short-form scrubbing of the JSON-ish log structures
-	shorts := []string{"p", "u"}
-	shortForm := strings.Join(shorts, "")
-	s = fmt.Sprintf(`(?i)(\b[%s]\b)[,'":]+\s*(?:['"]([^'"]*)['"]|([^,'"\s]+))[,}]?`, shortForm)
+	// Appear in the snyk-config debug logging as various constellations of { 'u': 'john.doe', } with or without quotes,
+	// and values can contain spaces, double and/or single quotes.
+
+	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?:['"](?<short_form_value>.*)['"]|([^,'"\s]+))[,}]?`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	// CLI argument-style specific scrubbing
-	// For arguments with space separator (--password value)
-	longForm := strings.Join(kw, "|")
-	s = fmt.Sprintf(`(?i)(?:--?(?:%s),?[\w-]*|-?[%s])[ ]+(['"]?)([^',"\s]+)`, longForm, shortForm)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// For arguments with equals sign (--password=value)
-	s = fmt.Sprintf(`(?i)(?:--?(?:%s)[\w-]*|-?[%s])=(['"]?)([^'"\s]+)`, longForm, shortForm)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// For a specific output containing all arguments provided verbatim
-	s = fmt.Sprintf(`(?s)_:\s*\[(.*)\]`)
+	// CLI argument-style-specific scrubbing
+	// Many cases are already covered by the JSON scrubbing above, thus this might seem incomplete.
+	// Refer to the unit tests for the full set of covered cases.
+	s = fmt.Sprintf(`(?im)\-[%s][\s=](?<short_form_value>\S*)`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),
 	}
 
-	u, err := user.Current()
-	if err == nil {
-		s = fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(u.Username))
-		addTermToDict(s, 0, dict)
+	// Long-form, rest is covered by the JSON scrubbing above
+	s = fmt.Sprintf(`(?im)--(?<argument_key>[^=\s]*(?:%s)[^=\s]*)[\s=]['"]?(?<argument_value>\S*)['"]?`, kws)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
 	}
 
 	return dict
@@ -261,8 +292,8 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	s := string(p)
 
-	// Regular expressions can overlap each other, which leads to unpredictable results
-	// if the dictionary output is not sorted by some key, whichever it is.
+	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
+	// in a specific order every time. Since dictionaries are unordered, we sort the keys here.
 	keys := make([]string, 0, len(scrubDict))
 	for k := range scrubDict {
 		keys = append(keys, k)
@@ -275,7 +306,7 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 			if entry.groupToRedact >= len(match) || match[entry.groupToRedact] == "" {
 				continue
 			}
-			s = strings.Replace(s, match[entry.groupToRedact], redactMask, -1)
+			s = strings.Replace(s, match[entry.groupToRedact], SANITIZE_REPLACEMENT_STRING, -1)
 		}
 	}
 	return []byte(s)

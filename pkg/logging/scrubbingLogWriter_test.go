@@ -95,7 +95,7 @@ func TestScrubbingIoWriter(t *testing.T) {
 
 	pattern := "%s for my account, including my %s"
 	patternWithSecret := fmt.Sprintf(pattern, "secret", "token")
-	patternWithMaskedSecret := fmt.Sprintf(pattern, redactMask, redactMask)
+	patternWithMaskedSecret := fmt.Sprintf(pattern, SANITIZE_REPLACEMENT_STRING, SANITIZE_REPLACEMENT_STRING)
 
 	bufioWriter := bytes.NewBufferString("")
 	writer := NewScrubbingIoWriter(bufioWriter, scrubDict)
@@ -254,9 +254,24 @@ func TestAddDefaults(t *testing.T) {
 			expected: "refresh_token=***&expire",
 		},
 		{
-			name:     "token in json",
-			input:    `"token":"alittlesecret"`,
-			expected: `"token":"***"`,
+			name:     "access token in json",
+			input:    `{"access_token":"secret_access_token"}`,
+			expected: `{"access_token":"***"}`,
+		},
+		{
+			name:     "access token in json with multiple fields",
+			input:    `{"unrelated":"foobar", "access_token":"secret_access_token","expires_in":300,"issued_at":"2025-06-20T15:32:38.38731422Z"}`,
+			expected: `{"unrelated":"foobar", "access_token":"***","expires_in":300,"issued_at":"2025-06-20T15:32:38.38731422Z"}`,
+		},
+		{
+			name:     "any type of token in json",
+			input:    `{"something_token":"secret_access_token"}`,
+			expected: `{"something_token":"***"}`,
+		},
+		{
+			name:     "any type of token in json with postfix",
+			input:    `{"something_token_and_a_postfix":"secret_access_token"}`,
+			expected: `{"something_token_and_a_postfix":"***"}`,
 		},
 		{
 			name:     "SNYK_TOKEN",
@@ -266,96 +281,100 @@ func TestAddDefaults(t *testing.T) {
 		{
 			name:     "username",
 			input:    fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", u.Username, u.Username),
-			expected: fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", redactMask, redactMask),
+			expected: fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", SANITIZE_REPLACEMENT_STRING, SANITIZE_REPLACEMENT_STRING),
 		},
 		{
-			name: "JSON-ish argument structure with verbatim output",
+			name: "JSON-ish argument structure with verbatim output from snyk-config",
 			input: `_: [
 						'gcr.io/distroless/nodejs:latest',
 						'john.doe',
-						'heste123',
+						'hunter2',
 						[other things]
 				  	],`,
 			expected: `_: [***],`,
 		},
 		{
-			name: "username and password passed as an argument somewhere in the log with a JSON-ish structure",
-			input: `
-			{
-				_: [ 'test' ],
+			name: "cli argument mapping from snyk-config debug logging",
+			input: `{
+				username: 'username-set',
+				'username=john.doe': true,
+				password: 'password-set',
 				'password=foobar': true,
-				'-u': 'john.doe',
+				'u=foobar': true,
+				'password-with-double-quotes=foo"bar': true,
+				"password-with-single-quotes=foo'bar": true,
+				'password-with-comma=foo,bar': true,
+				'my-password-with-spaces=foo bar': true,
+				'my-password-thats-solid=solid': true,
+				'p=foobar': true,
+				debug: true,
+				'log-level': 'trace'
+			}`,
+			expected: `{
+				username: 'username-set',
+				'username=***': true,
+				password: 'password-set',
+				'password=***': true,
+				'u=***': true,
+				'password-with-double-quotes=***': true,
+				"password-with-single-quotes=***": true,
+				'password-with-comma=***': true,
+				'my-password-with-spaces=***': true,
+				'my-password-thats-***=***': true,
+				'p=***': true,
+				debug: true,
+				'log-level': 'trace'
+			}`,
+		},
+		{
+			name: "username and password constellations passed in a JSON-ish structure with verbatim output from snyk-config",
+			input: `{
+				unrelated: dont-scrub,
+				"unrelated": "dont-scrub",
+				'unrelated': 'dont-scrub',
+				unrelated: dont-scrub,
 				'-p': 'hunter2',
 				'u': 'john.doe',
 				'p': 'hunter2',
+				'p': 'hun"ter2',
+				'p': 'hun ter2',
+				'p': 'hun,ter2',
 				"u": "john.doe",
+				"u": "john'doe",
+				"u": "john,doe",
+				"u": "john doe",
 				"p": "hunter2",
 				u: 'john.doe',
 				p: 'hunter2',
-				debug: true,
-				'log-level': 'trace',
 				"REGISTRY_USERNAME": "user",
 				"REGISTRY_PASSWORD": "foobar",
-				"API": "https://api.snyk.io",
-				"INTEGRATION_NAME": "CLI_V1_PLUGIN"
+				"MORE_UNRELATED": "DONT_SCRUB"
 			}`,
-			expected: `
-			{
-				_: [***],
-				'password=***': true,
-				'-u': '***',
+			expected: `{
+				unrelated: dont-scrub,
+				"unrelated": "dont-scrub",
+				'unrelated': 'dont-scrub',
+				unrelated: dont-scrub,
 				'-p': '***',
 				'u': '***',
 				'p': '***',
+				'p': '***',
+				'p': '***',
+				'p': '***',
+				"u": "***",
+				"u": "***",
+				"u": "***",
 				"u": "***",
 				"p": "***",
 				u: '***',
 				p: '***',
-				debug: true,
-				'log-level': 'trace',
 				"REGISTRY_USERNAME": "***",
 				"REGISTRY_PASSWORD": "***",
-				"API": "https://api.snyk.io",
-				"INTEGRATION_NAME": "CLI_V1_PLUGIN"
+				"MORE_UNRELATED": "DONT_SCRUB"
 			}`,
 		},
 		{
-			name: "Scrubbing in JSON structures",
-			input: `{
-			"normal_key": "some_value",
-			"username": "john.doe",
-			"password": "hunter2",
-			"ENV_VAR_USERNAME": "john.doe",
-			"ENV_VAR_PASSWORD": "hunter2",
-			"u": "john.doe",
-			"p": "hunter2",
-			"token": "hunter2",
-			"access_token": "hunter2",
-			\"escaped_access_token\": \"hunter2\",
-			"refresh_token": "hunter2",
-			"a_token_with_a_postfix": "hunter2",
-			"a_secret_with_secret_words_in_the_value": "this-is-a-secret-with-the-word-password-in-it",
-			"unrelated_json_key": "something-that-should-not-be-scrubbed",
-		}`,
-			expected: `{
-			"normal_key": "some_value",
-			"username": "***",
-			"password": "***",
-			"ENV_VAR_USERNAME": "***",
-			"ENV_VAR_PASSWORD": "***",
-			"u": "***",
-			"p": "***",
-			"token": "***",
-			"access_token": "***",
-			\"escaped_access_token\": \"***\",
-			"refresh_token": "***",
-			"a_token_with_a_postfix": "***",
-			"a_secret_with_secret_words_in_the_value": "***",
-			"unrelated_json_key": "something-that-should-not-be-scrubbed",
-		}`,
-		},
-		{
-			name: "Various passed arguments",
+			name: "CLI arguments logged to the debug logs (multi-line)",
 			input: `Arguments:[
 			container test gcr.io/distroless/nodejs:latest
 			--platform=linux/arm64
@@ -366,8 +385,11 @@ func TestAddDefaults(t *testing.T) {
 			-p hunter2
 			--username john.doe
 			--password hunter2
-			--a-password-with-secret-in-the-value='super-secret-password'
-			--a-super-secret-password='hunter2'
+			--a-password-with-secret-in-the-value 'super-secret-password'
+			--a-password-with-an-equals-sign='hunter2'
+			--a-password-with-spaces='hun ter2'
+			--a-password-with-double-quotes='hun"ter2'
+			--a-password-with-single-quotes="hun'ter2"
 			--token "token"
 			--password-with-no-value
 			--another-unrelated-at-the-end
@@ -385,9 +407,12 @@ func TestAddDefaults(t *testing.T) {
 			-p ***
 			--username ***
 			--password ***
-			--a-password-with-secret-in-the-value='***'
-			--a-***='***'
-			--*** "***"
+			--a-password-with-secret-in-the-value '***
+			--a-password-with-an-equals-sign=***
+			--a-password-with-spaces=***
+			--a-password-with-double-quotes=***
+			--a-password-with-single-quotes=***
+			--token "***
 			--password-with-no-value
 			--another-unrelated-at-the-end
 			--log-level=trace
@@ -396,14 +421,24 @@ func TestAddDefaults(t *testing.T) {
 		]`,
 		},
 		{
-			name:     "Same as above but comma-separated (short form)",
-			input:    `container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, -u, john.doe, -p, heste123, -d, --log-level=trace`,
-			expected: "container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, -u, ***, -p, ***, -d, --log-level=trace",
+			name:     "CLI arguments logged to the debug logs (same line, short-form, no equals signs)",
+			input:    `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u john.doe -p hunter2 --log-level=trace`,
+			expected: `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u *** -p *** --log-level=trace`,
 		},
 		{
-			name:     "Same as above but comma-separated (long form)",
-			input:    `container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, --username, john.doe, --password, heste123, -d, --log-level=trace`,
-			expected: "container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, --username, ***, --password, ***, -d, --log-level=trace",
+			name:     "CLI arguments logged to the debug logs (same line, short-form, with equals signs)",
+			input:    `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u=john.doe -p=hunter2 --log-level=trace`,
+			expected: `container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --unrelated-argument --unrelated-argument-with-value "value" --unrelated-argument-with-equals-sign="value" -u=*** -p=*** --log-level=trace`,
+		},
+		{
+			name:     "CLI arguments logged to the debug logs (same line, long-form, no equals signs)",
+			input:    `container test ubuntu:latest --username john.doe --password solidpassword -d`,
+			expected: `container test ubuntu:latest --username *** --password *** -d`,
+		},
+		{
+			name:     "CLI arguments logged to the debug logs (same line, long-form, with equals signs)",
+			input:    `container test ubuntu:latest --username=john.doe --password=solidpassword -d`,
+			expected: `container test ubuntu:latest --username=*** --password=*** -d`,
 		},
 	}
 	for _, test := range tests {
