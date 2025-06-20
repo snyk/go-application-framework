@@ -19,16 +19,15 @@ package logging
 import (
 	"bytes"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/stretchr/testify/require"
 	"os/user"
 	"regexp"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type mockWriter struct {
@@ -270,15 +269,29 @@ func TestAddDefaults(t *testing.T) {
 			expected: fmt.Sprintf("User %s.%s is repeatedly mentioned, but not partially.", redactMask, redactMask),
 		},
 		{
-			name: "username/password passed as an argument somewhere in the log",
+			name: "JSON-ish argument structure with verbatim output",
+			input: `_: [
+						'gcr.io/distroless/nodejs:latest',
+						'john.doe',
+						'heste123',
+						[other things]
+				  	],`,
+			expected: `_: [***],`,
+		},
+		{
+			name: "username and password passed as an argument somewhere in the log with a JSON-ish structure",
 			input: `
 			{
 				_: [ 'test' ],
-				password: 'password-set',
 				'password=foobar': true,
-				'-u user',
-				'-p 1234',
-				u: true,
+				'-u': 'john.doe',
+				'-p': 'hunter2',
+				'u': 'john.doe',
+				'p': 'hunter2',
+				"u": "john.doe",
+				"p": "hunter2",
+				u: 'john.doe',
+				p: 'hunter2',
 				debug: true,
 				'log-level': 'trace',
 				"REGISTRY_USERNAME": "user",
@@ -288,12 +301,16 @@ func TestAddDefaults(t *testing.T) {
 			}`,
 			expected: `
 			{
-				_: [ 'test' ],
-				password: '***',
+				_: [***],
 				'password=***': true,
-				'-u ***',
-				'-p ***',
-				u: true,
+				'-u': '***',
+				'-p': '***',
+				'u': '***',
+				'p': '***',
+				"u": "***",
+				"p": "***",
+				u: '***',
+				p: '***',
 				debug: true,
 				'log-level': 'trace',
 				"REGISTRY_USERNAME": "***",
@@ -303,32 +320,90 @@ func TestAddDefaults(t *testing.T) {
 			}`,
 		},
 		{
-			name: "Various authentication request/response combinations",
-			input: `
-		{
-			"token": "super_secret_token",
-			"access_token": "super_secret_token",
-			"expires_in": 3599,
-			"refresh_expires_in": 15552000,
-			"refresh_token": "super_secret_refresh_token",
-			"scope": "org.read",
-			"token_type": "bearer"
+			name: "Scrubbing in JSON structures",
+			input: `{
+			"normal_key": "some_value",
+			"username": "john.doe",
+			"password": "hunter2",
+			"ENV_VAR_USERNAME": "john.doe",
+			"ENV_VAR_PASSWORD": "hunter2",
+			"u": "john.doe",
+			"p": "hunter2",
+			"token": "hunter2",
+			"access_token": "hunter2",
+			\"escaped_access_token\": \"hunter2\",
+			"refresh_token": "hunter2",
+			"a_token_with_a_postfix": "hunter2",
+			"a_secret_with_secret_words_in_the_value": "this-is-a-secret-with-the-word-password-in-it",
+			"unrelated_json_key": "something-that-should-not-be-scrubbed",
 		}`,
-			expected: `
-		{
+			expected: `{
+			"normal_key": "some_value",
+			"username": "***",
+			"password": "***",
+			"ENV_VAR_USERNAME": "***",
+			"ENV_VAR_PASSWORD": "***",
+			"u": "***",
+			"p": "***",
 			"token": "***",
 			"access_token": "***",
-			"expires_in": 3599,
-			"refresh_expires_in": 15552000,
+			\"escaped_access_token\": \"***\",
 			"refresh_token": "***",
-			"scope": "org.read",
-			"token_type": "bearer"
+			"a_token_with_a_postfix": "***",
+			"a_secret_with_secret_words_in_the_value": "***",
+			"unrelated_json_key": "something-that-should-not-be-scrubbed",
 		}`,
 		},
 		{
-			name:     "Various passed arguments",
-			input:    "Arguments:[container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --u=johndoe --p=hunter2 --log-level=trace -d]",
-			expected: "Arguments:[container test gcr.io/distroless/nodejs:latest --platform=linux/arm64 --u=*** --p=*** --log-level=trace -d]",
+			name: "Various passed arguments",
+			input: `Arguments:[
+			container test gcr.io/distroless/nodejs:latest
+			--platform=linux/arm64
+			--unrelated-argument
+			--unrelated-argument-with-value "value"
+			--unrelated-argument-with-equals-sign="value"
+			-u john.doe
+			-p hunter2
+			--username john.doe
+			--password hunter2
+			--a-password-with-secret-in-the-value='super-secret-password'
+			--a-super-secret-password='hunter2'
+			--token "token"
+			--password-with-no-value
+			--another-unrelated-at-the-end
+			--log-level=trace
+			-d
+			--debug
+		]`,
+			expected: `Arguments:[
+			container test gcr.io/distroless/nodejs:latest
+			--platform=linux/arm64
+			--unrelated-argument
+			--unrelated-argument-with-value "value"
+			--unrelated-argument-with-equals-sign="value"
+			-u ***
+			-p ***
+			--username ***
+			--password ***
+			--a-password-with-secret-in-the-value='***'
+			--a-***='***'
+			--*** "***"
+			--password-with-no-value
+			--another-unrelated-at-the-end
+			--log-level=trace
+			-d
+			--debug
+		]`,
+		},
+		{
+			name:     "Same as above but comma-separated (short form)",
+			input:    `container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, -u, john.doe, -p, heste123, -d, --log-level=trace`,
+			expected: "container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, -u, ***, -p, ***, -d, --log-level=trace",
+		},
+		{
+			name:     "Same as above but comma-separated (long form)",
+			input:    `container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, --username, john.doe, --password, heste123, -d, --log-level=trace`,
+			expected: "container, test, gcr.io/distroless/nodejs:latest, --platform=linux/arm64, --username, ***, --password, ***, -d, --log-level=trace",
 		},
 	}
 	for _, test := range tests {

@@ -21,6 +21,7 @@ import (
 	"io"
 	"os/user"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -195,16 +196,49 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
-	// Scrub all kinds of "username/password" combinations sent to the log in various cases and with or without equal signs, etc.
-	s = `(?im)(\b\w*username\b|\-u|'u|"u)["'=:\s]+([\S\s]*?)["'\s]`
+	// JSON structure specific scrubbing
+	kw := []string{
+		"token", // Should cover "access_token", "refresh_token", etc.
+		"username",
+		"password",
+		"secret",
+	}
+	kws := strings.Join(kw, "|")
+	s = fmt.Sprintf(`(?i)"[^"]*(%s)[^"]*"\s*:\s*"([^"]*)"`, kws)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
-	s = `(?im)(\b\w*password\b|\-p|'p|"p)["'=:\s]+([\S\s]*?)["'\s]`
+	// Specific short-form scrubbing of the JSON-ish log structures
+	shorts := []string{"p", "u"}
+	shortForm := strings.Join(shorts, "")
+	s = fmt.Sprintf(`(?i)(\b[%s]\b)[,'":]+\s*(?:['"]([^'"]*)['"]|([^,'"\s]+))[,}]?`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// CLI argument-style specific scrubbing
+	// For arguments with space separator (--password value)
+	longForm := strings.Join(kw, "|")
+	s = fmt.Sprintf(`(?i)(?:--?(?:%s),?[\w-]*|-?[%s])[ ]+(['"]?)([^',"\s]+)`, longForm, shortForm)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// For arguments with equals sign (--password=value)
+	s = fmt.Sprintf(`(?i)(?:--?(?:%s)[\w-]*|-?[%s])=(['"]?)([^'"\s]+)`, longForm, shortForm)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// For a specific output containing all arguments provided verbatim
+	s = fmt.Sprintf(`(?s)_:\s*\[(.*)\]`)
+	dict[s] = scrubStruct{
+		groupToRedact: 1,
 		regex:         regexp.MustCompile(s),
 	}
 
@@ -226,13 +260,21 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 
 func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	s := string(p)
-	for _, entry := range scrubDict {
+
+	// Regular expressions can overlap each other, which leads to unpredictable results
+	// if the dictionary output is not sorted by some key, whichever it is.
+	keys := make([]string, 0, len(scrubDict))
+	for k := range scrubDict {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		entry := scrubDict[key]
 		matches := entry.regex.FindAllStringSubmatch(s, -1)
 		for _, match := range matches {
-			if match[entry.groupToRedact] == "" {
+			if entry.groupToRedact >= len(match) || match[entry.groupToRedact] == "" {
 				continue
 			}
-
 			s = strings.Replace(s, match[entry.groupToRedact], redactMask, -1)
 		}
 	}
