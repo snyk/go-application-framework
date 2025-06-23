@@ -50,17 +50,17 @@ func (mr *MockUserInterfaceMockRecorder) Input(prompt interface{}) *gomock.Call 
 }
 
 // NewProgressBar mocks base method.
-func (m *MockUserInterface) NewProgressBar() ui.ProgressBar {
+func (m *MockUserInterface) NewProgressBar(title string) ui.ProgressBar {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewProgressBar")
+	ret := m.ctrl.Call(m, "NewProgressBar", title)
 	ret0, _ := ret[0].(ui.ProgressBar)
 	return ret0
 }
 
 // NewProgressBar indicates an expected call of NewProgressBar.
-func (mr *MockUserInterfaceMockRecorder) NewProgressBar() *gomock.Call {
+func (mr *MockUserInterfaceMockRecorder) NewProgressBar(title interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewProgressBar", reflect.TypeOf((*MockUserInterface)(nil).NewProgressBar))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewProgressBar", reflect.TypeOf((*MockUserInterface)(nil).NewProgressBar), title)
 }
 
 // Output mocks base method.

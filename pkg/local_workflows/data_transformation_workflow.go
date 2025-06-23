@@ -40,8 +40,7 @@ func dataTransformationEntryPoint(invocationCtx workflow.InvocationContext, inpu
 		return output, nil
 	}
 
-	progress := invocationCtx.GetUserInterface().NewProgressBar()
-	progress.SetTitle("Transforming data")
+	progress := invocationCtx.GetUserInterface().NewProgressBar("Transforming data")
 	progressError := progress.UpdateProgress(ui.InfiniteProgress)
 	if progressError != nil {
 		logger.Err(progressError).Msgf("Error when setting progress")

@@ -54,29 +54,38 @@ const (
 
 type OptionalAnalysisFunctions func(string, func() *http.Client, *zerolog.Logger, configuration.Configuration, ui.UserInterface) (*sarif.SarifResponse, *scan.ResultMetaData, error)
 
-type ProgressTrackerFactory struct {
+func NewTrackerFactory(userInterface ui.UserInterface, logger *zerolog.Logger) scan.TrackerFactory {
+	return progressTrackerFactory{
+		userInterface: userInterface,
+		logger:        logger,
+	}
+}
+
+type progressTrackerFactory struct {
 	userInterface ui.UserInterface
 	logger        *zerolog.Logger
 }
 
-func (p ProgressTrackerFactory) GenerateTracker() scan.Tracker {
-	return &ProgressTrackerAdapter{
-		bar:    p.userInterface.NewProgressBar(),
-		logger: p.logger,
+func (p progressTrackerFactory) GenerateTracker() scan.Tracker {
+	return &progressTrackerAdapter{
+		userInterface: p.userInterface,
+		logger:        p.logger,
 	}
 }
 
-type ProgressTrackerAdapter struct {
-	bar    ui.ProgressBar
-	logger *zerolog.Logger
+type progressTrackerAdapter struct {
+	userInterface ui.UserInterface
+	logger        *zerolog.Logger
+	bar           ui.ProgressBar
 }
 
-func (p ProgressTrackerAdapter) Begin(title, message string) {
-	if len(message) > 0 {
-		p.bar.SetTitle(title + " - " + message)
-	} else {
-		p.bar.SetTitle(title)
+func (p *progressTrackerAdapter) Begin(title, message string) {
+	if p.bar != nil {
+		p.logger.Error().Msg("progress tracker already begun")
+		return
 	}
+	p.bar = p.userInterface.NewProgressBar(title)
+	p.bar.SetMessage(message)
 
 	err := p.bar.UpdateProgress(ui.InfiniteProgress)
 	if err != nil {
@@ -84,8 +93,11 @@ func (p ProgressTrackerAdapter) Begin(title, message string) {
 	}
 }
 
-func (p ProgressTrackerAdapter) End(message string) {
-	p.bar.SetTitle(message)
+func (p *progressTrackerAdapter) End(message string) {
+	if p.bar == nil {
+		return
+	}
+	p.bar.SetMessage(message)
 	err := p.bar.Clear()
 	if err != nil {
 		p.logger.Err(err).Msg("Failed to clear progress")
@@ -211,10 +223,7 @@ func defaultAnalyzeFunction(path string, httpClientFunc func() *http.Client, log
 		localConfiguration: config,
 	}
 
-	progressFactory := ProgressTrackerFactory{
-		userInterface: userInterface,
-		logger:        logger,
-	}
+	progressFactory := NewTrackerFactory(userInterface, logger)
 
 	analysisOptions := []codeclient.AnalysisOption{}
 
