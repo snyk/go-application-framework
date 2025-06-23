@@ -570,9 +570,9 @@ components:
         - $ref: '#/components/schemas/types.CodeSastFingerprintV1'
         - $ref: '#/components/schemas/types.ScaProblemFingerprint'
         - $ref: '#/components/schemas/types.IdentityFingerprint'
-        - $ref: '#/components/schemas/types.FingerprintProjectV1'
-        - $ref: '#/components/schemas/types.FingerprintRepositoryV1'
-        - $ref: '#/components/schemas/types.FingerprintAssetV1'
+        - $ref: '#/components/schemas/types.CodeSastFingerprintProjectV1'
+        - $ref: '#/components/schemas/types.CodeSastFingerprintRepositoryV1'
+        - $ref: '#/components/schemas/types.CodeSastFingerprintAssetV1'
       discriminator:
         propertyName: scheme
         mapping:
@@ -580,9 +580,9 @@ components:
           code-sast-v1: '#/components/schemas/types.CodeSastFingerprintV1'
           sca-problem: '#/components/schemas/types.ScaProblemFingerprint'
           identity: '#/components/schemas/types.IdentityFingerprint'
-          snyk/org/project/finding/v1: '#/components/schemas/types.FingerprintProjectV1'
-          snyk/org/repository/finding/v1: '#/components/schemas/types.FingerprintRepositoryV1'
-          snyk/asset/finding/v1: '#/components/schemas/types.FingerprintAssetV1'
+          snyk/org/project/finding/v1: '#/components/schemas/types.CodeSastFingerprintProjectV1'
+          snyk/org/repository/finding/v1: '#/components/schemas/types.CodeSastFingerprintRepositoryV1'
+          snyk/asset/finding/v1: '#/components/schemas/types.CodeSastFingerprintAssetV1'
     LinkProperty:
       oneOf:
         - $ref: '#/components/schemas/io.snyk.api.common.LinkString'
@@ -816,6 +816,42 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/types.ThreadFlow'
+    types.CodeSastFingerprintAssetV1:
+      type: object
+      required:
+        - scheme
+        - value
+      properties:
+        scheme:
+          type: string
+          enum:
+            - snyk/asset/finding/v1
+        value:
+          type: string
+    types.CodeSastFingerprintProjectV1:
+      type: object
+      required:
+        - scheme
+        - value
+      properties:
+        scheme:
+          type: string
+          enum:
+            - snyk/org/project/finding/v1
+        value:
+          type: string
+    types.CodeSastFingerprintRepositoryV1:
+      type: object
+      required:
+        - scheme
+        - value
+      properties:
+        scheme:
+          type: string
+          enum:
+            - snyk/org/repository/finding/v1
+        value:
+          type: string
     types.CodeSastFingerprintV0:
       type: object
       required:
@@ -1620,42 +1656,6 @@ components:
           items:
             $ref: '#/components/schemas/types.Coverage'
       description: Summary statistics about a Test's Findings.
-    types.FingerprintAssetV1:
-      type: object
-      required:
-        - scheme
-        - value
-      properties:
-        scheme:
-          type: string
-          enum:
-            - snyk/asset/finding/v1
-        value:
-          type: string
-    types.FingerprintProjectV1:
-      type: object
-      required:
-        - scheme
-        - value
-      properties:
-        scheme:
-          type: string
-          enum:
-            - snyk/org/project/finding/v1
-        value:
-          type: string
-    types.FingerprintRepositoryV1:
-      type: object
-      required:
-        - scheme
-        - value
-      properties:
-        scheme:
-          type: string
-          enum:
-            - snyk/org/repository/finding/v1
-        value:
-          type: string
     types.GitCommit:
       type: string
       example: 23ee663c96889a1ce6f62217adf4dea2bea1b09e
@@ -1992,14 +1992,16 @@ components:
     types.Suppression:
       type: object
       required:
-        - kind
+        - status
       properties:
-        kind:
+        id:
+          type: string
+        status:
           type: string
           enum:
-            - ignored
-            - pending_ignore_approval
-            - other
+            - accepted
+            - underReview
+            - rejected
         justification:
           type: string
         details:
@@ -2008,7 +2010,6 @@ components:
     types.SuppressionDetails:
       type: object
       required:
-        - expiration
         - category
         - ignoredOn
         - ignoredBy

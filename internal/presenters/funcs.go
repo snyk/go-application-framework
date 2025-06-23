@@ -82,6 +82,14 @@ func getFieldValueFrom(data interface{}, path string) string {
 	return value.String()
 }
 
+// fieldEquals checks if a field value equals a given expected value
+func fieldEquals(path string, expectedValue any) func(obj any) bool {
+	return func(obj any) bool {
+		actualValue := getFieldValueFrom(obj, path)
+		return actualValue == expectedValue
+	}
+}
+
 func getFromConfig(config configuration.Configuration) func(key string) string {
 	return func(key string) string {
 		if config.GetBool(key) {
@@ -131,6 +139,7 @@ func sortFindingBy(path string, order []string, findings []local_models.FindingR
 	return result
 }
 
+// filteredFinding takes a filter function and applies it to a list of findings, it will return findings that match the filter function
 func filterFinding(cmpFunc func(any) bool, findings []local_models.FindingResource) (filteredFindings []local_models.FindingResource) {
 	for _, finding := range findings {
 		if cmpFunc(finding) {
@@ -139,6 +148,88 @@ func filterFinding(cmpFunc func(any) bool, findings []local_models.FindingResour
 	}
 
 	return filteredFindings
+}
+
+// filteredFindingsOr applies multiple filter functions to findings, any findings that match any filter will be added to the filteredFindings,
+// maintaining the original order.
+func filterFindingsOr(findings []local_models.FindingResource, cmpFuncs ...func(any) bool) (filteredFindings []local_models.FindingResource) {
+	filteredFindings = make([]local_models.FindingResource, 0)
+	addedFindings := make(map[string]bool)
+
+	for _, finding := range findings {
+		var fingerprintValue string
+		findingAlreadyAdded := false
+
+		// would be nice to use the finding ID, but this is not being sent currently
+		// e.g. `filteredFindingsMap[finding.Id.String()] = finding`
+		// so we use the "snyk/asset/finding/v1" fingerprint, which may limit the effective scope of this method
+		for _, fpUnion := range finding.Attributes.Fingerprint {
+			actualFpInterface := getUnionValue(fpUnion)
+
+			if assetFp, ok := actualFpInterface.(local_models.TypesCodeSastFingerprintAssetV1); ok {
+				fingerprintValue = assetFp.Value
+				findingAlreadyAdded = true
+				break
+			}
+		}
+
+		// avoid adding duplicate findings
+		if findingAlreadyAdded && fingerprintValue != "" && addedFindings[fingerprintValue] {
+			continue
+		}
+
+		// apply filters
+		for _, cmpFunc := range cmpFuncs {
+			// add filtered findings
+			if cmpFunc(finding) {
+				filteredFindings = append(filteredFindings, finding)
+				if findingAlreadyAdded && fingerprintValue != "" {
+					addedFindings[fingerprintValue] = true
+				}
+				break
+			}
+		}
+	}
+
+	return filteredFindings
+}
+
+func isOpenFinding() func(obj any) bool {
+	return func(obj any) bool {
+		finding, ok := obj.(local_models.FindingResource)
+		if !ok {
+			return false
+		}
+		return finding.Attributes.Suppression == nil || finding.Attributes.Suppression.Status == local_models.Rejected
+	}
+}
+
+func isPendingFinding() func(obj any) bool {
+	return func(obj any) bool {
+		finding, ok := obj.(local_models.FindingResource)
+		if !ok {
+			return false
+		}
+		return finding.Attributes.Suppression != nil && finding.Attributes.Suppression.Status == local_models.UnderReview
+	}
+}
+
+func isIgnoredFinding() func(obj any) bool {
+	return func(obj any) bool {
+		finding, ok := obj.(local_models.FindingResource)
+		if !ok {
+			return false
+		}
+		return finding.Attributes.Suppression != nil && finding.Attributes.Suppression.Status == local_models.Accepted
+	}
+}
+
+func hasSuppression(finding local_models.FindingResource) bool {
+	if finding.Attributes.Suppression == nil {
+		return false
+	}
+
+	return finding.Attributes.Suppression.Status != local_models.Rejected
 }
 
 func getSarifTemplateFuncMap() template.FuncMap {
@@ -162,7 +253,25 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["divider"] = RenderDivider
 	fnMap["title"] = RenderTitle
 	fnMap["renderToString"] = renderTemplateToString(tmpl)
+	fnMap["isOpenFinding"] = isOpenFinding
+	fnMap["isPendingFinding"] = isPendingFinding
+	fnMap["isIgnoredFinding"] = isIgnoredFinding
+	fnMap["hasSuppression"] = hasSuppression
 	return fnMap
+}
+
+func getUnionValue(input interface{}) interface{} {
+	u, ok := input.(local_models.UnionInterface)
+	if !ok {
+		return ""
+	}
+
+	result, err := u.ValueByDiscriminator()
+	if err != nil {
+		return ""
+	}
+
+	return result
 }
 
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {
@@ -171,7 +280,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getValueFromConfig"] = getFromConfig(config)
 	defaultMap["sortFindingBy"] = sortFindingBy
 	defaultMap["getFieldValueFrom"] = getFieldValueFrom
+	defaultMap["fieldEquals"] = fieldEquals
 	defaultMap["filterFinding"] = filterFinding
+	defaultMap["filterFindingsOr"] = filterFindingsOr
 	defaultMap["hasField"] = hasField
 	defaultMap["notHasField"] = func(path string) func(obj any) bool {
 		return func(obj any) bool {
@@ -183,19 +294,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["reverse"] = reverse
 	defaultMap["join"] = strings.Join
 	defaultMap["formatDatetime"] = formatDatetime
-	defaultMap["getUnionValue"] = func(input interface{}) interface{} {
-		u, ok := input.(local_models.UnionInterface)
-		if !ok {
-			return ""
-		}
-
-		result, err := u.ValueByDiscriminator()
-		if err != nil {
-			return ""
-		}
-
-		return result
-	}
+	defaultMap["getUnionValue"] = getUnionValue
 	defaultMap["hasPrefix"] = strings.HasPrefix
 	defaultMap["getQuotedString"] = func(input string) string {
 		return strconv.Quote(input)

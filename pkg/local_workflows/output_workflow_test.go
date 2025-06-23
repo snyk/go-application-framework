@@ -385,8 +385,9 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should print valid sarif json output", func(t *testing.T) {
-		testfile := "testdata/sarif-snyk-goof-ignores.json"
-		localFinding, err := sarifToLocalFinding(t, testfile, "/mypath")
+		expectedSarif := "testdata/sarif-snyk-goof-ignores.json"
+		apiResponse := "testdata/sarif-snyk-goof-ignores.api.response.json"
+		localFinding, err := sarifToLocalFinding(t, apiResponse, "/mypath")
 		assert.Nil(t, err)
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
@@ -410,7 +411,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// assert
 		validateSarifData(t, writer.Bytes())
 
-		expectedSarifFile, err := os.Open(testfile)
+		expectedSarifFile, err := os.Open(expectedSarif)
 		assert.NoError(t, err)
 
 		expectedSarifBytes, err := io.ReadAll(expectedSarifFile)
