@@ -214,7 +214,7 @@ func Test_InstrumentationCollector(t *testing.T) {
 
 		mockExtension := map[string]interface{}{
 			"strings":  "hello world",
-			"password": "REDACTED",
+			"password": "***",
 		}
 
 		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
