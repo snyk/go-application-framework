@@ -3,6 +3,7 @@ package analytics
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"io"
 	"net/http"
 	"os/user"
@@ -74,7 +75,7 @@ func Test_Basic(t *testing.T) {
 			body, err := io.ReadAll(request.Body)
 			assert.Nil(t, err)
 			// expect no CLI args to be sent to analytics (CLI-586)
-			assert.Equal(t, 0, strings.Count(string(body), sanitizeReplacementString))
+			assert.Equal(t, 0, strings.Count(string(body), logging.SANITIZE_REPLACEMENT_STRING))
 
 			var requestBody dataOutput
 			err = json.Unmarshal(body, &requestBody)
@@ -118,11 +119,11 @@ func Test_SanitizeValuesByKey(t *testing.T) {
 	}
 
 	// test input
-	filter := sensitiveFieldNames
+	filter := logging.SENSITIVE_FIELD_NAMES
 	input, err := json.Marshal(inputStruct)
 	assert.NoError(t, err)
 
-	replacement := sanitizeReplacementString
+	replacement := logging.SANITIZE_REPLACEMENT_STRING
 
 	fmt.Println("Before: " + string(input))
 
@@ -171,7 +172,7 @@ func Test_SanitizeUsername(t *testing.T) {
 	// 2. with domain name
 	// 3. user name and path are different
 	// 4. current OS values
-	replacement := "REDACTED"
+	replacement := "***"
 	inputData := []input{
 		{
 			userName:     "some.user",

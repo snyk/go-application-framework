@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/logging"
 	"os/user"
 	"time"
 
@@ -180,7 +181,7 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Lo
 	}
 
 	var sanitized []byte
-	sanitized, err = SanitizeValuesByKey(sensitiveFieldNames, sanitizeReplacementString, extension)
+	sanitized, err = SanitizeValuesByKey(logging.SENSITIVE_FIELD_NAMES, logging.SANITIZE_REPLACEMENT_STRING, extension)
 	if err != nil {
 		logger.Printf("failed to sanitize extension, removing object from analytics payload as sanitzation was not possible: %v", err)
 		return result
@@ -192,7 +193,7 @@ func (ic *instrumentationCollectorImpl) sanitizeExtensionData(logger *zerolog.Lo
 		return result
 	}
 
-	sanitized, err = SanitizeUsername(u.Username, u.HomeDir, sanitizeReplacementString, sanitized)
+	sanitized, err = SanitizeUsername(u.Username, u.HomeDir, logging.SANITIZE_REPLACEMENT_STRING, sanitized)
 	if err != nil {
 		logger.Printf("failed to sanitize user information in extension payload, removing object from analytics payload as sanitzation was not possible: %v", err)
 		return result
