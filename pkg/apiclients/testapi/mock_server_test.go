@@ -41,11 +41,18 @@ type JobPollResponseConfig struct {
 
 // Defines the response for GET /tests/{testID}.
 type FinalTestResultConfig struct {
-	Outcome       testapi.PassFail
-	OutcomeReason *testapi.TestOutcomeReason
-	ApiErrors     *[]testapi.IoSnykApiCommonError
-	ApiWarnings   *[]testapi.IoSnykApiCommonError
-	CustomHandler http.HandlerFunc // If set, this custom handler is used instead of standard result mock
+	Outcome           testapi.PassFail
+	OutcomeReason     *testapi.TestOutcomeReason
+	ApiErrors         *[]testapi.IoSnykApiCommonError
+	ApiWarnings       *[]testapi.IoSnykApiCommonError
+	TestConfiguration *testapi.TestConfiguration
+	CreatedAt         *time.Time
+	TestSubject       testapi.TestSubject
+	SubjectLocators   *[]testapi.TestSubjectLocator
+	BreachedPolicies  *testapi.PolicyRefSet
+	EffectiveSummary  *testapi.FindingSummary
+	RawSummary        *testapi.FindingSummary
+	CustomHandler     http.HandlerFunc // If set, this custom handler is used instead of standard result mock
 }
 
 // Configures mocking for GET /tests/{testID}/findings.
@@ -153,11 +160,19 @@ func handleTestResultRequest(t *testing.T, w http.ResponseWriter, r *http.Reques
 		config.FinalTestResult.CustomHandler(w, r)
 		return
 	}
-	resultResp := mockTestResultResponse(t, config.TestID,
+	resultResp := mockTestResultResponse(t,
+		config.TestID,
 		config.FinalTestResult.Outcome,
 		config.FinalTestResult.OutcomeReason,
 		config.FinalTestResult.ApiErrors,
 		config.FinalTestResult.ApiWarnings,
+		config.FinalTestResult.TestConfiguration,
+		config.FinalTestResult.CreatedAt,
+		config.FinalTestResult.TestSubject,
+		config.FinalTestResult.SubjectLocators,
+		config.FinalTestResult.BreachedPolicies,
+		config.FinalTestResult.EffectiveSummary,
+		config.FinalTestResult.RawSummary,
 	)
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write(resultResp)
@@ -439,19 +454,32 @@ func mockTestResultResponse(
 	outcomeReason *testapi.TestOutcomeReason,
 	apiErrors *[]testapi.IoSnykApiCommonError,
 	apiWarnings *[]testapi.IoSnykApiCommonError,
+	testConfig *testapi.TestConfiguration,
+	createdAt *time.Time,
+	testSubject testapi.TestSubject,
+	subjectLocators *[]testapi.TestSubjectLocator,
+	breachedPolicies *testapi.PolicyRefSet,
+	effectiveSummary *testapi.FindingSummary,
+	rawSummary *testapi.FindingSummary,
 ) []byte {
 	t.Helper()
 	attributes := testapi.TestAttributes{
+		Config:           testConfig,
+		CreatedAt:        createdAt,
+		Subject:          testSubject,
+		SubjectLocators:  subjectLocators,
+		EffectiveSummary: effectiveSummary,
+		RawSummary:       rawSummary,
 		Outcome: &testapi.TestOutcome{
-			Result: outcomeResult,
-			Reason: outcomeReason,
+			Result:           outcomeResult,
+			Reason:           outcomeReason,
+			BreachedPolicies: breachedPolicies,
 		},
 		State: &testapi.TestState{
 			Execution: testapi.Finished,
 			Errors:    apiErrors,
 			Warnings:  apiWarnings,
 		},
-		EffectiveSummary: nil,
 	}
 
 	responseData := testapi.TestData{

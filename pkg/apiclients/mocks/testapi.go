@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	uuid "github.com/google/uuid"
@@ -52,6 +53,34 @@ func (mr *MockTestResultMockRecorder) Findings(ctx interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Findings", reflect.TypeOf((*MockTestResult)(nil).Findings), ctx)
 }
 
+// GetBreachedPolicies mocks base method.
+func (m *MockTestResult) GetBreachedPolicies() *testapi.PolicyRefSet {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBreachedPolicies")
+	ret0, _ := ret[0].(*testapi.PolicyRefSet)
+	return ret0
+}
+
+// GetBreachedPolicies indicates an expected call of GetBreachedPolicies.
+func (mr *MockTestResultMockRecorder) GetBreachedPolicies() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBreachedPolicies", reflect.TypeOf((*MockTestResult)(nil).GetBreachedPolicies))
+}
+
+// GetCreatedAt mocks base method.
+func (m *MockTestResult) GetCreatedAt() *time.Time {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCreatedAt")
+	ret0, _ := ret[0].(*time.Time)
+	return ret0
+}
+
+// GetCreatedAt indicates an expected call of GetCreatedAt.
+func (mr *MockTestResultMockRecorder) GetCreatedAt() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCreatedAt", reflect.TypeOf((*MockTestResult)(nil).GetCreatedAt))
+}
+
 // GetEffectiveSummary mocks base method.
 func (m *MockTestResult) GetEffectiveSummary() *testapi.FindingSummary {
 	m.ctrl.T.Helper()
@@ -80,18 +109,18 @@ func (mr *MockTestResultMockRecorder) GetErrors() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetErrors", reflect.TypeOf((*MockTestResult)(nil).GetErrors))
 }
 
-// GetOutcome mocks base method.
-func (m *MockTestResult) GetOutcome() *testapi.PassFail {
+// GetExecutionState mocks base method.
+func (m *MockTestResult) GetExecutionState() testapi.TestExecutionStates {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOutcome")
-	ret0, _ := ret[0].(*testapi.PassFail)
+	ret := m.ctrl.Call(m, "GetExecutionState")
+	ret0, _ := ret[0].(testapi.TestExecutionStates)
 	return ret0
 }
 
-// GetOutcome indicates an expected call of GetOutcome.
-func (mr *MockTestResultMockRecorder) GetOutcome() *gomock.Call {
+// GetExecutionState indicates an expected call of GetExecutionState.
+func (mr *MockTestResultMockRecorder) GetExecutionState() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOutcome", reflect.TypeOf((*MockTestResult)(nil).GetOutcome))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionState", reflect.TypeOf((*MockTestResult)(nil).GetExecutionState))
 }
 
 // GetOutcomeReason mocks base method.
@@ -108,6 +137,20 @@ func (mr *MockTestResultMockRecorder) GetOutcomeReason() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOutcomeReason", reflect.TypeOf((*MockTestResult)(nil).GetOutcomeReason))
 }
 
+// GetPassFail mocks base method.
+func (m *MockTestResult) GetPassFail() *testapi.PassFail {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPassFail")
+	ret0, _ := ret[0].(*testapi.PassFail)
+	return ret0
+}
+
+// GetPassFail indicates an expected call of GetPassFail.
+func (mr *MockTestResultMockRecorder) GetPassFail() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPassFail", reflect.TypeOf((*MockTestResult)(nil).GetPassFail))
+}
+
 // GetRawSummary mocks base method.
 func (m *MockTestResult) GetRawSummary() *testapi.FindingSummary {
 	m.ctrl.T.Helper()
@@ -122,18 +165,32 @@ func (mr *MockTestResultMockRecorder) GetRawSummary() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRawSummary", reflect.TypeOf((*MockTestResult)(nil).GetRawSummary))
 }
 
-// GetState mocks base method.
-func (m *MockTestResult) GetState() string {
+// GetSubjectLocators mocks base method.
+func (m *MockTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetState")
-	ret0, _ := ret[0].(string)
+	ret := m.ctrl.Call(m, "GetSubjectLocators")
+	ret0, _ := ret[0].(*[]testapi.TestSubjectLocator)
 	return ret0
 }
 
-// GetState indicates an expected call of GetState.
-func (mr *MockTestResultMockRecorder) GetState() *gomock.Call {
+// GetSubjectLocators indicates an expected call of GetSubjectLocators.
+func (mr *MockTestResultMockRecorder) GetSubjectLocators() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockTestResult)(nil).GetState))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubjectLocators", reflect.TypeOf((*MockTestResult)(nil).GetSubjectLocators))
+}
+
+// GetTestConfiguration mocks base method.
+func (m *MockTestResult) GetTestConfiguration() *testapi.TestConfiguration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTestConfiguration")
+	ret0, _ := ret[0].(*testapi.TestConfiguration)
+	return ret0
+}
+
+// GetTestConfiguration indicates an expected call of GetTestConfiguration.
+func (mr *MockTestResultMockRecorder) GetTestConfiguration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestConfiguration", reflect.TypeOf((*MockTestResult)(nil).GetTestConfiguration))
 }
 
 // GetTestID mocks base method.
@@ -148,6 +205,20 @@ func (m *MockTestResult) GetTestID() *uuid.UUID {
 func (mr *MockTestResultMockRecorder) GetTestID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestID", reflect.TypeOf((*MockTestResult)(nil).GetTestID))
+}
+
+// GetTestSubject mocks base method.
+func (m *MockTestResult) GetTestSubject() testapi.TestSubject {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTestSubject")
+	ret0, _ := ret[0].(testapi.TestSubject)
+	return ret0
+}
+
+// GetTestSubject indicates an expected call of GetTestSubject.
+func (mr *MockTestResultMockRecorder) GetTestSubject() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestSubject", reflect.TypeOf((*MockTestResult)(nil).GetTestSubject))
 }
 
 // GetWarnings mocks base method.

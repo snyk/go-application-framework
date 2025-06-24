@@ -93,14 +93,23 @@ type client struct {
 
 // TestResult defines the contract for accessing test result information.
 type TestResult interface {
-	GetState() string
+	GetTestID() *uuid.UUID
+	GetTestConfiguration() *TestConfiguration
+	GetCreatedAt() *time.Time
+	GetTestSubject() TestSubject
+	GetSubjectLocators() *[]TestSubjectLocator
+
+	GetExecutionState() TestExecutionStates
 	GetErrors() *[]IoSnykApiCommonError
 	GetWarnings() *[]IoSnykApiCommonError
-	GetTestID() *uuid.UUID
-	GetOutcome() *PassFail
+
+	GetPassFail() *PassFail
 	GetOutcomeReason() *TestOutcomeReason
+	GetBreachedPolicies() *PolicyRefSet
+
 	GetEffectiveSummary() *FindingSummary
 	GetRawSummary() *FindingSummary
+
 	Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error)
 }
 
@@ -156,14 +165,22 @@ type StartTestParams struct {
 // testResult is the concrete implementation of the TestResult interface for
 // accessing summary and findings data of a completed test.
 type testResult struct {
-	State            string // e.g., "finished", "errored"
-	Errors           *[]IoSnykApiCommonError
-	Warnings         *[]IoSnykApiCommonError
-	TestID           *uuid.UUID         // The final Test ID (different from Job ID)
-	Outcome          *PassFail          // Pass or Fail
+	TestID            *uuid.UUID // The final Test ID (different from Job ID)
+	TestConfiguration *TestConfiguration
+	CreatedAt         *time.Time
+	TestSubject       TestSubject
+	SubjectLocators   *[]TestSubjectLocator
+
+	ExecutionState TestExecutionStates // e.g., "finished", "errored"
+	Errors         *[]IoSnykApiCommonError
+	Warnings       *[]IoSnykApiCommonError
+
+	PassFail         *PassFail          // Pass or Fail
 	OutcomeReason    *TestOutcomeReason // Reason for the outcome (e.g., policy_breach)
-	EffectiveSummary *FindingSummary    // Summary excluding suppressed findings
-	RawSummary       *FindingSummary    // Summary including suppressed findings
+	BreachedPolicies *PolicyRefSet      // A set of local or managed policies
+
+	EffectiveSummary *FindingSummary // Summary excluding suppressed findings
+	RawSummary       *FindingSummary // Summary including suppressed findings
 
 	findings         []FindingData // Stores the actual findings
 	findingsComplete bool          // True if all findings pages were fetched
@@ -174,8 +191,8 @@ type testResult struct {
 	handle *testHandle // Populated when testResult is created
 }
 
-// GetState returns the execution state of the test.
-func (r *testResult) GetState() string { return r.State }
+// GetExecutionState returns the execution state of the test.
+func (r *testResult) GetExecutionState() TestExecutionStates { return r.ExecutionState }
 
 // GetErrors returns any API errors encountered during the test execution.
 func (r *testResult) GetErrors() *[]IoSnykApiCommonError { return r.Errors }
@@ -186,11 +203,26 @@ func (r *testResult) GetWarnings() *[]IoSnykApiCommonError { return r.Warnings }
 // GetTestID returns the final Test ID.
 func (r *testResult) GetTestID() *uuid.UUID { return r.TestID }
 
-// GetOutcome returns the pass/fail outcome of the test.
-func (r *testResult) GetOutcome() *PassFail { return r.Outcome }
+// GetPassFail returns the pass/fail outcome of the test.
+func (r *testResult) GetPassFail() *PassFail { return r.PassFail }
 
 // GetOutcomeReason returns the reason for the test outcome.
 func (r *testResult) GetOutcomeReason() *TestOutcomeReason { return r.OutcomeReason }
+
+// GetBreachedPolicies returns the policies that were breached.
+func (r *testResult) GetBreachedPolicies() *PolicyRefSet { return r.BreachedPolicies }
+
+// GetTestConfiguration returns the test configuration.
+func (r *testResult) GetTestConfiguration() *TestConfiguration { return r.TestConfiguration }
+
+// GetCreatedAt returns the creation timestamp of the test.
+func (r *testResult) GetCreatedAt() *time.Time { return r.CreatedAt }
+
+// GetTestSubject returns the test subject.
+func (r *testResult) GetTestSubject() TestSubject { return r.TestSubject }
+
+// GetSubjectLocators returns the subject locators.
+func (r *testResult) GetSubjectLocators() *[]TestSubjectLocator { return r.SubjectLocators }
 
 // GetEffectiveSummary returns the summary excluding suppressed findings.
 func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveSummary }
@@ -471,31 +503,36 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 
 	testData := resp.ApplicationvndApiJSON200.Data
 	attrs := testData.Attributes
-	status := &testResult{
-		TestID:           testData.Id,
-		EffectiveSummary: attrs.EffectiveSummary,
-		RawSummary:       attrs.RawSummary,
-		handle:           h,
+	result := &testResult{
+		TestID:            testData.Id,
+		TestConfiguration: attrs.Config,
+		CreatedAt:         attrs.CreatedAt,
+		TestSubject:       attrs.Subject,
+		SubjectLocators:   attrs.SubjectLocators,
+		EffectiveSummary:  attrs.EffectiveSummary,
+		RawSummary:        attrs.RawSummary,
+		handle:            h,
 	}
 
 	if attrs.State != nil {
-		status.State = string(attrs.State.Execution)
+		result.ExecutionState = attrs.State.Execution
 		if attrs.State.Errors != nil && len(*attrs.State.Errors) > 0 {
-			status.Errors = attrs.State.Errors
+			result.Errors = attrs.State.Errors
 		}
 		if attrs.State.Warnings != nil && len(*attrs.State.Warnings) > 0 {
-			status.Warnings = attrs.State.Warnings
+			result.Warnings = attrs.State.Warnings
 		}
 	} else {
-		status.State = "unknown" // API spec defines this as always set
+		result.ExecutionState = TestExecutionStates("unknown") // API spec defines this as always set
 	}
 
 	if attrs.Outcome != nil {
-		status.Outcome = &attrs.Outcome.Result
-		status.OutcomeReason = attrs.Outcome.Reason
+		result.PassFail = &attrs.Outcome.Result
+		result.OutcomeReason = attrs.Outcome.Reason
+		result.BreachedPolicies = attrs.Outcome.BreachedPolicies
 	}
 
-	return status, nil
+	return result, nil
 }
 
 // Returns a channel signaling completion of Wait()
