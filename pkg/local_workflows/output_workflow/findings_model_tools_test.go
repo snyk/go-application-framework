@@ -92,3 +92,58 @@ func Test_getSarifFileRenderer(t *testing.T) {
 		assert.NoFileExists(t, config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE))
 	})
 }
+
+func Test_getJsonFileRenderer(t *testing.T) {
+	t.Run("no file path specified", func(t *testing.T) {
+		localFindings := getLocalFindingsSkeleton(t, 3)
+		config := configuration.NewWithOpts()
+		renderer, err := getJsonFileRenderer(config, localFindings)
+		assert.NoError(t, err)
+		assert.Nil(t, renderer)
+	})
+
+	t.Run("path specified is a directory", func(t *testing.T) {
+		localFindings := getLocalFindingsSkeleton(t, 3)
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_JSON_FILE, t.TempDir())
+		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, true)
+		renderer, err := getJsonFileRenderer(config, localFindings)
+		assert.Error(t, err)
+		assert.Nil(t, renderer)
+	})
+
+	t.Run("write empty file", func(t *testing.T) {
+		localFindings := getLocalFindingsSkeleton(t, 0)
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_JSON_FILE, filepath.Join(t.TempDir(), "not-existing", "somefile"))
+		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, true)
+		renderer, err := getJsonFileRenderer(config, localFindings)
+		assert.NoError(t, err)
+		assert.NotNil(t, renderer)
+		assert.NoError(t, renderer.closer())
+		assert.FileExists(t, config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE))
+	})
+
+	t.Run("write non empty file", func(t *testing.T) {
+		localFindings := getLocalFindingsSkeleton(t, 1)
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_JSON_FILE, filepath.Join(t.TempDir(), "not-existing", "somefile"))
+		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, false)
+		renderer, err := getJsonFileRenderer(config, localFindings)
+		assert.NoError(t, err)
+		assert.NotNil(t, renderer)
+		assert.NoError(t, renderer.closer())
+		assert.FileExists(t, config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE))
+	})
+
+	t.Run("don't write empty file", func(t *testing.T) {
+		localFindings := getLocalFindingsSkeleton(t, 0)
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_JSON_FILE, filepath.Join(t.TempDir(), "not-existing", "somefile"))
+		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, false)
+		renderer, err := getJsonFileRenderer(config, localFindings)
+		assert.NoError(t, err)
+		assert.Nil(t, renderer)
+		assert.NoFileExists(t, config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE))
+	})
+}
