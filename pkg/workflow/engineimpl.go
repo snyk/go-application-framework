@@ -240,16 +240,23 @@ func (e *EngineImpl) GetWorkflow(id Identifier) (Entry, bool) {
 	return workflow, ok
 }
 
+// Deprecated: Use Invoke() with WithInput() instead
+//
 // InvokeWithInput invokes the workflow with the given identifier and input data.
 func (e *EngineImpl) InvokeWithInput(id Identifier, input []Data) ([]Data, error) {
 	return e.Invoke(id, WithInput(input))
 }
 
+// Deprecated: Use Invoke() with WithConfig() instead
+//
 // InvokeWithConfig invokes the workflow with the given identifier and configuration.
 func (e *EngineImpl) InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error) {
 	return e.Invoke(id, WithConfig(config))
 }
 
+// Deprecated: Use Invoke() with WithInput() and WithConfig() instead
+//
+// InvokeWithInputAndConfig invokes the workflow with the given identifier, input data, and configuration.
 func (e *EngineImpl) InvokeWithInputAndConfig(
 	id Identifier,
 	input []Data,

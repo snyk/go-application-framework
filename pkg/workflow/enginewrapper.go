@@ -37,6 +37,7 @@ func (e *engineWrapper) GetWorkflow(id Identifier) (Entry, bool) {
 	return e.WrappedEngine.GetWorkflow(id)
 }
 
+// Invoke invokes the workflow with the given identifier.
 func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Data, error) {
 	options := &engineRuntimeConfig{}
 	for _, opt := range opts {
@@ -51,14 +52,23 @@ func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Dat
 	return e.WrappedEngine.Invoke(id, opts...)
 }
 
+// Deprecated: Use Invoke() with WithInput() instead
+//
+// InvokeWithInput invokes the workflow with the given identifier and input data.
 func (e *engineWrapper) InvokeWithInput(id Identifier, input []Data) ([]Data, error) {
 	return e.Invoke(id, WithInput(input))
 }
 
+// Deprecated: Use Invoke() with WithConfig() instead
+//
+// InvokeWithConfig invokes the workflow with the given identifier and configuration.
 func (e *engineWrapper) InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error) {
 	return e.Invoke(id, WithConfig(config))
 }
 
+// Deprecated: Use Invoke() with WithInput() and WithConfig() instead
+//
+// InvokeWithInputAndConfig invokes the workflow with the given identifier, input data, and configuration.
 func (e *engineWrapper) InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error) {
 	return e.Invoke(id, WithInput(input), WithConfig(config))
 }
