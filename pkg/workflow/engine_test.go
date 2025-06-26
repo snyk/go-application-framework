@@ -126,6 +126,69 @@ func Test_EngineBasics(t *testing.T) {
 	assert.Equal(t, "callback2", extension["cmd2::hello"])
 }
 
+func Test_EngineBasics_InvokeWithCollector(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewWithOpts())
+	collector := analytics.NewInstrumentationCollector()
+
+	expectedKey := "some"
+	expectedValue := "value"
+
+	test1Id := NewWorkflowIdentifier("test1")
+	test2Id := NewWorkflowIdentifier("test2")
+	noOpWorkflowOptions := ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+	input := []Data{NewData(NewTypeIdentifier(test1Id, "input"), "random", nil)}
+
+	_, err := engine.Register(test1Id, noOpWorkflowOptions, func(invocation InvocationContext, input []Data) ([]Data, error) {
+		invocation.GetAnalytics().AddExtensionStringValue(expectedKey, expectedValue)
+		return invocation.GetEngine().Invoke(test2Id, WithInput(input)) // without specifying the collector, Invoke will use the default
+	})
+	assert.NoError(t, err)
+
+	_, err = engine.Register(test2Id, noOpWorkflowOptions, func(invocation InvocationContext, input []Data) ([]Data, error) {
+		invocation.GetAnalytics().AddExtensionStringValue(expectedKey, expectedValue)
+		return input, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	testcases := []struct {
+		name            string
+		invokeOptions   []EngineInvokeOption
+		assertCollector analytics.InstrumentationCollector
+	}{
+		{
+			name:            "Use specified Instrumentation Collector",
+			assertCollector: collector,
+			invokeOptions:   []EngineInvokeOption{WithInput(input), WithInstrumentationCollector(collector)},
+		},
+		{
+			name:            "Use default Instrumentation Collector",
+			assertCollector: engine.GetAnalytics().GetInstrumentation(),
+			invokeOptions:   []EngineInvokeOption{WithInput(input)},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			// invoke method under test, case collector is specified
+			output, err := engine.Invoke(test1Id, tc.invokeOptions...)
+			assert.NoError(t, err)
+			assert.Equal(t, input, output)
+
+			// ensure the provided collector has the expected data
+			instrumentationData, err := analytics.GetV2InstrumentationObject(tc.assertCollector)
+			assert.NoError(t, err)
+			assert.NotNil(t, instrumentationData)
+
+			extension := *instrumentationData.Data.Attributes.Interaction.Extension
+			assert.Equal(t, expectedValue, extension["test1::some"])
+			assert.Equal(t, expectedValue, extension["test2::some"])
+		})
+	}
+}
+
 func Test_EngineRegisterErrorHandling(t *testing.T) {
 	configuration := configuration.New()
 	engine := NewWorkFlowEngine(configuration)

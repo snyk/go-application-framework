@@ -36,6 +36,32 @@ type EngineImpl struct {
 
 var _ Engine = (*EngineImpl)(nil)
 
+type engineRuntimeConfig struct {
+	config configuration.Configuration
+	input  []Data
+	ic     analytics.InstrumentationCollector
+}
+
+type EngineInvokeOption func(*engineRuntimeConfig)
+
+func WithConfig(config configuration.Configuration) EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.config = config
+	}
+}
+
+func WithInput(input []Data) EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.input = input
+	}
+}
+
+func WithInstrumentationCollector(ic analytics.InstrumentationCollector) EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		e.ic = ic
+	}
+}
+
 func (e *EngineImpl) GetLogger() *zerolog.Logger {
 	return e.logger
 }
@@ -214,26 +240,35 @@ func (e *EngineImpl) GetWorkflow(id Identifier) (Entry, bool) {
 	return workflow, ok
 }
 
-// Invoke invokes the workflow with the given identifier.
-func (e *EngineImpl) Invoke(id Identifier) ([]Data, error) {
-	return e.InvokeWithInputAndConfig(id, []Data{}, nil)
-}
-
+// Deprecated: Use Invoke() with WithInput() instead
+//
 // InvokeWithInput invokes the workflow with the given identifier and input data.
 func (e *EngineImpl) InvokeWithInput(id Identifier, input []Data) ([]Data, error) {
-	return e.InvokeWithInputAndConfig(id, input, nil)
+	return e.Invoke(id, WithInput(input))
 }
 
+// Deprecated: Use Invoke() with WithConfig() instead
+//
 // InvokeWithConfig invokes the workflow with the given identifier and configuration.
 func (e *EngineImpl) InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error) {
-	return e.InvokeWithInputAndConfig(id, []Data{}, config)
+	return e.Invoke(id, WithConfig(config))
 }
 
-// InvokeWithInputAndConfig invokes the workflow with the given identifier, input data and configuration.
+// Deprecated: Use Invoke() with WithInput() and WithConfig() instead
+//
+// InvokeWithInputAndConfig invokes the workflow with the given identifier, input data, and configuration.
 func (e *EngineImpl) InvokeWithInputAndConfig(
 	id Identifier,
 	input []Data,
 	config configuration.Configuration,
+) ([]Data, error) {
+	return e.Invoke(id, WithConfig(config), WithInput(input))
+}
+
+// Invoke invokes the workflow with the given identifier.
+func (e *EngineImpl) Invoke(
+	id Identifier,
+	opts ...EngineInvokeOption,
 ) ([]Data, error) {
 	var output []Data
 	var err error
@@ -249,30 +284,49 @@ func (e *EngineImpl) InvokeWithInputAndConfig(
 			e.mu.Lock()
 			e.invocationCounter++
 
+			// create default options
+			options := engineRuntimeConfig{
+				config: e.config.Clone(),
+				input:  []Data{},
+			}
+
+			// override default options based on optional parameters
+			for _, opt := range opts {
+				opt(&options)
+			}
+
 			// prepare logger
 			prefix := fmt.Sprintf("%s:%d", id.Host, e.invocationCounter)
-			zlogger := e.logger.With().Str("ext", prefix).Logger()
+			localLogger := e.logger.With().Str("ext", prefix).Logger()
 
 			localUi := e.ui
-			localAnalytics := NewAnalyticsWrapper(e.analytics, id.Host)
 
-			// prepare configuration
-			if config == nil {
-				config = e.config.Clone()
+			var localAnalytics analytics.Analytics
+			if options.ic != nil {
+				tmpAnalytics := &analytics.AnalyticsImpl{}
+				tmpAnalytics.SetInstrumentation(options.ic)
+				localAnalytics = NewAnalyticsWrapper(tmpAnalytics, id.Host)
+			} else {
+				localAnalytics = NewAnalyticsWrapper(e.analytics, id.Host)
 			}
 
 			// prepare networkAccess
-			networkAccess := e.networkAccess.Clone()
-			networkAccess.SetConfiguration(config)
+			localNetworkAccess := e.networkAccess.Clone()
+			localNetworkAccess.SetConfiguration(options.config)
+
+			localEngine := &engineWrapper{
+				WrappedEngine:                   e,
+				defaultInstrumentationCollector: options.ic,
+			}
 			e.mu.Unlock()
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, config, e, networkAccess, zlogger, localAnalytics, localUi)
+			context := NewInvocationContext(id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
 
 			// invoke workflow through its callback
-			zlogger.Printf("Workflow Start")
-			output, err = callback(context, input)
-			zlogger.Printf("Workflow End")
+			localLogger.Printf("Workflow Start")
+			output, err = callback(context, options.input)
+			localLogger.Printf("Workflow End")
 		}
 	} else {
 		err = fmt.Errorf("workflow '%v' not found", id)

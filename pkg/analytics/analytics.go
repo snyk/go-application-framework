@@ -315,6 +315,10 @@ func (a *AnalyticsImpl) GetInstrumentation() InstrumentationCollector {
 	return a.instrumentor
 }
 
+func (a *AnalyticsImpl) SetInstrumentation(ic InstrumentationCollector) {
+	a.instrumentor = ic
+}
+
 var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname // breaking API change
 
 // This method sanitizes the given content by searching for key-value mappings. It thereby replaces all keys defined in keysToFilter by the replacement string

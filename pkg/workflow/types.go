@@ -69,7 +69,7 @@ type Engine interface {
 	Register(id Identifier, config ConfigurationOptions, callback Callback) (Entry, error)
 	GetWorkflows() []Identifier
 	GetWorkflow(id Identifier) (Entry, bool)
-	Invoke(id Identifier) ([]Data, error)
+	Invoke(id Identifier, opts ...EngineInvokeOption) ([]Data, error)
 	InvokeWithInput(id Identifier, input []Data) ([]Data, error)
 	InvokeWithConfig(id Identifier, config configuration.Configuration) ([]Data, error)
 	InvokeWithInputAndConfig(id Identifier, input []Data, config configuration.Configuration) ([]Data, error)
