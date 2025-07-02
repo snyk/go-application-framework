@@ -87,6 +87,15 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 		writerMap[OUTPUT_CONFIG_KEY_SARIF_FILE] = sarifWriter
 	}
 
+	jsonWriter, err := getJsonFileRenderer(config, findings)
+	if err != nil {
+		return writerMap, err
+	}
+
+	if jsonWriter != nil {
+		writerMap[OUTPUT_CONFIG_KEY_JSON_FILE] = jsonWriter
+	}
+
 	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
 		writerMap[DEFAULT_WRITER].mimeType = presenters.ApplicationSarifMimeType
 		writerMap[DEFAULT_WRITER].templates = presenters.ApplicationSarifTemplates
@@ -101,6 +110,37 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 
 func getSarifFileRenderer(config configuration.Configuration, findings []*local_models.LocalFinding) (*WriterEntry, error) {
 	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
+	if len(outputFileName) == 0 {
+		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
+		return nil, nil
+	}
+
+	if !config.GetBool(OUTPUT_CONFIG_WRITE_EMPTY_FILE) && getTotalNumberOfFindings(findings) == 0 {
+		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
+		return nil, nil
+	}
+
+	pathError := iUtils.CreateFilePath(outputFileName)
+	if pathError != nil {
+		return nil, pathError
+	}
+
+	file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
+	if fileErr != nil {
+		return nil, fileErr
+	}
+
+	writer := &WriterEntry{
+		writer:    file,
+		mimeType:  presenters.ApplicationSarifMimeType,
+		templates: presenters.ApplicationSarifTemplates,
+		closer:    func() error { return file.Close() },
+	}
+	return writer, nil
+}
+
+func getJsonFileRenderer(config configuration.Configuration, findings []*local_models.LocalFinding) (*WriterEntry, error) {
+	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
 	if len(outputFileName) == 0 {
 		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
 		return nil, nil
