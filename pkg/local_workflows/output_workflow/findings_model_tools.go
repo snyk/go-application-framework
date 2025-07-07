@@ -65,40 +65,108 @@ func getTotalNumberOfFindings(findings []*local_models.LocalFinding) uint32 {
 	return count
 }
 
+type newLineCloser struct {
+	writer io.Writer
+}
+
+func (wc *newLineCloser) Write(p []byte) (n int, err error) {
+	return wc.writer.Write(p)
+}
+
+func (wc *newLineCloser) Close() error {
+	_, err := fmt.Fprintln(wc.writer, "")
+	return err
+}
+
 func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination, findings []*local_models.LocalFinding) (map[string]*WriterEntry, error) {
-	writerMap := map[string]*WriterEntry{
-		DEFAULT_WRITER: {
-			writer:    outputDestination.GetWriter(),
-			mimeType:  presenters.DefaultMimeType,
-			templates: presenters.DefaultTemplateFiles,
-			closer: func() error {
-				_, err := fmt.Fprintln(outputDestination.GetWriter(), "")
-				return err
+	knownDestintations := map[string]struct {
+		writer func(string) (io.WriteCloser, error)
+	}{
+		"stdout": {
+			writer: func(_ string) (io.WriteCloser, error) {
+				return &newLineCloser{
+					writer: outputDestination.GetWriter(),
+				}, nil
+			},
+		},
+		"file": {
+			writer: func(s string) (io.WriteCloser, error) {
+				pathError := iUtils.CreateFilePath(s)
+				if pathError != nil {
+					return nil, pathError
+				}
+
+				file, fileErr := os.OpenFile(s, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+				if fileErr != nil {
+					return nil, fileErr
+				}
+				return file, nil
 			},
 		},
 	}
 
-	sarifWriter, err := getSarifFileRenderer(config, findings)
-	if err != nil {
-		return writerMap, err
+	knownTemplates := map[string][]string{
+		presenters.DefaultMimeType:          presenters.DefaultTemplateFiles,
+		presenters.ApplicationSarifMimeType: presenters.ApplicationSarifTemplates,
 	}
 
-	if sarifWriter != nil {
-		writerMap[OUTPUT_CONFIG_KEY_SARIF_FILE] = sarifWriter
+	type outputTarget struct {
+		name        string
+		destination string
+		fileName    string
+		mimeType    string
 	}
 
-	jsonWriter, err := getJsonFileRenderer(config, findings)
-	if err != nil {
-		return writerMap, err
-	}
-
-	if jsonWriter != nil {
-		writerMap[OUTPUT_CONFIG_KEY_JSON_FILE] = jsonWriter
+	stdOutTarget := outputTarget{
+		name:        DEFAULT_WRITER,
+		destination: "stdout",
+		mimeType:    presenters.DefaultMimeType,
 	}
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-		writerMap[DEFAULT_WRITER].mimeType = presenters.ApplicationSarifMimeType
-		writerMap[DEFAULT_WRITER].templates = presenters.ApplicationSarifTemplates
+		stdOutTarget.mimeType = presenters.ApplicationSarifMimeType
+	} else if config.IsSet(OUTPUT_CONFIG_KEY_JSON) {
+		stdOutTarget.mimeType = presenters.ApplicationJSONMimeType
+	}
+
+	var targets []outputTarget = []outputTarget{stdOutTarget}
+
+	if config.IsSet(OUTPUT_CONFIG_KEY_SARIF_FILE) {
+		sarifFileTarget := outputTarget{
+			name:        OUTPUT_CONFIG_KEY_SARIF_FILE,
+			destination: "file",
+			fileName:    config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE),
+			mimeType:    presenters.ApplicationSarifMimeType,
+		}
+		targets = append(targets, sarifFileTarget)
+	}
+
+	if config.IsSet(OUTPUT_CONFIG_KEY_JSON_FILE) {
+		jsonFileTarget := outputTarget{
+			name:        OUTPUT_CONFIG_KEY_JSON_FILE,
+			destination: "file",
+			fileName:    config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE),
+			mimeType:    presenters.ApplicationSarifMimeType,
+		}
+		targets = append(targets, jsonFileTarget)
+	}
+
+	writerMap := map[string]*WriterEntry{}
+	for _, target := range targets {
+		writer, err := knownDestintations[target.destination].writer(target.fileName)
+		if err != nil {
+			return nil, err
+		}
+		mimeType := target.mimeType
+		templates := knownTemplates[mimeType]
+		closer := writer.Close
+
+		writerMap[target.name] = &WriterEntry{
+			writer,
+			mimeType,
+			templates,
+			closer,
+		}
 	}
 
 	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
