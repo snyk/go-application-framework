@@ -151,7 +151,7 @@ func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, e
 }
 
 func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
-	const charGroup = "[a-zA-Z0-9-_:.=]{6,}"
+	const charGroup = "[a-zA-Z0-9-_:.=/+~]{6,}"
 	s := `(http(s)?://)((.+?):(.+?))@(\S+)`
 	dict[s] = scrubStruct{
 		groupToRedact: 3,
@@ -171,6 +171,12 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	s = fmt.Sprintf(`([b|B]asic )(%s)`, charGroup)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
+	s = fmt.Sprintf("([n|N]egotiate )(%s)", charGroup)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
