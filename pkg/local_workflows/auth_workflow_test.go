@@ -2,7 +2,9 @@ package localworkflows
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -33,6 +35,10 @@ func Test_auth_oauth(t *testing.T) {
 	err = engine.Init()
 	assert.NoError(t, err)
 
+	mockDeriveEndpoint := func(pat string, config configuration.Configuration, client *http.Client, regions []string) (string, error) {
+		return "", nil
+	}
+
 	t.Run("happy", func(t *testing.T) {
 		config.Set(authTypeParameter, nil)
 		authenticator.EXPECT().Authenticate().Times(2).Return(nil)
@@ -40,8 +46,8 @@ func Test_auth_oauth(t *testing.T) {
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator, mockDeriveEndpoint)
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator, mockDeriveEndpoint)
 		assert.NoError(t, err)
 	})
 
@@ -53,7 +59,7 @@ func Test_auth_oauth(t *testing.T) {
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator, mockDeriveEndpoint)
 		assert.Equal(t, expectedErr, err)
 	})
 }
@@ -66,6 +72,9 @@ func Test_auth_token(t *testing.T) {
 	logger := zerolog.New(logContent)
 	engine := mocks.NewMockEngine(mockCtl)
 	authenticator := mocks.NewMockAuthenticator(mockCtl)
+	mockDeriveEndpoint := func(pat string, config configuration.Configuration, client *http.Client, regions []string) (string, error) {
+		return "", nil
+	}
 
 	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	engine.EXPECT().Init().Times(1)
@@ -84,7 +93,7 @@ func Test_auth_token(t *testing.T) {
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
 
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator, mockDeriveEndpoint)
 		assert.NoError(t, err)
 	})
 
@@ -97,7 +106,7 @@ func Test_auth_token(t *testing.T) {
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
 
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator, mockDeriveEndpoint)
 		assert.NoError(t, err)
 	})
 }
@@ -118,6 +127,8 @@ func Test_pat(t *testing.T) {
 
 	engine := mocks.NewMockEngine(mockCtl)
 	authenticator := mocks.NewMockAuthenticator(mockCtl)
+	mockNetworkAccess := mocks.NewMockNetworkAccess(mockCtl)
+	mockHTTPClient := &http.Client{}
 
 	t.Run("happy", func(t *testing.T) {
 		config := configuration.New()
@@ -126,48 +137,58 @@ func Test_pat(t *testing.T) {
 		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "some-oauth-token")
 		config.Set(configuration.AUTHENTICATION_TOKEN, "some-legacy-api-token")
 
-		config.Set(configuration.API_URL, []string{"https://api.snyk.io"})
+		config.Set(configuration.SNYK_REGION_URLS, []string{"https://api.snyk.io"})
 
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).Times(1)
+		mockInvocationContext.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).Times(1)
+		mockNetworkAccess.EXPECT().GetUnauthorizedHttpClient().Return(mockHTTPClient).Times(1)
 
 		engineConfig := configuration.New()
 		engine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
 
-		err := entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		mockDeriveEndpoint := func(pat string, config configuration.Configuration, client *http.Client, regions []string) (string, error) {
+			return mockedPatEndpoint, nil
+		}
+
+		err := entryPointDI(mockInvocationContext, &logger, engine, authenticator, mockDeriveEndpoint)
 		assert.NoError(t, err)
 
 		assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 		assert.Empty(t, config.GetString(configuration.AUTHENTICATION_TOKEN))
 	})
 
-	t.Run("invalid pat should fail", func(t *testing.T) {
+	t.Run("DeriveEndpointFromPAT fails", func(t *testing.T) {
 		config := configuration.New()
 		config.Set(authTypeParameter, auth.AUTH_TYPE_PAT)
 		config.Set(ConfigurationNewAuthenticationToken, testPAT)
-		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "some-oauth-token")
-		config.Set(configuration.AUTHENTICATION_TOKEN, "some-legacy-api-token")
+		originalToken := "original-token"
+		config.Set(expectedAPIKeyStorage, originalToken)
 
-		config.Set(configuration.API_URL, []string{"https://api.snyk.io"})
+		config.Set(configuration.SNYK_REGION_URLS, []string{"https://api.snyk.io"})
 
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).Times(1)
+		mockInvocationContext.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).Times(1)
+		mockNetworkAccess.EXPECT().GetUnauthorizedHttpClient().Return(mockHTTPClient).Times(1)
 
 		engineConfig := configuration.New()
 		engine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
-		mockWhoAmIError := fmt.Errorf("mock whoami failure")
-		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, mockWhoAmIError)
 
-		err := entryPointDI(mockInvocationContext, &logger, engine, authenticator)
-		assert.ErrorIs(t, err, mockWhoAmIError)
+		expectedErr := errors.New("mocked DeriveEndpointFromPAT error")
+		mockDeriveEndpoint := func(pat string, config configuration.Configuration, client *http.Client, regions []string) (string, error) {
+			return "", expectedErr
+		}
 
-		assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
-		assert.Empty(t, config.GetString(configuration.AUTHENTICATION_TOKEN))
+		err := entryPointDI(mockInvocationContext, &logger, engine, authenticator, mockDeriveEndpoint)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, expectedErr)
+
+		assert.Equal(t, originalToken, config.GetString(expectedAPIKeyStorage))
 	})
 }
 
