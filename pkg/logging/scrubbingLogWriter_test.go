@@ -19,12 +19,14 @@ package logging
 import (
 	"bytes"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/stretchr/testify/require"
 	"os/user"
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -232,6 +234,11 @@ func TestAddDefaults(t *testing.T) {
 			name:     "Basic header with value",
 			input:    "basic dXM0000=\" asdf",
 			expected: "basic ***\" asdf",
+		},
+		{
+			name:     "Negotiate header with value",
+			input:    "Proxy-Authorization: Negotiate YIICSAYGbWLumn6s9/8pfMB513heIeAJ/udlOk7K+XUbIoBZGzi0cA6xahe/vE0x2Fla0OeU+JK2h4G58i/lSVO0Ip+LDQApB+TC1SCh50KvgF1U8F/p4Pwr/LLrXX/pDgMUTt3kOmjRPJ9/qhU+aHrFWq3/L0E102+mc2bI asdf",
+			expected: "Proxy-Authorization: Negotiate *** asdf",
 		},
 		{
 			name:     "github pat (classic)",
