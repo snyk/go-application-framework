@@ -87,6 +87,14 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 			ApplicationSarifTemplates,
 			true,
 		},
+		/*
+			skipping support for json file output by default, since there is no supporting rendering yet.
+			{
+				OUTPUT_CONFIG_KEY_JSON_FILE,
+				SARIF_MIME_TYPE,
+				ApplicationSarifTemplates,
+				true,
+			},*/
 	}
 
 	// use configured file writers if available
