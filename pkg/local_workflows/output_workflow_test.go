@@ -436,16 +436,16 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 
 	fileWriters := []output_workflow.FileWriter{
 		{
-			output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE,
-			output_workflow.SARIF_MIME_TYPE,
-			output_workflow.ApplicationSarifTemplates,
-			true,
+			NameConfigKey:     output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE,
+			MimeType:          output_workflow.SARIF_MIME_TYPE,
+			TemplateFiles:     output_workflow.ApplicationSarifTemplates,
+			WriteEmptyContent: true,
 		},
 		{
-			output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE,
-			output_workflow.SARIF_MIME_TYPE,
-			output_workflow.ApplicationSarifTemplates,
-			false,
+			NameConfigKey:     output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE,
+			MimeType:          output_workflow.SARIF_MIME_TYPE,
+			TemplateFiles:     output_workflow.ApplicationSarifTemplates,
+			WriteEmptyContent: false,
 		},
 	}
 	config.Set(output_workflow.OUTPUT_CONFIG_KEY_FILE_WRITERS, fileWriters)

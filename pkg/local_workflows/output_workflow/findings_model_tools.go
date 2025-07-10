@@ -73,7 +73,7 @@ func getTotalNumberOfFindings(findings []*local_models.LocalFinding) uint32 {
 	return count
 }
 
-func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination) (map[string]*WriterEntry, error) {
+func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination) map[string]*WriterEntry {
 	// resulting map of writers and their templates
 	writerMap := map[string]*WriterEntry{
 		DEFAULT_WRITER: getDefaultWriter(config, outputDestination),
@@ -105,7 +105,7 @@ func getWritersToUse(config configuration.Configuration, outputDestination iUtil
 		}
 	}
 
-	return writerMap, nil
+	return writerMap
 }
 
 func getDefaultWriter(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
@@ -133,7 +133,7 @@ func getDefaultWriter(config configuration.Configuration, outputDestination iUti
 func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.LocalFinding, invocation workflow.InvocationContext) {
 	debugLogger := invocation.GetEnhancedLogger()
 
-	if wEntry.renderEmptyData == false && getTotalNumberOfFindings(findings) == 0 {
+	if wEntry.renderEmptyData && getTotalNumberOfFindings(findings) == 0 {
 		debugLogger.Info().Msgf("[%s] The input is empty, skipping rendering!", name)
 		return
 	}
@@ -166,6 +166,7 @@ func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.
 }
 
 func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.InvocationContext, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
+	var err error
 	debugLogger := invocation.GetEnhancedLogger()
 	config := invocation.GetConfiguration()
 
@@ -178,10 +179,7 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	threadCount := max(int64(config.GetInt(configuration.MAX_THREADS)), 1)
 	debugLogger.Info().Msgf("Thread count: %d", threadCount)
 
-	writerMap, err := getWritersToUse(config, outputDestination)
-	if err != nil {
-		debugLogger.Err(err).Msg("Failed to initialize all required writers")
-	}
+	writerMap := getWritersToUse(config, outputDestination)
 
 	// iterate over all writers and render for each of them
 	ctx := context.Background()
