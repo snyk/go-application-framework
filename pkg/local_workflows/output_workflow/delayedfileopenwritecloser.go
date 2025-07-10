@@ -20,7 +20,7 @@ func (wc *delayedFileOpenWriteCloser) Write(p []byte) (n int, err error) {
 			return 0, pathError
 		}
 
-		file, fileErr := os.OpenFile(wc.Filename, os.O_WRONLY|os.O_CREATE, iUtils.FILEPERM_666)
+		file, fileErr := os.OpenFile(wc.Filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, iUtils.FILEPERM_666)
 		if fileErr != nil {
 			return 0, fileErr
 		}

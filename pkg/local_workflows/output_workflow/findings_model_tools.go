@@ -133,7 +133,7 @@ func getDefaultWriter(config configuration.Configuration, outputDestination iUti
 func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.LocalFinding, invocation workflow.InvocationContext) {
 	debugLogger := invocation.GetEnhancedLogger()
 
-	if wEntry.renderEmptyData && getTotalNumberOfFindings(findings) == 0 {
+	if !wEntry.renderEmptyData && getTotalNumberOfFindings(findings) == 0 {
 		debugLogger.Info().Msgf("[%s] The input is empty, skipping rendering!", name)
 		return
 	}
