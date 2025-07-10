@@ -195,13 +195,14 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	for k, v := range writerMap {
 		err = availableThreads.Acquire(ctx, 1)
 		if err != nil {
-			debugLogger.Err(err).Msgf("[%s] Failed to acquire threading lock.", k)
+			debugLogger.Err(err).Msgf("[%s] Failed to acquire threading lock. Cancel rendering.", k)
+			break
 		}
 
-		go func() {
+		go func(name string, writer *WriterEntry) {
 			defer availableThreads.Release(1)
-			useRendererWith(k, v, findings, invocation)
-		}()
+			useRendererWith(name, writer, findings, invocation)
+		}(k, v)
 	}
 
 	err = availableThreads.Acquire(ctx, threadCount)
