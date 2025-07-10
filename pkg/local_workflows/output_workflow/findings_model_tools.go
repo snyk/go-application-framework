@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -19,11 +18,20 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// WriterEntry is an internal structure to handle all template based writers
 type WriterEntry struct {
-	writer    io.Writer
-	mimeType  string
-	templates []string
-	closer    func() error
+	writer          io.WriteCloser
+	mimeType        string
+	templates       []string
+	renderEmptyData bool
+}
+
+// FileWriter is a public structure used to configure file based rendering
+type FileWriter struct {
+	NameConfigKey     string   // defines the configuration key to look up the filename under
+	MimeType          string   // defines the final mime type of the rendering
+	TemplateFiles     []string // defines the set of template files to use for rendering
+	WriteEmptyContent bool     // specifies if anything should be written at all if the input data is empty
 }
 
 func getListOfFindings(input []workflow.Data, debugLogger *zerolog.Logger) (findings []*local_models.LocalFinding, remainingData []workflow.Data) {
@@ -65,191 +73,82 @@ func getTotalNumberOfFindings(findings []*local_models.LocalFinding) uint32 {
 	return count
 }
 
-type newLineCloser struct {
-	writer io.Writer
-}
+func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination) (map[string]*WriterEntry, error) {
+	// resulting map of writers and their templates
+	writerMap := map[string]*WriterEntry{
+		DEFAULT_WRITER: getDefaultWriter(config, outputDestination),
+	}
 
-func (wc *newLineCloser) Write(p []byte) (n int, err error) {
-	return wc.writer.Write(p)
-}
-
-func (wc *newLineCloser) Close() error {
-	_, err := fmt.Fprintln(wc.writer, "")
-	return err
-}
-
-func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination, findings []*local_models.LocalFinding) (map[string]*WriterEntry, error) {
-	knownDestintations := map[string]struct {
-		writer func(string) (io.WriteCloser, error)
-	}{
-		"stdout": {
-			writer: func(_ string) (io.WriteCloser, error) {
-				return &newLineCloser{
-					writer: outputDestination.GetWriter(),
-				}, nil
-			},
-		},
-		"file": {
-			writer: func(s string) (io.WriteCloser, error) {
-				pathError := iUtils.CreateFilePath(s)
-				if pathError != nil {
-					return nil, pathError
-				}
-
-				file, fileErr := os.OpenFile(s, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-				if fileErr != nil {
-					return nil, fileErr
-				}
-				return file, nil
-			},
+	// default file writers
+	fileWriters := []FileWriter{
+		{
+			OUTPUT_CONFIG_KEY_SARIF_FILE,
+			SARIF_MIME_TYPE,
+			ApplicationSarifTemplates,
+			true,
 		},
 	}
 
-	knownTemplates := map[string][]string{
-		presenters.DefaultMimeType:          presenters.DefaultTemplateFiles,
-		presenters.ApplicationSarifMimeType: presenters.ApplicationSarifTemplates,
+	// use configured file writers if available
+	if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
+		fileWriters = tmp
 	}
 
-	type outputTarget struct {
-		name        string
-		destination string
-		fileName    string
-		mimeType    string
-	}
-
-	stdOutTarget := outputTarget{
-		name:        DEFAULT_WRITER,
-		destination: "stdout",
-		mimeType:    presenters.DefaultMimeType,
-	}
-
-	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-		stdOutTarget.mimeType = presenters.ApplicationSarifMimeType
-	} else if config.IsSet(OUTPUT_CONFIG_KEY_JSON) {
-		stdOutTarget.mimeType = presenters.ApplicationJSONMimeType
-	}
-
-	var targets []outputTarget = []outputTarget{stdOutTarget}
-
-	if config.IsSet(OUTPUT_CONFIG_KEY_SARIF_FILE) {
-		sarifFileTarget := outputTarget{
-			name:        OUTPUT_CONFIG_KEY_SARIF_FILE,
-			destination: "file",
-			fileName:    config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE),
-			mimeType:    presenters.ApplicationSarifMimeType,
+	for _, fileWriter := range fileWriters {
+		if config.IsSet(fileWriter.NameConfigKey) {
+			writerMap[fileWriter.NameConfigKey] = &WriterEntry{
+				writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
+				mimeType:        fileWriter.MimeType,
+				templates:       fileWriter.TemplateFiles,
+				renderEmptyData: fileWriter.WriteEmptyContent,
+			}
 		}
-		targets = append(targets, sarifFileTarget)
-	}
-
-	if config.IsSet(OUTPUT_CONFIG_KEY_JSON_FILE) {
-		jsonFileTarget := outputTarget{
-			name:        OUTPUT_CONFIG_KEY_JSON_FILE,
-			destination: "file",
-			fileName:    config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE),
-			mimeType:    presenters.ApplicationSarifMimeType,
-		}
-		targets = append(targets, jsonFileTarget)
-	}
-
-	writerMap := map[string]*WriterEntry{}
-	for _, target := range targets {
-		writer, err := knownDestintations[target.destination].writer(target.fileName)
-		if err != nil {
-			return nil, err
-		}
-		mimeType := target.mimeType
-		templates := knownTemplates[mimeType]
-		closer := writer.Close
-
-		writerMap[target.name] = &WriterEntry{
-			writer,
-			mimeType,
-			templates,
-			closer,
-		}
-	}
-
-	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
-		writerMap[DEFAULT_WRITER].templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
 	}
 
 	return writerMap, nil
 }
 
-func getSarifFileRenderer(config configuration.Configuration, findings []*local_models.LocalFinding) (*WriterEntry, error) {
-	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE)
-	if len(outputFileName) == 0 {
-		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
-		return nil, nil
-	}
-
-	if !config.GetBool(OUTPUT_CONFIG_WRITE_EMPTY_FILE) && getTotalNumberOfFindings(findings) == 0 {
-		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
-		return nil, nil
-	}
-
-	pathError := iUtils.CreateFilePath(outputFileName)
-	if pathError != nil {
-		return nil, pathError
-	}
-
-	file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
-	if fileErr != nil {
-		return nil, fileErr
-	}
-
+func getDefaultWriter(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
 	writer := &WriterEntry{
-		writer:    file,
-		mimeType:  presenters.ApplicationSarifMimeType,
-		templates: presenters.ApplicationSarifTemplates,
-		closer:    func() error { return file.Close() },
+		writer: &newLineCloser{
+			writer: outputDestination.GetWriter(),
+		},
+		mimeType:        DEFAULT_MIME_TYPE,
+		templates:       DefaultTemplateFiles,
+		renderEmptyData: true,
 	}
-	return writer, nil
+
+	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
+		writer.mimeType = SARIF_MIME_TYPE
+	} else if config.IsSet(OUTPUT_CONFIG_KEY_JSON) {
+		writer.mimeType = presenters.ApplicationJSONMimeType
+	}
+
+	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
+		writer.templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
+	}
+
+	return writer
 }
 
-func getJsonFileRenderer(config configuration.Configuration, findings []*local_models.LocalFinding) (*WriterEntry, error) {
-	outputFileName := config.GetString(OUTPUT_CONFIG_KEY_JSON_FILE)
-	if len(outputFileName) == 0 {
-		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
-		return nil, nil
+func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.LocalFinding, invocation workflow.InvocationContext) {
+	debugLogger := invocation.GetEnhancedLogger()
+
+	if wEntry.renderEmptyData == false && getTotalNumberOfFindings(findings) == 0 {
+		debugLogger.Info().Msgf("[%s] The input is empty, skipping rendering!", name)
+		return
 	}
 
-	if !config.GetBool(OUTPUT_CONFIG_WRITE_EMPTY_FILE) && getTotalNumberOfFindings(findings) == 0 {
-		//nolint:nilnil // returning a nil writer is a valid case based on the configuration and is not an error case
-		return nil, nil
-	}
-
-	pathError := iUtils.CreateFilePath(outputFileName)
-	if pathError != nil {
-		return nil, pathError
-	}
-
-	file, fileErr := os.OpenFile(outputFileName, os.O_WRONLY|os.O_CREATE, 0644)
-	if fileErr != nil {
-		return nil, fileErr
-	}
-
-	writer := &WriterEntry{
-		writer:    file,
-		mimeType:  presenters.ApplicationSarifMimeType,
-		templates: presenters.ApplicationSarifTemplates,
-		closer:    func() error { return file.Close() },
-	}
-	return writer, nil
-}
-
-func useRendererWith(name string, wEntry *WriterEntry, debugLogger *zerolog.Logger, findings []*local_models.LocalFinding, config configuration.Configuration, invocation workflow.InvocationContext) {
 	debugLogger.Info().Msgf("[%s] Creating findings model renderer", name)
 
-	if wEntry.closer != nil {
-		defer func() {
-			closeErr := wEntry.closer()
-			if closeErr != nil {
-				debugLogger.Err(closeErr).Msgf("[%s] Error while closing writer.", name)
-			}
-		}()
-	}
+	defer func() {
+		closeErr := wEntry.writer.Close()
+		if closeErr != nil {
+			debugLogger.Err(closeErr).Msgf("[%s] Error while closing writer.", name)
+		}
+	}()
 
+	config := invocation.GetConfiguration()
 	renderer := presenters.NewLocalFindingsRenderer(
 		findings,
 		config,
@@ -280,7 +179,7 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	threadCount := max(int64(config.GetInt(configuration.MAX_THREADS)), 1)
 	debugLogger.Info().Msgf("Thread count: %d", threadCount)
 
-	writerMap, err := getWritersToUse(config, outputDestination, findings)
+	writerMap, err := getWritersToUse(config, outputDestination)
 	if err != nil {
 		debugLogger.Err(err).Msg("Failed to initialize all required writers")
 	}
@@ -296,7 +195,7 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 
 		go func() {
 			defer availableThreads.Release(1)
-			useRendererWith(k, v, debugLogger, findings, config, invocation)
+			useRendererWith(k, v, findings, invocation)
 		}()
 	}
 
