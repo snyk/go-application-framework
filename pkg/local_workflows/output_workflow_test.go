@@ -430,9 +430,25 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 }
 
-func TestLocalFindingsHandling_renderSarifFile_renderUI(t *testing.T) {
+func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	logger := &zerolog.Logger{}
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts()
+
+	fileWriters := []output_workflow.FileWriter{
+		{
+			output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE,
+			output_workflow.SARIF_MIME_TYPE,
+			output_workflow.ApplicationSarifTemplates,
+			true,
+		},
+		{
+			output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE,
+			output_workflow.SARIF_MIME_TYPE,
+			output_workflow.ApplicationSarifTemplates,
+			false,
+		},
+	}
+	config.Set(output_workflow.OUTPUT_CONFIG_KEY_FILE_WRITERS, fileWriters)
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
@@ -448,57 +464,8 @@ func TestLocalFindingsHandling_renderSarifFile_renderUI(t *testing.T) {
 	outputDestination.EXPECT().GetWriter().Return(byteBuffer).AnyTimes()
 
 	expectedSarifFile := filepath.Join(t.TempDir(), "TestLocalFindingsHandling.sarif")
-	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE, expectedSarifFile)
-	config.Set(configuration.MAX_THREADS, 10)
-
-	testfile := "testdata/sarif-snyk-goof-ignores.json"
-
-	finding, err := sarifToLocalFinding(t, testfile, "")
-	assert.NoError(t, err)
-
-	findingData, err := getWorkflowDataFromLocalFinding(finding)
-	assert.NoError(t, err)
-
-	randomData1 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), content_type.SARIF_JSON, []byte{})
-	randomData2 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), "plain", []byte{})
-	input := []workflow.Data{randomData1, findingData, randomData2}
-
-	// invoking method under test
-	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, outputDestination)
-	assert.NoError(t, err)
-	assert.NotNil(t, actualRemainingData)
-
-	expectedRemainingData := []workflow.Data{randomData1, randomData2}
-	assert.Equal(t, expectedRemainingData, actualRemainingData)
-
-	dataFromSarifFile, err := os.ReadFile(expectedSarifFile)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, dataFromSarifFile)
-
-	dataFromBuffer := byteBuffer.Bytes()
-	assert.NotEmpty(t, dataFromBuffer)
-
-	validateSarifData(t, dataFromSarifFile)
-}
-
-func TestLocalFindingsHandling_renderJsonFile_renderUI(t *testing.T) {
-	logger := &zerolog.Logger{}
-	config := configuration.NewInMemory()
-
-	// setup mocks
-	ctrl := gomock.NewController(t)
-	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	outputDestination := iMocks.NewMockOutputDestination(ctrl)
-
-	// invocation context mocks
-	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
-	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
-
-	byteBuffer := &bytes.Buffer{}
-	outputDestination.EXPECT().GetWriter().Return(byteBuffer).AnyTimes()
-
 	expectedJsonFile := filepath.Join(t.TempDir(), "TestLocalFindingsHandling.json")
+	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE, expectedSarifFile)
 	config.Set(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE, expectedJsonFile)
 	config.Set(configuration.MAX_THREADS, 10)
 
@@ -524,12 +491,15 @@ func TestLocalFindingsHandling_renderJsonFile_renderUI(t *testing.T) {
 
 	dataFromJsonFile, err := os.ReadFile(expectedJsonFile)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, dataFromJsonFile)
+	dataFromSarifFile, err := os.ReadFile(expectedSarifFile)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, dataFromSarifFile)
+	assert.Equal(t, dataFromSarifFile, dataFromJsonFile)
 
 	dataFromBuffer := byteBuffer.Bytes()
 	assert.NotEmpty(t, dataFromBuffer)
 
-	validateSarifData(t, dataFromJsonFile)
+	validateSarifData(t, dataFromSarifFile)
 }
 
 func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
