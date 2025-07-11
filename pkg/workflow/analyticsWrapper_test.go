@@ -74,6 +74,8 @@ func TestAnalyticsWrapper_Setter(t *testing.T) {
 	// unset dynamically generated value
 	originalOutput.Id = ""
 	wrappedOutput.Id = ""
+	originalOutput.DurationMs = 1
+	wrappedOutput.DurationMs = 1
 
 	assert.Equal(t, originalOutput, wrappedOutput)
 }
