@@ -1,13 +1,18 @@
 package output_workflow
 
 import (
-	"path/filepath"
+	"bytes"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
 func getLocalFindingsSkeleton(t *testing.T, count uint32) []*local_models.LocalFinding {
@@ -48,47 +53,115 @@ func Test_getTotalNumberOfFindings(t *testing.T) {
 	})
 }
 
-func Test_getSarifFileRenderer(t *testing.T) {
-	t.Run("no file path specified", func(t *testing.T) {
-		localFindings := getLocalFindingsSkeleton(t, 3)
+func Test_getWritersToUse(t *testing.T) {
+	t.Run("default writer only", func(t *testing.T) {
 		config := configuration.NewWithOpts()
-		renderer, err := getSarifFileRenderer(config, localFindings)
-		assert.NoError(t, err)
-		assert.Nil(t, renderer)
+		buffer := &bytes.Buffer{}
+
+		mockCtl := gomock.NewController(t)
+		output := mocks.NewMockOutputDestination(mockCtl)
+		output.EXPECT().GetWriter().AnyTimes().Return(buffer)
+
+		writerMap := getWritersToUse(config, output)
+		assert.Equal(t, 1, len(writerMap))
 	})
 
-	t.Run("write empty file", func(t *testing.T) {
-		localFindings := getLocalFindingsSkeleton(t, 0)
+	t.Run("default writer + sarif file writer", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
 		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, filepath.Join(t.TempDir(), "not-existing", "somefile"))
-		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, true)
-		renderer, err := getSarifFileRenderer(config, localFindings)
-		assert.NoError(t, err)
-		assert.NotNil(t, renderer)
-		assert.NoError(t, renderer.closer())
-		assert.FileExists(t, config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE))
+		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, t.TempDir()+"/test.sarif")
+
+		mockCtl := gomock.NewController(t)
+		output := mocks.NewMockOutputDestination(mockCtl)
+		output.EXPECT().GetWriter().AnyTimes().Return(buffer)
+
+		writerMap := getWritersToUse(config, output)
+		assert.Equal(t, 2, len(writerMap))
 	})
 
-	t.Run("write non empty file", func(t *testing.T) {
-		localFindings := getLocalFindingsSkeleton(t, 1)
+	t.Run("default writer + configured file writer", func(t *testing.T) {
+		newKey := "somethingNewKey"
+		buffer := &bytes.Buffer{}
 		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, filepath.Join(t.TempDir(), "not-existing", "somefile"))
-		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, false)
-		renderer, err := getSarifFileRenderer(config, localFindings)
-		assert.NoError(t, err)
-		assert.NotNil(t, renderer)
-		assert.NoError(t, renderer.closer())
-		assert.FileExists(t, config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE))
+		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, t.TempDir()+"/test.sarif")
+		config.Set(OUTPUT_CONFIG_KEY_JSON_FILE, t.TempDir()+"/test.json")
+		config.Set(newKey, t.TempDir()+"/test.new")
+
+		config.Set(OUTPUT_CONFIG_KEY_FILE_WRITERS, []FileWriter{
+			{
+				OUTPUT_CONFIG_KEY_SARIF_FILE,
+				SARIF_MIME_TYPE,
+				ApplicationSarifTemplates,
+				true,
+			},
+			{
+				OUTPUT_CONFIG_KEY_JSON_FILE,
+				SARIF_MIME_TYPE,
+				ApplicationSarifTemplates,
+				true,
+			},
+			{
+				newKey,
+				SARIF_MIME_TYPE,
+				ApplicationSarifTemplates,
+				true,
+			},
+		})
+
+		mockCtl := gomock.NewController(t)
+		output := mocks.NewMockOutputDestination(mockCtl)
+		output.EXPECT().GetWriter().AnyTimes().Return(buffer)
+
+		writerMap := getWritersToUse(config, output)
+		assert.Equal(t, 4, len(writerMap))
+	})
+}
+
+func Test_useRendererWith(t *testing.T) {
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+	mockCtl := gomock.NewController(t)
+	ctx := pkgMocks.NewMockInvocationContext(mockCtl)
+	ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
+
+	t.Run("render non empty input", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		writer := &WriterEntry{
+			writer:          &newLineCloser{writer: buffer},
+			mimeType:        DEFAULT_MIME_TYPE,
+			templates:       DefaultTemplateFiles,
+			renderEmptyData: true,
+		}
+		findings := getLocalFindingsSkeleton(t, 2)
+		useRendererWith("", writer, findings, ctx)
+		assert.NotEmpty(t, buffer)
 	})
 
-	t.Run("don't write empty file", func(t *testing.T) {
-		localFindings := getLocalFindingsSkeleton(t, 0)
-		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, filepath.Join(t.TempDir(), "not-existing", "somefile"))
-		config.Set(OUTPUT_CONFIG_WRITE_EMPTY_FILE, false)
-		renderer, err := getSarifFileRenderer(config, localFindings)
-		assert.NoError(t, err)
-		assert.Nil(t, renderer)
-		assert.NoFileExists(t, config.GetString(OUTPUT_CONFIG_KEY_SARIF_FILE))
+	t.Run("render empty input", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		writer := &WriterEntry{
+			writer:          &newLineCloser{writer: buffer},
+			mimeType:        DEFAULT_MIME_TYPE,
+			templates:       DefaultTemplateFiles,
+			renderEmptyData: true,
+		}
+		findings := getLocalFindingsSkeleton(t, 0)
+		useRendererWith("", writer, findings, ctx)
+		assert.NotEmpty(t, buffer)
+	})
+
+	t.Run("don't render empty input", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		writer := &WriterEntry{
+			writer:          &newLineCloser{writer: buffer},
+			mimeType:        DEFAULT_MIME_TYPE,
+			templates:       DefaultTemplateFiles,
+			renderEmptyData: false,
+		}
+		findings := getLocalFindingsSkeleton(t, 0)
+		useRendererWith("", writer, findings, ctx)
+		assert.Empty(t, buffer)
 	})
 }
