@@ -109,6 +109,26 @@ func Test_LogRequest_happyPath_server_request(t *testing.T) {
 	assert.Equal(t, expectedBody, string(actualBody))
 }
 
+func Test_LogRequest_happyPath_server_request_limited(t *testing.T) {
+	inputBody := "this is a longer text, that will not be logged fully. It'll just stop at some point and show the end of the text as well, since start and end of a message might be the most interesting part"
+	expectedBody := "this is a longer text, that wi [...shortened...] t be the most interesting part"
+	body := io.NopCloser(bytes.NewBufferString(inputBody))
+
+	logBuffer := bytes.Buffer{}
+	logger := zerolog.New(&logBuffer).Level(zerolog.TraceLevel)
+	request, err := http.NewRequest(http.MethodGet, "http://localhost/", body)
+	assert.NoError(t, err)
+
+	// method under test
+	LogRequest(request, &logger)
+	assert.Contains(t, logBuffer.String(), expectedBody)
+
+	// ensure that the request body can still be read
+	actualBody, err := io.ReadAll(request.Body)
+	assert.NoError(t, err)
+	assert.Equal(t, inputBody, string(actualBody))
+}
+
 func Test_LogRequest_happyPath_client_request(t *testing.T) {
 	expectedBody := "hello world"
 	body := io.NopCloser(bytes.NewBufferString(expectedBody))
