@@ -13,6 +13,8 @@ import (
 
 const defaultNetworkLogLevel = zerolog.DebugLevel
 const extendedNetworkLogLevel = zerolog.TraceLevel
+const maxNumberOfRequestBodyCharacters = 60
+const maxNumberOfResponseBodyCharacters = -1 // log complete response body
 
 func shouldNotLog(currentLevel zerolog.Level, levelToLogAt zerolog.Level) bool {
 	// Don't log if logger level is above the threshold
@@ -71,9 +73,8 @@ func decodeBody(bodyBytes []byte, contentEncoding string) (string, error) {
 	}
 }
 
-func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, body io.ReadCloser, header http.Header) {
+func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, body io.ReadCloser, header http.Header, maxBodyCharacters int64) {
 	if body != nil {
-		bodyBytes, bodyErr := io.ReadAll(body)
 		defer func() {
 			closeErr := body.Close()
 			if closeErr != nil {
@@ -81,6 +82,7 @@ func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, b
 			}
 		}()
 
+		bodyBytes, bodyErr := io.ReadAll(body)
 		if bodyErr != nil {
 			return
 		}
@@ -89,9 +91,22 @@ func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, b
 		if err != nil {
 			logger.WithLevel(logLevel).Err(err).Msgf("%s Failed to decode request body", logPrefix)
 		} else if len(bodyString) > 0 {
+			bodyString = shortenStringFromCenter(bodyString, maxBodyCharacters)
 			logger.WithLevel(logLevel).Msgf("%s body: %v", logPrefix, bodyString)
 		}
 	}
+}
+
+// shortenStringFromCenter shortens the given string and keeps only maxCharacters of it. It removes content from the center
+// of the string and adds a placeholder making this obvious.
+func shortenStringFromCenter(str string, maxCharacters int64) string {
+	// shorten body if maxBodyCharacters is set
+	bodyLength := int64(len(str))
+	if maxCharacters > 0 && bodyLength > maxCharacters {
+		subLength := maxCharacters / 2
+		str = fmt.Sprintf("%s [...shortened...] %s", str[0:subLength], str[bodyLength-subLength:bodyLength])
+	}
+	return str
 }
 
 func LogRequest(r *http.Request, logger *zerolog.Logger) {
@@ -108,7 +123,7 @@ func LogRequest(r *http.Request, logger *zerolog.Logger) {
 		return
 	}
 
-	logBody(logger, defaultNetworkLogLevel, logPrefixRequest, getRequestBody(r), r.Header)
+	logBody(logger, defaultNetworkLogLevel, logPrefixRequest, getRequestBody(r), r.Header, maxNumberOfRequestBodyCharacters)
 }
 
 func LogResponse(response *http.Response, logger *zerolog.Logger) {
@@ -126,6 +141,6 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 			return
 		}
 
-		logBody(logger, defaultNetworkLogLevel, logPrefixResponse, getResponseBody(response), response.Header)
+		logBody(logger, defaultNetworkLogLevel, logPrefixResponse, getResponseBody(response), response.Header, maxNumberOfResponseBodyCharacters)
 	}
 }
