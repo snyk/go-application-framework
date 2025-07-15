@@ -73,7 +73,6 @@ func decodeBody(bodyBytes []byte, contentEncoding string) (string, error) {
 
 func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, body io.ReadCloser, header http.Header, maxLength int64) {
 	if body != nil {
-		bodyBytes, bodyErr := io.ReadAll(body)
 		defer func() {
 			closeErr := body.Close()
 			if closeErr != nil {
@@ -81,22 +80,22 @@ func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, b
 			}
 		}()
 
+		bodyBytes, bodyErr := io.ReadAll(body)
 		if bodyErr != nil {
 			return
 		}
 
 		bodyString, err := decodeBody(bodyBytes, header.Get("Content-Encoding"))
-
-		// shorten body if maxLength is set
-		bodyLength := int64(len(bodyString))
-		if maxLength > 0 && bodyLength > maxLength {
-			subLength := maxLength / 2
-			bodyString = fmt.Sprintf("%s [...shortened...] %s", bodyString[0:subLength], bodyString[bodyLength-subLength:bodyLength])
-		}
-
 		if err != nil {
 			logger.WithLevel(logLevel).Err(err).Msgf("%s Failed to decode request body", logPrefix)
 		} else if len(bodyString) > 0 {
+			// shorten body if maxLength is set
+			bodyLength := int64(len(bodyString))
+			if maxLength > 0 && bodyLength > maxLength {
+				subLength := maxLength / 2
+				bodyString = fmt.Sprintf("%s [...shortened...] %s", bodyString[0:subLength], bodyString[bodyLength-subLength:bodyLength])
+			}
+
 			logger.WithLevel(logLevel).Msgf("%s body: %v", logPrefix, bodyString)
 		}
 	}
