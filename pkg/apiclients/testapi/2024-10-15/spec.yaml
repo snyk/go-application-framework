@@ -450,10 +450,12 @@ components:
           dependency_path: '#/components/schemas/DependencyPathEvidence'
           execution_flow: '#/components/schemas/ExecutionFlowEvidence'
           other: '#/components/schemas/OtherEvidence'
+          reachability: '#/components/schemas/ReachabilityEvidence'
         propertyName: source
       oneOf:
       - $ref: '#/components/schemas/DependencyPathEvidence'
       - $ref: '#/components/schemas/ExecutionFlowEvidence'
+      - $ref: '#/components/schemas/ReachabilityEvidence'
       - $ref: '#/components/schemas/OtherEvidence'
     ExecutionFlowEvidence:
       description: Indicate a program flow of execution as additional evidence for
@@ -1216,6 +1218,58 @@ components:
           description: Severity level of the finding.
       required:
       - severity
+      type: object
+    ReachabilityEvidence:
+      description: Indicate the reachability signals as additional evidence for the
+        finding.
+      properties:
+        paths:
+          description: |-
+            Sequence of locations within this flow of execution.
+
+            For example, a sequence of locations connecting the "source" location
+            where input data is obtained, to a "sink" location where it is used.
+          items:
+            $ref: '#/components/schemas/ReachablePath'
+          minItems: 1
+          type: array
+        reachability:
+          $ref: '#/components/schemas/ReachabilityType'
+        source:
+          enum:
+          - reachability
+          type: string
+      required:
+      - source
+      - paths
+      - reachability
+      type: object
+    ReachabilityType:
+      description: Reachability enum for reachability signal.
+      enum:
+      - none
+      - function
+      - no_info
+      - not_applicable
+      type: string
+    ReachablePath:
+      description: ReachablePath represents the paths to a vulnerable function.
+      properties:
+        call_paths:
+          description: Paths in code bundle that call the vulnerable function.
+          items:
+            type: string
+          type: array
+        function_name:
+          description: Vulnerable function name.
+          type: string
+        location:
+          allOf:
+          - $ref: '#/components/schemas/FileRegion'
+          description: Location in a file where the vulnerability can be found.
+      required:
+      - function_name
+      - call_paths
       type: object
     Risk:
       description: Risk represents Snyk's risk assessment of a finding.

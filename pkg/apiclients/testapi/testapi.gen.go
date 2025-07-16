@@ -143,6 +143,19 @@ const (
 	ProjectName ProjectNameLocatorType = "project_name"
 )
 
+// Defines values for ReachabilityEvidenceSource.
+const (
+	Reachability ReachabilityEvidenceSource = "reachability"
+)
+
+// Defines values for ReachabilityType.
+const (
+	ReachabilityTypeFunction      ReachabilityType = "function"
+	ReachabilityTypeNoInfo        ReachabilityType = "no_info"
+	ReachabilityTypeNone          ReachabilityType = "none"
+	ReachabilityTypeNotApplicable ReachabilityType = "not_applicable"
+)
+
 // Defines values for SbomReachabilitySubjectType.
 const (
 	SbomReachability SbomReachabilitySubjectType = "sbom_reachability"
@@ -244,7 +257,7 @@ const (
 
 // Defines values for SnykvulndbOtherPackageEcosystemType.
 const (
-	Other SnykvulndbOtherPackageEcosystemType = "other"
+	SnykvulndbOtherPackageEcosystemTypeOther SnykvulndbOtherPackageEcosystemType = "other"
 )
 
 // ActualVersion Resolved API version
@@ -820,6 +833,37 @@ type QueryVersion = string
 type Rating struct {
 	// Severity Severity level of the finding.
 	Severity Severity `json:"severity"`
+}
+
+// ReachabilityEvidence Indicate the reachability signals as additional evidence for the finding.
+type ReachabilityEvidence struct {
+	// Paths Sequence of locations within this flow of execution.
+	//
+	// For example, a sequence of locations connecting the "source" location
+	// where input data is obtained, to a "sink" location where it is used.
+	Paths []ReachablePath `json:"paths"`
+
+	// Reachability Reachability enum for reachability signal.
+	Reachability ReachabilityType           `json:"reachability"`
+	Source       ReachabilityEvidenceSource `json:"source"`
+}
+
+// ReachabilityEvidenceSource defines model for ReachabilityEvidence.Source.
+type ReachabilityEvidenceSource string
+
+// ReachabilityType Reachability enum for reachability signal.
+type ReachabilityType string
+
+// ReachablePath ReachablePath represents the paths to a vulnerable function.
+type ReachablePath struct {
+	// CallPaths Paths in code bundle that call the vulnerable function.
+	CallPaths []string `json:"call_paths"`
+
+	// FunctionName Vulnerable function name.
+	FunctionName string `json:"function_name"`
+
+	// Location Location in a file where the vulnerability can be found.
+	Location *FileRegion `json:"location,omitempty"`
 }
 
 // Risk Risk represents Snyk's risk assessment of a finding.
@@ -2418,6 +2462,34 @@ func (t *Evidence) MergeExecutionFlowEvidence(v ExecutionFlowEvidence) error {
 	return err
 }
 
+// AsReachabilityEvidence returns the union data inside the Evidence as a ReachabilityEvidence
+func (t Evidence) AsReachabilityEvidence() (ReachabilityEvidence, error) {
+	var body ReachabilityEvidence
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromReachabilityEvidence overwrites any union data inside the Evidence as the provided ReachabilityEvidence
+func (t *Evidence) FromReachabilityEvidence(v ReachabilityEvidence) error {
+	v.Source = "reachability"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeReachabilityEvidence performs a merge with any union data inside the Evidence, using the provided ReachabilityEvidence
+func (t *Evidence) MergeReachabilityEvidence(v ReachabilityEvidence) error {
+	v.Source = "reachability"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsOtherEvidence returns the union data inside the Evidence as a OtherEvidence
 func (t Evidence) AsOtherEvidence() (OtherEvidence, error) {
 	var body OtherEvidence
@@ -2466,6 +2538,8 @@ func (t Evidence) ValueByDiscriminator() (interface{}, error) {
 		return t.AsExecutionFlowEvidence()
 	case "other":
 		return t.AsOtherEvidence()
+	case "reachability":
+		return t.AsReachabilityEvidence()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
