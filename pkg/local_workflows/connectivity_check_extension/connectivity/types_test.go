@@ -96,10 +96,13 @@ func TestConnectivityCheckResult_AddTODO(t *testing.T) {
 }
 
 func TestSnykHosts(t *testing.T) {
+	// Get hosts using thread-safe getter
+	hosts := GetSnykHosts()
+
 	// Verify we have the expected number of hosts
 	expectedCount := 16
-	if len(SnykHosts) != expectedCount {
-		t.Errorf("Expected %d Snyk hosts, got %d", expectedCount, len(SnykHosts))
+	if len(hosts) != expectedCount {
+		t.Errorf("Expected %d Snyk hosts, got %d", expectedCount, len(hosts))
 	}
 
 	// Verify some key hosts are present
@@ -117,7 +120,7 @@ func TestSnykHosts(t *testing.T) {
 
 	for _, required := range requiredHosts {
 		found := false
-		for _, host := range SnykHosts {
+		for _, host := range hosts {
 			if host == required {
 				found = true
 				break

@@ -44,15 +44,12 @@ func TestConnectivityCheckerWithRealNetworkAccess(t *testing.T) {
 	logger := zerolog.Nop()
 
 	// Override SnykHosts for testing with our test server
-	originalHosts := connectivity.SnykHosts
-	connectivity.SnykHosts = []string{
+	cleanup := connectivity.SetSnykHostsForTesting([]string{
 		server.URL[8:] + "/api.snyk.io",
 		server.URL[8:] + "/app.snyk.io",
 		server.URL[8:] + "/forbidden",
-	}
-	defer func() {
-		connectivity.SnykHosts = originalHosts
-	}()
+	})
+	defer cleanup()
 
 	// Create checker with real network access
 	checker := connectivity.NewChecker(networkAccess, &logger, config)
@@ -168,11 +165,8 @@ func TestNetworkAccessWithCustomHeaders(t *testing.T) {
 	checker := connectivity.NewChecker(networkAccess, &logger, config)
 
 	// Override hosts for testing
-	originalHosts := connectivity.SnykHosts
-	connectivity.SnykHosts = []string{server.URL[8:]}
-	defer func() {
-		connectivity.SnykHosts = originalHosts
-	}()
+	cleanup := connectivity.SetSnykHostsForTesting([]string{server.URL[8:]})
+	defer cleanup()
 
 	// Run check
 	result, err := checker.CheckConnectivity()
@@ -248,11 +242,8 @@ func TestJSONOutputWithOrganizations(t *testing.T) {
 	logger := zerolog.Nop()
 
 	// Override SnykHosts for testing
-	originalHosts := connectivity.SnykHosts
-	connectivity.SnykHosts = []string{server.URL[8:]}
-	defer func() {
-		connectivity.SnykHosts = originalHosts
-	}()
+	cleanup := connectivity.SetSnykHostsForTesting([]string{server.URL[8:]})
+	defer cleanup()
 
 	// Create checker
 	checker := connectivity.NewChecker(networkAccess, &logger, config)

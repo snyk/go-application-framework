@@ -2,6 +2,7 @@ package connectivity
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -126,6 +127,9 @@ type Organization struct {
 	} `json:"group"`
 }
 
+// snykHostsMutex protects access to SnykHosts
+var snykHostsMutex sync.RWMutex
+
 // SnykHosts contains all the Snyk endpoints to test
 var SnykHosts = []string{
 	"api.snyk.io",
@@ -144,4 +148,45 @@ var SnykHosts = []string{
 	"static.snyk.io/cli/latest/version",
 	"snyk.io",
 	"sentry.io",
+}
+
+// GetSnykHosts returns a copy of the current SnykHosts slice in a thread-safe manner
+func GetSnykHosts() []string {
+	snykHostsMutex.RLock()
+	defer snykHostsMutex.RUnlock()
+
+	// Return a copy to prevent external modification
+	hosts := make([]string, len(SnykHosts))
+	copy(hosts, SnykHosts)
+	return hosts
+}
+
+// SetSnykHosts sets the SnykHosts slice in a thread-safe manner
+func SetSnykHosts(hosts []string) {
+	snykHostsMutex.Lock()
+	defer snykHostsMutex.Unlock()
+
+	// Create a copy to prevent external modification after setting
+	SnykHosts = make([]string, len(hosts))
+	copy(SnykHosts, hosts)
+}
+
+// SetSnykHostsForTesting is a helper for tests that sets hosts and returns a cleanup function
+func SetSnykHostsForTesting(hosts []string) func() {
+	snykHostsMutex.Lock()
+	// Save the current hosts before modification
+	originalHosts := make([]string, len(SnykHosts))
+	copy(originalHosts, SnykHosts)
+
+	// Set the new hosts
+	SnykHosts = make([]string, len(hosts))
+	copy(SnykHosts, hosts)
+	snykHostsMutex.Unlock()
+
+	// Return a cleanup function that restores the original hosts
+	return func() {
+		snykHostsMutex.Lock()
+		SnykHosts = originalHosts
+		snykHostsMutex.Unlock()
+	}
 }

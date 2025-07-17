@@ -161,7 +161,7 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 	result.ProxyConfig = c.DetectProxyConfig()
 
 	// Test each host
-	for _, host := range SnykHosts {
+	for _, host := range GetSnykHosts() {
 		hostResult := c.checkHost(host)
 		result.HostResults = append(result.HostResults, hostResult)
 
@@ -277,7 +277,7 @@ func (c *Checker) categorizeError(err error) ConnectionStatus {
 
 	// DNS errors
 	var dnsErr *net.DNSError
-	if ok := errorsAs(err, &dnsErr); ok {
+	if errors.As(err, &dnsErr) {
 		return StatusDNSError
 	}
 	if strings.Contains(errStr, "no such host") {
@@ -298,7 +298,7 @@ func (c *Checker) categorizeError(err error) ConnectionStatus {
 
 	// URL errors
 	var urlErr *url.Error
-	if ok := errorsAs(err, &urlErr); ok {
+	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() {
 			return StatusTimeout
 		}
@@ -354,28 +354,4 @@ func (c *Checker) generateTODOs(result *ConnectivityCheckResult, hostResult *Hos
 				hostResult.StatusCode, hostResult.DisplayHost)
 		}
 	}
-}
-
-// errorsAs is a helper function for error type assertion
-func errorsAs(err error, target interface{}) bool {
-	if err == nil {
-		return false
-	}
-
-	switch v := target.(type) {
-	case *net.DNSError:
-		var dnsErr *net.DNSError
-		if errors.As(err, &dnsErr) {
-			*v = *dnsErr
-			return true
-		}
-	case *url.Error:
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
-			*v = *urlErr
-			return true
-		}
-	}
-
-	return false
 }

@@ -642,15 +642,12 @@ func TestCheckConnectivity(t *testing.T) {
 	defer server.Close()
 
 	// Override SnykHosts for testing
-	originalHosts := SnykHosts
-	SnykHosts = []string{
+	cleanup := SetSnykHostsForTesting([]string{
 		"api.snyk.io",
 		"app.snyk.io",
 		"static.snyk.io",
-	}
-	defer func() {
-		SnykHosts = originalHosts
-	}()
+	})
+	defer cleanup()
 
 	// Create checker with mock NetworkAccess
 	logger := zerolog.Nop()
@@ -676,8 +673,8 @@ func TestCheckConnectivity(t *testing.T) {
 	}
 
 	// Verify we got results for all hosts
-	if len(result.HostResults) != len(SnykHosts) {
-		t.Errorf("Expected %d host results, got %d", len(SnykHosts), len(result.HostResults))
+	if len(result.HostResults) != 3 { // We're testing with 3 hosts
+		t.Errorf("Expected 3 host results, got %d", len(result.HostResults))
 	}
 }
 
