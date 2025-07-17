@@ -95,6 +95,7 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
+	github.com/snyk/connectivity-check/connectivity_check_extension v0.0.0-20250717120229-60a145f4a1e4 // indirect
 	github.com/speakeasy-api/jsonpath v0.6.1 // indirect
 	github.com/speakeasy-api/openapi-overlay v0.10.1 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
