@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -125,6 +126,11 @@ func TestDetectProxyConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Skip case-sensitivity test on Windows since environment variables are case-insensitive
+			if runtime.GOOS == "windows" && tt.name == "Priority order - HTTPS_PROXY wins" {
+				t.Skip("Skipping case-sensitivity test on Windows")
+			}
+
 			// Set test environment variables using t.Setenv
 			// First clear relevant proxy variables
 			t.Setenv("HTTPS_PROXY", "")
