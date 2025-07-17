@@ -71,12 +71,9 @@ func (m *mockNetworkAccess) GetUnauthorizedHttpClient() *http.Client {
 func (m *mockNetworkAccess) AddHeaders(request *http.Request) error {
 	// Simulate the framework adding authorization header when token is configured
 	if m.config != nil {
-		token := m.config.GetString("token")
+		token := m.config.GetString(configuration.AUTHENTICATION_TOKEN)
 		if token == "" {
-			token = m.config.GetString("AUTHENTICATION_TOKEN")
-		}
-		if token == "" {
-			token = m.config.GetString("AUTHENTICATION_BEARER_TOKEN")
+			token = m.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
 		}
 		if token != "" {
 			request.Header.Set("Authorization", "Bearer "+token)
@@ -703,15 +700,21 @@ func (e *mockError) Error() string {
 func TestCheckOrganizations(t *testing.T) {
 	// Create test server that returns organizations
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Log the request for debugging
+		t.Logf("Received request: %s %s", r.Method, r.URL.String())
+		t.Logf("Authorization header: %s", r.Header.Get("Authorization"))
+
 		// Verify authorization header
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer test-token" {
+			t.Logf("Authorization failed: expected 'Bearer test-token', got '%s'", auth)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
 		// Verify the API endpoint path
 		if !strings.Contains(r.URL.Path, "/rest/orgs") {
+			t.Logf("Path check failed: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -770,12 +773,13 @@ func TestCheckOrganizations(t *testing.T) {
 	logger := zerolog.Nop()
 	mockNA := newMockNetworkAccess(server.Client())
 	config := configuration.New()
-	config.Set("token", "test-token")
+	config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 	config.Set("api", server.URL)
 	mockNA.SetConfiguration(config)
 	checker := NewChecker(mockNA, &logger, config)
 
 	orgs, err := checker.CheckOrganizations(server.URL)
+	t.Logf("CheckOrganizations returned: orgs=%v, err=%v", orgs, err)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -822,9 +826,10 @@ func TestCheckOrganizations(t *testing.T) {
 	defer serverError.Close()
 
 	configError := configuration.New()
-	configError.Set("token", "test-token")
+	configError.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 	configError.Set("api", serverError.URL)
 	mockNAError := newMockNetworkAccess(serverError.Client())
+	mockNAError.SetConfiguration(configError)
 	checkerError := NewChecker(mockNAError, &logger, configError)
 
 	_, err = checkerError.CheckOrganizations(serverError.URL)
