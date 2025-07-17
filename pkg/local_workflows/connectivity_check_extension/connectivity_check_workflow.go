@@ -80,7 +80,7 @@ func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input
 		bufferUI := &bufferUIAdapter{writer: &buf}
 
 		// Use the GAF formatter
-		formatter := connectivity.NewGAFFormatter(bufferUI, useColor)
+		formatter := connectivity.NewFormatter(bufferUI, useColor)
 		if err := formatter.FormatResult(result); err != nil {
 			return nil, fmt.Errorf("failed to format results: %w", err)
 		}

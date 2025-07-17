@@ -11,28 +11,28 @@ import (
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
-// GAFFormatter formats connectivity check results using GAF UI components
-type GAFFormatter struct {
+// Formatter formats connectivity check results using GAF UI components
+type Formatter struct {
 	ui       ui.UserInterface
 	useColor bool
 }
 
-// NewGAFFormatter creates a new formatter using GAF UI interfaces
-func NewGAFFormatter(ui ui.UserInterface, useColor bool) *GAFFormatter {
+// NewFormatter creates a new formatter using GAF UI interfaces
+func NewFormatter(ui ui.UserInterface, useColor bool) *Formatter {
 	if useColor {
 		lipgloss.SetColorProfile(termenv.TrueColor)
 	} else {
 		lipgloss.SetColorProfile(termenv.Ascii)
 	}
 
-	return &GAFFormatter{
+	return &Formatter{
 		ui:       ui,
 		useColor: useColor,
 	}
 }
 
 // FormatResult formats the complete connectivity check result using GAF presenters
-func (f *GAFFormatter) FormatResult(result *ConnectivityCheckResult) error {
+func (f *Formatter) FormatResult(result *ConnectivityCheckResult) error {
 	// Format proxy configuration
 	if err := f.formatProxyConfig(result.ProxyConfig); err != nil {
 		return err
@@ -70,7 +70,7 @@ func (f *GAFFormatter) FormatResult(result *ConnectivityCheckResult) error {
 }
 
 // formatProxyConfig formats proxy configuration information
-func (f *GAFFormatter) formatProxyConfig(config ProxyConfig) error {
+func (f *Formatter) formatProxyConfig(config ProxyConfig) error {
 	f.ui.Output("Checking for proxy configuration...")
 	f.ui.Output("")
 	f.ui.Output("Environment variables:")
@@ -109,7 +109,7 @@ func (f *GAFFormatter) formatProxyConfig(config ProxyConfig) error {
 }
 
 // formatHostResult formats a single host result
-func (f *GAFFormatter) formatHostResult(result HostResult) error {
+func (f *Formatter) formatHostResult(result HostResult) error {
 	line := fmt.Sprintf("%-30s ", result.DisplayHost)
 
 	statusStr := result.Status.String()
@@ -135,7 +135,7 @@ func (f *GAFFormatter) formatHostResult(result HostResult) error {
 }
 
 // formatTODOs formats the actionable TODO items
-func (f *GAFFormatter) formatTODOs(todos []TODO) error {
+func (f *Formatter) formatTODOs(todos []TODO) error {
 	f.ui.Output("")
 	f.ui.Output(presenters.RenderTitle("Actionable TODOs"))
 
@@ -169,7 +169,7 @@ func (f *GAFFormatter) formatTODOs(todos []TODO) error {
 }
 
 // formatOrganizations formats the organization list
-func (f *GAFFormatter) formatOrganizations(result *ConnectivityCheckResult) error {
+func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
 	f.ui.Output("")
 	f.ui.Output(presenters.RenderTitle("Snyk Token and Organizations"))
 
@@ -232,7 +232,7 @@ func (f *GAFFormatter) formatOrganizations(result *ConnectivityCheckResult) erro
 }
 
 // renderHTML converts HTML-like markup to ANSI colors using GAF's HTML presenter
-func (f *GAFFormatter) renderHTML(html string) string {
+func (f *Formatter) renderHTML(html string) string {
 	if !f.useColor {
 		// Strip HTML tags if color is disabled
 		presenter := presenters.NewHTMLPresenter(func(tag, cssClass, originalContent string) string {
