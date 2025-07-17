@@ -10,132 +10,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/networking"
-	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 )
-
-// mockNetworkAccess implements networking.NetworkAccess for testing
-type mockNetworkAccess struct {
-	httpClient *http.Client
-	logger     *zerolog.Logger
-	config     configuration.Configuration
-}
-
-// mockTransport wraps http.RoundTripper to add headers
-type mockTransport struct {
-	base          http.RoundTripper
-	networkAccess *mockNetworkAccess
-}
-
-func (t *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Add headers before sending the request
-	if err := t.networkAccess.AddHeaders(req); err != nil {
-		return nil, err
-	}
-
-	if t.base == nil {
-		t.base = http.DefaultTransport
-	}
-	return t.base.RoundTrip(req)
-}
-
-func newMockNetworkAccess(httpClient *http.Client) *mockNetworkAccess {
-	return &mockNetworkAccess{
-		httpClient: httpClient,
-	}
-}
-
-func (m *mockNetworkAccess) GetHttpClient() *http.Client {
-	// Wrap the client to add headers on each request
-	if m.httpClient == nil {
-		m.httpClient = &http.Client{}
-	}
-
-	// Create a new client that adds headers
-	return &http.Client{
-		Transport: &mockTransport{
-			base:          m.httpClient.Transport,
-			networkAccess: m,
-		},
-		Timeout: m.httpClient.Timeout,
-	}
-}
-
-func (m *mockNetworkAccess) GetUnauthorizedHttpClient() *http.Client {
-	return m.httpClient
-}
-
-func (m *mockNetworkAccess) AddHeaders(request *http.Request) error {
-	// Simulate the framework adding authorization header when token is configured
-	if m.config != nil {
-		token := m.config.GetString(configuration.AUTHENTICATION_TOKEN)
-		if token == "" {
-			token = m.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
-		}
-		if token != "" {
-			request.Header.Set("Authorization", "Bearer "+token)
-		}
-	}
-	return nil
-}
-
-func (m *mockNetworkAccess) GetRoundTripper() http.RoundTripper {
-	if m.httpClient != nil && m.httpClient.Transport != nil {
-		return m.httpClient.Transport
-	}
-	return http.DefaultTransport
-}
-
-func (m *mockNetworkAccess) AddHeaderField(key, value string) {}
-
-func (m *mockNetworkAccess) AddDynamicHeaderField(key string, f networking.DynamicHeaderFunc) {}
-
-func (m *mockNetworkAccess) RemoveHeaderField(key string) {}
-
-func (m *mockNetworkAccess) AddRootCAs(pemFileLocation string) error {
-	return nil
-}
-
-func (m *mockNetworkAccess) AddErrorHandler(handler networktypes.ErrorHandlerFunc) {}
-
-func (m *mockNetworkAccess) GetErrorHandler() networktypes.ErrorHandlerFunc {
-	return nil
-}
-
-func (m *mockNetworkAccess) GetAuthenticator() auth.Authenticator {
-	return nil
-}
-
-func (m *mockNetworkAccess) SetLogger(logger *zerolog.Logger) {
-	m.logger = logger
-}
-
-func (m *mockNetworkAccess) SetConfiguration(config configuration.Configuration) {
-	m.config = config
-}
-
-func (m *mockNetworkAccess) GetLogger() *zerolog.Logger {
-	return m.logger
-}
-
-func (m *mockNetworkAccess) GetConfiguration() configuration.Configuration {
-	return m.config
-}
-
-func (m *mockNetworkAccess) Clone() networking.NetworkAccess {
-	return &mockNetworkAccess{
-		httpClient: m.httpClient,
-		logger:     m.logger,
-		config:     m.config,
-	}
-}
 
 func TestNewChecker(t *testing.T) {
 	// Create mock NetworkAccess
-	mockNA := newMockNetworkAccess(nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockNA := mocks.NewMockNetworkAccess(ctrl)
 	logger := zerolog.Nop()
 	config := configuration.New()
 
@@ -255,7 +141,7 @@ func TestDetectProxyConfig(t *testing.T) {
 
 			// Create checker
 			logger := zerolog.Nop()
-			mockNA := newMockNetworkAccess(&http.Client{Timeout: 10 * time.Second})
+			mockNA := mocks.NewMockNetworkAccess(gomock.NewController(t))
 			config := configuration.New()
 			checker := NewChecker(mockNA, &logger, config)
 
@@ -357,9 +243,15 @@ func TestCheckHost(t *testing.T) {
 			}))
 			defer server.Close()
 
-			// Create checker with mock NetworkAccess using test server's client
+			// Create checker with mock NetworkAccess
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockNA := mocks.NewMockNetworkAccess(ctrl)
+			// Set expectation for GetUnauthorizedHttpClient (not GetHttpClient)
+			mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client()).AnyTimes()
+
 			logger := zerolog.Nop()
-			mockNA := newMockNetworkAccess(server.Client())
 			config := configuration.New()
 			checker := NewChecker(mockNA, &logger, config)
 
@@ -413,8 +305,14 @@ func TestCheckHost_WithPath(t *testing.T) {
 			defer server.Close()
 
 			// Create checker with mock NetworkAccess
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockNA := mocks.NewMockNetworkAccess(ctrl)
+			// Set expectation for GetUnauthorizedHttpClient
+			mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client()).AnyTimes()
+
 			logger := zerolog.Nop()
-			mockNA := newMockNetworkAccess(server.Client())
 			config := configuration.New()
 			checker := NewChecker(mockNA, &logger, config)
 
@@ -436,7 +334,7 @@ func TestCheckHost_WithPath(t *testing.T) {
 
 func TestCategorizeError(t *testing.T) {
 	logger := zerolog.Nop()
-	mockNA := newMockNetworkAccess(nil)
+	mockNA := mocks.NewMockNetworkAccess(gomock.NewController(t))
 	config := configuration.New()
 	checker := NewChecker(mockNA, &logger, config)
 
@@ -504,7 +402,7 @@ func TestCategorizeError(t *testing.T) {
 
 func TestGenerateTODOs(t *testing.T) {
 	logger := zerolog.Nop()
-	mockNA := newMockNetworkAccess(nil)
+	mockNA := mocks.NewMockNetworkAccess(gomock.NewController(t))
 	config := configuration.New()
 	checker := NewChecker(mockNA, &logger, config)
 
@@ -650,8 +548,16 @@ func TestCheckConnectivity(t *testing.T) {
 	defer cleanup()
 
 	// Create checker with mock NetworkAccess
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockNA := mocks.NewMockNetworkAccess(ctrl)
+	// Set expectation for GetUnauthorizedHttpClient (used by checkHost)
+	mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client()).AnyTimes()
+	// Mock GetConfiguration to return empty config (no token)
+	mockNA.EXPECT().GetConfiguration().Return(configuration.New()).AnyTimes()
+
 	logger := zerolog.Nop()
-	mockNA := newMockNetworkAccess(server.Client())
 	config := configuration.New()
 	checker := NewChecker(mockNA, &logger, config)
 
@@ -767,12 +673,27 @@ func TestCheckOrganizations(t *testing.T) {
 	defer server.Close()
 
 	// Test with token
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	logger := zerolog.Nop()
-	mockNA := newMockNetworkAccess(server.Client())
+	mockNA := mocks.NewMockNetworkAccess(ctrl)
 	config := configuration.New()
 	config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 	config.Set("api", server.URL)
-	mockNA.SetConfiguration(config)
+
+	// Create a custom HTTP client that adds headers
+	client := server.Client()
+	originalTransport := client.Transport
+	client.Transport = &headerAddingTransport{
+		base:   originalTransport,
+		config: config,
+	}
+
+	// Set expectations
+	mockNA.EXPECT().GetHttpClient().Return(client).AnyTimes()
+	mockNA.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
 	checker := NewChecker(mockNA, &logger, config)
 
 	orgs, err := checker.CheckOrganizations(server.URL)
@@ -800,8 +721,10 @@ func TestCheckOrganizations(t *testing.T) {
 	// Clear any OAuth tokens by setting the oauth disable flag
 	configNoToken.Set("snyk_oauth_token", "")
 	configNoToken.Set("snyk_disable_analytics", "1")
-	mockNANoToken := newMockNetworkAccess(server.Client())
-	mockNANoToken.SetConfiguration(configNoToken)
+
+	mockNANoToken := mocks.NewMockNetworkAccess(ctrl)
+	mockNANoToken.EXPECT().GetConfiguration().Return(configNoToken).AnyTimes()
+
 	checkerNoToken := NewChecker(mockNANoToken, &logger, configNoToken)
 
 	orgsNoToken, err := checkerNoToken.CheckOrganizations(server.URL)
@@ -825,12 +748,40 @@ func TestCheckOrganizations(t *testing.T) {
 	configError := configuration.New()
 	configError.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 	configError.Set("api", serverError.URL)
-	mockNAError := newMockNetworkAccess(serverError.Client())
-	mockNAError.SetConfiguration(configError)
+
+	mockNAError := mocks.NewMockNetworkAccess(ctrl)
+	errorClient := serverError.Client()
+	errorClient.Transport = &headerAddingTransport{
+		base:   errorClient.Transport,
+		config: configError,
+	}
+	mockNAError.EXPECT().GetHttpClient().Return(errorClient).AnyTimes()
+	mockNAError.EXPECT().GetConfiguration().Return(configError).AnyTimes()
+
 	checkerError := NewChecker(mockNAError, &logger, configError)
 
 	_, err = checkerError.CheckOrganizations(serverError.URL)
 	if err == nil {
 		t.Error("Expected error for HTTP 500 response")
 	}
+}
+
+// headerAddingTransport adds authorization headers to requests
+type headerAddingTransport struct {
+	base   http.RoundTripper
+	config configuration.Configuration
+}
+
+func (t *headerAddingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Add authorization header if token is present
+	if t.config != nil {
+		token := t.config.GetString(configuration.AUTHENTICATION_TOKEN)
+		if token == "" {
+			token = t.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
+	return t.base.RoundTrip(req)
 }
