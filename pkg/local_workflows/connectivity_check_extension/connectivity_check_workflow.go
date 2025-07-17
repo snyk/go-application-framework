@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension/connectivity"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
+	"golang.org/x/term"
 )
 
 const (
@@ -69,17 +72,18 @@ func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input
 		outputData := createWorkflowData(jsonData, "application/json", logger, config)
 		return []workflow.Data{outputData}, nil
 	} else {
-		// Human-readable output
+		// Human-readable output using GAF formatter
 		var buf bytes.Buffer
 		useColor := !config.GetBool(noColorFlag) && isTerminal()
-		formatter := connectivity.NewFormatter(&buf, useColor)
 
+		// Create a simple writer-based UI adapter
+		bufferUI := &bufferUIAdapter{writer: &buf}
+
+		// Use the GAF formatter
+		formatter := connectivity.NewGAFFormatter(bufferUI, useColor)
 		if err := formatter.FormatResult(result); err != nil {
 			return nil, fmt.Errorf("failed to format results: %w", err)
 		}
-
-		// Don't write to UI directly when integrated with CLI - the workflow engine handles output
-		// The workflow data will be displayed by the CLI framework
 
 		// Create workflow data for text output
 		outputData := createWorkflowData(buf.Bytes(), "text/plain", logger, config)
@@ -100,9 +104,36 @@ func createWorkflowData(data interface{}, contentType string, logger *zerolog.Lo
 
 // isTerminal checks if stdout is a terminal
 func isTerminal() bool {
-	fileInfo, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-	return (fileInfo.Mode() & os.ModeCharDevice) != 0
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
+
+// bufferUIAdapter implements a minimal ui.UserInterface that writes to a buffer
+type bufferUIAdapter struct {
+	writer io.Writer
+}
+
+func (b *bufferUIAdapter) Output(output string) error {
+	_, err := fmt.Fprintln(b.writer, output)
+	return err
+}
+
+func (b *bufferUIAdapter) OutputError(err error, opts ...ui.Opts) error {
+	_, writeErr := fmt.Fprintln(b.writer, err.Error())
+	return writeErr
+}
+
+func (b *bufferUIAdapter) NewProgressBar() ui.ProgressBar {
+	// Return a no-op progress bar for workflow context
+	return &noOpProgressBar{}
+}
+
+func (b *bufferUIAdapter) Input(prompt string) (string, error) {
+	return "", fmt.Errorf("input not supported in workflow context")
+}
+
+// noOpProgressBar is a progress bar that does nothing
+type noOpProgressBar struct{}
+
+func (n *noOpProgressBar) UpdateProgress(progress float64) error { return nil }
+func (n *noOpProgressBar) SetTitle(title string)                 {}
+func (n *noOpProgressBar) Clear() error                          { return nil }
