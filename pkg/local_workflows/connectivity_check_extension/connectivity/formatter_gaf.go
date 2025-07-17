@@ -2,6 +2,7 @@ package connectivity
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -252,19 +253,41 @@ func (f *GAFFormatter) renderHTML(html string) string {
 			return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(originalContent)
 		case "info":
 			return lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Render(originalContent)
-		case "section-title":
-			return lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true).Render(originalContent)
-		case "prompt-help":
-			return lipgloss.NewStyle().Faint(true).Render(originalContent)
+		case "dim":
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(originalContent)
+		case "proxy-info":
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render(originalContent)
+		case "url":
+			return lipgloss.NewStyle().Underline(true).Render(originalContent)
 		default:
-			// Use the default HtmlToAnsi for other classes
-			return presenters.HtmlToAnsi(tag, cssClass, originalContent)
+			return originalContent
 		}
 	})
 
-	output, err := presenter.Present(html)
-	if err != nil {
-		return html // Fallback to original if parsing fails
-	}
+	output, _ := presenter.Present(html)
 	return output
+}
+
+// getEnvOrEmpty returns the value of an environment variable or empty string
+func getEnvOrEmpty(key string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return ""
+}
+
+// deduplicateTODOs removes duplicate TODO messages
+func deduplicateTODOs(todos []TODO) []TODO {
+	seen := make(map[string]bool)
+	unique := []TODO{}
+
+	for _, todo := range todos {
+		key := fmt.Sprintf("%d:%s", todo.Level, todo.Message)
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, todo)
+		}
+	}
+
+	return unique
 }
