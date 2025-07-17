@@ -11,51 +11,6 @@ A Go-based extension for the Snyk CLI that performs comprehensive network connec
 - **Actionable Diagnostics**: Provides specific recommendations based on connectivity issues
 - **Integration Ready**: Built as a workflow extension for the Snyk CLI using go-application-framework
 
-## Installation
-
-### Prerequisites
-
-- Go 1.21 or higher
-- Snyk CLI (for extension integration)
-
-### Building from Source
-
-```bash
-git clone https://github.com/snyk/connectivity-check-extension.git
-cd connectivity_check_extension
-make build
-```
-
-This will create a `connectivity-check` binary in the project directory.
-
-### Installing as Snyk CLI Extension
-
-```bash
-# Build the extension
-make build
-
-# The extension integrates with Snyk CLI through the go-application-framework
-# Run it directly or integrate with Snyk CLI
-```
-
-## Usage
-
-### Basic Usage
-
-```bash
-# Run connectivity check with default settings
-./connectivity-check
-
-# Run with JSON output
-./connectivity-check --json
-
-# Run without color output
-./connectivity-check --no-color
-
-# Set custom timeout (in seconds)
-./connectivity-check --timeout 30
-```
-
 ### Environment Variables
 
 The tool respects standard proxy environment variables:
@@ -133,7 +88,7 @@ b2c3d4e5-f6a7-8901-bcde-f23456789012  Another Org           My Group
 ### JSON Output
 
 ```bash
-./connectivity-check --json
+snyk connectivity-check --json
 ```
 
 ```json
@@ -208,63 +163,3 @@ If authenticated but no organizations shown:
 - **TIMEOUT**: Connection timed out
 - **PROXY AUTH REQUIRED (SUPPORTED)**: Proxy needs auth, type is supported
 - **PROXY AUTH REQUIRED (UNSUPPORTED)**: Proxy needs auth, type not supported
-
-## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-make test
-
-# Run with coverage
-make test-cover
-
-# Run specific test
-go test -v -run TestCheckOrganizations ./internal/connectivity/
-```
-
-### Building
-
-```bash
-# Build for current platform
-make build
-
-# Clean build artifacts
-make clean
-
-# Run linting
-make lint
-```
-
-### Project Structure
-
-```
-connectivity_check_extension/
-├── cmd/extension/          # Main application entry point
-├── internal/connectivity/  # Core connectivity checking logic
-├── pkg/workflows/         # Snyk CLI workflow integration
-├── go.mod                 # Go module definition
-├── go.sum                 # Go module checksums
-└── Makefile              # Build automation
-```
-
-## Integration with Snyk CLI
-
-This extension integrates with the Snyk CLI through the go-application-framework. It:
-- Uses the framework's NetworkAccess for all HTTP operations
-- Leverages built-in authentication handling
-- Supports proxy configuration from the framework
-- Provides output compatible with Snyk CLI workflows
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details. 
