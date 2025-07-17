@@ -86,11 +86,6 @@ func (c *Checker) CheckOrganizations(endpoint string) ([]Organization, error) {
 		return nil, err
 	}
 
-	// Add headers including authorization
-	if err := c.networkAccess.AddHeaders(req); err != nil {
-		return nil, err
-	}
-
 	// Use NetworkAccess to make the request
 	httpClient := c.networkAccess.GetHttpClient()
 	resp, err := httpClient.Do(req)
