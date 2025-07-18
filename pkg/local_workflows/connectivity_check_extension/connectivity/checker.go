@@ -1,9 +1,7 @@
 package connectivity
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -23,15 +22,36 @@ type Checker struct {
 	logger        *zerolog.Logger
 	config        configuration.Configuration
 	timeout       time.Duration
+	apiClient     api.ApiClient
 }
 
 // NewChecker creates a new connectivity checker
 func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration) *Checker {
+	// Initialize API client
+	apiUrl := config.GetString(configuration.API_URL)
+	if apiUrl == "" {
+		apiUrl = "https://api.snyk.io"
+	}
+	httpClient := networkAccess.GetHttpClient()
+	apiClient := api.NewApi(apiUrl, httpClient)
+
 	return &Checker{
 		networkAccess: networkAccess,
 		logger:        logger,
 		config:        config,
 		timeout:       10 * time.Second,
+		apiClient:     apiClient,
+	}
+}
+
+// NewCheckerWithApiClient creates a new connectivity checker with a custom API client (useful for testing)
+func NewCheckerWithApiClient(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, apiClient api.ApiClient) *Checker {
+	return &Checker{
+		networkAccess: networkAccess,
+		logger:        logger,
+		config:        config,
+		timeout:       10 * time.Second,
+		apiClient:     apiClient,
 	}
 }
 
@@ -80,71 +100,38 @@ func (c *Checker) CheckOrganizations(endpoint string) ([]Organization, error) {
 		return nil, nil
 	}
 
-	// Build request
-	req, err := http.NewRequest(http.MethodGet, endpoint+"/rest/orgs?version=2024-10-15&limit=100", nil)
+	response, err := c.apiClient.GetOrganizations(100)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use NetworkAccess to make the request
-	httpClient := c.networkAccess.GetHttpClient()
-	resp, err := httpClient.Do(req)
+	defaultOrgId, err := c.apiClient.GetDefaultOrgId()
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch organizations: HTTP %d", resp.StatusCode)
-	}
-
-	// Parse response
-	var apiResponse struct {
-		Data []struct {
-			ID         string `json:"id"`
-			Attributes struct {
-				Name string `json:"name"`
-				Slug string `json:"slug"`
-			} `json:"attributes"`
-			Relationships struct {
-				Group struct {
-					Data struct {
-						ID string `json:"id"`
-					} `json:"data"`
-				} `json:"group"`
-			} `json:"relationships"`
-		} `json:"data"`
-		Included []struct {
-			ID         string `json:"id"`
-			Type       string `json:"type"`
-			Attributes struct {
-				Name string `json:"name"`
-			} `json:"attributes"`
-		} `json:"included"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
-		return nil, err
+		// default org is optional, don't fail the entire operation
+		c.logger.Debug().Err(err).Msg("Failed to get default organization ID")
+		defaultOrgId = ""
 	}
 
 	// Build group name map from included data
 	groupNames := make(map[string]string)
-	for _, inc := range apiResponse.Included {
+	for _, inc := range response.Included {
 		if inc.Type == "group" {
-			groupNames[inc.ID] = inc.Attributes.Name
+			groupNames[inc.Id] = inc.Attributes.Name
 		}
 	}
 
-	// Convert to our Organization type
 	var orgs []Organization
-	for _, org := range apiResponse.Data {
+	for _, org := range response.Organizations {
 		o := Organization{
-			ID:   org.ID,
-			Name: org.Attributes.Name,
-			Slug: org.Attributes.Slug,
+			ID:        org.Id,
+			Name:      org.Attributes.Name,
+			Slug:      org.Attributes.Slug,
+			IsDefault: org.Id == defaultOrgId,
 		}
-		o.Group.ID = org.Relationships.Group.Data.ID
-		o.Group.Name = groupNames[o.Group.ID]
+		if org.Relationships.Group.Data.Id != "" {
+			o.Group.ID = org.Relationships.Group.Data.Id
+			o.Group.Name = groupNames[o.Group.ID]
+		}
 		orgs = append(orgs, o)
 	}
 
@@ -157,19 +144,15 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 		StartTime: time.Now(),
 	}
 
-	// Detect proxy configuration
 	result.ProxyConfig = c.DetectProxyConfig()
 
-	// Test each host
 	for _, host := range GetSnykHosts() {
 		hostResult := c.checkHost(host)
 		result.HostResults = append(result.HostResults, hostResult)
 
-		// Generate TODOs based on result
 		c.generateTODOs(result, &hostResult)
 	}
 
-	// Check for authentication token in configuration
 	token := c.config.GetString(configuration.AUTHENTICATION_TOKEN)
 	if token != "" {
 		c.logger.Info().Msg("API Token found")
@@ -192,7 +175,6 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 	result.TokenPresent = token != ""
 
 	if result.TokenPresent {
-		// Get API endpoint from configuration
 		apiEndpoint := c.config.GetString(configuration.API_URL)
 		if apiEndpoint == "" {
 			apiEndpoint = "https://api.snyk.io"
@@ -216,7 +198,7 @@ func (c *Checker) checkHost(host string) HostResult {
 		Host: host,
 	}
 
-	// Extract display host (remove path and port)
+	// need to extract only the host part for display
 	displayHost := host
 	if idx := strings.Index(displayHost, "/"); idx != -1 {
 		displayHost = displayHost[:idx]
@@ -226,10 +208,8 @@ func (c *Checker) checkHost(host string) HostResult {
 	}
 	result.DisplayHost = displayHost
 
-	// Build URL
 	result.URL = "https://" + host
 
-	// Perform HTTP request
 	httpClient := c.networkAccess.GetUnauthorizedHttpClient()
 	startTime := time.Now()
 	resp, err := httpClient.Get(result.URL)
@@ -244,14 +224,12 @@ func (c *Checker) checkHost(host string) HostResult {
 
 	result.StatusCode = resp.StatusCode
 
-	// Categorize response
 	switch resp.StatusCode {
 	case http.StatusOK, http.StatusNoContent, http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
 		result.Status = StatusOK
 	case http.StatusForbidden, http.StatusNotFound:
 		result.Status = StatusReachable
 	case http.StatusProxyAuthRequired:
-		// Check proxy authentication type
 		proxyAuth := resp.Header.Get("Proxy-Authenticate")
 		result.ProxyAuth = proxyAuth
 		if strings.Contains(strings.ToLower(proxyAuth), "negotiate") ||
@@ -273,9 +251,8 @@ func (c *Checker) checkHost(host string) HostResult {
 
 // categorizeError categorizes network errors
 func (c *Checker) categorizeError(err error) ConnectionStatus {
-	errStr := err.Error()
+	errStr := strings.ToLower(err.Error())
 
-	// DNS errors
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
 		return StatusDNSError
@@ -284,19 +261,16 @@ func (c *Checker) categorizeError(err error) ConnectionStatus {
 		return StatusDNSError
 	}
 
-	// Timeout errors
 	if os.IsTimeout(err) || strings.Contains(errStr, "timeout") ||
 		strings.Contains(errStr, "deadline exceeded") {
 		return StatusTimeout
 	}
 
-	// TLS/SSL errors
 	if strings.Contains(errStr, "tls") || strings.Contains(errStr, "ssl") ||
 		strings.Contains(errStr, "certificate") || strings.Contains(errStr, "x509") {
 		return StatusTLSError
 	}
 
-	// URL errors
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		if urlErr.Timeout() {
@@ -311,7 +285,7 @@ func (c *Checker) categorizeError(err error) ConnectionStatus {
 func (c *Checker) generateTODOs(result *ConnectivityCheckResult, hostResult *HostResult) {
 	switch hostResult.Status {
 	case StatusOK:
-		// No TODO needed for successful connections
+		// successful connections don't need any action
 	case StatusReachable:
 		result.AddTODOf(TodoWarn, "Host '%s' is reachable but returned HTTP %d. This is expected for some endpoints when accessed directly via browser/curl.",
 			hostResult.DisplayHost, hostResult.StatusCode)

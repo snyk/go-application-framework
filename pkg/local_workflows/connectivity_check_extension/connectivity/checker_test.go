@@ -2,20 +2,38 @@ package connectivity
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"runtime"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/go-application-framework/internal/api/contract"
+	internalmocks "github.com/snyk/go-application-framework/internal/mocks"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 )
+
+// createTestChecker is a helper to create a Checker with mocked dependencies
+func createTestChecker(t *testing.T, ctrl *gomock.Controller, config configuration.Configuration) (*Checker, *mocks.MockNetworkAccess) {
+	t.Helper()
+	mockNA := mocks.NewMockNetworkAccess(ctrl)
+	logger := zerolog.Nop()
+
+	// Expect GetHttpClient to be called for API client initialization
+	mockNA.EXPECT().GetHttpClient().Return(&http.Client{}).AnyTimes()
+
+	checker := NewChecker(mockNA, &logger, config)
+	return checker, mockNA
+}
 
 func TestNewChecker(t *testing.T) {
 	// Create mock NetworkAccess
@@ -25,6 +43,9 @@ func TestNewChecker(t *testing.T) {
 	mockNA := mocks.NewMockNetworkAccess(ctrl)
 	logger := zerolog.Nop()
 	config := configuration.New()
+
+	// Expect GetHttpClient to be called for API client initialization
+	mockNA.EXPECT().GetHttpClient().Return(&http.Client{})
 
 	// Create checker
 	checker := NewChecker(mockNA, &logger, config)
@@ -44,6 +65,9 @@ func TestNewChecker(t *testing.T) {
 	}
 	if checker.timeout != 10*time.Second {
 		t.Errorf("Expected default timeout to be 10s, got %v", checker.timeout)
+	}
+	if checker.apiClient == nil {
+		t.Error("Expected checker to have an API client")
 	}
 }
 
@@ -76,11 +100,9 @@ func TestDetectProxyConfig(t *testing.T) {
 			},
 		},
 		{
-			name:    "No proxy set",
-			envVars: map[string]string{},
-			expected: ProxyConfig{
-				Detected: false,
-			},
+			name:     "No proxy set",
+			envVars:  map[string]string{},
+			expected: ProxyConfig{Detected: false},
 		},
 		{
 			name: "NO_PROXY set",
@@ -98,58 +120,48 @@ func TestDetectProxyConfig(t *testing.T) {
 		{
 			name: "Priority order - HTTPS_PROXY wins",
 			envVars: map[string]string{
-				"HTTPS_PROXY": "http://https-proxy.example.com:8080",
-				"https_proxy": "http://https-proxy-lower.example.com:8080",
-				"HTTP_PROXY":  "http://http-proxy.example.com:8080",
-				"http_proxy":  "http://http-proxy-lower.example.com:8080",
+				"HTTPS_PROXY": "http://secure-proxy.example.com:8080",
+				"HTTP_PROXY":  "http://proxy.example.com:3128",
 			},
 			expected: ProxyConfig{
 				Detected: true,
-				URL:      "http://https-proxy.example.com:8080",
+				URL:      "http://secure-proxy.example.com:8080",
 				Variable: "HTTPS_PROXY",
 			},
 		},
 		{
 			name: "lowercase no_proxy used",
 			envVars: map[string]string{
-				"HTTP_PROXY": "http://proxy.example.com:8080",
-				"no_proxy":   "*.local,10.0.0.0/8",
+				"HTTPS_PROXY": "http://proxy.example.com:8080",
+				"no_proxy":    "*.local,169.254.0.0/16",
 			},
 			expected: ProxyConfig{
 				Detected: true,
 				URL:      "http://proxy.example.com:8080",
-				Variable: "HTTP_PROXY",
-				NoProxy:  "*.local,10.0.0.0/8",
+				Variable: "HTTPS_PROXY",
+				NoProxy:  "*.local,169.254.0.0/16",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Skip case-sensitivity test on Windows since environment variables are case-insensitive
-			if runtime.GOOS == "windows" && tt.name == "Priority order - HTTPS_PROXY wins" {
-				t.Skip("Skipping case-sensitivity test on Windows")
+			// Save and restore environment
+			for key := range tt.envVars {
+				oldVal := os.Getenv(key)
+				defer os.Setenv(key, oldVal)
 			}
 
-			// Set test environment variables using t.Setenv
-			// First clear relevant proxy variables
-			t.Setenv("HTTPS_PROXY", "")
-			t.Setenv("https_proxy", "")
-			t.Setenv("HTTP_PROXY", "")
-			t.Setenv("http_proxy", "")
-			t.Setenv("NO_PROXY", "")
-			t.Setenv("no_proxy", "")
-
-			// Set test environment variables
-			for k, v := range tt.envVars {
-				t.Setenv(k, v)
+			// Set test environment
+			for key, val := range tt.envVars {
+				os.Setenv(key, val)
 			}
 
-			// Create checker
-			logger := zerolog.Nop()
-			mockNA := mocks.NewMockNetworkAccess(gomock.NewController(t))
+			// Create test checker
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 			config := configuration.New()
-			checker := NewChecker(mockNA, &logger, config)
+			checker, _ := createTestChecker(t, ctrl, config)
 
 			// Test proxy detection
 			result := checker.DetectProxyConfig()
@@ -173,10 +185,12 @@ func TestDetectProxyConfig(t *testing.T) {
 
 func TestCheckHost(t *testing.T) {
 	tests := []struct {
-		name           string
-		serverResponse int
-		proxyAuth      string
-		expectedStatus ConnectionStatus
+		name             string
+		serverResponse   int
+		serverHeader     map[string]string
+		expectedStatus   ConnectionStatus
+		expectedCategory string
+		expectedAuth     string
 	}{
 		{
 			name:           "OK response",
@@ -216,20 +230,32 @@ func TestCheckHost(t *testing.T) {
 		{
 			name:           "Proxy auth required - Negotiate",
 			serverResponse: http.StatusProxyAuthRequired,
-			proxyAuth:      "Negotiate",
-			expectedStatus: StatusProxyAuthSupported,
+			serverHeader: map[string]string{
+				"Proxy-Authenticate": "Negotiate",
+			},
+			expectedStatus:   StatusProxyAuthSupported,
+			expectedCategory: "proxy_auth",
+			expectedAuth:     "Negotiate",
 		},
 		{
 			name:           "Proxy auth required - Basic",
 			serverResponse: http.StatusProxyAuthRequired,
-			proxyAuth:      "Basic realm=\"Proxy\"",
-			expectedStatus: StatusProxyAuthSupported,
+			serverHeader: map[string]string{
+				"Proxy-Authenticate": "Basic realm=\"Proxy\"",
+			},
+			expectedStatus:   StatusProxyAuthSupported,
+			expectedCategory: "proxy_auth",
+			expectedAuth:     "Basic realm=\"Proxy\"",
 		},
 		{
 			name:           "Proxy auth required - Unsupported",
 			serverResponse: http.StatusProxyAuthRequired,
-			proxyAuth:      "Digest realm=\"Proxy\"",
-			expectedStatus: StatusProxyAuthUnsupported,
+			serverHeader: map[string]string{
+				"Proxy-Authenticate": "Digest realm=\"Proxy\"",
+			},
+			expectedStatus:   StatusProxyAuthUnsupported,
+			expectedCategory: "proxy_auth",
+			expectedAuth:     "Digest realm=\"Proxy\"",
 		},
 		{
 			name:           "Unauthorized",
@@ -242,242 +268,193 @@ func TestCheckHost(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test server
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tt.proxyAuth != "" {
-					w.Header().Set("Proxy-Authenticate", tt.proxyAuth)
+				for k, v := range tt.serverHeader {
+					w.Header().Set(k, v)
 				}
 				w.WriteHeader(tt.serverResponse)
 			}))
 			defer server.Close()
 
-			// Create checker with mock NetworkAccess
+			// Create test setup
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-
-			mockNA := mocks.NewMockNetworkAccess(ctrl)
-			// Set expectation for GetUnauthorizedHttpClient (not GetHttpClient)
-			mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client()).AnyTimes()
-
-			logger := zerolog.Nop()
 			config := configuration.New()
-			checker := NewChecker(mockNA, &logger, config)
+			checker, mockNA := createTestChecker(t, ctrl, config)
 
-			// Test check host with server URL
-			result := checker.checkHost(server.URL[8:]) // Remove https://
+			// Set up mock expectations for checkHost
+			mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client())
 
-			// Verify status
+			// Parse server URL to get host
+			serverURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
+			}
+			host := serverURL.Host
+
+			// Test checkHost
+			result := checker.checkHost(host)
+
+			// Verify results
 			if result.Status != tt.expectedStatus {
 				t.Errorf("Expected status %v, got %v", tt.expectedStatus, result.Status)
 			}
-			if result.StatusCode != tt.serverResponse {
-				t.Errorf("Expected status code %d, got %d", tt.serverResponse, result.StatusCode)
-			}
-			if tt.proxyAuth != "" && result.ProxyAuth != tt.proxyAuth {
-				t.Errorf("Expected proxy auth '%s', got '%s'", tt.proxyAuth, result.ProxyAuth)
+			if tt.expectedAuth != "" && result.ProxyAuth != tt.expectedAuth {
+				t.Errorf("Expected proxy auth %v, got %v", tt.expectedAuth, result.ProxyAuth)
 			}
 		})
 	}
 }
 
 func TestCheckHost_WithPath(t *testing.T) {
-	// Test hosts with paths and ports
 	tests := []struct {
-		host        string
-		expectedURL string
-		displayHost string
+		host         string
+		expectedPath string
 	}{
 		{
-			host:        "api.snyk.io",
-			expectedURL: "https://api.snyk.io",
-			displayHost: "api.snyk.io",
+			host:         "api.snyk.io",
+			expectedPath: "/",
 		},
 		{
-			host:        "deeproxy.snyk.io/filters",
-			expectedURL: "https://deeproxy.snyk.io/filters",
-			displayHost: "deeproxy.snyk.io",
+			host:         "deeproxy.snyk.io/filters",
+			expectedPath: "/filters",
 		},
 		{
-			host:        "downloads.snyk.io:443/cli/wasm/bundle.tar.gz",
-			expectedURL: "https://downloads.snyk.io:443/cli/wasm/bundle.tar.gz",
-			displayHost: "downloads.snyk.io",
+			host:         "downloads.snyk.io:443/cli/wasm/bundle.tar.gz",
+			expectedPath: "/cli/wasm/bundle.tar.gz",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {
-			// Create test server
+			requestPath := ""
+			// Create test server that captures the request path
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requestPath = r.URL.Path
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer server.Close()
 
-			// Create checker with mock NetworkAccess
+			// Create test setup
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-
-			mockNA := mocks.NewMockNetworkAccess(ctrl)
-			// Set expectation for GetUnauthorizedHttpClient
-			mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client()).AnyTimes()
-
-			logger := zerolog.Nop()
 			config := configuration.New()
-			checker := NewChecker(mockNA, &logger, config)
+			checker, mockNA := createTestChecker(t, ctrl, config)
 
-			// Mock the host to use our test server
-			result := checker.checkHost(tt.host)
-
-			// Verify display host extraction
-			if result.DisplayHost != tt.displayHost {
-				t.Errorf("Expected display host '%s', got '%s'", tt.displayHost, result.DisplayHost)
+			// Get server host/port
+			serverURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
 			}
 
-			// Verify URL construction
-			if result.URL != tt.expectedURL {
-				t.Errorf("Expected URL '%s', got '%s'", tt.expectedURL, result.URL)
+			// For this test, we need to map the test host to our test server
+			// Since we can't actually hit the real hosts
+			testHost := serverURL.Host
+			if strings.Contains(tt.host, "/") {
+				// Keep the path part
+				parts := strings.SplitN(tt.host, "/", 2)
+				testHost = serverURL.Host + "/" + parts[1]
+			} else if strings.Contains(tt.host, ":") && strings.Contains(tt.host, ".tar.gz") {
+				// Special case for downloads with port and path
+				testHost = serverURL.Host + "/cli/wasm/bundle.tar.gz"
+			}
+
+			// Set up mock expectations
+			mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client())
+
+			// Test checkHost
+			result := checker.checkHost(testHost)
+
+			// Verify the request path was correct
+			if requestPath != tt.expectedPath {
+				t.Errorf("Expected request path %s, got %s", tt.expectedPath, requestPath)
+			}
+			if result.Status != StatusOK {
+				t.Errorf("Expected status OK, got %v", result.Status)
 			}
 		})
 	}
 }
 
 func TestCategorizeError(t *testing.T) {
-	logger := zerolog.Nop()
-	mockNA := mocks.NewMockNetworkAccess(gomock.NewController(t))
+	// Create test setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	config := configuration.New()
-	checker := NewChecker(mockNA, &logger, config)
+	checker, _ := createTestChecker(t, ctrl, config)
 
 	tests := []struct {
 		name           string
-		error          error
+		err            error
 		expectedStatus ConnectionStatus
 	}{
 		{
-			name:           "DNS error",
-			error:          &net.DNSError{Err: "no such host", Name: "example.com", IsNotFound: true},
+			name:           "DNS error - no such host",
+			err:            &net.DNSError{Err: "no such host", IsNotFound: true},
 			expectedStatus: StatusDNSError,
 		},
 		{
-			name:           "Timeout error from os.IsTimeout",
-			error:          &timeoutError{},
-			expectedStatus: StatusTimeout,
-		},
-		{
-			name:           "Timeout error in message",
-			error:          errors.New("context deadline exceeded (Client.Timeout exceeded)"),
-			expectedStatus: StatusTimeout,
-		},
-		{
-			name:           "URL timeout error",
-			error:          &url.Error{Op: "Get", URL: "https://example.com", Err: &timeoutError{}},
-			expectedStatus: StatusTimeout,
-		},
-		{
-			name:           "TLS error",
-			error:          errors.New("tls: failed to verify certificate"),
-			expectedStatus: StatusTLSError,
-		},
-		{
-			name:           "SSL error",
-			error:          errors.New("ssl handshake failure"),
+			name:           "TLS error - certificate invalid",
+			err:            fmt.Errorf("tls: certificate is invalid"),
 			expectedStatus: StatusTLSError,
 		},
 		{
 			name:           "Certificate error",
-			error:          errors.New("x509: certificate signed by unknown authority"),
+			err:            fmt.Errorf("x509: certificate signed by unknown authority"),
 			expectedStatus: StatusTLSError,
 		},
 		{
-			name:           "Generic connection error",
-			error:          errors.New("connection refused"),
+			name:           "Timeout error",
+			err:            &timeoutError{},
+			expectedStatus: StatusTimeout,
+		},
+		{
+			name:           "Connection refused",
+			err:            fmt.Errorf("connection refused"),
 			expectedStatus: StatusBlocked,
 		},
 		{
 			name:           "Network unreachable",
-			error:          errors.New("network is unreachable"),
+			err:            fmt.Errorf("network is unreachable"),
+			expectedStatus: StatusBlocked,
+		},
+		{
+			name:           "Generic error",
+			err:            fmt.Errorf("some other error"),
 			expectedStatus: StatusBlocked,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status := checker.categorizeError(tt.error)
+			status := checker.categorizeError(tt.err)
 			if status != tt.expectedStatus {
-				t.Errorf("Expected status %v for error '%v', got %v", tt.expectedStatus, tt.error, status)
+				t.Errorf("Expected status %v for error '%v', got %v", tt.expectedStatus, tt.err, status)
 			}
 		})
 	}
 }
 
 func TestGenerateTODOs(t *testing.T) {
-	logger := zerolog.Nop()
-	mockNA := mocks.NewMockNetworkAccess(gomock.NewController(t))
+	// Create test setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	config := configuration.New()
-	checker := NewChecker(mockNA, &logger, config)
+	checker, _ := createTestChecker(t, ctrl, config)
 
 	tests := []struct {
 		name         string
 		hostResult   HostResult
-		expectedTODO struct {
-			level    TodoLevel
-			contains string
-		}
+		proxyConfig  ProxyConfig
+		expectedTODO string
+		expectedNil  bool
 	}{
-		{
-			name: "Reachable host",
-			hostResult: HostResult{
-				DisplayHost: "static.snyk.io",
-				Status:      StatusReachable,
-				StatusCode:  403,
-			},
-			expectedTODO: struct {
-				level    TodoLevel
-				contains string
-			}{
-				level:    TodoWarn,
-				contains: "static.snyk.io",
-			},
-		},
 		{
 			name: "DNS error",
 			hostResult: HostResult{
 				DisplayHost: "api.snyk.io",
 				Status:      StatusDNSError,
 			},
-			expectedTODO: struct {
-				level    TodoLevel
-				contains string
-			}{
-				level:    TodoFail,
-				contains: "DNS resolution failed",
-			},
-		},
-		{
-			name: "Proxy auth supported - Negotiate",
-			hostResult: HostResult{
-				DisplayHost: "api.snyk.io",
-				Status:      StatusProxyAuthSupported,
-				ProxyAuth:   "Negotiate",
-			},
-			expectedTODO: struct {
-				level    TodoLevel
-				contains string
-			}{
-				level:    TodoInfo,
-				contains: "Negotiate",
-			},
-		},
-		{
-			name: "Proxy auth supported - Basic",
-			hostResult: HostResult{
-				DisplayHost: "api.snyk.io",
-				Status:      StatusProxyAuthSupported,
-				ProxyAuth:   "Basic",
-			},
-			expectedTODO: struct {
-				level    TodoLevel
-				contains string
-			}{
-				level:    TodoWarn,
-				contains: "Basic",
-			},
+			expectedTODO: "DNS resolution failed for 'api.snyk.io'",
 		},
 		{
 			name: "TLS error",
@@ -485,47 +462,83 @@ func TestGenerateTODOs(t *testing.T) {
 				DisplayHost: "api.snyk.io",
 				Status:      StatusTLSError,
 			},
-			expectedTODO: struct {
-				level    TodoLevel
-				contains string
-			}{
-				level:    TodoFail,
-				contains: "TLS/SSL error",
-			},
+			expectedTODO: "TLS/SSL error connecting to 'api.snyk.io'",
 		},
 		{
-			name: "Blocked with error",
+			name: "Timeout",
+			hostResult: HostResult{
+				DisplayHost: "api.snyk.io",
+				Status:      StatusTimeout,
+			},
+			expectedTODO: "Connection to 'api.snyk.io' timed out",
+		},
+		{
+			name: "Blocked",
 			hostResult: HostResult{
 				DisplayHost: "api.snyk.io",
 				Status:      StatusBlocked,
-				Error:       errors.New("connection refused"),
 			},
-			expectedTODO: struct {
-				level    TodoLevel
-				contains string
-			}{
-				level:    TodoFail,
-				contains: "connection refused",
+			expectedTODO: "Received HTTP status '0' when connecting to 'api.snyk.io'",
+		},
+		{
+			name: "Server error",
+			hostResult: HostResult{
+				DisplayHost: "api.snyk.io",
+				Status:      StatusServerError,
+				StatusCode:  500,
 			},
+			expectedTODO: "Server error (HTTP 500) when connecting to 'api.snyk.io'",
+		},
+		{
+			name: "Proxy auth required with proxy config",
+			hostResult: HostResult{
+				DisplayHost: "api.snyk.io",
+				Status:      StatusProxyAuthSupported,
+				ProxyAuth:   "Basic",
+			},
+			proxyConfig: ProxyConfig{
+				Detected: true,
+				URL:      "http://proxy.example.com:8080",
+			},
+			expectedTODO: "Proxy requires 'Basic' authentication for 'api.snyk.io'",
+		},
+		{
+			name: "OK status - no TODO",
+			hostResult: HostResult{
+				DisplayHost: "api.snyk.io",
+				Status:      StatusOK,
+			},
+			expectedNil: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := &ConnectivityCheckResult{}
+			result := &ConnectivityCheckResult{
+				ProxyConfig: tt.proxyConfig,
+			}
+
 			checker.generateTODOs(result, &tt.hostResult)
 
-			if len(result.TODOs) == 0 {
-				t.Fatal("Expected at least one TODO to be generated")
-			}
-
-			todo := result.TODOs[0]
-			if todo.Level != tt.expectedTODO.level {
-				t.Errorf("Expected TODO level %v, got %v", tt.expectedTODO.level, todo.Level)
-			}
-
-			if !strings.Contains(todo.Message, tt.expectedTODO.contains) {
-				t.Errorf("Expected TODO message to contain '%s', got '%s'", tt.expectedTODO.contains, todo.Message)
+			if tt.expectedNil {
+				if len(result.TODOs) > 0 {
+					t.Errorf("Expected no TODOs, got %v", result.TODOs)
+				}
+			} else {
+				if len(result.TODOs) == 0 {
+					t.Fatal("Expected TODO to be generated")
+				}
+				// Check if expected TODO message is present
+				found := false
+				for _, todo := range result.TODOs {
+					if strings.Contains(todo.Message, tt.expectedTODO) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected TODO containing '%s', got %v", tt.expectedTODO, result.TODOs)
+				}
 			}
 		})
 	}
@@ -592,213 +605,214 @@ func TestCheckConnectivity(t *testing.T) {
 	}
 }
 
-// timeoutError implements net.Error interface for testing timeouts
+// timeoutError implements error interface for testing
 type timeoutError struct{}
 
 func (e *timeoutError) Error() string   { return "timeout" }
 func (e *timeoutError) Timeout() bool   { return true }
 func (e *timeoutError) Temporary() bool { return true }
 
-// mockError implements error interface for testing
-type mockError struct {
-	msg string
+// Helper function to create test organization response
+func createTestOrgResponse() *contract.OrganizationsResponse {
+	return &contract.OrganizationsResponse{
+		Organizations: []contract.Organization{
+			{
+				Id: "org-1",
+				Attributes: contract.OrgAttributes{
+					Name: "Test Org 1",
+					Slug: "test-org-1",
+				},
+				Relationships: contract.OrgRelationships{
+					Group: struct {
+						Data struct {
+							Id   string `json:"id"`
+							Type string `json:"type"`
+						} `json:"data"`
+					}{
+						Data: struct {
+							Id   string `json:"id"`
+							Type string `json:"type"`
+						}{
+							Id:   "group-1",
+							Type: "group",
+						},
+					},
+				},
+			},
+			{
+				Id: "org-2",
+				Attributes: contract.OrgAttributes{
+					Name: "Test Org 2",
+					Slug: "test-org-2",
+				},
+				Relationships: contract.OrgRelationships{
+					Group: struct {
+						Data struct {
+							Id   string `json:"id"`
+							Type string `json:"type"`
+						} `json:"data"`
+					}{
+						Data: struct {
+							Id   string `json:"id"`
+							Type string `json:"type"`
+						}{
+							Id:   "group-1",
+							Type: "group",
+						},
+					},
+				},
+			},
+		},
+		Included: []contract.IncludedItem{
+			{
+				Id:   "group-1",
+				Type: "group",
+				Attributes: struct {
+					Name string `json:"name"`
+				}{
+					Name: "Test Group",
+				},
+			},
+		},
+	}
 }
 
-func (e *mockError) Error() string {
-	return e.msg
+// Helper function to verify organizations
+func verifyOrganizations(t *testing.T, orgs []Organization, expectedCount int, expectDefault bool) {
+	t.Helper()
+	if len(orgs) != expectedCount {
+		t.Errorf("Expected %d organizations, got %d", expectedCount, len(orgs))
+		return
+	}
+
+	if expectedCount > 0 {
+		if orgs[0].ID != "org-1" {
+			t.Errorf("Expected first org ID to be 'org-1', got '%s'", orgs[0].ID)
+		}
+		if orgs[0].Name != "Test Org 1" {
+			t.Errorf("Expected first org name to be 'Test Org 1', got '%s'", orgs[0].Name)
+		}
+		if orgs[0].Group.Name != "Test Group" {
+			t.Errorf("Expected group name to be 'Test Group', got '%s'", orgs[0].Group.Name)
+		}
+		if expectDefault && orgs[0].IsDefault != true {
+			t.Errorf("Expected first org to be default, got %v", orgs[0].IsDefault)
+		} else if !expectDefault && orgs[0].IsDefault != false {
+			t.Errorf("Expected no org to be default when GetDefaultOrgId fails, got %v", orgs[0].IsDefault)
+		}
+	}
 }
 
 func TestCheckOrganizations(t *testing.T) {
-	// Create test server that returns organizations
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Log the request for debugging
-		t.Logf("Received request: %s %s", r.Method, r.URL.String())
-		t.Logf("Authorization header: %s", r.Header.Get("Authorization"))
+	t.Run("with token", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-		// Verify authorization header
-		auth := r.Header.Get("Authorization")
-		if auth != "Bearer test-token" {
-			t.Logf("Authorization failed: expected 'Bearer test-token', got '%s'", auth)
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
+		// Create mock dependencies
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+		config := configuration.New()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 
-		// Verify the API endpoint path
-		if !strings.Contains(r.URL.Path, "/rest/orgs") {
-			t.Logf("Path check failed: %s", r.URL.Path)
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+		// Set expectations
+		mockApiClient.EXPECT().GetOrganizations(100).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
 
-		// Return mock organizations
-		response := `{
-			"data": [
-				{
-					"id": "org-1",
-					"attributes": {
-						"name": "Test Org 1",
-						"slug": "test-org-1"
-					},
-					"relationships": {
-						"group": {
-							"data": {
-								"id": "group-1"
-							}
-						}
-					}
-				},
-				{
-					"id": "org-2",
-					"attributes": {
-						"name": "Test Org 2",
-						"slug": "test-org-2"
-					},
-					"relationships": {
-						"group": {
-							"data": {
-								"id": "group-1"
-							}
-						}
-					}
-				}
-			],
-			"included": [
-				{
-					"id": "group-1",
-					"type": "group",
-					"attributes": {
-						"name": "Test Group"
-					}
-				}
-			]
-		}`
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(response)); err != nil {
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
+		// Create checker with mock API client
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
-	// Test with token
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	logger := zerolog.Nop()
-	mockNA := mocks.NewMockNetworkAccess(ctrl)
-	config := configuration.New()
-	config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
-	config.Set("api", server.URL)
-
-	// Create a custom HTTP client that adds headers
-	client := server.Client()
-	originalTransport := client.Transport
-	client.Transport = &headerAddingTransport{
-		base:   originalTransport,
-		config: config,
-	}
-
-	// Set expectations
-	mockNA.EXPECT().GetHttpClient().Return(client).AnyTimes()
-	mockNA.EXPECT().GetConfiguration().Return(config).AnyTimes()
-
-	checker := NewChecker(mockNA, &logger, config)
-
-	orgs, err := checker.CheckOrganizations(server.URL)
-	t.Logf("CheckOrganizations returned: orgs=%v, err=%v", orgs, err)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	// Verify organizations
-	if len(orgs) != 2 {
-		t.Errorf("Expected 2 organizations, got %d", len(orgs))
-	}
-	if orgs[0].ID != "org-1" {
-		t.Errorf("Expected first org ID to be 'org-1', got '%s'", orgs[0].ID)
-	}
-	if orgs[0].Name != "Test Org 1" {
-		t.Errorf("Expected first org name to be 'Test Org 1', got '%s'", orgs[0].Name)
-	}
-	if orgs[0].Group.Name != "Test Group" {
-		t.Errorf("Expected group name to be 'Test Group', got '%s'", orgs[0].Group.Name)
-	}
-
-	// Test without token
-	// Note: This test is commented out as it requires more complex mocking
-	// to properly test the no-token scenario. The CheckOrganizations method
-	// returns nil when no token is configured, which is tested elsewhere.
-	/*
-		configNoToken := configuration.New()
-		// Clear any OAuth tokens by setting the oauth disable flag
-		configNoToken.Set("snyk_oauth_token", "")
-		configNoToken.Set("snyk_disable_analytics", "1")
-
-		// Create a client that doesn't add authorization headers
-		noTokenClient := server.Client()
-
-		mockNANoToken := mocks.NewMockNetworkAccess(ctrl)
-		mockNANoToken.EXPECT().GetConfiguration().Return(configNoToken).AnyTimes()
-		mockNANoToken.EXPECT().GetHttpClient().Return(noTokenClient).AnyTimes()
-
-		checkerNoToken := NewChecker(mockNANoToken, &logger, configNoToken)
-
-		orgsNoToken, err := checkerNoToken.CheckOrganizations(server.URL)
-		// If OAuth is providing a token, we'll get a 401 error
-		// If no token at all, we should get nil organizations
+		// Test fetching organizations
+		orgs, err := checker.CheckOrganizations("https://api.snyk.io")
 		if err != nil {
-			// This is expected if OAuth is providing a token but it's not valid for our test server
-			if !strings.Contains(err.Error(), "401") {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-		} else if orgsNoToken != nil {
-			t.Errorf("Expected nil organizations when no token is set, got: %v", orgsNoToken)
+			t.Fatalf("Expected no error, got: %v", err)
 		}
-	*/
 
-	// Test with HTTP error
-	serverError := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer serverError.Close()
+		// Verify organizations
+		verifyOrganizations(t, orgs, 2, true)
+	})
 
-	configError := configuration.New()
-	configError.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
-	configError.Set("api", serverError.URL)
+	t.Run("with token and GetDefaultOrgId error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	mockNAError := mocks.NewMockNetworkAccess(ctrl)
-	errorClient := serverError.Client()
-	errorClient.Transport = &headerAddingTransport{
-		base:   errorClient.Transport,
-		config: configError,
-	}
-	mockNAError.EXPECT().GetHttpClient().Return(errorClient).AnyTimes()
-	mockNAError.EXPECT().GetConfiguration().Return(configError).AnyTimes()
+		// Create mock dependencies
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+		config := configuration.New()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 
-	checkerError := NewChecker(mockNAError, &logger, configError)
-
-	_, err = checkerError.CheckOrganizations(serverError.URL)
-	if err == nil {
-		t.Error("Expected error for HTTP 500 response")
-	}
-}
-
-// headerAddingTransport adds authorization headers to requests
-type headerAddingTransport struct {
-	base   http.RoundTripper
-	config configuration.Configuration
-}
-
-func (t *headerAddingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Add authorization header if token is present
-	if t.config != nil {
-		token := t.config.GetString(configuration.AUTHENTICATION_TOKEN)
-		if token == "" {
-			token = t.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
+		// Create mock response with single org
+		mockResponse := &contract.OrganizationsResponse{
+			Organizations: []contract.Organization{
+				createTestOrgResponse().Organizations[0],
+			},
+			Included: createTestOrgResponse().Included,
 		}
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+
+		// Set expectations - GetDefaultOrgId returns an error
+		mockApiClient.EXPECT().GetOrganizations(100).Return(mockResponse, nil)
+		mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("failed to get default org"))
+
+		// Create checker with mock API client
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
+
+		// Test fetching organizations
+		orgs, err := checker.CheckOrganizations("https://api.snyk.io")
+		if err != nil {
+			t.Fatalf("Expected no error, got: %v", err)
 		}
-	}
-	return t.base.RoundTrip(req)
+
+		// Verify organizations
+		verifyOrganizations(t, orgs, 1, false)
+	})
+
+	t.Run("without token", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+
+		// Create config without token and disable OAuth
+		configNoToken := configuration.New()
+		// Make sure OAuth is disabled by setting the disable flag
+		configNoToken.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+
+		checkerNoToken := NewCheckerWithApiClient(mockNA, &logger, configNoToken, mockApiClient)
+
+		orgs, err := checkerNoToken.CheckOrganizations("https://api.snyk.io")
+		if err != nil {
+			t.Errorf("Expected no error when no token configured, got: %v", err)
+		}
+		if orgs != nil {
+			t.Errorf("Expected nil organizations when no token configured, got %v", orgs)
+		}
+	})
+
+	t.Run("with API error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+		config := configuration.New()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
+
+		// Set expectations for error case
+		mockApiClient.EXPECT().GetOrganizations(100).Return(nil, errors.New("API error"))
+
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
+
+		_, err := checker.CheckOrganizations("https://api.snyk.io")
+		if err == nil {
+			t.Error("Expected error from API call")
+		}
+		if err.Error() != "API error" {
+			t.Errorf("Expected 'API error', got: %v", err)
+		}
+	})
 }

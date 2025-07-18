@@ -17,6 +17,12 @@ type Formatter struct {
 	useColor bool
 }
 
+// output is a helper method that calls ui.Output and ignores errors
+// since UI output errors are non-critical for this formatter
+func (f *Formatter) output(str string) {
+	_ = f.ui.Output(str) //nolint:errcheck // UI output errors are non-critical
+}
+
 // NewFormatter creates a new formatter using GAF UI interfaces
 func NewFormatter(ui ui.UserInterface, useColor bool) *Formatter {
 	if useColor {
@@ -33,37 +39,30 @@ func NewFormatter(ui ui.UserInterface, useColor bool) *Formatter {
 
 // FormatResult formats the complete connectivity check result using GAF presenters
 func (f *Formatter) FormatResult(result *ConnectivityCheckResult) error {
-	// Format proxy configuration
 	if err := f.formatProxyConfig(result.ProxyConfig); err != nil {
 		return err
 	}
 
-	// Add spacing
-	f.ui.Output("")
+	f.output("")
 
-	// Format connectivity results header
-	f.ui.Output(f.renderHTML(`<h2 class="section-title">Testing connectivity to Snyk endpoints...</h2>`))
-	f.ui.Output("")
+	f.output(f.renderHTML(`<h2 class="section-title">Testing connectivity to Snyk endpoints...</h2>`))
+	f.output("")
 
-	// Format table headers
-	f.ui.Output(fmt.Sprintf("%-30s %s", "Host", "Result"))
-	f.ui.Output(presenters.RenderDivider())
+	f.output(fmt.Sprintf("%-30s %s", "Host", "Result"))
+	f.output(presenters.RenderDivider())
 
-	// Format each host result
 	for _, hostResult := range result.HostResults {
 		if err := f.formatHostResult(hostResult); err != nil {
 			return err
 		}
 	}
 
-	// Format TODOs
 	if err := f.formatTODOs(result.TODOs); err != nil {
 		return err
 	}
 
-	// Format organizations if token is present
-	if err := f.formatOrganizations(result); err != nil {
-		return err
+	if result.TokenPresent || result.OrgCheckError != nil {
+		return f.formatOrganizations(result)
 	}
 
 	return nil
@@ -71,11 +70,10 @@ func (f *Formatter) FormatResult(result *ConnectivityCheckResult) error {
 
 // formatProxyConfig formats proxy configuration information
 func (f *Formatter) formatProxyConfig(config ProxyConfig) error {
-	f.ui.Output("Checking for proxy configuration...")
-	f.ui.Output("")
-	f.ui.Output("Environment variables:")
+	f.output("Checking for proxy configuration...")
+	f.output("")
+	f.output("Environment variables:")
 
-	// Show all proxy variables
 	proxyVars := []struct {
 		name  string
 		value string
@@ -90,19 +88,19 @@ func (f *Formatter) formatProxyConfig(config ProxyConfig) error {
 
 	for _, pv := range proxyVars {
 		if pv.value != "" {
-			f.ui.Output(fmt.Sprintf("  %-12s %s", pv.name+":", f.renderHTML(fmt.Sprintf(`<span class="warning">%s</span>`, pv.value))))
+			f.output(fmt.Sprintf("  %-12s %s", pv.name+":", f.renderHTML(fmt.Sprintf(`<span class="warning">%s</span>`, pv.value))))
 		} else {
-			f.ui.Output(fmt.Sprintf("  %-12s %s", pv.name+":", f.renderHTML(`<span class="prompt-help">(not set)</span>`)))
+			f.output(fmt.Sprintf("  %-12s %s", pv.name+":", f.renderHTML(`<span class="prompt-help">(not set)</span>`)))
 		}
 	}
 
-	f.ui.Output("")
+	f.output("")
 	if config.Detected {
-		f.ui.Output(f.renderHTML(fmt.Sprintf(`<span class="success">✓ Proxy detected</span> via <span class="warning">%s</span>: <span class="warning">%s</span>`,
+		f.output(f.renderHTML(fmt.Sprintf(`<span class="success">✓ Proxy detected</span> via <span class="warning">%s</span>: <span class="warning">%s</span>`,
 			config.Variable, config.URL)))
-		f.ui.Output("Testing connectivity through proxy...")
+		f.output("Testing connectivity through proxy...")
 	} else {
-		f.ui.Output(f.renderHTML(`<span class="info">ℹ No proxy detected</span> - Testing direct connection...`))
+		f.output(f.renderHTML(`<span class="info">ℹ No proxy detected</span> - Testing direct connection...`))
 	}
 
 	return nil
@@ -136,18 +134,17 @@ func (f *Formatter) formatHostResult(result HostResult) error {
 
 // formatTODOs formats the actionable TODO items
 func (f *Formatter) formatTODOs(todos []TODO) error {
-	f.ui.Output("")
-	f.ui.Output(presenters.RenderTitle("Actionable TODOs"))
+	f.output("")
+	f.output(presenters.RenderTitle("Actionable TODOs"))
 
 	if len(todos) == 0 {
-		f.ui.Output(f.renderHTML(`<span class="success">All checks passed. Your network configuration appears to be compatible with Snyk CLI.</span>`))
-		f.ui.Output("")
+		f.output(f.renderHTML(`<span class="success">All checks passed. Your network configuration appears to be compatible with Snyk CLI.</span>`))
+		f.output("")
 		tip := presenters.RenderTip("Certificate Configuration:\nIf you need to trust custom certificates, set NODE_EXTRA_CA_CERTS environment variable\nto point to your certificate bundle file.")
-		f.ui.Output(tip)
+		f.output(tip)
 		return nil
 	}
 
-	// Group and deduplicate TODOs
 	uniqueTodos := deduplicateTODOs(todos)
 
 	for _, todo := range uniqueTodos {
@@ -162,7 +159,7 @@ func (f *Formatter) formatTODOs(todos []TODO) error {
 		}
 
 		message := fmt.Sprintf("%s: %s", todo.Level, todo.Message)
-		f.ui.Output(f.renderHTML(fmt.Sprintf(`<span class="%s">%s</span>`, htmlClass, message)))
+		f.output(f.renderHTML(fmt.Sprintf(`<span class="%s">%s</span>`, htmlClass, message)))
 	}
 
 	return nil
@@ -170,33 +167,32 @@ func (f *Formatter) formatTODOs(todos []TODO) error {
 
 // formatOrganizations formats the organization list
 func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
-	f.ui.Output("")
-	f.ui.Output(presenters.RenderTitle("Snyk Token and Organizations"))
+	f.output("")
+	f.output(presenters.RenderTitle("Snyk Token and Organizations"))
 
 	if !result.TokenPresent {
-		f.ui.Output(f.renderHTML(`<span class="warning">No authentication token configured</span>`))
-		f.ui.Output("Configure authentication token to see your organizations")
+		f.output(f.renderHTML(`<span class="warning">No authentication token configured</span>`))
+		f.output("Configure authentication token to see your organizations")
 		return nil
 	}
 
-	f.ui.Output(f.renderHTML(`<span class="success">✓ Authentication token is configured</span>`))
+	f.output(f.renderHTML(`<span class="success">✓ Authentication token is configured</span>`))
 
 	if result.OrgCheckError != nil {
 		errMsg := fmt.Sprintf(`<span class="error">✗</span> Failed to fetch organizations: %v`, result.OrgCheckError)
-		f.ui.Output(f.renderHTML(errMsg))
-		return nil
+		f.output(f.renderHTML(errMsg))
+		return result.OrgCheckError
 	}
 
 	if len(result.Organizations) == 0 {
-		f.ui.Output(f.renderHTML(`<span class="warning">No organizations found</span>`))
+		f.output(f.renderHTML(`<span class="warning">No organizations found</span>`))
 		return nil
 	}
 
-	f.ui.Output("")
-	f.ui.Output(f.renderHTML(fmt.Sprintf(`<span class="success">Found %d organizations:</span>`, len(result.Organizations))))
-	f.ui.Output("")
+	f.output("")
+	f.output(f.renderHTML(fmt.Sprintf(`<span class="success">Found %d organizations:</span>`, len(result.Organizations))))
+	f.output("")
 
-	// Calculate column widths
 	idWidth, nameWidth, groupWidth := 36, 20, 20 // UUID length is 36
 	for _, org := range result.Organizations {
 		if len(org.ID) > idWidth {
@@ -210,22 +206,25 @@ func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
 		}
 	}
 
-	// Add padding
 	idWidth += 2
 	nameWidth += 2
 	groupWidth += 2
 
-	// Print header
 	header := fmt.Sprintf("%-*s %-*s %-*s", idWidth, "Organization ID", nameWidth, "Organization Name", groupWidth, "Group")
-	f.ui.Output(f.renderHTML(fmt.Sprintf(`<span class="info">%s</span>`, header)))
-	f.ui.Output(f.renderHTML(fmt.Sprintf(`<span class="info">%s</span>`, strings.Repeat("-", len(header)))))
+	f.output(f.renderHTML(fmt.Sprintf(`<span class="info">%s</span>`, header)))
+	f.output(f.renderHTML(fmt.Sprintf(`<span class="info">%s</span>`, strings.Repeat("-", len(header)))))
 
-	// Print organizations
 	for _, org := range result.Organizations {
-		f.ui.Output(fmt.Sprintf("%-*s %-*s %-*s",
+		orgLine := fmt.Sprintf("%-*s %-*s %-*s",
 			idWidth, org.ID,
 			nameWidth, org.Name,
-			groupWidth, org.Group.Name))
+			groupWidth, org.Group.Name)
+
+		if org.IsDefault {
+			f.output(f.renderHTML(fmt.Sprintf(`<span class="success">%s [DEFAULT]</span>`, orgLine)))
+		} else {
+			f.output(orgLine)
+		}
 	}
 
 	return nil
@@ -238,11 +237,13 @@ func (f *Formatter) renderHTML(html string) string {
 		presenter := presenters.NewHTMLPresenter(func(tag, cssClass, originalContent string) string {
 			return originalContent
 		})
-		output, _ := presenter.Present(html)
+		output, err := presenter.Present(html)
+		if err != nil {
+			return html
+		}
 		return output
 	}
 
-	// Use custom callback for our specific classes
 	presenter := presenters.NewHTMLPresenter(func(tag, cssClass, originalContent string) string {
 		switch cssClass {
 		case "success":
@@ -264,7 +265,10 @@ func (f *Formatter) renderHTML(html string) string {
 		}
 	})
 
-	output, _ := presenter.Present(html)
+	output, err := presenter.Present(html)
+	if err != nil {
+		return html
+	}
 	return output
 }
 

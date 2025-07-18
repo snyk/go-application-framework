@@ -118,10 +118,11 @@ func (r *ConnectivityCheckResult) AddTODOf(level TodoLevel, format string, args 
 
 // Organization represents a Snyk organization
 type Organization struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Slug  string `json:"slug"`
-	Group struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	IsDefault bool   `json:"isDefault"`
+	Group     struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"group"`
@@ -155,7 +156,7 @@ func GetSnykHosts() []string {
 	snykHostsMutex.RLock()
 	defer snykHostsMutex.RUnlock()
 
-	// Return a copy to prevent external modification
+	// must return a copy to prevent external modification
 	hosts := make([]string, len(SnykHosts))
 	copy(hosts, SnykHosts)
 	return hosts
@@ -166,7 +167,7 @@ func SetSnykHosts(hosts []string) {
 	snykHostsMutex.Lock()
 	defer snykHostsMutex.Unlock()
 
-	// Create a copy to prevent external modification after setting
+	// copy prevents modification of the slice after setting
 	SnykHosts = make([]string, len(hosts))
 	copy(SnykHosts, hosts)
 }
@@ -174,16 +175,14 @@ func SetSnykHosts(hosts []string) {
 // SetSnykHostsForTesting is a helper for tests that sets hosts and returns a cleanup function
 func SetSnykHostsForTesting(hosts []string) func() {
 	snykHostsMutex.Lock()
-	// Save the current hosts before modification
 	originalHosts := make([]string, len(SnykHosts))
 	copy(originalHosts, SnykHosts)
 
-	// Set the new hosts
 	SnykHosts = make([]string, len(hosts))
 	copy(SnykHosts, hosts)
 	snykHostsMutex.Unlock()
 
-	// Return a cleanup function that restores the original hosts
+	// cleanup function restores the original hosts for test isolation
 	return func() {
 		snykHostsMutex.Lock()
 		SnykHosts = originalHosts

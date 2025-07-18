@@ -55,6 +55,30 @@ func Test_GetSlugFromOrgId_ReturnsCorrectSlug(t *testing.T) {
 	assert.Equal(t, expectedSlug, actualSlug)
 }
 
+func Test_GetOrganizations_ReturnsOrganizations(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	orgResponse := newMockOrgResponse(t)
+	limit := 50
+	u := fmt.Sprintf("/rest/orgs?limit=%d&version=2024-10-15", limit)
+
+	server := setupSingleReponseServer(t, u, orgResponse)
+	client := api.NewApi(server.URL, http.DefaultClient)
+
+	// Act
+	response, err := client.GetOrganizations(limit)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Assert
+	assert.NotNil(t, response)
+	assert.Equal(t, 2, len(response.Organizations))
+	assert.Equal(t, "27ce75bf-5794-4bfd-9ae7-e779f465abdf", response.Organizations[0].Id)
+	assert.Equal(t, "defaultOrg", response.Organizations[0].Attributes.Name)
+	assert.Equal(t, "default-org", response.Organizations[0].Attributes.Slug)
+}
+
 func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	// Arrange
 	t.Parallel()

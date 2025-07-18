@@ -28,64 +28,51 @@ var WORKFLOWID_CONNECTIVITY_CHECK workflow.Identifier = workflow.NewWorkflowIden
 
 // InitConnectivityCheckWorkflow initializes the connectivity check workflow
 func InitConnectivityCheckWorkflow(engine workflow.Engine) error {
-	// Initialize workflow configuration
 	config := pflag.NewFlagSet(connectivityCheckWorkflowName, pflag.ExitOnError)
 
-	// Add flags
 	config.Bool(jsonFlag, false, "Output results in JSON format")
 	config.Bool(noColorFlag, false, "Disable colored output")
 	config.Int(timeoutFlag, 10, "Timeout in seconds for each connection test")
 
-	// Register workflow with engine
 	_, err := engine.Register(WORKFLOWID_CONNECTIVITY_CHECK, workflow.ConfigurationOptionsFromFlagset(config), connectivityCheckEntryPoint)
 	return err
 }
 
 // connectivityCheckEntryPoint is the entry point for the connectivity check workflow
 func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
-	// Get necessary objects from invocation context
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	networkAccess := invocationCtx.GetNetworkAccess()
 
-	// Create connectivity checker
 	checker := connectivity.NewChecker(networkAccess, logger, config)
 
-	// Log start of connectivity check
 	logger.Info().Msg("Starting Snyk connectivity check")
 
-	// Perform connectivity check
 	result, err := checker.CheckConnectivity()
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform connectivity check: %w", err)
 	}
 
-	// Output results based on format
 	if config.GetBool(jsonFlag) {
-		// JSON output
 		jsonData, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal results to JSON: %w", err)
 		}
 
-		// Create workflow data for JSON output
 		outputData := createWorkflowData(jsonData, "application/json", logger, config)
 		return []workflow.Data{outputData}, nil
 	} else {
-		// Human-readable output using GAF formatter
+		// need to format as human-readable text
 		var buf bytes.Buffer
 		useColor := !config.GetBool(noColorFlag) && isTerminal()
 
-		// Create a simple writer-based UI adapter
 		bufferUI := &bufferUIAdapter{writer: &buf}
 
-		// Use the GAF formatter
 		formatter := connectivity.NewFormatter(bufferUI, useColor)
 		if err := formatter.FormatResult(result); err != nil {
 			return nil, fmt.Errorf("failed to format results: %w", err)
 		}
 
-		// Create workflow data for text output
 		outputData := createWorkflowData(buf.Bytes(), "text/plain", logger, config)
 		return []workflow.Data{outputData}, nil
 	}

@@ -14,6 +14,12 @@ type OrgRelationships struct {
 			Type string `json:"type"`
 		} `json:"data"`
 	} `json:"member_role"`
+	Group struct {
+		Data struct {
+			Id   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"data"`
+	} `json:"group"`
 }
 
 type Organization struct {
@@ -23,8 +29,17 @@ type Organization struct {
 	Relationships OrgRelationships `json:"relationships"`
 }
 
+type IncludedItem struct {
+	Id         string `json:"id"`
+	Type       string `json:"type"`
+	Attributes struct {
+		Name string `json:"name"`
+	} `json:"attributes"`
+}
+
 type OrganizationsResponse struct {
 	Organizations []Organization `json:"data"`
+	Included      []IncludedItem `json:"included"`
 	Jsonapi       struct {
 		Version string `json:"version"`
 	} `json:"jsonapi"`

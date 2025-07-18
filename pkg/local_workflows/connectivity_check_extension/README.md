@@ -6,7 +6,7 @@ A Go-based extension for the Snyk CLI that performs comprehensive network connec
 
 - **Comprehensive Endpoint Testing**: Tests connectivity to all Snyk API endpoints and services
 - **Proxy Detection & Validation**: Automatically detects and validates proxy configurations
-- **Organization Listing**: Displays your Snyk organizations when authenticated
+- **Organization Listing**: Displays your Snyk organizations when authenticated (with default organization highlighted)
 - **Multiple Output Formats**: Human-readable (with color support) and JSON formats
 - **Actionable Diagnostics**: Provides specific recommendations based on connectivity issues
 - **Integration Ready**: Built as a workflow extension for the Snyk CLI using go-application-framework
@@ -28,7 +28,7 @@ The tool uses Snyk authentication from the go-application-framework configuratio
 - OAuth tokens
 - Bearer tokens
 
-When authenticated, the tool will display your organizations with their IDs.
+When authenticated, the tool will display your organizations with their IDs. The default organization is highlighted with a `[DEFAULT]` marker.
 
 ## Output Examples
 
@@ -81,7 +81,7 @@ pointing to your CA bundle file.
 Found 2 organizations:
 Organization ID                         Organization Name      Group
 ---------------------------------------------------------------------------------------------------
-a1b2c3d4-e5f6-7890-abcd-ef1234567890  My Organization       My Group
+a1b2c3d4-e5f6-7890-abcd-ef1234567890  My Organization       My Group                    [DEFAULT]
 b2c3d4e5-f6a7-8901-bcde-f23456789012  Another Org           My Group
 ```
 
@@ -114,6 +114,17 @@ snyk connectivity-check --json
       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "name": "My Organization",
       "slug": "my-organization",
+      "isDefault": true,
+      "group": {
+        "id": "group-uuid-5678",
+        "name": "My Group"
+      }
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+      "name": "Another Org",
+      "slug": "another-org",
+      "isDefault": false,
       "group": {
         "id": "group-uuid-5678",
         "name": "My Group"
