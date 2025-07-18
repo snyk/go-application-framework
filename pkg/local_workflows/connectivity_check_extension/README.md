@@ -79,10 +79,10 @@ pointing to your CA bundle file.
 ✓ Authentication token is configured
 
 Found 2 organizations:
-Group ID                              Name                   Slug                 Default
------------------------------------------------------------------------------------------
-a1b2c3d4-e5f6-7890-abcd-ef1234567890  My Organization       my-organization      Yes
-b2c3d4e5-f6a7-8901-bcde-f23456789012  Another Org           another-org
+Group ID                              Org ID                                Name                   Slug                 Default
+---------------------------------------------------------------------------------------------------------------------------------------
+a1b2c3d4-e5f6-7890-abcd-ef1234567890  d4e5f6a7-b890-cdef-1234-567890abcdef  My Organization       my-organization      Yes
+b2c3d4e5-f6a7-8901-bcde-f23456789012  e5f6a7b8-c901-def2-3456-7890abcdef12  Another Org           another-org
 ```
 
 ### JSON Output
