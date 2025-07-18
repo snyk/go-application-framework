@@ -120,12 +120,7 @@ func (r *ConnectivityCheckResult) AddTODOf(level TodoLevel, format string, args 
 type Organization struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
-	Slug      string `json:"slug"`
 	IsDefault bool   `json:"isDefault"`
-	Group     struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"group"`
 }
 
 // snykHostsMutex protects access to SnykHosts

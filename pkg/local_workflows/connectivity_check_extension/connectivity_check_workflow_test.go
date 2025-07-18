@@ -272,9 +272,7 @@ func TestJSONOutputWithOrganizations(t *testing.T) {
 		if org.Name != "Test Organization" {
 			t.Errorf("Expected org name 'Test Organization', got '%s'", org.Name)
 		}
-		if org.Slug != "test-org" {
-			t.Errorf("Expected org slug 'test-org', got '%s'", org.Slug)
-		}
+		// Note: We don't check IsDefault here because this test doesn't mock GetDefaultOrgId()
 	}
 
 	// Test JSON marshaling

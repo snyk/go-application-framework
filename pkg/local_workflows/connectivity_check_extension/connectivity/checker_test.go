@@ -692,9 +692,6 @@ func verifyOrganizations(t *testing.T, orgs []Organization, expectedCount int, e
 		if orgs[0].Name != "Test Org 1" {
 			t.Errorf("Expected first org name to be 'Test Org 1', got '%s'", orgs[0].Name)
 		}
-		if orgs[0].Group.Name != "Test Group" {
-			t.Errorf("Expected group name to be 'Test Group', got '%s'", orgs[0].Group.Name)
-		}
 		if expectDefault && orgs[0].IsDefault != true {
 			t.Errorf("Expected first org to be default, got %v", orgs[0].IsDefault)
 		} else if !expectDefault && orgs[0].IsDefault != false {

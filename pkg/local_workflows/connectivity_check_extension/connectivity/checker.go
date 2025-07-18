@@ -112,27 +112,14 @@ func (c *Checker) CheckOrganizations(endpoint string) ([]Organization, error) {
 		defaultOrgId = ""
 	}
 
-	// Build group name map from included data
-	groupNames := make(map[string]string)
-	for _, inc := range response.Included {
-		if inc.Type == "group" {
-			groupNames[inc.Id] = inc.Attributes.Name
-		}
-	}
-
 	var orgs []Organization
 	for _, org := range response.Organizations {
-		o := Organization{
+		// Convert to our Organization type
+		orgs = append(orgs, Organization{
 			ID:        org.Id,
 			Name:      org.Attributes.Name,
-			Slug:      org.Attributes.Slug,
 			IsDefault: org.Id == defaultOrgId,
-		}
-		if org.Relationships.Group.Data.Id != "" {
-			o.Group.ID = org.Relationships.Group.Data.Id
-			o.Group.Name = groupNames[o.Group.ID]
-		}
-		orgs = append(orgs, o)
+		})
 	}
 
 	return orgs, nil

@@ -193,7 +193,7 @@ func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
 	f.output(f.renderHTML(fmt.Sprintf(`<span class="success">Found %d organizations:</span>`, len(result.Organizations))))
 	f.output("")
 
-	idWidth, nameWidth, groupWidth := 36, 20, 20 // UUID length is 36
+	idWidth, nameWidth, defaultWidth := 36, 20, 7 // UUID length is 36, "Default" is 7
 	for _, org := range result.Organizations {
 		if len(org.ID) > idWidth {
 			idWidth = len(org.ID)
@@ -201,27 +201,29 @@ func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
 		if len(org.Name) > nameWidth {
 			nameWidth = len(org.Name)
 		}
-		if len(org.Group.Name) > groupWidth {
-			groupWidth = len(org.Group.Name)
-		}
 	}
 
 	idWidth += 2
 	nameWidth += 2
-	groupWidth += 2
+	defaultWidth += 2
 
-	header := fmt.Sprintf("%-*s %-*s %-*s", idWidth, "Organization ID", nameWidth, "Organization Name", groupWidth, "Group")
+	header := fmt.Sprintf("%-*s %-*s %-*s", idWidth, "Organization ID", nameWidth, "Organization Name", defaultWidth, "Default")
 	f.output(f.renderHTML(fmt.Sprintf(`<span class="info">%s</span>`, header)))
 	f.output(f.renderHTML(fmt.Sprintf(`<span class="info">%s</span>`, strings.Repeat("-", len(header)))))
 
 	for _, org := range result.Organizations {
+		defaultStr := ""
+		if org.IsDefault {
+			defaultStr = "Yes"
+		}
+
 		orgLine := fmt.Sprintf("%-*s %-*s %-*s",
 			idWidth, org.ID,
 			nameWidth, org.Name,
-			groupWidth, org.Group.Name)
+			defaultWidth, defaultStr)
 
 		if org.IsDefault {
-			f.output(f.renderHTML(fmt.Sprintf(`<span class="success">%s [DEFAULT]</span>`, orgLine)))
+			f.output(f.renderHTML(fmt.Sprintf(`<span class="success">%s</span>`, orgLine)))
 		} else {
 			f.output(orgLine)
 		}
