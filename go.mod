@@ -31,7 +31,7 @@ require (
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/snyk/error-catalog-golang-public v0.0.0-20250429130542-564b0605020e
+	github.com/snyk/error-catalog-golang-public v0.0.0-20250625135845-2d6f9a31f318
 	github.com/subosito/gotenv v1.4.1
 	golang.org/x/net v0.38.0
 	golang.org/x/sync v0.13.0
