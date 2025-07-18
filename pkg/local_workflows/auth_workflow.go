@@ -69,7 +69,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	)
 
-	err = entryPointDI(invocationCtx, logger, engine, authenticator)
+	err = entryPointDI(invocationCtx, logger, engine, authenticator, auth.DeriveEndpointFromPAT)
 	return nil, err
 }
 
@@ -95,7 +95,7 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	return auth.AUTH_TYPE_OAUTH
 }
 
-func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator, deriveEndpointFn auth.DeriveEndpointFn) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	config := invocationCtx.GetConfiguration()
 
@@ -124,34 +124,35 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 			logger.Debug().Err(err).Msg("Failed to output authenticated message")
 		}
 	} else if strings.EqualFold(authType, auth.AUTH_TYPE_PAT) { // PAT flow
-		engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_TOKEN)
-
-		oldToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 		pat := config.GetString(ConfigurationNewAuthenticationToken)
 
-		logger.Print("Unset existing auth keys from config")
+		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
 		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-		config.Unset(configuration.AUTHENTICATION_TOKEN)
+		config.Set(configuration.AUTHENTICATION_TOKEN, "") // clear token to avoid using it during authentication
 
-		logger.Print("Validating pat")
-		whoamiConfig := config.Clone()
-		whoamiConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
-		whoamiConfig.Set(configuration.AUTHENTICATION_TOKEN, pat)
-		_, whoamiErr := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("whoami"), whoamiConfig)
-		if whoamiErr != nil {
-			// reset config file
-			if len(oldToken) > 0 {
-				config.Set(auth.CONFIG_KEY_TOKEN, oldToken)
-			}
-			return whoamiErr
+		regions := config.GetStringSlice(configuration.SNYK_REGION_URLS)
+		// prefer the configured API URL
+		if config.IsSet(configuration.API_URL) {
+			regions = []string{config.GetString(configuration.API_URL)}
+		}
+		apiUrl, endpointErr := deriveEndpointFn(pat, config, invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient(), regions)
+
+		if endpointErr != nil {
+			return endpointErr
 		}
 
-		logger.Print("Validation successful; set pat credentials in config")
-		engine.GetConfiguration().Set(auth.CONFIG_KEY_TOKEN, pat)
+		if len(apiUrl) > 0 {
+			logger.Print("Set pat credentials in config")
+			engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_TOKEN)
+			engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_ENDPOINT)
 
-		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
-		if err != nil {
-			logger.Debug().Err(err).Msg("Failed to output authenticated message")
+			engine.GetConfiguration().Set(auth.CONFIG_KEY_TOKEN, pat)
+			engine.GetConfiguration().Set(auth.CONFIG_KEY_ENDPOINT, apiUrl)
+
+			err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
+			if err != nil {
+				logger.Debug().Err(err).Msg("Failed to output authenticated message")
+			}
 		}
 	} else { // LEGACY flow
 		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
