@@ -2,29 +2,28 @@ package connectivity
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 	"github.com/snyk/go-application-framework/internal/presenters"
-	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 // Formatter formats connectivity check results using GAF UI components
 type Formatter struct {
-	ui       ui.UserInterface
+	writer   io.Writer
 	useColor bool
 }
 
-// output is a helper method that calls ui.Output and ignores errors
-// since UI output errors are non-critical for this formatter
+// output is a helper method that writes to the writer
 func (f *Formatter) output(str string) {
-	_ = f.ui.Output(str) //nolint:errcheck // UI output errors are non-critical
+	fmt.Fprintln(f.writer, str)
 }
 
-// NewFormatter creates a new formatter using GAF UI interfaces
-func NewFormatter(ui ui.UserInterface, useColor bool) *Formatter {
+// NewFormatter creates a new formatter using an io.Writer
+func NewFormatter(writer io.Writer, useColor bool) *Formatter {
 	if useColor {
 		lipgloss.SetColorProfile(termenv.TrueColor)
 	} else {
@@ -32,7 +31,7 @@ func NewFormatter(ui ui.UserInterface, useColor bool) *Formatter {
 	}
 
 	return &Formatter{
-		ui:       ui,
+		writer:   writer,
 		useColor: useColor,
 	}
 }
@@ -129,7 +128,8 @@ func (f *Formatter) formatHostResult(result HostResult) error {
 		line += f.renderHTML(fmt.Sprintf(`<span class="error">%s</span>`, message))
 	}
 
-	return f.ui.Output(line)
+	f.output(line)
+	return nil
 }
 
 // formatTODOs formats the actionable TODO items

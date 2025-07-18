@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension/connectivity"
-	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -67,9 +65,7 @@ func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input
 		var buf bytes.Buffer
 		useColor := !config.GetBool(noColorFlag) && isTerminal()
 
-		bufferUI := &bufferUIAdapter{writer: &buf}
-
-		formatter := connectivity.NewFormatter(bufferUI, useColor)
+		formatter := connectivity.NewFormatter(&buf, useColor)
 		if err := formatter.FormatResult(result); err != nil {
 			return nil, fmt.Errorf("failed to format results: %w", err)
 		}
@@ -94,34 +90,3 @@ func createWorkflowData(data interface{}, contentType string, logger *zerolog.Lo
 func isTerminal() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
-
-// bufferUIAdapter implements a minimal ui.UserInterface that writes to a buffer
-type bufferUIAdapter struct {
-	writer io.Writer
-}
-
-func (b *bufferUIAdapter) Output(output string) error {
-	_, err := fmt.Fprintln(b.writer, output)
-	return err
-}
-
-func (b *bufferUIAdapter) OutputError(err error, opts ...ui.Opts) error {
-	_, writeErr := fmt.Fprintln(b.writer, err.Error())
-	return writeErr
-}
-
-func (b *bufferUIAdapter) NewProgressBar() ui.ProgressBar {
-	// Return a no-op progress bar for workflow context
-	return &noOpProgressBar{}
-}
-
-func (b *bufferUIAdapter) Input(prompt string) (string, error) {
-	return "", fmt.Errorf("input not supported in workflow context")
-}
-
-// noOpProgressBar is a progress bar that does nothing
-type noOpProgressBar struct{}
-
-func (n *noOpProgressBar) UpdateProgress(progress float64) error { return nil }
-func (n *noOpProgressBar) SetTitle(title string)                 {}
-func (n *noOpProgressBar) Clear() error                          { return nil }
