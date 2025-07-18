@@ -762,7 +762,6 @@ func createTestOrgResponse() *contract.OrganizationsResponse {
 				Relationships: contract.OrgRelationships{},
 			},
 		},
-		Included: []contract.IncludedItem{},
 	}
 }
 
@@ -840,7 +839,6 @@ func TestCheckOrganizations(t *testing.T) {
 			Organizations: []contract.Organization{
 				createTestOrgResponse().Organizations[0],
 			},
-			Included: createTestOrgResponse().Included,
 		}
 
 		// Set expectations - GetDefaultOrgId returns an error
