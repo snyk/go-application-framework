@@ -109,7 +109,7 @@ func (c *Checker) DetectProxyConfig() ProxyConfig {
 }
 
 // CheckOrganizations checks if authentication token is configured and fetches organizations
-func (c *Checker) CheckOrganizations(endpoint string, limit int) ([]Organization, error) {
+func (c *Checker) CheckOrganizations(limit int) ([]Organization, error) {
 	// Check if token is available
 	token := c.config.GetString(configuration.AUTHENTICATION_TOKEN)
 	if token == "" {
@@ -237,18 +237,13 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 	if result.TokenPresent {
 		c.updateProgress(progressBar, currentStep/totalSteps, "Fetching organizations...")
 
-		apiEndpoint := c.config.GetString(configuration.API_URL)
-		if apiEndpoint == "" {
-			apiEndpoint = "https://api.snyk.io"
-		}
-
 		// Get the organization limit from configuration, default to 100
 		orgLimit := c.config.GetInt("max-org-count")
 		if orgLimit <= 0 {
 			orgLimit = 100
 		}
 
-		orgs, err := c.CheckOrganizations(apiEndpoint, orgLimit)
+		orgs, err := c.CheckOrganizations(orgLimit)
 		if err != nil {
 			c.logger.Error().Err(err).Msg("Failed to fetch organizations")
 			result.OrgCheckError = err

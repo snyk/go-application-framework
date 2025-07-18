@@ -814,7 +814,7 @@ func TestCheckOrganizations(t *testing.T) {
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Test fetching organizations
-		orgs, err := checker.CheckOrganizations("https://api.snyk.io", 100)
+		orgs, err := checker.CheckOrganizations(100)
 		if err != nil {
 			t.Fatalf("Expected no error, got: %v", err)
 		}
@@ -849,7 +849,7 @@ func TestCheckOrganizations(t *testing.T) {
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Test fetching organizations
-		orgs, err := checker.CheckOrganizations("https://api.snyk.io", 100)
+		orgs, err := checker.CheckOrganizations(100)
 		if err != nil {
 			t.Fatalf("Expected no error, got: %v", err)
 		}
@@ -873,7 +873,7 @@ func TestCheckOrganizations(t *testing.T) {
 
 		checkerNoToken := NewCheckerWithApiClient(mockNA, &logger, configNoToken, mockApiClient)
 
-		orgs, err := checkerNoToken.CheckOrganizations("https://api.snyk.io", 100)
+		orgs, err := checkerNoToken.CheckOrganizations(100)
 		if err != nil {
 			t.Errorf("Expected no error when no token configured, got: %v", err)
 		}
@@ -897,7 +897,7 @@ func TestCheckOrganizations(t *testing.T) {
 
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
-		_, err := checker.CheckOrganizations("https://api.snyk.io", 100)
+		_, err := checker.CheckOrganizations(100)
 		if err == nil {
 			t.Fatalf("Expected error, got nil")
 		}
@@ -938,7 +938,7 @@ func TestCheckOrganizations(t *testing.T) {
 				checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 				// Test fetching organizations with the specific limit
-				orgs, err := checker.CheckOrganizations("https://api.snyk.io", tc.limit)
+				orgs, err := checker.CheckOrganizations(tc.limit)
 				if err != nil {
 					t.Fatalf("Expected no error, got: %v", err)
 				}
