@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -146,15 +145,15 @@ func TestDetectProxyConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore environment
-			for key := range tt.envVars {
-				oldVal := os.Getenv(key)
-				defer os.Setenv(key, oldVal)
+			// Clear all proxy-related environment variables for test isolation
+			proxyEnvVars := []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"}
+			for _, key := range proxyEnvVars {
+				t.Setenv(key, "")
 			}
 
 			// Set test environment
 			for key, val := range tt.envVars {
-				os.Setenv(key, val)
+				t.Setenv(key, val)
 			}
 
 			// Create test checker
