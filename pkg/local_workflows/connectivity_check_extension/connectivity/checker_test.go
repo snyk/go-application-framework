@@ -604,6 +604,134 @@ func TestCheckConnectivity(t *testing.T) {
 	}
 }
 
+func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
+	// Create a test server
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	// Override SnykHosts for testing
+	cleanup := SetSnykHostsForTesting([]string{"api.snyk.io"})
+	defer cleanup()
+
+	t.Run("respects max-org-count from configuration", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mock dependencies
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+
+		// Configure with authentication token and custom max-org-count
+		config := configuration.New()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
+		config.Set("max-org-count", 25)
+		config.Set("insecure", true)
+
+		// Create HTTP client for mock
+		httpClient := server.Client()
+		mockNA.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+		mockNA.EXPECT().GetUnauthorizedHttpClient().Return(httpClient).AnyTimes()
+
+		// Expect GetOrganizations to be called with limit from config
+		mockApiClient.EXPECT().GetOrganizations(25).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+
+		// Create checker
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
+
+		// Run connectivity check
+		result, err := checker.CheckConnectivity()
+		if err != nil {
+			t.Fatalf("CheckConnectivity failed: %v", err)
+		}
+
+		// Verify organizations were fetched
+		if len(result.Organizations) != 2 {
+			t.Errorf("Expected 2 organizations, got %d", len(result.Organizations))
+		}
+	})
+
+	t.Run("uses default when max-org-count is not set", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mock dependencies
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+
+		// Configure with authentication token but no max-org-count
+		config := configuration.New()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
+		config.Set("insecure", true)
+
+		// Create HTTP client for mock
+		httpClient := server.Client()
+		mockNA.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+		mockNA.EXPECT().GetUnauthorizedHttpClient().Return(httpClient).AnyTimes()
+
+		// Expect GetOrganizations to be called with default limit of 100
+		mockApiClient.EXPECT().GetOrganizations(100).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+
+		// Create checker
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
+
+		// Run connectivity check
+		result, err := checker.CheckConnectivity()
+		if err != nil {
+			t.Fatalf("CheckConnectivity failed: %v", err)
+		}
+
+		// Verify organizations were fetched
+		if len(result.Organizations) != 2 {
+			t.Errorf("Expected 2 organizations, got %d", len(result.Organizations))
+		}
+	})
+
+	t.Run("uses default when max-org-count is invalid", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mock dependencies
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+
+		// Configure with authentication token and invalid max-org-count
+		config := configuration.New()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
+		config.Set("max-org-count", -5)
+		config.Set("insecure", true)
+
+		// Create HTTP client for mock
+		httpClient := server.Client()
+		mockNA.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+		mockNA.EXPECT().GetUnauthorizedHttpClient().Return(httpClient).AnyTimes()
+
+		// Expect GetOrganizations to be called with default limit of 100 (since -5 is invalid)
+		mockApiClient.EXPECT().GetOrganizations(100).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+
+		// Create checker
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
+
+		// Run connectivity check
+		result, err := checker.CheckConnectivity()
+		if err != nil {
+			t.Fatalf("CheckConnectivity failed: %v", err)
+		}
+
+		// Verify organizations were fetched
+		if len(result.Organizations) != 2 {
+			t.Errorf("Expected 2 organizations, got %d", len(result.Organizations))
+		}
+	})
+}
+
 // timeoutError implements error interface for testing
 type timeoutError struct{}
 
@@ -687,7 +815,7 @@ func TestCheckOrganizations(t *testing.T) {
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Test fetching organizations
-		orgs, err := checker.CheckOrganizations("https://api.snyk.io")
+		orgs, err := checker.CheckOrganizations("https://api.snyk.io", 100)
 		if err != nil {
 			t.Fatalf("Expected no error, got: %v", err)
 		}
@@ -723,7 +851,7 @@ func TestCheckOrganizations(t *testing.T) {
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Test fetching organizations
-		orgs, err := checker.CheckOrganizations("https://api.snyk.io")
+		orgs, err := checker.CheckOrganizations("https://api.snyk.io", 100)
 		if err != nil {
 			t.Fatalf("Expected no error, got: %v", err)
 		}
@@ -747,7 +875,7 @@ func TestCheckOrganizations(t *testing.T) {
 
 		checkerNoToken := NewCheckerWithApiClient(mockNA, &logger, configNoToken, mockApiClient)
 
-		orgs, err := checkerNoToken.CheckOrganizations("https://api.snyk.io")
+		orgs, err := checkerNoToken.CheckOrganizations("https://api.snyk.io", 100)
 		if err != nil {
 			t.Errorf("Expected no error when no token configured, got: %v", err)
 		}
@@ -771,12 +899,57 @@ func TestCheckOrganizations(t *testing.T) {
 
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
-		_, err := checker.CheckOrganizations("https://api.snyk.io")
+		_, err := checker.CheckOrganizations("https://api.snyk.io", 100)
 		if err == nil {
-			t.Error("Expected error from API call")
+			t.Fatalf("Expected error, got nil")
 		}
 		if err.Error() != "API error" {
 			t.Errorf("Expected 'API error', got: %v", err)
+		}
+	})
+
+	t.Run("with custom limit", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create mock dependencies
+		logger := zerolog.Nop()
+		mockNA := mocks.NewMockNetworkAccess(ctrl)
+		mockApiClient := internalmocks.NewMockApiClient(ctrl)
+		config := configuration.New()
+		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
+
+		// Test with different limit values
+		testCases := []struct {
+			name  string
+			limit int
+		}{
+			{"small limit", 10},
+			{"medium limit", 50},
+			{"large limit", 200},
+			{"default limit", 100},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				// Set expectations with the specific limit
+				mockApiClient.EXPECT().GetOrganizations(tc.limit).Return(createTestOrgResponse(), nil)
+				mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+
+				// Create checker with mock API client
+				checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
+
+				// Test fetching organizations with the specific limit
+				orgs, err := checker.CheckOrganizations("https://api.snyk.io", tc.limit)
+				if err != nil {
+					t.Fatalf("Expected no error, got: %v", err)
+				}
+
+				// Verify organizations were returned
+				if len(orgs) != 2 {
+					t.Errorf("Expected 2 organizations, got %d", len(orgs))
+				}
+			})
 		}
 	})
 }

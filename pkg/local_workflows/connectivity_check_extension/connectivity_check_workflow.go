@@ -19,6 +19,7 @@ const (
 	jsonFlag                      = "json"
 	noColorFlag                   = "no-color"
 	timeoutFlag                   = "timeout"
+	maxOrgCountFlag               = "max-org-count"
 )
 
 // Define workflow identifier
@@ -31,6 +32,7 @@ func InitConnectivityCheckWorkflow(engine workflow.Engine) error {
 	config.Bool(jsonFlag, false, "Output results in JSON format")
 	config.Bool(noColorFlag, false, "Disable colored output")
 	config.Int(timeoutFlag, 10, "Timeout in seconds for each connection test")
+	config.Int(maxOrgCountFlag, 100, "Maximum number of organizations to retrieve")
 
 	_, err := engine.Register(WORKFLOWID_CONNECTIVITY_CHECK, workflow.ConfigurationOptionsFromFlagset(config), connectivityCheckEntryPoint)
 	return err

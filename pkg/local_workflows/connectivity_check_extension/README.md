@@ -30,6 +30,13 @@ The tool uses Snyk authentication from the go-application-framework configuratio
 
 When authenticated, the tool will display your organizations with their IDs. The default organization is highlighted with a `[DEFAULT]` marker.
 
+### Command Line Options
+
+- `--json` - Output results in JSON format
+- `--no-color` - Disable colored output
+- `--timeout <seconds>` - Timeout in seconds for each connection test (default: 10)
+- `--max-org-count <number>` - Maximum number of organizations to retrieve (default: 100)
+
 ## Output Examples
 
 ### Human-Readable Output
