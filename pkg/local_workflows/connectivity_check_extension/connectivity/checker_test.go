@@ -951,3 +951,64 @@ func TestCheckOrganizations(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckConnectivityHandlesOrgError(t *testing.T) {
+	// Create a test server for host connectivity checks
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Override SnykHosts for testing
+	cleanup := SetSnykHostsForTesting([]string{"api.snyk.io"})
+	defer cleanup()
+
+	// Create controller for mocks
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Setup mocks
+	mockNA := mocks.NewMockNetworkAccess(ctrl)
+	mockApiClient := internalmocks.NewMockApiClient(ctrl)
+	logger := zerolog.Nop()
+	config := configuration.New()
+
+	// Set authentication token to trigger organization fetch
+	config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
+
+	// Set expectation for GetUnauthorizedHttpClient (used by checkHost)
+	mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client()).AnyTimes()
+
+	// Mock GetOrganizations to return an error
+	expectedError := errors.New("organization fetch error")
+	mockApiClient.EXPECT().GetOrganizations(100).Return(nil, expectedError)
+
+	// Create checker with mocked API client
+	checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
+
+	// Run connectivity check
+	result, err := checker.CheckConnectivity()
+
+	// The method should not return an error, but should populate OrgCheckError
+	if err != nil {
+		t.Fatalf("Unexpected error from CheckConnectivity: %v", err)
+	}
+
+	// Verify that OrgCheckError is set to the expected error
+	if result.OrgCheckError == nil {
+		t.Fatal("Expected OrgCheckError to be set, but it was nil")
+	}
+
+	if result.OrgCheckError.Error() != expectedError.Error() {
+		t.Errorf("Expected OrgCheckError to be '%v', got '%v'", expectedError, result.OrgCheckError)
+	}
+
+	// Verify other fields are still populated correctly
+	if !result.TokenPresent {
+		t.Error("Expected TokenPresent to be true when token is configured")
+	}
+
+	if len(result.Organizations) != 0 {
+		t.Error("Expected Organizations to be empty when fetch fails")
+	}
+}

@@ -251,6 +251,7 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 		orgs, err := c.CheckOrganizations(apiEndpoint, orgLimit)
 		if err != nil {
 			c.logger.Error().Err(err).Msg("Failed to fetch organizations")
+			result.OrgCheckError = err
 		} else {
 			result.Organizations = orgs
 		}
