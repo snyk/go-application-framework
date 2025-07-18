@@ -19,6 +19,7 @@ type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)
 	GetOrgIdFromSlug(slugName string) (string, error)
 	GetSlugFromOrgId(orgID string) (string, error)
+	GetOrganizations(limit int) (*contract.OrganizationsResponse, error)
 	Init(url string, client *http.Client)
 	GetFeatureFlag(flagname string, origId string) (bool, error)
 	GetUserMe() (string, error)
@@ -91,6 +92,32 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("org ID not found for slug %v", slugName)
+}
+
+// GetOrganizations retrieves organizations accessible to the authenticated user.
+//
+// Parameters:
+//   - limit: Maximum number of organizations to return
+//
+// Returns:
+//   - A pointer to OrganizationsResponse containing organizations.
+//   - An error object (if an error occurred during the API request or response parsing).
+func (a *snykApiClient) GetOrganizations(limit int) (*contract.OrganizationsResponse, error) {
+	endpoint := "/rest/orgs"
+	version := "2024-10-15"
+
+	body, err := clientGet(a, endpoint, &version, "limit", fmt.Sprintf("%d", limit))
+	if err != nil {
+		return nil, err
+	}
+
+	var response contract.OrganizationsResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // GetDefaultOrgId retrieves the default organization ID associated with the authenticated user.
