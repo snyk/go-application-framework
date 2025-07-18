@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	connectivityCheckWorkflowName = "connectivity-check"
+	connectivityCheckWorkflowName = "tools.connectivity-check"
 	jsonFlag                      = "json"
 	noColorFlag                   = "no-color"
 	timeoutFlag                   = "timeout"
@@ -43,8 +43,9 @@ func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	networkAccess := invocationCtx.GetNetworkAccess()
+	ui := invocationCtx.GetUserInterface()
 
-	checker := connectivity.NewChecker(networkAccess, logger, config)
+	checker := connectivity.NewChecker(networkAccess, logger, config, ui)
 
 	logger.Info().Msg("Starting Snyk connectivity check")
 

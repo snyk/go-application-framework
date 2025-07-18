@@ -79,10 +79,10 @@ pointing to your CA bundle file.
 ✓ Authentication token is configured
 
 Found 2 organizations:
-Organization ID                         Organization Name      Default
-----------------------------------------------------------------------
-a1b2c3d4-e5f6-7890-abcd-ef1234567890  My Organization       Yes
-b2c3d4e5-f6a7-8901-bcde-f23456789012  Another Org
+Group ID                              Name                   Slug                 Default
+-----------------------------------------------------------------------------------------
+a1b2c3d4-e5f6-7890-abcd-ef1234567890  My Organization       my-organization      Yes
+b2c3d4e5-f6a7-8901-bcde-f23456789012  Another Org           another-org
 ```
 
 ### JSON Output
@@ -111,13 +111,17 @@ snyk connectivity-check --json
   "todos": [],
   "organizations": [
     {
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "id": "org-uuid-1",
+      "groupId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "name": "My Organization",
+      "slug": "my-organization",
       "isDefault": true
     },
     {
-      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+      "id": "org-uuid-2",
+      "groupId": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
       "name": "Another Org",
+      "slug": "another-org",
       "isDefault": false
     }
   ],

@@ -2,6 +2,7 @@ package connectivity
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
 // Checker performs connectivity checks to Snyk endpoints
@@ -23,10 +25,16 @@ type Checker struct {
 	config        configuration.Configuration
 	timeout       time.Duration
 	apiClient     api.ApiClient
+	ui            ui.UserInterface
 }
 
 // NewChecker creates a new connectivity checker
-func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration) *Checker {
+func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, ui ...ui.UserInterface) *Checker {
+	timeout := time.Duration(config.GetInt("timeout")) * time.Second
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+
 	// Initialize API client
 	apiUrl := config.GetString(configuration.API_URL)
 	if apiUrl == "" {
@@ -35,24 +43,43 @@ func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, 
 	httpClient := networkAccess.GetHttpClient()
 	apiClient := api.NewApi(apiUrl, httpClient)
 
-	return &Checker{
+	checker := &Checker{
 		networkAccess: networkAccess,
 		logger:        logger,
 		config:        config,
-		timeout:       10 * time.Second,
+		timeout:       timeout,
 		apiClient:     apiClient,
 	}
+
+	// Set UI if provided
+	if len(ui) > 0 && ui[0] != nil {
+		checker.ui = ui[0]
+	}
+
+	return checker
 }
 
-// NewCheckerWithApiClient creates a new connectivity checker with a custom API client (useful for testing)
-func NewCheckerWithApiClient(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, apiClient api.ApiClient) *Checker {
-	return &Checker{
+// NewCheckerWithApiClient creates a new connectivity checker with a custom API client (mainly for testing)
+func NewCheckerWithApiClient(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, apiClient api.ApiClient, ui ...ui.UserInterface) *Checker {
+	timeout := time.Duration(config.GetInt("timeout")) * time.Second
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+
+	checker := &Checker{
 		networkAccess: networkAccess,
 		logger:        logger,
 		config:        config,
-		timeout:       10 * time.Second,
+		timeout:       timeout,
 		apiClient:     apiClient,
 	}
+
+	// Set UI if provided
+	if len(ui) > 0 && ui[0] != nil {
+		checker.ui = ui[0]
+	}
+
+	return checker
 }
 
 // DetectProxyConfig detects proxy configuration from environment variables
@@ -117,12 +144,50 @@ func (c *Checker) CheckOrganizations(endpoint string) ([]Organization, error) {
 		// Convert to our Organization type
 		orgs = append(orgs, Organization{
 			ID:        org.Id,
+			GroupID:   org.Attributes.GroupId,
 			Name:      org.Attributes.Name,
+			Slug:      org.Attributes.Slug,
 			IsDefault: org.Id == defaultOrgId,
 		})
 	}
 
 	return orgs, nil
+}
+
+// updateProgress is a helper to update progress bar with error handling
+func (c *Checker) updateProgress(progressBar ui.ProgressBar, progress float64, title string) {
+	if progressBar == nil {
+		return
+	}
+	if title != "" {
+		progressBar.SetTitle(title)
+	}
+	if err := progressBar.UpdateProgress(progress); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to update progress bar")
+	}
+}
+
+// checkAuthentication checks for available authentication tokens
+func (c *Checker) checkAuthentication() string {
+	token := c.config.GetString(configuration.AUTHENTICATION_TOKEN)
+	if token != "" {
+		c.logger.Info().Msg("API Token found")
+		return token
+	}
+
+	token = c.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
+	if token != "" {
+		c.logger.Info().Msg("Bearer Token found")
+		return token
+	}
+
+	oauthToken, err := auth.GetOAuthToken(c.config)
+	if err == nil && oauthToken != nil && oauthToken.AccessToken != "" {
+		c.logger.Info().Msg("OAuth Token found")
+		return oauthToken.AccessToken
+	}
+
+	return ""
 }
 
 // CheckConnectivity performs connectivity checks to all Snyk endpoints
@@ -131,37 +196,47 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 		StartTime: time.Now(),
 	}
 
+	// Create progress bar if UI is available
+	var progressBar ui.ProgressBar
+	if c.ui != nil {
+		progressBar = c.ui.NewProgressBar()
+		defer func() {
+			if err := progressBar.Clear(); err != nil {
+				c.logger.Debug().Err(err).Msg("Failed to clear progress bar")
+			}
+		}()
+	}
+
+	// Step 1: Detect proxy configuration
+	c.updateProgress(progressBar, 0.1, "Detecting proxy configuration...")
 	result.ProxyConfig = c.DetectProxyConfig()
 
-	for _, host := range GetSnykHosts() {
+	// Step 2: Check connectivity to hosts
+	hosts := GetSnykHosts()
+	totalSteps := float64(len(hosts) + 3) // hosts + proxy + auth + orgs
+	currentStep := 1.0
+
+	for i, host := range hosts {
+		progress := (currentStep + float64(i)) / totalSteps
+		c.updateProgress(progressBar, progress, fmt.Sprintf("Checking connectivity to %s...", host))
+
 		hostResult := c.checkHost(host)
 		result.HostResults = append(result.HostResults, hostResult)
-
 		c.generateTODOs(result, &hostResult)
 	}
+	currentStep += float64(len(hosts))
 
-	token := c.config.GetString(configuration.AUTHENTICATION_TOKEN)
-	if token != "" {
-		c.logger.Info().Msg("API Token found")
-	}
-	if token == "" {
-		token = c.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
-		if token != "" {
-			c.logger.Info().Msg("Bearer Token found")
-		}
-	}
+	// Step 3: Check authentication
+	c.updateProgress(progressBar, currentStep/totalSteps, "Checking authentication...")
+	currentStep++
 
-	if token == "" {
-		oauthToken, err := auth.GetOAuthToken(c.config)
-		if err == nil && oauthToken != nil && oauthToken.AccessToken != "" {
-			c.logger.Info().Msg("OAuth Token found")
-			token = oauthToken.AccessToken
-		}
-	}
-
+	token := c.checkAuthentication()
 	result.TokenPresent = token != ""
 
+	// Step 4: Check organizations (if authenticated)
 	if result.TokenPresent {
+		c.updateProgress(progressBar, currentStep/totalSteps, "Fetching organizations...")
+
 		apiEndpoint := c.config.GetString(configuration.API_URL)
 		if apiEndpoint == "" {
 			apiEndpoint = "https://api.snyk.io"
@@ -169,11 +244,14 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 
 		orgs, err := c.CheckOrganizations(apiEndpoint)
 		if err != nil {
-			result.OrgCheckError = err
+			c.logger.Error().Err(err).Msg("Failed to fetch organizations")
 		} else {
 			result.Organizations = orgs
 		}
 	}
+
+	// Complete progress
+	c.updateProgress(progressBar, 1.0, "")
 
 	result.EndTime = time.Now()
 	return result, nil

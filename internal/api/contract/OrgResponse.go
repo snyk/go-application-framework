@@ -14,12 +14,6 @@ type OrgRelationships struct {
 			Type string `json:"type"`
 		} `json:"data"`
 	} `json:"member_role"`
-	Group struct {
-		Data struct {
-			Id   string `json:"id"`
-			Type string `json:"type"`
-		} `json:"data"`
-	} `json:"group"`
 }
 
 type Organization struct {

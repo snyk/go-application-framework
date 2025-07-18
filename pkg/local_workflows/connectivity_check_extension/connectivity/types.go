@@ -119,7 +119,9 @@ func (r *ConnectivityCheckResult) AddTODOf(level TodoLevel, format string, args 
 // Organization represents a Snyk organization
 type Organization struct {
 	ID        string `json:"id"`
+	GroupID   string `json:"groupId"`
 	Name      string `json:"name"`
+	Slug      string `json:"slug"`
 	IsDefault bool   `json:"isDefault"`
 }
 

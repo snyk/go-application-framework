@@ -618,61 +618,23 @@ func createTestOrgResponse() *contract.OrganizationsResponse {
 			{
 				Id: "org-1",
 				Attributes: contract.OrgAttributes{
-					Name: "Test Org 1",
-					Slug: "test-org-1",
+					Name:    "Test Org 1",
+					Slug:    "test-org-1",
+					GroupId: "group-id-1",
 				},
-				Relationships: contract.OrgRelationships{
-					Group: struct {
-						Data struct {
-							Id   string `json:"id"`
-							Type string `json:"type"`
-						} `json:"data"`
-					}{
-						Data: struct {
-							Id   string `json:"id"`
-							Type string `json:"type"`
-						}{
-							Id:   "group-1",
-							Type: "group",
-						},
-					},
-				},
+				Relationships: contract.OrgRelationships{},
 			},
 			{
 				Id: "org-2",
 				Attributes: contract.OrgAttributes{
-					Name: "Test Org 2",
-					Slug: "test-org-2",
+					Name:    "Test Org 2",
+					Slug:    "test-org-2",
+					GroupId: "group-id-2",
 				},
-				Relationships: contract.OrgRelationships{
-					Group: struct {
-						Data struct {
-							Id   string `json:"id"`
-							Type string `json:"type"`
-						} `json:"data"`
-					}{
-						Data: struct {
-							Id   string `json:"id"`
-							Type string `json:"type"`
-						}{
-							Id:   "group-1",
-							Type: "group",
-						},
-					},
-				},
+				Relationships: contract.OrgRelationships{},
 			},
 		},
-		Included: []contract.IncludedItem{
-			{
-				Id:   "group-1",
-				Type: "group",
-				Attributes: struct {
-					Name string `json:"name"`
-				}{
-					Name: "Test Group",
-				},
-			},
-		},
+		Included: []contract.IncludedItem{},
 	}
 }
 
@@ -688,8 +650,14 @@ func verifyOrganizations(t *testing.T, orgs []Organization, expectedCount int, e
 		if orgs[0].ID != "org-1" {
 			t.Errorf("Expected first org ID to be 'org-1', got '%s'", orgs[0].ID)
 		}
+		if orgs[0].GroupID != "group-id-1" {
+			t.Errorf("Expected first org GroupID to be 'group-id-1', got '%s'", orgs[0].GroupID)
+		}
 		if orgs[0].Name != "Test Org 1" {
 			t.Errorf("Expected first org name to be 'Test Org 1', got '%s'", orgs[0].Name)
+		}
+		if orgs[0].Slug != "test-org-1" {
+			t.Errorf("Expected first org slug to be 'test-org-1', got '%s'", orgs[0].Slug)
 		}
 		if expectDefault && orgs[0].IsDefault != true {
 			t.Errorf("Expected first org to be default, got %v", orgs[0].IsDefault)

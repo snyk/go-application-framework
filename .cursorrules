@@ -10,6 +10,7 @@
 - always create an implementation plan and save it to the directory under ${issueID}_implementation_plan but never commit it. take it as a reference for each step and how to proceed. Get confirmation that the plan is ok. update it as needed and get it approved, before you start changing files. the `issueID` is usually specified in the current branch in the format `XXX-XXXX`.
 - don't comment what is done, instead comment why something is done if the code is not clear
 - always write and update test cases. iterate until they pass.
+- to manipulate the environment in tests, please use t.SetEnv, never use os.SetEnv
 - follow clean code
 - follow golang best practices, produce idiomatic code
 - please check the makefile - make lint runs the linter, other targets might be relevant as well.

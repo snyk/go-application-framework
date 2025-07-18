@@ -195,24 +195,10 @@ func TestJSONOutputWithOrganizations(t *testing.T) {
 						"id": "test-org-1",
 						"attributes": {
 							"name": "Test Organization",
-							"slug": "test-org"
+							"slug": "test-org",
+							"group_id": "test-group-id"
 						},
-						"relationships": {
-							"group": {
-								"data": {
-									"id": "test-group"
-								}
-							}
-						}
-					}
-				],
-				"included": [
-					{
-						"id": "test-group",
-						"type": "group",
-						"attributes": {
-							"name": "Test Group"
-						}
+						"relationships": {}
 					}
 				]
 			}`
