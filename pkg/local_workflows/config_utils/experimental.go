@@ -29,10 +29,10 @@ func MarkAsExperimental(flags *pflag.FlagSet) *pflag.FlagSet {
 	if flags == nil {
 		return nil
 	}
-	
+
 	result := *flags
 	if result.Lookup(configuration.FLAG_EXPERIMENTAL) == nil {
 		result.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental command")
-	} 
+	}
 	return &result
 }

@@ -110,7 +110,7 @@ func TestMarkAsExperimental(t *testing.T) {
 		original1.String("other-flag", "", "some other flag")
 
 		result1 := MarkAsExperimental(original1)
-		
+
 		// Should be experimental after adding flag
 		assert.True(t, IsExperimental(result1), "should be experimental after adding flag")
 
@@ -120,4 +120,4 @@ func TestMarkAsExperimental(t *testing.T) {
 		// Should remain experimental
 		assert.True(t, IsExperimental(result2), "should remain experimental")
 	})
-} 
+}
