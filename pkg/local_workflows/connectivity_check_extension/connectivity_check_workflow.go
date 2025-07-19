@@ -7,11 +7,11 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension/connectivity"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -35,9 +35,8 @@ func InitConnectivityCheckWorkflow(engine workflow.Engine) error {
 	config.Bool(noColorFlag, false, "Disable colored output")
 	config.Int(timeoutFlag, 10, "Timeout in seconds for each connection test")
 	config.Int(maxOrgCountFlag, 100, "Maximum number of organizations to retrieve")
-	config.Bool(configuration.FLAG_EXPERIMENTAL, false, "This feature is experimental")
 
-	_, err := engine.Register(WORKFLOWID_CONNECTIVITY_CHECK, workflow.ConfigurationOptionsFromFlagset(config), connectivityCheckEntryPoint)
+	_, err := engine.Register(WORKFLOWID_CONNECTIVITY_CHECK, workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(config)), connectivityCheckEntryPoint)
 	return err
 }
 
@@ -47,10 +46,6 @@ func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input
 	logger := invocationCtx.GetEnhancedLogger()
 	networkAccess := invocationCtx.GetNetworkAccess()
 	ui := invocationCtx.GetUserInterface()
-
-	if !config.GetBool(configuration.FLAG_EXPERIMENTAL) {
-		return nil, cli.NewCommandIsExperimentalError("")
-	}
 
 	checker := connectivity.NewChecker(networkAccess, logger, config, ui)
 
