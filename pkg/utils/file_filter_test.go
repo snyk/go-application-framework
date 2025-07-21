@@ -376,3 +376,161 @@ func createFileInPath(tb testing.TB, filePath string, content []byte) {
 	err = os.WriteFile(filePath, content, 0777)
 	assert.NoError(tb, err)
 }
+
+func TestParseIgnoreRuleToGlobs(t *testing.T) {
+	testCases := []struct {
+		name          string
+		rule          string
+		baseDir       string
+		expectedGlobs []string
+	}{
+		{
+			name:          "single slash has no effect",
+			rule:          "/",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{},
+		},
+		{
+			name:          "negated single slash has no effect",
+			rule:          "!/",
+			baseDir:       "/tmp/test",
+			expectedGlobs: []string{},
+		},
+		{
+			name:    "slash with star ignores everything",
+			rule:    "/*",
+			baseDir: "/tmp/test",
+			expectedGlobs: []string{
+				"/tmp/test/*/**",
+				"/tmp/test/*",
+			},
+		},
+		{
+			name:    "root directory pattern",
+			rule:    "/foo",
+			baseDir: "/tmp/test",
+			expectedGlobs: []string{
+				"/tmp/test/foo/**",
+				"/tmp/test/foo",
+			},
+		},
+		{
+			name:    "root directory with trailing slash",
+			rule:    "/foo/",
+			baseDir: "/tmp/test",
+			expectedGlobs: []string{
+				"/tmp/test/foo/**",
+			},
+		},
+		{
+			name:    "non-root directory pattern",
+			rule:    "foo",
+			baseDir: "/tmp/test",
+			expectedGlobs: []string{
+				"/tmp/test/**/foo/**",
+				"/tmp/test/**/foo",
+			},
+		},
+		{
+			name:    "non-root directory with trailing slash",
+			rule:    "foo/",
+			baseDir: "/tmp/test",
+			expectedGlobs: []string{
+				"/tmp/test/**/foo/**",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir)
+			assert.ElementsMatch(t, tc.expectedGlobs, globs,
+				"Rule: %q, Expected: %v, Got: %v", tc.rule, tc.expectedGlobs, globs)
+		})
+	}
+}
+
+func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
+	t.Run("gitignore with single slash has no effect", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create test files
+		files := []string{
+			"file1.txt",
+			"file2.txt",
+			"subdir/file3.txt",
+			"subdir/nested/file4.txt",
+		}
+
+		for _, file := range files {
+			filePath := filepath.Join(tempDir, file)
+			createFileInPath(t, filePath, []byte("test content"))
+		}
+
+		// Create .gitignore with "/"
+		gitignorePath := filepath.Join(tempDir, ".gitignore")
+		createFileInPath(t, gitignorePath, []byte("/"))
+
+		// Test file filtering
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		rules, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		// Should only have default rules since "/" has no effect
+		assert.Equal(t, fileFilter.defaultRules, rules, "Rules should only contain default rules")
+
+		// Get all files and filter them
+		allFiles := fileFilter.GetAllFiles()
+		filteredFiles := fileFilter.GetFilteredFiles(allFiles, rules)
+
+		// Collect filtered files
+		var filteredFilesList []string
+		for file := range filteredFiles {
+			relPath, err := filepath.Rel(tempDir, file)
+			assert.NoError(t, err)
+			filteredFilesList = append(filteredFilesList, relPath)
+		}
+
+		// With "/" pattern, no files should be ignored (all files pass through)
+		expectedFiles := []string{".gitignore", "file1.txt", "file2.txt", "subdir/file3.txt", "subdir/nested/file4.txt"}
+		assert.ElementsMatch(t, expectedFiles, filteredFilesList, "All files should pass through filter")
+	})
+
+	t.Run("gitignore with /* ignores all files", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create test files
+		files := []string{
+			"file1.txt",
+			"file2.txt",
+			"subdir/file3.txt",
+		}
+
+		for _, file := range files {
+			filePath := filepath.Join(tempDir, file)
+			createFileInPath(t, filePath, []byte("test content"))
+		}
+
+		// Create .gitignore with "/*"
+		gitignorePath := filepath.Join(tempDir, ".gitignore")
+		createFileInPath(t, gitignorePath, []byte("/*"))
+
+		// Test file filtering
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		rules, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		// Get all files and filter them
+		allFiles := fileFilter.GetAllFiles()
+		filteredFiles := fileFilter.GetFilteredFiles(allFiles, rules)
+
+		// Collect filtered files
+		var filteredFilesList []string
+		for file := range filteredFiles {
+			filteredFilesList = append(filteredFilesList, file)
+		}
+
+		// With "/*" pattern, all files should be ignored
+		assert.Empty(t, filteredFilesList, "All files should be filtered out with /* pattern")
+	})
+}

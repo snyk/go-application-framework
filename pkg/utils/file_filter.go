@@ -220,6 +220,12 @@ func parseIgnoreRuleToGlobs(rule string, filePath string) (globs []string) {
 		rule = rule[1:]
 		prefix = negation
 	}
+
+	// Special case: "/" pattern has no effect in gitignore
+	if rule == slash {
+		return globs
+	}
+
 	startingSlash := strings.HasPrefix(rule, slash)
 	startingGlobstar := strings.HasPrefix(rule, all)
 	endingSlash := strings.HasSuffix(rule, slash)
