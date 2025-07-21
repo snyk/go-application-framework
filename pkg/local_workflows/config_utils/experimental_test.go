@@ -12,12 +12,12 @@ import (
 func TestIsExperimental(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupFlags     func() *pflag.FlagSet
+		setupFlags     func(t *testing.T) *pflag.FlagSet
 		expectedResult bool
 	}{
 		{
 			name: "returns false when experimental flag does not exist",
-			setupFlags: func() *pflag.FlagSet {
+			setupFlags: func(_ *testing.T) *pflag.FlagSet {
 				flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 				flags.String("other-flag", "", "some other flag")
 				return flags
@@ -26,7 +26,7 @@ func TestIsExperimental(t *testing.T) {
 		},
 		{
 			name: "returns true when experimental flag exists and is not deprecated",
-			setupFlags: func() *pflag.FlagSet {
+			setupFlags: func(_ *testing.T) *pflag.FlagSet {
 				flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 				return MarkAsExperimental(flags)
 			},
@@ -34,7 +34,7 @@ func TestIsExperimental(t *testing.T) {
 		},
 		{
 			name: "returns false when experimental flag usage contains 'deprecated' (case insensitive)",
-			setupFlags: func() *pflag.FlagSet {
+			setupFlags: func(_ *testing.T) *pflag.FlagSet {
 				flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 				flags.Bool(configuration.FLAG_EXPERIMENTAL, false, "This is DEPRECATED and should not be used")
 				return flags
@@ -43,9 +43,11 @@ func TestIsExperimental(t *testing.T) {
 		},
 		{
 			name: "returns false when experimental flag deprecated field is set",
-			setupFlags: func() *pflag.FlagSet {
+			setupFlags: func(t *testing.T) *pflag.FlagSet {
+				t.Helper()
 				flags := MarkAsExperimental(pflag.NewFlagSet("test", pflag.ContinueOnError))
-				flags.MarkDeprecated(configuration.FLAG_EXPERIMENTAL, "use new-flag instead")
+				err := flags.MarkDeprecated(configuration.FLAG_EXPERIMENTAL, "use new-flag instead")
+				assert.NoError(t, err)
 				return flags
 			},
 			expectedResult: false,
@@ -54,7 +56,7 @@ func TestIsExperimental(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			flags := tt.setupFlags()
+			flags := tt.setupFlags(t)
 			result := IsExperimental(flags)
 			assert.Equal(t, tt.expectedResult, result)
 		})
