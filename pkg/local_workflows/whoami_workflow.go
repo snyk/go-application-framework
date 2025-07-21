@@ -10,6 +10,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -26,13 +27,11 @@ var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(whoAm
 func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	// initialize workflow configuration
 	whoAmIConfig := pflag.NewFlagSet(whoAmIworkflowName, pflag.ExitOnError)
-	// add experimental flag to configuration
-	whoAmIConfig.Bool(experimentalFlag, false, "enable experimental whoAmI command")
 	// add json flag to configuration
 	whoAmIConfig.Bool(jsonFlag, false, "output in json format")
 
 	// register workflow with engine
-	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(whoAmIConfig), whoAmIWorkflowEntryPoint)
+	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(whoAmIConfig)), whoAmIWorkflowEntryPoint)
 	return err
 }
 
