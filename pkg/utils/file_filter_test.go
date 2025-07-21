@@ -488,7 +488,8 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		for file := range filteredFiles {
 			relPath, err := filepath.Rel(tempDir, file)
 			assert.NoError(t, err)
-			filteredFilesList = append(filteredFilesList, relPath)
+			// Normalize path separators for cross-platform compatibility
+			filteredFilesList = append(filteredFilesList, filepath.ToSlash(relPath))
 		}
 
 		// With "/" pattern, no files should be ignored (all files pass through)
