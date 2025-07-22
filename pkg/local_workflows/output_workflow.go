@@ -95,6 +95,11 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		return output, err
 	}
 
+	input, err = output_workflow.HandleContentTypeShimModel(input, invocation, outputDestination)
+	if err != nil {
+		return output, err
+	}
+
 	for i := range input {
 		mimeType := input[i].GetContentType()
 
