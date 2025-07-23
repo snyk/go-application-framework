@@ -291,7 +291,7 @@ func Test_ConfigurationClone(t *testing.T) {
 	flagset.Bool("debug", true, "debugging")
 	flagset.Float64("size", 10, "size")
 
-	config := NewFromFiles(TEST_FILENAME)
+	config := NewWithOpts(WithFiles(TEST_FILENAME))
 	err := config.AddFlagSet(flagset)
 	assert.NoError(t, err)
 
@@ -352,6 +352,7 @@ func Test_ConfigurationClone(t *testing.T) {
 
 	// we assume that a cloned configuration uses the same storage object. Just the pointer is cloned.
 	assert.Equal(t, config.(*extendedViper).storage, clonedConfig.(*extendedViper).storage)
+	assert.Equal(t, config.(*extendedViper).automaticEnvEnabled, clonedConfig.(*extendedViper).automaticEnvEnabled)
 
 	cleanupConfigstore(t)
 }

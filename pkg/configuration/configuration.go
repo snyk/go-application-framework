@@ -279,14 +279,13 @@ func (ev *extendedViper) Clone() Configuration {
 	defer ev.mutex.RUnlock()
 
 	// manually clone the Configuration instance
-	var clone Configuration
+	options := []Opts{}
 	if ev.configType == jsonFile {
 		configFileUsed := ev.viper.ConfigFileUsed()
-		clone = NewFromFiles(configFileUsed)
-	} else {
-		clone = NewInMemory()
+		options = append(options, WithFiles(configFileUsed))
 	}
 
+	clone := NewWithOpts(options...)
 	clone.SetStorage(ev.storage)
 	keys := ev.viper.AllKeys()
 	for i := range keys {
