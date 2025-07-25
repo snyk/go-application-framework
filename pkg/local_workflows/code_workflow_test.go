@@ -104,7 +104,7 @@ func Test_Code_entrypoint(t *testing.T) {
 
 func Test_Code_WithSlce(t *testing.T) {
 	org := "1234"
-	sastResponse := contract.SastResponse{}
+	sastResponse := sast_contract.SastResponse{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.String(), "/v1/cli-config/settings/sast?org="+org) {
 			err := json.NewEncoder(w).Encode(sastResponse)
@@ -121,9 +121,9 @@ func Test_Code_WithSlce(t *testing.T) {
 	baseConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"http://example.com"})
 
 	t.Run("scle enabled, SLCE url is added to the additional auth urls", func(t *testing.T) {
-		sastResponse = contract.SastResponse{
+		sastResponse = sast_contract.SastResponse{
 			SastEnabled: true,
-			LocalCodeEngine: contract.LocalCodeEngine{
+			LocalCodeEngine: sast_contract.LocalCodeEngine{
 				Enabled: true,
 				Url:     "http://slce.example.com",
 			},
@@ -141,9 +141,9 @@ func Test_Code_WithSlce(t *testing.T) {
 	})
 
 	t.Run("scle disabled, no additional auth url is added", func(t *testing.T) {
-		sastResponse = contract.SastResponse{
+		sastResponse = sast_contract.SastResponse{
 			SastEnabled: true,
-			LocalCodeEngine: contract.LocalCodeEngine{
+			LocalCodeEngine: sast_contract.LocalCodeEngine{
 				Enabled: false,
 				Url:     "http://slce.example.com",
 			},
@@ -161,9 +161,9 @@ func Test_Code_WithSlce(t *testing.T) {
 	})
 
 	t.Run("sast disabled, no additional auth url is added", func(t *testing.T) {
-		sastResponse = contract.SastResponse{
+		sastResponse = sast_contract.SastResponse{
 			SastEnabled: false,
-			LocalCodeEngine: contract.LocalCodeEngine{
+			LocalCodeEngine: sast_contract.LocalCodeEngine{
 				Enabled: true,
 				Url:     "http://slce.example.com",
 			},
