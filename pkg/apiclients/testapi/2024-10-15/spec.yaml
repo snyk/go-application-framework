@@ -1241,7 +1241,6 @@ components:
           type: string
       required:
       - source
-      - paths
       - reachability
       type: object
     ReachabilityType:
@@ -2889,6 +2888,7 @@ paths:
             pathId: org_id
             permissions:
             - read
+            - package.test
             type: org
           skip: false
       x-snyk-api-lifecycle: released
@@ -3105,7 +3105,7 @@ paths:
       x-stability-level: beta
 servers:
 - description: test-api-shim
-  url: /closed-beta
+  url: /rest
 tags:
 - description: The OpenAPI specification for test-api-shim.
   name: OpenAPI
