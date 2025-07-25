@@ -33,5 +33,10 @@ cd -
 # place OpenAPI build artifacts
 mkdir -p $TEST_API_GENERATED
 
-cp $API_SPEC_PATH/internal/api/closed-beta/versions/2024-10-15/spec.yaml $TEST_API_GENERATED/spec.yaml
+# copy beta API spec
+# cp $API_SPEC_PATH/internal/api/closed-beta/versions/2024-10-15/spec.yaml $TEST_API_GENERATED/spec.yaml
+
+# copy public API spec
+cp $API_SPEC_PATH/internal/api/public/versions/2024-10-15/spec.yaml $TEST_API_GENERATED/spec.yaml
+
 echo $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT > $TEST_API_GENERATED/generated.txt
