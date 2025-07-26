@@ -51,15 +51,19 @@ func ShouldRequireAuthentication(
 	additionalSubdomains []string,
 	additionalUrls []string,
 ) (matchesPattern bool, err error) {
+	referenceUrl, err := api.GetCanonicalApiUrl(*url)
+	if err != nil {
+		return false, err
+	}
+
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
-		var matchesPattern bool
-		var prefixUrl, referenceUrl string
+		var prefixUrl, localReferenceUrl string
 		if len(subdomain) == 0 {
+			localReferenceUrl = referenceUrl
 			prefixUrl = apiUrl
-			referenceUrl, err = api.GetCanonicalApiUrl(*url)
 		} else {
-			referenceUrl = url.String()
+			localReferenceUrl = url.String()
 			prefixUrl, err = api.DeriveSubdomainUrl(apiUrl, subdomain)
 		}
 
@@ -67,16 +71,20 @@ func ShouldRequireAuthentication(
 			return false, err
 		}
 
-		matchesPattern = strings.HasPrefix(referenceUrl, prefixUrl)
+		matchesPattern = strings.HasPrefix(localReferenceUrl, prefixUrl)
 		if matchesPattern {
 			return matchesPattern, nil
 		}
 	}
 
 	// if the default check for an api didn't succeed, check additional Urls if available
-	requestUrl := url.String()
 	for _, v := range additionalUrls {
-		if strings.HasPrefix(requestUrl, v) {
+		canonicalV, vErr := api.GetCanonicalApiUrlFromString(v)
+		if vErr != nil {
+			continue
+		}
+
+		if strings.HasPrefix(referenceUrl, canonicalV) {
 			return true, nil
 		}
 	}

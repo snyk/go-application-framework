@@ -25,6 +25,7 @@ func Test_ShouldRequireAuthentication(t *testing.T) {
 		"https://app.eu.snyk.io":                 false,
 		"https://deeproxy.eu.snyk.io":            false,
 		"https://example.com":                    false,
+		"https://app.au.snyk.io.evil.com":        false,
 	}
 
 	additionalSubdomains := []string{}
@@ -46,12 +47,13 @@ func Test_ShouldRequireAuthentication_subdomains(t *testing.T) {
 		"https://mydomain.eu.snyk.io:443": true,
 		"https://whatever.eu.snyk.io":     false,
 		"https://deeproxy.eu.snyk.io":     true,
-		"https://somethingelse.com/":      true,
+		"https://somethingelse.com:443/":  true,
 		"https://definitelynot.com/":      false,
+		"https://anotherone.com":          true,
 	}
 
 	additionalSubdomains := []string{"deeproxy", "mydomain"}
-	additionalUrls := []string{"https://somethingelse.com/"}
+	additionalUrls := []string{"https://somethingelse.com/", "https://anotherone.com:443/"}
 
 	for u, expected := range cases {
 		t.Run(u, func(t *testing.T) {
