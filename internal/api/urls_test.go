@@ -24,6 +24,7 @@ func Test_GetCanonicalApiUrlFromString(t *testing.T) {
 			"https://api." + instance + ".io/v1",
 			"https://api." + instance + ".io",
 			"https://api." + instance + ".io?something=here",
+			"https://api." + instance + ".io:443?something=here",
 		}
 
 		expected := "https://api." + instance + ".io"

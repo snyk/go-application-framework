@@ -67,6 +67,11 @@ func GetCanonicalApiAsUrl(url url.URL) (url.URL, error) {
 		url.Path = ""
 		url.Fragment = ""
 		url.RawQuery = ""
+
+		// simplify, replace redundant port/scheme content if used
+		if url.Port() == "443" && url.Scheme == "https" {
+			url.Host = url.Hostname()
+		}
 	}
 
 	return url, nil
