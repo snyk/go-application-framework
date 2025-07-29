@@ -841,7 +841,7 @@ type ReachabilityEvidence struct {
 	//
 	// For example, a sequence of locations connecting the "source" location
 	// where input data is obtained, to a "sink" location where it is used.
-	Paths []ReachablePath `json:"paths"`
+	Paths *[]ReachablePath `json:"paths,omitempty"`
 
 	// Reachability Reachability enum for reachability signal.
 	Reachability ReachabilityType           `json:"reachability"`
