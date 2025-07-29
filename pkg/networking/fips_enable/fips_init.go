@@ -8,5 +8,5 @@ package fips_enable
 import "os"
 
 func init() {
-	os.Setenv("GOFIPS", "1")
+	os.Setenv("GODEBUG", "fips140=on")
 }
