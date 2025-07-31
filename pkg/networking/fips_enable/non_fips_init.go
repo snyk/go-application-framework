@@ -6,5 +6,7 @@ package fips_enable
 import "os"
 
 func init() {
-	os.Setenv("GOFIPS", "0")
+	existingValue := os.Getenv(godebugEnvVarName)
+	existingValue = setFipState(existingValue, false)
+	os.Setenv(godebugEnvVarName, existingValue)
 }
