@@ -1,7 +1,10 @@
 package ignore_workflow
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +17,64 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+type IgnoreSettings struct {
+	ReasonRequired          bool `json:"reasonRequired,omitempty"`
+	AutoApproveIgnores      bool `json:"autoApproveIgnores,omitempty"`
+	ApprovalWorkflowEnabled bool `json:"approvalWorkflowEnabled,omitempty"`
+}
+
+type SettingsResponse struct {
+	Ignores IgnoreSettings `json:"ignores"`
+}
+
+func getOrganizationSettings(engine workflow.Engine) (*IgnoreSettings, error) {
+	config := engine.GetConfiguration()
+	org := config.GetString(configuration.ORGANIZATION)
+	client := engine.GetNetworkAccess().GetHttpClient()
+	apiUrl := config.GetString(configuration.API_URL)
+
+	endpoint := fmt.Sprintf("%s/v1/org/%s/settings", apiUrl, url.QueryEscape(org))
+	res, err := client.Get(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve organization settings: %w", err)
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read organization settings response: %w", err)
+	}
+
+	var response SettingsResponse
+	if err = json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("unable to parse organization settings (status: %d): %w", res.StatusCode, err)
+	}
+
+	return &response.Ignores, nil
+}
+
+func getIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	return func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		settings, err := getOrganizationSettings(engine)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to retrieve organization settings.")
+			return false, err
+		}
+
+		if settings == nil {
+			return false, nil
+		}
+
+		return settings.ApprovalWorkflowEnabled, nil
+	}
+}
 
 func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext) {
 	config := invocationCtx.GetConfiguration()

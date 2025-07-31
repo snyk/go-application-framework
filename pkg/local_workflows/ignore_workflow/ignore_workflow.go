@@ -14,11 +14,11 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -88,7 +88,7 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 		return err
 	}
 
-	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_IAW_ENABLED, "ignoreApprovalWorkflow")
+	engine.GetConfiguration().AddDefaultValue("internal_iaw_enabled", getIgnoreApprovalEnabled(engine))
 
 	return nil
 }
@@ -100,8 +100,13 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	config := invocationCtx.GetConfiguration()
 	id := invocationCtx.GetWorkflowIdentifier()
 
-	if !config.GetBool(configuration.FF_IAW_ENABLED) {
-		return nil, cli.NewFeatureUnderDevelopmentError("")
+	if !config.GetBool("internal_iaw_enabled") {
+		return nil, snyk_errors.Error{
+			Title:       "Organization setting not enabled",
+			Description: "This feature must be enabled in the organization settings.",
+			Detail:      "Ignore Approval Workflow is not enabled for the current organization. Enable it in the org settings, or use another organization.",
+			Level:       "fatal",
+		}
 	}
 
 	interactive := config.GetBool(InteractiveKey)
