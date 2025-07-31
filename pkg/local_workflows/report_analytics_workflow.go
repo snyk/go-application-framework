@@ -146,7 +146,12 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 
 func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
 	// Create a request
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(input.GetPayload().([]byte)))
+	byteData, ok := input.GetPayload().([]byte)
+	if !ok {
+		return fmt.Errorf("invalid payload type: %T", input.GetPayload())
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(byteData))
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}

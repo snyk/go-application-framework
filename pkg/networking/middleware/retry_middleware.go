@@ -161,7 +161,7 @@ func parseRetryAfterHeader(headerRetryAfterValue string) time.Duration {
 
 	// Retry-After: Fri, 31 Dec 1999 23:59:59 GMT
 	if tmp, err := time.Parse(time.RFC1123, headerRetryAfterValue); err == nil {
-		if until := tmp.Sub(time.Now()); until > 0 {
+		if until := time.Until(tmp); until > 0 {
 			return until
 		}
 	}

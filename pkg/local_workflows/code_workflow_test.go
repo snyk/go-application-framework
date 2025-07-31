@@ -98,7 +98,7 @@ func Test_Code_entrypoint(t *testing.T) {
 	rs, err := engine.InvokeWithConfig(WORKFLOWID_CODE, config)
 	assert.NoError(t, err)
 	assert.NotNil(t, rs)
-	assert.Equal(t, expectedData, rs[0].GetPayload().(string))
+	assert.Equal(t, expectedData, rs[0].GetPayload().(string)) //nolint:errcheck //in this test, the type is clear
 	assert.Equal(t, 2, sastSettingsCalled)
 }
 
@@ -141,7 +141,7 @@ func Test_Code_legacyImplementation_happyPath(t *testing.T) {
 	rs, err := engine.InvokeWithConfig(WORKFLOWID_CODE, config)
 	assert.NoError(t, err)
 	assert.NotNil(t, rs)
-	assert.Equal(t, expectedData, rs[0].GetPayload().(string))
+	assert.Equal(t, expectedData, rs[0].GetPayload().(string)) //nolint:errcheck //in this test, the type is clear
 }
 
 func Test_Code_nativeImplementation_happyPath(t *testing.T) {
@@ -226,7 +226,7 @@ func Test_Code_nativeImplementation_happyPath(t *testing.T) {
 	for _, v := range rs {
 		if v.GetContentType() == content_type.TEST_SUMMARY {
 			actualSummary := &json_schemas.TestSummary{}
-			err = json.Unmarshal(v.GetPayload().([]byte), actualSummary)
+			err = json.Unmarshal(v.GetPayload().([]byte), actualSummary) //nolint:errcheck //in this test, the type is clear
 			assert.NoError(t, err)
 
 			count := 0
