@@ -230,7 +230,7 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
-		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) (interface{}, error) {
+		config.AddDefaultValue(ORGANIZATION, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
 				return existingValue, nil
 			}
@@ -396,7 +396,7 @@ func Test_DefaultValuehandling(t *testing.T) {
 		valueExplicitlySet := "explicitly set value"
 
 		config := NewInMemory()
-		config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) (interface{}, error) {
+		config.AddDefaultValue(keyWithDefault, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
 				return existingValue, nil
 			}
@@ -434,7 +434,7 @@ func Test_DefaultValuehandling(t *testing.T) {
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
-		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) (interface{}, error) {
+		config.AddDefaultValue(ORGANIZATION, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
 				return existingValue, nil
 			}
@@ -800,7 +800,7 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 	cacheDuration := 10 * time.Minute
 
 	config := NewWithOpts(WithCachingEnabled(cacheDuration))
-	config.AddDefaultValue(myKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(myKey, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 		defaultFuncCalled++
 
 		if existingValue != nil {

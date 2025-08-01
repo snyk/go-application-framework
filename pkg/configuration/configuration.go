@@ -20,7 +20,7 @@ import (
 
 //go:generate $GOPATH/bin/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
 
-type DefaultValueFunction func(existingValue interface{}) (interface{}, error)
+type DefaultValueFunction func(config Configuration, existingValue interface{}) (interface{}, error)
 
 type configType string
 type KeyType int
@@ -107,7 +107,7 @@ type extendedViper struct {
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
 func StandardDefaultValueFunction(defaultValue interface{}) DefaultValueFunction {
-	return func(existingValue interface{}) (interface{}, error) {
+	return func(_ Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		} else {
@@ -458,7 +458,7 @@ func (ev *extendedViper) GetWithError(key string) (interface{}, error) {
 	// if nothing was found in the cache, try to execute the default function
 	if defaultFunc != nil {
 		var defErr error
-		value, defErr = defaultFunc(value)
+		value, defErr = defaultFunc(ev, value)
 		err = errors.Join(err, defErr)
 
 		// if enabled and no error occurred, store value in cache
