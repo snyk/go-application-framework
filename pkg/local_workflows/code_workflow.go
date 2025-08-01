@@ -61,7 +61,7 @@ func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error
 }
 
 func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
@@ -78,7 +78,7 @@ func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFun
 }
 
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
@@ -95,7 +95,7 @@ func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 }
 
 func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}

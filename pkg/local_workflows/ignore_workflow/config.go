@@ -18,26 +18,26 @@ import (
 func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext) {
 	config := invocationCtx.GetConfiguration()
 
-	config.AddDefaultValue(RemoteRepoUrlKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(RemoteRepoUrlKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		return remoteRepoUrlDefaultFunc(existingValue, config)
 	})
 
-	config.AddDefaultValue(IgnoreTypeKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(IgnoreTypeKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(IgnoreTypeKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidIgnoreType)
 	})
 
-	config.AddDefaultValue(ExpirationKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(ExpirationKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(ExpirationKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidExpirationDate)
 	})
 
-	config.AddDefaultValue(FindingsIdKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(FindingsIdKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(FindingsIdKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidFindingsId)
 	})
 
-	config.AddDefaultValue(ReasonKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(ReasonKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(ReasonKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidReason)
 	})

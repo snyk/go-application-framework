@@ -11,7 +11,7 @@ import (
 func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFlagName string) {
 	config := engine.GetConfiguration()
 
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue == nil {
 			httpClient := engine.GetNetworkAccess().GetHttpClient()
 			return GetFeatureFlagValue(featureFlagName, config, httpClient)
