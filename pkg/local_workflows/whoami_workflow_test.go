@@ -167,7 +167,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathRegularUser(t *testing.T) {
 		assert.Nil(t, err)
 
 		var actual interface{}
-		err = json.Unmarshal(output[0].GetPayload().([]byte), &actual)
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &actual) //nolint:errcheck //in this test, the type is clear
 		assert.Nil(t, err)
 
 		// The output should be a dump of the data from the API in json format
@@ -216,7 +216,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathServiceUser(t *testing.T) {
 		assert.Nil(t, err)
 
 		var actual interface{}
-		err = json.Unmarshal(output[0].GetPayload().([]byte), &actual)
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &actual) //nolint:errcheck //in this test, the type is clear
 		assert.Nil(t, err)
 
 		// The output should be a dump of the data from the API in json format

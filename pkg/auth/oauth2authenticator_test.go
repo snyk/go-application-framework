@@ -173,9 +173,9 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
-	err := authenticator.(*oAuth2Authenticator).persistToken(newToken)
+	err := authenticator.(*oAuth2Authenticator).persistToken(newToken) //nolint:errcheck //in this test, the type is clear
 	assert.NoError(t, err)
-	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) { //nolint:errcheck //in this test, the type is clear
 		assert.False(t, true, "The token is valid and no refresh is required!")
 		return newToken, nil
 	}
@@ -197,7 +197,7 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 	actualToken, err := GetOAuthToken(config)
 	assert.NoError(t, err)
 	assert.Equal(t, *newToken, *actualToken)
-	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token)
+	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token) //nolint:errcheck //in this test, the type is clear
 }
 
 func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
@@ -218,9 +218,9 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
-	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
+	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken) //nolint:errcheck //in this test, the type is clear
 	assert.NoError(t, err)
-	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) { //nolint:errcheck //in this test, the type is clear
 		return newToken, nil
 	}
 
@@ -241,7 +241,7 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 	actualToken, err := GetOAuthToken(config)
 	assert.NoError(t, err)
 	assert.Equal(t, *newToken, *actualToken)
-	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token)
+	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token) //nolint:errcheck //in this test, the type is clear
 }
 
 func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
@@ -262,9 +262,9 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	authenticator := NewOAuth2AuthenticatorWithOpts(config)
-	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken)
+	err := authenticator.(*oAuth2Authenticator).persistToken(expiredToken) //nolint:errcheck //in this test, the type is clear
 	assert.NoError(t, err)
-	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+	authenticator.(*oAuth2Authenticator).tokenRefresherFunc = func(_ context.Context, _ *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) { //nolint:errcheck //in this test, the type is clear
 		assert.False(t, true, "The token is valid and no refresh is required!")
 		return newToken, nil
 	}
@@ -275,7 +275,7 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 
 	// have authenticator2 update the token "in parallel"
 	authenticator2 := NewOAuth2AuthenticatorWithOpts(config)
-	err = authenticator2.(*oAuth2Authenticator).persistToken(newToken)
+	err = authenticator2.(*oAuth2Authenticator).persistToken(newToken) //nolint:errcheck //in this test, the type is clear
 	assert.NoError(t, err)
 
 	// run method under test
@@ -291,7 +291,7 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 	actualToken, err := GetOAuthToken(config)
 	assert.NoError(t, err)
 	assert.Equal(t, *newToken, *actualToken)
-	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token)
+	assert.Equal(t, *newToken, *authenticator.(*oAuth2Authenticator).token) //nolint:errcheck //in this test, the type is clear
 }
 
 func Test_determineGrantType_empty(t *testing.T) {

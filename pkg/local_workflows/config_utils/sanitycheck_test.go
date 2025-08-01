@@ -21,7 +21,7 @@ func Test_CheckSanity_ApiUrl(t *testing.T) {
 	claims := &jws.ClaimSet{
 		Aud: expectedAudience,
 	}
-	pk, err := rsa.GenerateKey(rand.Reader, 1023)
+	pk, err := rsa.GenerateKey(rand.Reader, 2048)
 	assert.NoError(t, err)
 
 	accessToken, err := jws.Encode(header, claims, pk)

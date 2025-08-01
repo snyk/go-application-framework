@@ -351,8 +351,8 @@ func Test_ConfigurationClone(t *testing.T) {
 	assert.Equal(t, expectedAlternateValue, actualAlternateValue)
 
 	// we assume that a cloned configuration uses the same storage object. Just the pointer is cloned.
-	assert.Equal(t, config.(*extendedViper).storage, clonedConfig.(*extendedViper).storage)
-	assert.Equal(t, config.(*extendedViper).automaticEnvEnabled, clonedConfig.(*extendedViper).automaticEnvEnabled)
+	assert.Equal(t, config.(*extendedViper).storage, clonedConfig.(*extendedViper).storage)                         //nolint:errcheck //in this test, the type is clear
+	assert.Equal(t, config.(*extendedViper).automaticEnvEnabled, clonedConfig.(*extendedViper).automaticEnvEnabled) //nolint:errcheck //in this test, the type is clear
 
 	cleanupConfigstore(t)
 }
@@ -377,7 +377,7 @@ func TestNewFromFiles(t *testing.T) {
 func TestNewInMemory_shouldNotBreakWhenTryingToPersist(t *testing.T) {
 	config := NewInMemory()
 
-	assert.Nil(t, config.(*extendedViper).storage)
+	assert.Nil(t, config.(*extendedViper).storage) //nolint:errcheck //in this test, the type is clear
 	assert.NotNil(t, config)
 
 	const key = "test"

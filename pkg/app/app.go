@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crypto/fips140"
 	"io"
 	"log"
 	"net/http"
@@ -251,6 +252,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts(engine))
+	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {

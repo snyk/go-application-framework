@@ -113,8 +113,8 @@ func TestScrubbingIoWriter(t *testing.T) {
 		bufioWriter = bytes.NewBufferString("")
 		writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
 
-		writer.(ScrubbingLogWriter).RemoveTerm("token")
-		writer.(ScrubbingLogWriter).RemoveTerm("secret")
+		writer.(ScrubbingLogWriter).RemoveTerm("token")  //nolint:errcheck //in this test, the type is clear
+		writer.(ScrubbingLogWriter).RemoveTerm("secret") //nolint:errcheck //in this test, the type is clear
 
 		n, err = writer.Write([]byte(patternWithSecret))
 		require.NoError(t, err)
@@ -126,8 +126,8 @@ func TestScrubbingIoWriter(t *testing.T) {
 	t.Run("now re-add", func(t *testing.T) {
 		bufioWriter = bytes.NewBufferString("")
 		writer = NewScrubbingIoWriter(bufioWriter, scrubDict)
-		writer.(ScrubbingLogWriter).AddTerm("token", 0)
-		writer.(ScrubbingLogWriter).AddTerm("secret", 0)
+		writer.(ScrubbingLogWriter).AddTerm("token", 0)  //nolint:errcheck //in this test, the type is clear
+		writer.(ScrubbingLogWriter).AddTerm("secret", 0) //nolint:errcheck //in this test, the type is clear
 
 		n, err = writer.Write([]byte(patternWithSecret))
 		require.NoError(t, err)

@@ -156,7 +156,7 @@ func Test_RoundTripper_SecureHTTPS(t *testing.T) {
 	config := getConfig()
 	net, ok := NewNetworkAccess(config).(*networkImpl)
 	assert.True(t, ok)
-	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport)) //nolint:errcheck //in this test, the type is clear
 	assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
 
@@ -166,7 +166,7 @@ func Test_RoundTripper_InsecureHTTPS(t *testing.T) {
 	assert.True(t, ok)
 
 	config.Set(configuration.INSECURE_HTTPS, true)
-	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport)) //nolint:errcheck //in this test, the type is clear
 	assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
 }
 
@@ -179,7 +179,7 @@ func Test_RoundTripper_ProxyAuth(t *testing.T) {
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.AnyAuth))
 
 	// invoke method under test
-	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	transport := net.configureRoundTripper(http.DefaultTransport.(*http.Transport)) //nolint:errcheck //in this test, the type is clear
 
 	assert.NotNil(t, transport.DialContext)
 	assert.Nil(t, transport.Proxy)
@@ -188,7 +188,7 @@ func Test_RoundTripper_ProxyAuth(t *testing.T) {
 	config.Set(configuration.PROXY_AUTHENTICATION_MECHANISM, httpauth.StringFromAuthenticationMechanism(httpauth.NoAuth))
 
 	// invoke method under test
-	transport = net.configureRoundTripper(http.DefaultTransport.(*http.Transport))
+	transport = net.configureRoundTripper(http.DefaultTransport.(*http.Transport)) //nolint:errcheck //in this test, the type is clear
 
 	// with Auth disabled, no proxyAuthenticator should be available
 	assert.Nil(t, transport.DialContext)
@@ -234,7 +234,7 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 		listener.Close()
 	})
 
-	serverURL := fmt.Sprintf("https://localhost:%d/", listener.Addr().(*net.TCPAddr).Port)
+	serverURL := fmt.Sprintf("https://localhost:%d/", listener.Addr().(*net.TCPAddr).Port) //nolint:errcheck //in this test, the type is clear
 	listen := func() {
 		listenerReady <- struct{}{} // Signal that listener is ready (using empty struct)
 		//nolint:gosec // client timeouts not a concern in tests

@@ -101,7 +101,6 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
     # TODO(forbidigo): revisit
     #- forbidigo
     - forcetypeassert
@@ -145,7 +144,7 @@ linters:
     # TODO(stylecheck): revisit in a followup; some breaking API changes
     #- stylecheck
     # NOTE: removed tagliatelle as it conflicts too much with existing API wireformats
-    - tenv
+    # - TODO(usetesting)
     # TODO(testpackage): improve open vs closed-box testing in a followup
     #- testpackage
     - thelper
