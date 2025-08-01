@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +19,16 @@ const (
 	CONFIG_KEY_TOKEN               = "api"      // the snyk config key for api token
 	CONFIG_KEY_ENDPOINT            = "endpoint" // the snyk config key for api endpoint
 )
+
+const (
+	delimiter = "."
+)
+
+// Claims represents the structure of the PATs claims, it does not represent all the claims; only the ones we need
+type Claims struct {
+	// Hostname PAT is valid for
+	Hostname string `json:"h,omitempty"`
+}
 
 var _ Authenticator = (*tokenAuthenticator)(nil)
 
@@ -65,4 +78,26 @@ func IsAuthTypePAT(token string) bool {
 		return matched
 	}
 	return false
+}
+
+// ExtractClaimsFromPAT accepts a raw PAT string and returns the PAT claims
+func ExtractClaimsFromPAT(raw string) (*Claims, error) {
+	parts := strings.Split(raw, delimiter)
+	if len(parts) != 4 {
+		return nil, fmt.Errorf("invalid number of segments: %d", len(parts))
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode payload: %w", err)
+	}
+
+	var c Claims
+	if err = json.Unmarshal(payload, &c); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	return &Claims{
+		Hostname: c.Hostname,
+	}, nil
 }
