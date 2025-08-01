@@ -135,6 +135,8 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 
 		logger.Print("Validating pat")
 		whoamiConfig := config.Clone()
+		// we don't want to use the cache here, so this is a workaround
+		whoamiConfig.ClearCache()
 		whoamiConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
 		whoamiConfig.Set(configuration.AUTHENTICATION_TOKEN, pat)
 		_, whoamiErr := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("whoami"), whoamiConfig)
@@ -147,6 +149,8 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		}
 
 		logger.Print("Validation successful; set pat credentials in config")
+		// we don't want to use the cache here, so this is a workaround
+		engine.GetConfiguration().ClearCache()
 		engine.GetConfiguration().Set(auth.CONFIG_KEY_TOKEN, pat)
 
 		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)

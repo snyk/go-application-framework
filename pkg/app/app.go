@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/fips140"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -89,6 +90,15 @@ func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) co
 
 		if len(urlFromOauthToken) > 0 && len(urlFromOauthToken[0]) > 0 {
 			urlString = urlFromOauthToken[0]
+		} else if auth.IsAuthTypePAT(config.GetString(configuration.AUTHENTICATION_TOKEN)) {
+			claims, err := auth.ExtractClaimsFromPAT(config.GetString(configuration.AUTHENTICATION_TOKEN))
+			apiUrl := claims.Hostname
+			if err != nil {
+				logger.Warn().Err(err).Msg("failed to get api url from pat")
+			}
+			if len(apiUrl) > 0 {
+				urlString = fmt.Sprintf("https://%s", apiUrl)
+			}
 		} else if existingValue != nil { // try the configured value as last resort
 			if temp, ok := existingValue.(string); ok {
 				urlString = temp
