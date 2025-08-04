@@ -18,10 +18,7 @@ const (
 	CACHED_PAT_IS_VALID_KEY_PREFIX = "cached_pat_is_valid"
 	CONFIG_KEY_TOKEN               = "api"      // the snyk config key for api token
 	CONFIG_KEY_ENDPOINT            = "endpoint" // the snyk config key for api endpoint
-)
-
-const (
-	delimiter = "."
+	PAT_REGEX                      = `(snyk_(?:uat|sat))\.([a-z0-9]{8}\.[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+)`
 )
 
 // Claims represents the structure of the PATs claims, it does not represent all the claims; only the ones we need
@@ -73,16 +70,13 @@ func IsAuthTypeToken(token string) bool {
 
 func IsAuthTypePAT(token string) bool {
 	// e.g. snyk_uat.1a2b3c4d.mySuperSecret_Token-Value.aChecksum_123-Value
-	patRegex := `^snyk_(?:uat|sat)\.[a-z0-9]{8}\.[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+$`
-	if matched, err := regexp.MatchString(patRegex, token); err == nil && matched {
-		return matched
-	}
-	return false
+	return regexp.MustCompile(fmt.Sprintf("^%s$", PAT_REGEX)).MatchString(token)
 }
 
-// ExtractClaimsFromPAT accepts a raw PAT string and returns the PAT claims
-func ExtractClaimsFromPAT(raw string) (*Claims, error) {
-	parts := strings.Split(raw, delimiter)
+// extractClaimsFromPAT accepts a raw PAT string and returns the PAT claims
+// differs from the implementation in oauth.go as Snyk PATs do not strictly follow the JWT spec
+func extractClaimsFromPAT(raw string) (*Claims, error) {
+	parts := strings.Split(raw, ".")
 	if len(parts) != 4 {
 		return nil, fmt.Errorf("invalid number of segments: %d", len(parts))
 	}
@@ -97,7 +91,19 @@ func ExtractClaimsFromPAT(raw string) (*Claims, error) {
 		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
-	return &Claims{
-		Hostname: c.Hostname,
-	}, nil
+	return &c, nil
+}
+
+func GetApiUrlFromPAT(pat string) (string, error) {
+	claims, err := extractClaimsFromPAT(pat)
+	if err != nil {
+		return "", err
+	}
+
+	hostname := claims.Hostname
+	if !strings.HasPrefix(hostname, "http") {
+		hostname = fmt.Sprintf("https://%s", hostname)
+	}
+
+	return hostname, nil
 }

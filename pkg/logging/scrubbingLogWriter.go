@@ -194,6 +194,13 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
+	// Snyk PATs
+	s = auth.PAT_REGEX
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
+
 	// github
 	s = fmt.Sprintf(`(access_token[\\="\s:]+)(%s)&?`, charGroup)
 	dict[s] = scrubStruct{

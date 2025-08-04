@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -87,6 +88,40 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 	actualApiUrl := config.GetString(configuration.API_URL)
 	assert.Equal(t, expectApiUrl, actualApiUrl)
+}
+
+func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		apiUrl := "api.snyk.io"
+		euPAT := createMockPAT(t, fmt.Sprintf(`{"h":"%s"}`, apiUrl))
+		engine := CreateAppEngine()
+		config := engine.GetConfiguration()
+		config.Set(configuration.AUTHENTICATION_TOKEN, euPAT)
+
+		actualApiUrl := config.GetString(configuration.API_URL)
+		assert.Equal(t, fmt.Sprintf("https://%s", apiUrl), actualApiUrl)
+	})
+
+	t.Run("eu", func(t *testing.T) {
+		apiUrl := "api.eu.snyk.io"
+		euPAT := createMockPAT(t, fmt.Sprintf(`{"h":"%s"}`, apiUrl))
+		engine := CreateAppEngine()
+		config := engine.GetConfiguration()
+		config.Set(configuration.AUTHENTICATION_TOKEN, euPAT)
+
+		actualApiUrl := config.GetString(configuration.API_URL)
+		assert.Equal(t, fmt.Sprintf("https://%s", apiUrl), actualApiUrl)
+	})
+
+	t.Run("invalid PAT reverts to default API URL", func(t *testing.T) {
+		patWithExtraSegments := "snyk_uat.12345678.payload.signature.extra"
+		engine := CreateAppEngine()
+		config := engine.GetConfiguration()
+		config.Set(configuration.AUTHENTICATION_TOKEN, patWithExtraSegments)
+
+		actualApiUrl := config.GetString(configuration.API_URL)
+		assert.Equal(t, constants.SNYK_DEFAULT_API_URL, actualApiUrl)
+	})
 }
 
 func Test_CreateAppEngine_config_OauthAudHasPrecedence(t *testing.T) {
@@ -367,4 +402,12 @@ func Test_initConfiguration_DEFAULT_TEMP_DIRECTORY(t *testing.T) {
 		actual := config.GetString(configuration.TEMP_DIR_PATH)
 		assert.Equal(t, expected, actual)
 	})
+}
+
+func createMockPAT(t *testing.T, payload string) string {
+	t.Helper()
+
+	encodedPayload := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	signature := "signature"
+	return fmt.Sprintf("snyk_uat.12345678.%s.%s", encodedPayload, signature)
 }

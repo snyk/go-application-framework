@@ -475,3 +475,60 @@ func TestScrubbingIoWriter_piecewise(t *testing.T) {
 	t.Log(string(innerWriter.written))
 	assert.Equal(t, string(expectedOutput), string(innerWriter.written))
 }
+
+func TestSnykPATScrubbing(t *testing.T) {
+	dict := addMandatoryMasking(ScrubbingDict{})
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Snyk PAT UAT token with Bearer",
+			input:    "Authorization: Bearer snyk_uat.12345678.abcdefgh-ijklmnop.qrstuvwx-yz123456",
+			expected: "Authorization: Bearer ***",
+		},
+		{
+			name:     "Snyk PAT SAT token with Bearer",
+			input:    "Authorization: Bearer snyk_sat.87654321.zyxwvuts-rqponmlk.jihgfedc-ba987654",
+			expected: "Authorization: Bearer ***",
+		},
+		{
+			name:     "Snyk PAT UAT token standalone",
+			input:    "PAT_EU: snyk_uat.abcd1234.test-token-value.more-token-data",
+			expected: "PAT_EU: snyk_uat.***",
+		},
+		{
+			name:     "Snyk PAT SAT token standalone",
+			input:    "Token: snyk_sat.12ab34cd.test_value-123.final_part-456",
+			expected: "Token: snyk_sat.***",
+		},
+		{
+			name:     "Snyk PAT token in environment variable",
+			input:    "SNYK_TOKEN=snyk_uat.abcd1234.test-token-value.more-token-data",
+			expected: "SNYK_TOKEN=***",
+		},
+		{
+			name:     "Snyk PAT token in JSON",
+			input:    `{"token":"snyk_sat.12ab34cd.test_value-123.final_part-456"}`,
+			expected: `{"token":"***"}`,
+		},
+		{
+			name:     "Multiple Snyk PAT tokens",
+			input:    "First token: snyk_uat.11111111.first-token.part and second: snyk_sat.22222222.second-token.part",
+			expected: "First token: ****** and second: snyk_sat.***",
+		},
+		{
+			name:     "Snyk PAT token mixed with other tokens",
+			input:    "Bearer token123 and snyk_uat.99999999.mixed-test.token-here and Basic auth456",
+			expected: "Bearer *** and snyk_uat.*** and Basic ***",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := scrub([]byte(test.input), dict)
+			assert.Equal(t, test.expected, string(actual))
+		})
+	}
+}
