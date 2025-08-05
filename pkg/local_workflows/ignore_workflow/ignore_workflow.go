@@ -61,7 +61,7 @@ const (
 	interactiveEnsureVersionControlMessage    = "👉🏼 Ensure the code containing the issue is committed and pushed to remote origin, so approvers can review it."
 	interactiveIgnoreRequestSubmissionMessage = "✅ Your ignore request has been submitted."
 
-	configIgnoreApprovalEnabled = "internal_iaw_enabled"
+	ConfigIgnoreApprovalEnabled = "internal_iaw_enabled"
 )
 
 var reasonPromptHelpMap = map[string]string{
@@ -90,7 +90,7 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 		return err
 	}
 
-	engine.GetConfiguration().AddDefaultValue(configIgnoreApprovalEnabled, getOrgIgnoreApprovalEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(ConfigIgnoreApprovalEnabled, getOrgIgnoreApprovalEnabled(engine))
 
 	return nil
 }
@@ -102,7 +102,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	config := invocationCtx.GetConfiguration()
 	id := invocationCtx.GetWorkflowIdentifier()
 
-	if !config.GetBool(configIgnoreApprovalEnabled) {
+	if !config.GetBool(ConfigIgnoreApprovalEnabled) {
 		return nil, snyk_errors.Error{
 			ID:          "SNYK-CLI-0014",
 			Title:       "Organization setting not enabled",
