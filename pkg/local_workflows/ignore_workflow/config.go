@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/go-application-framework/internal/api"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
@@ -41,6 +42,28 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 		isSet := config.IsSet(ReasonKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidReason)
 	})
+}
+
+func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	return func(existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		config := engine.GetConfiguration()
+		org := config.GetString(configuration.ORGANIZATION)
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient := api.NewApi(url, client)
+
+		settings, err := apiClient.GetOrgSettings(org)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return nil, err
+		}
+
+		return settings.Ignores.ApprovalWorkflowEnabled, nil
+	}
 }
 
 func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration) (interface{}, error) {

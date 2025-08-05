@@ -25,6 +25,7 @@ type ApiClient interface {
 	GetUserMe() (string, error)
 	GetSelf() (contract.SelfResponse, error)
 	GetSastSettings(orgId string) (*sast_contract.SastResponse, error)
+	GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -242,6 +243,28 @@ func (a *snykApiClient) GetSastSettings(orgId string) (*sast_contract.SastRespon
 	var response sast_contract.SastResponse
 	if err = json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("unable to retrieve settings (status: %d): %w", res.StatusCode, err)
+	}
+
+	return &response, err
+}
+
+func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error) {
+	endpoint := a.url + fmt.Sprintf("/v1/org/%s/settings", url.QueryEscape(orgId))
+	res, err := a.client.Get(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve org settings: %w", err)
+	}
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve org settings: %w", err)
+	}
+
+	var response contract.OrgSettingsResponse
+	if err = json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("unable to retrieve org settings (status: %d): %w", res.StatusCode, err)
 	}
 
 	return &response, err

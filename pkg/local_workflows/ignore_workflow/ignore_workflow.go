@@ -14,11 +14,11 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -60,6 +60,8 @@ const (
 
 	interactiveEnsureVersionControlMessage    = "👉🏼 Ensure the code containing the issue is committed and pushed to remote origin, so approvers can review it."
 	interactiveIgnoreRequestSubmissionMessage = "✅ Your ignore request has been submitted."
+
+	configIgnoreApprovalEnabled = "internal_iaw_enabled"
 )
 
 var reasonPromptHelpMap = map[string]string{
@@ -88,7 +90,7 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 		return err
 	}
 
-	config_utils.AddFeatureFlagToConfig(engine, configuration.FF_IAW_ENABLED, "ignoreApprovalWorkflow")
+	engine.GetConfiguration().AddDefaultValue(configIgnoreApprovalEnabled, getOrgIgnoreApprovalEnabled(engine))
 
 	return nil
 }
@@ -100,8 +102,14 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	config := invocationCtx.GetConfiguration()
 	id := invocationCtx.GetWorkflowIdentifier()
 
-	if !config.GetBool(configuration.FF_IAW_ENABLED) {
-		return nil, cli.NewFeatureUnderDevelopmentError("")
+	if !config.GetBool(configIgnoreApprovalEnabled) {
+		return nil, snyk_errors.Error{
+			ID:          "SNYK-CLI-0014",
+			Title:       "Organization setting not enabled",
+			Description: "The feature you are trying to use is not enabled you the current organization. Enable it in the settings or try switching the organization.",
+			Detail:      "",
+			Level:       "fatal",
+		}
 	}
 
 	interactive := config.GetBool(InteractiveKey)
