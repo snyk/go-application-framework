@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -14,7 +15,21 @@ import (
 const defaultNetworkLogLevel = zerolog.DebugLevel
 const extendedNetworkLogLevel = zerolog.TraceLevel
 const maxNumberOfRequestBodyCharacters = 60
-const maxNumberOfResponseBodyCharacters = -1 // log complete response body
+const maxNumberOfResponseBodyCharacters = 10 * 1024 // 10KiB, to ensure we don't log an entire CLI download response that is interrupted.
+
+// Binary content types that should not have their response bodies logged to avoid memory issues
+var binaryMIMETypes = []string{
+	"application/octet-stream",  // Standard binary MIME type
+	"binary/octet-stream",       // Non-standard but sometimes used
+	"application/zip",           // ZIP archives
+	"application/gzip",          // GZIP archives
+	"application/x-gzip",        // Alternative GZIP MIME type
+	"application/x-tar",         // TAR archives
+	"application/x-executable",  // Executable files
+	"application/x-msdownload",  // Windows executables
+	"application/x-mach-binary", // macOS binaries
+	"application/x-elf",         // Linux ELF binaries
+}
 
 func shouldNotLog(currentLevel zerolog.Level, levelToLogAt zerolog.Level) bool {
 	// Don't log if logger level is above the threshold
@@ -109,6 +124,17 @@ func shortenStringFromCenter(str string, maxCharacters int64) string {
 	return str
 }
 
+// isBinaryContent checks if the content type indicates binary data that shouldn't be logged
+func isBinaryContent(contentType string) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	for _, binaryMIMEType := range binaryMIMETypes {
+		if mimeType == binaryMIMEType {
+			return true
+		}
+	}
+	return false
+}
+
 func LogRequest(r *http.Request, logger *zerolog.Logger) {
 	if shouldNotLog(logger.GetLevel(), defaultNetworkLogLevel) { // Don't log if logger level is above the threshold
 		return
@@ -138,6 +164,12 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 
 		// additional logs for trace level logging and error responses
 		if !(response.StatusCode >= 400 || !shouldNotLog(logger.GetLevel(), extendedNetworkLogLevel)) {
+			return
+		}
+
+		// Skip response body logging for binary content to avoid memory issues with large binary downloads.
+		if isBinaryContent(response.Header.Get("Content-Type")) {
+			logger.WithLevel(defaultNetworkLogLevel).Msgf("%s body: [BINARY CONTENT - NOT LOGGED]", logPrefixResponse)
 			return
 		}
 
