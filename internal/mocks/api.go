@@ -81,6 +81,21 @@ func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgIdFromSlug", reflect.TypeOf((*MockApiClient)(nil).GetOrgIdFromSlug), slugName)
 }
 
+// GetOrgSettings mocks base method.
+func (m *MockApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOrgSettings", orgId)
+	ret0, _ := ret[0].(*contract.OrgSettingsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOrgSettings indicates an expected call of GetOrgSettings.
+func (mr *MockApiClientMockRecorder) GetOrgSettings(orgId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgSettings", reflect.TypeOf((*MockApiClient)(nil).GetOrgSettings), orgId)
+}
+
 // GetOrganizations mocks base method.
 func (m *MockApiClient) GetOrganizations(limit int) (*contract.OrganizationsResponse, error) {
 	m.ctrl.T.Helper()

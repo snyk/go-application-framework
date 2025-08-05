@@ -51,7 +51,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
-	config.Set(configuration.FF_IAW_ENABLED, true)
+	config.Set(configIgnoreApprovalEnabled, true)
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
@@ -306,7 +306,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 
 		invocationContext := setupMockIgnoreContext(t, "{}", http.StatusCreated)
 		config := invocationContext.GetConfiguration()
-		config.Set(configuration.FF_IAW_ENABLED, false)
+		config.Set(configIgnoreApprovalEnabled, false)
 
 		config.Set(InteractiveKey, false)
 
@@ -330,7 +330,7 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
-	config.Set(configuration.FF_IAW_ENABLED, true)
+	config.Set(configIgnoreApprovalEnabled, true)
 	config.Set(InteractiveKey, true) // Always interactive
 	config.Set(EnrichResponseKey, true)
 	config.Set(configuration.ORGANIZATION_SLUG, "some-org")
