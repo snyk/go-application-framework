@@ -230,7 +230,7 @@ func Test_ConfigurationSet_differentCases(t *testing.T) {
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
-		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) (interface{}, error) {
+		config.AddDefaultValue(ORGANIZATION, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
 				return existingValue, nil
 			}
@@ -396,7 +396,7 @@ func Test_DefaultValuehandling(t *testing.T) {
 		valueExplicitlySet := "explicitly set value"
 
 		config := NewInMemory()
-		config.AddDefaultValue(keyWithDefault, func(existingValue interface{}) (interface{}, error) {
+		config.AddDefaultValue(keyWithDefault, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
 				return existingValue, nil
 			}
@@ -434,7 +434,7 @@ func Test_DefaultValuehandling(t *testing.T) {
 		err := config.AddFlagSet(flagset)
 		assert.NoError(t, err)
 		config.AddAlternativeKeys(ORGANIZATION, []string{"snyk_cfg_org"})
-		config.AddDefaultValue(ORGANIZATION, func(existingValue interface{}) (interface{}, error) {
+		config.AddDefaultValue(ORGANIZATION, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 			if existingValue != nil {
 				return existingValue, nil
 			}
@@ -561,6 +561,51 @@ func Test_Configuration_Locking(t *testing.T) {
 		}
 
 		wg.Wait()
+	})
+}
+
+func Test_ImmutableDefaultValueFunction(t *testing.T) {
+	t.Run("direct function behavior", func(t *testing.T) {
+		defaultValue := "immutable-default"
+		fn := ImmutableDefaultValueFunction(defaultValue)
+
+		result, err := fn(nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+
+		result, err = fn(nil, "some-existing-value")
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+
+		result, err = fn(nil, 123)
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+
+		result, err = fn(nil, true)
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+	})
+
+	t.Run("comparison with StandardDefaultValueFunction", func(t *testing.T) {
+		standardKey := "standard-key"
+		immutableKey := "immutable-key"
+		defaultValue := "default"
+		explicitValue := "explicit"
+
+		config := NewInMemory()
+		config.AddDefaultValue(standardKey, StandardDefaultValueFunction(defaultValue))
+		config.AddDefaultValue(immutableKey, ImmutableDefaultValueFunction(defaultValue))
+
+		assert.Equal(t, defaultValue, config.GetString(standardKey))
+		assert.Equal(t, defaultValue, config.GetString(immutableKey))
+
+		config.Set(standardKey, explicitValue)
+		config.Set(immutableKey, explicitValue)
+
+		// StandardDefaultValueFunction should return the explicit value
+		assert.Equal(t, explicitValue, config.GetString(standardKey))
+		// ImmutableDefaultValueFunction should still return the default value
+		assert.Equal(t, defaultValue, config.GetString(immutableKey))
 	})
 }
 
@@ -800,7 +845,7 @@ func Test_Configuration_caching_enabled(t *testing.T) {
 	cacheDuration := 10 * time.Minute
 
 	config := NewWithOpts(WithCachingEnabled(cacheDuration))
-	config.AddDefaultValue(myKey, func(existingValue interface{}) (interface{}, error) {
+	config.AddDefaultValue(myKey, func(_ Configuration, existingValue interface{}) (interface{}, error) {
 		defaultFuncCalled++
 
 		if existingValue != nil {
