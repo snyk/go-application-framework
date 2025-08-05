@@ -564,6 +564,51 @@ func Test_Configuration_Locking(t *testing.T) {
 	})
 }
 
+func Test_ImmutableDefaultValueFunction(t *testing.T) {
+	t.Run("direct function behavior", func(t *testing.T) {
+		defaultValue := "immutable-default"
+		fn := ImmutableDefaultValueFunction(defaultValue)
+
+		result, err := fn(nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+
+		result, err = fn(nil, "some-existing-value")
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+
+		result, err = fn(nil, 123)
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+
+		result, err = fn(nil, true)
+		assert.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+	})
+
+	t.Run("comparison with StandardDefaultValueFunction", func(t *testing.T) {
+		standardKey := "standard-key"
+		immutableKey := "immutable-key"
+		defaultValue := "default"
+		explicitValue := "explicit"
+
+		config := NewInMemory()
+		config.AddDefaultValue(standardKey, StandardDefaultValueFunction(defaultValue))
+		config.AddDefaultValue(immutableKey, ImmutableDefaultValueFunction(defaultValue))
+
+		assert.Equal(t, defaultValue, config.GetString(standardKey))
+		assert.Equal(t, defaultValue, config.GetString(immutableKey))
+
+		config.Set(standardKey, explicitValue)
+		config.Set(immutableKey, explicitValue)
+
+		// StandardDefaultValueFunction should return the explicit value
+		assert.Equal(t, explicitValue, config.GetString(standardKey))
+		// ImmutableDefaultValueFunction should still return the default value
+		assert.Equal(t, defaultValue, config.GetString(immutableKey))
+	})
+}
+
 func Test_JsonStorage_Locking(t *testing.T) {
 	outerConfig := NewFromFiles(TEST_FILENAME)
 	outerConfig.PersistInStorage("n")

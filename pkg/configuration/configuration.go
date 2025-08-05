@@ -116,6 +116,13 @@ func StandardDefaultValueFunction(defaultValue interface{}) DefaultValueFunction
 	}
 }
 
+// ImmutableDefaultValueFunction returns a default value function that always returns the same value.
+func ImmutableDefaultValueFunction(defaultValue interface{}) DefaultValueFunction {
+	return func(_ Configuration, _ interface{}) (interface{}, error) {
+		return defaultValue, nil
+	}
+}
+
 // determineBasePath returns the base path for the configuration files.
 func determineBasePath() string {
 	homedir, err := os.UserHomeDir()
