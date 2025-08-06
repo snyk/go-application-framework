@@ -73,7 +73,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
 
-		return orgId, nil
+		return orgId, err
 	}
 	return callback
 }

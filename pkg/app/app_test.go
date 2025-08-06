@@ -176,6 +176,31 @@ func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 	assert.Equal(t, defaultOrgSlug, actualOrgSlug)
 }
 
+func Test_initConfiguration_failDefaultOrgLookup(t *testing.T) {
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertion
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("error")).AnyTimes()
+
+	config := configuration.NewInMemory()
+	engine := workflow.NewWorkFlowEngine(config)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	actualOrgId, orgIdError := config.GetStringWithError(configuration.ORGANIZATION)
+	assert.Error(t, orgIdError)
+	assert.Empty(t, actualOrgId)
+
+	actualOrgSlug, slugError := config.GetStringWithError(configuration.ORGANIZATION_SLUG)
+	assert.Error(t, slugError)
+	assert.Empty(t, actualOrgSlug)
+}
+
 func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
 	orgName := "someOrgName"
 	defaultOrgId := "someDefaultOrgId"
