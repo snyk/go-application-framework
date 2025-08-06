@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -214,6 +215,86 @@ func Test_LogResponse_nolog(t *testing.T) {
 		actualLoggerContent := logBuffer.String()
 		assert.Empty(t, actualLoggerContent)
 	})
+}
+
+func Test_LogResponse_skipsBinaryContent(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		isBinary    bool
+	}{
+		{
+			name:        "binary/octet-stream",
+			contentType: "binary/octet-stream",
+			isBinary:    true,
+		},
+		{
+			name:        "text/plain",
+			contentType: "text/plain",
+			isBinary:    false,
+		},
+		{
+			name:        "application/json",
+			contentType: "application/json",
+			isBinary:    false,
+		},
+		{
+			name:        "empty content type",
+			contentType: "",
+			isBinary:    false,
+		},
+		{
+			name:        "case insensitive",
+			contentType: "APPLICATION/OCTET-STREAM",
+			isBinary:    true,
+		},
+		{
+			name:        "with charset",
+			contentType: "application/octet-stream; charset=utf-8",
+			isBinary:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := bytes.NewBufferString("")
+			logger := zerolog.New(content).Level(zerolog.TraceLevel)
+
+			var testData string
+			if tt.isBinary {
+				testData = "binary data that should not be logged"
+			} else {
+				testData = "text data that should be logged"
+			}
+			response := &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Header:     http.Header{},
+				Body:       io.NopCloser(strings.NewReader(testData)),
+			}
+			if tt.contentType != "" {
+				response.Header.Set("Content-Type", tt.contentType)
+			}
+
+			// Act
+			LogResponse(response, &logger)
+
+			logOutput := content.String()
+			assert.Contains(t, logOutput, "< response [0x0]: 200 OK")
+
+			if tt.contentType != "" {
+				assert.Contains(t, logOutput, "Content-Type:["+tt.contentType+"]")
+			}
+
+			if tt.isBinary {
+				assert.Contains(t, logOutput, "[BINARY CONTENT - NOT LOGGED]")
+				assert.NotContains(t, logOutput, testData)
+			} else {
+				assert.NotContains(t, logOutput, "[BINARY CONTENT - NOT LOGGED]")
+				assert.Contains(t, logOutput, testData)
+			}
+		})
+	}
 }
 
 func Test_logRoundTrip(t *testing.T) {
