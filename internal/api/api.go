@@ -249,7 +249,7 @@ func (a *snykApiClient) GetSastSettings(orgId string) (*sast_contract.SastRespon
 }
 
 func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error) {
-	endpoint := a.url + fmt.Sprintf("/v1/org/%s/settings", url.QueryEscape(orgId))
+	endpoint := fmt.Sprintf("%s/v1/org/%s/settings", a.url, url.QueryEscape(orgId))
 	res, err := a.client.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve org settings: %w", err)
