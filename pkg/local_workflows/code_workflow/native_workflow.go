@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 
 	gUuid "github.com/google/uuid"
 	"github.com/hashicorp/go-uuid"
@@ -19,9 +20,11 @@ import (
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/error-catalog-golang-public/code"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -183,6 +186,22 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 			return nil, findingsError
 		}
 		output = append(output, findingsData)
+
+		// transform to ufm
+		// create new data and append
+		ufm := NewSarifTestResult(result, summary)
+		ufmData, ufmError := createCodeWorkflowData(
+			workflow.NewTypeIdentifier(id, "findings"),
+			config,
+			ufm,
+			content_type.LOCAL_FINDING_MODEL,
+			path,
+			logger)
+		if ufmError != nil {
+			return nil, ufmError
+		}
+		output = append(output, ufmData)
+
 	}
 
 	return output, err
@@ -333,4 +352,146 @@ func createCodeWorkflowData(id workflow.Identifier, config configuration.Configu
 	data.SetContentLocation(path)
 
 	return data, nil
+}
+
+// sarifTestResult wraps a SARIF response to implement the TestResult interface
+type sarifTestResult struct {
+	sarifResponse *sarif.SarifResponse
+	summary       *json_schemas.TestSummary
+	createdAt     time.Time
+	testID        gUuid.UUID
+}
+
+// NewSarifTestResult creates a new TestResult that wraps SARIF data
+func NewSarifTestResult(sarifResponse *sarif.SarifResponse, summary *json_schemas.TestSummary) testapi.TestResult {
+	return &sarifTestResult{
+		sarifResponse: sarifResponse,
+		summary:       summary,
+		createdAt:     time.Now(),
+		testID:        gUuid.New(),
+	}
+}
+
+// GetTestID returns the test ID
+func (r *sarifTestResult) GetTestID() *gUuid.UUID {
+	return &r.testID
+}
+
+// GetTestConfiguration returns nil as SARIF doesn't have test configuration
+func (r *sarifTestResult) GetTestConfiguration() *testapi.TestConfiguration {
+	return nil
+}
+
+// GetCreatedAt returns the creation time
+func (r *sarifTestResult) GetCreatedAt() *time.Time {
+	return &r.createdAt
+}
+
+// GetTestSubject returns an empty TestSubject as SARIF doesn't have this concept
+func (r *sarifTestResult) GetTestSubject() testapi.TestSubject {
+	return testapi.TestSubject{}
+}
+
+// GetSubjectLocators returns nil as SARIF doesn't have subject locators
+func (r *sarifTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
+	return nil
+}
+
+// GetExecutionState returns Finished as SARIF results are already complete
+func (r *sarifTestResult) GetExecutionState() testapi.TestExecutionStates {
+	return testapi.Finished
+}
+
+// GetErrors returns nil as SARIF doesn't have execution errors
+func (r *sarifTestResult) GetErrors() *[]testapi.IoSnykApiCommonError {
+	return nil
+}
+
+// GetWarnings returns nil as SARIF doesn't have execution warnings
+func (r *sarifTestResult) GetWarnings() *[]testapi.IoSnykApiCommonError {
+	return nil
+}
+
+// GetPassFail determines pass/fail based on SARIF results
+func (r *sarifTestResult) GetPassFail() *testapi.PassFail {
+	if r.sarifResponse == nil || len(r.sarifResponse.Sarif.Runs) == 0 {
+		pass := testapi.Pass
+		return &pass
+	}
+
+	// Check if there are any high/critical findings
+	for _, run := range r.sarifResponse.Sarif.Runs {
+		for _, result := range run.Results {
+			if result.Level == "error" {
+				fail := testapi.Fail
+				return &fail
+			}
+		}
+	}
+
+	pass := testapi.Pass
+	return &pass
+}
+
+// GetOutcomeReason returns nil as SARIF doesn't have outcome reasons
+func (r *sarifTestResult) GetOutcomeReason() *testapi.TestOutcomeReason {
+	return nil
+}
+
+// GetBreachedPolicies returns nil as SARIF doesn't have breached policies
+func (r *sarifTestResult) GetBreachedPolicies() *testapi.PolicyRefSet {
+	return nil
+}
+
+// GetEffectiveSummary converts SARIF summary to FindingSummary
+func (r *sarifTestResult) GetEffectiveSummary() *testapi.FindingSummary {
+	if r.summary == nil {
+		return &testapi.FindingSummary{Count: 0}
+	}
+
+	// Count open findings (non-ignored)
+	var openCount int
+	for _, result := range r.summary.Results {
+		openCount += result.Open
+	}
+
+	return &testapi.FindingSummary{Count: uint32(openCount)}
+}
+
+// GetRawSummary converts SARIF summary to FindingSummary
+func (r *sarifTestResult) GetRawSummary() *testapi.FindingSummary {
+	if r.summary == nil {
+		return &testapi.FindingSummary{Count: 0}
+	}
+
+	// Count all findings
+	var totalCount int
+	for _, result := range r.summary.Results {
+		totalCount += result.Total
+	}
+
+	return &testapi.FindingSummary{Count: uint32(totalCount)}
+}
+
+// Findings converts SARIF results to FindingData
+func (r *sarifTestResult) Findings(ctx context.Context) ([]testapi.FindingData, bool, error) {
+	if r.sarifResponse == nil || len(r.sarifResponse.Sarif.Runs) == 0 {
+		return []testapi.FindingData{}, true, nil
+	}
+
+	var findings []testapi.FindingData
+
+	for _, run := range r.sarifResponse.Sarif.Runs {
+		for _, result := range run.Results {
+			// Convert SARIF result to FindingData
+			finding := testapi.FindingData{
+				Attributes: &testapi.FindingAttributes{
+					Description: result.Message.Text,
+				},
+			}
+			findings = append(findings, finding)
+		}
+	}
+
+	return findings, true, nil
 }

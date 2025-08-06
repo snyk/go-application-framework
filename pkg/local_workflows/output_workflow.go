@@ -99,12 +99,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
-			outputSummary, err := filterSummaryOutput(config, input[i], debugLogger)
-			if err != nil {
-				debugLogger.Warn().Err(err).Msg("Failed to filter test summary output")
-				output = append(output, input[i])
-			}
-			output = append(output, outputSummary)
+			output = append(output, input[i])
 			continue
 		}
 
