@@ -34,7 +34,6 @@ import (
 
 const MAX_WRITE_RETRIES = 10
 const SANITIZE_REPLACEMENT_STRING string = "***"
-const MAX_SCRUB_SIZE = 1024 * 1024 // 1MB - skip scrubbing for lines larger than this
 
 // SENSITIVE_FIELD_NAMES is a list of field names that should be sanitized.
 var SENSITIVE_FIELD_NAMES = []string{
@@ -297,12 +296,6 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 }
 
 func scrub(p []byte, scrubDict ScrubbingDict) []byte {
-	// Check if the content is too large to scrub efficiently
-	if len(p) > MAX_SCRUB_SIZE {
-		redactionMsg := fmt.Sprintf("*** WHOLE LINE REDACTED - TOO LARGE (%d bytes) ***\n", len(p))
-		return []byte(redactionMsg)
-	}
-
 	s := string(p)
 
 	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
