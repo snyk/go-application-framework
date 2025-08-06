@@ -22,7 +22,7 @@ func TestNewAnalyticsWrapper(t *testing.T) {
 	extension := *obj.Data.Attributes.Interaction.Extension
 	assert.Equal(t, "Bar", extension["MyPrefix::FOO"])
 	assert.Equal(t, true, extension["MyPrefix::booleanValue"])
-	assert.Equal(t, 2, int(extension["MyPrefix::num"].(float64))) // there is a bit of type confusion in this test, as an internal json representation loses track of the exact type and assumes float
+	assert.Equal(t, 2, int(extension["MyPrefix::num"].(float64))) //nolint:errcheck // there is a bit of type confusion in this test, as an internal json representation loses track of the exact type and assumes float
 }
 
 func TestAnalyticsWrapper_Setter(t *testing.T) {

@@ -17,7 +17,7 @@ func getAccessTokenWithSingleAudienceClaim(t *testing.T, audience string) string
 	claims := &jws.ClaimSet{
 		Aud: audience,
 	}
-	pk, err := rsa.GenerateKey(rand.Reader, 1023)
+	pk, err := rsa.GenerateKey(rand.Reader, 2048)
 	assert.NoError(t, err)
 
 	accessToken, err := jws.Encode(header, claims, pk)

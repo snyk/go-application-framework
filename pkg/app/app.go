@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crypto/fips140"
 	"io"
 	"log"
 	"net/http"
@@ -28,7 +29,7 @@ import (
 )
 
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
@@ -46,7 +47,7 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 }
 
 func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
@@ -77,8 +78,8 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	return callback
 }
 
-func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(config configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		urlString := constants.SNYK_DEFAULT_API_URL
 
 		urlFromOauthToken, err := auth.GetAudienceClaimFromOauthToken(config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
@@ -104,7 +105,7 @@ func defaultFuncApiUrl(config configuration.Configuration, logger *zerolog.Logge
 }
 
 func defaultInputDirectory() configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue == nil {
 			path, err := os.Getwd()
 			if err != nil {
@@ -119,7 +120,7 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 }
 
 func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
 		if ri != nil && len(ri.GetVersion()) > 0 {
@@ -150,7 +151,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 }
 
 func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
@@ -172,7 +173,7 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.Default
 }
 
 func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		const multipleAttempts = 3 // three here is chosen based on other places in the application
 		const singleAttempt = 1
 
@@ -218,7 +219,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
-	config.AddDefaultValue(configuration.WEB_APP_URL, func(existingValue any) (any, error) {
+	config.AddDefaultValue(configuration.WEB_APP_URL, func(_ configuration.Configuration, existingValue any) (any, error) {
 		canonicalApiUrl := config.GetString(configuration.API_URL)
 		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
 		if err != nil {
@@ -231,7 +232,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
 
-	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(existingValue any) (any, error) {
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
 			return true, nil
 		} else {
@@ -239,7 +240,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		}
 	})
 
-	config.AddDefaultValue(configuration.IS_FEDRAMP, func(existingValue any) (any, error) {
+	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
 			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
 		} else {
@@ -251,10 +252,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts(engine))
+	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
-	return func(existingValue interface{}) (interface{}, error) {
+	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		var files []string
 		// last file usually wins if the same values are configured
 		// Precedence should be:

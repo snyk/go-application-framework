@@ -121,7 +121,7 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, len(input), len(output))
 		var filteredFindings local_models.LocalFinding
-		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings) //nolint:errcheck //in this test, the type is clear
 		assert.NoError(t, err)
 		for _, finding := range filteredFindings.Findings {
 			severity := string(finding.Attributes.Rating.Severity.Value)
@@ -157,7 +157,7 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(output))
 		var filteredFindings local_models.LocalFinding
-		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings)
+		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings) //nolint:errcheck //in this test, the type is clear
 		assert.NoError(t, err)
 
 		expectedCounts := local_models.NewFindingsCounts()

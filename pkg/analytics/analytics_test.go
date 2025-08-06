@@ -3,12 +3,13 @@ package analytics
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/logging"
 	"io"
 	"net/http"
 	"os/user"
 	"strings"
 	"testing"
+
+	"github.com/snyk/go-application-framework/pkg/logging"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -237,7 +238,7 @@ func Test_SanitizeUsername(t *testing.T) {
 func newTestAnalytics(t *testing.T) Analytics {
 	t.Helper()
 	a := New()
-	a.(*AnalyticsImpl).userCurrent = testUserCurrent(t)
+	a.(*AnalyticsImpl).userCurrent = testUserCurrent(t) //nolint:errcheck //in this test, the type is clear
 	return a
 }
 
