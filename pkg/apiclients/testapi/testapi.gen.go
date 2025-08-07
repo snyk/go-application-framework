@@ -1049,6 +1049,9 @@ type SnykVulnProblem struct {
 	// as those publicly distributed.
 	Ecosystem SnykvulndbPackageEcosystem `json:"ecosystem"`
 
+	// EpssDetails EPSS details - see note on model definition.
+	EpssDetails *SnykvulndbEpssDetails `json:"epss_details,omitempty"`
+
 	// ExploitDetails Details about the maturity of exploits for this vulnerability.
 	ExploitDetails SnykvulndbExploitDetails `json:"exploit_details"`
 	Id             string                   `json:"id"`
@@ -1079,6 +1082,10 @@ type SnykVulnProblem struct {
 
 	// PackageName Package name.
 	PackageName string `json:"package_name"`
+
+	// PackagePopularityRank Percentile rank indicating the package's prevalence across Snyk-monitored projects.
+	// A higher rank signifies the package is used in a larger percentage of projects.
+	PackagePopularityRank *float32 `json:"package_popularity_rank,omitempty"`
 
 	// PackageRepositoryUrl Link to the package repository containing the vulnerable package.
 	PackageRepositoryUrl *string `json:"package_repository_url,omitempty"`
@@ -1560,6 +1567,23 @@ type SnykvulndbCvssSource struct {
 // SnykvulndbCvssSourceType Indicate whether the CVSS source is primary (recommended) or secondary
 // (provided as supplemental information).
 type SnykvulndbCvssSourceType string
+
+// SnykvulndbEpssDetails Exploit Prediction Scoring System (EPSS), which predicts the likelihood (probability) of the vulnerability to be
+// exploited, and the percentile of the EPSS of a vulnerability relative to all other vulnerabilities.
+// We are using the latest model.
+// https://www.first.org/epss/model
+type SnykvulndbEpssDetails struct {
+	// ModelVersion The version of the EPSS model we use.
+	ModelVersion string `json:"model_version"`
+
+	// Percentile The percentile of the EPSS of a vulnerability relative to all other vulnerabilities.
+	// In value range 0 - 1 with 5 fixed digits.
+	Percentile string `json:"percentile"`
+
+	// Probability The probability of the vulnerability to be exploited.
+	// In value range 0 - 1 with 5 fixed digits.
+	Probability string `json:"probability"`
+}
 
 // SnykvulndbExploitDetails Details about the exploitability of a vulnerability.
 type SnykvulndbExploitDetails struct {
