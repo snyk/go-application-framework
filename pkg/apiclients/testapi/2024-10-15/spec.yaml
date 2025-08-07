@@ -954,7 +954,6 @@ components:
         severity_threshold:
           allOf:
           - $ref: '#/components/schemas/Severity'
-          default: medium
           description: Findings of equal or greater severity will fail the test.
         suppress_pending_ignores:
           default: false
@@ -1559,6 +1558,10 @@ components:
 
             This applies to private packages distributed with ecosystem tooling as well
             as those publicly distributed.
+        epss_details:
+          allOf:
+          - $ref: '#/components/schemas/snykvulndb.EpssDetails'
+          description: EPSS details - see note on model definition.
         exploit_details:
           allOf:
           - $ref: '#/components/schemas/snykvulndb.ExploitDetails'
@@ -1605,6 +1608,13 @@ components:
         package_name:
           description: Package name.
           type: string
+        package_popularity_rank:
+          description: |-
+            Percentile rank indicating the package's prevalence across Snyk-monitored projects.
+            A higher rank signifies the package is used in a larger percentage of projects.
+          maximum: 100
+          minimum: 0
+          type: number
         package_repository_url:
           description: Link to the package repository containing the vulnerable package.
           example: https://repo.maven.apache.org/maven2
@@ -2413,6 +2423,34 @@ components:
       - secondary
       - other
       type: string
+    snykvulndb.EpssDetails:
+      description: |-
+        Exploit Prediction Scoring System (EPSS), which predicts the likelihood (probability) of the vulnerability to be
+        exploited, and the percentile of the EPSS of a vulnerability relative to all other vulnerabilities.
+        We are using the latest model.
+        https://www.first.org/epss/model
+      properties:
+        model_version:
+          description: The version of the EPSS model we use.
+          example: v2025.03.14
+          type: string
+        percentile:
+          description: |-
+            The percentile of the EPSS of a vulnerability relative to all other vulnerabilities.
+            In value range 0 - 1 with 5 fixed digits.
+          example: "0.73768"
+          type: string
+        probability:
+          description: |-
+            The probability of the vulnerability to be exploited.
+            In value range 0 - 1 with 5 fixed digits.
+          example: "0.00859"
+          type: string
+      required:
+      - percentile
+      - probability
+      - model_version
+      type: object
     snykvulndb.ExploitDetails:
       description: Details about the exploitability of a vulnerability.
       properties:
