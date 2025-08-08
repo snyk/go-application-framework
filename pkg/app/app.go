@@ -81,6 +81,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(config configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		urlString := constants.SNYK_DEFAULT_API_URL
+		authToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 
 		urlFromOauthToken, err := auth.GetAudienceClaimFromOauthToken(config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 		if err != nil {
@@ -89,6 +90,14 @@ func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) co
 
 		if len(urlFromOauthToken) > 0 && len(urlFromOauthToken[0]) > 0 {
 			urlString = urlFromOauthToken[0]
+		} else if auth.IsAuthTypePAT(authToken) {
+			apiUrl, claimsErr := auth.GetApiUrlFromPAT(authToken)
+			if claimsErr != nil {
+				logger.Warn().Err(claimsErr).Msg("failed to get api url from pat")
+			}
+			if len(apiUrl) > 0 {
+				urlString = apiUrl
+			}
 		} else if existingValue != nil { // try the configured value as last resort
 			if temp, ok := existingValue.(string); ok {
 				urlString = temp

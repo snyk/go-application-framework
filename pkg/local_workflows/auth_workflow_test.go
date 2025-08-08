@@ -103,12 +103,6 @@ func Test_auth_token(t *testing.T) {
 }
 
 func Test_pat(t *testing.T) {
-	const (
-		testPAT               = "snyk_pat.12345678.abcdefghijklmnopqrstuvwxyz123456"
-		mockedPatEndpoint     = "https://api.snyk.io"
-		expectedAPIKeyStorage = auth.CONFIG_KEY_TOKEN
-	)
-
 	mockCtl := gomock.NewController(t)
 	defer mockCtl.Finish()
 
@@ -118,23 +112,22 @@ func Test_pat(t *testing.T) {
 
 	engine := mocks.NewMockEngine(mockCtl)
 	authenticator := mocks.NewMockAuthenticator(mockCtl)
+	pat := "myPAT"
 
 	t.Run("happy", func(t *testing.T) {
-		config := configuration.New()
+		config := configuration.NewWithOpts()
 		config.Set(authTypeParameter, auth.AUTH_TYPE_PAT)
-		config.Set(ConfigurationNewAuthenticationToken, testPAT)
+		config.Set(ConfigurationNewAuthenticationToken, pat)
+
 		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "some-oauth-token")
 		config.Set(configuration.AUTHENTICATION_TOKEN, "some-legacy-api-token")
-
-		config.Set(configuration.API_URL, []string{"https://api.snyk.io"})
 
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).Times(1)
 
-		engineConfig := configuration.New()
-		engine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+		engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
 
 		err := entryPointDI(mockInvocationContext, &logger, engine, authenticator)
@@ -145,21 +138,20 @@ func Test_pat(t *testing.T) {
 	})
 
 	t.Run("invalid pat should fail", func(t *testing.T) {
-		config := configuration.New()
+		config := configuration.NewWithOpts()
 		config.Set(authTypeParameter, auth.AUTH_TYPE_PAT)
-		config.Set(ConfigurationNewAuthenticationToken, testPAT)
+		config.Set(ConfigurationNewAuthenticationToken, pat)
+
 		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "some-oauth-token")
 		config.Set(configuration.AUTHENTICATION_TOKEN, "some-legacy-api-token")
-
-		config.Set(configuration.API_URL, []string{"https://api.snyk.io"})
 
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).Times(1)
 
-		engineConfig := configuration.New()
-		engine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
+		engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+
 		mockWhoAmIError := fmt.Errorf("mock whoami failure")
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, mockWhoAmIError)
 
