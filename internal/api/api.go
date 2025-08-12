@@ -249,22 +249,15 @@ func (a *snykApiClient) GetSastSettings(orgId string) (*sast_contract.SastRespon
 }
 
 func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error) {
-	endpoint := fmt.Sprintf("%s/v1/org/%s/settings", a.url, url.QueryEscape(orgId))
-	res, err := a.client.Get(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve org settings: %w", err)
-	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
+	endpoint := fmt.Sprintf("/v1/org/%s/settings", url.QueryEscape(orgId))
+	body, err := clientGet(a, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve org settings: %w", err)
 	}
 
 	var response contract.OrgSettingsResponse
 	if err = json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("unable to retrieve org settings (status: %d): %w", res.StatusCode, err)
+		return nil, err
 	}
 
 	return &response, err

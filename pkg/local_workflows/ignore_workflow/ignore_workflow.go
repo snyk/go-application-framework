@@ -103,12 +103,17 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	id := invocationCtx.GetWorkflowIdentifier()
 
 	if !config.GetBool(ConfigIgnoreApprovalEnabled) {
+		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
 		return nil, snyk_errors.Error{
-			ID:          "SNYK-CLI-0014",
-			Title:       "Organization setting not enabled",
-			Description: "The feature you are trying to use is not enabled you the current organization. Enable it in the settings or try switching the organization.",
-			Detail:      "",
-			Level:       "fatal",
+			Type:           "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-cli-0016",
+			Title:          "Feature not enabled",
+			Description:    "This feature is disabled for your current organization. You can enable it in the settings or switch to an organization where it's already enabled.",
+			StatusCode:     403,
+			ErrorCode:      "SNYK-CLI-0016",
+			Classification: "ACTIONABLE",
+			Links:          []string{},
+			Level:          "error",
+			Detail:         fmt.Sprintf("The Ignore Approval Workflow feature must be enabled for the %s organization. Enable it in your organization settings: Settings > General > Ignore approval workflow for Snyk Code.", orgName),
 		}
 	}
 

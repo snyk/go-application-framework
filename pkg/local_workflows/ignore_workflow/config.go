@@ -45,7 +45,7 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 }
 
 func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	return func(existingValue interface{}) (interface{}, error) {
+	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
@@ -60,6 +60,10 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
 			return nil, err
+		}
+
+		if settings.Ignores == nil {
+			return false, nil
 		}
 
 		return settings.Ignores.ApprovalWorkflowEnabled, nil

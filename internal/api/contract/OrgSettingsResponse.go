@@ -11,6 +11,6 @@ type OrgRequestAccessSettings struct {
 }
 
 type OrgSettingsResponse struct {
-	Ignores       OrgIgnoreSettings        `json:"ignores"`
-	RequestAccess OrgRequestAccessSettings `json:"requestAccess"`
+	Ignores       *OrgIgnoreSettings        `json:"ignores"`
+	RequestAccess *OrgRequestAccessSettings `json:"requestAccess"`
 }
