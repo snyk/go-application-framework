@@ -1,5 +1,7 @@
 package contract
 
+// API reference: https://docs.snyk.io/snyk-api/reference/organizations-v1#get-org-orgid-settings
+
 type OrgIgnoreSettings struct {
 	ReasonRequired          bool `json:"reasonRequired,omitempty"`
 	AutoApproveIgnores      bool `json:"autoApproveIgnores,omitempty"`

@@ -62,11 +62,11 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 			return nil, err
 		}
 
-		if settings.Ignores == nil {
-			return false, nil
+		if settings.Ignores != nil && settings.Ignores.ApprovalWorkflowEnabled {
+			return true, nil
 		}
 
-		return settings.Ignores.ApprovalWorkflowEnabled, nil
+		return false, nil
 	}
 }
 

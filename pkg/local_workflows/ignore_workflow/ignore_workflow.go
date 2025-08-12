@@ -14,7 +14,6 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/cli"
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -104,17 +103,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 
 	if !config.GetBool(ConfigIgnoreApprovalEnabled) {
 		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
-		return nil, snyk_errors.Error{
-			Type:           "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-cli-0016",
-			Title:          "Feature not enabled",
-			Description:    "This feature is disabled for your current organization. You can enable it in the settings or switch to an organization where it's already enabled.",
-			StatusCode:     403,
-			ErrorCode:      "SNYK-CLI-0016",
-			Classification: "ACTIONABLE",
-			Links:          []string{},
-			Level:          "error",
-			Detail:         fmt.Sprintf("The Ignore Approval Workflow feature must be enabled for the %s organization. Enable it in your organization settings: Settings > General > Ignore approval workflow for Snyk Code.", orgName),
-		}
+		return nil, cli.NewFeatureNotEnabledError(fmt.Sprintf("The Ignore Approval Workflow feature must be enabled for the %s organization. Enable it in your organization settings: Settings > General > Ignore approval workflow for Snyk Code.", orgName))
 	}
 
 	interactive := config.GetBool(InteractiveKey)
