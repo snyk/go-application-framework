@@ -286,7 +286,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// Long-form, rest is covered by the JSON scrubbing above
-	s = fmt.Sprintf(`(?im)--(?<argument_key>[^=\s]*(?:%s)[^=\s]*)[\s=]['"]?(?<argument_value>\S*)['"]?`, kws)
+	s = `(?i)(["']?\wkey[\w-]"?)\s?[:|=, ]\s?["']?([^"'\s]*)["']?`
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
