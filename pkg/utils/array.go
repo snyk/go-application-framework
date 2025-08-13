@@ -74,6 +74,26 @@ func Merge(input1 []string, input2 []string) []string {
 	return result
 }
 
+// Dedupe removes duplicate entries from a given slice.
+// Returns a new, deduplicated slice.
+//
+// Example:
+//
+//	mySlice := []string{"apple", "banana", "apple", "cherry", "banana", "date"}
+//	dedupedSlice := dedupe(mySlice)
+//	fmt.Println(dedupedSlice) // Output: [apple banana cherry date]
+func Dedupe(s []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+	for _, str := range s {
+		if _, ok := seen[str]; !ok {
+			seen[str] = true
+			result = append(result, str)
+		}
+	}
+	return result
+}
+
 // ToKeyValueMap converts a list of strings to a map of strings.
 // The input list will be converted based on the delimiter, 'splitBy'.
 // The resulting map will contain the keys and values of the input list.
