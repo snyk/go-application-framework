@@ -251,11 +251,11 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 
 	// CLI argument mapping from the snyk-config debug logging
 	// I.e., if --argument=value is passed, it will be logged as { 'argument=value': true }
-	s = fmt.Sprintf(`(?im)(%s)[^=]*=(?P<value>.*)['"]`, kws)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
+	// s = fmt.Sprintf(`(?im)(%s)[^=]*=(?P<value>.*)['"]`, kws)
+	// dict[s] = scrubStruct{
+	// 	groupToRedact: 2,
+	// 	regex:         regexp.MustCompile(s),
+	// }
 
 	// Same as above, only with short form
 	shorts := []string{"p", "u"}
@@ -282,6 +282,13 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	s = fmt.Sprintf(`(?im)\-[%s][\s=](?<short_form_value>\S*)`, shortForm)
 	dict[s] = scrubStruct{
 		groupToRedact: 1,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// Long-form, rest is covered by the JSON scrubbing above
+	s = fmt.Sprintf(`(?im)--(?<argument_key>[^=\s]*(?:%s)[^=\s]*)[\s=]['"]?(?<argument_value>\S*)['"]?`, kws)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
 	}
 
