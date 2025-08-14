@@ -42,6 +42,71 @@ func TestUpdatePathWithDefaults(t *testing.T) {
 		require.Equal(t, "b"+pathListSep+pathFromEnv, os.Getenv("PATH"))
 	})
 
+	t.Run("prepend re-prioritizes existing path segment to front", func(t *testing.T) {
+		pathFromEnv := "a" + pathListSep + "b" + pathListSep + "c"
+		t.Setenv("PATH", pathFromEnv)
+
+		UpdatePath("b", true)
+
+		require.Equal(t, "b"+pathListSep+"a"+pathListSep+"c", os.Getenv("PATH"))
+	})
+
+	t.Run("add multiple entries at once (prepend)", func(t *testing.T) {
+		pathFromEnv := "d" + pathListSep + "e"
+		t.Setenv("PATH", pathFromEnv)
+
+		pathToPrepend := "a" + pathListSep + "b" + pathListSep + "c"
+		UpdatePath(pathToPrepend, true)
+
+		require.Equal(t, pathToPrepend+pathListSep+pathFromEnv, os.Getenv("PATH"))
+	})
+
+	t.Run("add multiple entries at once (append)", func(t *testing.T) {
+		pathFromEnv := "a" + pathListSep + "b"
+		t.Setenv("PATH", pathFromEnv)
+
+		pathToAppend := "c" + pathListSep + "d" + pathListSep + "e"
+		UpdatePath(pathToAppend, false)
+
+		require.Equal(t, pathFromEnv+pathListSep+pathToAppend, os.Getenv("PATH"))
+	})
+
+	t.Run("add multiple entries with duplicates of existing entries (prepend)", func(t *testing.T) {
+		pathFromEnv := "b" + pathListSep + "d"
+		t.Setenv("PATH", pathFromEnv)
+
+		UpdatePath("a"+pathListSep+"b"+pathListSep+"c", true)
+
+		require.Equal(t, "a"+pathListSep+"b"+pathListSep+"c"+pathListSep+"d", os.Getenv("PATH"))
+	})
+
+	t.Run("add multiple entries with duplicates of existing entries (append)", func(t *testing.T) {
+		pathFromEnv := "a" + pathListSep + "b" + pathListSep + "c"
+		t.Setenv("PATH", pathFromEnv)
+
+		UpdatePath("b"+pathListSep+"c"+pathListSep+"d", false)
+
+		require.Equal(t, "a"+pathListSep+"b"+pathListSep+"c"+pathListSep+"d", os.Getenv("PATH"))
+	})
+
+	t.Run("add multiple entries with duplicates of new entries (prepend)", func(t *testing.T) {
+		pathFromEnv := "b" + pathListSep + "d"
+		t.Setenv("PATH", pathFromEnv)
+
+		UpdatePath("a"+pathListSep+"b"+pathListSep+"c"+pathListSep+"b", true)
+
+		require.Equal(t, "a"+pathListSep+"b"+pathListSep+"c"+pathListSep+"d", os.Getenv("PATH"))
+	})
+
+	t.Run("add multiple entries with duplicates of new entries (append)", func(t *testing.T) {
+		pathFromEnv := "a" + pathListSep + "b" + pathListSep + "c"
+		t.Setenv("PATH", pathFromEnv)
+
+		UpdatePath("b"+pathListSep+"c"+pathListSep+"d"+pathListSep+"c", false)
+
+		require.Equal(t, "a"+pathListSep+"b"+pathListSep+"c"+pathListSep+"d", os.Getenv("PATH"))
+	})
+
 	t.Run("add to path from environment only if not blank", func(t *testing.T) {
 		pathFromEnv := "a"
 		t.Setenv("PATH", pathFromEnv)
