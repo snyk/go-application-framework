@@ -180,7 +180,7 @@ func Test_StartTest_Success(t *testing.T) {
 	// Create our test client
 	testHTTPClient := newTestHTTPClient(t, server)
 	testClient, err := testapi.NewTestClient(server.URL,
-		testapi.WithPollInterval(1*time.Second), // short poll interval for faster tests
+		testapi.WithPollInterval(1*time.Second),
 		testapi.WithCustomHTTPClient(testHTTPClient),
 	)
 	require.NoError(t, err)
@@ -1046,4 +1046,86 @@ func assertTestFinishedWithOutcomeErrorsAndWarnings(t *testing.T, result testapi
 	} else {
 		assert.Nil(t, result.GetWarnings())
 	}
+}
+
+// TestJitter verifies times returned are 0.5-1.5 times the original value,
+// and invalid times are return unmodified.
+func TestJitter(t *testing.T) {
+	t.Parallel()
+	t.Run("returns original duration for zero or negative input", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, time.Duration(0), testapi.Jitter(0))
+		assert.Equal(t, time.Duration(-1), testapi.Jitter(-1))
+	})
+
+	t.Run("returns duration within 0.5x to 1.5x of input", func(t *testing.T) {
+		t.Parallel()
+		duration := 100 * time.Millisecond
+		minDur := time.Duration(float64(duration) * 0.5)
+		maxDur := time.Duration(float64(duration) * 1.5)
+
+		for range 100 {
+			jittered := testapi.Jitter(duration)
+			assert.GreaterOrEqual(t, jittered, minDur)
+			assert.LessOrEqual(t, jittered, maxDur)
+		}
+	})
+}
+
+// Test_Wait_CallsJitter ensures Jitter is called while polling for job completion.
+func Test_Wait_CallsJitter(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenario(t)
+
+	params := testapi.StartTestParams{
+		OrgID:   testData.OrgID.String(),
+		Subject: testData.TestSubjectCreate,
+	}
+
+	// Mock Jitter
+	var jitterCalled bool
+	jitterFunc := func(d time.Duration) time.Duration {
+		jitterCalled = true
+		return d
+	}
+
+	// Mock server handler
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.Pending}, // First poll
+			{ShouldRedirect: true},    // Second poll, redirects
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome: testapi.Pass,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	// Act
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+		testapi.WithJitterFunc(jitterFunc),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	err = handle.Wait(ctx)
+	require.NoError(t, err)
+
+	// Assert
+	assert.True(t, jitterCalled)
 }

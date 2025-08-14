@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"sync"
@@ -24,6 +25,7 @@ type config struct {
 	APIVersion            string
 	Logger                *zerolog.Logger
 	lowLevelClientOptions []ClientOption // Options for the oapi-codegen client
+	jitterFunc            func(time.Duration) time.Duration
 }
 
 // ConfigOption allows setting custom parameters during construction
@@ -82,6 +84,13 @@ func WithCustomRequestEditorFn(fn RequestEditorFn) ConfigOption {
 	return func(c *config) {
 		opt := WithRequestEditorFn(fn)
 		c.lowLevelClientOptions = append(c.lowLevelClientOptions, opt)
+	}
+}
+
+// WithJitterFunc allows setting a custom jitter function for polling.
+func WithJitterFunc(fn func(time.Duration) time.Duration) ConfigOption {
+	return func(c *config) {
+		c.jitterFunc = fn
 	}
 }
 
@@ -235,6 +244,7 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 	cfg := config{
 		PollInterval: DefaultPollInterval,
 		APIVersion:   DefaultAPIVersion,
+		jitterFunc:   Jitter,
 	}
 
 	for _, opt := range options {
@@ -441,7 +451,9 @@ func contextCanceledError(operationDescription string, contextError error) error
 
 // Query the job endpoint until we're redirected to its 'related' link containing results
 func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error) {
-	ticker := time.NewTicker(h.client.config.PollInterval)
+	cfg := h.client.config
+
+	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
 
 	getJobParams := &GetJobParams{Version: h.client.config.APIVersion}
@@ -463,6 +475,7 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 				if stopPolling {
 					return nil, jobErr
 				}
+				ticker.Reset(cfg.jitterFunc(cfg.PollInterval))
 				continue
 
 			case http.StatusSeeOther:
@@ -478,6 +491,7 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 					Str("orgID", h.orgID.String()).
 					Str("jobID", h.jobID.String()).
 					Msg("Job polling returned 404 Not Found, continuing polling in case of delayed job creation")
+				ticker.Reset(cfg.jitterFunc(cfg.PollInterval))
 				continue
 
 			default:
@@ -690,4 +704,14 @@ func (r *testResult) handleFindingsError(err error, partialFindings []FindingDat
 // ptr returns a pointer to the given value. Useful for optional fields.
 func ptr[T any](v T) *T {
 	return &v
+}
+
+// Jitter returns a random duration between 0.5 and 1.5 of the given duration.
+func Jitter(d time.Duration) time.Duration {
+	if d <= 0 {
+		return d
+	}
+	minDur := int64(float64(d) * 0.5)
+	maxDur := int64(float64(d) * 1.5)
+	return time.Duration(rand.Int63n(maxDur-minDur) + minDur)
 }
