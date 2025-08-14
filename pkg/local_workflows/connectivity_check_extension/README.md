@@ -11,6 +11,15 @@ A Go-based extension for the Snyk CLI that performs comprehensive network connec
 - **Actionable Diagnostics**: Provides specific recommendations based on connectivity issues
 - **Integration Ready**: Built as a workflow extension for the Snyk CLI using go-application-framework
 
+## Workflow ID and Invocation
+
+- Workflow ID: `tools.connectivity-check`
+- Output MIME types:
+  - Human-readable: `text/plain`
+  - JSON: `application/json`
+
+Flags (see below) are provided via the framework configuration/flagset.
+
 ### Environment Variables
 
 The tool respects standard proxy environment variables:
@@ -28,9 +37,9 @@ The tool uses Snyk authentication from the go-application-framework configuratio
 - OAuth tokens
 - Bearer tokens
 
-When authenticated, the tool will display your organizations with their IDs. The default organization is highlighted with a `[DEFAULT]` marker.
+When authenticated, the tool will display your organizations with their IDs. The default organization is indicated with `Default = Yes` and the entire line is highlighted in success color in colorized output.
 
-### Command Line Options
+### Flags
 
 - `--json` - Output results in JSON format
 - `--no-color` - Disable colored output
@@ -95,7 +104,7 @@ b2c3d4e5-f6a7-8901-bcde-f23456789012  e5f6a7b8-c901-def2-3456-7890abcdef12  Anot
 ### JSON Output
 
 ```bash
-snyk connectivity-check --json
+snyk tools connectivity-check --json --experimental
 ```
 
 ```json
@@ -103,7 +112,8 @@ snyk connectivity-check --json
   "proxyConfig": {
     "detected": false,
     "url": "",
-    "variable": ""
+    "variable": "",
+    "noProxy": ""
   },
   "hostResults": [
     {
@@ -148,13 +158,13 @@ If you see "PROXY AUTH REQUIRED", the tool has detected your proxy but needs aut
 - For other proxy auth types: Configure proxy credentials in your proxy URL
 
 #### DNS Errors
-If you see "DNS_ERROR" for multiple hosts:
+If you see "DNS ERROR" for multiple hosts:
 - Check your DNS configuration
 - Verify you can resolve external domains
 - Check if you need to use a corporate DNS server
 
 #### TLS/SSL Errors
-If you see "TLS/SSL_ERROR":
+If you see "TLS/SSL ERROR":
 - You may need to configure custom CA certificates
 - Set `NODE_EXTRA_CA_CERTS` to point to your CA bundle
 - Ensure your proxy (if any) isn't intercepting SSL
@@ -170,8 +180,8 @@ If authenticated but no organizations shown:
 - **OK**: Full connectivity verified
 - **REACHABLE**: Host is reachable but returned unexpected status
 - **BLOCKED**: Connection refused or blocked
-- **DNS_ERROR**: Cannot resolve hostname
-- **TLS/SSL_ERROR**: Certificate or TLS handshake issues
+- **DNS ERROR**: Cannot resolve hostname
+- **TLS/SSL ERROR**: Certificate or TLS handshake issues
 - **TIMEOUT**: Connection timed out
 - **PROXY AUTH REQUIRED (SUPPORTED)**: Proxy needs auth, type is supported
 - **PROXY AUTH REQUIRED (UNSUPPORTED)**: Proxy needs auth, type not supported
