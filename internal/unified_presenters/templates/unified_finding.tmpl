@@ -1,0 +1,148 @@
+{{define "finding_details"}}
+   Finding ID: {{ getFindingId . }}
+			{{- with (getVulnInfoURL .) }}
+   Info: {{ . }}
+			{{- end }}
+			{{- with (getIntroducedBy .) }}
+   Introduced by: {{ . }}
+			{{- end }}
+			{{- with (getIntroducedThrough .) }}
+   Introduced through: {{ . }}
+			{{- end }}
+			{{- if not (isLicenseFinding .) }}
+				{{- $riskScore := getFieldValueFrom . "Attributes.Risk.RiskScore.Value" -}}
+				{{- if $riskScore }}
+   Risk Score: {{ $riskScore }}
+				{{- else }}
+   Risk Score: N/A
+				{{- end }}
+			{{- end }}
+			{{- $reachability := getReachability . -}}
+			{{- if ne $reachability "N/A" }}
+   Reachability: {{ $reachability }}
+			{{- end }}
+
+{{end}}
+
+{{- define "details" -}}
+    {{- $sortedFindings := .Findings | sortFindingBy "Attributes.Rating.Severity" .Summary.SeverityOrderAsc }}
+    {{- $openFindings :=  $sortedFindings | filterFinding (isOpenFinding) }}
+    {{- $pendingIgnoreFindings := $sortedFindings | filterFinding (isPendingFinding) }}
+    {{- $ignoredFindings := $sortedFindings | filterFinding (isIgnoredFinding) }}
+    {{- $hasOpenFindings := gt (len $openFindings) 0 }}
+    {{- $hasPendingIgnoreFindings := gt (len $pendingIgnoreFindings) 0 }}
+    {{- $hasIgnoredFindings := gt (len $ignoredFindings) 0 }}
+    {{- if $hasOpenFindings }}{{ "Open Issues" | title }}
+		{{- range $finding := $openFindings }}
+			{{- $severity := getFieldValueFrom $finding "Attributes.Rating.Severity" -}}
+			{{- $title := getFieldValueFrom $finding "Attributes.Title" -}}
+			{{- printf " ✗ %s %s" (printf "[%s]" ($severity | toUpperCase) | renderInSeverityColor) ($title | bold) -}}
+			{{- template "finding_details" $finding -}}
+		{{- end }}
+    {{- end }}
+    {{- if $hasPendingIgnoreFindings }}
+		{{- range $finding := $pendingIgnoreFindings }}
+			{{- $severity := getFieldValueFrom $finding "Attributes.Rating.Severity" -}}
+			{{- $title := getFieldValueFrom $finding "Attributes.Title" -}}
+			{{- printf " ! [PENDING] %s %s" (printf "[%s]" ($severity | toUpperCase) | renderInSeverityColor) ($title | bold) -}}
+			{{- template "finding_details" $finding -}}
+		{{- end }}
+    {{- end }}
+    {{- if or (and $hasOpenFindings $hasIgnoredFindings) (eq (getValueFromConfig "include-ignores") "true") }}
+		{{- divider }}
+    {{- end}}
+{{- if eq (getValueFromConfig "include-ignores") "true" }}{{"Ignored Issues" | title }}
+	{{- if $hasIgnoredFindings -}}
+		{{- range $finding := $ignoredFindings}}
+			{{- $severity := getFieldValueFrom $finding "Attributes.Rating.Severity" -}}
+			{{- $title := getFieldValueFrom $finding "Attributes.Title" -}}
+			{{- printf " ! [IGNORED] %s %s" (printf "[%s]" ($severity | toUpperCase) | renderInSeverityColor) ($title | bold) -}}
+			{{- template "finding_details" $finding -}}
+		{{- end }}
+	{{- else}}  There are no ignored issues
+	{{- end -}}
+{{tip "Ignores are currently managed in the Snyk Web UI.\nTo edit or remove the ignore please go to: https://app.snyk.io/"}}
+{{- end}}
+{{- end}}{{/* end "details" */}}
+
+{{define "header" }}
+{{ $displayPath := constructDisplayPath .DisplayTargetFile -}}
+{{ print "Testing " $displayPath " ..." | bold }}
+{{end }}
+
+{{- define "summary"}}{{ "Test Summary" | bold }}
+
+  Organization:      {{ getValueFromConfig "internal_org_slug" }}
+  Test type:         {{ if eq .Summary.Type "sast" }}Static code analysis{{else}}{{ .Summary.Type }}{{ end}}
+  Project path:      {{ getValueFromConfig "targetDirectory" }}
+  
+  {{- $total := 0 }}{{- $open := 0 }}{{- $ignored := 0 }}
+  {{- range $res := .Summary.Results }}
+      {{- $total = add $total $res.Total }}
+      {{- $open = add $open $res.Open }}
+      {{- $ignored = add $ignored $res.Ignored }}
+  {{- end }}
+
+  Total issues:   {{ $total }}
+  {{- if gt $total 0}}
+  Ignored issues: {{ print $ignored | bold }} [
+  {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
+      {{- $countFound := 0 }}
+          {{- range $res := $.Summary.Results }}
+              {{- if eq $res.Severity $severity }}
+                  {{- $countFound = $res.Ignored }}
+              {{- end }}
+          {{- end}}
+      {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
+  {{- end}}]
+  Open issues:    {{ print $open | bold }} [
+  {{- range $severity := .Summary.SeverityOrderAsc | reverse }}
+      {{- $countFound := 0 }}
+          {{- range $res := $.Summary.Results }}
+              {{- if eq $res.Severity $severity }}
+                  {{- $countFound = $res.Open }}
+              {{- end }}
+          {{- end}}
+      {{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}
+  {{- end}}]{{- end}}
+{{- end }} {{/* end summary */}}
+
+{{- define "main" }}
+{{- range .Results}}
+    {{- template "header"  . }}
+
+    {{- $totalIssues := 0 }}
+    {{- range $res := .Summary.Results }}
+        {{- $totalIssues = add $totalIssues $res.Total }}
+    {{- end }}
+
+    {{- if gt .DependencyCount 0 -}}
+        {{- if eq $totalIssues 0 -}}
+            {{- printf "\n✔ Tested %d dependencies for known issues, no vulnerable paths found.\n" .DependencyCount | renderGreen -}}
+        {{- else -}}
+            {{- printf "\nTested %d dependencies for known issues, found %d issues, %d vulnerable paths.\n" .DependencyCount $totalIssues .VulnerablePathsCount -}}
+        {{- end -}}
+    {{- end }}
+
+    {{- template "details" . }}
+
+    {{- if not (eq (getValueFromConfig "severity-threshold") "") }}
+        {{ tip "You are currently viewing results with --severity-threshold applied.\nTo view all issues, remove the --severity-threshold flag"}}
+    {{- end }}
+
+    {{- "\n" }}
+
+    {{- box (renderToString "summary" .)}}
+
+    {{- if ne (getValueFromConfig "include-ignores") "true" }}
+
+        {{- tip "To view ignored issues, use the --include-ignores option."}}
+        {{- "\n" }}
+    {{- end }}
+
+{{- end }}
+
+
+{{- end }} {{/* end main */}}
+
+{{ template "main" . }}

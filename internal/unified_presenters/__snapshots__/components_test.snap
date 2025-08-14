@@ -1,0 +1,112 @@
+
+[Test_RenderError/colors_for_severity_warn - 1]
+
+[43m [0m[30;43mWARN[0m[43m [0m   [1mService temporarily throttled (SNYK-0001)[0m
+         The request rate limit has been exceeded. Wait a few minutes, then try again.  
+
+Status:  429 Too Many Requests 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0001 
+                                                                     
+---
+
+[Test_RenderError/colors_for_severity_warn - 2]
+
+[43m [0m[30;43mWARN[0m[43m [0m   [1mService temporarily throttled (SNYK-0001)[0m
+         The request rate limit has been exceeded. Wait a few minutes, then try again.  
+
+Status:  429 Too Many Requests 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0001 
+                                                                     
+---
+
+[Test_RenderError/colors_for_severity_error - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mService temporarily throttled (SNYK-0001)[0m
+         The request rate limit has been exceeded. Wait a few minutes, then try again.  
+
+Status:  429 Too Many Requests 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0001 
+                                                                     
+---
+
+[Test_RenderError/colors_for_severity_error - 2]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mService temporarily throttled (SNYK-0001)[0m
+         The request rate limit has been exceeded. Wait a few minutes, then try again.  
+
+Status:  429 Too Many Requests 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0001 
+                                                                     
+---
+
+[Test_RenderError/colors_for_severity_fatal - 1]
+
+[41m [0m[97;41mFATAL[0m[41m [0m  [1mService temporarily throttled (SNYK-0001)[0m
+         The request rate limit has been exceeded. Wait a few minutes, then try again.  
+
+Status:  429 Too Many Requests 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0001 
+                                                                     
+---
+
+[Test_RenderError/colors_for_severity_fatal - 2]
+
+[41m [0m[97;41mFATAL[0m[41m [0m  [1mService temporarily throttled (SNYK-0001)[0m
+         The request rate limit has been exceeded. Wait a few minutes, then try again.  
+
+Status:  429 Too Many Requests 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0001 
+                                                                     
+---
+
+[Test_RenderError/without_status_code - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mClient request cannot be processed (SNYK-0003)[0m
+         The server cannot process the request due to a client error, such as malformed 
+         request syntax, size too large, invalid request message framing, or deceptive  
+         request routing. Review the request and try again.                             
+                                                                                        
+           A short error description                                                    
+
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0003 
+                                                                     
+---
+
+[Test_RenderError/without_links - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mClient request cannot be processed[0m
+         The server cannot process the request due to a client error, such as malformed 
+         request syntax, size too large, invalid request message framing, or deceptive  
+         request routing. Review the request and try again.                             
+                                                                                        
+           A short error description                                                    
+
+Status:  400 Bad Request 
+---
+
+[Test_RenderError/with_links - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mUnable to process request (SNYK-9999)[0m
+         The server cannot process the request due to an unexpected error. Check Snyk   
+         status, then try again.                                                        
+                                                                                        
+           An error                                                                     
+
+Status:  500 Internal Server Error 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-9999 
+                                                                     
+---
+
+[Test_RenderError/with_context - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mUnable to process request (SNYK-9999)[0m
+         The server cannot process the request due to an unexpected error. Check Snyk   
+         status, then try again.                                                        
+                                                                                        
+           An error                                                                     
+
+Status:  500 Internal Server Error 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-9999 
+                                                                     
+ID:      urn:snyk:interaction:some-UUID 
+---

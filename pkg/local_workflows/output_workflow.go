@@ -89,8 +89,14 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
 
-	// Handle findings models, if none found, continue with the rest
-	input, err := output_workflow.HandleContentTypeFindingsModel(input, invocation, outputDestination)
+	//// Handle findings models, if none found, continue with the rest
+	//input, err := output_workflow.HandleContentTypeFindingsModel(input, invocation, outputDestination)
+	//if err != nil {
+	//	return output, err
+	//}
+
+	// Handle unified findings models, if none found, continue with the rest
+	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, outputDestination)
 	if err != nil {
 		return output, err
 	}
@@ -99,12 +105,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		mimeType := input[i].GetContentType()
 
 		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
-			outputSummary, err := filterSummaryOutput(config, input[i], debugLogger)
-			if err != nil {
-				debugLogger.Warn().Err(err).Msg("Failed to filter test summary output")
-				output = append(output, input[i])
-			}
-			output = append(output, outputSummary)
+			output = append(output, input[i])
 			continue
 		}
 

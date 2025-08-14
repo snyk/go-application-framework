@@ -1,0 +1,29 @@
+{{define "finding"}}
+{{- (renderToString "severity" . | toUpperCase | renderInSeverityColor )}} {{print .Attributes.Title | bold}}
+{{- if .Attributes.Suppression }}{{if eq .Attributes.Suppression.Status "ignored" }} [ IGNORED ]
+{{- else if eq .Attributes.Suppression.Status "pending_ignore_approval" }} [ PENDING IGNORE... ] {{- else}}{{end -}}
+{{- else}}{{end}}
+
+   Finding ID: {{ getFindingId . }}
+{{- range $location := .Attributes.Locations}}
+   {{- $sourceLoc := getSourceLocation $location }}
+   {{- if $sourceLoc }}
+   Path: {{$sourceLoc.FilePath}}, line {{$sourceLoc.FromLine}}
+   {{- end }}
+{{- end }}
+   Info: {{.Attributes.Description}}
+
+   {{- if .Attributes.Suppression}}
+   {{- if or (eq .Attributes.Suppression.Status "ignored") (eq .Attributes.Suppression.Status "pending_ignore_approval")}}
+
+   {{- if .Attributes.Suppression.Justification }}
+   Reason:     {{ .Attributes.Suppression.Justification }}
+   {{- end}}
+   {{- end}}
+   {{- end}}
+{{end}}
+
+{{- define "severity"}}
+  {{- if not (hasSuppression .) }} ✗ {{ else }} ! {{ end -}}
+  [{{.Attributes.Rating.Severity}}]
+{{- end}}

@@ -17,3 +17,10 @@ const (
 // DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.
 var DefaultTemplateFiles = presenters.DefaultTemplateFiles
 var ApplicationSarifTemplates = presenters.ApplicationSarifTemplates
+
+const (
+	// LocalUnifiedFindingModel is a constant for the local unified finding model content type.
+	LocalUnifiedFindingModel = "application/json; schema=local-unified-finding"
+	// LocalUnifiedSummaryModel is a constant for the local unified summary model content type.
+	LocalUnifiedSummaryModel = "application/json; schema=local-unified-summary"
+)
