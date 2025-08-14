@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/code-client-go/sarif"
@@ -101,9 +102,17 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 	config := invocationCtx.GetConfiguration()
 	id := invocationCtx.GetWorkflowIdentifier()
 
-	if !config.GetBool(ConfigIgnoreApprovalEnabled) {
+	enabled, enabledError := config.GetBoolWithError(ConfigIgnoreApprovalEnabled)
+	if enabledError != nil {
+		return nil, enabledError
+	}
+
+	if !enabled {
 		orgName := config.GetString(configuration.ORGANIZATION_SLUG)
-		return nil, cli.NewFeatureNotEnabledError(fmt.Sprintf("The Ignore Approval Workflow feature must be enabled for the %s organization. Enable it in your organization settings: Settings > General > Ignore approval workflow for Snyk Code.", orgName))
+		appUrl := config.GetString(configuration.WEB_APP_URL)
+		settingsUrl := fmt.Sprintf("%s/org/%s/manage/settings", appUrl, orgName)
+		disabledError := cli.NewFeatureNotEnabledError(fmt.Sprintf(`Ignore Approval Workflow is disabled for "%s".`, orgName), snyk_errors.WithLinks([]string{settingsUrl}))
+		return nil, disabledError
 	}
 
 	interactive := config.GetBool(InteractiveKey)
