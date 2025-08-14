@@ -114,6 +114,11 @@ func UpdatePath(pathExtension string, prepend bool) string {
 		return currentPath
 	}
 
+	if currentPath == "" {
+		_ = os.Setenv(PathEnvVarName, pathExtension)
+		return pathExtension
+	}
+
 	currentPathEntries := strings.Split(currentPath, string(os.PathListSeparator))
 	addPathEntries := strings.Split(pathExtension, string(os.PathListSeparator))
 
