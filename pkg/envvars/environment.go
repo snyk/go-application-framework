@@ -20,24 +20,48 @@ const (
 	ShellEnvVarName = "SHELL"
 )
 
-// LoadConfiguredEnvironment updates the environment with local configuration. Precedence as follows:
-//  1. std folder-based config files
-//  2. given command-line parameter config file
-//  3. std config file in home directory
-//  4. global shell configuration
+// LoadConfiguredEnvironment updates the environment with local configuration.
+// First the user's SHELL is read, then the configuration files.
+// Any new PATH is prepended to the existing PATH.
+// See LoadShellEnvironment and LoadConfigFiles.
 func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
+	LoadShellEnvironment()
+
+	LoadConfigFiles(customConfigFiles, workingDirectory)
+}
+
+// LoadShellEnvironment loads the user's shell environment and prepends
+// any PATH entries to the current PATH. This ensures shell PATH takes precedence.
+func LoadShellEnvironment() {
 	bashOutput := getEnvFromShell("bash")
 
+	// Prepend the Bash PATH now, as it is low priority
+	// We use the Bash shell env as well, since the more info scraping the better to help OSS scans
+	env := gotenv.Parse(strings.NewReader(bashOutput))
+	if val, ok := env[PathEnvVarName]; ok {
+		UpdatePath(val, true)
+	}
+
 	// this is applied at the end always, as it does not overwrite existing variables
+	// We use the Bash shell env as well, since the more info scraping the better to help OSS scans
 	defer func() { _ = gotenv.Apply(strings.NewReader(bashOutput)) }() //nolint:errcheck // we can't do anything with the error
 
-	env := gotenv.Parse(strings.NewReader(bashOutput))
+	env = gotenv.Parse(strings.NewReader(bashOutput))
 	specificShell, ok := env[ShellEnvVarName]
 	if ok {
 		fromSpecificShell := getEnvFromShell(specificShell)
 		_ = gotenv.Apply(strings.NewReader(fromSpecificShell)) //nolint:errcheck // we can't do anything with the error
-	}
 
+		env = gotenv.Parse(strings.NewReader(fromSpecificShell))
+		if val, ok := env[PathEnvVarName]; ok {
+			UpdatePath(val, true)
+		}
+	}
+}
+
+// LoadConfigFiles loads configuration files and prepends any PATH entries
+// to the current PATH. This ensures config file PATH takes precedence.
+func LoadConfigFiles(customConfigFiles []string, workingDirectory string) {
 	// process config files
 	for _, file := range customConfigFiles {
 		if !filepath.IsAbs(file) {
@@ -63,19 +87,20 @@ func loadFile(fileName string) {
 
 // guard against command injection
 var shellWhiteList = map[string]bool{
-	"bash":          true,
-	"/bin/zsh":      true,
-	"/bin/sh":       true,
-	"/bin/fish":     true,
-	"/bin/csh":      true,
-	"/bin/ksh":      true,
-	"/bin/bash":     true,
-	"/usr/bin/zsh":  true,
-	"/usr/bin/sh":   true,
-	"/usr/bin/fish": true,
-	"/usr/bin/csh":  true,
-	"/usr/bin/ksh":  true,
-	"/usr/bin/bash": true,
+	"bash":                   true,
+	"/bin/zsh":               true,
+	"/bin/sh":                true,
+	"/bin/fish":              true,
+	"/bin/csh":               true,
+	"/bin/ksh":               true,
+	"/bin/bash":              true,
+	"/usr/bin/zsh":           true,
+	"/usr/bin/sh":            true,
+	"/usr/bin/fish":          true,
+	"/usr/bin/csh":           true,
+	"/usr/bin/ksh":           true,
+	"/usr/bin/bash":          true,
+	"/opt/homebrew/bin/bash": true,
 }
 
 func getEnvFromShell(shell string) string {
