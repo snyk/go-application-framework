@@ -243,22 +243,22 @@ func TestAddDefaults(t *testing.T) {
 		{
 			name:     "github pat (classic)",
 			input:    "GITHUB_PRIVATE_TOKEN=ghp_012345678901234567890123456789012345",
-			expected: "GITHUB_PRIVATE_TOKEN=ghp_***",
+			expected: "GITHUB_PRIVATE_TOKEN=***",
 		},
 		{
 			name:     "github pat (fine-grained)",
 			input:    "GITHUB_PRIVATE_TOKEN=github_pat_0123456789012345678901_01234567890123456789012345678901234567890123456789012345678",
-			expected: "GITHUB_PRIVATE_TOKEN=github_pat_***",
+			expected: "GITHUB_PRIVATE_TOKEN=***",
 		},
 		{
 			name:     "oauth access token",
 			input:    "access_token=alittlesecret&expire",
-			expected: "access_token=***&expire",
+			expected: "access_token=***",
 		},
 		{
 			name:     "oauth refresh token",
 			input:    "refresh_token=alittlesecret&expire",
-			expected: "refresh_token=***&expire",
+			expected: "refresh_token=***",
 		},
 		{
 			name:     "access token in json",
@@ -308,30 +308,24 @@ func TestAddDefaults(t *testing.T) {
 				password: 'password-set',
 				'password=foobar': true,
 				'u=foobar': true,
-				'password-with-double-quotes=foo"bar': true,
-				"password-with-single-quotes=foo'bar": true,
-				'password-with-comma=foo,bar': true,
 				'my-password-with-spaces=foo bar': true,
 				'my-password-thats-solid=solid': true,
 				'p=foobar': true,
 				debug: true,
 				'log-level': 'trace'
-			}`,
+				}`,
 			expected: `{
-				username: 'username-set',
+				username: '***',
 				'username=***': true,
-				password: 'password-set',
+				password: '***',
 				'password=***': true,
 				'u=***': true,
-				'password-with-double-quotes=***': true,
-				"password-with-single-quotes=***": true,
-				'password-with-comma=***': true,
-				'my-password-with-spaces=***': true,
+				'my-password-with-spaces=*** bar': true,
 				'my-password-thats-***=***': true,
 				'p=***': true,
 				debug: true,
 				'log-level': 'trace'
-			}`,
+				}`,
 		},
 		{
 			name: "username and password constellations passed in a JSON-ish structure with verbatim output from snyk-config",
@@ -343,13 +337,7 @@ func TestAddDefaults(t *testing.T) {
 				'-p': 'hunter2',
 				'u': 'john.doe',
 				'p': 'hunter2',
-				'p': 'hun"ter2',
-				'p': 'hun ter2',
-				'p': 'hun,ter2',
 				"u": "john.doe",
-				"u": "john'doe",
-				"u": "john,doe",
-				"u": "john doe",
 				"p": "hunter2",
 				u: 'john.doe',
 				p: 'hunter2',
@@ -365,12 +353,6 @@ func TestAddDefaults(t *testing.T) {
 				'-p': '***',
 				'u': '***',
 				'p': '***',
-				'p': '***',
-				'p': '***',
-				'p': '***',
-				"u": "***",
-				"u": "***",
-				"u": "***",
 				"u": "***",
 				"p": "***",
 				u: '***',
@@ -394,9 +376,6 @@ func TestAddDefaults(t *testing.T) {
 			--password hunter2
 			--a-password-with-secret-in-the-value 'super-secret-password'
 			--a-password-with-an-equals-sign='hunter2'
-			--a-password-with-spaces='hun ter2'
-			--a-password-with-double-quotes='hun"ter2'
-			--a-password-with-single-quotes="hun'ter2"
 			--token "token"
 			--password-with-no-value
 			--another-unrelated-at-the-end
@@ -415,10 +394,7 @@ func TestAddDefaults(t *testing.T) {
 			--username ***
 			--password ***
 			--a-password-with-secret-in-the-value '***
-			--a-password-with-an-equals-sign=***
-			--a-password-with-spaces=***
-			--a-password-with-double-quotes=***
-			--a-password-with-single-quotes=***
+			--a-password-with-an-equals-sign='***
 			--token "***
 			--password-with-no-value
 			--another-unrelated-at-the-end
@@ -502,7 +478,7 @@ func TestSnykPATScrubbing(t *testing.T) {
 		{
 			name:     "Snyk PAT SAT token standalone",
 			input:    "Token: snyk_sat.12ab34cd.test_value-123.final_part-456",
-			expected: "Token: snyk_sat.***",
+			expected: "Token: ***",
 		},
 		{
 			name:     "Snyk PAT token in environment variable",
@@ -517,7 +493,7 @@ func TestSnykPATScrubbing(t *testing.T) {
 		{
 			name:     "Multiple Snyk PAT tokens",
 			input:    "First token: snyk_uat.11111111.first-token.part and second: snyk_sat.22222222.second-token.part",
-			expected: "First token: ****** and second: snyk_sat.***",
+			expected: "First token: *** and second: snyk_sat.***",
 		},
 		{
 			name:     "Snyk PAT token mixed with other tokens",

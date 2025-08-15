@@ -249,13 +249,24 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
-	// CLI argument mapping from the snyk-config debug logging
-	// I.e., if --argument=value is passed, it will be logged as { 'argument=value': true }
-	// s = fmt.Sprintf(`(?im)(%s)[^=]*=(?P<value>.*)['"]`, kws)
-	// dict[s] = scrubStruct{
-	// 	groupToRedact: 2,
-	// 	regex:         regexp.MustCompile(s),
-	// }
+	// CLI argument mapping from the snyk-config debug logging, handles:
+	// - username: 'value'
+	// - 'username=value': true
+	// - 'u=value': true
+	// - --a-password-with-secret-in-the-value 'value'
+	// - --a-password-with-secret-in-the-value=value
+	s = fmt.Sprintf(`(?im)(['"]?)([^'"\s,}]*?(?:%s)[^'"\s,}]*?)(?:\s*[:=]\s*|['"]?\s*=\s*['"]?)(['"]?)([^'"\s,}]*?)(?:['"]?\s*[,}\s]|$)`, kws)
+	dict[s] = scrubStruct{
+		groupToRedact: 4,
+		regex:         regexp.MustCompile(s),
+	}
+
+	// Additional pattern for the specific case: 'key=value': true
+	s = fmt.Sprintf(`(?im)['"]([^'"\s,}]*?(?:%s)[^'"\s,}]*?=)([^'"\s,}]*?)['"]`, kws)
+	dict[s] = scrubStruct{
+		groupToRedact: 2,
+		regex:         regexp.MustCompile(s),
+	}
 
 	// Same as above, only with short form
 	shorts := []string{"p", "u"}
@@ -293,7 +304,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	}
 
 	// Long-form, rest is covered by the JSON scrubbing above
-	s = `(?i)(["']?\wkey[\w-]"?)\s?[:|=, ]\s?["']?([^"'\s]*)["']?`
+	s = fmt.Sprintf(`(?im)(--[^=\s"']*(?:%s)[^=\s"']*)[\s=]+['"]?([^'"\n]*?)`, kws)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
