@@ -59,30 +59,60 @@ func LoadShellEnvironment() {
 	}
 }
 
-// LoadConfigFiles loads configuration files and prepends any PATH entries
-// to the current PATH. This ensures config file PATH takes precedence.
+// LoadConfigFiles loads environment variables from configuration files.
+// Handles PATH and SDK environment variables specially.
+// The resultant PATH is constructed as follows:
+// 1. Config file PATH entries (highest precedence)
+// 2. SDK bin directories (if SDK variables like JAVA_HOME, GOROOT are set by the config file)
+// 3. Previous PATH entries (lowest precedence)
 func LoadConfigFiles(customConfigFiles []string, workingDirectory string) {
-	// process config files
-	for _, file := range customConfigFiles {
-		if !filepath.IsAbs(file) {
-			file = filepath.Join(workingDirectory, file)
+	// Capture current SDK environment variables and track their latest values
+	sdkVarNames := []string{"JAVA_HOME", "GOROOT"}
+	sdkValues := make(map[string]string)
+	for _, sdkVar := range sdkVarNames {
+		sdkValues[sdkVar] = os.Getenv(sdkVar)
+		// Unset the env var so we can capture if the config file sets it.
+		_ = os.Unsetenv(sdkVar)
+	}
+
+	// Process config files
+	for _, envFilePath := range customConfigFiles {
+		if !filepath.IsAbs(envFilePath) {
+			envFilePath = filepath.Join(workingDirectory, envFilePath)
 		}
-		loadFile(file)
+
+		// Preserve original PATH and unset it so our prepending / appending logic works correctly
+		previousPath := os.Getenv(PathEnvVarName)
+		_ = os.Unsetenv(PathEnvVarName)
+
+		// overwrite existing variables with file config
+		err := gotenv.OverLoad(envFilePath)
+		if err != nil {
+			continue
+		}
+
+		// Check if SDK variables were set by this config file and append their bin directories
+		for _, sdkVar := range sdkVarNames {
+			currentValue := os.Getenv(sdkVar)
+			if currentValue != "" {
+				binPath := filepath.Join(currentValue, "bin")
+				UpdatePath(binPath, false)
+				// Update our tracking and unset for the next file
+				sdkValues[sdkVar] = currentValue
+				_ = os.Unsetenv(sdkVar)
+			}
+		}
+
+		// Add previous PATH to the end of the new
+		UpdatePath(previousPath, false)
 	}
-}
 
-func loadFile(fileName string) {
-	// preserve path
-	previousPath := os.Getenv(PathEnvVarName)
-
-	// overwrite existing variables with file config
-	err := gotenv.OverLoad(fileName)
-	if err != nil {
-		return
+	// Set final SDK values (latest from config files, or original if not overridden)
+	for _, sdkVar := range sdkVarNames {
+		if sdkValues[sdkVar] != "" {
+			_ = os.Setenv(sdkVar, sdkValues[sdkVar])
+		}
 	}
-
-	// add previous path to the end of the new
-	UpdatePath(previousPath, false)
 }
 
 // guard against command injection
