@@ -17,6 +17,8 @@ func Init(engine workflow.Engine) error {
 		InitConfigWorkflow,
 		InitDataTransformationWorkflow,
 		InitFilterFindingsWorkflow,
+		InitToolsWorkflowList,
+		InitToolsWorkflowShow,
 	}
 
 	for i := range initMethods {
