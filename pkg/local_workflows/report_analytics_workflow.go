@@ -70,7 +70,9 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		return nil, fmt.Errorf("set `--experimental` flag to enable analytics report command")
 	}
 
-	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", config.GetString(configuration.API_URL), config.Get(configuration.ORGANIZATION), reportAnalyticsAPIVersion)
+	organization := getOrganizationOrDefaultIfEmpty(config)
+
+	url := fmt.Sprintf("%s/hidden/orgs/%s/analytics?version=%s", config.GetString(configuration.API_URL), organization, reportAnalyticsAPIVersion)
 
 	commandLineInput := config.GetString(reportAnalyticsInputDataFlagName)
 	if commandLineInput != "" {
@@ -142,6 +144,16 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 		}
 	}
 	return nil, nil
+}
+
+func getOrganizationOrDefaultIfEmpty(config configuration.Configuration) string {
+	organization := config.GetString(configuration.ORGANIZATION)
+	if organization == "" {
+		// This will delete only the ORGANIZATION key from cache
+		config.Set(configuration.ORGANIZATION, nil)
+		organization = config.GetString(configuration.ORGANIZATION)
+	}
+	return organization
 }
 
 func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data, url string) error {
