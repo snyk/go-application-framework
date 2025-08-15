@@ -209,6 +209,39 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 	require.Error(t, err)
 }
 
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_handlesEmptyOrganization(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	config := configuration.New()
+	orgId := "resolved-org-id"
+
+	// Don't set organization initially - it should be empty
+	// Add default value function that will return an org ID
+	config.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		return orgId, nil
+	})
+
+	config.Set(configuration.FLAG_EXPERIMENTAL, true)
+
+	ctrl := gomock.NewController(t)
+	engineMock := mocks.NewMockEngine(ctrl)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
+
+	requestPayload := testGetAnalyticsV2PayloadString()
+	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
+
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
+
+	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
+
+	require.NoError(t, err)
+}
+
 func testPayload(payload string) workflow.Data {
 	return workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(payload))
 }
@@ -341,4 +374,69 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *h
 		}
 	})
 	return mockClient
+}
+
+func Test_getOrganizationOrDefaultIfEmpty_returnsExistingOrganization(t *testing.T) {
+	config := configuration.New()
+	orgId := "existing-org-id"
+	config.Set(configuration.ORGANIZATION, orgId)
+
+	result := getOrganizationOrDefaultIfEmpty(config)
+
+	require.Equal(t, orgId, result)
+}
+
+func Test_getOrganizationOrDefaultIfEmpty_clearsCache_whenOrganizationIsEmpty(t *testing.T) {
+	config := configuration.New()
+	// Don't set organization - it should be empty initially
+
+	// First call should return empty
+	firstResult := config.GetString(configuration.ORGANIZATION)
+	require.Equal(t, "", firstResult)
+
+	// Now set a default value function that returns a non-empty value
+	config.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		return "default-org-id", nil
+	})
+
+	result := getOrganizationOrDefaultIfEmpty(config)
+
+	// verify that it got the default value after cache clear
+	require.Equal(t, "default-org-id", result)
+}
+
+func Test_getOrganizationOrDefaultIfEmpty_doesNotClearCache_whenOrganizationExists(t *testing.T) {
+	// setup - create config with caching enabled
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(configuration.NoCacheExpiration))
+	orgId := "existing-org-id"
+
+	// Add a default value function that will be called ONCE to populate cache
+	defaultFunctionCallCount := 0
+	config.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		defaultFunctionCallCount++
+		// Return the orgId to simulate getting it from API or other source
+		return orgId, nil
+	})
+
+	// First call - this will call the default function and cache the result
+	firstResult := config.GetString(configuration.ORGANIZATION)
+	require.Equal(t, orgId, firstResult)
+	require.Equal(t, 1, defaultFunctionCallCount, "Default function should be called once to populate cache")
+
+	// Reset the call count to track subsequent calls
+	defaultFunctionCallCount = 0
+
+	// Now update the default function to track if it gets called again (it shouldn't)
+	config.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		defaultFunctionCallCount++
+		t.Error("Default function should never be called when organization is cached")
+		return "should-not-be-returned", nil
+	})
+
+	// test - this should return cached value without calling default function
+	result := getOrganizationOrDefaultIfEmpty(config)
+
+	// verify that it returns the cached value and default function was not called again
+	require.Equal(t, orgId, result)
+	require.Equal(t, 0, defaultFunctionCallCount, "Default function should not have been called - value should come from cache")
 }

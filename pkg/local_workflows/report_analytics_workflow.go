@@ -149,7 +149,7 @@ func reportAnalyticsEntrypoint(invocationCtx workflow.InvocationContext, inputDa
 func getOrganizationOrDefaultIfEmpty(config configuration.Configuration) string {
 	organization := config.GetString(configuration.ORGANIZATION)
 	if organization == "" {
-		// This will delete only the ORGANIZATION key from cache
+		// This will delete the cached value for the ORGANIZATION key from cache
 		config.Set(configuration.ORGANIZATION, nil)
 		organization = config.GetString(configuration.ORGANIZATION)
 	}
