@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -469,7 +470,7 @@ func (ev *extendedViper) GetWithError(key string) (interface{}, error) {
 		err = errors.Join(err, defErr)
 
 		// if enabled and no error occurred, store value in cache
-		if cacheEnabled && err == nil {
+		if cacheEnabled && err == nil && !utils.IsEmpty(value) {
 			localDefaultCache.Set(key, value, cacheDuration)
 		}
 	}

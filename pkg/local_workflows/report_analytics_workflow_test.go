@@ -209,6 +209,39 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 	require.Error(t, err)
 }
 
+func Test_ReportAnalytics_ReportAnalyticsEntryPoint_handlesEmptyOrganization(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	config := configuration.New()
+	orgId := "resolved-org-id"
+
+	// Don't set organization initially - it should be empty
+	// Add default value function that will return an org ID
+	config.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		return orgId, nil
+	})
+
+	config.Set(configuration.FLAG_EXPERIMENTAL, true)
+
+	ctrl := gomock.NewController(t)
+	engineMock := mocks.NewMockEngine(ctrl)
+	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
+	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
+
+	requestPayload := testGetAnalyticsV2PayloadString()
+	mockClient := testGetMockHTTPClient(t, orgId, requestPayload)
+
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
+
+	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
+
+	require.NoError(t, err)
+}
+
 func testPayload(payload string) workflow.Data {
 	return workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(payload))
 }
@@ -342,3 +375,4 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *h
 	})
 	return mockClient
 }
+
