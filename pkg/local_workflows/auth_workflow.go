@@ -107,6 +107,7 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(authTypeParameter, authType)
 
+	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
@@ -128,12 +129,9 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		}
 	} else if strings.EqualFold(authType, auth.AUTH_TYPE_PAT) { // PAT flow
 		engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_TOKEN)
-
-		oldToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 		pat := config.GetString(ConfigurationNewAuthenticationToken)
 
 		logger.Print("Unset existing auth keys from config")
-
 		logger.Print("Validating pat")
 		whoamiConfig := config.Clone()
 		// we don't want to use the cache here, so this is a workaround
@@ -143,8 +141,8 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		_, whoamiErr := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("whoami"), whoamiConfig)
 		if whoamiErr != nil {
 			// reset config file
-			if len(oldToken) > 0 {
-				config.Set(auth.CONFIG_KEY_TOKEN, oldToken)
+			if len(existingSnykToken) > 0 {
+				config.Set(auth.CONFIG_KEY_TOKEN, existingSnykToken)
 			}
 			return whoamiErr
 		}
