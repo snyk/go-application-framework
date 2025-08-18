@@ -107,9 +107,12 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 	logger.Printf("Authentication Type: %s", authType)
 	analytics.AddExtensionStringValue(authTypeParameter, authType)
 
+	// always attempt to clear existing tokens before triggering auth
+	config.Unset(configuration.AUTHENTICATION_TOKEN)
+	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)
-		config.Unset(configuration.AUTHENTICATION_TOKEN)
 
 		headless := config.GetBool(headlessFlag)
 		logger.Printf("Headless: %v", headless)
@@ -130,8 +133,6 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		pat := config.GetString(ConfigurationNewAuthenticationToken)
 
 		logger.Print("Unset existing auth keys from config")
-		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
-		config.Unset(configuration.AUTHENTICATION_TOKEN)
 
 		logger.Print("Validating pat")
 		whoamiConfig := config.Clone()
@@ -159,7 +160,6 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		}
 	} else { // LEGACY flow
 		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
-		config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 		config.Set(configuration.WORKFLOW_USE_STDIO, true)
