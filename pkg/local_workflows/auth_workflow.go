@@ -109,12 +109,11 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth
+	logger.Print("Unset existing auth keys from config")
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
-		logger.Printf("Unset legacy token key %q from config", configuration.AUTHENTICATION_TOKEN)
-
 		headless := config.GetBool(headlessFlag)
 		logger.Printf("Headless: %v", headless)
 
@@ -131,7 +130,6 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_TOKEN)
 		pat := config.GetString(ConfigurationNewAuthenticationToken)
 
-		logger.Print("Unset existing auth keys from config")
 		logger.Print("Validating pat")
 		whoamiConfig := config.Clone()
 		// we don't want to use the cache here, so this is a workaround
@@ -157,8 +155,6 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 			logger.Debug().Err(err).Msg("Failed to output authenticated message")
 		}
 	} else { // LEGACY flow
-		logger.Printf("Unset oauth key %q from config", auth.CONFIG_KEY_OAUTH_TOKEN)
-
 		config.Set(configuration.RAW_CMD_ARGS, os.Args[1:])
 		config.Set(configuration.WORKFLOW_USE_STDIO, true)
 		config.Set(configuration.AUTHENTICATION_TOKEN, "") // clear token to avoid using it during authentication
