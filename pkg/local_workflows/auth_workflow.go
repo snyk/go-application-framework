@@ -60,7 +60,6 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
 
-	// always attempt to clear existing tokens before triggering auth
 	config.ClearCache()
 
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
