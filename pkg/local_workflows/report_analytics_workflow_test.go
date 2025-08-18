@@ -242,10 +242,6 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_handlesEmptyOrganization(t *
 	require.NoError(t, err)
 }
 
-func testPayload(payload string) workflow.Data {
-	return workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(payload))
-}
-
 func testGetAnalyticsV2PayloadString() string {
 	return fmt.Sprintf(`{
   "data": {
@@ -376,3 +372,6 @@ func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *h
 	return mockClient
 }
 
+func testPayload(payload string) workflow.Data {
+	return workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_REPORT_ANALYTICS, reportAnalyticsWorkflowName), "application/json", []byte(payload))
+}
