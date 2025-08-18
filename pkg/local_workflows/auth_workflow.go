@@ -109,7 +109,9 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth
-	logger.Print("Unset existing auth keys from config")
+	logger.Print("Unset existing auth keys and clear config cache")
+	config.ClearCache()
+
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
@@ -133,7 +135,6 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		logger.Print("Validating pat")
 		whoamiConfig := config.Clone()
 		// we don't want to use the cache here, so this is a workaround
-		whoamiConfig.ClearCache()
 		whoamiConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
 		whoamiConfig.Set(configuration.AUTHENTICATION_TOKEN, pat)
 		_, whoamiErr := engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("whoami"), whoamiConfig)
