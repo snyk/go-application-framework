@@ -112,7 +112,6 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth
 	logger.Print("Unset existing auth keys and clear config cache")
-
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
