@@ -163,6 +163,74 @@ func Test_pat(t *testing.T) {
 	})
 }
 
+func Test_clearAllCredentialsBeforeAuth(t *testing.T) {
+	mockCtl := gomock.NewController(t)
+	defer mockCtl.Finish()
+
+	logContent := &bytes.Buffer{}
+	logger := zerolog.New(logContent)
+	analytics := analytics.New()
+	engine := mocks.NewMockEngine(mockCtl)
+	authenticator := mocks.NewMockAuthenticator(mockCtl)
+
+	testCases := []struct {
+		name       string
+		authType   string
+		setupMocks func()
+	}{
+		{
+			name:     "OAuth flow clears all credentials",
+			authType: auth.AUTH_TYPE_OAUTH,
+			setupMocks: func() {
+				authenticator.EXPECT().Authenticate().Return(nil)
+			},
+		},
+		{
+			name:     "PAT flow clears all credentials",
+			authType: auth.AUTH_TYPE_PAT,
+			setupMocks: func() {
+				engine.EXPECT().GetConfiguration().Return(configuration.NewWithOpts()).AnyTimes()
+				engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+		},
+		{
+			name:     "Token flow clears all credentials",
+			authType: auth.AUTH_TYPE_TOKEN,
+			setupMocks: func() {
+				engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(authTypeParameter, tc.authType)
+			if tc.authType == auth.AUTH_TYPE_PAT {
+				config.Set(ConfigurationNewAuthenticationToken, "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456")
+			}
+
+			// Set existing tokens that should be cleared
+			config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "existing-oauth-token")
+			config.Set(configuration.AUTHENTICATION_TOKEN, "existing-auth-token")
+
+			mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
+			mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
+			mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+			mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
+
+			tc.setupMocks()
+
+			err := entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+			assert.NoError(t, err)
+
+			// Verify both tokens are cleared regardless of auth type
+			assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "OAuth token should be cleared for %s flow", tc.authType)
+			assert.Empty(t, config.GetString(configuration.AUTHENTICATION_TOKEN), "Authentication token should be cleared for %s flow", tc.authType)
+		})
+	}
+}
+
 func Test_autodetectAuth(t *testing.T) {
 	t.Run("in stable versions, token by default", func(t *testing.T) {
 		expected := auth.AUTH_TYPE_OAUTH
