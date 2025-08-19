@@ -81,13 +81,16 @@ func LoadConfigFiles(customConfigFiles []string, workingDirectory string) {
 			envFilePath = filepath.Join(workingDirectory, envFilePath)
 		}
 
-		// Preserve original PATH and unset it so our prepending / appending logic works correctly
+		// Preserve original PATH and unset it to ensure correct precedence order.
+		// Without unsetting, if the config file has no PATH, SDK bins will be appended to original PATH (wrong precedence).
 		previousPath := os.Getenv(PathEnvVarName)
 		_ = os.Unsetenv(PathEnvVarName)
 
 		// overwrite existing variables with file config
 		err := gotenv.OverLoad(envFilePath)
 		if err != nil {
+			// Restore PATH if config file loading failed.
+			_ = os.Setenv(PathEnvVarName, previousPath)
 			continue
 		}
 
