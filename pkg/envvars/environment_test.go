@@ -145,8 +145,8 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 func TestLoadConfigFiles(t *testing.T) {
 	t.Run("should load config files and prepend PATH", func(t *testing.T) {
 		dir := t.TempDir()
-		originalPath := "original" + pathListSep + "existing"
-		t.Setenv("PATH", originalPath)
+		originalPathValue := "original_path"
+		t.Setenv("PATH", originalPathValue)
 
 		// Create a config file with PATH entry (no overlapping paths)
 		configFileName := filepath.Join(dir, ".snyk.env")
@@ -161,14 +161,14 @@ func TestLoadConfigFiles(t *testing.T) {
 		require.Equal(t, "test_value", os.Getenv("TEST_VAR"))
 
 		// Verify PATH was prepended (config path should come first)
-		expectedPath := "config" + pathListSep + "file" + pathListSep + "original" + pathListSep + "existing"
+		expectedPath := "config" + pathListSep + "file" + pathListSep + originalPathValue
 		require.Equal(t, expectedPath, os.Getenv("PATH"))
 	})
 
 	t.Run("should handle relative config file paths", func(t *testing.T) {
 		dir := t.TempDir()
-		originalPath := "original"
-		t.Setenv("PATH", originalPath)
+		originalPathValue := "original_path"
+		t.Setenv("PATH", originalPathValue)
 
 		// Create a config file with relative path
 		configFileName := ".test.env"
@@ -181,7 +181,7 @@ func TestLoadConfigFiles(t *testing.T) {
 		LoadConfigFiles(files, dir)
 
 		// Verify PATH was prepended
-		expectedPath := "relative" + pathListSep + "path" + pathListSep + originalPath
+		expectedPath := "relative" + pathListSep + "path" + pathListSep + originalPathValue
 		require.Equal(t, expectedPath, os.Getenv("PATH"))
 	})
 
@@ -189,18 +189,18 @@ func TestLoadConfigFiles(t *testing.T) {
 		dir := t.TempDir()
 
 		// Set a pre-existing PATH value
-		originalPathValue := "/original/path"
+		originalPathValue := "original_path"
 		t.Setenv("PATH", originalPathValue)
 
 		// Test with JAVA_HOME unset and GOROOT originally set
 		t.Setenv("JAVA_HOME", "")
-		t.Setenv("GOROOT", "/usr/local/go")
+		t.Setenv("GOROOT", "system_go")
 
 		// Create a config file that sets SDK variables and PATH
 		configFileName := filepath.Join(dir, ".snyk.env")
-		configFilePathValue := "/opt/homebrew/bin"
-		configFileJavaHomeValue := "/opt/java"
-		configFileGoRootValue := "/usr/local/go"
+		configFilePathValue := "config_bin"
+		configFileJavaHomeValue := "project_java"
+		configFileGoRootValue := "project_go"
 		configContent := []byte("JAVA_HOME=" + configFileJavaHomeValue + "\nGOROOT=" + configFileGoRootValue + "\nPATH=" + configFilePathValue + "\n")
 		err := os.WriteFile(configFileName, configContent, 0660)
 		require.NoError(t, err)
@@ -209,11 +209,14 @@ func TestLoadConfigFiles(t *testing.T) {
 		LoadConfigFiles([]string{configFileName}, dir)
 
 		// Verify SDK variables were set
-		assert.Equal(t, "/opt/java", os.Getenv("JAVA_HOME"))
-		assert.Equal(t, "/usr/local/go", os.Getenv("GOROOT"))
+		assert.Equal(t, "project_java", os.Getenv("JAVA_HOME"))
+		assert.Equal(t, "project_go", os.Getenv("GOROOT"))
 
 		// Verify PATH order: config PATH, then SDK bins, then original PATH
-		expectedPath := configFilePathValue + pathListSep + configFileJavaHomeValue + "/bin" + pathListSep + configFileGoRootValue + "/bin" + pathListSep + originalPathValue
+		// Build expected paths using platform-appropriate separators
+		javaHomeBin := filepath.Join(configFileJavaHomeValue, "bin")
+		goRootBin := filepath.Join(configFileGoRootValue, "bin")
+		expectedPath := configFilePathValue + pathListSep + javaHomeBin + pathListSep + goRootBin + pathListSep + originalPathValue
 		assert.Equal(t, expectedPath, os.Getenv("PATH"))
 	})
 
@@ -221,12 +224,12 @@ func TestLoadConfigFiles(t *testing.T) {
 		dir := t.TempDir()
 
 		// Set a pre-existing PATH value
-		originalPathValue := "/original/path"
+		originalPathValue := "original_path"
 		t.Setenv("PATH", originalPathValue)
 
 		// Pre-set SDK variables (as if from IDE or system)
-		preExistingJavaHome := "/system/java"
-		preExistingGoRoot := "/system/go"
+		preExistingJavaHome := "system_java"
+		preExistingGoRoot := "system_go"
 		t.Setenv("JAVA_HOME", preExistingJavaHome)
 		t.Setenv("GOROOT", preExistingGoRoot)
 
@@ -251,17 +254,17 @@ func TestLoadConfigFiles(t *testing.T) {
 		dir := t.TempDir()
 
 		// Set a pre-existing PATH value
-		originalPathValue := "/original/path"
+		originalPathValue := "original_path"
 		t.Setenv("PATH", originalPathValue)
 
 		// Pre-set some SDK variables
-		preExistingJavaHome := "/system/java"
+		preExistingJavaHome := "system_java"
 		t.Setenv("JAVA_HOME", preExistingJavaHome)
 		t.Setenv("GOROOT", "")
 
 		// Create a config file that only changes GOROOT
 		configFileName := filepath.Join(dir, ".snyk.env")
-		configFileGoRootValue := "/project/go"
+		configFileGoRootValue := "project_go"
 		configContent := []byte("GOROOT=" + configFileGoRootValue + "\n")
 		err := os.WriteFile(configFileName, configContent, 0660)
 		require.NoError(t, err)
@@ -274,7 +277,9 @@ func TestLoadConfigFiles(t *testing.T) {
 		assert.Equal(t, configFileGoRootValue, os.Getenv("GOROOT"))
 
 		// Verify only GOROOT/bin was added to PATH (prepended before the original PATH)
-		expectedPath := configFileGoRootValue + "/bin" + pathListSep + originalPathValue
+		// Build expected path using platform-appropriate separators
+		goRootBin := filepath.Join(configFileGoRootValue, "bin")
+		expectedPath := goRootBin + pathListSep + originalPathValue
 		assert.Equal(t, expectedPath, os.Getenv("PATH"))
 	})
 
@@ -282,8 +287,11 @@ func TestLoadConfigFiles(t *testing.T) {
 		dir := t.TempDir()
 
 		// Set up PATH with JAVA_HOME/bin already in the middle
-		javaHomeValue := "/opt/java"
-		originalPathValue := "/system/bin" + pathListSep + javaHomeValue + "/bin" + pathListSep + "/usr/bin"
+		javaHomeValue := "project_java"
+		javaHomeBinPath := filepath.Join(javaHomeValue, "bin")
+		systemBin := "system_bin"
+		usrBin := "usr_bin"
+		originalPathValue := systemBin + pathListSep + javaHomeBinPath + pathListSep + usrBin
 		t.Setenv("PATH", originalPathValue)
 
 		// Pre-set JAVA_HOME (as if from IDE or system)
@@ -291,7 +299,7 @@ func TestLoadConfigFiles(t *testing.T) {
 
 		// Create a config file that sets JAVA_HOME to the same value
 		configFileName := filepath.Join(dir, ".snyk.env")
-		configFilePathValue := "/config/path"
+		configFilePathValue := "config_path"
 		configContent := []byte("JAVA_HOME=" + javaHomeValue + "\nPATH=" + configFilePathValue + "\n")
 		err := os.WriteFile(configFileName, configContent, 0660)
 		require.NoError(t, err)
@@ -303,15 +311,17 @@ func TestLoadConfigFiles(t *testing.T) {
 		assert.Equal(t, javaHomeValue, os.Getenv("JAVA_HOME"))
 
 		// Verify PATH re-prioritization: config PATH, then JAVA_HOME/bin, then the original PATH with JAVA_HOME/bin deduplicated out
-		expectedPath := configFilePathValue + pathListSep + javaHomeValue + "/bin" + pathListSep + "/system/bin" + pathListSep + "/usr/bin"
+		// Build expected path using platform-appropriate separators
+		javaHomeBin := filepath.Join(javaHomeValue, "bin")
+		expectedPath := configFilePathValue + pathListSep + javaHomeBin + pathListSep + systemBin + pathListSep + usrBin
 		assert.Equal(t, expectedPath, os.Getenv("PATH"))
 	})
 }
 
 func TestLoadShellEnvironment(t *testing.T) {
 	t.Run("should load shell environment and prepend PATH", func(t *testing.T) {
-		originalPath := "original" + pathListSep + "path"
-		t.Setenv("PATH", originalPath)
+		originalPathValue := "original_path"
+		t.Setenv("PATH", originalPathValue)
 
 		// Note: This test will only work properly on non-Windows systems
 		// and when a shell is available. On Windows or in environments
