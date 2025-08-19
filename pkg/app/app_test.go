@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
@@ -209,6 +210,38 @@ func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
 	assert.Equal(t, defaultOrgId, actualOrgId)
 	assert.Equal(t, defaultOrgSlug, actualOrgSlug)
+}
+
+func Test_initConfiguration_failDefaultOrgLookup(t *testing.T) {
+	orgId := "someOrgId"
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertion
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("error")).Times(2)
+	mockApiClient.EXPECT().GetDefaultOrgId().Return(orgId, nil).Times(1)
+
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Second))
+	engine := workflow.NewWorkFlowEngine(config)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	actualOrgId, orgIdError := config.GetStringWithError(configuration.ORGANIZATION)
+	assert.Error(t, orgIdError)
+	assert.Empty(t, actualOrgId)
+
+	actualOrgSlug, slugError := config.GetStringWithError(configuration.ORGANIZATION_SLUG)
+	assert.Error(t, slugError)
+	assert.Empty(t, actualOrgSlug)
+
+	// ensure that if the error resolves, a valid value is returned
+	actualOrgId, orgIdError = config.GetStringWithError(configuration.ORGANIZATION)
+	assert.NoError(t, orgIdError)
+	assert.Equal(t, orgId, actualOrgId)
 }
 
 func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
