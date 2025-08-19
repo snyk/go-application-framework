@@ -20,9 +20,9 @@ const (
 	ShellEnvVarName = "SHELL"
 )
 
-// LoadConfiguredEnvironment updates the environment with local configuration.
-// First the user's SHELL is read, then the configuration files.
-// Any new PATH is prepended to the existing PATH.
+// LoadConfiguredEnvironment updates the environment with user and local configuration.
+// First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
+// The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
 // See LoadShellEnvironment and LoadConfigFiles.
 func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
 	LoadShellEnvironment()
@@ -30,37 +30,36 @@ func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory stri
 	LoadConfigFiles(customConfigFiles, workingDirectory)
 }
 
-// LoadShellEnvironment loads the user's shell environment and prepends
-// any PATH entries to the current PATH. This ensures shell PATH takes precedence.
+// LoadShellEnvironment loads the user's shell environment with special handling of PATHs.
+// First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read.
+// The Bash env PATH is appended to the existing PATH (as a fallback), the user's preferred SHELL's env PATH is prepended (preferential).
 func LoadShellEnvironment() {
-	bashOutput := getEnvFromShell("bash")
+	bashEnvOutput := getEnvFromShell("bash")
 
-	// Prepend the Bash PATH now, as it is low priority
-	// We use the Bash shell env as well, since the more info scraping the better to help OSS scans
-	env := gotenv.Parse(strings.NewReader(bashOutput))
-	if val, ok := env[PathEnvVarName]; ok {
-		UpdatePath(val, true)
+	// We first append the Bash PATH as a fallback for if the user's SHELL's env fails to read / parse.
+	// Note: We do this as the more info scraping the better to help ensure we can find binaries for OSS scans.
+	bashEnv := gotenv.Parse(strings.NewReader(bashEnvOutput))
+	if val, ok := bashEnv[PathEnvVarName]; ok {
+		UpdatePath(val, false)
 	}
 
-	// this is applied at the end always, as it does not overwrite existing variables
-	// We use the Bash shell env as well, since the more info scraping the better to help OSS scans
-	defer func() { _ = gotenv.Apply(strings.NewReader(bashOutput)) }() //nolint:errcheck // we can't do anything with the error
+	// this is applied at the end always, as we do not want it to overwrite existing variables from the user's preferred SHELL
+	defer func() { _ = gotenv.Apply(strings.NewReader(bashEnvOutput)) }() //nolint:errcheck // we can't do anything with the error
 
-	env = gotenv.Parse(strings.NewReader(bashOutput))
-	specificShell, ok := env[ShellEnvVarName]
+	preferredShell, ok := bashEnv[ShellEnvVarName]
 	if ok {
-		fromSpecificShell := getEnvFromShell(specificShell)
-		_ = gotenv.Apply(strings.NewReader(fromSpecificShell)) //nolint:errcheck // we can't do anything with the error
+		preferredShellEnvOutput := getEnvFromShell(preferredShell)
+		_ = gotenv.Apply(strings.NewReader(preferredShellEnvOutput)) //nolint:errcheck // we can't do anything with the error
 
-		env = gotenv.Parse(strings.NewReader(fromSpecificShell))
-		if val, ok := env[PathEnvVarName]; ok {
+		preferredShellEnv := gotenv.Parse(strings.NewReader(preferredShellEnvOutput))
+		if val, ok := preferredShellEnv[PathEnvVarName]; ok {
 			UpdatePath(val, true)
 		}
 	}
 }
 
 // LoadConfigFiles loads environment variables from configuration files.
-// Handles PATH and SDK environment variables specially.
+// With special handling for PATH and SDK environment variables.
 // The resultant PATH is constructed as follows:
 // 1. Config file PATH entries (highest precedence)
 // 2. SDK bin directories (if SDK variables like JAVA_HOME, GOROOT are set by the config file)
