@@ -210,7 +210,7 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 	o.config = config
 	//nolint:errcheck // breaking api change needed to fix this
 	o.token, _ = GetOAuthToken(config)
-	o.oauthConfig = getOAuthConfiguration(o.config)
+	o.oauthConfig = getOAuthConfiguration(config)
 	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
 
 	// set defaults
