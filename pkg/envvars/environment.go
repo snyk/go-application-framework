@@ -20,22 +20,30 @@ const (
 	ShellEnvVarName = "SHELL"
 )
 
-// LoadConfiguredEnvironment updates the environment with local configuration. Precedence as follows:
-//  1. std folder-based config files
-//  2. given command-line parameter config file
-//  3. std config file in home directory
-//  4. global shell configuration
+// LoadConfiguredEnvironment updates the environment with user and local configuration.
+// First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
+// The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
 func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
 	bashOutput := getEnvFromShell("bash")
 
 	// this is applied at the end always, as it does not overwrite existing variables
 	defer func() { _ = gotenv.Apply(strings.NewReader(bashOutput)) }() //nolint:errcheck // we can't do anything with the error
 
-	env := gotenv.Parse(strings.NewReader(bashOutput))
-	specificShell, ok := env[ShellEnvVarName]
+	bashEnv := gotenv.Parse(strings.NewReader(bashOutput))
+
+	if bashPATH, ok := bashEnv[PathEnvVarName]; ok {
+		UpdatePath(bashPATH, false)
+	}
+
+	specificShell, ok := bashEnv[ShellEnvVarName]
 	if ok {
 		fromSpecificShell := getEnvFromShell(specificShell)
 		_ = gotenv.Apply(strings.NewReader(fromSpecificShell)) //nolint:errcheck // we can't do anything with the error
+
+		specificShellEnv := gotenv.Parse(strings.NewReader(fromSpecificShell))
+		if specificShellPATH, ok := specificShellEnv[PathEnvVarName]; ok {
+			UpdatePath(specificShellPATH, true)
+		}
 	}
 
 	// process config files
