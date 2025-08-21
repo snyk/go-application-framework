@@ -105,6 +105,7 @@ func autoDetectAuthType(config configuration.Configuration) string {
 func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	config := invocationCtx.GetConfiguration()
+	globalConfig := invocationCtx.GetEngine().GetConfiguration()
 
 	authType := config.GetString(authTypeParameter)
 	if len(authType) == 0 {
@@ -115,10 +116,12 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 	analytics.AddExtensionStringValue(authTypeParameter, authType)
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
-	// always attempt to clear existing tokens before triggering auth
+	// always attempt to clear existing tokens before triggering auth for current config clone and global config
 	logger.Print("Unset existing auth keys")
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
+	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)
