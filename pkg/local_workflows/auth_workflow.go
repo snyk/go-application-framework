@@ -176,8 +176,6 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		if legacyCLIError != nil {
 			return legacyCLIError
 		}
-		newToken := config.Get(configuration.AUTHENTICATION_TOKEN)
-		globalConfig.Set(configuration.AUTHENTICATION_TOKEN, newToken)
 	}
 
 	return err
