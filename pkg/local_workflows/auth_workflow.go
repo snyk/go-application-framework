@@ -104,7 +104,7 @@ func autoDetectAuthType(config configuration.Configuration) string {
 
 func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
-	globalConfig := invocationCtx.GetEngine().GetConfiguration()
+	globalConfig := engine.GetConfiguration()
 	config := invocationCtx.GetConfiguration()
 
 	authType := config.GetString(authTypeParameter)
