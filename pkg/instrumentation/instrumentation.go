@@ -10,7 +10,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func getKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
+func GetKnownCommandsAndFlags(engine workflow.Engine) ([]string, []string) {
 	knownCommands := KNOWN_COMMANDS
 	knownFlags := known_flags
 
