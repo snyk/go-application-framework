@@ -62,6 +62,8 @@ const (
 	interactiveIgnoreRequestSubmissionMessage = "✅ Your ignore request has been submitted."
 
 	ConfigIgnoreApprovalEnabled = "internal_iaw_enabled"
+	ConfigIgnoreReasonRequired  = "internal_ignore_reason_required"
+	ConfigIgnoreSettings        = "internal_ignore_settings"
 )
 
 var reasonPromptHelpMap = map[string]string{
@@ -90,7 +92,9 @@ func InitIgnoreWorkflows(engine workflow.Engine) error {
 		return err
 	}
 
+	engine.GetConfiguration().AddDefaultValue(ConfigIgnoreSettings, getOrgIgnoreSettingsConfig(engine))
 	engine.GetConfiguration().AddDefaultValue(ConfigIgnoreApprovalEnabled, getOrgIgnoreApprovalEnabled(engine))
+	engine.GetConfiguration().AddDefaultValue(ConfigIgnoreReasonRequired, getOrgIgnoreReasonRequired(engine))
 
 	return nil
 }
@@ -113,6 +117,11 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		settingsUrl := fmt.Sprintf("%s/org/%s/manage/settings", appUrl, orgName)
 		disabledError := cli.NewFeatureNotEnabledError(fmt.Sprintf(`Ignore Approval Workflow is disabled for "%s".`, orgName), snyk_errors.WithLinks([]string{settingsUrl}))
 		return nil, disabledError
+	}
+
+	reasonRequired, reasonRequiredError := config.GetBoolWithError(ConfigIgnoreReasonRequired)
+	if reasonRequiredError != nil {
+		return nil, reasonRequiredError
 	}
 
 	interactive := config.GetBool(InteractiveKey)
@@ -184,7 +193,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		if !ok {
 			reasonHelp = reasonPromptHelp
 		}
-		reason, err = promptIfEmpty(reason, userInterface, reasonHelp, reasonDescription, isValidReason)
+		reason, err = promptIfEmpty(reason, userInterface, reasonHelp, reasonDescription, getReasonValidator(reasonRequired))
 		if err != nil {
 			return nil, err
 		}
@@ -213,7 +222,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 			return nil, cli.NewEmptyFlagOptionError("The expiration flag is required and cannot be empty. Provide it using the --expiration flag. The date format is YYYY-MM-DD or 'never' for no expiration.")
 		}
 
-		if reason == "" {
+		if reasonRequired && reason == "" {
 			return nil, cli.NewEmptyFlagOptionError("The reason flag is required and cannot be empty. Provide it using the --reason flag.")
 		}
 

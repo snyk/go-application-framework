@@ -322,6 +322,72 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.NotNil(t, err, "Should return an error when IAW FF is disabled")
 		assert.Nil(t, result, "result should be nil when IAW FF is disabled")
 	})
+	t.Run("reason not required - non-interactive mode success with empty reason", func(t *testing.T) {
+		expectedFindingsId := uuid.New().String()
+		expectedIgnoreType := string(policyApi.WontFix)
+		policyId := uuid.New().String()
+		responseMock := fmt.Sprintf(`{
+	  "data": {
+    "id": "%s",
+    "type": "policy",
+    "attributes": {
+      "action": {
+        "data": {
+          "ignore_type": "%s"
+        }
+      },
+      "action_type": "%s",
+      "conditions_group": {
+        "conditions": [
+          {
+            "field": "%s",
+            "operator": "%s",
+            "value": "%s"
+          }
+        ],
+        "logical_operator": "%s"
+      },
+      "created_by": {
+        "email": "%s"
+      },
+      "review": "%s"
+    }
+}}`, policyId, expectedIgnoreType, policyApi.PolicyAttributesActionTypeIgnore, policyApi.Snykassetfindingv1, policyApi.Includes, expectedFindingsId, policyApi.And, expectedUser, policyApi.PolicyReviewPending)
+		invocationContext := setupMockIgnoreContext(t, responseMock, http.StatusCreated)
+		config := invocationContext.GetConfiguration()
+		config.Set(InteractiveKey, false)
+		config.Set(ConfigIgnoreReasonRequired, false)
+
+		config.Set(FindingsIdKey, expectedFindingsId)
+		config.Set(IgnoreTypeKey, expectedIgnoreType)
+		config.Set(ReasonKey, "")
+		config.Set(ExpirationKey, "never")
+		config.Set(RemoteRepoUrlKey, testRepoUrl)
+		config.Set(configuration.API_URL, "https://api.snyk.io")
+		config.Set(EnrichResponseKey, true)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
+		assert.NoError(t, err)
+		assert.Greater(t, len(result), 0)
+	})
+	t.Run("non-interactive mode failure - reason required but not provided", func(t *testing.T) {
+		expectedFindingsId := uuid.New().String()
+		expectedIgnoreType := string(policyApi.WontFix)
+		invocationContext := setupMockIgnoreContext(t, "{}", http.StatusCreated)
+		config := invocationContext.GetConfiguration()
+		config.Set(ConfigIgnoreReasonRequired, true)
+		config.Set(InteractiveKey, false)
+
+		config.Set(FindingsIdKey, expectedFindingsId)
+		config.Set(IgnoreTypeKey, expectedIgnoreType)
+		config.Set(ReasonKey, "")
+		config.Set(ExpirationKey, "never")
+		config.Set(RemoteRepoUrlKey, testRepoUrl)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
 }
 
 func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiStatusCode int) (*mocks.MockInvocationContext, *mocks.MockUserInterface) {
@@ -583,6 +649,46 @@ func Test_InteractiveIgnoreWorkflow(t *testing.T) {
 		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
 		assert.Error(t, err, "Expected to have an error regarding invalid ignore type")
 	})
+
+	t.Run("interactive mode - reason required but not provided", func(t *testing.T) {
+		invocationCtx, mockUI := setupInteractiveMockContext(t, "", http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(ConfigIgnoreReasonRequired, true)
+
+		mockUI.EXPECT().Input(gomock.Eq(findingsIdDescription)).Return(findingId, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(ignoreTypeDescription)).Return(ignoreType, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(expirationDescription)).Return(expiration, nil).Times(1)
+
+		mockUI.EXPECT().Input(gomock.Eq(reasonDescription)).Return("", nil).Times(1)
+
+		_, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("interactive mode - reason not required and not provided", func(t *testing.T) {
+		mockResponse := getSuccessfulPolicyResponse(policyId.String(), findingId, ignoreType, "", email, &expirationDate)
+		invocationCtx, mockUI := setupInteractiveMockContext(t, mockResponse, http.StatusCreated)
+		config := invocationCtx.GetConfiguration()
+		config.Set(ConfigIgnoreReasonRequired, false)
+
+		mockUI.EXPECT().Input(gomock.Eq(findingsIdDescription)).Return(findingId, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(ignoreTypeDescription)).Return(ignoreType, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(expirationDescription)).Return(expiration, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(remoteRepoUrlDescription)).Return(repoUrl, nil).Times(1)
+		mockUI.EXPECT().Input(gomock.Eq(reasonDescription)).Return("", nil).Times(1)
+
+		result, err := ignoreCreateWorkflowEntryPoint(invocationCtx, nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Greater(t, len(result), 0)
+
+		var policyResp sarif.Suppression
+		data, ok := result[0].GetPayload().([]byte)
+		assert.True(t, ok)
+		err = json.Unmarshal(data, &policyResp)
+		assert.NoError(t, err, "Should parse JSON response")
+		assert.Equal(t, "", policyResp.Justification)
+	})
 }
 
 func getSuccessfulPolicyResponse(policyIdStr, findingId, ignoreTypeStr, reasonStr, userEmailStr string, expiration *time.Time) string {
@@ -772,7 +878,7 @@ func Test_getOrgIgnoreApprovalEnabled(t *testing.T) {
 
 		mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
 		mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
-		mockEngine.EXPECT().GetLogger().Return(&logger)
+		mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
 		mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
 		mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
 		mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
@@ -781,7 +887,11 @@ func Test_getOrgIgnoreApprovalEnabled(t *testing.T) {
 		result, err := defaultValueFunc(nil, nil)
 
 		assert.Error(t, err)
-		assert.Nil(t, result)
+		assert.NotNil(t, result)
+
+		ok, isOk := result.(bool)
+		assert.True(t, isOk)
+		assert.False(t, ok)
 		assert.Contains(t, err.Error(), "unable to retrieve org settings")
 	})
 }
@@ -808,12 +918,129 @@ func setupMockEngineForOrgSettings(t *testing.T, response *contract.OrgSettingsR
 		}
 	})
 
-	mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
+	mockConfig.EXPECT().Set(ConfigIgnoreSettings, gomock.Any())
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
 	mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
 	mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
 	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
 
 	defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
+	return defaultValueFunc(nil, nil)
+}
+
+func Test_getOrgIgnoreReasonRequired(t *testing.T) {
+	t.Run("returns existing value when not nil", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockEngine := mocks.NewMockEngine(ctrl)
+		defaultValueFunc := getOrgIgnoreReasonRequired(mockEngine)
+
+		result, err := defaultValueFunc(nil, true)
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		result, err = defaultValueFunc(nil, false)
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("reason required enabled", func(t *testing.T) {
+		result, err := setupMockEngineForOrgReasonRequired(t, &contract.OrgSettingsResponse{
+			Ignores: &contract.OrgIgnoreSettings{ReasonRequired: true},
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("reason required disabled", func(t *testing.T) {
+		result, err := setupMockEngineForOrgReasonRequired(t, &contract.OrgSettingsResponse{
+			Ignores: &contract.OrgIgnoreSettings{ReasonRequired: false},
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("ignores field is nil", func(t *testing.T) {
+		result, err := setupMockEngineForOrgReasonRequired(t, &contract.OrgSettingsResponse{
+			Ignores: nil,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("API call fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		logger := zerolog.Logger{}
+		orgId := uuid.New().String()
+		apiUrl := "https://api.snyk.io"
+
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
+
+		httpClient := localworkflows.NewTestClient(func(req *http.Request) *http.Response {
+			return &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Body:       io.NopCloser(bytes.NewBufferString("Internal Server Error")),
+			}
+		})
+
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
+		mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
+		mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+		mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
+		mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
+		mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
+
+		defaultValueFunc := getOrgIgnoreReasonRequired(mockEngine)
+		result, err := defaultValueFunc(nil, nil)
+
+		assert.Error(t, err)
+		assert.NotNil(t, result)
+
+		ok, isOk := result.(bool)
+		assert.True(t, isOk)
+		assert.False(t, ok)
+		assert.Contains(t, err.Error(), "unable to retrieve org settings")
+	})
+}
+
+func setupMockEngineForOrgReasonRequired(t *testing.T, response *contract.OrgSettingsResponse) (interface{}, error) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	orgId := uuid.New().String()
+	apiUrl := "https://api.snyk.io"
+
+	responseJSON, err := json.Marshal(response)
+	assert.NoError(t, err)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockConfig := mocks.NewMockConfiguration(ctrl)
+	mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
+
+	httpClient := localworkflows.NewTestClient(func(req *http.Request) *http.Response {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBuffer(responseJSON)),
+		}
+	})
+
+	mockConfig.EXPECT().Set(ConfigIgnoreSettings, gomock.Any())
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
+	mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
+	mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
+	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
+
+	defaultValueFunc := getOrgIgnoreReasonRequired(mockEngine)
 	return defaultValueFunc(nil, nil)
 }
