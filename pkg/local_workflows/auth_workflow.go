@@ -131,8 +131,10 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 		if err != nil {
 			return err
 		}
+
 		newToken := config.Get(auth.CONFIG_KEY_OAUTH_TOKEN)
 		globalConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newToken)
+
 		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
 		if err != nil {
 			logger.Debug().Err(err).Msg("Failed to output authenticated message")

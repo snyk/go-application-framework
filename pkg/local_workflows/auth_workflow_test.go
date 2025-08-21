@@ -26,7 +26,7 @@ func Test_auth_oauth(t *testing.T) {
 	config.Set(configuration.PREVIEW_FEATURES_ENABLED, true)
 	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	engine.EXPECT().Init().Times(1)
-
+	engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	err := InitAuth(engine)
 	assert.NoError(t, err)
 
@@ -69,7 +69,7 @@ func Test_auth_token(t *testing.T) {
 
 	engine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	engine.EXPECT().Init().Times(1)
-
+	engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	err := InitAuth(engine)
 	assert.NoError(t, err)
 
@@ -172,7 +172,7 @@ func Test_clearAllCredentialsBeforeAuth(t *testing.T) {
 	analytics := analytics.New()
 	engine := mocks.NewMockEngine(mockCtl)
 	authenticator := mocks.NewMockAuthenticator(mockCtl)
-
+	engine.EXPECT().GetConfiguration().Return(configuration.NewWithOpts()).AnyTimes()
 	testCases := []struct {
 		name       string
 		authType   string
