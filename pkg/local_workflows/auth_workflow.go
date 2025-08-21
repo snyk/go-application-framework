@@ -59,8 +59,13 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
+	globalConfig := invocationCtx.GetEngine().GetConfiguration()
 
-	config.ClearCache()
+	// cache always interferes with auth
+	globalConfig.ClearCache()
+
+	// make sure the updated environment is forwarded to global config
+	defer globalConfig.ClearCache()
 
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(

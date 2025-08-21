@@ -228,8 +228,8 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
-	config.AddDefaultValue(configuration.WEB_APP_URL, func(_ configuration.Configuration, existingValue any) (any, error) {
-		canonicalApiUrl := config.GetString(configuration.API_URL)
+	config.AddDefaultValue(configuration.WEB_APP_URL, func(c configuration.Configuration, existingValue any) (any, error) {
+		canonicalApiUrl := c.GetString(configuration.API_URL)
 		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
 		if err != nil {
 			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", err)
