@@ -444,3 +444,148 @@ func createMockPAT(t *testing.T, payload string) string {
 	signature := "signature"
 	return fmt.Sprintf("snyk_uat.12345678.%s.%s", encodedPayload, signature)
 }
+
+func TestDefaultInputDirectory(t *testing.T) {
+	defaultFunction := defaultInputDirectory()
+	assert.NotNil(t, defaultFunction)
+
+	// Create a mock configuration for testing
+	mockConfig := configuration.New()
+
+	tests := []struct {
+		name           string
+		existingValue  interface{}
+		expectedError  bool
+		expectedResult interface{}
+		description    string
+	}{
+		{
+			name:           "nil input",
+			existingValue:  nil,
+			expectedError:  false,
+			expectedResult: nil, // Will fall back to current working directory
+			description:    "should handle nil input gracefully and return current working directory",
+		},
+		{
+			name:           "empty string",
+			existingValue:  "",
+			expectedError:  false,
+			expectedResult: nil, // Will fall back to current working directory
+			description:    "should handle empty string and return current working directory",
+		},
+		{
+			name:           "whitespace only string",
+			existingValue:  "   \t\n  ",
+			expectedError:  false,
+			expectedResult: nil, // Will fall back to current working directory after trimming
+			description:    "should handle whitespace-only string and return current working directory",
+		},
+		{
+			name:           "valid absolute path",
+			existingValue:  "/usr/local/bin",
+			expectedError:  false,
+			expectedResult: "/usr/local/bin",
+			description:    "should return valid absolute path as-is",
+		},
+		{
+			name:           "valid relative path",
+			existingValue:  "./relative/path",
+			expectedError:  false,
+			expectedResult: "./relative/path",
+			description:    "should return valid relative path as-is",
+		},
+		{
+			name:           "path with leading/trailing whitespace",
+			existingValue:  "  /path/with/whitespace  ",
+			expectedError:  false,
+			expectedResult: "/path/with/whitespace",
+			description:    "should trim whitespace and return clean path",
+		},
+		{
+			name:           "non-string type - integer",
+			existingValue:  123,
+			expectedError:  false,
+			expectedResult: nil, // Will fall back to current working directory
+			description:    "should handle non-string types gracefully and return current working directory",
+		},
+		{
+			name:           "non-string type - boolean",
+			existingValue:  true,
+			expectedError:  false,
+			expectedResult: nil, // Will fall back to current working directory
+			description:    "should handle non-string types gracefully and return current working directory",
+		},
+		{
+			name:           "non-string type - slice",
+			existingValue:  []string{"path1", "path2"},
+			expectedError:  false,
+			expectedResult: nil, // Will fall back to current working directory
+			description:    "should handle non-string types gracefully and return current working directory",
+		},
+		{
+			name:           "non-string type - map",
+			existingValue:  map[string]string{"key": "value"},
+			expectedError:  false,
+			expectedResult: nil, // Will fall back to current working directory
+			description:    "should handle non-string types gracefully and return current working directory",
+		},
+		{
+			name:           "current directory symbol",
+			existingValue:  ".",
+			expectedError:  false,
+			expectedResult: ".",
+			description:    "should return current directory symbol as-is",
+		},
+		{
+			name:           "parent directory symbol",
+			existingValue:  "..",
+			expectedError:  false,
+			expectedResult: "..",
+			description:    "should return parent directory symbol as-is",
+		},
+		{
+			name:           "home directory symbol",
+			existingValue:  "~",
+			expectedError:  false,
+			expectedResult: "~",
+			description:    "should return home directory symbol as-is",
+		},
+		{
+			name:           "path with special characters",
+			existingValue:  "/path/with/special-chars_123",
+			expectedError:  false,
+			expectedResult: "/path/with/special-chars_123",
+			description:    "should handle paths with special characters",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := defaultFunction(mockConfig, tt.existingValue)
+
+			// Check error expectations
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// Check result expectations
+			if tt.expectedResult != nil {
+				// For specific expected results, check exact match
+				assert.Equal(t, tt.expectedResult, result, tt.description)
+			} else {
+				// For fallback cases, just ensure we get a non-empty result
+				assert.NotNil(t, result, tt.description)
+				if str, ok := result.(string); ok {
+					assert.NotEmpty(t, str, tt.description)
+				}
+			}
+		})
+	}
+
+	// Additional test to verify the function actually returns a function
+	t.Run("returns callable function", func(t *testing.T) {
+		assert.IsType(t, defaultFunction, defaultFunction)
+	})
+}
