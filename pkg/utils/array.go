@@ -80,10 +80,25 @@ func Merge(input1 []string, input2 []string) []string {
 // Example:
 //
 //	mySlice := []string{"apple", "banana", "apple", "cherry", "banana", "date"}
-//	dedupedSlice := dedupe(mySlice)
+//	dedupedSlice := Dedupe(mySlice)
 //	fmt.Println(dedupedSlice) // Output: [apple banana cherry date]
 func Dedupe(s []string) []string {
-	seen := make(map[string]bool)
+	return dedupe(map[string]bool{}, s)
+}
+
+// DedupeWithoutBlanks removes duplicate entries and empty strings from a given slice.
+// Returns a new, deduplicated slice.
+//
+// Example:
+//
+//	mySlice := []string{"apple", "", "banana", "apple", "cherry", "", "banana", "date"}
+//	dedupedSlice := DedupeWithoutBlanks(mySlice)
+//	fmt.Println(dedupedSlice) // Output: [apple banana cherry date]
+func DedupeWithoutBlanks(s []string) []string {
+	return dedupe(map[string]bool{"": true}, s)
+}
+
+func dedupe(seen map[string]bool, s []string) []string {
 	var result []string
 	for _, str := range s {
 		if _, ok := seen[str]; !ok {

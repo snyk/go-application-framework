@@ -142,33 +142,37 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 	})
 }
 
-func TestLoadConfigFiles(t *testing.T) {
+func TestReadConfigFiles(t *testing.T) {
 	t.Run("should load config files and prepend PATH", func(t *testing.T) {
 		dir := t.TempDir()
 		originalPathValue := "original_path"
-		t.Setenv("PATH", originalPathValue)
+		initialEnv := map[string]string{
+			"PATH": originalPathValue,
+		}
 
-		// Create a config file with PATH entry (no overlapping paths)
+		// Create a config file with PATH entry
 		configFileName := filepath.Join(dir, ".snyk.env")
 		configContent := []byte("TEST_VAR=test_value\nPATH=config" + pathListSep + "file\n")
 		err := os.WriteFile(configFileName, configContent, 0660)
 		require.NoError(t, err)
 
 		files := []string{configFileName}
-		LoadConfigFiles(files, dir)
+		finalEnv := ReadConfigFiles(initialEnv, files, dir)
 
 		// Verify environment variable was set
-		require.Equal(t, "test_value", os.Getenv("TEST_VAR"))
+		require.Equal(t, "test_value", finalEnv["TEST_VAR"])
 
 		// Verify PATH was prepended (config path should come first)
 		expectedPath := "config" + pathListSep + "file" + pathListSep + originalPathValue
-		require.Equal(t, expectedPath, os.Getenv("PATH"))
+		require.Equal(t, expectedPath, finalEnv["PATH"])
 	})
 
 	t.Run("should handle relative config file paths", func(t *testing.T) {
 		dir := t.TempDir()
 		originalPathValue := "original_path"
-		t.Setenv("PATH", originalPathValue)
+		initialEnv := map[string]string{
+			"PATH": originalPathValue,
+		}
 
 		// Create a config file with relative path
 		configFileName := ".test.env"
@@ -178,23 +182,21 @@ func TestLoadConfigFiles(t *testing.T) {
 		require.NoError(t, err)
 
 		files := []string{configFileName} // relative path
-		LoadConfigFiles(files, dir)
+		finalEnv := ReadConfigFiles(initialEnv, files, dir)
 
 		// Verify PATH was prepended
 		expectedPath := "relative" + pathListSep + "path" + pathListSep + originalPathValue
-		require.Equal(t, expectedPath, os.Getenv("PATH"))
+		require.Equal(t, expectedPath, finalEnv["PATH"])
 	})
 
 	t.Run("should add config file PATH and SDK bin directories to PATH (in that precedence order)", func(t *testing.T) {
 		dir := t.TempDir()
-
-		// Set a pre-existing PATH value
 		originalPathValue := "original_path"
-		t.Setenv("PATH", originalPathValue)
-
-		// Test with JAVA_HOME unset and GOROOT originally set
-		t.Setenv("JAVA_HOME", "")
-		t.Setenv("GOROOT", "system_go")
+		initialEnv := map[string]string{
+			"PATH":      originalPathValue,
+			"JAVA_HOME": "",
+			"GOROOT":    "system_go",
+		}
 
 		// Create a config file that sets SDK variables and PATH
 		configFileName := filepath.Join(dir, ".snyk.env")
@@ -206,32 +208,30 @@ func TestLoadConfigFiles(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		LoadConfigFiles([]string{configFileName}, dir)
+		finalEnv := ReadConfigFiles(initialEnv, []string{configFileName}, dir)
 
 		// Verify SDK variables were set
-		assert.Equal(t, "project_java", os.Getenv("JAVA_HOME"))
-		assert.Equal(t, "project_go", os.Getenv("GOROOT"))
+		assert.Equal(t, "project_java", finalEnv["JAVA_HOME"])
+		assert.Equal(t, "project_go", finalEnv["GOROOT"])
 
 		// Verify PATH order: config PATH, then SDK bins, then original PATH
 		// Build expected paths using platform-appropriate separators
 		javaHomeBin := filepath.Join(configFileJavaHomeValue, "bin")
 		goRootBin := filepath.Join(configFileGoRootValue, "bin")
 		expectedPath := configFilePathValue + pathListSep + javaHomeBin + pathListSep + goRootBin + pathListSep + originalPathValue
-		assert.Equal(t, expectedPath, os.Getenv("PATH"))
+		assert.Equal(t, expectedPath, finalEnv["PATH"])
 	})
 
 	t.Run("should not add SDK bin directories when SDK variables are pre-existing and not overridden", func(t *testing.T) {
 		dir := t.TempDir()
-
-		// Set a pre-existing PATH value
 		originalPathValue := "original_path"
-		t.Setenv("PATH", originalPathValue)
-
-		// Pre-set SDK variables (as if from IDE or system)
 		preExistingJavaHome := "system_java"
 		preExistingGoRoot := "system_go"
-		t.Setenv("JAVA_HOME", preExistingJavaHome)
-		t.Setenv("GOROOT", preExistingGoRoot)
+		initialEnv := map[string]string{
+			"PATH":      originalPathValue,
+			"JAVA_HOME": preExistingJavaHome,
+			"GOROOT":    preExistingGoRoot,
+		}
 
 		// Create a config file that doesn't change these SDK variables
 		configFileName := filepath.Join(dir, ".snyk.env")
@@ -240,27 +240,24 @@ func TestLoadConfigFiles(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		LoadConfigFiles([]string{configFileName}, dir)
+		finalEnv := ReadConfigFiles(initialEnv, []string{configFileName}, dir)
 
 		// Verify SDK variables are unchanged
-		assert.Equal(t, preExistingJavaHome, os.Getenv("JAVA_HOME"))
-		assert.Equal(t, preExistingGoRoot, os.Getenv("GOROOT"))
+		assert.Equal(t, preExistingJavaHome, finalEnv["JAVA_HOME"])
+		assert.Equal(t, preExistingGoRoot, finalEnv["GOROOT"])
 
 		// Verify PATH was not modified by SDK bin directories
-		assert.Equal(t, originalPathValue, os.Getenv("PATH"))
+		assert.Equal(t, originalPathValue, finalEnv["PATH"])
 	})
 
 	t.Run("should add bin directories only for SDK variables changed by config files", func(t *testing.T) {
 		dir := t.TempDir()
-
-		// Set a pre-existing PATH value
 		originalPathValue := "original_path"
-		t.Setenv("PATH", originalPathValue)
-
-		// Pre-set some SDK variables
 		preExistingJavaHome := "system_java"
-		t.Setenv("JAVA_HOME", preExistingJavaHome)
-		t.Setenv("GOROOT", "")
+		initialEnv := map[string]string{
+			"PATH":      originalPathValue,
+			"JAVA_HOME": preExistingJavaHome,
+		}
 
 		// Create a config file that only changes GOROOT
 		configFileName := filepath.Join(dir, ".snyk.env")
@@ -270,32 +267,30 @@ func TestLoadConfigFiles(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		LoadConfigFiles([]string{configFileName}, dir)
+		finalEnv := ReadConfigFiles(initialEnv, []string{configFileName}, dir)
 
 		// Verify JAVA_HOME is unchanged, GOROOT is changed
-		assert.Equal(t, preExistingJavaHome, os.Getenv("JAVA_HOME"))
-		assert.Equal(t, configFileGoRootValue, os.Getenv("GOROOT"))
+		assert.Equal(t, preExistingJavaHome, finalEnv["JAVA_HOME"])
+		assert.Equal(t, configFileGoRootValue, finalEnv["GOROOT"])
 
-		// Verify only GOROOT/bin was added to PATH (prepended before the original PATH)
+		// Verify only GOROOT/bin was added to PATH (appended after the config path, which is empty)
 		// Build expected path using platform-appropriate separators
 		goRootBin := filepath.Join(configFileGoRootValue, "bin")
 		expectedPath := goRootBin + pathListSep + originalPathValue
-		assert.Equal(t, expectedPath, os.Getenv("PATH"))
+		assert.Equal(t, expectedPath, finalEnv["PATH"])
 	})
 
 	t.Run("should re-prioritize SDK bin directories when config file sets same value", func(t *testing.T) {
 		dir := t.TempDir()
-
-		// Set up PATH with JAVA_HOME/bin already in the middle
 		javaHomeValue := "project_java"
 		javaHomeBinPath := filepath.Join(javaHomeValue, "bin")
 		systemBin := "system_bin"
 		usrBin := "usr_bin"
 		originalPathValue := systemBin + pathListSep + javaHomeBinPath + pathListSep + usrBin
-		t.Setenv("PATH", originalPathValue)
-
-		// Pre-set JAVA_HOME (as if from IDE or system)
-		t.Setenv("JAVA_HOME", javaHomeValue)
+		initialEnv := map[string]string{
+			"PATH":      originalPathValue,
+			"JAVA_HOME": javaHomeValue,
+		}
 
 		// Create a config file that sets JAVA_HOME to the same value
 		configFileName := filepath.Join(dir, ".snyk.env")
@@ -305,33 +300,32 @@ func TestLoadConfigFiles(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		LoadConfigFiles([]string{configFileName}, dir)
+		finalEnv := ReadConfigFiles(initialEnv, []string{configFileName}, dir)
 
 		// Verify JAVA_HOME is still the same value
-		assert.Equal(t, javaHomeValue, os.Getenv("JAVA_HOME"))
+		assert.Equal(t, javaHomeValue, finalEnv["JAVA_HOME"])
 
 		// Verify PATH re-prioritization: config PATH, then JAVA_HOME/bin, then the original PATH with JAVA_HOME/bin deduplicated out
 		// Build expected path using platform-appropriate separators
 		javaHomeBin := filepath.Join(javaHomeValue, "bin")
 		expectedPath := configFilePathValue + pathListSep + javaHomeBin + pathListSep + systemBin + pathListSep + usrBin
-		assert.Equal(t, expectedPath, os.Getenv("PATH"))
+		assert.Equal(t, expectedPath, finalEnv["PATH"])
 	})
 }
 
-func TestLoadShellEnvironment(t *testing.T) {
-	t.Run("should load shell environment and prepend PATH", func(t *testing.T) {
+func TestReadShellEnvironment(t *testing.T) {
+	t.Run("should read shell environment and still contain original PATH", func(t *testing.T) {
 		originalPathValue := "original_path"
-		t.Setenv("PATH", originalPathValue)
+		initialEnv := map[string]string{
+			"PATH": originalPathValue,
+		}
 
 		// Note: This test will only work properly on non-Windows systems
 		// and when a shell is available. On Windows or in environments
 		// without shell access, the function will be a no-op.
-		LoadShellEnvironment()
+		finalEnv := ReadShellEnvironment(initialEnv)
 
-		// The shell environment loading behavior depends on the actual shell
-		// and environment. We can't predict exact PATH changes, but we can
-		// verify the function doesn't crash and PATH is still set.
-		require.NotEmpty(t, os.Getenv("PATH"))
+		assert.Contains(t, finalEnv["PATH"], originalPathValue)
 	})
 }
 
