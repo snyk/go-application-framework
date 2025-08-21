@@ -33,6 +33,15 @@ func GetCurrentEnvironment() map[string]string {
 	return currentEnv
 }
 
+// SetEnvironmentDifferences Sets the environment variables that have changed since the current env snapshot.
+func SetEnvironmentDifferences(currentEnv map[string]string, newEnv map[string]string) {
+	for newEnvName, newEnvValue := range newEnv {
+		if currentEnv[newEnvName] != newEnvValue {
+			_ = os.Setenv(newEnvName, newEnvValue) // we can't do anything with the error
+		}
+	}
+}
+
 // LoadConfiguredEnvironment updates the environment with user and local configuration.
 // First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
 // The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
@@ -41,11 +50,7 @@ func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory stri
 	currentEnv := GetCurrentEnvironment()
 	newEnv := ReadShellEnvironment(currentEnv)
 	newEnv = ReadConfigFiles(newEnv, customConfigFiles, workingDirectory)
-	for newEnvName, newEnvValue := range newEnv {
-		if currentEnv[newEnvName] != newEnvValue {
-			_ = os.Setenv(newEnvName, newEnvValue) // we can't do anything with the error
-		}
-	}
+	SetEnvironmentDifferences(currentEnv, newEnv)
 }
 
 // ReadShellEnvironment reads the user's shell environment with special handling of PATHs.
