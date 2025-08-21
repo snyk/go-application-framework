@@ -17,9 +17,7 @@
 package logging
 
 import (
-	"fmt"
 	"io"
-	"os/user"
 	"regexp"
 	"sort"
 	"strings"
@@ -45,8 +43,23 @@ var SENSITIVE_FIELD_NAMES = []string{
 	"secret",
 }
 
+// EXACT_SCRUB_LIST is a list of terms to scrub with exact matching.
+var EXACT_SCRUB_LIST = []string{
+	"u",
+	"p",
+	"pw",
+	"path",
+	"creds",
+}
+
+// FUZZY_SCRUB_RE is a regex pattern used to scrub with fuzzy matching
+var FUZZY_SCRUB_RE = regexp.MustCompile("(?i)(headers|user|passw|token|key|secret|pat|creden)")
+
 type ScrubbingLogWriter interface {
 	AddTerm(term string, matchGroup int)
+	// AddArgs adds all args as a key-value pair to check for scrubbing.
+	// Any args that match the scrub list will be added to the scrubbing dictionary.
+	AddArgs(args map[string]string)
 	RemoveTerm(term string)
 }
 
@@ -70,19 +83,30 @@ type scrubbingIoWriter struct {
 }
 
 func NewScrubbingWriter(writer zerolog.LevelWriter, scrubDict ScrubbingDict) zerolog.LevelWriter {
-	dict := addMandatoryMasking(scrubDict)
 	levelWriter := scrubbingLevelWriter{
 		writer:    writer,
-		scrubDict: dict,
+		scrubDict: scrubDict,
 	}
 	return &levelWriter
 }
 
 func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
-	dict := addMandatoryMasking(scrubDict)
 	return &scrubbingIoWriter{
 		writer:    writer,
-		scrubDict: dict,
+		scrubDict: scrubDict,
+	}
+}
+
+func (w *scrubbingIoWriter) AddArgs(args map[string]string) {
+	filteredArgs := filterArgs(args)
+
+	// lock for dict readers and writers
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	// add the filtered args to the scrubbing dictionary
+	for _, v := range filteredArgs {
+		addTermToDict(v, 0, w.scrubDict)
 	}
 }
 
@@ -123,8 +147,20 @@ func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 
 func getDefaultDict() ScrubbingDict {
 	dict := ScrubbingDict{}
-	addMandatoryMasking(dict)
 	return dict
+}
+
+func (w *scrubbingLevelWriter) AddArgs(args map[string]string) {
+	filteredArgs := filterArgs(args)
+
+	// lock for dict readers and writers
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	// add the filtered args to the scrubbing dictionary
+	for _, v := range filteredArgs {
+		addTermToDict(v, 0, w.scrubDict)
+	}
 }
 
 func (w *scrubbingLevelWriter) AddTerm(term string, matchGroup int) {
@@ -148,151 +184,6 @@ func (w *scrubbingLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, e
 	return internalWrite(w.scrubDict, p, func(p []byte) (int, error) {
 		return w.writer.WriteLevel(level, p)
 	})
-}
-
-func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
-	const charGroup = "[a-zA-Z0-9-_:.=/+~]{6,}"
-	s := `(http(s)?://)((.+?):(.+?))@(\S+)`
-	dict[s] = scrubStruct{
-		groupToRedact: 3,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`([t|T]oken )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`([b|B]earer )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`([b|B]asic )(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf("([n|N]egotiate )(%s)", charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf("(gh[ps])_(%s)", charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf("(github_pat_)(%s)", charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// Snyk PATs
-	s = auth.PAT_REGEX
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// github
-	s = fmt.Sprintf(`(access_token[\\="\s:]+)(%s)&?`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`(refresh_token[\\="\s:]+)(%s)&?`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`(token[\\="\s:]+)(%s)&?`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	s = fmt.Sprintf(`(SNYK_TOKEN)=(%s)`, charGroup)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// Hide whatever is the current username
-	u, err := user.Current()
-	if err == nil {
-		s = fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(u.Username))
-		addTermToDict(s, 0, dict)
-	}
-
-	// The legacy CLI's snyk-config package prints the entire configuration in debug mode.
-	// It begins with some pseudo-JSON structure, which we can redact.
-	s = `(?s)_:\s*\[(?<everything_inside_hard_brackets>.*)\]`
-	dict[s] = scrubStruct{
-		groupToRedact: 1,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// JSON-formatted data, in general
-	kws := strings.Join(SENSITIVE_FIELD_NAMES, "|")
-	s = fmt.Sprintf(`(?i)"[^"]*(?<json_key>%s)[^"]*"\s*:\s*"(?<json_value>[^"]*)"`, kws)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// CLI argument mapping from the snyk-config debug logging
-	// I.e., if --argument=value is passed, it will be logged as { 'argument=value': true }
-	s = fmt.Sprintf(`(?im)(%s)[^=]*=(?P<value>.*)['"]`, kws)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// Same as above, only with short form
-	shorts := []string{"p", "u"}
-	shortForm := strings.Join(shorts, "")
-	s = fmt.Sprintf(`(?im)'[%s]=(?<value>.*)'`, shortForm)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// Specific short-form scrubbing of the JSON-ish log structures
-	// Appear in the snyk-config debug logging as various constellations of { 'u': 'john.doe', } with or without quotes,
-	// and values can contain spaces, double and/or single quotes.
-
-	s = fmt.Sprintf(`(?i)(?<short_form_key>\b[%s]\b)[,'":]+\s*(?:['"](?<short_form_value>.*)['"]|([^,'"\s]+))[,}]?`, shortForm)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// CLI argument-style-specific scrubbing
-	// Many cases are already covered by the JSON scrubbing above, thus this might seem incomplete.
-	// Refer to the unit tests for the full set of covered cases.
-	s = fmt.Sprintf(`(?im)\-[%s][\s=](?<short_form_value>\S*)`, shortForm)
-	dict[s] = scrubStruct{
-		groupToRedact: 1,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// Long-form, rest is covered by the JSON scrubbing above
-	s = fmt.Sprintf(`(?im)--(?<argument_key>[^=\s]*(?:%s)[^=\s]*)[\s=]['"]?(?<argument_value>\S*)['"]?`, kws)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	return dict
 }
 
 func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
@@ -356,4 +247,33 @@ func internalWrite(dict ScrubbingDict, p []byte, writeFunc func(p []byte) (int, 
 		return len(p), err
 	}
 	return len(p), nil // we return the original length, since we don't know the length of the redacted string
+}
+
+// filterArgs filters the args map to only include args that match the scrubbing criteria.
+func filterArgs(args map[string]string) []string {
+	argsMap := make(map[string]string, len(args))
+
+	// check for exact matches
+	for _, name := range EXACT_SCRUB_LIST {
+		if v, ok := args[strings.ToLower(name)]; ok {
+			argsMap[v] = v
+		}
+		if v, ok := args[strings.ToUpper(name)]; ok {
+			argsMap[v] = v
+		}
+	}
+
+	// check for fuzzy matches (case insensitive)
+	for k, v := range args {
+		if FUZZY_SCRUB_RE.MatchString(k) {
+			argsMap[v] = v
+		}
+	}
+
+	// return as a slice of values
+	filteredArgs := make([]string, 0, len(argsMap))
+	for _, v := range argsMap {
+		filteredArgs = append(filteredArgs, v)
+	}
+	return filteredArgs
 }
