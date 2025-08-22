@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-
 	"sync"
 	"time"
 
@@ -91,8 +90,9 @@ func getRedirectUri(port int) string {
 }
 
 func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
-	appUrl := config.GetString(configuration.WEB_APP_URL)
+	config.ClearCache()
 	apiUrl := config.GetString(configuration.API_URL)
+	appUrl := config.GetString(configuration.WEB_APP_URL)
 	tokenUrl := apiUrl + "/oauth2/token"
 	authUrl := appUrl + "/oauth2/authorize"
 
@@ -272,6 +272,8 @@ func (o *oAuth2Authenticator) Authenticate() error {
 
 func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error {
 	var err error
+
+	o.oauthConfig = getOAuthConfiguration(o.config)
 
 	if o.grantType == ClientCredentialsGrant {
 		err = o.authenticateWithClientCredentialsGrant(ctx)
