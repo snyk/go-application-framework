@@ -20,62 +20,107 @@ const (
 	ShellEnvVarName = "SHELL"
 )
 
-// LoadConfiguredEnvironment updates the environment with local configuration. Precedence as follows:
-//  1. std folder-based config files
-//  2. given command-line parameter config file
-//  3. std config file in home directory
-//  4. global shell configuration
-func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
-	bashOutput := getEnvFromShell("bash")
-
-	// this is applied at the end always, as it does not overwrite existing variables
-	defer func() { _ = gotenv.Apply(strings.NewReader(bashOutput)) }() //nolint:errcheck // we can't do anything with the error
-
-	env := gotenv.Parse(strings.NewReader(bashOutput))
-	specificShell, ok := env[ShellEnvVarName]
-	if ok {
-		fromSpecificShell := getEnvFromShell(specificShell)
-		_ = gotenv.Apply(strings.NewReader(fromSpecificShell)) //nolint:errcheck // we can't do anything with the error
-	}
-
-	// process config files
-	for _, file := range customConfigFiles {
-		if !filepath.IsAbs(file) {
-			file = filepath.Join(workingDirectory, file)
+// GetCurrentEnvironment reads all current environment variables into a map.
+func GetCurrentEnvironment() map[string]string {
+	currentEnv := make(map[string]string)
+	for _, envKeyValueString := range os.Environ() {
+		envKeyValuePair := strings.SplitN(envKeyValueString, "=", 2)
+		if len(envKeyValuePair) != 2 {
+			continue
 		}
-		loadFile(file)
+		currentEnv[envKeyValuePair[0]] = envKeyValuePair[1]
+	}
+	return currentEnv
+}
+
+// SetEnvironmentDifferences Sets the environment variables that have changed since the current env snapshot.
+func SetEnvironmentDifferences(currentEnv map[string]string, newEnv map[string]string) {
+	for newEnvName, newEnvValue := range newEnv {
+		if currentEnv[newEnvName] != newEnvValue {
+			_ = os.Setenv(newEnvName, newEnvValue) // we can't do anything with the error
+		}
 	}
 }
 
-func loadFile(fileName string) {
-	// preserve path
-	previousPath := os.Getenv(PathEnvVarName)
+// LoadConfiguredEnvironment updates the environment with user and local configuration.
+// First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
+// The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
+// See LoadShellEnvironment and LoadConfigFiles.
+func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
+	currentEnv := GetCurrentEnvironment()
+	newEnv := ReadShellEnvironment(currentEnv)
+	newEnv = ReadConfigFiles(newEnv, customConfigFiles, workingDirectory)
+	SetEnvironmentDifferences(currentEnv, newEnv)
+}
 
-	// overwrite existing variables with file config
-	err := gotenv.OverLoad(fileName)
-	if err != nil {
-		return
+// ReadShellEnvironment reads the user's shell environment with special handling of PATHs.
+// First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read.
+// The Bash env PATH is appended to the existing PATH (as a fallback), the user's preferred SHELL's env PATH is prepended (preferential).
+func ReadShellEnvironment(currentEnv map[string]string) map[string]string {
+	bashEnvOutput := getEnvFromShell("bash")
+	bashEnv := gotenv.Parse(strings.NewReader(bashEnvOutput))
+
+	preferredShell, ok := bashEnv[ShellEnvVarName]
+	if ok {
+		preferredShellEnvOutput := getEnvFromShell(preferredShell)
+		preferredShellEnv := gotenv.Parse(strings.NewReader(preferredShellEnvOutput))
+
+		currentEnv = MergeEnvs(preferredShellEnv, currentEnv)
 	}
 
-	// add previous path to the end of the new
-	UpdatePath(previousPath, false)
+	currentEnv = MergeEnvs(currentEnv, bashEnv)
+
+	return currentEnv
+}
+
+var sdkVarNames = []string{"JAVA_HOME", "GOROOT"}
+
+// ReadConfigFiles loads environment variables from configuration files.
+// With special handling for PATH and SDK environment variables.
+// The resultant PATH is constructed as follows:
+// 1. Config file PATH entries (highest precedence)
+// 2. SDK bin directories (if SDK variables like JAVA_HOME, GOROOT are set by the config file)
+// 3. Previous PATH entries (lowest precedence)
+func ReadConfigFiles(currentEnv map[string]string, customConfigFiles []string, workingDirectory string) map[string]string {
+	for _, configFile := range customConfigFiles {
+		if !filepath.IsAbs(configFile) {
+			configFile = filepath.Join(workingDirectory, configFile)
+		}
+
+		configEnv, err := gotenv.Read(configFile)
+		if err != nil {
+			continue
+		}
+
+		// Check if SDK variables were set by this config file and append their bin directories
+		for _, sdkVar := range sdkVarNames {
+			if configEnvSDKValue, ok := configEnv[sdkVar]; ok {
+				configEnv[PathEnvVarName] = MergePaths(configEnv[PathEnvVarName], filepath.Join(configEnvSDKValue, "bin"))
+			}
+		}
+
+		currentEnv = MergeEnvs(configEnv, currentEnv)
+	}
+
+	return currentEnv
 }
 
 // guard against command injection
 var shellWhiteList = map[string]bool{
-	"bash":          true,
-	"/bin/zsh":      true,
-	"/bin/sh":       true,
-	"/bin/fish":     true,
-	"/bin/csh":      true,
-	"/bin/ksh":      true,
-	"/bin/bash":     true,
-	"/usr/bin/zsh":  true,
-	"/usr/bin/sh":   true,
-	"/usr/bin/fish": true,
-	"/usr/bin/csh":  true,
-	"/usr/bin/ksh":  true,
-	"/usr/bin/bash": true,
+	"bash":                   true,
+	"/bin/zsh":               true,
+	"/bin/sh":                true,
+	"/bin/fish":              true,
+	"/bin/csh":               true,
+	"/bin/ksh":               true,
+	"/bin/bash":              true,
+	"/usr/bin/zsh":           true,
+	"/usr/bin/sh":            true,
+	"/usr/bin/fish":          true,
+	"/usr/bin/csh":           true,
+	"/usr/bin/ksh":           true,
+	"/usr/bin/bash":          true,
+	"/opt/homebrew/bin/bash": true,
 }
 
 func getEnvFromShell(shell string) string {
@@ -100,6 +145,13 @@ func getEnvFromShell(shell string) string {
 	return string(env)
 }
 
+// MergeEnvs merges two sets of environment variables, including PATHs.
+func MergeEnvs(preferentialEnv map[string]string, leastPreferentialEnv map[string]string) map[string]string {
+	mergedEnv := utils.MergeMaps(leastPreferentialEnv, preferentialEnv)
+	mergedEnv[PathEnvVarName] = MergePaths(preferentialEnv[PathEnvVarName], leastPreferentialEnv[PathEnvVarName])
+	return mergedEnv
+}
+
 // UpdatePath prepends or appends the extension to the current path.
 // For append, if the entry is already there, it will not be re-added / moved.
 // For prepend, if the entry is already there, it will be correctly re-prioritized to the front.
@@ -109,29 +161,25 @@ func getEnvFromShell(shell string) string {
 //	prepend bool whether to pre- or append
 func UpdatePath(pathExtension string, prepend bool) string {
 	currentPath := os.Getenv(PathEnvVarName)
-
-	if pathExtension == "" {
-		return currentPath
-	}
-
-	if currentPath == "" {
-		_ = os.Setenv(PathEnvVarName, pathExtension)
-		return pathExtension
-	}
-
-	currentPathEntries := strings.Split(currentPath, string(os.PathListSeparator))
-	addPathEntries := strings.Split(pathExtension, string(os.PathListSeparator))
-
-	var combinedSliceWithDuplicates []string
+	var newPath string
 	if prepend {
-		combinedSliceWithDuplicates = append(addPathEntries, currentPathEntries...)
+		newPath = MergePaths(pathExtension, currentPath)
 	} else {
-		combinedSliceWithDuplicates = append(currentPathEntries, addPathEntries...)
+		newPath = MergePaths(currentPath, pathExtension)
 	}
+	_ = os.Setenv(PathEnvVarName, newPath)
+	return newPath
+}
 
-	newPathSlice := utils.Dedupe(combinedSliceWithDuplicates)
+// MergePaths appends the leastPreferentialPath to the preferentialPath while removing duplicates.
+func MergePaths(preferentialPath string, leastPreferentialPath string) string {
+	preferentialPathEntries := strings.Split(preferentialPath, string(os.PathListSeparator))
+	leastPreferentialPathEntries := strings.Split(leastPreferentialPath, string(os.PathListSeparator))
+
+	combinedSliceWithDuplicates := append(preferentialPathEntries, leastPreferentialPathEntries...)
+
+	newPathSlice := utils.DedupeWithoutBlanks(combinedSliceWithDuplicates)
 
 	newPath := strings.Join(newPathSlice, string(os.PathListSeparator))
-	_ = os.Setenv(PathEnvVarName, newPath)
 	return newPath
 }
