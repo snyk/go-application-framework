@@ -7,12 +7,11 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_auth_oauth(t *testing.T) {
@@ -34,26 +33,26 @@ func Test_auth_oauth(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("happy", func(t *testing.T) {
-		config.Set(authTypeParameter, nil)
+		config.Set(AuthTypeParameter, nil)
 		authenticator.EXPECT().Authenticate().Times(2).Return(nil)
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.NoError(t, err)
 	})
 
 	t.Run("unhappy", func(t *testing.T) {
-		config.Set(authTypeParameter, nil)
+		config.Set(AuthTypeParameter, nil)
 		expectedErr := fmt.Errorf("someting went wrong")
 		authenticator.EXPECT().Authenticate().Times(1).Return(expectedErr)
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.Equal(t, expectedErr, err)
 	})
 }
@@ -77,19 +76,19 @@ func Test_auth_token(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("happy", func(t *testing.T) {
-		config.Set(authTypeParameter, auth.AUTH_TYPE_TOKEN)
+		config.Set(AuthTypeParameter, auth.AUTH_TYPE_TOKEN)
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
 		mockInvocationContext.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
 
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.NoError(t, err)
 	})
 
 	t.Run("automatically switch to token when API token is given", func(t *testing.T) {
-		config.Set(authTypeParameter, nil)
+		config.Set(AuthTypeParameter, nil)
 		config.Set(ConfigurationNewAuthenticationToken, "00000000-0000-0000-0000-000000000000")
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
 		mockInvocationContext := mocks.NewMockInvocationContext(mockCtl)
@@ -97,7 +96,7 @@ func Test_auth_token(t *testing.T) {
 		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
 
-		err = entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err = AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.NoError(t, err)
 	})
 }
@@ -116,7 +115,7 @@ func Test_pat(t *testing.T) {
 
 	t.Run("happy", func(t *testing.T) {
 		config := configuration.NewWithOpts()
-		config.Set(authTypeParameter, auth.AUTH_TYPE_PAT)
+		config.Set(AuthTypeParameter, auth.AUTH_TYPE_PAT)
 		config.Set(ConfigurationNewAuthenticationToken, pat)
 
 		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "some-oauth-token")
@@ -130,7 +129,7 @@ func Test_pat(t *testing.T) {
 		engine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any())
 
-		err := entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err := AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.NoError(t, err)
 
 		assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
@@ -139,7 +138,7 @@ func Test_pat(t *testing.T) {
 
 	t.Run("invalid pat should fail", func(t *testing.T) {
 		config := configuration.NewWithOpts()
-		config.Set(authTypeParameter, auth.AUTH_TYPE_PAT)
+		config.Set(AuthTypeParameter, auth.AUTH_TYPE_PAT)
 		config.Set(ConfigurationNewAuthenticationToken, pat)
 
 		config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "some-oauth-token")
@@ -155,7 +154,7 @@ func Test_pat(t *testing.T) {
 		mockWhoAmIError := fmt.Errorf("mock whoami failure")
 		engine.EXPECT().InvokeWithConfig(gomock.Any(), gomock.Any()).Return(nil, mockWhoAmIError)
 
-		err := entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+		err := AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
 		assert.ErrorIs(t, err, mockWhoAmIError)
 
 		assert.Empty(t, config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
@@ -205,7 +204,7 @@ func Test_clearAllCredentialsBeforeAuth(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := configuration.NewWithOpts()
-			config.Set(authTypeParameter, tc.authType)
+			config.Set(AuthTypeParameter, tc.authType)
 			if tc.authType == auth.AUTH_TYPE_PAT {
 				config.Set(ConfigurationNewAuthenticationToken, "snyk_uat.12345678.abcdefg-hijklmnop.qrstuvwxyz-123456")
 			}
@@ -221,7 +220,7 @@ func Test_clearAllCredentialsBeforeAuth(t *testing.T) {
 
 			tc.setupMocks()
 
-			err := entryPointDI(mockInvocationContext, &logger, engine, authenticator)
+			err := AuthEntryPointDI(mockInvocationContext, &logger, engine, authenticator)
 			assert.NoError(t, err)
 
 			// Verify both tokens are cleared regardless of auth type

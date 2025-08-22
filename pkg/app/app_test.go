@@ -1,7 +1,10 @@
 package app
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -14,15 +17,19 @@ import (
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/jws"
 )
 
 func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
@@ -587,5 +594,129 @@ func TestDefaultInputDirectory(t *testing.T) {
 	// Additional test to verify the function actually returns a function
 	t.Run("returns callable function", func(t *testing.T) {
 		assert.IsType(t, defaultFunction, defaultFunction)
+	})
+}
+
+func Test_auth_oauth(t *testing.T) {
+	mockCtl := gomock.NewController(t)
+	engine := CreateAppEngine()
+	logger := engine.GetLogger()
+	analytics := analytics.New()
+
+	t.Run("oauth token is set on global config", func(t *testing.T) {
+		// Create separate configs for invocation and global
+		globalConfig := engine.GetConfiguration()
+		invocationConfig := globalConfig.Clone()
+
+		// Expected OAuth token that will be set after authentication
+		expectedOAuthToken := "test-oauth-token-12345"
+
+		invocationConfig.Set("auth-type", auth.AUTH_TYPE_OAUTH)
+
+		// Create mocks
+		mockInvocationContext := pkgMocks.NewMockInvocationContext(mockCtl)
+		mockInvocationContext.EXPECT().GetConfiguration().Return(invocationConfig).AnyTimes()
+		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
+		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
+		mockInvocationContext.EXPECT().GetEngine().Return(engine).AnyTimes()
+
+		// Mock authenticator to simulate successful authentication
+		// After authentication, the OAuth token should be set in the invocation config
+		mockAuthenticator := pkgMocks.NewMockAuthenticator(mockCtl)
+		mockAuthenticator.EXPECT().Authenticate().DoAndReturn(func() error {
+			// Simulate successful OAuth authentication by setting the token
+			invocationConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, expectedOAuthToken)
+			return nil
+		})
+
+		// Execute the auth workflow
+		err := localworkflows.AuthEntryPointDI(mockInvocationContext, logger, engine, mockAuthenticator)
+		assert.NoError(t, err)
+
+		// Verify that the OAuth token was set on the global config
+		actualToken := globalConfig.Get(auth.CONFIG_KEY_OAUTH_TOKEN)
+		assert.Equal(t, expectedOAuthToken, actualToken, "OAuth token should be set on global config after successful authentication")
+
+		// Verify that the authentication token is not set (should be cleared)
+		assert.Empty(t, globalConfig.GetString(configuration.AUTHENTICATION_TOKEN), "Legacy authentication token should be cleared")
+	})
+	//
+	t.Run("oauth token change updates api url extraction", func(t *testing.T) {
+		createOAuthTokenWithAudience := func(audience string) string {
+			header := &jws.Header{}
+			claims := &jws.ClaimSet{
+				Aud: audience,
+			}
+			pk, err := rsa.GenerateKey(rand.Reader, 2048)
+			assert.NoError(t, err)
+
+			accessToken, err := jws.Encode(header, claims, pk)
+			assert.NoError(t, err)
+
+			token := oauth2.Token{
+				AccessToken: accessToken,
+			}
+
+			tokenBytes, err := json.Marshal(token)
+			assert.NoError(t, err)
+
+			return string(tokenBytes)
+		}
+
+		globalConfig := engine.GetConfiguration()
+		globalConfig.Set(configuration.API_URL, "https://api.snyk.io")
+		invocationConfig := globalConfig.Clone()
+
+		firstAPIURL := "https://api.eu.snyk.io"
+		firstOAuthToken := createOAuthTokenWithAudience(firstAPIURL)
+
+		// Set auth type to OAuth
+		invocationConfig.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
+
+		// Create mocks
+		mockInvocationContext := pkgMocks.NewMockInvocationContext(mockCtl)
+		mockInvocationContext.EXPECT().GetConfiguration().Return(invocationConfig).AnyTimes()
+		mockInvocationContext.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
+		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
+
+		// First authentication with US token
+		mockAuthenticator := pkgMocks.NewMockAuthenticator(mockCtl)
+		mockAuthenticator.EXPECT().Authenticate().DoAndReturn(func() error {
+			invocationConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, firstOAuthToken)
+			return nil
+		})
+
+		// Execute first auth workflow
+		err := localworkflows.AuthEntryPointDI(mockInvocationContext, logger, engine, mockAuthenticator)
+		assert.NoError(t, err)
+
+		// Verify first OAuth token was set
+		actualToken := globalConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+		assert.Equal(t, firstOAuthToken, actualToken)
+
+		actualApiUrl := globalConfig.GetString(configuration.API_URL)
+		assert.Equal(t, firstAPIURL, actualApiUrl, "First OAuth token should contain EU API URL")
+
+		// Now simulate re-authentication with EU
+		secondAPIURL := "https://api.us.snyk.io"
+		secondOAuthToken := createOAuthTokenWithAudience(secondAPIURL)
+
+		// Mock second authentication
+		mockAuthenticator.EXPECT().Authenticate().DoAndReturn(func() error {
+			invocationConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, secondOAuthToken)
+			return nil
+		})
+
+		// Execute second workflow
+		err = localworkflows.AuthEntryPointDI(mockInvocationContext, logger, engine, mockAuthenticator)
+		assert.NoError(t, err)
+
+		// Verify second OAuth token was set
+		actualToken = globalConfig.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+		assert.Equal(t, secondOAuthToken, actualToken)
+
+		// Extract and verify second API URL from token
+		actualApiUrl = globalConfig.GetString(configuration.API_URL)
+		assert.Equal(t, secondAPIURL, actualApiUrl, "Second OAuth token should contain US API URL")
 	})
 }
