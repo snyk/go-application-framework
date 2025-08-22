@@ -59,8 +59,13 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
+	globalConfig := invocationCtx.GetEngine().GetConfiguration()
 
-	config.ClearCache()
+	// cache always interferes with auth
+	globalConfig.ClearCache()
+
+	// make sure the updated environment is forwarded to global config
+	defer globalConfig.ClearCache()
 
 	httpClient := invocationCtx.GetNetworkAccess().GetUnauthorizedHttpClient()
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
@@ -99,6 +104,7 @@ func autoDetectAuthType(config configuration.Configuration) string {
 
 func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
+	globalConfig := engine.GetConfiguration()
 	config := invocationCtx.GetConfiguration()
 
 	authType := config.GetString(authTypeParameter)
@@ -110,10 +116,12 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 	analytics.AddExtensionStringValue(authTypeParameter, authType)
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
-	// always attempt to clear existing tokens before triggering auth
+	// always attempt to clear existing tokens before triggering auth for current config clone and global config
 	logger.Print("Unset existing auth keys")
 	config.Unset(configuration.AUTHENTICATION_TOKEN)
 	config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+	globalConfig.Unset(configuration.AUTHENTICATION_TOKEN)
+	globalConfig.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
 
 	if strings.EqualFold(authType, auth.AUTH_TYPE_OAUTH) { // OAUTH flow
 		headless := config.GetBool(headlessFlag)
@@ -124,12 +132,15 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 			return err
 		}
 
+		newToken := config.Get(auth.CONFIG_KEY_OAUTH_TOKEN)
+		globalConfig.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newToken)
+
 		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
 		if err != nil {
 			logger.Debug().Err(err).Msg("Failed to output authenticated message")
 		}
 	} else if strings.EqualFold(authType, auth.AUTH_TYPE_PAT) { // PAT flow
-		engine.GetConfiguration().PersistInStorage(auth.CONFIG_KEY_TOKEN)
+		globalConfig.PersistInStorage(auth.CONFIG_KEY_TOKEN)
 		pat := config.GetString(ConfigurationNewAuthenticationToken)
 
 		logger.Print("Validating pat")
@@ -149,8 +160,8 @@ func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logg
 
 		logger.Print("Validation successful; set pat credentials in config")
 		// we don't want to use the cache here, so this is a workaround
-		engine.GetConfiguration().ClearCache()
-		engine.GetConfiguration().Set(auth.CONFIG_KEY_TOKEN, pat)
+		globalConfig.ClearCache()
+		globalConfig.Set(auth.CONFIG_KEY_TOKEN, pat)
 
 		err = ui.DefaultUi().Output(auth.AUTHENTICATED_MESSAGE)
 		if err != nil {
