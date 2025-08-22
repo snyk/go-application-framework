@@ -59,7 +59,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
-	globalConfig := invocationCtx.GetEngine().GetConfiguration()
+	globalConfig := engine.GetConfiguration()
 
 	// cache always interferes with auth
 	globalConfig.ClearCache()
