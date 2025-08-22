@@ -611,7 +611,7 @@ func Test_auth_oauth(t *testing.T) {
 		// Expected OAuth token that will be set after authentication
 		expectedOAuthToken := "test-oauth-token-12345"
 
-		invocationConfig.Set("auth-type", auth.AUTH_TYPE_OAUTH)
+		invocationConfig.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
 
 		// Create mocks
 		mockInvocationContext := pkgMocks.NewMockInvocationContext(mockCtl)
@@ -620,8 +620,6 @@ func Test_auth_oauth(t *testing.T) {
 		mockInvocationContext.EXPECT().GetAnalytics().Return(analytics).AnyTimes()
 		mockInvocationContext.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-		// Mock authenticator to simulate successful authentication
-		// After authentication, the OAuth token should be set in the invocation config
 		mockAuthenticator := pkgMocks.NewMockAuthenticator(mockCtl)
 		mockAuthenticator.EXPECT().Authenticate().DoAndReturn(func() error {
 			// Simulate successful OAuth authentication by setting the token
@@ -640,7 +638,7 @@ func Test_auth_oauth(t *testing.T) {
 		// Verify that the authentication token is not set (should be cleared)
 		assert.Empty(t, globalConfig.GetString(configuration.AUTHENTICATION_TOKEN), "Legacy authentication token should be cleared")
 	})
-	//
+
 	t.Run("oauth token change updates api url extraction", func(t *testing.T) {
 		createOAuthTokenWithAudience := func(audience string) string {
 			header := &jws.Header{}
