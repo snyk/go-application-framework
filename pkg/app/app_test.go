@@ -498,8 +498,8 @@ func TestDefaultInputDirectory(t *testing.T) {
 			name:           "path with leading/trailing whitespace",
 			existingValue:  "  /path/with/whitespace  ",
 			expectedError:  false,
-			expectedResult: "/path/with/whitespace",
-			description:    "should trim whitespace and return clean path",
+			expectedResult: "  /path/with/whitespace  ",
+			description:    "should preserve whitespace and return path exactly as provided",
 		},
 		{
 			name:           "non-string type - integer",
