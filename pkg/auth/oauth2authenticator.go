@@ -273,7 +273,9 @@ func (o *oAuth2Authenticator) Authenticate() error {
 func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error {
 	var err error
 
+	globalRefreshMutex.Lock()
 	o.oauthConfig = getOAuthConfiguration(o.config)
+	globalRefreshMutex.Unlock()
 
 	if o.grantType == ClientCredentialsGrant {
 		err = o.authenticateWithClientCredentialsGrant(ctx)

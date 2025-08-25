@@ -18,7 +18,7 @@ import (
 const (
 	workflowNameAuth  = "auth"
 	headlessFlag      = "headless"
-	authTypeParameter = "auth-type"
+	AuthTypeParameter = "auth-type"
 )
 
 var authTypeDescription = fmt.Sprint("Authentication type (", auth.AUTH_TYPE_TOKEN, ", ", auth.AUTH_TYPE_OAUTH, ")")
@@ -39,7 +39,7 @@ var ConfigurationNewAuthenticationToken = "internal_new_snyk_token"
 // InitAuth initializes the auth workflow before registering it with the engine.
 func InitAuth(engine workflow.Engine) error {
 	config := pflag.NewFlagSet(workflowNameAuth, pflag.ExitOnError)
-	config.String(authTypeParameter, "", authTypeDescription)
+	config.String(AuthTypeParameter, "", authTypeDescription)
 	config.Bool(headlessFlag, false, "Enable headless OAuth authentication")
 	config.String(auth.PARAMETER_CLIENT_SECRET, "", "Client Credential Grant, client secret")
 	config.String(auth.PARAMETER_CLIENT_ID, "", "Client Credential Grant, client id")
@@ -59,7 +59,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	engine := invocationCtx.GetEngine()
-	globalConfig := invocationCtx.GetEngine().GetConfiguration()
+	globalConfig := engine.GetConfiguration()
 
 	// cache always interferes with auth
 	globalConfig.ClearCache()
@@ -76,7 +76,7 @@ func authEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data)
 		auth.WithLogger(logger),
 	)
 
-	err = entryPointDI(invocationCtx, logger, engine, authenticator)
+	err = AuthEntryPointDI(invocationCtx, logger, engine, authenticator)
 	return nil, err
 }
 
@@ -102,18 +102,18 @@ func autoDetectAuthType(config configuration.Configuration) string {
 	return auth.AUTH_TYPE_OAUTH
 }
 
-func entryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
+func AuthEntryPointDI(invocationCtx workflow.InvocationContext, logger *zerolog.Logger, engine workflow.Engine, authenticator auth.Authenticator) (err error) {
 	analytics := invocationCtx.GetAnalytics()
 	globalConfig := engine.GetConfiguration()
 	config := invocationCtx.GetConfiguration()
 
-	authType := config.GetString(authTypeParameter)
+	authType := config.GetString(AuthTypeParameter)
 	if len(authType) == 0 {
 		authType = autoDetectAuthType(config)
 	}
 
 	logger.Printf("Authentication Type: %s", authType)
-	analytics.AddExtensionStringValue(authTypeParameter, authType)
+	analytics.AddExtensionStringValue(AuthTypeParameter, authType)
 
 	existingSnykToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 	// always attempt to clear existing tokens before triggering auth for current config clone and global config
