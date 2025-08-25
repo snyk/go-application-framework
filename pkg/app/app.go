@@ -115,20 +115,19 @@ func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) co
 
 func defaultInputDirectory() configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// Check if we have a valid string value
 		existingString, isString := existingValue.(string)
-		if isString {
-			existingString = strings.TrimSpace(existingString)
-		}
-
-		if len(existingString) == 0 {
-			path, err := os.Getwd()
-			if err != nil {
-				return "", err
-			}
-			return path, nil
-		} else {
+		if isString && len(existingString) > 0 {
+			// Return the string value as-is (preserving any whitespace)
 			return existingString, nil
 		}
+
+		// Fall back to current working directory for non-string types or empty strings
+		path, err := os.Getwd()
+		if err != nil {
+			return ".", err
+		}
+		return path, nil
 	}
 	return callback
 }
