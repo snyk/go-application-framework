@@ -24,7 +24,7 @@ const (
 // Claims represents the structure of the PATs claims, it does not represent all the claims; only the ones we need
 type Claims struct {
 	// Hostname PAT is valid for
-	Hostname string `json:"h,omitempty"`
+	Hostname string `json:"h"`
 }
 
 var _ Authenticator = (*tokenAuthenticator)(nil)
@@ -101,6 +101,10 @@ func GetApiUrlFromPAT(pat string) (string, error) {
 	}
 
 	hostname := claims.Hostname
+	if len(hostname) == 0 {
+		return "", fmt.Errorf("hostname is empty")
+	}
+
 	if !strings.HasPrefix(hostname, "http") {
 		hostname = fmt.Sprintf("https://%s", hostname)
 	}

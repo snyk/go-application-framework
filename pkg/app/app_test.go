@@ -121,11 +121,21 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("https://%s", apiUrl), actualApiUrl)
 	})
 
-	t.Run("invalid PAT reverts to default API URL", func(t *testing.T) {
+	t.Run("invalid PAT reverts to default API URL (with wrong payload)", func(t *testing.T) {
 		patWithExtraSegments := "snyk_uat.12345678.payload.signature.extra"
 		engine := CreateAppEngine()
 		config := engine.GetConfiguration()
 		config.Set(configuration.AUTHENTICATION_TOKEN, patWithExtraSegments)
+
+		actualApiUrl := config.GetString(configuration.API_URL)
+		assert.Equal(t, constants.SNYK_DEFAULT_API_URL, actualApiUrl)
+	})
+
+	t.Run("invalid PAT reverts to default API URL (with no hostname in claim)", func(t *testing.T) {
+		pat := createMockPAT(t, `{}`)
+		engine := CreateAppEngine()
+		config := engine.GetConfiguration()
+		config.Set(configuration.AUTHENTICATION_TOKEN, pat)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
 		assert.Equal(t, constants.SNYK_DEFAULT_API_URL, actualApiUrl)
