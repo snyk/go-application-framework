@@ -96,6 +96,14 @@ func TestGetApiUrlFromPAT(t *testing.T) {
 		assert.Equal(t, "http://api.snyk.io", apiUrl)
 	})
 
+	t.Run("PAT without hostname in claims", func(t *testing.T) {
+		pat := createMockPAT(t, `{}`)
+		fmt.Println("pat", pat)
+		apiUrl, err := GetApiUrlFromPAT(pat)
+		assert.NoError(t, err)
+		assert.Equal(t, "http://api.snyk.io", apiUrl)
+	})
+
 	t.Run("Invalid PAT", func(t *testing.T) {
 		patTooManySegments := "snyk_test.12345678.payload.signature.extra"
 		apiUrl, err := GetApiUrlFromPAT(patTooManySegments)
