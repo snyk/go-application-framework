@@ -90,7 +90,6 @@ func TestGetApiUrlFromPAT(t *testing.T) {
 
 	t.Run("PAT with scheme", func(t *testing.T) {
 		pat := createMockPAT(t, `{"h":"http://api.snyk.io"}`)
-		fmt.Println("pat", pat)
 		apiUrl, err := GetApiUrlFromPAT(pat)
 		assert.NoError(t, err)
 		assert.Equal(t, "http://api.snyk.io", apiUrl)
@@ -98,7 +97,6 @@ func TestGetApiUrlFromPAT(t *testing.T) {
 
 	t.Run("PAT without hostname in claims", func(t *testing.T) {
 		pat := createMockPAT(t, `{}`)
-		fmt.Println("pat", pat)
 		_, err := GetApiUrlFromPAT(pat)
 		assert.Error(t, err)
 	})
