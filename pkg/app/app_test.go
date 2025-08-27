@@ -34,7 +34,8 @@ import (
 
 func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 	t.Run("should load default config files (without given command line)", func(t *testing.T) {
-		engine := CreateAppEngine()
+		localConfig := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 		conf := engine.GetConfiguration()
 
 		actual := conf.GetStringSlice(configuration.CUSTOM_CONFIG_FILES)
@@ -50,7 +51,8 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 	})
 
 	t.Run("should load default config files (with given command line)", func(t *testing.T) {
-		engine := CreateAppEngine()
+		localConfig := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 		conf := engine.GetConfiguration()
 		conf.Set("configfile", "abc/d")
 
@@ -98,12 +100,143 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
+func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
+	tests := []struct {
+		name              string
+		patPayload        string
+		oauthJWTPayload   string
+		userDefinedApiUrl interface{}
+		expectedURL       string
+	}{
+		{
+			name:              "no user-specified input, should default to the hard-coded default URL",
+			patPayload:        "",
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "",
+			expectedURL:       constants.SNYK_DEFAULT_API_URL,
+		},
+		{
+			name:              "broken user-defined API URL is defined, should default to the hard-coded default URL",
+			patPayload:        "",
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: 123,
+			expectedURL:       constants.SNYK_DEFAULT_API_URL,
+		},
+		{
+			name:              "only user-defined API URL is defined, use that",
+			patPayload:        "",
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with a broken PAT configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        `{broken`,
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with an empty PAT configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        `{}`,
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with a PAT configured and a user-defined API URL, PAT host should take precedence",
+			patPayload:        `{"h":"api.pat"}`,
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.pat",
+		},
+		{
+			name:              "with a broken OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        "",
+			oauthJWTPayload:   `{broken`,
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        "",
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":[]}`,
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with OAuth configured and a user-defined API URL, OAuth audience should take precedence",
+			patPayload:        "",
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth"]}`,
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.oauth",
+		},
+		{
+			name:              "with only PAT configured, use PAT host",
+			patPayload:        `{"h":"api.pat"}`,
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "",
+			expectedURL:       "https://api.pat",
+		},
+		{
+			name:              "with only OAuth configured, use OAuth audience",
+			patPayload:        "",
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth"]}`,
+			userDefinedApiUrl: "",
+			expectedURL:       "https://api.oauth",
+		},
+		// This is not a likely scenario, as you cannot define both at the same time. However, it will potentially
+		// catch regressions if this test starts to fail.
+		{
+			name:              "with PAT, OAuth and user-defined API URL, PAT should take precedence over OAuth",
+			patPayload:        `{"h":"api.pat"}`,
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth"]}`,
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.pat",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			assert.NotNil(t, engine)
+
+			if tt.userDefinedApiUrl != "" {
+				config.Set(configuration.API_URL, tt.userDefinedApiUrl)
+			}
+
+			if tt.patPayload != "" {
+				pat := createMockPAT(t, tt.patPayload)
+				config.Set(configuration.AUTHENTICATION_TOKEN, pat)
+			}
+
+			if tt.oauthJWTPayload != "" {
+				jwtHeader := `{"alg":"HS256","typ":"JWT"}`
+				encodedHeader := base64.RawURLEncoding.EncodeToString([]byte(jwtHeader))
+				encodedPayload := base64.RawURLEncoding.EncodeToString([]byte(tt.oauthJWTPayload))
+				signature := "hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"
+
+				jwtToken := fmt.Sprintf("%s.%s.%s", encodedHeader, encodedPayload, signature)
+				oauthTokenJSON := fmt.Sprintf(`{"access_token": "%s"}`, jwtToken)
+
+				config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, oauthTokenJSON)
+			}
+
+			actualApiUrl := config.GetString(configuration.API_URL)
+			assert.Equal(t, tt.expectedURL, actualApiUrl)
+		})
+	}
+}
+
 func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		apiUrl := "api.snyk.io"
 		euPAT := createMockPAT(t, fmt.Sprintf(`{"h":"%s"}`, apiUrl))
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, euPAT)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -113,8 +246,10 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 	t.Run("eu", func(t *testing.T) {
 		apiUrl := "api.eu.snyk.io"
 		euPAT := createMockPAT(t, fmt.Sprintf(`{"h":"%s"}`, apiUrl))
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, euPAT)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -123,8 +258,10 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 
 	t.Run("invalid PAT reverts to default API URL (with wrong payload)", func(t *testing.T) {
 		patWithExtraSegments := "snyk_uat.12345678.payload.signature.extra"
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, patWithExtraSegments)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -133,8 +270,10 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 
 	t.Run("invalid PAT reverts to default API URL (with no hostname in claim)", func(t *testing.T) {
 		pat := createMockPAT(t, `{}`)
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, pat)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -609,7 +748,10 @@ func TestDefaultInputDirectory(t *testing.T) {
 
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
-	engine := CreateAppEngine()
+	config := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
 	logger := engine.GetLogger()
 	analytics := analytics.New()
 
