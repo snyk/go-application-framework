@@ -34,7 +34,8 @@ import (
 
 func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 	t.Run("should load default config files (without given command line)", func(t *testing.T) {
-		engine := CreateAppEngine()
+		localConfig := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 		conf := engine.GetConfiguration()
 
 		actual := conf.GetStringSlice(configuration.CUSTOM_CONFIG_FILES)
@@ -50,7 +51,8 @@ func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 	})
 
 	t.Run("should load default config files (with given command line)", func(t *testing.T) {
-		engine := CreateAppEngine()
+		localConfig := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig))
 		conf := engine.GetConfiguration()
 		conf.Set("configfile", "abc/d")
 
@@ -154,9 +156,9 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := CreateAppEngine()
 			config := configuration.NewWithOpts()
-			initConfiguration(engine, config, engine.GetLogger(), nil)
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			assert.NotNil(t, engine)
 
 			if tt.userDefinedApiUrl != "" {
 				config.Set(configuration.API_URL, tt.userDefinedApiUrl)
@@ -194,8 +196,10 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		apiUrl := "api.snyk.io"
 		euPAT := createMockPAT(t, fmt.Sprintf(`{"h":"%s"}`, apiUrl))
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, euPAT)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -205,8 +209,10 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 	t.Run("eu", func(t *testing.T) {
 		apiUrl := "api.eu.snyk.io"
 		euPAT := createMockPAT(t, fmt.Sprintf(`{"h":"%s"}`, apiUrl))
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, euPAT)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -215,8 +221,10 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 
 	t.Run("invalid PAT reverts to default API URL (with wrong payload)", func(t *testing.T) {
 		patWithExtraSegments := "snyk_uat.12345678.payload.signature.extra"
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, patWithExtraSegments)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -225,8 +233,10 @@ func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 
 	t.Run("invalid PAT reverts to default API URL (with no hostname in claim)", func(t *testing.T) {
 		pat := createMockPAT(t, `{}`)
-		engine := CreateAppEngine()
-		config := engine.GetConfiguration()
+		config := configuration.NewWithOpts()
+		engine := CreateAppEngineWithOptions(WithConfiguration(config))
+		assert.NotNil(t, engine)
+
 		config.Set(configuration.AUTHENTICATION_TOKEN, pat)
 
 		actualApiUrl := config.GetString(configuration.API_URL)
@@ -701,7 +711,10 @@ func TestDefaultInputDirectory(t *testing.T) {
 
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
-	engine := CreateAppEngine()
+	config := configuration.NewWithOpts()
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+	assert.NotNil(t, engine)
+
 	logger := engine.GetLogger()
 	analytics := analytics.New()
 
