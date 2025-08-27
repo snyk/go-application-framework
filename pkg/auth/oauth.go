@@ -17,7 +17,7 @@ type arrayClaimSet struct {
 	Aud []string `json:"aud"`
 }
 
-// oauthApiUrl returns the API URL specified by the audience claim in a JWT
+// GetAudienceClaimFromOauthToken returns the API URL specified by the audience claim in a JWT
 // token established by a prior OAuth authentication flow.
 //
 // Returns an empty string if an OAuth token is not available, cannot be parsed,
