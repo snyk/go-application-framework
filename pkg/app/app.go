@@ -83,6 +83,14 @@ func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) co
 		urlString := constants.SNYK_DEFAULT_API_URL
 		authToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
 
+		// If a user specified their own value, start by respecting that
+		if existingValue != nil {
+			if temp, ok := existingValue.(string); ok {
+				urlString = temp
+			}
+		}
+
+		// If an oauth token is provided, with a URL in the audience claim, use that instead
 		urlFromOauthToken, err := auth.GetAudienceClaimFromOauthToken(config.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 		if err != nil {
 			logger.Warn().Err(err).Msg("failed to read oauth token")
@@ -90,17 +98,16 @@ func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) co
 
 		if len(urlFromOauthToken) > 0 && len(urlFromOauthToken[0]) > 0 {
 			urlString = urlFromOauthToken[0]
-		} else if auth.IsAuthTypePAT(authToken) {
+		}
+
+		// Same logic for PAT - if a PAT is provided, and it has a URL in the claims, use that instead
+		if auth.IsAuthTypePAT(authToken) {
 			apiUrl, claimsErr := auth.GetApiUrlFromPAT(authToken)
 			if claimsErr != nil {
 				logger.Warn().Err(claimsErr).Msg("failed to get api url from pat")
 			}
 			if len(apiUrl) > 0 {
 				urlString = apiUrl
-			}
-		} else if existingValue != nil { // try the configured value as last resort
-			if temp, ok := existingValue.(string); ok {
-				urlString = temp
 			}
 		}
 

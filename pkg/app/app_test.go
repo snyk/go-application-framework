@@ -98,6 +98,98 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 	assert.Equal(t, expectApiUrl, actualApiUrl)
 }
 
+func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
+	tests := []struct {
+		name              string
+		patPayload        string
+		oauthJWTPayload   string
+		userDefinedApiUrl string
+		expectedURL       string
+	}{
+		{
+			name:              "only user-defined API URL is defined, use that",
+			patPayload:        "",
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user.defined.url.api.snyk.io",
+			expectedURL:       "https://api.user.defined.url.api.snyk.io",
+		},
+		{
+			name:              "with a PAT configured and a user-defined API URL, PAT host should take precedence",
+			patPayload:        `{"h":"api.pat.is.defined.api.snyk.io"}`,
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user.defined.url.api.snyk.io",
+			expectedURL:       "https://api.pat.is.defined.api.snyk.io",
+		},
+		{
+			name:              "with OAuth configured and a user-defined API URL, OAuth audience should take precedence",
+			patPayload:        "",
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth.defined.api.snyk.io"]}`,
+			userDefinedApiUrl: "https://api.user.defined.url.api.snyk.io",
+			expectedURL:       "https://api.oauth.defined.api.snyk.io",
+		},
+		{
+			name:              "with only PAT configured, use PAT host",
+			patPayload:        `{"h":"api.pat.is.defined.api.snyk.io"}`,
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "",
+			expectedURL:       "https://api.pat.is.defined.api.snyk.io",
+		},
+		{
+			name:              "with only OAuth configured, use OAuth audience",
+			patPayload:        "",
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth.defined.api.snyk.io"]}`,
+			userDefinedApiUrl: "",
+			expectedURL:       "https://api.oauth.defined.api.snyk.io",
+		},
+		// This is not a likely scenario, as you cannot define both at the same time. However, it will potentially
+		// catch regressions if this test starts to fail.
+		{
+			name:              "with PAT, OAuth and user-defined API URL, PAT should take precedence over OAuth",
+			patPayload:        `{"h":"api.pat.is.defined.api.snyk.io"}`,
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth.defined.api.snyk.io"]}`,
+			userDefinedApiUrl: "https://api.user.defined.url.api.snyk.io",
+			expectedURL:       "https://api.pat.is.defined.api.snyk.io",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := CreateAppEngine()
+			config := configuration.NewWithOpts()
+			initConfiguration(engine, config, engine.GetLogger(), nil)
+
+			if tt.userDefinedApiUrl != "" {
+				config.Set(configuration.API_URL, tt.userDefinedApiUrl)
+			}
+
+			if tt.patPayload != "" {
+				pat := createMockPAT(t, tt.patPayload)
+				config.Set(configuration.AUTHENTICATION_TOKEN, pat)
+			}
+
+			if tt.oauthJWTPayload != "" {
+				// Human-readable JWT header
+				jwtHeader := `{"alg":"HS256","typ":"JWT"}`
+
+				// Encode to base64
+				encodedHeader := base64.RawURLEncoding.EncodeToString([]byte(jwtHeader))
+				encodedPayload := base64.RawURLEncoding.EncodeToString([]byte(tt.oauthJWTPayload))
+				signature := "hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"
+
+				// Construct JWT token
+				jwtToken := fmt.Sprintf("%s.%s.%s", encodedHeader, encodedPayload, signature)
+				oauthTokenJSON := fmt.Sprintf(`{"access_token": "%s"}`, jwtToken)
+
+				config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, oauthTokenJSON)
+			}
+
+			actualApiUrl := config.GetString(configuration.API_URL)
+			assert.True(t, actualApiUrl == tt.expectedURL,
+				"Expected URL %s should be used, but got %s", tt.expectedURL, actualApiUrl)
+		})
+	}
+}
+
 func Test_CreateAppEngine_config_PAT_autoRegionDetection(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		apiUrl := "api.snyk.io"
