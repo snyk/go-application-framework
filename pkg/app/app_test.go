@@ -105,7 +105,7 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		name              string
 		patPayload        string
 		oauthJWTPayload   string
-		userDefinedApiUrl string
+		userDefinedApiUrl interface{}
 		expectedURL       string
 	}{
 		{
@@ -116,8 +116,29 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 			expectedURL:       constants.SNYK_DEFAULT_API_URL,
 		},
 		{
+			name:              "broken user-defined API URL is defined, should default to the hard-coded default URL",
+			patPayload:        "",
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: 123,
+			expectedURL:       constants.SNYK_DEFAULT_API_URL,
+		},
+		{
 			name:              "only user-defined API URL is defined, use that",
 			patPayload:        "",
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with a broken PAT configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        `{broken`,
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with an empty PAT configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        `{}`,
 			oauthJWTPayload:   "",
 			userDefinedApiUrl: "https://api.user",
 			expectedURL:       "https://api.user",
@@ -128,6 +149,20 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 			oauthJWTPayload:   "",
 			userDefinedApiUrl: "https://api.user",
 			expectedURL:       "https://api.pat",
+		},
+		{
+			name:              "with a broken OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        "",
+			oauthJWTPayload:   `{broken`,
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
+		},
+		{
+			name:              "with OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
+			patPayload:        "",
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":[]}`,
+			userDefinedApiUrl: "https://api.user",
+			expectedURL:       "https://api.user",
 		},
 		{
 			name:              "with OAuth configured and a user-defined API URL, OAuth audience should take precedence",
@@ -189,7 +224,7 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 			}
 
 			actualApiUrl := config.GetString(configuration.API_URL)
-			assert.Equal(t, actualApiUrl, tt.expectedURL)
+			assert.Equal(t, tt.expectedURL, actualApiUrl)
 		})
 	}
 }
