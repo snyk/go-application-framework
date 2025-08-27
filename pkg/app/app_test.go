@@ -170,15 +170,11 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 			}
 
 			if tt.oauthJWTPayload != "" {
-				// Human-readable JWT header
 				jwtHeader := `{"alg":"HS256","typ":"JWT"}`
-
-				// Encode to base64
 				encodedHeader := base64.RawURLEncoding.EncodeToString([]byte(jwtHeader))
 				encodedPayload := base64.RawURLEncoding.EncodeToString([]byte(tt.oauthJWTPayload))
 				signature := "hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"
 
-				// Construct JWT token
 				jwtToken := fmt.Sprintf("%s.%s.%s", encodedHeader, encodedPayload, signature)
 				oauthTokenJSON := fmt.Sprintf(`{"access_token": "%s"}`, jwtToken)
 
