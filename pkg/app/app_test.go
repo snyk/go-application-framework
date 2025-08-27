@@ -109,6 +109,13 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		expectedURL       string
 	}{
 		{
+			name:              "no user-specified input, should default to the hard-coded default URL",
+			patPayload:        "",
+			oauthJWTPayload:   "",
+			userDefinedApiUrl: "",
+			expectedURL:       constants.SNYK_DEFAULT_API_URL,
+		},
+		{
 			name:              "only user-defined API URL is defined, use that",
 			patPayload:        "",
 			oauthJWTPayload:   "",
