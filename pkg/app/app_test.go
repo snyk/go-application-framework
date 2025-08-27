@@ -189,8 +189,7 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 			}
 
 			actualApiUrl := config.GetString(configuration.API_URL)
-			assert.True(t, actualApiUrl == tt.expectedURL,
-				"Expected URL %s should be used, but got %s", tt.expectedURL, actualApiUrl)
+			assert.Equal(t, actualApiUrl, tt.expectedURL)
 		})
 	}
 }
