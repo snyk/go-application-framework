@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -74,36 +75,37 @@ func TestExtractClaimsFromPAT(t *testing.T) {
 }
 
 func TestGetApiUrlFromPAT(t *testing.T) {
+	redirectAuthHostRE := constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP
 	t.Run("Valid PAT", func(t *testing.T) {
 		pat := createMockPAT(t, `{"h":"api.snyk.io"}`)
-		apiUrl, err := GetApiUrlFromPAT(pat)
+		apiUrl, err := GetApiUrlFromPAT(pat, redirectAuthHostRE)
 		assert.NoError(t, err)
 		assert.Equal(t, "https://api.snyk.io", apiUrl)
 	})
 
 	t.Run("Valid EU PAT", func(t *testing.T) {
 		pat := createMockPAT(t, `{"h":"api.eu.snyk.io"}`)
-		apiUrl, err := GetApiUrlFromPAT(pat)
+		apiUrl, err := GetApiUrlFromPAT(pat, redirectAuthHostRE)
 		assert.NoError(t, err)
 		assert.Equal(t, "https://api.eu.snyk.io", apiUrl)
 	})
 
 	t.Run("PAT with scheme", func(t *testing.T) {
 		pat := createMockPAT(t, `{"h":"http://api.snyk.io"}`)
-		apiUrl, err := GetApiUrlFromPAT(pat)
+		apiUrl, err := GetApiUrlFromPAT(pat, redirectAuthHostRE)
 		assert.NoError(t, err)
 		assert.Equal(t, "http://api.snyk.io", apiUrl)
 	})
 
 	t.Run("PAT without hostname in claims", func(t *testing.T) {
 		pat := createMockPAT(t, `{}`)
-		_, err := GetApiUrlFromPAT(pat)
+		_, err := GetApiUrlFromPAT(pat, redirectAuthHostRE)
 		assert.Error(t, err)
 	})
 
 	t.Run("Invalid PAT", func(t *testing.T) {
 		patTooManySegments := "snyk_test.12345678.payload.signature.extra"
-		apiUrl, err := GetApiUrlFromPAT(patTooManySegments)
+		apiUrl, err := GetApiUrlFromPAT(patTooManySegments, redirectAuthHostRE)
 		assert.Error(t, err)
 		assert.Equal(t, "", apiUrl)
 	})

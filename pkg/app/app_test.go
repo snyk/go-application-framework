@@ -145,10 +145,10 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		},
 		{
 			name:              "with a PAT configured and a user-defined API URL, PAT host should take precedence",
-			patPayload:        `{"h":"api.pat"}`,
+			patPayload:        `{"h":"api.snyk.io"}`,
 			oauthJWTPayload:   "",
 			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.pat",
+			expectedURL:       "https://api.snyk.io",
 		},
 		{
 			name:              "with a broken OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
@@ -173,10 +173,10 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		},
 		{
 			name:              "with only PAT configured, use PAT host",
-			patPayload:        `{"h":"api.pat"}`,
+			patPayload:        `{"h":"api.eu.snyk.io"}`,
 			oauthJWTPayload:   "",
 			userDefinedApiUrl: "",
-			expectedURL:       "https://api.pat",
+			expectedURL:       "https://api.eu.snyk.io",
 		},
 		{
 			name:              "with only OAuth configured, use OAuth audience",
@@ -189,10 +189,10 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		// catch regressions if this test starts to fail.
 		{
 			name:              "with PAT, OAuth and user-defined API URL, PAT should take precedence over OAuth",
-			patPayload:        `{"h":"api.pat"}`,
+			patPayload:        `{"h":"api.au.snyk.io"}`,
 			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth"]}`,
 			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.pat",
+			expectedURL:       "https://api.au.snyk.io",
 		},
 	}
 
@@ -225,6 +225,37 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 
 			actualApiUrl := config.GetString(configuration.API_URL)
 			assert.Equal(t, tt.expectedURL, actualApiUrl)
+		})
+	}
+}
+
+func Test_CreateAppEngine_config_PAT_validHost(t *testing.T) {
+	testCases := []struct {
+		apiUrl      string
+		expectedURL string
+	}{
+		{"api.au.snyk.io", "https://api.au.snyk.io"},
+		{"api.example.snyk.io", "https://api.example.snyk.io"},
+		{"api.snyk.io", "https://api.snyk.io"},
+		{"api.snykgov.io", "https://api.snykgov.io"},
+		{"api.pre-release.snykgov.io", "https://api.pre-release.snykgov.io"},
+		// default to api.snyk.io for invalid hosts
+		{"snyk.io", "https://api.snyk.io"},
+		{"api.example.com", "https://api.snyk.io"},
+		{"api.snyk.evil.com", "https://api.snyk.io"},
+		{"evilsnykgov.io", "https://api.snyk.io"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.apiUrl, func(t *testing.T) {
+			pat := createMockPAT(t, fmt.Sprintf(`{"h":"%s"}`, tc.apiUrl))
+			config := configuration.NewWithOpts()
+			engine := CreateAppEngineWithOptions(WithConfiguration(config))
+			assert.NotNil(t, engine)
+
+			config.Set(configuration.AUTHENTICATION_TOKEN, pat)
+			actualApiUrl := config.GetString(configuration.API_URL)
+			assert.Equal(t, tc.expectedURL, actualApiUrl)
 		})
 	}
 }

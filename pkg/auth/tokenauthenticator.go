@@ -94,7 +94,7 @@ func extractClaimsFromPAT(raw string) (*Claims, error) {
 	return &c, nil
 }
 
-func GetApiUrlFromPAT(pat string) (string, error) {
+func GetApiUrlFromPAT(pat string, redirectAuthHostRE string) (string, error) {
 	claims, err := extractClaimsFromPAT(pat)
 	if err != nil {
 		return "", err
@@ -107,6 +107,15 @@ func GetApiUrlFromPAT(pat string) (string, error) {
 
 	if !strings.HasPrefix(hostname, "http") {
 		hostname = fmt.Sprintf("https://%s", hostname)
+	}
+
+	isValidHost, err := IsValidAuthHost(hostname, redirectAuthHostRE)
+	if err != nil {
+		return "", err
+	}
+
+	if !isValidHost {
+		return "", fmt.Errorf("specified instance is an invalid host")
 	}
 
 	return hostname, nil
