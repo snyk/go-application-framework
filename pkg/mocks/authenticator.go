@@ -77,31 +77,31 @@ func (mr *MockAuthenticatorMockRecorder) IsSupported() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSupported", reflect.TypeOf((*MockAuthenticator)(nil).IsSupported))
 }
 
-// MockCancellableAuthenticator is a mock of CancellableAuthenticator interface.
-type MockCancellableAuthenticator struct {
+// MockCancelableAuthenticator is a mock of CancelableAuthenticator interface.
+type MockCancelableAuthenticator struct {
 	ctrl     *gomock.Controller
-	recorder *MockCancellableAuthenticatorMockRecorder
+	recorder *MockCancelableAuthenticatorMockRecorder
 }
 
-// MockCancellableAuthenticatorMockRecorder is the mock recorder for MockCancellableAuthenticator.
-type MockCancellableAuthenticatorMockRecorder struct {
-	mock *MockCancellableAuthenticator
+// MockCancelableAuthenticatorMockRecorder is the mock recorder for MockCancelableAuthenticator.
+type MockCancelableAuthenticatorMockRecorder struct {
+	mock *MockCancelableAuthenticator
 }
 
-// NewMockCancellableAuthenticator creates a new mock instance.
-func NewMockCancellableAuthenticator(ctrl *gomock.Controller) *MockCancellableAuthenticator {
-	mock := &MockCancellableAuthenticator{ctrl: ctrl}
-	mock.recorder = &MockCancellableAuthenticatorMockRecorder{mock}
+// NewMockCancelableAuthenticator creates a new mock instance.
+func NewMockCancelableAuthenticator(ctrl *gomock.Controller) *MockCancelableAuthenticator {
+	mock := &MockCancelableAuthenticator{ctrl: ctrl}
+	mock.recorder = &MockCancelableAuthenticatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockCancellableAuthenticator) EXPECT() *MockCancellableAuthenticatorMockRecorder {
+func (m *MockCancelableAuthenticator) EXPECT() *MockCancelableAuthenticatorMockRecorder {
 	return m.recorder
 }
 
 // AddAuthenticationHeader mocks base method.
-func (m *MockCancellableAuthenticator) AddAuthenticationHeader(request *http.Request) error {
+func (m *MockCancelableAuthenticator) AddAuthenticationHeader(request *http.Request) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddAuthenticationHeader", request)
 	ret0, _ := ret[0].(error)
@@ -109,27 +109,41 @@ func (m *MockCancellableAuthenticator) AddAuthenticationHeader(request *http.Req
 }
 
 // AddAuthenticationHeader indicates an expected call of AddAuthenticationHeader.
-func (mr *MockCancellableAuthenticatorMockRecorder) AddAuthenticationHeader(request interface{}) *gomock.Call {
+func (mr *MockCancelableAuthenticatorMockRecorder) AddAuthenticationHeader(request interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAuthenticationHeader", reflect.TypeOf((*MockCancellableAuthenticator)(nil).AddAuthenticationHeader), request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAuthenticationHeader", reflect.TypeOf((*MockCancelableAuthenticator)(nil).AddAuthenticationHeader), request)
 }
 
-// CancellableAuthenticate mocks base method.
-func (m *MockCancellableAuthenticator) CancellableAuthenticate(ctx context.Context) error {
+// Authenticate mocks base method.
+func (m *MockCancelableAuthenticator) Authenticate() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CancellableAuthenticate", ctx)
+	ret := m.ctrl.Call(m, "Authenticate")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// CancellableAuthenticate indicates an expected call of CancellableAuthenticate.
-func (mr *MockCancellableAuthenticatorMockRecorder) CancellableAuthenticate(ctx interface{}) *gomock.Call {
+// Authenticate indicates an expected call of Authenticate.
+func (mr *MockCancelableAuthenticatorMockRecorder) Authenticate() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancellableAuthenticate", reflect.TypeOf((*MockCancellableAuthenticator)(nil).CancellableAuthenticate), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authenticate", reflect.TypeOf((*MockCancelableAuthenticator)(nil).Authenticate))
+}
+
+// CancelableAuthenticate mocks base method.
+func (m *MockCancelableAuthenticator) CancelableAuthenticate(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelableAuthenticate", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CancelableAuthenticate indicates an expected call of CancelableAuthenticate.
+func (mr *MockCancelableAuthenticatorMockRecorder) CancelableAuthenticate(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelableAuthenticate", reflect.TypeOf((*MockCancelableAuthenticator)(nil).CancelableAuthenticate), ctx)
 }
 
 // IsSupported mocks base method.
-func (m *MockCancellableAuthenticator) IsSupported() bool {
+func (m *MockCancelableAuthenticator) IsSupported() bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsSupported")
 	ret0, _ := ret[0].(bool)
@@ -137,7 +151,7 @@ func (m *MockCancellableAuthenticator) IsSupported() bool {
 }
 
 // IsSupported indicates an expected call of IsSupported.
-func (mr *MockCancellableAuthenticatorMockRecorder) IsSupported() *gomock.Call {
+func (mr *MockCancelableAuthenticatorMockRecorder) IsSupported() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSupported", reflect.TypeOf((*MockCancellableAuthenticator)(nil).IsSupported))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSupported", reflect.TypeOf((*MockCancelableAuthenticator)(nil).IsSupported))
 }
