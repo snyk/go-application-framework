@@ -943,7 +943,7 @@ func Test_toDuration(t *testing.T) {
 	}
 }
 
-func Test_Configuration_AddKeyDependency(t *testing.T) {
+func Test_Configuration_AddKeyDependency_happy(t *testing.T) {
 	key1 := "key1"
 	key2 := "key2"
 	key3 := "key3"
@@ -959,10 +959,6 @@ func Test_Configuration_AddKeyDependency(t *testing.T) {
 	assert.NoError(t, err)
 	err = config.AddKeyDependency(key2, key3)
 	assert.NoError(t, err)
-
-	// circular dependency should be detected
-	err = config.AddKeyDependency(key3, key1)
-	assert.Error(t, err)
 
 	config.AddDefaultValue(key1, func(config Configuration, existingValue interface{}) (interface{}, error) {
 		key1Count++
@@ -989,7 +985,7 @@ func Test_Configuration_AddKeyDependency(t *testing.T) {
 	assert.Equal(t, actual2, actual3)
 	assert.Equal(t, key1Count, actual1)
 
-	// unset dependency key and expect key1 to be updated
+	// unset dependency key3 and expect key1, key2 to be updated
 	config.Unset(key3)
 
 	actual1 = config.GetInt(key1)
@@ -998,4 +994,54 @@ func Test_Configuration_AddKeyDependency(t *testing.T) {
 	assert.Equal(t, actual2, actual1)
 	assert.Equal(t, actual2, actual3)
 	assert.Equal(t, key1Count, actual1)
+
+	// unset dependency key2 and expect key1 to be updated but not key3
+	config.Unset(key2)
+
+	actual1 = config.GetInt(key1)
+	actual2 = config.GetInt(key2)
+	actual3 = config.GetInt(key3)
+	assert.Equal(t, actual2, actual1)
+	assert.NotEqual(t, actual2, actual3)
+	assert.Equal(t, key1Count, actual1)
+}
+
+func Test_Configuration_AddKeyDependency_CircularDependency(t *testing.T) {
+	config := NewWithOpts(WithCachingEnabled(10 * time.Minute))
+
+	// key1 -> key1.1 -> key1.1.1 -> key1.1.1.1
+	//                -> key1.1.2
+	// key1 -> key1.2 -> key1.2.1 -> key1.2.1.1 -> key1.2.1.1.1
+
+	var err error
+
+	err = config.AddKeyDependency("key1.1", "key1.1.1")
+	assert.NoError(t, err)
+
+	err = config.AddKeyDependency("key1.1.1", "key1.1.1.1")
+	assert.NoError(t, err)
+
+	err = config.AddKeyDependency("key1.1.2", "key1.1.2.1")
+	assert.NoError(t, err)
+
+	err = config.AddKeyDependency("key1.2", "key1.2.1")
+	assert.NoError(t, err)
+
+	err = config.AddKeyDependency("key1.2.1", "key1.2.1.1")
+	assert.NoError(t, err)
+
+	err = config.AddKeyDependency("key1.2.1.1", "key1.2.1.1.1")
+	assert.NoError(t, err)
+
+	// detect direct circular dependency
+	err = config.AddKeyDependency("key1.2.1.1.1", "key1.2.1.1")
+	assert.Error(t, err)
+
+	// detect indirect circular dependency
+	err = config.AddKeyDependency("key1.1.1.1", "key1.1")
+	assert.Error(t, err)
+
+	// detect indirect circular dependency
+	err = config.AddKeyDependency("key1", "key1")
+	assert.Error(t, err)
 }

@@ -881,9 +881,15 @@ func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
 }
 
 func (ev *extendedViper) detectCircularDependency(key string, dependencyKey string) error {
+	circularDependencyError := errors.New("circular dependency detected")
+
+	if key == dependencyKey {
+		return circularDependencyError
+	}
+
 	for _, existingKey := range ev.interkeyDependencies[key] {
 		if existingKey == dependencyKey {
-			return errors.New("circular dependency detected")
+			return circularDependencyError
 		}
 
 		if err := ev.detectCircularDependency(existingKey, dependencyKey); err != nil {
