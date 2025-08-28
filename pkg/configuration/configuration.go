@@ -62,6 +62,10 @@ type Configuration interface {
 	GetAllKeysThatContainValues(key string) []string
 	GetKeyType(key string) KeyType
 
+	// AddKeyDependency can be used to describe that a certain key and its values actually depend on another value, this can then be used to clear the cache of a key when a depending key changes.
+	// In words: key depends on dependencyKey.
+	AddKeyDependency(key string, dependencyKey string) error
+
 	// PersistInStorage ensures that when Set is called with the given key, it will be persisted in the config file.
 	PersistInStorage(key string)
 	SetStorage(storage Storage)
@@ -103,6 +107,8 @@ type extendedViper struct {
 
 	// supportedEnvVars store the env vars that should be supported REGARDLESS of its prefix. e.g. NODE_EXTRA_CA_CERTS
 	supportedEnvVars []string
+
+	interkeyDependencies map[string][]string
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -238,10 +244,11 @@ func NewInMemory() Configuration {
 func createViperDefaultConfig(opts ...Opts) *extendedViper {
 	// prepare environment variables
 	config := &extendedViper{
-		viper:           viper.New(),
-		alternativeKeys: make(map[string][]string),
-		defaultValues:   make(map[string]DefaultValueFunction),
-		persistedKeys:   make(map[string]bool),
+		viper:                viper.New(),
+		alternativeKeys:      make(map[string][]string),
+		defaultValues:        make(map[string]DefaultValueFunction),
+		persistedKeys:        make(map[string]bool),
+		interkeyDependencies: make(map[string][]string),
 	}
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
@@ -331,9 +338,19 @@ func (ev *extendedViper) Clone() Configuration {
 		items := ev.defaultCache.Items()
 		clonedCache := cache.NewFrom(cacheTTL, defaultCacheCleanupInterval, items)
 		evClone.setCache(clonedCache)
+		evClone.interkeyDependencies = ev.interkeyDependencies
 	}
 
 	return clone
+}
+
+func (ev *extendedViper) clearCache(key string) {
+	ev.defaultCache.Delete(key)
+
+	// clear cache of all keys that depend on the current key
+	for _, dependencyKey := range ev.interkeyDependencies[key] {
+		ev.clearCache(dependencyKey)
+	}
 }
 
 // Set sets a configuration value.
@@ -343,7 +360,7 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	isPersisted := ev.persistedKeys[key]
 	ev.viper.Set(key, value)
 	if ev.defaultCache != nil {
-		ev.defaultCache.Delete(key)
+		ev.clearCache(key)
 	}
 	ev.mutex.Unlock()
 
@@ -861,6 +878,33 @@ func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
 	}
 
 	return enabled, duration, nil
+}
+
+func (ev *extendedViper) detectCircularDependency(key string, dependencyKey string) error {
+	for _, existingKey := range ev.interkeyDependencies[key] {
+		if existingKey == dependencyKey {
+			return errors.New("circular dependency detected")
+		}
+
+		if err := ev.detectCircularDependency(existingKey, dependencyKey); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (ev *extendedViper) AddKeyDependency(key string, dependencyKey string) error {
+	ev.mutex.Lock()
+	defer ev.mutex.Unlock()
+
+	// detect circular dependencies
+	if err := ev.detectCircularDependency(key, dependencyKey); err != nil {
+		return err
+	}
+
+	ev.interkeyDependencies[dependencyKey] = append(ev.interkeyDependencies[dependencyKey], key)
+	return nil
 }
 
 func toBool(result interface{}) (bool, error) {

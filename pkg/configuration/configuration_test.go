@@ -942,3 +942,60 @@ func Test_toDuration(t *testing.T) {
 		})
 	}
 }
+
+func Test_Configuration_AddKeyDependency(t *testing.T) {
+	key1 := "key1"
+	key2 := "key2"
+	key3 := "key3"
+	key1Count := 0
+	key2Count := 0
+	key3Count := 0
+
+	config := NewWithOpts(WithCachingEnabled(10 * time.Minute))
+
+	// define dependency
+	var err error
+	err = config.AddKeyDependency(key1, key2)
+	assert.NoError(t, err)
+	err = config.AddKeyDependency(key2, key3)
+	assert.NoError(t, err)
+
+	// circular dependency should be detected
+	err = config.AddKeyDependency(key3, key1)
+	assert.Error(t, err)
+
+	config.AddDefaultValue(key1, func(config Configuration, existingValue interface{}) (interface{}, error) {
+		key1Count++
+		return key1Count, nil
+	})
+
+	config.AddDefaultValue(key2, func(config Configuration, existingValue interface{}) (interface{}, error) {
+		key2Count++
+		return key2Count, nil
+	})
+
+	config.AddDefaultValue(key3, func(config Configuration, existingValue interface{}) (interface{}, error) {
+		key3Count++
+		return key3Count, nil
+	})
+
+	var actual1, actual2, actual3 int
+
+	// actual 1 and 2 should always be the same
+	actual1 = config.GetInt(key1)
+	actual2 = config.GetInt(key2)
+	actual3 = config.GetInt(key3)
+	assert.Equal(t, actual2, actual1)
+	assert.Equal(t, actual2, actual3)
+	assert.Equal(t, key1Count, actual1)
+
+	// unset dependency key and expect key1 to be updated
+	config.Unset(key3)
+
+	actual1 = config.GetInt(key1)
+	actual2 = config.GetInt(key2)
+	actual3 = config.GetInt(key3)
+	assert.Equal(t, actual2, actual1)
+	assert.Equal(t, actual2, actual3)
+	assert.Equal(t, key1Count, actual1)
+}
