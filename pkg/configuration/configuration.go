@@ -345,11 +345,13 @@ func (ev *extendedViper) Clone() Configuration {
 }
 
 func (ev *extendedViper) clearCache(key string) {
-	ev.defaultCache.Delete(key)
+	if ev.defaultCache != nil {
+		ev.defaultCache.Delete(key)
 
-	// clear cache of all keys that depend on the current key
-	for _, dependencyKey := range ev.interkeyDependencies[key] {
-		ev.clearCache(dependencyKey)
+		// clear cache of all keys that depend on the current key
+		for _, dependencyKey := range ev.interkeyDependencies[key] {
+			ev.clearCache(dependencyKey)
+		}
 	}
 }
 
@@ -359,9 +361,8 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	localStorage := ev.storage
 	isPersisted := ev.persistedKeys[key]
 	ev.viper.Set(key, value)
-	if ev.defaultCache != nil {
-		ev.clearCache(key)
-	}
+	ev.clearCache(key)
+
 	ev.mutex.Unlock()
 
 	if localStorage != nil && isPersisted {
