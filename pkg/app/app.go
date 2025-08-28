@@ -29,7 +29,10 @@ import (
 )
 
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	config.AddKeyDependency(configuration.ORGANIZATION_SLUG, configuration.ORGANIZATION)
+	err := config.AddKeyDependency(configuration.ORGANIZATION_SLUG, configuration.ORGANIZATION)
+	if err != nil {
+		logger.Print("Failed to add dependency for ORGANIZATION_SLUG:", err)
+	}
 
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
@@ -49,7 +52,10 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 }
 
 func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	config.AddKeyDependency(configuration.ORGANIZATION, configuration.API_URL)
+	err := config.AddKeyDependency(configuration.ORGANIZATION, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for ORGANIZATION:", err)
+	}
 
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
@@ -83,8 +89,14 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 }
 
 func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	globalConfig.AddKeyDependency(configuration.API_URL, configuration.AUTHENTICATION_TOKEN)
-	globalConfig.AddKeyDependency(configuration.API_URL, auth.CONFIG_KEY_OAUTH_TOKEN)
+	err := globalConfig.AddKeyDependency(configuration.API_URL, configuration.AUTHENTICATION_TOKEN)
+	if err != nil {
+		logger.Print("Failed to add dependency for API_URL:", err)
+	}
+	err = globalConfig.AddKeyDependency(configuration.API_URL, auth.CONFIG_KEY_OAUTH_TOKEN)
+	if err != nil {
+		logger.Print("Failed to add dependency for API_URL:", err)
+	}
 
 	callback := func(config configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		urlString := constants.SNYK_DEFAULT_API_URL
@@ -247,12 +259,16 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 
-	config.AddKeyDependency(configuration.WEB_APP_URL, configuration.API_URL)
+	err = config.AddKeyDependency(configuration.WEB_APP_URL, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for WEB_APP_URL:", err)
+	}
+
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(c configuration.Configuration, existingValue any) (any, error) {
 		canonicalApiUrl := c.GetString(configuration.API_URL)
-		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
-		if err != nil {
-			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", err)
+		appUrl, appUrlErr := api.DeriveAppUrl(canonicalApiUrl)
+		if appUrlErr != nil {
+			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", appUrlErr)
 		}
 
 		return appUrl, nil
@@ -269,7 +285,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		}
 	})
 
-	config.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
+	err = config.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
+	}
+
 	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
 			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
