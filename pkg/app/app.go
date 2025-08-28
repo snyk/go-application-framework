@@ -29,6 +29,8 @@ import (
 )
 
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	config.AddKeyDependency(configuration.ORGANIZATION_SLUG, configuration.ORGANIZATION)
+
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
@@ -47,6 +49,8 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 }
 
 func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	config.AddKeyDependency(configuration.ORGANIZATION, configuration.API_URL)
+
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
@@ -78,7 +82,10 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	return callback
 }
 
-func defaultFuncApiUrl(_ configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	globalConfig.AddKeyDependency(configuration.API_URL, configuration.AUTHENTICATION_TOKEN)
+	globalConfig.AddKeyDependency(configuration.API_URL, auth.CONFIG_KEY_OAUTH_TOKEN)
+
 	callback := func(config configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		urlString := constants.SNYK_DEFAULT_API_URL
 		authToken := config.GetString(configuration.AUTHENTICATION_TOKEN)
@@ -236,9 +243,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
+	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
+
+	config.AddKeyDependency(configuration.WEB_APP_URL, configuration.API_URL)
 	config.AddDefaultValue(configuration.WEB_APP_URL, func(c configuration.Configuration, existingValue any) (any, error) {
 		canonicalApiUrl := c.GetString(configuration.API_URL)
 		appUrl, err := api.DeriveAppUrl(canonicalApiUrl)
@@ -260,6 +269,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		}
 	})
 
+	config.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
 	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
 			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
