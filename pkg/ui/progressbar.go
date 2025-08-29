@@ -11,7 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=progressbar.go -destination ../mocks/progressbar.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/
+//go:generate go tool github.com/golang/mock/mockgen -source=progressbar.go -destination ../mocks/progressbar.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/
 
 type ProgressType string
 

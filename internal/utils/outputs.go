@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=outputs.go -destination ../mocks/utils.go -package mocks -self_package github.com/snyk/go-application-framework/internal/utils/
+//go:generate go tool github.com/golang/mock/mockgen -source=outputs.go -destination ../mocks/utils.go -package mocks -self_package github.com/snyk/go-application-framework/internal/utils/
 
 type OutputDestination interface {
 	Println(a ...any) (n int, err error)

@@ -9,7 +9,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=authenticator.go -destination ../mocks/authenticator.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/auth/
+//go:generate go tool github.com/golang/mock/mockgen -source=authenticator.go -destination ../mocks/authenticator.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/auth/
 
 type Authenticator interface {
 	// Authenticate authenticates the user and returns an error if the authentication failed.
