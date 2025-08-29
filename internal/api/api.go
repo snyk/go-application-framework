@@ -1,7 +1,5 @@
 package api
 
-//go:generate $GOPATH/bin/mockgen -source=api.go -destination ../mocks/api.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/api/
-
 import (
 	"encoding/json"
 	"fmt"
@@ -14,6 +12,8 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
+
+//go:generate go tool github.com/golang/mock/mockgen -source=api.go -destination ../mocks/api.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/api/
 
 type ApiClient interface {
 	GetDefaultOrgId() (orgID string, err error)

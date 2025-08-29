@@ -14,7 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=types.go -destination ../mocks/workflow.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/workflow/
+//go:generate go tool github.com/golang/mock/mockgen -source=types.go -destination ../mocks/workflow.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/workflow/
 
 // typedefs
 type Identifier = *url.URL
