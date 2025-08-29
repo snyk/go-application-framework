@@ -139,6 +139,24 @@ func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog
 	return callback
 }
 
+func defaultFuncWebAppUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	err := globalConfig.AddKeyDependency(configuration.WEB_APP_URL, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for WEB_APP_URL:", err)
+	}
+
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		canonicalApiUrl := c.GetString(configuration.API_URL)
+		appUrl, appUrlErr := api.DeriveAppUrl(canonicalApiUrl)
+		if appUrlErr != nil {
+			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", appUrlErr)
+		}
+
+		return appUrl, nil
+	}
+	return callback
+}
+
 func defaultInputDirectory() configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		// Check if we have a valid string value
@@ -228,6 +246,22 @@ func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.Defaul
 	return callback
 }
 
+func defaultIsFedramp(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	err := globalConfig.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
+	}
+
+	callback := func(config configuration.Configuration, existingValue any) (any, error) {
+		if existingValue == nil {
+			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
+		} else {
+			return existingValue, nil
+		}
+	}
+	return callback
+}
+
 // initConfiguration initializes the configuration with initial values.
 func initConfiguration(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) {
 	if logger == nil {
@@ -252,57 +286,19 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
 	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(`^api(\.(.+))?\.snyk|snykgov\.io$`))
-
-	// set default filesize threshold to 512MB
-	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
+	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB)) // set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
-
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
-
-	err = config.AddKeyDependency(configuration.WEB_APP_URL, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for WEB_APP_URL:", err)
-	}
-
-	config.AddDefaultValue(configuration.WEB_APP_URL, func(c configuration.Configuration, existingValue any) (any, error) {
-		canonicalApiUrl := c.GetString(configuration.API_URL)
-		appUrl, appUrlErr := api.DeriveAppUrl(canonicalApiUrl)
-		if appUrlErr != nil {
-			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", appUrlErr)
-		}
-
-		return appUrl, nil
-	})
-
+	config.AddDefaultValue(configuration.WEB_APP_URL, defaultFuncWebAppUrl(config, logger))
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
-
-	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
-		if existingValue == nil {
-			return true, nil
-		} else {
-			return existingValue, nil
-		}
-	})
-
-	err = config.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
-	}
-
-	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
-		if existingValue == nil {
-			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
-		} else {
-			return existingValue, nil
-		}
-	})
-
+	config.AddDefaultValue(configuration.IS_FEDRAMP, defaultIsFedramp(config, logger)) // set default is fedramp to false
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts(engine))
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
+	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.StandardDefaultValueFunction(true))
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
