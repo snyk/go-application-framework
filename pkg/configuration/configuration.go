@@ -18,7 +18,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
+//go:generate go tool github.com/golang/mock/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
 
 type DefaultValueFunction func(config Configuration, existingValue interface{}) (interface{}, error)
 

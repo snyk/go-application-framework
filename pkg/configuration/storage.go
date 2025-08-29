@@ -13,7 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/utils"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=storage.go -destination ../mocks/config_storage.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
+//go:generate go tool github.com/golang/mock/mockgen -source=storage.go -destination ../mocks/config_storage.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
 
 type Storage interface {
 	Set(key string, value any) error

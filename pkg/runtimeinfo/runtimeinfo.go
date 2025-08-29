@@ -1,6 +1,6 @@
 package runtimeinfo
 
-//go:generate $GOPATH/bin/mockgen -source=runtimeinfo.go -destination ../mocks/runtimeinfo.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/runtimeinfo/
+//go:generate go tool github.com/golang/mock/mockgen -source=runtimeinfo.go -destination ../mocks/runtimeinfo.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/runtimeinfo/
 
 type RuntimeInfo interface {
 	GetName() string
