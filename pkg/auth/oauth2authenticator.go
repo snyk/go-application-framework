@@ -90,7 +90,6 @@ func getRedirectUri(port int) string {
 }
 
 func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
-	config.ClearCache()
 	apiUrl := config.GetString(configuration.API_URL)
 	appUrl := config.GetString(configuration.WEB_APP_URL)
 	tokenUrl := apiUrl + "/oauth2/token"

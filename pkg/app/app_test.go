@@ -32,6 +32,28 @@ import (
 	"golang.org/x/oauth2/jws"
 )
 
+func createOAuthTokenWithAudience(t *testing.T, audience string) string {
+	t.Helper()
+	header := &jws.Header{}
+	claims := &jws.ClaimSet{
+		Aud: audience,
+	}
+	pk, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.NoError(t, err)
+
+	accessToken, err := jws.Encode(header, claims, pk)
+	assert.NoError(t, err)
+
+	token := oauth2.Token{
+		AccessToken: accessToken,
+	}
+
+	tokenBytes, err := json.Marshal(token)
+	assert.NoError(t, err)
+
+	return string(tokenBytes)
+}
+
 func Test_AddsDefaultFunctionForCustomConfigFiles(t *testing.T) {
 	t.Run("should load default config files (without given command line)", func(t *testing.T) {
 		localConfig := configuration.NewWithOpts()
@@ -792,33 +814,12 @@ func Test_auth_oauth(t *testing.T) {
 	})
 
 	t.Run("oauth token change updates api url extraction", func(t *testing.T) {
-		createOAuthTokenWithAudience := func(audience string) string {
-			header := &jws.Header{}
-			claims := &jws.ClaimSet{
-				Aud: audience,
-			}
-			pk, err := rsa.GenerateKey(rand.Reader, 2048)
-			assert.NoError(t, err)
-
-			accessToken, err := jws.Encode(header, claims, pk)
-			assert.NoError(t, err)
-
-			token := oauth2.Token{
-				AccessToken: accessToken,
-			}
-
-			tokenBytes, err := json.Marshal(token)
-			assert.NoError(t, err)
-
-			return string(tokenBytes)
-		}
-
 		globalConfig := engine.GetConfiguration()
 		globalConfig.Set(configuration.API_URL, "https://api.snyk.io")
 		invocationConfig := globalConfig.Clone()
 
 		firstAPIURL := "https://api.eu.snyk.io"
-		firstOAuthToken := createOAuthTokenWithAudience(firstAPIURL)
+		firstOAuthToken := createOAuthTokenWithAudience(t, firstAPIURL)
 
 		// Set auth type to OAuth
 		invocationConfig.Set(localworkflows.AuthTypeParameter, auth.AUTH_TYPE_OAUTH)
@@ -849,7 +850,7 @@ func Test_auth_oauth(t *testing.T) {
 
 		// Now simulate re-authentication with EU
 		secondAPIURL := "https://api.us.snyk.io"
-		secondOAuthToken := createOAuthTokenWithAudience(secondAPIURL)
+		secondOAuthToken := createOAuthTokenWithAudience(t, secondAPIURL)
 
 		// Mock second authentication
 		mockAuthenticator.EXPECT().Authenticate().DoAndReturn(func() error {
@@ -869,4 +870,60 @@ func Test_auth_oauth(t *testing.T) {
 		actualApiUrl = globalConfig.GetString(configuration.API_URL)
 		assert.Equal(t, secondAPIURL, actualApiUrl, "Second OAuth token should contain US API URL")
 	})
+}
+
+// this tests compares the behavior of the config when it has caching enabled and when it doesn't
+func Test_config_compareCachedAndUncachedConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config configuration.Configuration
+	}{
+		{
+			name:   "Cached config",
+			config: configuration.NewWithOpts(configuration.WithCachingEnabled(time.Hour * 1)),
+		},
+		{
+			name:   "Uncached config",
+			config: configuration.NewWithOpts(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := CreateAppEngineWithOptions(WithConfiguration(tt.config))
+			assert.NotNil(t, engine)
+
+			// Default API URL
+			assert.Equal(t, constants.SNYK_DEFAULT_API_URL, tt.config.GetString(configuration.API_URL))
+
+			// set API URL explicitly
+			tt.config.Set(configuration.API_URL, "https://api.us.snyk.io")
+			assert.Equal(t, "https://api.us.snyk.io", tt.config.GetString(configuration.API_URL))
+			assert.Equal(t, "https://app.us.snyk.io", tt.config.GetString(configuration.WEB_APP_URL))
+
+			// set PAT and derive API URL
+			tt.config.Set(configuration.AUTHENTICATION_TOKEN, createMockPAT(t, `{"h":"api.au.snyk.io"}`))
+			assert.Equal(t, "https://api.au.snyk.io", tt.config.GetString(configuration.API_URL))
+			assert.Equal(t, "https://app.au.snyk.io", tt.config.GetString(configuration.WEB_APP_URL))
+			tt.config.Unset(configuration.AUTHENTICATION_TOKEN)
+
+			// set OAuth token and derive API URL
+			tt.config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, createOAuthTokenWithAudience(t, "https://api.snykgov.io"))
+			assert.Equal(t, "https://api.snykgov.io", tt.config.GetString(configuration.API_URL))
+			assert.Equal(t, "https://app.snykgov.io", tt.config.GetString(configuration.WEB_APP_URL))
+
+			// set PAT and derive API URL
+			tt.config.Set(configuration.AUTHENTICATION_TOKEN, createMockPAT(t, `{"h":"api.eu.snyk.io"}`))
+			assert.Equal(t, "https://api.eu.snyk.io", tt.config.GetString(configuration.API_URL))
+			assert.Equal(t, "https://app.eu.snyk.io", tt.config.GetString(configuration.WEB_APP_URL))
+
+			// unset PAT and OAuth token
+			tt.config.Unset(configuration.AUTHENTICATION_TOKEN)
+			tt.config.Unset(auth.CONFIG_KEY_OAUTH_TOKEN)
+
+			// exlicitly set API URL is restored
+			assert.Equal(t, "https://api.us.snyk.io", tt.config.GetString(configuration.API_URL))
+			assert.Equal(t, "https://app.us.snyk.io", tt.config.GetString(configuration.WEB_APP_URL))
+		})
+	}
 }

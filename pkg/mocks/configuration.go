@@ -75,6 +75,20 @@ func (mr *MockConfigurationMockRecorder) AddFlagSet(flagset interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFlagSet", reflect.TypeOf((*MockConfiguration)(nil).AddFlagSet), flagset)
 }
 
+// AddKeyDependency mocks base method.
+func (m *MockConfiguration) AddKeyDependency(key, dependencyKey string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddKeyDependency", key, dependencyKey)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddKeyDependency indicates an expected call of AddKeyDependency.
+func (mr *MockConfigurationMockRecorder) AddKeyDependency(key, dependencyKey interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddKeyDependency", reflect.TypeOf((*MockConfiguration)(nil).AddKeyDependency), key, dependencyKey)
+}
+
 // AllKeys mocks base method.
 func (m *MockConfiguration) AllKeys() []string {
 	m.ctrl.T.Helper()
