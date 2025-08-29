@@ -54,6 +54,9 @@ func Init(engine workflow.Engine) error {
 ### Initialise configuration
 We use the `pflag` package in order to create POSIX/GNU-style --flags. The extension should support the `--json` flag, so we add it to the configuration via `whoAmIConfig.Bool()`.
 
+### Mark experimental versions of an extension workflow
+There is a common pattern to mark workflows as experimental by using [MarkAsExperimental()](https://github.com/snyk/go-application-framework/blob/main/pkg/local_workflows/config_utils/experimental.go#L28) in order to indicate early non production ready versions of a workflow. In the CLI this will automatically reflect in a required argument `--experimental`, if not provided the CLI will show an error and not call the workflow.
+
 ### Register with the workflow engine
 Next we must register the extension with the workflow engine. The `workflow` package is used again here in, firstly to abstract away the engine/workflow registration logic via `engine.Register`, and again to configure the workflow's configuration via `workflow.ConfigurationOptionsFromFlagset`.
 
