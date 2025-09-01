@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// 0755 is the default permission for directories, it means the owner can read, write, and execute,
+// DIR_PERMISSION is 0755 which is the default permission for directories, it means the owner can read, write, and execute,
 // and everyone else can read and execute but not write.
 const DIR_PERMISSION = 0755
 

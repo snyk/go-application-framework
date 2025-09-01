@@ -72,7 +72,7 @@ func UserAgent(opts ...UserAgentOptions) UserAgentInfo {
 	return ua
 }
 
-// ToUserAgentHeader returns a string that can be used as a User-Agent header.
+// String returns a string that can be used as a User-Agent header.
 // The string is following this format:
 // <app>/<appVer> (<os>;<arch>;<procName>) <integration>/<integrationVersion> (<integrationEnv>/<integrationEnvVersion>)
 // Everything other than the app, app version and system information (os/arch/process name) is optional.

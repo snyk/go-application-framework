@@ -103,7 +103,7 @@ func trackUsage(network networking.NetworkAccess, config configuration.Configura
 		return
 	}
 
-	resp.Body.Close()
+	_ = resp.Body.Close() //nolint:errcheck // Ignore lack of error handling
 }
 
 func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...OptionalAnalysisFunctions) ([]workflow.Data, error) {

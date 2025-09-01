@@ -24,7 +24,7 @@ const (
 	maxOrgCountFlag               = "max-org-count"
 )
 
-// Define workflow identifier
+// WORKFLOWID_CONNECTIVITY_CHECK defines workflow identifier
 var WORKFLOWID_CONNECTIVITY_CHECK workflow.Identifier = workflow.NewWorkflowIdentifier(connectivityCheckWorkflowName)
 
 // InitConnectivityCheckWorkflow initializes the connectivity check workflow

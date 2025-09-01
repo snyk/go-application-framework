@@ -4,6 +4,7 @@ type FindingResource TypesFindingResource
 type TestOutcome TypesTestOutcome
 
 // TODO: This schema should be imported from Dragonfly
+
 type LocalFinding struct {
 	Findings []FindingResource    `json:"findings"`
 	Outcome  TestOutcome          `json:"outcome"`

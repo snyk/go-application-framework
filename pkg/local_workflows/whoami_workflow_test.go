@@ -89,7 +89,7 @@ func setupMockContext(t *testing.T, payload string, experimental bool, json bool
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 
-	var httpClient *http.Client = http.DefaultClient
+	httpClient := http.DefaultClient
 
 	if mockClient {
 		httpClient = NewTestClient(func(req *http.Request) *http.Response {

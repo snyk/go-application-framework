@@ -39,15 +39,11 @@ func cleanupConfigstore(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func cleanUpEnvVars() {
-	os.Unsetenv("SNYK_TOKEN")
-	os.Unsetenv("SNYK_OAUTH_TOKEN")
-	os.Unsetenv("SNYK_DOCKER_TOKEN")
-	os.Unsetenv("SNYK_DISABLE_ANALYTICS")
-}
-
 func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
-	os.Unsetenv("SNYK_TOKEN")
+	t.Setenv("SNYK_TOKEN", "") // Ensures automatic cleanup
+	err := os.Unsetenv("SNYK_TOKEN")
+	assert.NoError(t, err)
+
 	expectedValue := "mytoken"
 	expectedValue2 := "123456"
 	assert.Nil(t, prepareConfigstore(`{"api": "mytoken", "somethingElse": 12}`))
@@ -66,7 +62,6 @@ func Test_ConfigurationGet_AUTHENTICATION_TOKEN(t *testing.T) {
 	assert.Equal(t, expectedValue2, actualValue)
 
 	cleanupConfigstore(t)
-	cleanUpEnvVars()
 }
 
 func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
@@ -93,7 +88,6 @@ func Test_ConfigurationGet_AUTHENTICATION_BEARER_TOKEN(t *testing.T) {
 	})
 
 	cleanupConfigstore(t)
-	cleanUpEnvVars()
 }
 
 func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
@@ -113,7 +107,6 @@ func Test_ConfigurationGet_ANALYTICS_DISABLED(t *testing.T) {
 	assert.False(t, actualValue)
 
 	cleanupConfigstore(t)
-	cleanUpEnvVars()
 }
 
 func Test_Configuration_GetE(t *testing.T) {
@@ -124,7 +117,9 @@ func Test_Configuration_GetE(t *testing.T) {
 		WithSupportedEnvVarPrefixes("snyk_"),
 	)
 
-	_ = os.Unsetenv(ANALYTICS_DISABLED)
+	t.Setenv(ANALYTICS_DISABLED, "") // Ensures automatic cleanup
+	err := os.Unsetenv(ANALYTICS_DISABLED)
+	assert.NoError(t, err)
 
 	actualValue, err := config.GetWithError(ANALYTICS_DISABLED)
 	assert.Nil(t, err)
@@ -143,7 +138,6 @@ func Test_Configuration_GetE(t *testing.T) {
 	assert.Equal(t, "0", actualValue)
 
 	cleanupConfigstore(t)
-	cleanUpEnvVars()
 }
 
 func Test_ConfigurationGet_ALTERNATE_KEYS(t *testing.T) {
@@ -724,8 +718,6 @@ func Test_Configuration_envVarSupport(t *testing.T) {
 
 		shouldBeNil := config.Get(invalidKey)
 		assert.Nil(t, shouldBeNil)
-
-		cleanUpEnvVars()
 	})
 
 	t.Run("supports a list of env vars", func(t *testing.T) {
@@ -790,8 +782,6 @@ func Test_Configuration_envVarSupport(t *testing.T) {
 
 		shouldBeNil := config.Get(invalidKey)
 		assert.Nil(t, shouldBeNil)
-
-		cleanUpEnvVars()
 	})
 
 	t.Run("WithAutomaticEnv takes precedence", func(t *testing.T) {
@@ -833,8 +823,6 @@ func Test_Configuration_envVarSupport(t *testing.T) {
 
 		actualAutoEnvValue := config.Get(autoEnv)
 		assert.Equal(t, autoEnvValue, actualAutoEnvValue)
-
-		cleanUpEnvVars()
 	})
 }
 

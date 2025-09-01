@@ -196,7 +196,10 @@ func updateFile(t *testing.T, filePath, target, replacement string) error {
 	t.Helper()
 	file, err := os.Open(filePath)
 	assert.NoError(t, err)
-	defer func() { _ = file.Close() }()
+	defer func() {
+		closeErr := file.Close()
+		assert.NoError(t, closeErr)
+	}()
 
 	scanner := bufio.NewScanner(file)
 	var updatedLines []string
@@ -204,7 +207,7 @@ func updateFile(t *testing.T, filePath, target, replacement string) error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.Contains(line, target) {
-			newLine := strings.Replace(line, target, replacement, -1)
+			newLine := strings.ReplaceAll(line, target, replacement)
 			updatedLines = append(updatedLines, newLine)
 		} else {
 			updatedLines = append(updatedLines, line)
@@ -221,7 +224,10 @@ func updateFile(t *testing.T, filePath, target, replacement string) error {
 	if err != nil {
 		return err
 	}
-	defer newFile.Close()
+	defer func() {
+		closeErr := newFile.Close()
+		assert.NoError(t, closeErr)
+	}()
 
 	writer := bufio.NewWriter(newFile)
 	for _, line := range updatedLines {

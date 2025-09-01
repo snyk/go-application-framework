@@ -71,7 +71,7 @@ func MakeSelfSignedCert(certName string, dnsNames []string, debugLogger *log.Log
 	return certPEMBlockBytes, keyPEMBlockBytes, nil
 }
 
-// Append all certificates specified via extraCertificateLocation to the given PEM formatted byte slice
+// AppendExtraCaCert appends all certificates specified via extraCertificateLocation to the given PEM formatted byte slice
 func AppendExtraCaCert(extraCertificateLocation string, certPem []byte) []byte {
 	// try to access certificate file provided via the environment variable extraCertificateLocation
 	extraCertificateBytes, _, extraCertificateError := GetExtraCaCert(extraCertificateLocation)
@@ -82,7 +82,7 @@ func AppendExtraCaCert(extraCertificateLocation string, certPem []byte) []byte {
 	return certPem
 }
 
-// Returns the Certificates specified via extraCertificateLocation as a PEM formatted byte slice and as a list of certificates.
+// GetExtraCaCert returns the Certificates specified via extraCertificateLocation as a PEM formatted byte slice and as a list of certificates.
 func GetExtraCaCert(extraCertificateLocation string) ([]byte, []*x509.Certificate, error) {
 	var resultAsByte []byte
 	var err error
@@ -107,7 +107,7 @@ func GetExtraCaCert(extraCertificateLocation string) ([]byte, []*x509.Certificat
 	return resultAsByte, resultAsCert, err
 }
 
-// Decode all Certifactes given in the PEM formatted input slice and return the Certificates as a list. It returns an error if any of the content is not a Certificate.
+// GetAllCerts decodes all Certifactes given in the PEM formatted input slice and returns the Certificates as a list. It returns an error if any of the content is not a Certificate.
 func GetAllCerts(pemData []byte) ([]*x509.Certificate, error) {
 	var result []*x509.Certificate
 	for len(pemData) > 0 {
@@ -135,7 +135,7 @@ func GetAllCerts(pemData []byte) ([]*x509.Certificate, error) {
 	return result, nil
 }
 
-// Get global Certificate pool including x509.SystemCertPool() + extraCertificateLocation
+// AddCertificatesToPool gets global Certificate pool including x509.SystemCertPool() + extraCertificateLocation
 func AddCertificatesToPool(pool *x509.CertPool, extraCertificateLocation string) error {
 	_, extracCertList, err := GetExtraCaCert(extraCertificateLocation)
 	if err != nil {
