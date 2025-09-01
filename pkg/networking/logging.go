@@ -40,7 +40,7 @@ func getResponseBody(response *http.Response) io.ReadCloser {
 	if response.Body != nil {
 		bodyBytes, bodyErr := io.ReadAll(response.Body)
 		if bodyErr == nil {
-			response.Body.Close()
+			_ = response.Body.Close() //nolint:errcheck // Ignore lack of error handling
 			bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
 			response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			return bodyReader
@@ -61,7 +61,7 @@ func getRequestBody(request *http.Request) io.ReadCloser {
 	if request.Body != nil {
 		bodyBytes, bodyErr := io.ReadAll(request.Body)
 		if bodyErr == nil {
-			request.Body.Close()
+			_ = request.Body.Close() //nolint:errcheck // Ignore lack of error handling
 			bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
 			request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			return bodyReader
@@ -77,7 +77,7 @@ func decodeBody(bodyBytes []byte, contentEncoding string) (string, error) {
 		if err != nil {
 			return "", errors.Wrap(err, "failed to create gzip reader")
 		}
-		defer reader.Close()
+		defer func() { _ = reader.Close() }() //nolint:errcheck // Ignore lack of error handling
 		decodedBytes, err := io.ReadAll(reader)
 		if err != nil {
 			return "", errors.Wrap(err, "failed to read decoded body")
@@ -163,7 +163,7 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 		logger.WithLevel(defaultNetworkLogLevel).Msgf("%s header: %v", logPrefixResponse, response.Header)
 
 		// additional logs for trace level logging and error responses
-		if !(response.StatusCode >= 400 || !shouldNotLog(logger.GetLevel(), extendedNetworkLogLevel)) {
+		if response.StatusCode < 400 && shouldNotLog(logger.GetLevel(), extendedNetworkLogLevel) {
 			return
 		}
 
