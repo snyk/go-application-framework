@@ -225,6 +225,9 @@
 						}{{if lt $coverageIndex $coverageSize}},{{end}}
 						{{- end }}
 					]
+				},
+				"automationDetails": {
+					"id": "{{- getAutomationDetailsId $result.Summary.Type $result.Summary.Path }}"
 				}
 			}
 		{{- end}}
