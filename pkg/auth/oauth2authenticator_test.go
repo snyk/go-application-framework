@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -409,7 +410,7 @@ func Test_Authenticate_AuthorizationCode(t *testing.T) {
 
 	t.Run("does not redirect to invalid instance", func(t *testing.T) {
 		config := configuration.NewWithOpts()
-		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, `^api(\.(.+))?\.snyk|snykgov\.io$`)
+		config.Set(CONFIG_KEY_ALLOWED_HOST_REGEXP, constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP)
 
 		// Create mock server for successful oauth2 flow
 		mux := http.NewServeMux()

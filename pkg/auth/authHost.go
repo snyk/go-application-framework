@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 func redirectAuthHost(instance string) (string, error) {
@@ -24,4 +25,12 @@ func redirectAuthHost(instance string) (string, error) {
 	}
 
 	return canonicalizedInstanceUrl.Host, nil
+}
+
+func IsValidAuthHost(instance string, redirectAuthHostRE string) (bool, error) {
+	isValidHost, err := utils.MatchesRegex(instance, redirectAuthHostRE)
+	if err != nil {
+		return false, err
+	}
+	return isValidHost, nil
 }

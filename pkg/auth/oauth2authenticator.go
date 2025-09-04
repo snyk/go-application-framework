@@ -24,7 +24,6 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 const (
@@ -466,7 +465,7 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 
 	redirectAuthHostRE := o.config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
 	o.logger.Info().Msgf("Validating with regexp: \"%s\"", redirectAuthHostRE)
-	isValidHost, err := utils.MatchesRegex(authHost, redirectAuthHostRE)
+	isValidHost, err := IsValidAuthHost(authHost, redirectAuthHostRE)
 	if err != nil {
 		return err
 	}
