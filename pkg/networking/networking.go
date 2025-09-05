@@ -196,6 +196,7 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 
 	if n.errorHandler != nil {
 		crt = middleware.NewReponseMiddleware(crt, n.config, n.errorHandler)
+		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
 	}
 	rt := defaultHeadersRoundTripper{
 		networkAccess:            n,
