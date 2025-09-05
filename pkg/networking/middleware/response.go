@@ -62,7 +62,7 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 
 	err = getErrorsFromResponse(res)
 	if err != nil {
-		return addRequestDataToErr(err, res)
+		return addResponseDataToErr(err, res)
 	}
 
 	return nil
@@ -136,12 +136,21 @@ func errFromStatusCode(code int) error {
 }
 
 // addRequestDataToErr adds the request-id and request-url fields in the metadata map for the error.
-func addRequestDataToErr(err error, res *http.Response) error {
-	reqId := res.Request.Header.Get("snyk-request-id")
-	reqPath := res.Request.URL.Path
+func addRequestDataToErr(err error, req *http.Request) error {
+	if req == nil {
+		return err
+	}
+
+	reqId := req.Header.Get("snyk-request-id")
+	reqPath := req.URL.Path
 
 	return utils.AddMetaDataToErr(err, map[string]any{
 		"request-id":   reqId,
 		"request-path": reqPath,
 	})
+}
+
+// addRequestDataToErr adds the request-id and request-url fields in the metadata map for the error.
+func addResponseDataToErr(err error, res *http.Response) error {
+	return addRequestDataToErr(err, res.Request)
 }
