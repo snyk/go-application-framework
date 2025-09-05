@@ -21,6 +21,7 @@ import (
 	"io"
 	"os/user"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ import (
 )
 
 const MAX_WRITE_RETRIES = 10
+const MIN_TERM_LENGTH = 6
 const SANITIZE_REPLACEMENT_STRING string = "***"
 
 // SENSITIVE_FIELD_NAMES is a list of field names that should be sanitized.
@@ -45,8 +47,18 @@ var SENSITIVE_FIELD_NAMES = []string{
 	"secret",
 }
 
+// ALLOW_LIST is a list of terms to not scrub.
+var ALLOW_LIST = []string{
+	"log-level",
+	"d",
+	"debug",
+}
+
 type ScrubbingLogWriter interface {
 	AddTerm(term string, matchGroup int)
+	// AddTerms adds all terms as a key-value pair to check for scrubbing.
+	// Any terms that match the scrub criteria will be added to the scrubbing dictionary.
+	AddTerms(args map[string]string)
 	RemoveTerm(term string)
 }
 
@@ -83,6 +95,16 @@ func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
 	return &scrubbingIoWriter{
 		writer:    writer,
 		scrubDict: dict,
+	}
+}
+
+func (w *scrubbingIoWriter) AddTerms(terms map[string]string) {
+	// add terms to the scrubbing dictionary
+	for k, v := range terms {
+		// if they are longer than the minimum length and not in the allow list
+		if len(v) > MIN_TERM_LENGTH && !slices.Contains(ALLOW_LIST, k) {
+			w.AddTerm(v, 0)
+		}
 	}
 }
 
@@ -125,6 +147,16 @@ func getDefaultDict() ScrubbingDict {
 	dict := ScrubbingDict{}
 	addMandatoryMasking(dict)
 	return dict
+}
+
+func (w *scrubbingLevelWriter) AddTerms(args map[string]string) {
+	// add terms to the scrubbing dictionary
+	for k, v := range args {
+		// if they are longer than the minimum length and not in the allow list
+		if len(v) > MIN_TERM_LENGTH && !slices.Contains(ALLOW_LIST, k) {
+			w.AddTerm(v, 0)
+		}
+	}
 }
 
 func (w *scrubbingLevelWriter) AddTerm(term string, matchGroup int) {
