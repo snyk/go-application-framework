@@ -8,7 +8,7 @@ orbs:
 base_image: &base_image
   resource_class: small
   docker:
-    - image: cimg/go:1.22
+    - image: cimg/go:1.24
 
 # Define the jobs we want to run for this project
 jobs:
