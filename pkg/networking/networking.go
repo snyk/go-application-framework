@@ -17,7 +17,7 @@ import (
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
-//go:generate $GOPATH/bin/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
+//go:generate go tool github.com/golang/mock/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
 
 type keyTypeString string
 

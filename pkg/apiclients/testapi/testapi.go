@@ -1,7 +1,5 @@
 package testapi
 
-//go:generate $GOPATH/bin/mockgen -source=testapi.go -destination ../mocks/testapi.go -package mocks -imports testapi=github.com/snyk/go-application-framework/pkg/apiclients/testapi
-
 import (
 	"context"
 	"errors"
@@ -17,6 +15,8 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
+
+//go:generate go tool github.com/golang/mock/mockgen -source=testapi.go -destination ../mocks/testapi.go -package mocks -imports testapi=github.com/snyk/go-application-framework/pkg/apiclients/testapi
 
 // config holds configuration for the test API client, set using ConfigOption functions.
 type config struct {
