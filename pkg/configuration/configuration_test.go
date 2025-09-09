@@ -943,6 +943,21 @@ func Test_toDuration(t *testing.T) {
 	}
 }
 
+func Test_Configuration_GetStringSliceString(t *testing.T) {
+	key := "key1"
+	expected := []string{"value1", "value2"}
+	config := NewWithOpts()
+	config.Set(key, expected)
+
+	// access slice as slice
+	actual := config.GetStringSlice(key)
+	assert.Equal(t, expected, actual)
+
+	// access slice as string
+	actualString := config.GetString(key)
+	assert.Equal(t, expected[0], actualString)
+}
+
 func Test_Configuration_AddKeyDependency_happy(t *testing.T) {
 	key1 := "key1"
 	key2 := "key2"
