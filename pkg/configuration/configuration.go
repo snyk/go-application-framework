@@ -501,22 +501,28 @@ func (ev *extendedViper) GetStringWithError(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if s, ok := result.(string); ok {
-		return s, nil
+
+	switch v := result.(type) {
+	case string:
+		return v, nil
+	case []string:
+		if len(v) == 0 {
+			return "", nil
+		}
+
+		return v[0], nil
 	}
+
 	return "", fmt.Errorf("value for key %s is not a string", key)
 }
 
 // GetString returns a configuration value as string.
 func (ev *extendedViper) GetString(key string) string {
-	result := ev.Get(key)
-	if result == nil {
+	result, err := ev.GetStringWithError(key)
+	if err != nil {
 		return ""
 	}
-	if s, ok := result.(string); ok {
-		return s
-	}
-	return ""
+	return result
 }
 
 // GetBoolWithError returns a configuration value as bool.

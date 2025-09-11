@@ -697,8 +697,15 @@ func TestDefaultInputDirectory(t *testing.T) {
 			name:           "non-string type - slice",
 			existingValue:  []string{"path1", "path2"},
 			expectedError:  false,
-			expectedResult: nil, // Will fall back to current working directory
-			description:    "should handle non-string types gracefully and return current working directory",
+			expectedResult: []string{"path1", "path2"},
+			description:    "should handle non-string types gracefully and return the slice as there are multiple paths possible",
+		},
+		{
+			name:           "non-string type - slice with empty strings",
+			existingValue:  []string{"path1", "", "path2"},
+			expectedError:  false,
+			expectedResult: []string{"path1", "path2"},
+			description:    "should ignore empty strings in slices",
 		},
 		{
 			name:           "non-string type - map",
@@ -757,6 +764,8 @@ func TestDefaultInputDirectory(t *testing.T) {
 				assert.NotNil(t, result, tt.description)
 				if str, ok := result.(string); ok {
 					assert.NotEmpty(t, str, tt.description)
+				} else {
+					assert.Fail(t, "result is not a string", tt.description)
 				}
 			}
 		})

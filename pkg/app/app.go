@@ -148,6 +148,19 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 			return existingString, nil
 		}
 
+		existingStringSlice, isStringSlice := existingValue.([]string)
+		resultingSlice := []string{}
+		for _, s := range existingStringSlice {
+			if len(s) > 0 {
+				resultingSlice = append(resultingSlice, s)
+			}
+		}
+
+		if isStringSlice && len(resultingSlice) > 0 {
+			// Return the string value as-is (preserving any whitespace)
+			return resultingSlice, nil
+		}
+
 		// Fall back to current working directory for non-string types or empty strings
 		path, err := os.Getwd()
 		if err != nil {
