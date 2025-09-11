@@ -25,6 +25,7 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -51,7 +52,7 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	return callback
 }
 
-func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+func defaultFuncOrganizationLdx(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	err := config.AddKeyDependency(configuration.ORGANIZATION, configuration.API_URL)
 	if err != nil {
 		logger.Print("Failed to add dependency for ORGANIZATION:", err)
@@ -61,31 +62,93 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
-		existingString, ok := existingValue.(string)
-		if existingValue != nil && ok && len(existingString) > 0 {
-			orgId := existingString
-			_, err := uuid.Parse(orgId)
-			isSlugName := err != nil
-			if isSlugName {
-				orgId, err = apiClient.GetOrgIdFromSlug(existingString)
-				if err != nil {
-					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
-				} else {
-					return orgId, nil
-				}
-			} else {
-				return orgId, nil
-			}
+
+		// Handle existing organization value
+		if orgId := handleExistingOrganization(existingValue, apiClient, logger); orgId != "" {
+			return orgId, nil
 		}
 
-		orgId, err := apiClient.GetDefaultOrgId()
-		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+		// Try LDX-Sync resolution
+		if orgId := tryLdxSyncResolution(config, apiClient, logger); orgId != "" {
+			return orgId, nil
 		}
 
-		return orgId, err
+		// Fallback to default org resolution
+		return getDefaultOrganization(apiClient, logger)
 	}
 	return callback
+}
+
+// handleExistingOrganization validates and resolves existing organization values
+func handleExistingOrganization(existingValue interface{}, apiClient api.ApiClient, logger *zerolog.Logger) string {
+	existingString, ok := existingValue.(string)
+	if existingValue == nil || !ok || len(existingString) == 0 {
+		return ""
+	}
+
+	orgId := existingString
+	_, err := uuid.Parse(orgId)
+	isSlugName := err != nil
+
+	if isSlugName {
+		orgId, err = apiClient.GetOrgIdFromSlug(existingString)
+		if err != nil {
+			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+			return ""
+		}
+	}
+
+	return orgId
+}
+
+// tryLdxSyncResolution attempts to resolve organization using LDX-Sync
+func tryLdxSyncResolution(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) string {
+	inputDir := config.GetString(configuration.INPUT_DIRECTORY)
+	if inputDir == "" {
+		return ""
+	}
+
+	projectRoot := findProjectRoot(inputDir)
+	if projectRoot == "" {
+		logger.Debug().Str("inputDir", inputDir).Msg("No git repository found, falling back to default")
+		return ""
+	}
+
+	remoteUrl, err := git.GetRemoteUrl(projectRoot)
+	if err != nil {
+		logger.Debug().Err(err).Str("projectRoot", projectRoot).Msg("Git remote detection failed, falling back to default")
+		return ""
+	}
+
+	ldxConfig, err := apiClient.GetLdxSyncConfig(remoteUrl)
+	if err != nil {
+		logger.Debug().Err(err).Str("remoteUrl", remoteUrl).Msg("LDX-Sync resolution failed, falling back to default")
+		return ""
+	}
+
+	// Try to find organization from folder configs first (more specific)
+	orgId := findOrganizationFromFolderConfigs(ldxConfig, remoteUrl)
+	if orgId == "" {
+		// Fall back to default organization from main organizations list
+		orgId = findDefaultOrganization(ldxConfig)
+	}
+
+	if orgId != "" {
+		logger.Debug().Str("orgId", orgId).Str("remoteUrl", remoteUrl).Str("projectRoot", projectRoot).Msg("Resolved organization via LDX-Sync")
+		return orgId
+	}
+
+	logger.Debug().Str("remoteUrl", remoteUrl).Msg("No matching organization found in LDX-Sync config, falling back to default")
+	return ""
+}
+
+// getDefaultOrganization falls back to the default organization resolution
+func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (string, error) {
+	orgId, err := apiClient.GetDefaultOrgId()
+	if err != nil {
+		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+	}
+	return orgId, err
 }
 
 func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
@@ -287,7 +350,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		return appUrl, nil
 	})
 
-	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganizationLdx(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
@@ -372,4 +435,54 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 // Deprecated: Use CreateAppEngineWithOptions instead.
 func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
 	return CreateAppEngineWithOptions(WithLogger(logger))
+}
+
+// findProjectRoot walks up the directory tree from the given path to find a git repository root
+func findProjectRoot(startPath string) string {
+	currentPath := startPath
+
+	for {
+		// Check if current directory is a git repository
+		gitDir := filepath.Join(currentPath, ".git")
+		if _, err := os.Stat(gitDir); err == nil {
+			return currentPath
+		}
+
+		// Move up one directory
+		parentPath := filepath.Dir(currentPath)
+		if parentPath == currentPath {
+			// Reached filesystem root
+			break
+		}
+		currentPath = parentPath
+	}
+
+	return ""
+}
+
+// findOrganizationFromFolderConfigs looks for an organization in folder configs that matches the remote URL
+func findOrganizationFromFolderConfigs(ldxConfig *api.LdxSyncConfig, remoteUrl string) string {
+	for _, folderConfig := range ldxConfig.Attributes.ConfigData.FolderConfigs {
+		if folderConfig.RemoteURL == remoteUrl && len(folderConfig.Organizations) > 0 {
+			// Return the first organization from the matching folder config
+			return folderConfig.Organizations[0].ID
+		}
+	}
+	return ""
+}
+
+// findDefaultOrganization finds the default organization from the main organizations list
+func findDefaultOrganization(ldxConfig *api.LdxSyncConfig) string {
+	for _, org := range ldxConfig.Attributes.ConfigData.Organizations {
+		if org.IsDefault {
+			return org.ID
+		}
+	}
+
+	// If no default organization found, return the first one
+	if len(ldxConfig.Attributes.ConfigData.Organizations) > 0 {
+		return ldxConfig.Attributes.ConfigData.Organizations[0].ID
+	}
+
+	return ""
 }

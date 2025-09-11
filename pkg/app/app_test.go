@@ -374,6 +374,7 @@ func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
 	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(defaultOrgSlug, nil).AnyTimes()
 
@@ -398,6 +399,7 @@ func Test_initConfiguration_failDefaultOrgLookup(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
 	mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("error")).Times(2)
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(orgId, nil).Times(1)
 
@@ -432,6 +434,7 @@ func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).AnyTimes()
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
 	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(orgName, nil).AnyTimes()
@@ -458,13 +461,18 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
+	// Expect LDX-Sync call to fail (since no existing org is set initially)
+	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
+	// Expect fallback to default org resolution
+	mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("no default org")).AnyTimes()
+
 	config := configuration.NewInMemory()
+	config.Set(configuration.ORGANIZATION, orgId)
 	engine := workflow.NewWorkFlowEngine(config)
 	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
 		return mockApiClient
 	}
 	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
-	config.Set(configuration.ORGANIZATION, orgId)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, actualOrgId, orgId)
