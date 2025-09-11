@@ -99,7 +99,7 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 
 	t.Run("with invalid severity threshold", func(t *testing.T) {
 		ctx := setupMockFilterContext(t, "invalid")
-		var findings local_models.LocalFinding = local_models.LocalFinding{}
+		findings := local_models.LocalFinding{}
 		findingsBytes, err := json.Marshal(findings)
 		assert.NoError(t, err)
 		input := []workflow.Data{workflow.NewData(

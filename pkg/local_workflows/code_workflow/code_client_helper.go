@@ -23,7 +23,7 @@ func (c *codeClientConfig) IsFedramp() bool {
 }
 
 func (c *codeClientConfig) SnykCodeApi() string {
-	return strings.Replace(c.localConfiguration.GetString(configuration.API_URL), "api", "deeproxy", -1)
+	return strings.ReplaceAll(c.localConfiguration.GetString(configuration.API_URL), "api", "deeproxy")
 }
 
 func (c *codeClientConfig) SnykApi() string {

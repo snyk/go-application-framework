@@ -3,7 +3,10 @@ GOOS = $(shell go env GOOS)
 GOARCH = $(shell go env GOARCH)
 
 GO_BIN := $(shell pwd)/.bin
-OVERRIDE_GOCI_LINT_V := v1.64.8
+
+GOCI_LINT_V := v2.3.0
+GOCI_LINT_TARGETS := $(GO_BIN)/golangci-lint $(GO_BIN)/.golangci-lint_$(GOCI_LINT_V)
+
 SHELL := env PATH=$(GO_BIN):$(shell go env GOROOT)/bin:$(PATH) $(SHELL)
 
 .PHONY: format
@@ -12,10 +15,10 @@ format:
 	@gofmt -w -l -e .
 
 .PHONY: lint
-lint: $(GO_BIN)/golangci-lint
+lint: $(GOCI_LINT_TARGETS)
 	@echo "Linting..."
 	@./scripts/lint.sh
-	$(GO_BIN)/golangci-lint run ./...
+	$(GO_BIN)/golangci-lint run --timeout=10m ./...
 
 .PHONY: build
 build:
@@ -44,10 +47,12 @@ generate:
 	@make format
 
 .PHONY: tools
-tools: $(GO_BIN)/golangci-lint
+tools: $(GOCI_LINT_TARGETS)
 
-$(GO_BIN)/golangci-lint:
-	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
+$(GOCI_LINT_TARGETS):
+	@rm -f $(GO_BIN)/.golangci-lint_*
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOCI_LINT_V)/install.sh | sh -s -- -b $(GO_BIN) $(GOCI_LINT_V)
+	@touch $(GO_BIN)/.golangci-lint_$(GOCI_LINT_V)
 
 .PHONY: update-dragonfly
 update-dragonfly:

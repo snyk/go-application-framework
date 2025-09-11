@@ -127,11 +127,7 @@ func (p *consoleProgressBar) update() {
 	}
 
 	var err error
-	for {
-		if !p.active.Load() {
-			break
-		}
-
+	for p.active.Load() {
 		var progressString string
 		progress := *p.progress.Load()
 		if progress >= 0 {
@@ -145,11 +141,12 @@ func (p *consoleProgressBar) update() {
 
 		p.state++
 
-		if p.progressType == SpinnerType {
+		switch p.progressType {
+		case SpinnerType:
 			err = p.renderSpinner(progressString)
-		} else if p.progressType == BarType {
+		case BarType:
 			err = p.renderBar(progressString)
-		} else {
+		default:
 			err = p.renderText(progressString)
 		}
 
