@@ -89,7 +89,7 @@ func determineCategoryFromArgs(args []string, knownCommands []string, flagsAllow
 }
 
 func DetermineCategory(args []string, engine workflow.Engine) []string {
-	knownCommands, knownFlags := getKnownCommandsAndFlags(engine)
+	knownCommands, knownFlags := GetKnownCommandsAndFlags(engine)
 	return determineCategoryFromArgs(args, knownCommands, knownFlags)
 }
 
