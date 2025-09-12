@@ -944,3 +944,45 @@ func Test_config_compareCachedAndUncachedConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultFuncLdxSyncConfig(t *testing.T) {
+	t.Run("should return cached value when existing", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockApiClient := mocks.NewMockApiClient(ctrl)
+		config := configuration.NewInMemory()
+		engine := workflow.NewWorkFlowEngine(config)
+		apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+			return mockApiClient
+		}
+
+		defaultFunc := defaultFuncLdxSyncConfig(engine, config, &zlog.Logger, apiClientFactory)
+
+		existingConfig := &api.LdxSyncConfig{ID: "test-config"}
+		result, err := defaultFunc(config, existingConfig)
+		assert.NoError(t, err)
+		assert.Equal(t, existingConfig, result)
+	})
+
+	t.Run("should return error when no input directory", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockApiClient := mocks.NewMockApiClient(ctrl)
+		config := configuration.NewInMemory()
+		engine := workflow.NewWorkFlowEngine(config)
+		apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+			return mockApiClient
+		}
+
+		config.Set(configuration.INPUT_DIRECTORY, "")
+
+		defaultFunc := defaultFuncLdxSyncConfig(engine, config, &zlog.Logger, apiClientFactory)
+
+		result, err := defaultFunc(config, nil)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "no input directory specified")
+	})
+}

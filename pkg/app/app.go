@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/fips140"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -52,7 +53,7 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	return callback
 }
 
-func defaultFuncOrganizationLdx(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	err := config.AddKeyDependency(configuration.ORGANIZATION, configuration.API_URL)
 	if err != nil {
 		logger.Print("Failed to add dependency for ORGANIZATION:", err)
@@ -149,6 +150,54 @@ func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (st
 		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 	}
 	return orgId, err
+}
+
+// defaultFuncLdxSyncConfig provides a default function for retrieving LDX-Sync configuration
+func defaultFuncLdxSyncConfig(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(configuration.LDX_SYNC_CONFIG, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for LDX_SYNC_CONFIG:", err)
+	}
+
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// If there's already a cached value, return it
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient := apiClientFactory(url, client)
+
+		// Try to get LDX-Sync config based on current directory
+		inputDir := config.GetString(configuration.INPUT_DIRECTORY)
+		if inputDir == "" {
+			logger.Debug().Msg("No input directory specified, cannot retrieve LDX-Sync config")
+			return nil, fmt.Errorf("no input directory specified")
+		}
+
+		projectRoot := findProjectRoot(inputDir)
+		if projectRoot == "" {
+			logger.Debug().Str("inputDir", inputDir).Msg("No git repository found, cannot retrieve LDX-Sync config")
+			return nil, fmt.Errorf("no git repository found in input directory: %s", inputDir)
+		}
+
+		remoteUrl, err := git.GetRemoteUrl(projectRoot)
+		if err != nil {
+			logger.Debug().Err(err).Str("projectRoot", projectRoot).Msg("Git remote detection failed, cannot retrieve LDX-Sync config")
+			return nil, fmt.Errorf("git remote detection failed: %w", err)
+		}
+
+		ldxConfig, err := apiClient.GetLdxSyncConfig(remoteUrl)
+		if err != nil {
+			logger.Debug().Err(err).Str("remoteUrl", remoteUrl).Msg("Failed to retrieve LDX-Sync config")
+			return nil, fmt.Errorf("failed to retrieve LDX-Sync config: %w", err)
+		}
+
+		logger.Debug().Str("remoteUrl", remoteUrl).Str("projectRoot", projectRoot).Msg("Successfully retrieved LDX-Sync config")
+		return ldxConfig, nil
+	}
+	return callback
 }
 
 func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
@@ -350,8 +399,9 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		return appUrl, nil
 	})
 
-	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganizationLdx(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
+	config.AddDefaultValue(configuration.LDX_SYNC_CONFIG, defaultFuncLdxSyncConfig(engine, config, logger, apiClientFactory))
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
