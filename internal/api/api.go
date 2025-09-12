@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
+	v20241015 "github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/internal/constants"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
@@ -26,168 +27,10 @@ type ApiClient interface {
 	GetSelf() (contract.SelfResponse, error)
 	GetSastSettings(orgId string) (*sast_contract.SastResponse, error)
 	GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error)
-	GetLdxSyncConfig(remoteUrl string) (*LdxSyncConfig, error)
+	GetLdxSyncConfig(remoteUrl string) (*v20241015.ConfigResponse, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
-
-// LdxSyncOrganization represents an organization in the LDX-Sync response
-type LdxSyncOrganization struct {
-	ID                   string `json:"id"`
-	IsDefault            bool   `json:"is_default"`
-	Name                 string `json:"name"`
-	PreferredByAlgorithm bool   `json:"preferred_by_algorithm"`
-	ProjectCount         int    `json:"project_count"`
-	Slug                 string `json:"slug"`
-}
-
-// LdxSyncEndpoints represents the endpoints configuration
-type LdxSyncEndpoints struct {
-	APIEndpoint  string `json:"api_endpoint"`
-	CodeEndpoint string `json:"code_endpoint"`
-}
-
-// LdxSyncSeverities represents severity configuration
-type LdxSyncSeverities struct {
-	Critical bool `json:"critical"`
-	High     bool `json:"high"`
-	Low      bool `json:"low"`
-	Medium   bool `json:"medium"`
-}
-
-// LdxSyncFilterConfig represents filter configuration
-type LdxSyncFilterConfig struct {
-	CVE                []string          `json:"cve"`
-	CWE                []string          `json:"cwe"`
-	RiskScoreThreshold int               `json:"risk_score_threshold"`
-	Rule               []string          `json:"rule"`
-	Severities         LdxSyncSeverities `json:"severities"`
-}
-
-// LdxSyncFolderConfig represents folder-specific configuration
-type LdxSyncFolderConfig struct {
-	FolderPath    string                `json:"folder_path"`
-	Organizations []LdxSyncOrganization `json:"organizations"`
-	RemoteURL     string                `json:"remote_url"`
-}
-
-// LdxSyncCodeAction represents a code action configuration
-type LdxSyncCodeAction struct {
-	Enabled         bool   `json:"enabled"`
-	IntegrationName string `json:"integration_name"`
-}
-
-// LdxSyncCodeActions represents code actions configuration
-type LdxSyncCodeActions struct {
-	OpenBrowser     []LdxSyncCodeAction `json:"open_browser"`
-	OpenLearnLesson []LdxSyncCodeAction `json:"open_learn_lesson"`
-	SCAUpgrade      []LdxSyncCodeAction `json:"sca_upgrade"`
-}
-
-// LdxSyncBinaryManagementConfig represents binary management configuration
-type LdxSyncBinaryManagementConfig struct {
-	AutomaticDownload bool `json:"automatic_download"`
-}
-
-// LdxSyncIssueViewConfig represents issue view configuration
-type LdxSyncIssueViewConfig struct {
-	IgnoredIssues bool `json:"ignored_issues"`
-	OpenIssues    bool `json:"open_issues"`
-}
-
-// LdxSyncProductConfig represents product configuration
-type LdxSyncProductConfig struct {
-	Code      bool `json:"code"`
-	Container bool `json:"container"`
-	IAC       bool `json:"iac"`
-	OSS       bool `json:"oss"`
-}
-
-// LdxSyncScanConfig represents scan configuration
-type LdxSyncScanConfig struct {
-	Automatic bool `json:"automatic"`
-	NetNew    bool `json:"net_new"`
-}
-
-// LdxSyncTrustConfig represents trust configuration
-type LdxSyncTrustConfig struct {
-	Enable         bool     `json:"enable"`
-	TrustedFolders []string `json:"trusted_folders"`
-}
-
-// LdxSyncIDEConfig represents IDE configuration
-type LdxSyncIDEConfig struct {
-	BinaryManagementConfig LdxSyncBinaryManagementConfig `json:"binary_management_config"`
-	CodeActions            LdxSyncCodeActions            `json:"code_actions"`
-	HoverVerbosity         int                           `json:"hover_verbosity"`
-	IssueViewConfig        LdxSyncIssueViewConfig        `json:"issue_view_config"`
-	ProductConfig          LdxSyncProductConfig          `json:"product_config"`
-	ScanConfig             LdxSyncScanConfig             `json:"scan_config"`
-	TrustConfig            LdxSyncTrustConfig            `json:"trust_config"`
-}
-
-// LdxSyncProxyConfig represents proxy configuration
-type LdxSyncProxyConfig struct {
-	HTTP     string `json:"http"`
-	HTTPS    string `json:"https"`
-	Insecure bool   `json:"insecure"`
-	NoProxy  string `json:"no_proxy"`
-}
-
-// LdxSyncAttributeSource represents attribute source information
-type LdxSyncAttributeSource struct {
-	RemoteURL []string `json:"remote_url"`
-}
-
-// LdxSyncConfigData represents the configuration data
-type LdxSyncConfigData struct {
-	AuthenticationMethod string                `json:"authentication_method"`
-	Endpoints            LdxSyncEndpoints      `json:"endpoints"`
-	FilterConfig         LdxSyncFilterConfig   `json:"filter_config"`
-	FolderConfigs        []LdxSyncFolderConfig `json:"folder_configs"`
-	IDEConfig            LdxSyncIDEConfig      `json:"ide_config"`
-	Organizations        []LdxSyncOrganization `json:"organizations"`
-	ProxyConfig          LdxSyncProxyConfig    `json:"proxy_config"`
-}
-
-// LdxSyncAttributes represents the attributes in the LDX-Sync response
-type LdxSyncAttributes struct {
-	AttributeSource LdxSyncAttributeSource `json:"attribute_source"`
-	ConfigData      LdxSyncConfigData      `json:"config_data"`
-	CreatedAt       string                 `json:"created_at"`
-	LastModifiedAt  string                 `json:"last_modified_at"`
-	Scope           string                 `json:"scope"`
-}
-
-// LdxSyncConfig represents the configuration returned by the LDX-Sync API
-type LdxSyncConfig struct {
-	ID         string            `json:"id"`
-	Type       string            `json:"type"`
-	Attributes LdxSyncAttributes `json:"attributes"`
-}
-
-// LdxSyncJSONAPI represents the JSON API version information
-type LdxSyncJSONAPI struct {
-	Version string `json:"version"`
-}
-
-// LdxSyncLinks represents the links in the response
-type LdxSyncLinks struct {
-	Self string `json:"self"`
-}
-
-// LdxSyncMeta represents the metadata in the response
-type LdxSyncMeta struct {
-	RequestTime string `json:"request_time"`
-}
-
-// LdxSyncResponse represents the full response from the LDX-Sync API
-type LdxSyncResponse struct {
-	Data    LdxSyncConfig  `json:"data"`
-	JSONAPI LdxSyncJSONAPI `json:"jsonapi"`
-	Links   LdxSyncLinks   `json:"links"`
-	Meta    LdxSyncMeta    `json:"meta"`
-}
 
 type snykApiClient struct {
 	url    string
@@ -439,7 +282,7 @@ func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsRespo
 // Returns:
 //   - A pointer to LdxSyncConfig containing the resolved organization and project information.
 //   - An error object (if an error occurred during the API request or response parsing).
-func (a *snykApiClient) GetLdxSyncConfig(remoteUrl string) (*LdxSyncConfig, error) {
+func (a *snykApiClient) GetLdxSyncConfig(remoteUrl string) (*v20241015.ConfigResponse, error) {
 	endpoint := "/rest/ldx_sync/config"
 	version := "2024-10-15"
 	body, err := clientGet(a, endpoint, &version, "remote_url", remoteUrl)
@@ -447,13 +290,13 @@ func (a *snykApiClient) GetLdxSyncConfig(remoteUrl string) (*LdxSyncConfig, erro
 		return nil, fmt.Errorf("LDX-Sync API request failed: %w", err)
 	}
 
-	var response LdxSyncResponse
+	var response v20241015.ConfigResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse LDX-Sync response: %w", err)
 	}
 
-	return &response.Data, nil
+	return &response, nil
 }
 
 // clientGet performs an HTTP GET request to the Snyk API, handling query parameters,

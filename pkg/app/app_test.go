@@ -18,6 +18,7 @@ import (
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -959,7 +960,9 @@ func TestDefaultFuncLdxSyncConfig(t *testing.T) {
 
 		defaultFunc := defaultFuncLdxSyncConfig(engine, config, &zlog.Logger, apiClientFactory)
 
-		existingConfig := &api.LdxSyncConfig{ID: "test-config"}
+		existingConfig := &v20241015.ConfigResponse{
+			Data: v20241015.ConfigResource{},
+		}
 		result, err := defaultFunc(config, existingConfig)
 		assert.NoError(t, err)
 		assert.Equal(t, existingConfig, result)

@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
+	v20241015 "github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,22 +21,23 @@ func TestGetLdxSyncConfig(t *testing.T) {
 		assert.Equal(t, "https://github.com/test/repo.git", r.URL.Query().Get("remote_url"))
 
 		// Return mock response
-		response := LdxSyncResponse{
-			Data: LdxSyncConfig{
-				ID:   "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-				Type: "config",
-				Attributes: LdxSyncAttributes{
-					Scope:          "global",
-					LastModifiedAt: "2024-01-15T10:30:00Z",
-					ConfigData: LdxSyncConfigData{
-						AuthenticationMethod: "oauth",
-						Endpoints: LdxSyncEndpoints{
-							APIEndpoint:  "https://api.snyk.io",
-							CodeEndpoint: "https://deeproxy.snyk.io",
+		oauth := v20241015.Oauth
+		response := v20241015.ConfigResponse{
+			Data: v20241015.ConfigResource{
+				Id:   uuid.New(),
+				Type: v20241015.ConfigResourceTypeConfig,
+				Attributes: v20241015.ConfigAttributes{
+					Scope:          v20241015.Global,
+					LastModifiedAt: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+					ConfigData: v20241015.ConfigData{
+						AuthenticationMethod: &oauth,
+						Endpoints: &v20241015.Endpoints{
+							ApiEndpoint:  &[]string{"https://api.snyk.io"}[0],
+							CodeEndpoint: &[]string{"https://deeproxy.snyk.io"}[0],
 						},
-						Organizations: []LdxSyncOrganization{
+						Organizations: &[]v20241015.Organization{
 							{
-								ID:   "test-org-123",
+								Id:   "test-org-123",
 								Name: "Test Organization",
 								Slug: "test-org",
 							},
@@ -58,35 +62,36 @@ func TestGetLdxSyncConfig(t *testing.T) {
 	// Test GetLdxSyncConfig
 	config, err := client.GetLdxSyncConfig("https://github.com/test/repo.git")
 	assert.NoError(t, err)
-	assert.Equal(t, "3fa85f64-5717-4562-b3fc-2c963f66afa6", config.ID)
-	assert.Equal(t, "config", config.Type)
-	assert.Equal(t, "global", config.Attributes.Scope)
-	assert.Equal(t, "oauth", config.Attributes.ConfigData.AuthenticationMethod)
-	assert.Equal(t, "https://api.snyk.io", config.Attributes.ConfigData.Endpoints.APIEndpoint)
-	assert.Equal(t, "https://deeproxy.snyk.io", config.Attributes.ConfigData.Endpoints.CodeEndpoint)
-	assert.Len(t, config.Attributes.ConfigData.Organizations, 1)
-	assert.Equal(t, "test-org-123", config.Attributes.ConfigData.Organizations[0].ID)
-	assert.Equal(t, "Test Organization", config.Attributes.ConfigData.Organizations[0].Name)
-	assert.Equal(t, "test-org", config.Attributes.ConfigData.Organizations[0].Slug)
+	assert.NotEmpty(t, config.Data.Id)
+	assert.Equal(t, v20241015.ConfigResourceTypeConfig, config.Data.Type)
+	assert.Equal(t, v20241015.Global, config.Data.Attributes.Scope)
+	assert.Equal(t, v20241015.Oauth, *config.Data.Attributes.ConfigData.AuthenticationMethod)
+	assert.Equal(t, "https://api.snyk.io", *config.Data.Attributes.ConfigData.Endpoints.ApiEndpoint)
+	assert.Equal(t, "https://deeproxy.snyk.io", *config.Data.Attributes.ConfigData.Endpoints.CodeEndpoint)
+	assert.Len(t, *config.Data.Attributes.ConfigData.Organizations, 1)
+	assert.Equal(t, "test-org-123", (*config.Data.Attributes.ConfigData.Organizations)[0].Id)
+	assert.Equal(t, "Test Organization", (*config.Data.Attributes.ConfigData.Organizations)[0].Name)
+	assert.Equal(t, "test-org", (*config.Data.Attributes.ConfigData.Organizations)[0].Slug)
 }
 
 func TestGetLdxSyncConfig_EmptyOrganizations(t *testing.T) {
 	// Create a mock server that returns empty organizations
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := LdxSyncResponse{
-			Data: LdxSyncConfig{
-				ID:   "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-				Type: "config",
-				Attributes: LdxSyncAttributes{
-					Scope:          "global",
-					LastModifiedAt: "2024-01-15T10:30:00Z",
-					ConfigData: LdxSyncConfigData{
-						AuthenticationMethod: "oauth",
-						Endpoints: LdxSyncEndpoints{
-							APIEndpoint:  "https://api.snyk.io",
-							CodeEndpoint: "https://deeproxy.snyk.io",
+		oauth := v20241015.Oauth
+		response := v20241015.ConfigResponse{
+			Data: v20241015.ConfigResource{
+				Id:   uuid.New(),
+				Type: v20241015.ConfigResourceTypeConfig,
+				Attributes: v20241015.ConfigAttributes{
+					Scope:          v20241015.Global,
+					LastModifiedAt: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+					ConfigData: v20241015.ConfigData{
+						AuthenticationMethod: &oauth,
+						Endpoints: &v20241015.Endpoints{
+							ApiEndpoint:  &[]string{"https://api.snyk.io"}[0],
+							CodeEndpoint: &[]string{"https://deeproxy.snyk.io"}[0],
 						},
-						Organizations: []LdxSyncOrganization{}, // Empty organizations
+						Organizations: &[]v20241015.Organization{}, // Empty organizations
 					},
 				},
 			},
@@ -107,7 +112,7 @@ func TestGetLdxSyncConfig_EmptyOrganizations(t *testing.T) {
 	// Test GetLdxSyncConfig should return config but with empty organizations
 	config, err := client.GetLdxSyncConfig("https://github.com/test/repo.git")
 	assert.NoError(t, err)
-	assert.Len(t, config.Attributes.ConfigData.Organizations, 0)
+	assert.Len(t, *config.Data.Attributes.ConfigData.Organizations, 0)
 }
 
 func TestGetLdxSyncConfig_HTTPError(t *testing.T) {

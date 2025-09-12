@@ -9,8 +9,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	api "github.com/snyk/go-application-framework/internal/api"
 	contract "github.com/snyk/go-application-framework/internal/api/contract"
+	v20241015 "github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	sast_contract "github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
@@ -68,10 +68,10 @@ func (mr *MockApiClientMockRecorder) GetFeatureFlag(flagname, origId interface{}
 }
 
 // GetLdxSyncConfig mocks base method.
-func (m *MockApiClient) GetLdxSyncConfig(remoteUrl string) (*api.LdxSyncConfig, error) {
+func (m *MockApiClient) GetLdxSyncConfig(remoteUrl string) (*v20241015.ConfigResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLdxSyncConfig", remoteUrl)
-	ret0, _ := ret[0].(*api.LdxSyncConfig)
+	ret0, _ := ret[0].(*v20241015.ConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

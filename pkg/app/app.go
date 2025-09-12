@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
@@ -511,27 +512,34 @@ func findProjectRoot(startPath string) string {
 }
 
 // findOrganizationFromFolderConfigs looks for an organization in folder configs that matches the remote URL
-func findOrganizationFromFolderConfigs(ldxConfig *api.LdxSyncConfig, remoteUrl string) string {
-	for _, folderConfig := range ldxConfig.Attributes.ConfigData.FolderConfigs {
-		if folderConfig.RemoteURL == remoteUrl && len(folderConfig.Organizations) > 0 {
+func findOrganizationFromFolderConfigs(ldxConfig *v20241015.ConfigResponse, remoteUrl string) string {
+	if ldxConfig.Data.Attributes.ConfigData.FolderConfigs == nil {
+		return ""
+	}
+	for _, folderConfig := range *ldxConfig.Data.Attributes.ConfigData.FolderConfigs {
+		if folderConfig.RemoteUrl == remoteUrl && folderConfig.Organizations != nil && len(*folderConfig.Organizations) > 0 {
 			// Return the first organization from the matching folder config
-			return folderConfig.Organizations[0].ID
+			return (*folderConfig.Organizations)[0].Id
 		}
 	}
 	return ""
 }
 
 // findDefaultOrganization finds the default organization from the main organizations list
-func findDefaultOrganization(ldxConfig *api.LdxSyncConfig) string {
-	for _, org := range ldxConfig.Attributes.ConfigData.Organizations {
-		if org.IsDefault {
-			return org.ID
+func findDefaultOrganization(ldxConfig *v20241015.ConfigResponse) string {
+	if ldxConfig.Data.Attributes.ConfigData.Organizations == nil {
+		return ""
+	}
+
+	for _, org := range *ldxConfig.Data.Attributes.ConfigData.Organizations {
+		if org.IsDefault != nil && *org.IsDefault {
+			return org.Id
 		}
 	}
 
 	// If no default organization found, return the first one
-	if len(ldxConfig.Attributes.ConfigData.Organizations) > 0 {
-		return ldxConfig.Attributes.ConfigData.Organizations[0].ID
+	if len(*ldxConfig.Data.Attributes.ConfigData.Organizations) > 0 {
+		return (*ldxConfig.Data.Attributes.ConfigData.Organizations)[0].Id
 	}
 
 	return ""
