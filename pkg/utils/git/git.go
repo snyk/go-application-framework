@@ -3,7 +3,7 @@ package git
 import (
 	"fmt"
 
-	"github.com/go-git/go-git/v5"
+	go_git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 )
 
@@ -32,8 +32,8 @@ func BranchNameFromDir(inputDir string) (string, error) {
 	return "", nil
 }
 
-func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error) {
-	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
+func RepoFromDir(inputDir string) (*go_git.Repository, *config.RemoteConfig, error) {
+	repo, err := go_git.PlainOpenWithOptions(inputDir, &go_git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 
@@ -52,4 +52,88 @@ func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error)
 		return repo, nil, fmt.Errorf("no remote url found")
 	}
 	return repo, remoteConfig, nil
+}
+
+// GetRemoteUrl retrieves the appropriate remote URL for LDX-Sync resolution.
+// Priority: origin remote first, then first available remote.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The remote URL as a string.
+//   - An error object (if no git repository found or no remotes configured).
+func GetRemoteUrl(inputDir string) (string, error) {
+	// Try to get origin remote first
+	originUrl, err := GetOriginRemote(inputDir)
+	if err == nil {
+		return originUrl, nil
+	}
+
+	// Fallback to first available remote
+	return GetFirstRemote(inputDir)
+}
+
+// GetOriginRemote retrieves the origin remote URL from a git repository.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The origin remote URL as a string.
+//   - An error object (if no git repository found or no origin remote configured).
+func GetOriginRemote(inputDir string) (string, error) {
+	repo, err := go_git.PlainOpenWithOptions(inputDir, &go_git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	remote, err := repo.Remote("origin")
+	if err != nil {
+		return "", fmt.Errorf("no origin remote found: %w", err)
+	}
+
+	remoteConfig := remote.Config()
+	if remoteConfig == nil || len(remoteConfig.URLs) == 0 || remoteConfig.URLs[0] == "" {
+		return "", fmt.Errorf("origin remote has no URL")
+	}
+
+	return remoteConfig.URLs[0], nil
+}
+
+// GetFirstRemote retrieves the first available remote URL from a git repository.
+//
+// Parameters:
+//   - inputDir (string): The directory path to check for git repository
+//
+// Returns:
+//   - The first remote URL as a string.
+//   - An error object (if no git repository found or no remotes configured).
+func GetFirstRemote(inputDir string) (string, error) {
+	repo, err := go_git.PlainOpenWithOptions(inputDir, &go_git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	remotes, err := repo.Remotes()
+	if err != nil {
+		return "", fmt.Errorf("failed to get remotes: %w", err)
+	}
+
+	if len(remotes) == 0 {
+		return "", fmt.Errorf("no remotes configured")
+	}
+
+	// Get the first remote
+	firstRemote := remotes[0]
+	remoteConfig := firstRemote.Config()
+	if remoteConfig == nil || len(remoteConfig.URLs) == 0 || remoteConfig.URLs[0] == "" {
+		return "", fmt.Errorf("first remote has no URL")
+	}
+
+	return remoteConfig.URLs[0], nil
 }
