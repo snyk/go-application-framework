@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	v20241015 "github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
+	v20241015 "github.com/snyk/go-application-framework/pkg/api/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
