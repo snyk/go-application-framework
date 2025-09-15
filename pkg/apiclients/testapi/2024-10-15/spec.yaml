@@ -945,6 +945,12 @@ components:
       description: Locally configured policy options for determining outcome of this
         specific test.
       properties:
+        fail_on_upgradable:
+          default: false
+          description: |-
+            Use to fail a test when there is at least one vulnerable finding that can be fixed by upgrading the version of the related
+               dependency. E.g. bumping lodash from 1.1.1 to 1.1.2.
+          type: boolean
         risk_score_threshold:
           description: Findings of equal or greater risk score will fail the test.
           format: uint16
@@ -1313,6 +1319,27 @@ components:
       - type
       - sbom_bundle_id
       - code_bundle_id
+      - locator
+      type: object
+    SbomSubject:
+      description: Test subject for SBOM test with reachability analysis.
+      properties:
+        locator:
+          allOf:
+          - $ref: '#/components/schemas/LocalPathLocator'
+          description: Locate the local paths from which the SBOM and source code
+            were derived.
+        sbom_bundle_id:
+          description: The SBOM to test for vulnerable dependencies.
+          pattern: ^[a-fA-F0-9]{64}$
+          type: string
+        type:
+          enum:
+          - sbom
+          type: string
+      required:
+      - type
+      - sbom_bundle_id
       - locator
       type: object
     ScmRepoLocator:
@@ -1994,6 +2021,7 @@ components:
           dep_graph: '#/components/schemas/DepGraphSubject'
           git_url_coordinates: '#/components/schemas/GitUrlCoordinatesSubject'
           other: '#/components/schemas/OtherSubject'
+          sbom: '#/components/schemas/SbomSubject'
           sbom_reachability: '#/components/schemas/SbomReachabilitySubject'
         propertyName: type
       oneOf:
@@ -2002,6 +2030,7 @@ components:
       - $ref: '#/components/schemas/GitUrlCoordinatesSubject'
       - $ref: '#/components/schemas/SbomReachabilitySubject'
       - $ref: '#/components/schemas/OtherSubject'
+      - $ref: '#/components/schemas/SbomSubject'
     TestSubjectCreate:
       description: |-
         The subject of a test, which identifies the asset/project and content references
@@ -2012,6 +2041,7 @@ components:
           dep_graph: '#/components/schemas/DepGraphSubjectCreate'
           git_url_coordinates: '#/components/schemas/GitUrlCoordinatesSubject'
           other: '#/components/schemas/OtherSubject'
+          sbom: '#/components/schemas/SbomSubject'
           sbom_reachability: '#/components/schemas/SbomReachabilitySubject'
         propertyName: type
       oneOf:
@@ -2020,6 +2050,7 @@ components:
       - $ref: '#/components/schemas/GitUrlCoordinatesSubject'
       - $ref: '#/components/schemas/SbomReachabilitySubject'
       - $ref: '#/components/schemas/OtherSubject'
+      - $ref: '#/components/schemas/SbomSubject'
     TestSubjectLocator:
       discriminator:
         mapping:

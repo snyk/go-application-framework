@@ -167,10 +167,10 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		},
 		{
 			name:              "with a PAT configured and a user-defined API URL, PAT host should take precedence",
-			patPayload:        `{"h":"api.pat"}`,
+			patPayload:        `{"h":"api.snyk.io"}`,
 			oauthJWTPayload:   "",
 			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.pat",
+			expectedURL:       "https://api.snyk.io",
 		},
 		{
 			name:              "with a broken OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
@@ -195,10 +195,10 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		},
 		{
 			name:              "with only PAT configured, use PAT host",
-			patPayload:        `{"h":"api.pat"}`,
+			patPayload:        `{"h":"api.eu.snyk.io"}`,
 			oauthJWTPayload:   "",
 			userDefinedApiUrl: "",
-			expectedURL:       "https://api.pat",
+			expectedURL:       "https://api.eu.snyk.io",
 		},
 		{
 			name:              "with only OAuth configured, use OAuth audience",
@@ -211,10 +211,10 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		// catch regressions if this test starts to fail.
 		{
 			name:              "with PAT, OAuth and user-defined API URL, PAT should take precedence over OAuth",
-			patPayload:        `{"h":"api.pat"}`,
+			patPayload:        `{"h":"api.au.snyk.io"}`,
 			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth"]}`,
 			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.pat",
+			expectedURL:       "https://api.au.snyk.io",
 		},
 	}
 
@@ -697,8 +697,15 @@ func TestDefaultInputDirectory(t *testing.T) {
 			name:           "non-string type - slice",
 			existingValue:  []string{"path1", "path2"},
 			expectedError:  false,
-			expectedResult: nil, // Will fall back to current working directory
-			description:    "should handle non-string types gracefully and return current working directory",
+			expectedResult: []string{"path1", "path2"},
+			description:    "should handle non-string types gracefully and return the slice as there are multiple paths possible",
+		},
+		{
+			name:           "non-string type - slice with empty strings",
+			existingValue:  []string{"path1", "", "path2"},
+			expectedError:  false,
+			expectedResult: []string{"path1", "path2"},
+			description:    "should ignore empty strings in slices",
 		},
 		{
 			name:           "non-string type - map",
@@ -757,6 +764,8 @@ func TestDefaultInputDirectory(t *testing.T) {
 				assert.NotNil(t, result, tt.description)
 				if str, ok := result.(string); ok {
 					assert.NotEmpty(t, str, tt.description)
+				} else {
+					assert.Fail(t, "result is not a string", tt.description)
 				}
 			}
 		})

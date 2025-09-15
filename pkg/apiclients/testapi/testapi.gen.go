@@ -161,6 +161,11 @@ const (
 	SbomReachability SbomReachabilitySubjectType = "sbom_reachability"
 )
 
+// Defines values for SbomSubjectType.
+const (
+	Sbom SbomSubjectType = "sbom"
+)
+
 // Defines values for ScmRepoLocatorType.
 const (
 	ScmRepo ScmRepoLocatorType = "scm_repo"
@@ -661,6 +666,10 @@ type LocalPathLocatorType string
 
 // LocalPolicy Locally configured policy options for determining outcome of this specific test.
 type LocalPolicy struct {
+	// FailOnUpgradable Use to fail a test when there is at least one vulnerable finding that can be fixed by upgrading the version of the related
+	//    dependency. E.g. bumping lodash from 1.1.1 to 1.1.2.
+	FailOnUpgradable *bool `json:"fail_on_upgradable,omitempty"`
+
 	// RiskScoreThreshold Findings of equal or greater risk score will fail the test.
 	RiskScoreThreshold *uint16 `json:"risk_score_threshold,omitempty"`
 
@@ -893,6 +902,19 @@ type SbomReachabilitySubject struct {
 
 // SbomReachabilitySubjectType defines model for SbomReachabilitySubject.Type.
 type SbomReachabilitySubjectType string
+
+// SbomSubject Test subject for SBOM test with reachability analysis.
+type SbomSubject struct {
+	// Locator Locate the local paths from which the SBOM and source code were derived.
+	Locator LocalPathLocator `json:"locator"`
+
+	// SbomBundleId The SBOM to test for vulnerable dependencies.
+	SbomBundleId string          `json:"sbom_bundle_id"`
+	Type         SbomSubjectType `json:"type"`
+}
+
+// SbomSubjectType defines model for SbomSubject.Type.
+type SbomSubjectType string
 
 // ScmRepoLocator ScmRepoLocator locates a test subject by SCM repository coordinates.
 type ScmRepoLocator struct {
@@ -3231,6 +3253,34 @@ func (t *TestSubject) MergeOtherSubject(v OtherSubject) error {
 	return err
 }
 
+// AsSbomSubject returns the union data inside the TestSubject as a SbomSubject
+func (t TestSubject) AsSbomSubject() (SbomSubject, error) {
+	var body SbomSubject
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSbomSubject overwrites any union data inside the TestSubject as the provided SbomSubject
+func (t *TestSubject) FromSbomSubject(v SbomSubject) error {
+	v.Type = "sbom"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSbomSubject performs a merge with any union data inside the TestSubject, using the provided SbomSubject
+func (t *TestSubject) MergeSbomSubject(v SbomSubject) error {
+	v.Type = "sbom"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t TestSubject) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -3253,6 +3303,8 @@ func (t TestSubject) ValueByDiscriminator() (interface{}, error) {
 		return t.AsGitUrlCoordinatesSubject()
 	case "other":
 		return t.AsOtherSubject()
+	case "sbom":
+		return t.AsSbomSubject()
 	case "sbom_reachability":
 		return t.AsSbomReachabilitySubject()
 	default:
@@ -3410,6 +3462,34 @@ func (t *TestSubjectCreate) MergeOtherSubject(v OtherSubject) error {
 	return err
 }
 
+// AsSbomSubject returns the union data inside the TestSubjectCreate as a SbomSubject
+func (t TestSubjectCreate) AsSbomSubject() (SbomSubject, error) {
+	var body SbomSubject
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSbomSubject overwrites any union data inside the TestSubjectCreate as the provided SbomSubject
+func (t *TestSubjectCreate) FromSbomSubject(v SbomSubject) error {
+	v.Type = "sbom"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSbomSubject performs a merge with any union data inside the TestSubjectCreate, using the provided SbomSubject
+func (t *TestSubjectCreate) MergeSbomSubject(v SbomSubject) error {
+	v.Type = "sbom"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t TestSubjectCreate) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -3432,6 +3512,8 @@ func (t TestSubjectCreate) ValueByDiscriminator() (interface{}, error) {
 		return t.AsGitUrlCoordinatesSubject()
 	case "other":
 		return t.AsOtherSubject()
+	case "sbom":
+		return t.AsSbomSubject()
 	case "sbom_reachability":
 		return t.AsSbomReachabilitySubject()
 	default:
