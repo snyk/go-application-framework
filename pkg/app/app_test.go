@@ -18,7 +18,6 @@ import (
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/internal/api"
-	v20241015 "github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -375,7 +374,6 @@ func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
 	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(defaultOrgSlug, nil).AnyTimes()
 
@@ -400,7 +398,6 @@ func Test_initConfiguration_failDefaultOrgLookup(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
 	mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("error")).Times(2)
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(orgId, nil).Times(1)
 
@@ -435,7 +432,6 @@ func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
 	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).AnyTimes()
 	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
 	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(orgName, nil).AnyTimes()
@@ -462,18 +458,13 @@ func Test_initConfiguration_uuidOrgId(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
-	// Expect LDX-Sync call to fail (since no existing org is set initially)
-	mockApiClient.EXPECT().GetLdxSyncConfig(gomock.Any()).Return(nil, errors.New("LDX-Sync not available")).AnyTimes()
-	// Expect fallback to default org resolution
-	mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("no default org")).AnyTimes()
-
 	config := configuration.NewInMemory()
-	config.Set(configuration.ORGANIZATION, orgId)
 	engine := workflow.NewWorkFlowEngine(config)
 	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
 		return mockApiClient
 	}
 	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+	config.Set(configuration.ORGANIZATION, orgId)
 
 	actualOrgId := config.GetString(configuration.ORGANIZATION)
 	assert.Equal(t, actualOrgId, orgId)
@@ -944,48 +935,4 @@ func Test_config_compareCachedAndUncachedConfig(t *testing.T) {
 			assert.Equal(t, "https://app.us.snyk.io", tt.config.GetString(configuration.WEB_APP_URL))
 		})
 	}
-}
-
-func TestDefaultFuncLdxSyncConfig(t *testing.T) {
-	t.Run("should return cached value when existing", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockApiClient := mocks.NewMockApiClient(ctrl)
-		config := configuration.NewInMemory()
-		engine := workflow.NewWorkFlowEngine(config)
-		apiClientFactory := func(url string, client *http.Client) api.ApiClient {
-			return mockApiClient
-		}
-
-		defaultFunc := defaultFuncLdxSyncConfig(engine, config, &zlog.Logger, apiClientFactory)
-
-		existingConfig := &v20241015.ConfigResponse{
-			Data: v20241015.ConfigResource{},
-		}
-		result, err := defaultFunc(config, existingConfig)
-		assert.NoError(t, err)
-		assert.Equal(t, existingConfig, result)
-	})
-
-	t.Run("should return error when no input directory", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockApiClient := mocks.NewMockApiClient(ctrl)
-		config := configuration.NewInMemory()
-		engine := workflow.NewWorkFlowEngine(config)
-		apiClientFactory := func(url string, client *http.Client) api.ApiClient {
-			return mockApiClient
-		}
-
-		config.Set(configuration.INPUT_DIRECTORY, "")
-
-		defaultFunc := defaultFuncLdxSyncConfig(engine, config, &zlog.Logger, apiClientFactory)
-
-		result, err := defaultFunc(config, nil)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "no input directory specified")
-	})
 }
