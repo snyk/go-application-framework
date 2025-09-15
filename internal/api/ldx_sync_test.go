@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	v20241015 "github.com/snyk/go-application-framework/pkg/api/ldx_sync/2024-10-15"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/stretchr/testify/assert"
 )
 

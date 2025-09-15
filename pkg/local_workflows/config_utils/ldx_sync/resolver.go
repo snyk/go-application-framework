@@ -8,7 +8,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	v20241015 "github.com/snyk/go-application-framework/pkg/api/ldx_sync/2024-10-15"
+	ldx_sync_config "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
@@ -76,12 +77,99 @@ func TryResolveOrganization(config configuration.Configuration, apiClient api.Ap
 }
 
 // GetConfig retrieves LDX-Sync configuration for the current project
-func GetConfig(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) (*v20241015.ConfigResponse, error) {
+func GetConfig(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) (*ldx_sync_config.Configuration, error) {
 	result := getLdxSyncConfig(config, apiClient)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return result.Config, nil
+
+	// Convert the raw ConfigResponse to our high-level Configuration struct
+	configuration := convertToHighLevelConfig(result.Config)
+	return configuration, nil
+}
+
+// convertToHighLevelConfig converts a raw ConfigResponse to our high-level Configuration struct
+func convertToHighLevelConfig(configResponse *v20241015.ConfigResponse) *ldx_sync_config.Configuration {
+	config := &ldx_sync_config.Configuration{}
+	configData := &configResponse.Data.Attributes.ConfigData
+
+	// Extract organization
+	if configData.Organizations != nil && len(*configData.Organizations) > 0 {
+		// Find the default organization or use the first one
+		var selectedOrg *v20241015.Organization
+		for _, org := range *configData.Organizations {
+			if org.IsDefault != nil && *org.IsDefault {
+				selectedOrg = &org
+				break
+			}
+		}
+
+		if selectedOrg == nil {
+			selectedOrg = &(*configData.Organizations)[0]
+		}
+
+		if selectedOrg != nil {
+			config.Organization = selectedOrg.Id
+		}
+	}
+
+	// Extract filter configuration
+	if configData.FilterConfig != nil && configData.FilterConfig.Severities != nil {
+		severities := configData.FilterConfig.Severities
+		config.SeverityFilter = &ldx_sync_config.SeverityFilter{
+			Critical: *severities.Critical,
+			High:     *severities.High,
+			Medium:   *severities.Medium,
+			Low:      *severities.Low,
+		}
+	}
+
+	// Extract IDE configuration
+	if configData.IdeConfig != nil {
+		ideConfig := configData.IdeConfig
+
+		// Extract product configuration
+		if ideConfig.ProductConfig != nil {
+			productConfig := ideConfig.ProductConfig
+			config.ProductConfig = &ldx_sync_config.ProductConfig{
+				Code:      productConfig.Code != nil && *productConfig.Code,
+				Container: productConfig.Container != nil && *productConfig.Container,
+				Iac:       productConfig.Iac != nil && *productConfig.Iac,
+				Oss:       productConfig.Oss != nil && *productConfig.Oss,
+			}
+		}
+
+		// Extract scan configuration
+		if ideConfig.ScanConfig != nil && ideConfig.ScanConfig.Automatic != nil {
+			config.AutoScan = *ideConfig.ScanConfig.Automatic
+		}
+
+		// Extract trust configuration
+		if ideConfig.TrustConfig != nil && ideConfig.TrustConfig.TrustedFolders != nil {
+			config.TrustedFolders = *ideConfig.TrustConfig.TrustedFolders
+		}
+	}
+
+	// Extract proxy configuration
+	if configData.ProxyConfig != nil {
+		proxyConfig := configData.ProxyConfig
+		config.ProxyConfig = &ldx_sync_config.ProxyConfig{}
+
+		if proxyConfig.Http != nil {
+			config.ProxyConfig.Http = *proxyConfig.Http
+		}
+		if proxyConfig.Https != nil {
+			config.ProxyConfig.Https = *proxyConfig.Https
+		}
+		if proxyConfig.Insecure != nil {
+			config.ProxyConfig.Insecure = *proxyConfig.Insecure
+		}
+		if proxyConfig.NoProxy != nil {
+			config.ProxyConfig.NoProxy = *proxyConfig.NoProxy
+		}
+	}
+
+	return config
 }
 
 // findProjectRoot walks up the directory tree from the given path to find a git repository root

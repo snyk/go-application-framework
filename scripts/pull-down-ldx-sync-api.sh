@@ -27,6 +27,6 @@ git pull
 cd -
 
 # Vendor OpenAPI build artefacts for use in the LDX-Sync API client
-cp $API_SPEC_PATH/internal/api/rest/versions/$VERSION/spec.yaml ./pkg/api/ldx_sync/$VERSION/spec.yaml
+cp $API_SPEC_PATH/internal/api/rest/versions/$VERSION/spec.yaml ./pkg/apiclients/ldx_sync_config/ldx_sync/$VERSION/spec.yaml
 
 echo "Generated" $GENERATE_DATE $API_SPEC_BRANCH $API_COMMIT
