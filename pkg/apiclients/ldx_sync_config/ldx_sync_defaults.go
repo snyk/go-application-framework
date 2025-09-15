@@ -1,4 +1,4 @@
-package ldx_sync
+package ldx_sync_config
 
 import (
 	"net/http"

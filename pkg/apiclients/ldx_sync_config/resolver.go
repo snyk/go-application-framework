@@ -1,4 +1,4 @@
-package ldx_sync
+package ldx_sync_config
 
 import (
 	"fmt"
@@ -8,7 +8,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	ldx_sync_config "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
@@ -77,7 +76,7 @@ func TryResolveOrganization(config configuration.Configuration, apiClient api.Ap
 }
 
 // GetConfig retrieves LDX-Sync configuration for the current project
-func GetConfig(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) (*ldx_sync_config.Configuration, error) {
+func GetConfig(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) (*Configuration, error) {
 	result := getLdxSyncConfig(config, apiClient)
 	if result.Error != nil {
 		return nil, result.Error
@@ -89,25 +88,23 @@ func GetConfig(config configuration.Configuration, apiClient api.ApiClient, logg
 }
 
 // convertToHighLevelConfig converts a raw ConfigResponse to our high-level Configuration struct
-func convertToHighLevelConfig(configResponse *v20241015.ConfigResponse) *ldx_sync_config.Configuration {
-	config := &ldx_sync_config.Configuration{}
+func convertToHighLevelConfig(configResponse *v20241015.ConfigResponse) *Configuration {
+	config := &Configuration{}
 	configData := &configResponse.Data.Attributes.ConfigData
 
+	// Extract core configuration
+	extractCoreConfig(configData, config)
+	extractIdeConfig(configData, config)
+	extractProxyConfig(configData, config)
+
+	return config
+}
+
+// extractCoreConfig extracts core configuration fields
+func extractCoreConfig(configData *v20241015.ConfigData, config *Configuration) {
 	// Extract organization
 	if configData.Organizations != nil && len(*configData.Organizations) > 0 {
-		// Find the default organization or use the first one
-		var selectedOrg *v20241015.Organization
-		for _, org := range *configData.Organizations {
-			if org.IsDefault != nil && *org.IsDefault {
-				selectedOrg = &org
-				break
-			}
-		}
-
-		if selectedOrg == nil {
-			selectedOrg = &(*configData.Organizations)[0]
-		}
-
+		selectedOrg := findDefaultOrganizationFromList(*configData.Organizations)
 		if selectedOrg != nil {
 			config.Organization = selectedOrg.Id
 		}
@@ -116,60 +113,79 @@ func convertToHighLevelConfig(configResponse *v20241015.ConfigResponse) *ldx_syn
 	// Extract filter configuration
 	if configData.FilterConfig != nil && configData.FilterConfig.Severities != nil {
 		severities := configData.FilterConfig.Severities
-		config.SeverityFilter = &ldx_sync_config.SeverityFilter{
+		config.SeverityFilter = &SeverityFilter{
 			Critical: *severities.Critical,
 			High:     *severities.High,
 			Medium:   *severities.Medium,
 			Low:      *severities.Low,
 		}
 	}
+}
 
-	// Extract IDE configuration
-	if configData.IdeConfig != nil {
-		ideConfig := configData.IdeConfig
+// extractIdeConfig extracts IDE configuration
+func extractIdeConfig(configData *v20241015.ConfigData, config *Configuration) {
+	if configData.IdeConfig == nil {
+		return
+	}
 
-		// Extract product configuration
-		if ideConfig.ProductConfig != nil {
-			productConfig := ideConfig.ProductConfig
-			config.ProductConfig = &ldx_sync_config.ProductConfig{
-				Code:      productConfig.Code != nil && *productConfig.Code,
-				Container: productConfig.Container != nil && *productConfig.Container,
-				Iac:       productConfig.Iac != nil && *productConfig.Iac,
-				Oss:       productConfig.Oss != nil && *productConfig.Oss,
-			}
-		}
+	ideConfig := configData.IdeConfig
 
-		// Extract scan configuration
-		if ideConfig.ScanConfig != nil && ideConfig.ScanConfig.Automatic != nil {
-			config.AutoScan = *ideConfig.ScanConfig.Automatic
-		}
-
-		// Extract trust configuration
-		if ideConfig.TrustConfig != nil && ideConfig.TrustConfig.TrustedFolders != nil {
-			config.TrustedFolders = *ideConfig.TrustConfig.TrustedFolders
+	// Extract product configuration
+	if ideConfig.ProductConfig != nil {
+		productConfig := ideConfig.ProductConfig
+		config.ProductConfig = &ProductConfig{
+			Code:      productConfig.Code != nil && *productConfig.Code,
+			Container: productConfig.Container != nil && *productConfig.Container,
+			Iac:       productConfig.Iac != nil && *productConfig.Iac,
+			Oss:       productConfig.Oss != nil && *productConfig.Oss,
 		}
 	}
 
-	// Extract proxy configuration
-	if configData.ProxyConfig != nil {
-		proxyConfig := configData.ProxyConfig
-		config.ProxyConfig = &ldx_sync_config.ProxyConfig{}
-
-		if proxyConfig.Http != nil {
-			config.ProxyConfig.Http = *proxyConfig.Http
-		}
-		if proxyConfig.Https != nil {
-			config.ProxyConfig.Https = *proxyConfig.Https
-		}
-		if proxyConfig.Insecure != nil {
-			config.ProxyConfig.Insecure = *proxyConfig.Insecure
-		}
-		if proxyConfig.NoProxy != nil {
-			config.ProxyConfig.NoProxy = *proxyConfig.NoProxy
-		}
+	// Extract scan configuration
+	if ideConfig.ScanConfig != nil && ideConfig.ScanConfig.Automatic != nil {
+		config.AutoScan = *ideConfig.ScanConfig.Automatic
 	}
 
-	return config
+	// Extract trust configuration
+	if ideConfig.TrustConfig != nil && ideConfig.TrustConfig.TrustedFolders != nil {
+		config.TrustedFolders = *ideConfig.TrustConfig.TrustedFolders
+	}
+}
+
+// extractProxyConfig extracts proxy configuration
+func extractProxyConfig(configData *v20241015.ConfigData, config *Configuration) {
+	if configData.ProxyConfig == nil {
+		return
+	}
+
+	proxyConfig := configData.ProxyConfig
+	config.ProxyConfig = &ProxyConfig{}
+
+	if proxyConfig.Http != nil {
+		config.ProxyConfig.Http = *proxyConfig.Http
+	}
+	if proxyConfig.Https != nil {
+		config.ProxyConfig.Https = *proxyConfig.Https
+	}
+	if proxyConfig.Insecure != nil {
+		config.ProxyConfig.Insecure = *proxyConfig.Insecure
+	}
+	if proxyConfig.NoProxy != nil {
+		config.ProxyConfig.NoProxy = *proxyConfig.NoProxy
+	}
+}
+
+// findDefaultOrganizationFromList finds the default organization from a list
+func findDefaultOrganizationFromList(organizations []v20241015.Organization) *v20241015.Organization {
+	for _, org := range organizations {
+		if org.IsDefault != nil && *org.IsDefault {
+			return &org
+		}
+	}
+	if len(organizations) > 0 {
+		return &organizations[0]
+	}
+	return nil
 }
 
 // findProjectRoot walks up the directory tree from the given path to find a git repository root

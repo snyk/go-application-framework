@@ -380,8 +380,16 @@ func Test_GetConfiguration_EmptyResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		responseBytes, _ := json.Marshal(emptyResponse)
-		w.Write(responseBytes)
+		responseBytes, err := json.Marshal(emptyResponse)
+		if err != nil {
+			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
+			return
+		}
+		_, err = w.Write(responseBytes)
+		if err != nil {
+			// Log error but continue - this is a test server
+			t.Logf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -469,7 +477,7 @@ func Test_NewLdxSyncConfigClient_CustomAPIVersion(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
-		responseBytes, _ := json.Marshal(&v20241015.ConfigResponse{
+		responseBytes, err := json.Marshal(&v20241015.ConfigResponse{
 			Data: v20241015.ConfigResource{
 				Id:   configID,
 				Type: v20241015.ConfigResourceTypeConfig,
@@ -478,7 +486,15 @@ func Test_NewLdxSyncConfigClient_CustomAPIVersion(t *testing.T) {
 				},
 			},
 		})
-		w.Write(responseBytes)
+		if err != nil {
+			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
+			return
+		}
+		_, err = w.Write(responseBytes)
+		if err != nil {
+			// Log error but continue - this is a test server
+			t.Logf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -538,8 +554,16 @@ func Test_GetConfiguration_MultipleOrganizations(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		responseBytes, _ := json.Marshal(response)
-		w.Write(responseBytes)
+		responseBytes, err := json.Marshal(response)
+		if err != nil {
+			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
+			return
+		}
+		_, err = w.Write(responseBytes)
+		if err != nil {
+			// Log error but continue - this is a test server
+			t.Logf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -595,8 +619,16 @@ func Test_GetConfiguration_NoDefaultOrganization(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		responseBytes, _ := json.Marshal(response)
-		w.Write(responseBytes)
+		responseBytes, err := json.Marshal(response)
+		if err != nil {
+			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
+			return
+		}
+		_, err = w.Write(responseBytes)
+		if err != nil {
+			// Log error but continue - this is a test server
+			t.Logf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
