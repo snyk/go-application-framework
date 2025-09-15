@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -17,6 +18,7 @@ import (
 //go:generate go tool github.com/golang/mock/mockgen -source=types.go -destination ../mocks/workflow.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/workflow/
 
 // typedefs
+
 type Identifier = *url.URL
 type Callback func(invocation InvocationContext, input []Data) ([]Data, error)
 type ExtensionInit func(engine Engine) error

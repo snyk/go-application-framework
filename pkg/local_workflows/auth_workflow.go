@@ -32,7 +32,7 @@ If you can't wait use this url:
 %s
 `
 
-// define a new workflow identifier for this workflow
+// WORKFLOWID_AUTH defines a new workflow identifier for this workflow
 var WORKFLOWID_AUTH workflow.Identifier = workflow.NewWorkflowIdentifier(workflowNameAuth)
 var ConfigurationNewAuthenticationToken = "internal_new_snyk_token"
 
