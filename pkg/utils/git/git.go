@@ -3,7 +3,7 @@ package git
 import (
 	"fmt"
 
-	go_git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 )
 
@@ -32,8 +32,8 @@ func BranchNameFromDir(inputDir string) (string, error) {
 	return "", nil
 }
 
-func RepoFromDir(inputDir string) (*go_git.Repository, *config.RemoteConfig, error) {
-	repo, err := go_git.PlainOpenWithOptions(inputDir, &go_git.PlainOpenOptions{
+func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error) {
+	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 
@@ -83,7 +83,7 @@ func GetRemoteUrl(inputDir string) (string, error) {
 //   - The origin remote URL as a string.
 //   - An error object (if no git repository found or no origin remote configured).
 func GetOriginRemote(inputDir string) (string, error) {
-	repo, err := go_git.PlainOpenWithOptions(inputDir, &go_git.PlainOpenOptions{
+	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 	if err != nil {
@@ -112,7 +112,7 @@ func GetOriginRemote(inputDir string) (string, error) {
 //   - The first remote URL as a string.
 //   - An error object (if no git repository found or no remotes configured).
 func GetFirstRemote(inputDir string) (string, error) {
-	repo, err := go_git.PlainOpenWithOptions(inputDir, &go_git.PlainOpenOptions{
+	repo, err := git.PlainOpenWithOptions(inputDir, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	})
 	if err != nil {

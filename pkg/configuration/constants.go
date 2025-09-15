@@ -54,8 +54,4 @@ const (
 	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
 	FF_TRANSFORMATION_WORKFLOW    string = "internal_snyk_transformation_workflow_enabled"
 	FF_IAW_ENABLED                string = "internal_snyk_iaw_enabled"
-	FF_LDX_SYNC_ORG_RESOLUTION    string = "internal_snyk_ldx_sync_org_resolution_enabled"
-
-	// LDX-Sync configuration
-	LDX_SYNC_CONFIG string = "internal_ldx_sync_config"
 )

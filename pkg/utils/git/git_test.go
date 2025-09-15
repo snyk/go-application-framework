@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	go_git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/stretchr/testify/assert"
 )
@@ -16,7 +16,7 @@ func TestGetRemoteUrl(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Initialize a git repository
-	repo, err := go_git.PlainInit(tempDir, false)
+	repo, err := git.PlainInit(tempDir, false)
 	assert.NoError(t, err)
 
 	// Add a remote
@@ -39,7 +39,7 @@ func TestGetOriginRemote(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Initialize a git repository
-	repo, err := go_git.PlainInit(tempDir, false)
+	repo, err := git.PlainInit(tempDir, false)
 	assert.NoError(t, err)
 
 	// Add origin remote
@@ -62,7 +62,7 @@ func TestGetFirstRemote(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Initialize a git repository
-	repo, err := go_git.PlainInit(tempDir, false)
+	repo, err := git.PlainInit(tempDir, false)
 	assert.NoError(t, err)
 
 	// Add a remote (not origin)
@@ -97,7 +97,7 @@ func TestGetRemoteUrl_NoRemotes(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Initialize a git repository without remotes
-	_, err = go_git.PlainInit(tempDir, false)
+	_, err = git.PlainInit(tempDir, false)
 	assert.NoError(t, err)
 
 	// Test GetRemoteUrl should fail
@@ -113,7 +113,7 @@ func TestGetRemoteUrl_Priority(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Initialize a git repository
-	repo, err := go_git.PlainInit(tempDir, false)
+	repo, err := git.PlainInit(tempDir, false)
 	assert.NoError(t, err)
 
 	// Add multiple remotes

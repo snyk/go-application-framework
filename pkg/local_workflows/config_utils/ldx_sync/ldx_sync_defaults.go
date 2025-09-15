@@ -11,8 +11,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// LDX-Sync feature flag constant
-const FF_LDX_SYNC_ORG_RESOLUTION = "internal_snyk_ldx_sync_org_resolution_enabled"
+// LDX-Sync constants
+const (
+	FF_LDX_SYNC_ORG_RESOLUTION = "internal_snyk_ldx_sync_org_resolution_enabled"
+	LDX_SYNC_CONFIG            = "internal_ldx_sync_config"
+)
 
 // CreateDefaultFunctionWithApiClient creates a common pattern for default functions that need API client access
 func CreateDefaultFunctionWithApiClient(
@@ -108,7 +111,7 @@ func DefaultFuncOrganization(engine workflow.Engine, config configuration.Config
 
 // DefaultFuncLdxSyncConfig provides a default function for retrieving LDX-Sync configuration
 func DefaultFuncLdxSyncConfig(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	return CreateDefaultFunctionWithApiClient(engine, config, configuration.LDX_SYNC_CONFIG, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
+	return CreateDefaultFunctionWithApiClient(engine, config, LDX_SYNC_CONFIG, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
 		// If there's already a cached value, return it
 		if existingValue != nil {
 			return existingValue, nil
