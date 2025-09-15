@@ -18,7 +18,7 @@ import (
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
+	v20241015 "github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/pkg/analytics"

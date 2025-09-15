@@ -2,7 +2,6 @@ package app
 
 import (
 	"crypto/fips140"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -18,18 +17,39 @@ import (
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	"github.com/snyk/go-application-framework/internal/api/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/ldx_sync"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
-	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+// createDefaultFunctionWithApiClient creates a common pattern for default functions that need API client access
+func createDefaultFunctionWithApiClient(
+	engine workflow.Engine,
+	config configuration.Configuration,
+	key string,
+	logger *zerolog.Logger,
+	apiClientFactory func(url string, client *http.Client) api.ApiClient,
+	callback func(config configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error),
+) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(key, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for "+key+":", err)
+	}
+
+	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient := apiClientFactory(url, client)
+		return callback(config, existingValue, apiClient)
+	}
+}
 
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	err := config.AddKeyDependency(configuration.ORGANIZATION_SLUG, configuration.ORGANIZATION)
@@ -54,31 +74,42 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	return callback
 }
 
-func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	err := config.AddKeyDependency(configuration.ORGANIZATION, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for ORGANIZATION:", err)
-	}
-
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
-		apiClient := apiClientFactory(url, client)
-
+func defaultFuncOrganizationLdx(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	return createDefaultFunctionWithApiClient(engine, config, configuration.ORGANIZATION, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
 		// Handle existing organization value
 		if orgId := handleExistingOrganization(existingValue, apiClient, logger); orgId != "" {
 			return orgId, nil
 		}
 
 		// Try LDX-Sync resolution
-		if orgId := tryLdxSyncResolution(config, apiClient, logger); orgId != "" {
+		if orgId := ldx_sync.TryResolveOrganization(config, apiClient, logger); orgId != "" {
 			return orgId, nil
 		}
 
 		// Fallback to default org resolution
 		return getDefaultOrganization(apiClient, logger)
+	})
+}
+
+// defaultFuncOrganization provides organization resolution with LDX-Sync feature flag
+func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+	// Check if LDX-Sync organization resolution is enabled
+	if config.GetBool(configuration.FF_LDX_SYNC_ORG_RESOLUTION) {
+		logger.Debug().Msg("LDX-Sync organization resolution enabled, using enhanced resolution")
+		return defaultFuncOrganizationLdx(engine, config, logger, apiClientFactory)
 	}
-	return callback
+
+	// Use original organization resolution logic
+	logger.Debug().Msg("Using original organization resolution")
+	return createDefaultFunctionWithApiClient(engine, config, configuration.ORGANIZATION, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
+		// Handle existing organization value
+		if orgId := handleExistingOrganization(existingValue, apiClient, logger); orgId != "" {
+			return orgId, nil
+		}
+
+		// Fallback to default org resolution (original behavior)
+		return getDefaultOrganization(apiClient, logger)
+	})
 }
 
 // handleExistingOrganization validates and resolves existing organization values
@@ -103,47 +134,6 @@ func handleExistingOrganization(existingValue interface{}, apiClient api.ApiClie
 	return orgId
 }
 
-// tryLdxSyncResolution attempts to resolve organization using LDX-Sync
-func tryLdxSyncResolution(config configuration.Configuration, apiClient api.ApiClient, logger *zerolog.Logger) string {
-	inputDir := config.GetString(configuration.INPUT_DIRECTORY)
-	if inputDir == "" {
-		return ""
-	}
-
-	projectRoot := findProjectRoot(inputDir)
-	if projectRoot == "" {
-		logger.Debug().Str("inputDir", inputDir).Msg("No git repository found, falling back to default")
-		return ""
-	}
-
-	remoteUrl, err := git.GetRemoteUrl(projectRoot)
-	if err != nil {
-		logger.Debug().Err(err).Str("projectRoot", projectRoot).Msg("Git remote detection failed, falling back to default")
-		return ""
-	}
-
-	ldxConfig, err := apiClient.GetLdxSyncConfig(remoteUrl)
-	if err != nil {
-		logger.Debug().Err(err).Str("remoteUrl", remoteUrl).Msg("LDX-Sync resolution failed, falling back to default")
-		return ""
-	}
-
-	// Try to find organization from folder configs first (more specific)
-	orgId := findOrganizationFromFolderConfigs(ldxConfig, remoteUrl)
-	if orgId == "" {
-		// Fall back to default organization from main organizations list
-		orgId = findDefaultOrganization(ldxConfig)
-	}
-
-	if orgId != "" {
-		logger.Debug().Str("orgId", orgId).Str("remoteUrl", remoteUrl).Str("projectRoot", projectRoot).Msg("Resolved organization via LDX-Sync")
-		return orgId
-	}
-
-	logger.Debug().Str("remoteUrl", remoteUrl).Msg("No matching organization found in LDX-Sync config, falling back to default")
-	return ""
-}
-
 // getDefaultOrganization falls back to the default organization resolution
 func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (string, error) {
 	orgId, err := apiClient.GetDefaultOrgId()
@@ -155,50 +145,22 @@ func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (st
 
 // defaultFuncLdxSyncConfig provides a default function for retrieving LDX-Sync configuration
 func defaultFuncLdxSyncConfig(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	err := config.AddKeyDependency(configuration.LDX_SYNC_CONFIG, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for LDX_SYNC_CONFIG:", err)
-	}
-
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	return createDefaultFunctionWithApiClient(engine, config, configuration.LDX_SYNC_CONFIG, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
 		// If there's already a cached value, return it
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
-		apiClient := apiClientFactory(url, client)
-
 		// Try to get LDX-Sync config based on current directory
-		inputDir := config.GetString(configuration.INPUT_DIRECTORY)
-		if inputDir == "" {
-			logger.Debug().Msg("No input directory specified, cannot retrieve LDX-Sync config")
-			return nil, fmt.Errorf("no input directory specified")
-		}
-
-		projectRoot := findProjectRoot(inputDir)
-		if projectRoot == "" {
-			logger.Debug().Str("inputDir", inputDir).Msg("No git repository found, cannot retrieve LDX-Sync config")
-			return nil, fmt.Errorf("no git repository found in input directory: %s", inputDir)
-		}
-
-		remoteUrl, err := git.GetRemoteUrl(projectRoot)
+		ldxConfig, err := ldx_sync.GetConfig(config, apiClient, logger)
 		if err != nil {
-			logger.Debug().Err(err).Str("projectRoot", projectRoot).Msg("Git remote detection failed, cannot retrieve LDX-Sync config")
-			return nil, fmt.Errorf("git remote detection failed: %w", err)
+			logger.Debug().Err(err).Msg("Failed to retrieve LDX-Sync config")
+			return nil, err
 		}
 
-		ldxConfig, err := apiClient.GetLdxSyncConfig(remoteUrl)
-		if err != nil {
-			logger.Debug().Err(err).Str("remoteUrl", remoteUrl).Msg("Failed to retrieve LDX-Sync config")
-			return nil, fmt.Errorf("failed to retrieve LDX-Sync config: %w", err)
-		}
-
-		logger.Debug().Str("remoteUrl", remoteUrl).Str("projectRoot", projectRoot).Msg("Successfully retrieved LDX-Sync config")
+		logger.Debug().Msg("Successfully retrieved LDX-Sync config")
 		return ldxConfig, nil
-	}
-	return callback
+	})
 }
 
 func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
@@ -412,6 +374,14 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		}
 	})
 
+	config.AddDefaultValue(configuration.FF_LDX_SYNC_ORG_RESOLUTION, func(_ configuration.Configuration, existingValue any) (any, error) {
+		if existingValue == nil {
+			return false, nil
+		} else {
+			return existingValue, nil
+		}
+	})
+
 	err = config.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
 	if err != nil {
 		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
@@ -486,61 +456,4 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 // Deprecated: Use CreateAppEngineWithOptions instead.
 func CreateAppEngineWithLogger(logger *log.Logger) workflow.Engine {
 	return CreateAppEngineWithOptions(WithLogger(logger))
-}
-
-// findProjectRoot walks up the directory tree from the given path to find a git repository root
-func findProjectRoot(startPath string) string {
-	currentPath := startPath
-
-	for {
-		// Check if current directory is a git repository
-		gitDir := filepath.Join(currentPath, ".git")
-		if _, err := os.Stat(gitDir); err == nil {
-			return currentPath
-		}
-
-		// Move up one directory
-		parentPath := filepath.Dir(currentPath)
-		if parentPath == currentPath {
-			// Reached filesystem root
-			break
-		}
-		currentPath = parentPath
-	}
-
-	return ""
-}
-
-// findOrganizationFromFolderConfigs looks for an organization in folder configs that matches the remote URL
-func findOrganizationFromFolderConfigs(ldxConfig *v20241015.ConfigResponse, remoteUrl string) string {
-	if ldxConfig.Data.Attributes.ConfigData.FolderConfigs == nil {
-		return ""
-	}
-	for _, folderConfig := range *ldxConfig.Data.Attributes.ConfigData.FolderConfigs {
-		if folderConfig.RemoteUrl == remoteUrl && folderConfig.Organizations != nil && len(*folderConfig.Organizations) > 0 {
-			// Return the first organization from the matching folder config
-			return (*folderConfig.Organizations)[0].Id
-		}
-	}
-	return ""
-}
-
-// findDefaultOrganization finds the default organization from the main organizations list
-func findDefaultOrganization(ldxConfig *v20241015.ConfigResponse) string {
-	if ldxConfig.Data.Attributes.ConfigData.Organizations == nil {
-		return ""
-	}
-
-	for _, org := range *ldxConfig.Data.Attributes.ConfigData.Organizations {
-		if org.IsDefault != nil && *org.IsDefault {
-			return org.Id
-		}
-	}
-
-	// If no default organization found, return the first one
-	if len(*ldxConfig.Data.Attributes.ConfigData.Organizations) > 0 {
-		return (*ldxConfig.Data.Attributes.ConfigData.Organizations)[0].Id
-	}
-
-	return ""
 }
