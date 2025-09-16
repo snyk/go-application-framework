@@ -1,6 +1,7 @@
 package ldx_sync_config
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -13,18 +14,36 @@ import (
 
 // LDX-Sync constants
 const (
-	FF_LDX_SYNC_ORG_RESOLUTION = "internal_snyk_ldx_sync_org_resolution_enabled"
-	LDX_SYNC_CONFIG            = "internal_ldx_sync_config"
+	LDX_SYNC_CONFIG = "internal_ldx_sync_config"
 )
 
-// CreateDefaultFunctionWithApiClient creates a common pattern for default functions that need API client access
-func CreateDefaultFunctionWithApiClient(
+// createLdxSyncConfigClient creates an LdxSyncConfigClient instance
+func createLdxSyncConfigClient(url string, client *http.Client) LdxSyncConfigClient {
+	ldxClient, err := NewLdxSyncConfigClient(url, WithCustomHTTPClient(client))
+	if err != nil {
+		// Return a no-op client that will fail gracefully
+		return &noOpLdxSyncConfigClient{err: err}
+	}
+	return ldxClient
+}
+
+// noOpLdxSyncConfigClient is a no-op implementation that returns errors
+type noOpLdxSyncConfigClient struct {
+	err error
+}
+
+func (c *noOpLdxSyncConfigClient) GetConfiguration(ctx context.Context, params GetConfigurationParams) (*Configuration, error) {
+	return nil, c.err
+}
+
+// createDefaultFunctionWithLdxClient creates a common pattern for default functions that need LDX-Sync client access
+func createDefaultFunctionWithLdxClient(
 	engine workflow.Engine,
 	config configuration.Configuration,
 	key string,
 	logger *zerolog.Logger,
-	apiClientFactory func(url string, client *http.Client) api.ApiClient,
-	callback func(config configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error),
+	ldxClientFactory func(url string, client *http.Client) LdxSyncConfigClient,
+	callback func(config configuration.Configuration, existingValue interface{}, ldxClient LdxSyncConfigClient) (interface{}, error),
 ) configuration.DefaultValueFunction {
 	err := config.AddKeyDependency(key, configuration.API_URL)
 	if err != nil {
@@ -34,13 +53,13 @@ func CreateDefaultFunctionWithApiClient(
 	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
-		apiClient := apiClientFactory(url, client)
-		return callback(config, existingValue, apiClient)
+		ldxClient := ldxClientFactory(url, client)
+		return callback(config, existingValue, ldxClient)
 	}
 }
 
-// HandleExistingOrganization validates and resolves existing organization values
-func HandleExistingOrganization(existingValue interface{}, apiClient api.ApiClient, logger *zerolog.Logger) string {
+// handleExistingOrganization validates and resolves existing organization values
+func handleExistingOrganization(existingValue interface{}, apiClient api.ApiClient, logger *zerolog.Logger) string {
 	existingString, ok := existingValue.(string)
 	if existingValue == nil || !ok || len(existingString) == 0 {
 		return ""
@@ -61,8 +80,8 @@ func HandleExistingOrganization(existingValue interface{}, apiClient api.ApiClie
 	return orgId
 }
 
-// GetDefaultOrganization retrieves the default organization from the API
-func GetDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (string, error) {
+// getDefaultOrganization retrieves the default organization from the API
+func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (string, error) {
 	orgId, err := apiClient.GetDefaultOrgId()
 	if err != nil {
 		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
@@ -70,55 +89,58 @@ func GetDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (st
 	return orgId, err
 }
 
+// createDefaultFunctionWithHybridClient creates a common pattern for default functions that need both API and LDX-Sync client access
+func createDefaultFunctionWithHybridClient(
+	engine workflow.Engine,
+	config configuration.Configuration,
+	key string,
+	logger *zerolog.Logger,
+	apiClientFactory func(url string, client *http.Client) api.ApiClient,
+	ldxClientFactory func(url string, client *http.Client) LdxSyncConfigClient,
+	callback func(config configuration.Configuration, existingValue interface{}, apiClient api.ApiClient, ldxClient LdxSyncConfigClient) (interface{}, error),
+) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(key, configuration.API_URL)
+	if err != nil {
+		logger.Print("Failed to add dependency for "+key+":", err)
+	}
+
+	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		client := engine.GetNetworkAccess().GetHttpClient()
+		url := config.GetString(configuration.API_URL)
+		apiClient := apiClientFactory(url, client)
+		ldxClient := ldxClientFactory(url, client)
+		return callback(config, existingValue, apiClient, ldxClient)
+	}
+}
+
 // DefaultFuncOrganizationLdx provides LDX-Sync enhanced organization resolution
 func DefaultFuncOrganizationLdx(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	return CreateDefaultFunctionWithApiClient(engine, config, configuration.ORGANIZATION, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
+	return createDefaultFunctionWithHybridClient(engine, config, configuration.ORGANIZATION, logger, apiClientFactory, createLdxSyncConfigClient, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient, ldxClient LdxSyncConfigClient) (interface{}, error) {
 		// Handle existing organization value
-		if orgId := HandleExistingOrganization(existingValue, apiClient, logger); orgId != "" {
+		if orgId := handleExistingOrganization(existingValue, apiClient, logger); orgId != "" {
 			return orgId, nil
 		}
 
 		// Try LDX-Sync resolution
-		if orgId := TryResolveOrganization(config, apiClient, logger); orgId != "" {
+		if orgId := TryResolveOrganization(config, ldxClient, logger); orgId != "" {
 			return orgId, nil
 		}
 
 		// Fallback to default org resolution
-		return GetDefaultOrganization(apiClient, logger)
-	})
-}
-
-// DefaultFuncOrganization provides organization resolution with LDX-Sync feature flag
-func DefaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	// Check if LDX-Sync organization resolution is enabled
-	if config.GetBool(FF_LDX_SYNC_ORG_RESOLUTION) {
-		logger.Debug().Msg("LDX-Sync organization resolution enabled, using enhanced resolution")
-		return DefaultFuncOrganizationLdx(engine, config, logger, apiClientFactory)
-	}
-
-	// Use original organization resolution logic
-	logger.Debug().Msg("Using original organization resolution")
-	return CreateDefaultFunctionWithApiClient(engine, config, configuration.ORGANIZATION, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
-		// Handle existing organization value
-		if orgId := HandleExistingOrganization(existingValue, apiClient, logger); orgId != "" {
-			return orgId, nil
-		}
-
-		// Fallback to default org resolution (original behavior)
-		return GetDefaultOrganization(apiClient, logger)
+		return getDefaultOrganization(apiClient, logger)
 	})
 }
 
 // DefaultFuncLdxSyncConfig provides a default function for retrieving LDX-Sync configuration
 func DefaultFuncLdxSyncConfig(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	return CreateDefaultFunctionWithApiClient(engine, config, LDX_SYNC_CONFIG, logger, apiClientFactory, func(_ configuration.Configuration, existingValue interface{}, apiClient api.ApiClient) (interface{}, error) {
+	return createDefaultFunctionWithLdxClient(engine, config, LDX_SYNC_CONFIG, logger, createLdxSyncConfigClient, func(_ configuration.Configuration, existingValue interface{}, ldxClient LdxSyncConfigClient) (interface{}, error) {
 		// If there's already a cached value, return it
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
 		// Try to get LDX-Sync config based on current directory
-		ldxConfig, err := GetConfig(config, apiClient, logger)
+		ldxConfig, err := GetConfig(config, ldxClient, logger)
 		if err != nil {
 			logger.Debug().Err(err).Msg("Failed to retrieve LDX-Sync config")
 			return nil, err

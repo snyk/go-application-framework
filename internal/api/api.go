@@ -9,7 +9,6 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
@@ -27,7 +26,6 @@ type ApiClient interface {
 	GetSelf() (contract.SelfResponse, error)
 	GetSastSettings(orgId string) (*sast_contract.SastResponse, error)
 	GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error)
-	GetLdxSyncConfig(remoteUrl string) (*v20241015.ConfigResponse, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -271,32 +269,6 @@ func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsRespo
 	}
 
 	return &response, err
-}
-
-// GetLdxSyncConfig retrieves organization configuration from the LDX-Sync API based on git remote URL.
-// Note: This endpoint is currently not available in the production Snyk API and requires a mock server for testing.
-//
-// Parameters:
-//   - remoteUrl (string): The git remote URL to query for configuration
-//
-// Returns:
-//   - A pointer to LdxSyncConfig containing the resolved organization and project information.
-//   - An error object (if an error occurred during the API request or response parsing).
-func (a *snykApiClient) GetLdxSyncConfig(remoteUrl string) (*v20241015.ConfigResponse, error) {
-	endpoint := "/rest/ldx_sync/config"
-	version := "2024-10-15"
-	body, err := clientGet(a, endpoint, &version, "remote_url", remoteUrl)
-	if err != nil {
-		return nil, fmt.Errorf("LDX-Sync API request failed: %w", err)
-	}
-
-	var response v20241015.ConfigResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse LDX-Sync response: %w", err)
-	}
-
-	return &response, nil
 }
 
 // clientGet performs an HTTP GET request to the Snyk API, handling query parameters,
