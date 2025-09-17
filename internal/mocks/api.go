@@ -10,7 +10,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	contract "github.com/snyk/go-application-framework/internal/api/contract"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	sast_contract "github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
@@ -65,21 +64,6 @@ func (m *MockApiClient) GetFeatureFlag(flagname, origId string) (bool, error) {
 func (mr *MockApiClientMockRecorder) GetFeatureFlag(flagname, origId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeatureFlag", reflect.TypeOf((*MockApiClient)(nil).GetFeatureFlag), flagname, origId)
-}
-
-// GetLdxSyncConfig mocks base method.
-func (m *MockApiClient) GetLdxSyncConfig(remoteUrl string) (*v20241015.ConfigResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLdxSyncConfig", remoteUrl)
-	ret0, _ := ret[0].(*v20241015.ConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLdxSyncConfig indicates an expected call of GetLdxSyncConfig.
-func (mr *MockApiClientMockRecorder) GetLdxSyncConfig(remoteUrl interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLdxSyncConfig", reflect.TypeOf((*MockApiClient)(nil).GetLdxSyncConfig), remoteUrl)
 }
 
 // GetOrgIdFromSlug mocks base method.
