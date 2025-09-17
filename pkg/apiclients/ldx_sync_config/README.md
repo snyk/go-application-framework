@@ -12,6 +12,29 @@ The LDX-Sync API client follows a multi-layered architecture:
 4. **Default Functions** - Integration with the application framework's configuration system
 5. **Resolvers** - Logic for resolving organizations and configurations
 
+## Design Patterns
+
+The LDX-Sync configuration client implements several well-established design patterns:
+
+### 1. Facade Pattern
+The `ldx_sync_config.go` acts as a **Facade** that hides the complexity of the underlying LDX-Sync API client. It provides a simplified interface (`LdxSyncConfigClient`) that shields consumers from:
+- API version details (`v20241015`)
+- Generated type complexity (`ConfigResponse`, `ConfigData`, etc.)
+- HTTP client implementation details
+- Response parsing and error handling
+
+### 2. Adapter Pattern
+The client transforms the generated API types into domain-specific types (`Configuration`, `SeverityFilter`, etc.) that are more meaningful to consumers. This is a classic **Adapter** pattern.
+
+### 3. Repository Pattern
+The `LdxSyncConfigClient` acts as a **Repository** that abstracts data access, providing a clean interface for retrieving configuration data without exposing the underlying data source details.
+
+### 4. API Gateway Pattern
+This is essentially a microservice API Gateway pattern where:
+- External API calls are abstracted
+- Multiple API versions are hidden behind a stable interface
+- Request/response transformation happens transparently
+
 ## Specification Download and Code Generation
 
 ### 1. Specification Download
@@ -317,40 +340,6 @@ type ApiClient interface {
 }
 ```
 
-**Purpose:** For standard organization operations (slug validation, default org lookup)
-**Implementation:**
-- Part of the main application framework
-- Handles standard Snyk API operations
-- Used for fallback scenarios and organization validation
-
-## Architecture Benefits
-
-The new architecture provides several advantages:
-
-### **Type Safety**
-- Generated client provides compile-time type checking
-- No manual JSON parsing or type assertions
-- Better IDE support with autocomplete and error detection
-
-### **Consistency**
-- Single client used throughout the codebase
-- Consistent error handling and response processing
-- Unified interface for all LDX-Sync operations
-
-### **Maintainability**
-- OpenAPI spec changes automatically update the client
-- No manual HTTP client code to maintain
-- Clear separation of concerns between layers
-
-### **Performance**
-- High-level `Configuration` struct returned directly
-- No duplicate data transformation
-- Efficient caching at the framework level
-
-### **Testing**
-- Generated mocks for easy testing
-- Clear interfaces for dependency injection
-- Isolated components for unit testing
 
 ## Usage Flow
 
@@ -363,24 +352,6 @@ The new architecture provides several advantages:
 7. **Caching** - Configuration is cached for subsequent requests
 8. **Fallback Handling** - Falls back to standard organization resolution if LDX-Sync API is unavailable or returns no matching configuration
 
-## Error Handling
-
-The system includes comprehensive error handling:
-
-- **Git Repository Detection** - Handles missing `.git` directories
-- **Remote URL Extraction** - Handles git remote detection failures
-- **API Communication** - Handles HTTP errors and network issues
-- **Data Parsing** - Handles malformed API responses
-- **Graceful Degradation** - Falls back to standard resolution on errors
-
-## Testing
-
-The package includes comprehensive tests:
-
-- **Unit Tests** - Test individual functions and methods
-- **Integration Tests** - Test API client with mock servers
-- **Mock Generation** - Automatically generated mocks for testing
-- **Error Scenarios** - Test various error conditions and edge cases
 
 ## Dependencies
 

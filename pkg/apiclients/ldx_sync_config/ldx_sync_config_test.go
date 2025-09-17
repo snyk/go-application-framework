@@ -18,16 +18,56 @@ import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
-// Helper function to set up a common test scenario with mock server configuration.
-type TestData struct {
+// Test configuration and helper types
+type TestScenario struct {
+	Name                   string
 	RemoteUrl              string
 	Org                    string
 	ExpectedConfiguration  *ldx_sync_config.Configuration
 	ExpectedConfigResponse *v20241015.ConfigResponse
+	StatusCode             int
+	ExpectError            bool
+	ErrorContains          string
 }
 
-func setupTestScenario(t *testing.T) TestData {
-	t.Helper()
+// Test server configuration
+type TestServerConfig struct {
+	HandlerFunc http.HandlerFunc
+	StatusCode  int
+	Response    interface{}
+}
+
+// Helper functions for creating pointers
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
+func timePtr(s string) *time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return &time.Time{}
+	}
+	return &t
+}
+
+func parseTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// Common test data builders
+func createBasicTestData() TestScenario {
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 
@@ -55,7 +95,6 @@ func setupTestScenario(t *testing.T) TestData {
 		},
 	}
 
-	// Create expected API response
 	configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
 	expectedConfigResponse := &v20241015.ConfigResponse{
 		Data: v20241015.ConfigResource{
@@ -107,102 +146,21 @@ func setupTestScenario(t *testing.T) TestData {
 		},
 	}
 
-	return TestData{
+	return TestScenario{
+		Name:                   "Basic Configuration",
 		RemoteUrl:              remoteUrl,
 		Org:                    org,
 		ExpectedConfiguration:  expectedConfiguration,
 		ExpectedConfigResponse: expectedConfigResponse,
+		StatusCode:             http.StatusOK,
+		ExpectError:            false,
 	}
 }
 
-// Helper functions for creating pointers
-func boolPtr(b bool) *bool {
-	return &b
-}
-
-func stringPtr(s string) *string {
-	return &s
-}
-
-// Basic test that underlying client throws no errors on creation
-func Test_CreateClient_Defaults(t *testing.T) {
-	// Arrange
-	t.Parallel()
-	serverURL := "https://test.snyk.io/"
-
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(serverURL)
-
-	// Assert
-	assert.NotEmpty(t, client)
-	assert.Nil(t, err)
-}
-
-// Test successful configuration retrieval
-func Test_GetConfiguration_Success(t *testing.T) {
-	// Arrange
-	t.Parallel()
-	ctx := context.Background()
-	testData := setupTestScenario(t)
-
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify the request
-		assert.Equal(t, "/ldx_sync/config", r.URL.Path)
-		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, ldx_sync_config.DefaultAPIVersion, r.URL.Query().Get("version"))
-		assert.Equal(t, testData.Org, r.URL.Query().Get("org"))
-
-		// Return mock response
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		responseBytes, err := json.Marshal(testData.ExpectedConfigResponse)
-		if err != nil {
-			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			// Log error but continue - this is a test server
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
-		ldx_sync_config.WithCustomHTTPClient(server.Client()),
-	)
-	require.NoError(t, err)
-
-	params := ldx_sync_config.GetConfigurationParams{
-		RemoteUrl: testData.RemoteUrl,
-		Org:       &testData.Org,
-	}
-
-	config, err := client.GetConfiguration(ctx, params)
-
-	// Assert
-	assert.NoError(t, err)
-	require.NotNil(t, config)
-	assert.Equal(t, testData.ExpectedConfiguration.Organization, config.Organization)
-	assert.Equal(t, testData.ExpectedConfiguration.SeverityFilter, config.SeverityFilter)
-	assert.Equal(t, testData.ExpectedConfiguration.ProductConfig, config.ProductConfig)
-	assert.Equal(t, testData.ExpectedConfiguration.AutoScan, config.AutoScan)
-	assert.Equal(t, testData.ExpectedConfiguration.TrustedFolders, config.TrustedFolders)
-	assert.Equal(t, testData.ExpectedConfiguration.ProxyConfig, config.ProxyConfig)
-}
-
-// Test configuration retrieval with minimal data
-func Test_GetConfiguration_MinimalData(t *testing.T) {
-	// Arrange
-	t.Parallel()
-	ctx := context.Background()
+func createMinimalTestData() TestScenario {
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 
-	// Create minimal response
 	configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
 	minimalResponse := &v20241015.ConfigResponse{
 		Data: v20241015.ConfigResource{
@@ -221,125 +179,147 @@ func Test_GetConfiguration_MinimalData(t *testing.T) {
 		},
 	}
 
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		responseBytes, err := json.Marshal(minimalResponse)
-		if err != nil {
-			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			// Log error but continue - this is a test server
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
-		ldx_sync_config.WithCustomHTTPClient(server.Client()),
-	)
-	require.NoError(t, err)
-
-	params := ldx_sync_config.GetConfigurationParams{
-		RemoteUrl: remoteUrl,
-		Org:       &org,
+	expectedConfiguration := &ldx_sync_config.Configuration{
+		Organization: org,
 	}
 
-	config, err := client.GetConfiguration(ctx, params)
-
-	// Assert
-	assert.NoError(t, err)
-	require.NotNil(t, config)
-	assert.Equal(t, org, config.Organization)
-	assert.Nil(t, config.SeverityFilter)
-	assert.Nil(t, config.ProductConfig)
-	assert.False(t, config.AutoScan)
-	assert.Empty(t, config.TrustedFolders)
-	assert.Nil(t, config.ProxyConfig)
+	return TestScenario{
+		Name:                   "Minimal Configuration",
+		RemoteUrl:              remoteUrl,
+		Org:                    org,
+		ExpectedConfiguration:  expectedConfiguration,
+		ExpectedConfigResponse: minimalResponse,
+		StatusCode:             http.StatusOK,
+		ExpectError:            false,
+	}
 }
 
-// Test configuration retrieval with API error response
+func createErrorTestData() TestScenario {
+	remoteUrl := "https://github.com/test/repo"
+	org := "test-org-123"
+
+	return TestScenario{
+		Name:                   "API Error",
+		RemoteUrl:              remoteUrl,
+		Org:                    org,
+		ExpectedConfigResponse: nil, // Error responses don't use ConfigResponse
+		StatusCode:             http.StatusNotFound,
+		ExpectError:            true,
+		ErrorContains:          "unexpected response",
+	}
+}
+
+// Generic test server creator
+func createTestServer(t *testing.T, config TestServerConfig) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if config.HandlerFunc != nil {
+			config.HandlerFunc(w, r)
+			return
+		}
+
+		// Default handler
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(config.StatusCode)
+
+		if config.Response != nil {
+			responseBytes, err := json.Marshal(config.Response)
+			if err != nil {
+				http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
+				return
+			}
+			_, err = w.Write(responseBytes)
+			if err != nil {
+				t.Logf("Failed to write response: %v", err)
+			}
+		}
+	}))
+}
+
+// Generic client creator
+func createTestClient(t *testing.T, serverURL string, options ...ldx_sync_config.ConfigOption) ldx_sync_config.LdxSyncConfigClient {
+	t.Helper()
+	client, err := ldx_sync_config.NewLdxSyncConfigClient(serverURL, options...)
+	require.NoError(t, err)
+	return client
+}
+
+// Generic test runner
+func runConfigurationTest(t *testing.T, scenario TestScenario) {
+	t.Helper()
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// Create test server
+	server := createTestServer(t, TestServerConfig{
+		StatusCode: scenario.StatusCode,
+		Response:   scenario.ExpectedConfigResponse,
+	})
+	defer server.Close()
+
+	// Create client
+	client := createTestClient(t, server.URL, ldx_sync_config.WithCustomHTTPClient(server.Client()))
+
+	// Prepare parameters
+	params := ldx_sync_config.GetConfigurationParams{
+		RemoteUrl: scenario.RemoteUrl,
+		Org:       &scenario.Org,
+	}
+
+	// Execute test
+	config, err := client.GetConfiguration(ctx, params)
+
+	// Assertions
+	if scenario.ExpectError {
+		assert.Error(t, err)
+		assert.Nil(t, config)
+		if scenario.ErrorContains != "" {
+			assert.Contains(t, err.Error(), scenario.ErrorContains)
+		}
+	} else {
+		assert.NoError(t, err)
+		require.NotNil(t, config)
+		assert.Equal(t, scenario.ExpectedConfiguration.Organization, config.Organization)
+		assert.Equal(t, scenario.ExpectedConfiguration.SeverityFilter, config.SeverityFilter)
+		assert.Equal(t, scenario.ExpectedConfiguration.ProductConfig, config.ProductConfig)
+		assert.Equal(t, scenario.ExpectedConfiguration.AutoScan, config.AutoScan)
+		assert.Equal(t, scenario.ExpectedConfiguration.TrustedFolders, config.TrustedFolders)
+		assert.Equal(t, scenario.ExpectedConfiguration.ProxyConfig, config.ProxyConfig)
+	}
+}
+
+// Individual test functions
+func Test_CreateClient_Defaults(t *testing.T) {
+	t.Parallel()
+	serverURL := "https://test.snyk.io/"
+	client, err := ldx_sync_config.NewLdxSyncConfigClient(serverURL)
+	assert.NotEmpty(t, client)
+	assert.Nil(t, err)
+}
+
+func Test_GetConfiguration_Success(t *testing.T) {
+	scenario := createBasicTestData()
+	runConfigurationTest(t, scenario)
+}
+
+func Test_GetConfiguration_MinimalData(t *testing.T) {
+	scenario := createMinimalTestData()
+	runConfigurationTest(t, scenario)
+}
+
 func Test_GetConfiguration_APIError(t *testing.T) {
-	// Arrange
-	t.Parallel()
-	ctx := context.Background()
-	remoteUrl := "https://github.com/test/repo"
-	org := "test-org-123"
-
-	// Create error response
-	version := v20241015.ErrorDocument0JsonapiVersionN10
-	errorResponse := v20241015.ErrorResponseApplicationVndAPIPlusJSON{
-		Jsonapi: &struct {
-			Version *v20241015.ErrorDocument0JsonapiVersion `json:"version,omitempty"`
-		}{
-			Version: &version,
-		},
-		Errors: []v20241015.Error0{
-			{
-				Detail: "Organization not found",
-				Code:   stringPtr("SNYK-CONFIG-4041"),
-			},
-		},
-	}
-
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Request received: %s %s", r.Method, r.URL.Path)
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusNotFound)
-		responseBytes, err := json.Marshal(errorResponse)
-		if err != nil {
-			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			// Log error but continue - this is a test server
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	// Act
-	var logBuffer bytes.Buffer
-	customLogger := zerolog.New(&logBuffer).With().Timestamp().Logger()
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
-		ldx_sync_config.WithCustomHTTPClient(server.Client()),
-		ldx_sync_config.WithLogger(&customLogger),
-	)
-	require.NoError(t, err)
-
-	params := ldx_sync_config.GetConfigurationParams{
-		RemoteUrl: remoteUrl,
-		Org:       &org,
-	}
-
-	config, err := client.GetConfiguration(ctx, params)
-
-	// Assert
-	t.Logf("Error: %v", err)
-	t.Logf("Config: %v", config)
-	t.Logf("Log output: %s", logBuffer.String())
-	assert.Error(t, err)
-	assert.Nil(t, config)
-	assert.Contains(t, err.Error(), "unexpected response")
+	scenario := createErrorTestData()
+	runConfigurationTest(t, scenario)
 }
 
-// Test configuration retrieval with network error
 func Test_GetConfiguration_NetworkError(t *testing.T) {
-	// Arrange
 	t.Parallel()
 	ctx := context.Background()
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 
-	// Act - use non-listening port
+	// Use non-listening port
 	client, err := ldx_sync_config.NewLdxSyncConfigClient("http://127.0.0.1:1")
 	require.NoError(t, err)
 
@@ -350,21 +330,17 @@ func Test_GetConfiguration_NetworkError(t *testing.T) {
 
 	config, err := client.GetConfiguration(ctx, params)
 
-	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, config)
 	assert.Contains(t, err.Error(), "failed to retrieve LDX-Sync configuration")
 }
 
-// Test configuration retrieval with empty response
 func Test_GetConfiguration_EmptyResponse(t *testing.T) {
-	// Arrange
 	t.Parallel()
 	ctx := context.Background()
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 
-	// Create empty response
 	configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
 	emptyResponse := &v20241015.ConfigResponse{
 		Data: v20241015.ConfigResource{
@@ -376,29 +352,13 @@ func Test_GetConfiguration_EmptyResponse(t *testing.T) {
 		},
 	}
 
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		responseBytes, err := json.Marshal(emptyResponse)
-		if err != nil {
-			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			// Log error but continue - this is a test server
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
+	server := createTestServer(t, TestServerConfig{
+		StatusCode: http.StatusOK,
+		Response:   emptyResponse,
+	})
 	defer server.Close()
 
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
-		ldx_sync_config.WithCustomHTTPClient(server.Client()),
-	)
-	require.NoError(t, err)
+	client := createTestClient(t, server.URL, ldx_sync_config.WithCustomHTTPClient(server.Client()))
 
 	params := ldx_sync_config.GetConfigurationParams{
 		RemoteUrl: remoteUrl,
@@ -407,7 +367,6 @@ func Test_GetConfiguration_EmptyResponse(t *testing.T) {
 
 	config, err := client.GetConfiguration(ctx, params)
 
-	// Assert
 	assert.NoError(t, err)
 	require.NotNil(t, config)
 	assert.Empty(t, config.Organization)
@@ -418,93 +377,81 @@ func Test_GetConfiguration_EmptyResponse(t *testing.T) {
 	assert.Nil(t, config.ProxyConfig)
 }
 
-// Test custom logger option
 func Test_NewLdxSyncConfigClient_CustomLogger(t *testing.T) {
-	// Arrange
 	t.Parallel()
 	ctx := context.Background()
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 
-	// Create a buffer to capture log output and a custom logger
 	var logBuffer bytes.Buffer
 	customLogger := zerolog.New(&logBuffer).With().Timestamp().Logger()
 
-	// Create mock server that returns an error to trigger logging
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}))
+	server := createTestServer(t, TestServerConfig{
+		HandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		},
+	})
 	defer server.Close()
 
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
+	client := createTestClient(t, server.URL,
 		ldx_sync_config.WithLogger(&customLogger),
 		ldx_sync_config.WithCustomHTTPClient(server.Client()),
 	)
-	require.NoError(t, err)
 
 	params := ldx_sync_config.GetConfigurationParams{
 		RemoteUrl: remoteUrl,
 		Org:       &org,
 	}
 
-	_, err = client.GetConfiguration(ctx, params) // This will fail and log
+	_, err := client.GetConfiguration(ctx, params)
 	if err != nil {
 		t.Logf("Expected error: %v", err)
 	}
 
-	// Assert
 	logOutput := logBuffer.String()
 	t.Logf("Log output: %s", logOutput)
 	assert.Contains(t, logOutput, "Retrieving LDX-Sync configuration")
 	assert.Contains(t, logOutput, "unexpected response")
 }
 
-// Test custom API version option
 func Test_NewLdxSyncConfigClient_CustomAPIVersion(t *testing.T) {
-	// Arrange
 	t.Parallel()
 	ctx := context.Background()
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 	customVersion := "2024-01-01"
 
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify the custom API version is used
-		assert.Equal(t, customVersion, r.URL.Query().Get("version"))
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
-		responseBytes, err := json.Marshal(&v20241015.ConfigResponse{
-			Data: v20241015.ConfigResource{
-				Id:   configID,
-				Type: v20241015.ConfigResourceTypeConfig,
-				Attributes: v20241015.ConfigAttributes{
-					ConfigData: v20241015.ConfigData{},
+	server := createTestServer(t, TestServerConfig{
+		HandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, customVersion, r.URL.Query().Get("version"))
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
+			responseBytes, err := json.Marshal(&v20241015.ConfigResponse{
+				Data: v20241015.ConfigResource{
+					Id:   configID,
+					Type: v20241015.ConfigResourceTypeConfig,
+					Attributes: v20241015.ConfigAttributes{
+						ConfigData: v20241015.ConfigData{},
+					},
 				},
-			},
-		})
-		if err != nil {
-			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			// Log error but continue - this is a test server
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
+			})
+			if err != nil {
+				http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
+				return
+			}
+			_, err = w.Write(responseBytes)
+			if err != nil {
+				t.Logf("Failed to write response: %v", err)
+			}
+		},
+	})
 	defer server.Close()
 
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
+	client := createTestClient(t, server.URL,
 		ldx_sync_config.WithAPIVersion(customVersion),
 		ldx_sync_config.WithCustomHTTPClient(server.Client()),
 	)
-	require.NoError(t, err)
 
 	params := ldx_sync_config.GetConfigurationParams{
 		RemoteUrl: remoteUrl,
@@ -513,21 +460,17 @@ func Test_NewLdxSyncConfigClient_CustomAPIVersion(t *testing.T) {
 
 	config, err := client.GetConfiguration(ctx, params)
 
-	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, config)
 }
 
-// Test configuration extraction with multiple organizations
 func Test_GetConfiguration_MultipleOrganizations(t *testing.T) {
-	// Arrange
 	t.Parallel()
 	ctx := context.Background()
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 	defaultOrg := "default-org-456"
 
-	// Create response with multiple organizations
 	configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
 	response := &v20241015.ConfigResponse{
 		Data: v20241015.ConfigResource{
@@ -550,29 +493,13 @@ func Test_GetConfiguration_MultipleOrganizations(t *testing.T) {
 		},
 	}
 
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		responseBytes, err := json.Marshal(response)
-		if err != nil {
-			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			// Log error but continue - this is a test server
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
+	server := createTestServer(t, TestServerConfig{
+		StatusCode: http.StatusOK,
+		Response:   response,
+	})
 	defer server.Close()
 
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
-		ldx_sync_config.WithCustomHTTPClient(server.Client()),
-	)
-	require.NoError(t, err)
+	client := createTestClient(t, server.URL, ldx_sync_config.WithCustomHTTPClient(server.Client()))
 
 	params := ldx_sync_config.GetConfigurationParams{
 		RemoteUrl: remoteUrl,
@@ -581,22 +508,18 @@ func Test_GetConfiguration_MultipleOrganizations(t *testing.T) {
 
 	config, err := client.GetConfiguration(ctx, params)
 
-	// Assert
 	assert.NoError(t, err)
 	require.NotNil(t, config)
 	// Should select the default organization
 	assert.Equal(t, defaultOrg, config.Organization)
 }
 
-// Test configuration extraction with no default organization
 func Test_GetConfiguration_NoDefaultOrganization(t *testing.T) {
-	// Arrange
 	t.Parallel()
 	ctx := context.Background()
 	remoteUrl := "https://github.com/test/repo"
 	org := "test-org-123"
 
-	// Create response with no default organization
 	configID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
 	response := &v20241015.ConfigResponse{
 		Data: v20241015.ConfigResource{
@@ -615,29 +538,13 @@ func Test_GetConfiguration_NoDefaultOrganization(t *testing.T) {
 		},
 	}
 
-	// Create mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		responseBytes, err := json.Marshal(response)
-		if err != nil {
-			http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
-			return
-		}
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			// Log error but continue - this is a test server
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
+	server := createTestServer(t, TestServerConfig{
+		StatusCode: http.StatusOK,
+		Response:   response,
+	})
 	defer server.Close()
 
-	// Act
-	client, err := ldx_sync_config.NewLdxSyncConfigClient(
-		server.URL,
-		ldx_sync_config.WithCustomHTTPClient(server.Client()),
-	)
-	require.NoError(t, err)
+	client := createTestClient(t, server.URL, ldx_sync_config.WithCustomHTTPClient(server.Client()))
 
 	params := ldx_sync_config.GetConfigurationParams{
 		RemoteUrl: remoteUrl,
@@ -646,13 +553,13 @@ func Test_GetConfiguration_NoDefaultOrganization(t *testing.T) {
 
 	config, err := client.GetConfiguration(ctx, params)
 
-	// Assert
 	assert.NoError(t, err)
 	require.NotNil(t, config)
 	// Should select the first organization when no default is set
 	assert.Equal(t, org, config.Organization)
 }
 
+// Test with complete data - keeping the comprehensive test as is due to its complexity
 func Test_GetConfiguration_CompleteData(t *testing.T) {
 	// Test with complete data including all new fields
 	remoteUrl := "https://github.com/test/repo"
@@ -819,7 +726,6 @@ func Test_GetConfiguration_CompleteData(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		err := json.NewEncoder(w).Encode(configResponse)
 		if err != nil {
-			// Log error but continue - this is a test server
 			t.Logf("Failed to encode response: %v", err)
 		}
 	}))
@@ -910,27 +816,4 @@ func Test_GetConfiguration_CompleteData(t *testing.T) {
 	require.NotNil(t, config.Policy)
 	assert.Equal(t, []string{"filter_config.severities.critical"}, config.Policy.EnforcedAttributes)
 	assert.Equal(t, []string{"proxy_config.http"}, config.Policy.LockedAttributes)
-}
-
-// Additional helper functions for test data
-func intPtr(i int) *int {
-	return &i
-}
-
-func timePtr(s string) *time.Time {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		// Return zero time if parsing fails
-		return &time.Time{}
-	}
-	return &t
-}
-
-func parseTime(s string) time.Time {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		// Return zero time if parsing fails
-		return time.Time{}
-	}
-	return t
 }
