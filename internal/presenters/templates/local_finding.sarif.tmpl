@@ -225,6 +225,13 @@
 						}{{if lt $coverageIndex $coverageSize}},{{end}}
 						{{- end }}
 					]
+					{{- if .Links.report }},
+					"uploadResult": {
+						"projectId": "{{ .Links.projectid }}",
+						"snapshotId": "{{ .Links.snapshotid }}",
+						"reportUrl": "{{ .Links.report }}"
+					}
+					{{- end }}
 				}
 			}
 		{{- end}}

@@ -14,6 +14,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/code-client-go/scan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
@@ -389,6 +390,13 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		apiResponse := "testdata/sarif-snyk-goof-ignores.api.response.json"
 		localFinding, err := sarifToLocalFinding(t, apiResponse, "/mypath")
 		assert.Nil(t, err)
+
+		resultMetaData := &scan.ResultMetaData{
+			WebUiUrl:   "https://app.snyk.io/org/test/project/123",
+			ProjectId:  "123",
+			SnapshotId: "456",
+		}
+		local_models.TranslateMetadataToLocalFindingModel(resultMetaData, localFinding, config)
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 

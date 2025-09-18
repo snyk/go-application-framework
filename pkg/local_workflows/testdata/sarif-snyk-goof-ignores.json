@@ -3268,7 +3268,12 @@
             "lang": "JavaScript",
             "type": "SUPPORTED"
           }
-        ]
+        ],
+        "uploadResult": {
+          "projectId": "123",
+          "snapshotId": "456",
+          "reportUrl": "https://app.snyk.io/org/test/project/123"
+        }
       }
     }
   ]
