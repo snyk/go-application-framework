@@ -32,7 +32,7 @@ func getLdxSyncConfig(config configuration.Configuration, ldxClient v20241015.Cl
 	}
 
 	params := &v20241015.GetConfigParams{
-		Version:   "2024-10-15", // Use the API version
+		Version:   "2024-10-15",
 		RemoteUrl: &remoteUrl,
 	}
 
