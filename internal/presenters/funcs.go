@@ -306,7 +306,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	return defaultMap
 }
 
-func reverse(v interface{}) []interface{} {
+func reverse(v any) []any {
 	l, err := mustReverse(v)
 	if err != nil {
 		panic(err)
