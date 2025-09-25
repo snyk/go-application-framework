@@ -20,7 +20,7 @@ type LdxSyncConfigResult struct {
 }
 
 // getLdxSyncConfig retrieves LDX-Sync configuration for the current project
-func getLdxSyncConfig(config configuration.Configuration, ldxClient v20241015.ClientWithResponsesInterface) LdxSyncConfigResult {
+func getLdxSyncConfig(config configuration.Configuration, ldxClient v20241015.ClientWithResponsesInterface, orgId string) LdxSyncConfigResult {
 	inputDir := config.GetString(configuration.INPUT_DIRECTORY)
 	if inputDir == "" {
 		return LdxSyncConfigResult{Error: fmt.Errorf("no input directory specified")}
@@ -34,6 +34,7 @@ func getLdxSyncConfig(config configuration.Configuration, ldxClient v20241015.Cl
 	params := &v20241015.GetConfigParams{
 		Version:   "2024-10-15",
 		RemoteUrl: &remoteUrl,
+		Org:       &orgId,
 	}
 
 	response, err := ldxClient.GetConfigWithResponse(context.Background(), params)
@@ -64,46 +65,51 @@ func getLdxSyncConfig(config configuration.Configuration, ldxClient v20241015.Cl
 	}
 }
 
-// TryResolveOrganization attempts to resolve organization using LDX-Sync
+// TryResolveOrganization attempts to resolve organization using LDX-Sync or returns the default organization
 func TryResolveOrganization(config configuration.Configuration, ldxClient v20241015.ClientWithResponsesInterface, logger *zerolog.Logger) string {
-	result := getLdxSyncConfig(config, ldxClient)
-	if result.Error != nil {
-		logger.Debug().Err(result.Error).Msg("LDX-Sync resolution failed, falling back to default")
+	cfgResult := getLdxSyncConfig(config, ldxClient, "")
+	if cfgResult.Error != nil {
+		logger.Debug().Err(cfgResult.Error).Msg("LDX-Sync resolution failed, falling back to default")
 		return ""
 	}
 
-	// Extract organization from the response
 	orgId := ""
-	if result.Config.Data.Attributes.ConfigData.Organizations != nil &&
-		len(*result.Config.Data.Attributes.ConfigData.Organizations) > 0 {
-		// Find the default organization or use the first one
-		for _, org := range *result.Config.Data.Attributes.ConfigData.Organizations {
-			if org.IsDefault != nil && *org.IsDefault {
-				orgId = org.Id
-				break
-			}
+	defaultOrgId := ""
+	folderConfigs := cfgResult.Config.Data.Attributes.ConfigData.FolderConfigs
+
+	if folderConfigs == nil || len(*folderConfigs) == 0 {
+		logger.Debug().Str("remoteUrl", cfgResult.RemoteUrl).Msg("No folder configurations found in LDX-Sync config, so can't extract organization")
+		return ""
+	}
+
+	// taking first folder config, because currently repo can have only 1 folderconfig
+	for _, org := range *(*folderConfigs)[0].Organizations {
+		if org.IsDefault != nil && *org.IsDefault {
+			defaultOrgId = org.Id
 		}
-		if orgId == "" {
-			orgId = (*result.Config.Data.Attributes.ConfigData.Organizations)[0].Id
+		if org.PreferredByAlgorithm != nil && *org.PreferredByAlgorithm {
+			orgId = org.Id
+			break
 		}
 	}
 
-	if orgId != "" {
-		logger.Debug().Str("orgId", orgId).Str("remoteUrl", result.RemoteUrl).Str("projectRoot", result.ProjectRoot).Msg("Resolved organization via LDX-Sync")
-		return orgId
+	if orgId == "" {
+		logger.Debug().Str("remoteUrl", cfgResult.RemoteUrl).Msg("Failed to find organization with PreferredByAlgorithm = true, falling back to user default organization")
+		if defaultOrgId == "" {
+			logger.Debug().Str("remoteUrl", cfgResult.RemoteUrl).Msg("No default organization found in LDX-Sync config")
+			return ""
+		}
+		return defaultOrgId
 	}
 
-	logger.Debug().Str("remoteUrl", result.RemoteUrl).Msg("No matching organization found in LDX-Sync config, falling back to default")
-	return ""
+	logger.Debug().Str("orgId", orgId).Str("remoteUrl", cfgResult.RemoteUrl).Str("projectRoot", cfgResult.ProjectRoot).Msg("Resolved organization via LDX-Sync")
+	return orgId
 }
 
-// GetConfig retrieves LDX-Sync configuration for the current project
-func GetConfig(config configuration.Configuration, ldxClient v20241015.ClientWithResponsesInterface, logger *zerolog.Logger) (*v20241015.ConfigResponse, error) {
-	result := getLdxSyncConfig(config, ldxClient)
+func GetConfig(config configuration.Configuration, orgId string, ldxClient v20241015.ClientWithResponsesInterface, logger *zerolog.Logger) (*v20241015.ConfigResponse, error) {
+	result := getLdxSyncConfig(config, ldxClient, orgId)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-
-	// Return the configuration response directly
 	return result.Config, nil
 }

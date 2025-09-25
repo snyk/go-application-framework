@@ -252,15 +252,7 @@ components:
           default: true
           description: Whether the code action is enabled
           type: boolean
-        integration_name:
-          description: Integration name for the code action
-          type: string
       type: object
-    CodeActions:
-      additionalProperties: false
-      items:
-        $ref: '#/components/schemas/CodeAction'
-      type: array
     ConfigAttributes:
       additionalProperties: false
       properties:
@@ -314,8 +306,8 @@ components:
           $ref: '#/components/schemas/FilterConfig'
         folder_configs:
           $ref: '#/components/schemas/FolderConfigs'
-        ide_config:
-          $ref: '#/components/schemas/IdeConfig'
+        ide_configs:
+          $ref: '#/components/schemas/IdeConfigs'
         organizations:
           description: |
             This list includes all organizations the user has access to.
@@ -706,16 +698,20 @@ components:
       type: array
     IdeConfig:
       properties:
+        auto_configure_mcp_server:
+          default: false
+          description: Configure Snyk MCP server
+          type: boolean
         binary_management_config:
           $ref: '#/components/schemas/BinaryManagementConfig'
         code_actions:
           properties:
             open_browser:
-              $ref: '#/components/schemas/CodeActions'
+              $ref: '#/components/schemas/CodeAction'
             open_learn_lesson:
-              $ref: '#/components/schemas/CodeActions'
+              $ref: '#/components/schemas/CodeAction'
             sca_upgrade:
-              $ref: '#/components/schemas/CodeActions'
+              $ref: '#/components/schemas/CodeAction'
           type: object
         hover_verbosity:
           default: 1
@@ -723,14 +719,32 @@ components:
           maximum: 3
           minimum: 0
           type: integer
+        integration_name:
+          description: Name of the IDE integration
+          example: vscode
+          type: string
         issue_view_config:
           $ref: '#/components/schemas/IssueViewConfig'
+        persist_rules_in_projects:
+          default: false
+          description: Write Snyk rules to current project. False will write it globally
+            to user profile.
+          type: boolean
         product_config:
           $ref: '#/components/schemas/ProductConfig'
+        publish_security_at_inception_rules:
+          default: false
+          description: Publish Security at Inception rules
+          type: boolean
         scan_config:
           $ref: '#/components/schemas/ScanConfig'
         trust_config:
           $ref: '#/components/schemas/TrustConfig'
+      type: object
+    IdeConfigs:
+      additionalProperties:
+        $ref: '#/components/schemas/IdeConfig'
+      description: Map of IDE configurations keyed by integration_name
       type: object
     IssueViewConfig:
       additionalProperties: false

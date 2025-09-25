@@ -27,36 +27,36 @@ func createLdxSyncConfigClient(url string, client *http.Client) (v20241015.Clien
 }
 
 // DefaultFuncLdxSyncConfig provides a default function for retrieving LDX-Sync configuration
-func DefaultFuncLdxSyncConfig(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	err := config.AddKeyDependency(LDX_SYNC_CONFIG, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for "+LDX_SYNC_CONFIG+":", err)
-	}
-
-	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
-		ldxClient, err := createLdxSyncConfigClient(url, client)
-		if err != nil {
-			return nil, err
-		}
-
-		// If there's already a cached value, return it
-		if existingValue != nil {
-			return existingValue, nil
-		}
-
-		// Try to get LDX-Sync config based on current directory
-		ldxConfig, err := GetConfig(config, ldxClient, logger)
-		if err != nil {
-			logger.Debug().Err(err).Msg("Failed to retrieve LDX-Sync config")
-			return nil, err
-		}
-
-		logger.Debug().Msg("Successfully retrieved LDX-Sync config")
-		return ldxConfig, nil
-	}
-}
+// func DefaultFuncLdxSyncConfig(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
+// 	err := config.AddKeyDependency(LDX_SYNC_CONFIG, configuration.API_URL)
+// 	if err != nil {
+// 		logger.Print("Failed to add dependency for "+LDX_SYNC_CONFIG+":", err)
+// 	}
+//
+// 	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+// 		client := engine.GetNetworkAccess().GetHttpClient()
+// 		url := config.GetString(configuration.API_URL)
+// 		ldxClient, err := createLdxSyncConfigClient(url, client)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+//
+// 		// If there's already a cached value, return it
+// 		if existingValue != nil {
+// 			return existingValue, nil
+// 		}
+//
+// 		// Try to get LDX-Sync config based on current directory
+// 		ldxConfig, err := GetConfig(config, ldxClient, logger)
+// 		if err != nil {
+// 			logger.Debug().Err(err).Msg("Failed to retrieve LDX-Sync config")
+// 			return nil, err
+// 		}
+//
+// 		logger.Debug().Msg("Successfully retrieved LDX-Sync config")
+// 		return ldxConfig, nil
+// 	}
+// }
 
 // DefaultFuncOrganizationLdx provides LDX-Sync enhanced organization resolution
 func DefaultFuncOrganizationLdx(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {

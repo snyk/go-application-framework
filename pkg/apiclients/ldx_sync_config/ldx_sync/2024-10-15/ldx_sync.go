@@ -93,13 +93,7 @@ type BinaryManagementConfig struct {
 type CodeAction struct {
 	// Enabled Whether the code action is enabled
 	Enabled *bool `json:"enabled,omitempty"`
-
-	// IntegrationName Integration name for the code action
-	IntegrationName *string `json:"integration_name,omitempty"`
 }
-
-// CodeActions defines model for CodeActions.
-type CodeActions = []CodeAction
 
 // ConfigAttributes defines model for ConfigAttributes.
 type ConfigAttributes struct {
@@ -128,7 +122,9 @@ type ConfigData struct {
 	Endpoints            *Endpoints                      `json:"endpoints,omitempty"`
 	FilterConfig         *FilterConfig                   `json:"filter_config,omitempty"`
 	FolderConfigs        *FolderConfigs                  `json:"folder_configs,omitempty"`
-	IdeConfig            *IdeConfig                      `json:"ide_config,omitempty"`
+
+	// IdeConfigs Map of IDE configurations keyed by integration_name
+	IdeConfigs *IdeConfigs `json:"ide_configs,omitempty"`
 
 	// Organizations This list includes all organizations the user has access to.
 	Organizations *[]Organization `json:"organizations,omitempty"`
@@ -336,20 +332,34 @@ type FolderConfigs = []FolderConfig
 
 // IdeConfig defines model for IdeConfig.
 type IdeConfig struct {
+	// AutoConfigureMcpServer Configure Snyk MCP server
+	AutoConfigureMcpServer *bool                   `json:"auto_configure_mcp_server,omitempty"`
 	BinaryManagementConfig *BinaryManagementConfig `json:"binary_management_config,omitempty"`
 	CodeActions            *struct {
-		OpenBrowser     *CodeActions `json:"open_browser,omitempty"`
-		OpenLearnLesson *CodeActions `json:"open_learn_lesson,omitempty"`
-		ScaUpgrade      *CodeActions `json:"sca_upgrade,omitempty"`
+		OpenBrowser     *CodeAction `json:"open_browser,omitempty"`
+		OpenLearnLesson *CodeAction `json:"open_learn_lesson,omitempty"`
+		ScaUpgrade      *CodeAction `json:"sca_upgrade,omitempty"`
 	} `json:"code_actions,omitempty"`
 
 	// HoverVerbosity Verbosity level for hover information
-	HoverVerbosity  *int             `json:"hover_verbosity,omitempty"`
+	HoverVerbosity *int `json:"hover_verbosity,omitempty"`
+
+	// IntegrationName Name of the IDE integration
+	IntegrationName *string          `json:"integration_name,omitempty"`
 	IssueViewConfig *IssueViewConfig `json:"issue_view_config,omitempty"`
-	ProductConfig   *ProductConfig   `json:"product_config,omitempty"`
-	ScanConfig      *ScanConfig      `json:"scan_config,omitempty"`
-	TrustConfig     *TrustConfig     `json:"trust_config,omitempty"`
+
+	// PersistRulesInProjects Write Snyk rules to current project. False will write it globally to user profile.
+	PersistRulesInProjects *bool          `json:"persist_rules_in_projects,omitempty"`
+	ProductConfig          *ProductConfig `json:"product_config,omitempty"`
+
+	// PublishSecurityAtInceptionRules Publish Security at Inception rules
+	PublishSecurityAtInceptionRules *bool        `json:"publish_security_at_inception_rules,omitempty"`
+	ScanConfig                      *ScanConfig  `json:"scan_config,omitempty"`
+	TrustConfig                     *TrustConfig `json:"trust_config,omitempty"`
 }
+
+// IdeConfigs Map of IDE configurations keyed by integration_name
+type IdeConfigs map[string]IdeConfig
 
 // IssueViewConfig defines model for IssueViewConfig.
 type IssueViewConfig struct {
@@ -909,7 +919,6 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 		}
 
 		if params.Tenant != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -921,11 +930,9 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
-
 		}
 
 		if params.Group != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -937,11 +944,9 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
-
 		}
 
 		if params.Org != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -953,11 +958,9 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
-
 		}
 
 		if params.AssetId != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -969,11 +972,9 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
-
 		}
 
 		if params.ProjectName != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -985,11 +986,9 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
-
 		}
 
 		if params.RemoteUrl != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1001,7 +1000,6 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -1050,7 +1048,6 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 		}
 
 		if params.Org != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1062,11 +1059,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.AssetId != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1078,11 +1073,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.ProjectName != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1094,11 +1087,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.RemoteUrl != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1110,11 +1101,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.Group != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1126,11 +1115,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.Tenant != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1142,11 +1129,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.IntegrationName != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_name", runtime.ParamLocationQuery, *params.IntegrationName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1158,11 +1143,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.IntegrationVersion != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_version", runtime.ParamLocationQuery, *params.IntegrationVersion); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1174,11 +1157,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.IntegrationEnvironment != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_environment", runtime.ParamLocationQuery, *params.IntegrationEnvironment); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1190,11 +1171,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.IntegrationEnvironmentVersion != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_environment_version", runtime.ParamLocationQuery, *params.IntegrationEnvironmentVersion); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1206,11 +1185,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.StartingAfter != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "starting_after", runtime.ParamLocationQuery, *params.StartingAfter); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1222,11 +1199,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.EndingBefore != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ending_before", runtime.ParamLocationQuery, *params.EndingBefore); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1238,11 +1213,9 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		if params.Limit != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1254,7 +1227,6 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -1314,7 +1286,6 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 		}
 
 		if params.Tenant != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1326,11 +1297,9 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.Group != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1342,11 +1311,9 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.Org != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1358,11 +1325,9 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.AssetId != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1374,11 +1339,9 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.ProjectName != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1390,11 +1353,9 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.RemoteUrl != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1406,7 +1367,6 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -1468,7 +1428,6 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 		}
 
 		if params.Tenant != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1480,11 +1439,9 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.Group != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1496,11 +1453,9 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.Org != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1512,11 +1467,9 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.AssetId != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1528,11 +1481,9 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.ProjectName != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1544,11 +1495,9 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		if params.RemoteUrl != nil {
-
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1560,7 +1509,6 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
