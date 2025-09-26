@@ -287,7 +287,7 @@ func (c *Checker) checkHost(host string) HostResult {
 		result.Status = c.categorizeError(err)
 		return result
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // Ignore lack of error handling
 
 	result.StatusCode = resp.StatusCode
 

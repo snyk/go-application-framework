@@ -2,8 +2,6 @@ package analytics
 
 import (
 	"bytes"
-	"github.com/snyk/go-application-framework/pkg/logging"
-
 	//nolint:gosec // insecure sha1 used for legacy identifier
 	"crypto/sha1"
 	"encoding/json"
@@ -22,6 +20,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	utils2 "github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/logging"
 )
 
 // Analytics is an interface for managing analytics.
@@ -319,7 +318,7 @@ func (a *AnalyticsImpl) SetInstrumentation(ic InstrumentationCollector) {
 	a.instrumentor = ic
 }
 
-var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname // breaking API change
+var DisabledInFedrampErr = errors.New("analytics are disabled in FedRAMP environments") //nolint:errname,staticcheck // breaking API change
 
 // This method sanitizes the given content by searching for key-value mappings. It thereby replaces all keys defined in keysToFilter by the replacement string
 // Supported patterns are:

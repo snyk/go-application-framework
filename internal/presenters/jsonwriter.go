@@ -11,9 +11,7 @@ type JsonWriter struct {
 	stripWhiteSpaces bool
 }
 
-/*
- * This Writer can be used to strip away whitespaces from json content to reduce the final size
- */
+// NewJsonWriter creates a Writer that can be used to strip away whitespaces from json content to reduce the final size
 func NewJsonWriter(next io.Writer, stripWhitespaces bool) io.Writer {
 	return &JsonWriter{
 		next:             next,
