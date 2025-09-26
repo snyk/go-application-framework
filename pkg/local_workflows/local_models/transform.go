@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -266,4 +268,21 @@ func UpdateFindingSummary(findingsModel *LocalFinding) {
 	}
 
 	findingsModel.Summary.Counts = updatedFindingCounts
+}
+
+func TranslateMetadataToLocalFindingModel(resultMetaData *scan.ResultMetaData, localFindings *LocalFinding, config configuration.Configuration) {
+	// if available add a report url to the findings
+	if resultMetaData != nil && len(resultMetaData.WebUiUrl) > 0 {
+		localFindings.Links[LINKS_KEY_REPORT] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
+	}
+
+	// if available add a project id to the findings
+	if resultMetaData != nil && len(resultMetaData.ProjectId) > 0 {
+		localFindings.Links["projectid"] = resultMetaData.ProjectId
+	}
+
+	// if available add a project id to the findings
+	if resultMetaData != nil && len(resultMetaData.SnapshotId) > 0 {
+		localFindings.Links["snapshotid"] = resultMetaData.SnapshotId
+	}
 }

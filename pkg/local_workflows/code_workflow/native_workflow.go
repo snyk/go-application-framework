@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -161,10 +160,8 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 			return nil, lfError
 		}
 
-		// if available add a report link to the findings
-		if resultMetaData != nil && len(resultMetaData.WebUiUrl) > 0 {
-			localFindings.Links[local_models.LINKS_KEY_REPORT] = fmt.Sprintf("%s%s", config.GetString(configuration.WEB_APP_URL), resultMetaData.WebUiUrl)
-		}
+		// translate metadata to findings
+		local_models.TranslateMetadataToLocalFindingModel(resultMetaData, &localFindings, config)
 
 		targetId, targetIdError := instrumentation.GetTargetId(config.GetString(configuration.INPUT_DIRECTORY), instrumentation.AutoDetectedTargetId, instrumentation.WithConfiguredRepository(config))
 		if targetIdError != nil {

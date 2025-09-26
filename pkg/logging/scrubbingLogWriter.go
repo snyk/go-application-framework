@@ -46,13 +46,20 @@ var SENSITIVE_FIELD_NAMES = []string{
 }
 
 type ScrubbingLogWriter interface {
+	// AddTerm takes a regex pattern to scrub
 	AddTerm(term string, matchGroup int)
+	// AddTermsToReplace takes exact strings to scrub
+	AddTermsToReplace(args []string)
 	RemoveTerm(term string)
 }
 
 type scrubStruct struct {
+	// the group to redact from the regex pattern if `regex` is populated, otherwise 0
 	groupToRedact int
-	regex         *regexp.Regexp
+	// the regex pattern to scrub
+	regex *regexp.Regexp
+	// the exact term to replace
+	replace string
 }
 
 type ScrubbingDict map[string]scrubStruct
@@ -86,16 +93,30 @@ func NewScrubbingIoWriter(writer io.Writer, scrubDict ScrubbingDict) io.Writer {
 	}
 }
 
+func (w *scrubbingIoWriter) AddTermsToReplace(terms []string) {
+	w.m.Lock()
+	defer w.m.Unlock()
+	for _, v := range terms {
+		addStaticTermToDict(v, w.scrubDict)
+	}
+}
+
 func (w *scrubbingIoWriter) AddTerm(term string, matchGroup int) {
 	// lock for dict readers and writers
 	w.m.Lock()
 	defer w.m.Unlock()
-	addTermToDict(term, matchGroup, w.scrubDict)
+	addRegexTermToDict(term, matchGroup, w.scrubDict)
 }
 
-func addTermToDict(term string, matchGroup int, dict ScrubbingDict) {
-	if term != "" {
-		dict[term] = scrubStruct{matchGroup, regexp.MustCompile(term)}
+func addStaticTermToDict(replaceTerm string, dict ScrubbingDict) {
+	if replaceTerm != "" {
+		dict[replaceTerm] = scrubStruct{0, nil, replaceTerm}
+	}
+}
+
+func addRegexTermToDict(regexTerm string, matchGroup int, dict ScrubbingDict) {
+	if regexTerm != "" {
+		dict[regexTerm] = scrubStruct{matchGroup, regexp.MustCompile(regexTerm), ""}
 	}
 }
 
@@ -108,16 +129,16 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
-	addTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), 0, dict)
-	addTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), 0, dict)
-	addTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), 0, dict)
-	addTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), 0, dict)
+	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), dict)
+	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
+	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
+	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
 		return dict
 	}
-	addTermToDict(token.AccessToken, 0, dict)
-	addTermToDict(token.RefreshToken, 0, dict)
+	addStaticTermToDict(token.AccessToken, dict)
+	addStaticTermToDict(token.RefreshToken, dict)
 	return dict
 }
 
@@ -127,11 +148,19 @@ func getDefaultDict() ScrubbingDict {
 	return dict
 }
 
+func (w *scrubbingLevelWriter) AddTermsToReplace(terms []string) {
+	w.m.Lock()
+	defer w.m.Unlock()
+	for _, v := range terms {
+		addStaticTermToDict(v, w.scrubDict)
+	}
+}
+
 func (w *scrubbingLevelWriter) AddTerm(term string, matchGroup int) {
 	// lock for dict readers and writers
 	w.m.Lock()
 	defer w.m.Unlock()
-	addTermToDict(term, matchGroup, w.scrubDict)
+	addRegexTermToDict(term, matchGroup, w.scrubDict)
 }
 
 func (w *scrubbingLevelWriter) RemoveTerm(term string) {
@@ -230,7 +259,7 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	u, err := user.Current()
 	if err == nil {
 		s = fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(u.Username))
-		addTermToDict(s, 0, dict)
+		addRegexTermToDict(s, 0, dict)
 	}
 
 	// The legacy CLI's snyk-config package prints the entire configuration in debug mode.
@@ -244,14 +273,6 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 	// JSON-formatted data, in general
 	kws := strings.Join(SENSITIVE_FIELD_NAMES, "|")
 	s = fmt.Sprintf(`(?i)"[^"]*(?<json_key>%s)[^"]*"\s*:\s*"(?<json_value>[^"]*)"`, kws)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
-	// CLI argument mapping from the snyk-config debug logging
-	// I.e., if --argument=value is passed, it will be logged as { 'argument=value': true }
-	s = fmt.Sprintf(`(?im)(%s)[^=]*=(?P<value>.*)['"]`, kws)
 	dict[s] = scrubStruct{
 		groupToRedact: 2,
 		regex:         regexp.MustCompile(s),
@@ -285,13 +306,6 @@ func addMandatoryMasking(dict ScrubbingDict) ScrubbingDict {
 		regex:         regexp.MustCompile(s),
 	}
 
-	// Long-form, rest is covered by the JSON scrubbing above
-	s = fmt.Sprintf(`(?im)--(?<argument_key>[^=\s]*(?:%s)[^=\s]*)[\s=]['"]?(?<argument_value>\S*)['"]?`, kws)
-	dict[s] = scrubStruct{
-		groupToRedact: 2,
-		regex:         regexp.MustCompile(s),
-	}
-
 	return dict
 }
 
@@ -304,7 +318,6 @@ func (w *scrubbingLevelWriter) Write(p []byte) (int, error) {
 
 func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	s := string(p)
-
 	// The dictionary order is important here, as we want potentially overlapping regexes to be applied
 	// in a specific order every time. Since dictionaries are unordered, we sort the keys here.
 	keys := make([]string, 0, len(scrubDict))
@@ -314,6 +327,12 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 	sort.Strings(keys)
 	for _, key := range keys {
 		entry := scrubDict[key]
+		// scrub from the replacement list first
+		if entry.replace != "" {
+			s = strings.ReplaceAll(s, entry.replace, SANITIZE_REPLACEMENT_STRING)
+			continue
+		}
+		// then scrub from the regex list
 		matches := entry.regex.FindAllStringSubmatch(s, -1)
 		for _, match := range matches {
 			if entry.groupToRedact >= len(match) || match[entry.groupToRedact] == "" {
