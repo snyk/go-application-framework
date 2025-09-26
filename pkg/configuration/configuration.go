@@ -409,6 +409,9 @@ func (ev *extendedViper) IsSet(key string) bool {
 	ev.mutex.RLock()
 	defer ev.mutex.RUnlock()
 
+	//nolint:errcheck // bindenv is actually best effort and we don't care about the error
+	_ = ev.bindEnv(key)
+
 	isSet := ev.viper.IsSet(key)
 	if !isSet {
 		for _, altKey := range ev.alternativeKeys[key] {
