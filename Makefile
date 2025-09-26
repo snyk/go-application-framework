@@ -49,7 +49,10 @@ generate:
 .PHONY: tools
 tools: $(GOCI_LINT_TARGETS)
 
-$(GOCI_LINT_TARGETS):
+$(GO_BIN):
+	@mkdir -p $(GO_BIN)
+
+$(GOCI_LINT_TARGETS): | $(GO_BIN)
 	@rm -f $(GO_BIN)/.golangci-lint_*
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOCI_LINT_V)/install.sh | sh -s -- -b $(GO_BIN) $(GOCI_LINT_V)
 	@touch $(GO_BIN)/.golangci-lint_$(GOCI_LINT_V)
