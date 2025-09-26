@@ -13,12 +13,16 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/mocks"
+	ldx_mocks "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func TestTryResolveOrganization_Unit(t *testing.T) {
+func TestResolveOrganization(t *testing.T) {
 	logger := zerolog.Nop()
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
 
 	// Setup a temporary git repository
 	tempDir, err := os.MkdirTemp("", "test-git-repo")
@@ -37,20 +41,21 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 
 	// Test cases
 	tests := []struct {
-		name          string
-		setupMock     func(*mocks.MockClientWithResponsesInterface)
-		expectedOrgId string
-		inputDir      string
+		name                string
+		setupMock           func(mock *ldx_mocks.MockClientWithResponsesInterface)
+		setupClientCreation func()
+		expectedOrgId       string
+		inputDir            string
 	}{
 		{
 			name:          "empty input directory",
-			setupMock:     func(mock *mocks.MockClientWithResponsesInterface) {},
+			setupMock:     func(mock *ldx_mocks.MockClientWithResponsesInterface) {},
 			expectedOrgId: "",
 			inputDir:      "",
 		},
 		{
 			name: "successful resolution with PreferredByAlgorithm",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(&v20241015.GetConfigResponse{
@@ -61,10 +66,12 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 										FolderConfigs: &[]v20241015.FolderConfig{
 											{
 												Organizations: &[]v20241015.Organization{
-													{Id: "org-default", IsDefault: boolPtr(true)},
 													{Id: "org-preferred", PreferredByAlgorithm: boolPtr(true)},
 												},
 											},
+										},
+										Organizations: &[]v20241015.Organization{
+											{Id: "org-default", IsDefault: boolPtr(true)},
 										},
 									},
 								},
@@ -77,8 +84,35 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 			inputDir:      tempDir,
 		},
 		{
-			name: "successful resolution with default org when no preferred",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
+			name: "successful resolution using ApplicationvndApiJSON200 response",
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().
+					GetConfigWithResponse(gomock.Any(), gomock.Any()).
+					Return(&v20241015.GetConfigResponse{
+						ApplicationvndApiJSON200: &v20241015.ConfigResponse{
+							Data: v20241015.ConfigResource{
+								Attributes: v20241015.ConfigAttributes{
+									ConfigData: v20241015.ConfigData{
+										FolderConfigs: &[]v20241015.FolderConfig{
+											{
+												Organizations: &[]v20241015.Organization{
+													{Id: "org-preferred-vnd", PreferredByAlgorithm: boolPtr(true)},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
+					}, nil)
+			},
+			expectedOrgId: "org-preferred-vnd",
+			inputDir:      tempDir,
+		},
+		{
+			name: "fallback to default org when no preferred",
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(&v20241015.GetConfigResponse{
@@ -89,10 +123,12 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 										FolderConfigs: &[]v20241015.FolderConfig{
 											{
 												Organizations: &[]v20241015.Organization{
-													{Id: "org-default", IsDefault: boolPtr(true)},
-													{Id: "org-other", IsDefault: boolPtr(false)},
+													{Id: "org-other", PreferredByAlgorithm: boolPtr(false)},
 												},
 											},
+										},
+										Organizations: &[]v20241015.Organization{
+											{Id: "org-default", IsDefault: boolPtr(true)},
 										},
 									},
 								},
@@ -106,7 +142,7 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 		},
 		{
 			name: "no preferred or default org",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(&v20241015.GetConfigResponse{
@@ -117,10 +153,13 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 										FolderConfigs: &[]v20241015.FolderConfig{
 											{
 												Organizations: &[]v20241015.Organization{
-													{Id: "org-1", IsDefault: boolPtr(false)},
+													{Id: "org-1", PreferredByAlgorithm: boolPtr(false)},
 													{Id: "org-2"},
 												},
 											},
+										},
+										Organizations: &[]v20241015.Organization{
+											{Id: "org-3", IsDefault: boolPtr(false)},
 										},
 									},
 								},
@@ -133,8 +172,8 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 			inputDir:      tempDir,
 		},
 		{
-			name: "no organizations in response",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
+			name: "no organizations in folder config, fallback to default",
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(&v20241015.GetConfigResponse{
@@ -142,7 +181,12 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 							Data: v20241015.ConfigResource{
 								Attributes: v20241015.ConfigAttributes{
 									ConfigData: v20241015.ConfigData{
-										FolderConfigs: &[]v20241015.FolderConfig{},
+										FolderConfigs: &[]v20241015.FolderConfig{
+											{},
+										},
+										Organizations: &[]v20241015.Organization{
+											{Id: "org-default", IsDefault: boolPtr(true)},
+										},
 									},
 								},
 							},
@@ -150,12 +194,12 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			expectedOrgId: "",
+			expectedOrgId: "org-default",
 			inputDir:      tempDir,
 		},
 		{
-			name: "nil folderconfig in response",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
+			name: "nil folderconfig in response, fallback to default",
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(&v20241015.GetConfigResponse{
@@ -164,6 +208,9 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 								Attributes: v20241015.ConfigAttributes{
 									ConfigData: v20241015.ConfigData{
 										FolderConfigs: nil,
+										Organizations: &[]v20241015.Organization{
+											{Id: "org-default", IsDefault: boolPtr(true)},
+										},
 									},
 								},
 							},
@@ -171,12 +218,12 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			expectedOrgId: "",
+			expectedOrgId: "org-default",
 			inputDir:      tempDir,
 		},
 		{
 			name: "API error",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(nil, errors.New("API error"))
@@ -185,13 +232,49 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 			inputDir:      tempDir,
 		},
 		{
+			name: "API returns 404",
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().
+					GetConfigWithResponse(gomock.Any(), gomock.Any()).
+					Return(&v20241015.GetConfigResponse{
+						JSON404:      &v20241015.ErrorResponseApplicationJSON{},
+						HTTPResponse: &http.Response{StatusCode: http.StatusNotFound},
+					}, nil)
+			},
+			expectedOrgId: "",
+			inputDir:      tempDir,
+		},
+		{
+			name: "API returns 200 with no data",
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().
+					GetConfigWithResponse(gomock.Any(), gomock.Any()).
+					Return(&v20241015.GetConfigResponse{
+						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
+					}, nil)
+			},
+			expectedOrgId: "",
+			inputDir:      tempDir,
+		},
+		{
 			name: "git remote detection fails",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
+			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				// No API call expected
 			},
 			expectedOrgId: "",
 			inputDir:      "/tmp/non-existent-dir-for-git-fail",
 		},
+		{
+			name:          "client creation fails",
+			setupMock:     func(mock *ldx_mocks.MockClientWithResponsesInterface) {},
+			expectedOrgId: "",
+			inputDir:      tempDir,
+			setupClientCreation: func() {
+				newClient = func(_ workflow.Engine, _ configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
+					return nil, errors.New("client creation failed")
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -199,136 +282,24 @@ func TestTryResolveOrganization_Unit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockClient := mocks.NewMockClientWithResponsesInterface(ctrl)
-			tt.setupMock(mockClient)
+			mockLdxClient := ldx_mocks.NewMockClientWithResponsesInterface(ctrl)
+			if tt.setupMock != nil {
+				tt.setupMock(mockLdxClient)
+			}
+
+			// Default client creation mock
+			newClient = func(_ workflow.Engine, _ configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
+				return mockLdxClient, nil
+			}
+			if tt.setupClientCreation != nil {
+				tt.setupClientCreation()
+			}
+			defer func() { newClient = newClientImpl }()
 
 			config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-			config.Set(configuration.INPUT_DIRECTORY, tt.inputDir)
 
-			result := TryResolveOrganization(config, mockClient, &logger)
+			result := ResolveOrganization(config, mockEngine, &logger, tt.inputDir)
 			assert.Equal(t, tt.expectedOrgId, result)
-		})
-	}
-}
-
-// TestGetConfigWithMock tests the GetConfig function using generated mocks
-// Note: This test is limited due to git dependency in getLdxSyncConfig
-func TestGetConfigWithMock(t *testing.T) {
-	logger := zerolog.Nop()
-
-	tests := []struct {
-		name          string
-		inputDir      string
-		setupMock     func(*mocks.MockClientWithResponsesInterface)
-		expectedError string
-	}{
-		{
-			name:     "empty input directory",
-			inputDir: "",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
-				// No expectations needed as the function will return early
-			},
-			expectedError: "no input directory specified",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockClient := mocks.NewMockClientWithResponsesInterface(ctrl)
-			tt.setupMock(mockClient)
-
-			config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-			config.Set("INPUT_DIRECTORY", tt.inputDir)
-
-			result, err := GetConfig(config, "", mockClient, &logger)
-
-			if tt.expectedError != "" {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError)
-				assert.Nil(t, result)
-			}
-		})
-	}
-}
-
-func TestGetConfig(t *testing.T) {
-	logger := zerolog.Nop()
-
-	tests := []struct {
-		name          string
-		inputDir      string
-		setupMock     func(*mocks.MockClientWithResponsesInterface)
-		expectedError string
-	}{
-		{
-			name:     "empty input directory",
-			inputDir: "",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
-				// No expectations needed as the function will return early
-			},
-			expectedError: "no input directory specified",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockClient := mocks.NewMockClientWithResponsesInterface(ctrl)
-			tt.setupMock(mockClient)
-
-			config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-			config.Set("INPUT_DIRECTORY", tt.inputDir)
-
-			result, err := GetConfig(config, "", mockClient, &logger)
-
-			if tt.expectedError != "" {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError)
-				assert.Nil(t, result)
-			}
-		})
-	}
-}
-
-func TestGetLdxSyncConfig(t *testing.T) {
-	tests := []struct {
-		name          string
-		inputDir      string
-		setupMock     func(*mocks.MockClientWithResponsesInterface)
-		expectedError string
-	}{
-		{
-			name:     "empty input directory",
-			inputDir: "",
-			setupMock: func(mock *mocks.MockClientWithResponsesInterface) {
-				// No expectations needed as the function will return early
-			},
-			expectedError: "no input directory specified",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockClient := mocks.NewMockClientWithResponsesInterface(ctrl)
-			tt.setupMock(mockClient)
-
-			config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-			config.Set("INPUT_DIRECTORY", tt.inputDir)
-
-			result := getLdxSyncConfig(config, mockClient, "")
-
-			if tt.expectedError != "" {
-				assert.Error(t, result.Error)
-				assert.Contains(t, result.Error.Error(), tt.expectedError)
-			}
 		})
 	}
 }
