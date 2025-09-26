@@ -129,16 +129,16 @@ func (w *scrubbingIoWriter) RemoveTerm(term string) {
 
 func GetScrubDictFromConfig(config configuration.Configuration) ScrubbingDict {
 	dict := getDefaultDict()
-	addRegexTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), 0, dict)
-	addRegexTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), 0, dict)
-	addRegexTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), 0, dict)
-	addRegexTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), 0, dict)
+	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_TOKEN), dict)
+	addStaticTermToDict(config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN), dict)
+	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_SECRET), dict)
+	addStaticTermToDict(config.GetString(auth.PARAMETER_CLIENT_ID), dict)
 	token, err := auth.GetOAuthToken(config)
 	if err != nil || token == nil {
 		return dict
 	}
-	addRegexTermToDict(token.AccessToken, 0, dict)
-	addRegexTermToDict(token.RefreshToken, 0, dict)
+	addStaticTermToDict(token.AccessToken, dict)
+	addStaticTermToDict(token.RefreshToken, dict)
 	return dict
 }
 
