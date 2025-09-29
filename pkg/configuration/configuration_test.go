@@ -1060,3 +1060,12 @@ func Test_Configuration_AddKeyDependency_CircularDependency(t *testing.T) {
 	err = config.AddKeyDependency("key1", "key1")
 	assert.Error(t, err)
 }
+
+func Test_Configuration_IsSet(t *testing.T) {
+	key := "SNYK_TOKEN"
+	value := "value1"
+	config := NewWithOpts(WithSupportedEnvVarPrefixes("SNYK_"))
+	assert.False(t, config.IsSet(key))
+	t.Setenv(key, value)
+	assert.True(t, config.IsSet(key))
+}
