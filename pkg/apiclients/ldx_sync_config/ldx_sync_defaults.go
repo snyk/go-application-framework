@@ -34,7 +34,11 @@ func DefaultFuncOrganizationLdx(engine workflow.Engine, config configuration.Con
 		}
 
 		// Fallback to default org resolution
-		return getDefaultOrganization(apiClient, logger)
+		orgId, err := apiClient.GetDefaultOrgId()
+		if err != nil {
+			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+		}
+		return orgId, err
 	}
 }
 
@@ -58,13 +62,4 @@ func handleExistingOrganization(existingValue interface{}, apiClient api.ApiClie
 	}
 
 	return orgId
-}
-
-// getDefaultOrganization retrieves the default organization from the API
-func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (string, error) {
-	orgId, err := apiClient.GetDefaultOrgId()
-	if err != nil {
-		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
-	}
-	return orgId, err
 }

@@ -75,23 +75,6 @@ func getLdxSyncConfig(ldxClient v20241015.ClientWithResponsesInterface, orgId st
 	}
 }
 
-// findDefaultUserOrgId finds the default organization from the list of user organizations.
-func findDefaultUserOrgId(configData *v20241015.ConfigData, remoteUrl string, logger *zerolog.Logger) string {
-	if configData.Organizations == nil || len(*configData.Organizations) == 0 {
-		logger.Debug().Str("remoteUrl", remoteUrl).Msg("No user organizations found in LDX-Sync config, failed to resolve organization")
-		return ""
-	}
-
-	for _, org := range *configData.Organizations {
-		if org.IsDefault != nil && *org.IsDefault {
-			return org.Id
-		}
-	}
-
-	logger.Debug().Str("remoteUrl", remoteUrl).Msg("No default organization found in LDX-Sync config")
-	return ""
-}
-
 // ResolveOrganization attempts to resolve an organization using LDX-Sync.
 // It first tries to find a preferred organization from folder configurations.
 // If none is found, it falls back to the user's default organization.
@@ -128,5 +111,17 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 	}
 
 	// Fallback to default user organization
-	return findDefaultUserOrgId(&configData, cfgResult.RemoteUrl, logger)
+	if configData.Organizations == nil || len(*configData.Organizations) == 0 {
+		logger.Debug().Str("remoteUrl", cfgResult.RemoteUrl).Msg("No user organizations found in LDX-Sync config, failed to resolve organization")
+		return ""
+	}
+
+	for _, org := range *configData.Organizations {
+		if org.IsDefault != nil && *org.IsDefault {
+			return org.Id
+		}
+	}
+
+	logger.Debug().Str("remoteUrl", cfgResult.RemoteUrl).Msg("No default organization found in LDX-Sync config")
+	return ""
 }
