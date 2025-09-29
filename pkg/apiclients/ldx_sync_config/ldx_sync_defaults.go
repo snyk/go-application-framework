@@ -3,7 +3,6 @@ package ldx_sync_config
 import (
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -19,47 +18,7 @@ func DefaultFuncOrganizationLdx(engine workflow.Engine, config configuration.Con
 	}
 
 	return func(_ configuration.Configuration, existingValue any) (any, error) {
-		// Handle existing organization value
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
-		apiClient := apiClientFactory(url, client)
-		if orgId := handleExistingOrganization(existingValue, apiClient, logger); orgId != "" {
-			return orgId, nil
-		}
-
-		// Try LDX-Sync resolution
 		inputDir := config.GetString(configuration.INPUT_DIRECTORY)
-		if orgId := ResolveOrganization(config, engine, logger, inputDir); orgId != "" {
-			return orgId, nil
-		}
-
-		// Fallback to default org resolution
-		orgId, err := apiClient.GetDefaultOrgId()
-		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
-		}
-		return orgId, err
+		return ResolveOrganization(config, engine, logger, inputDir, existingValue)
 	}
-}
-
-// handleExistingOrganization validates and resolves existing organization values
-func handleExistingOrganization(existingValue interface{}, apiClient api.ApiClient, logger *zerolog.Logger) string {
-	existingString, ok := existingValue.(string)
-	if existingValue == nil || !ok || len(existingString) == 0 {
-		return ""
-	}
-
-	orgId := existingString
-	_, err := uuid.Parse(orgId)
-	isSlugName := err != nil
-
-	if isSlugName {
-		orgId, err = apiClient.GetOrgIdFromSlug(existingString)
-		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
-			return ""
-		}
-	}
-
-	return orgId
 }
