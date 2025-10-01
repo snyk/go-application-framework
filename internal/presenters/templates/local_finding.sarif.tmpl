@@ -232,6 +232,9 @@
 						"reportUrl": "{{ .Links.report }}"
 					}
 					{{- end }}
+				},
+				"automationDetails": {
+					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") }}"
 				}
 			}
 		{{- end}}
