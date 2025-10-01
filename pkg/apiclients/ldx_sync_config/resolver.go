@@ -99,8 +99,10 @@ func getLdxSyncConfig(ldxClient v20241015.ClientWithResponsesInterface, orgId st
 // 3. Falls back to the user's default organization from LDX-Sync.
 // 4. Falls back to the user's default organization from the Snyk API.
 func ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string, existingOrgID string) (Organization, error) {
+	apiClient := newApiClient(engine, config)
+
 	// 1. Handle existing organization value
-	org, err := handleExistingOrganization(existingOrgID, config, engine, logger)
+	org, err := handleExistingOrganization(existingOrgID, apiClient, logger)
 	if err != nil {
 		return Organization{}, err
 	}
@@ -112,13 +114,13 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 	ldxClient, err := newClient(engine, config)
 	if err != nil {
 		logger.Debug().Err(err).Msg("Failed to create LDX-Sync client, can't proceed with LDX-Sync resolution")
-		return fallbackOrganization(nil, config, engine, "", logger)
+		return fallbackOrganization(nil, apiClient, "", logger)
 	}
 
 	cfgResult := getLdxSyncConfig(ldxClient, "", dir)
 	if cfgResult.Error != nil {
 		logger.Debug().Err(cfgResult.Error).Msg("LDX-Sync resolution failed, falling back to default")
-		return fallbackOrganization(nil, config, engine, "", logger)
+		return fallbackOrganization(nil, apiClient, "", logger)
 	}
 
 	configData := cfgResult.Config.Data.Attributes.ConfigData
@@ -141,11 +143,10 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 	}
 
 	// 3 & 4. Fallback
-	return fallbackOrganization(&configData, config, engine, cfgResult.RemoteUrl, logger)
+	return fallbackOrganization(&configData, apiClient, cfgResult.RemoteUrl, logger)
 }
 
-func GetDefaultOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) (Organization, error) {
-	apiClient := newApiClient(engine, config)
+func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (Organization, error) {
 	defaultOrgId, err := apiClient.GetDefaultOrgId()
 	if err != nil {
 		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
@@ -155,13 +156,11 @@ func GetDefaultOrganization(config configuration.Configuration, engine workflow.
 	return Organization{Id: defaultOrgId, IsDefault: &boolTrue}, nil
 }
 
-func handleExistingOrganization(existingOrgID string, config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) (Organization, error) {
+func handleExistingOrganization(existingOrgID string, apiClient api.ApiClient, logger *zerolog.Logger) (Organization, error) {
 	if len(existingOrgID) == 0 {
 		logger.Debug().Msg("Existing organization value provided is not a string")
 		return Organization{}, nil
 	}
-
-	apiClient := newApiClient(engine, config)
 
 	_, err := uuid.Parse(existingOrgID)
 	isSlugName := err != nil
@@ -174,21 +173,21 @@ func handleExistingOrganization(existingOrgID string, config configuration.Confi
 		}
 	}
 
-	defaultOrg, err := GetDefaultOrganization(config, engine, logger)
+	defaultOrg, err := getDefaultOrganization(apiClient, logger)
 	if err != nil {
 		// If we can't get the default org, we can't compare, so return the existing org
-		return Organization{Id: existingOrgID, IsDefault: &boolTrue}, nil
+		return Organization{Id: existingOrgID, IsDefault: &boolFalse}, nil
 	}
 
-	// special case for migrating users from defaultOrg to ldx-sync based one
+	// If the existing org is the default org, return it
 	if defaultOrg.Id == existingOrgID {
-		return Organization{Id: existingOrgID, IsDefault: &boolTrue}, nil
+		return defaultOrg, nil
 	}
 
 	return Organization{Id: existingOrgID, IsDefault: &boolFalse}, nil
 }
 
-func fallbackOrganization(configData *v20241015.ConfigData, config configuration.Configuration, engine workflow.Engine, remoteUrl string, logger *zerolog.Logger) (Organization, error) {
+func fallbackOrganization(configData *v20241015.ConfigData, apiClient api.ApiClient, remoteUrl string, logger *zerolog.Logger) (Organization, error) {
 	// Fallback to default user organization from LDX-Sync response
 	if configData != nil && configData.Organizations != nil {
 		for _, org := range *configData.Organizations {
@@ -201,5 +200,5 @@ func fallbackOrganization(configData *v20241015.ConfigData, config configuration
 	}
 
 	// Fallback to default org resolution from API
-	return GetDefaultOrganization(config, engine, logger)
+	return getDefaultOrganization(apiClient, logger)
 }
