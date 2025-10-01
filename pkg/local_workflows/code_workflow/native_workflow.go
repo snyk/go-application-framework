@@ -271,7 +271,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 	}
 
 	if !pathIsDirectory {
-		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)))
+		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)), scan.WithCommitId(config.GetString(ConfigurationCommitId)))
 		if err != nil {
 			logger.Warn().Err(err)
 		}
@@ -287,7 +287,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 		return target, files, nil
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)))
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)), scan.WithCommitId(config.GetString(ConfigurationCommitId)))
 	if err != nil {
 		logger.Warn().Err(err)
 	}
