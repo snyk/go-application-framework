@@ -98,12 +98,6 @@ func getLdxSyncConfig(ldxClient v20241015.ClientWithResponsesInterface, orgId st
 // 2. Tries to find a preferred organization from LDX-Sync folder configurations.
 // 3. Falls back to the user's default organization from LDX-Sync.
 // 4. Falls back to the user's default organization from the Snyk API.
-
-// TODO typealias Org struct
-
-// TODO get user default
-
-// TODO: Change existingOrgValue to string. Return Org struct
 func ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string, existingOrgID string) (Organization, error) {
 	apiClient := newApiClient(engine, config)
 	// 1. Handle existing organization value
