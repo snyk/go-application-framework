@@ -50,15 +50,15 @@ func TestResolveOrganization(t *testing.T) {
 		expectedOrgId       string
 		expectedErr         error
 		inputDir            string
-		existingOrgValue    any
+		existingOrgID       string
 	}{
 		{
-			name:             "empty input directory",
-			setupMock:        func(mock *ldx_mocks.MockClientWithResponsesInterface) {},
-			setupApiMock:     func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
-			expectedOrgId:    "default-org",
-			inputDir:         "",
-			existingOrgValue: "",
+			name:          "empty input directory",
+			setupMock:     func(mock *ldx_mocks.MockClientWithResponsesInterface) {},
+			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			expectedOrgId: "default-org",
+			inputDir:      "",
+			existingOrgID: "",
 		},
 		{
 			name: "successful resolution with PreferredByAlgorithm",
@@ -87,9 +87,9 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			expectedOrgId:    "org-preferred",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			expectedOrgId: "org-preferred",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "successful resolution using ApplicationvndApiJSON200 response",
@@ -115,9 +115,9 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			expectedOrgId:    "org-preferred-vnd",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			expectedOrgId: "org-preferred-vnd",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "fallback to default org when no preferred",
@@ -146,9 +146,9 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			expectedOrgId:    "org-default",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			expectedOrgId: "org-default",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "no preferred or default org, fallback to api",
@@ -178,10 +178,10 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			setupApiMock:     func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
-			expectedOrgId:    "default-org",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			expectedOrgId: "default-org",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "no organizations in folder config, fallback to default",
@@ -206,9 +206,9 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			expectedOrgId:    "org-default",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			expectedOrgId: "org-default",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "nil folderconfig in response, fallback to default",
@@ -231,9 +231,9 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			expectedOrgId:    "org-default",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			expectedOrgId: "org-default",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "API error, fallback to api",
@@ -242,10 +242,10 @@ func TestResolveOrganization(t *testing.T) {
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(nil, errors.New("API error"))
 			},
-			setupApiMock:     func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
-			expectedOrgId:    "default-org",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			expectedOrgId: "default-org",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "API returns 404, fallback to api",
@@ -257,10 +257,10 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusNotFound},
 					}, nil)
 			},
-			setupApiMock:     func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
-			expectedOrgId:    "default-org",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			expectedOrgId: "default-org",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "API returns 200 with no data, fallback to api",
@@ -271,28 +271,28 @@ func TestResolveOrganization(t *testing.T) {
 						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
 					}, nil)
 			},
-			setupApiMock:     func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
-			expectedOrgId:    "default-org",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			expectedOrgId: "default-org",
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 		{
 			name: "git remote detection fails, fallback to api",
 			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				// No API call expected
 			},
-			setupApiMock:     func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
-			expectedOrgId:    "default-org",
-			inputDir:         "/tmp/non-existent-dir-for-git-fail",
-			existingOrgValue: "",
+			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			expectedOrgId: "default-org",
+			inputDir:      "/tmp/non-existent-dir-for-git-fail",
+			existingOrgID: "",
 		},
 		{
-			name:             "client creation fails, fallback to api",
-			setupMock:        func(mock *ldx_mocks.MockClientWithResponsesInterface) {},
-			setupApiMock:     func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
-			expectedOrgId:    "default-org",
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			name:          "client creation fails, fallback to api",
+			setupMock:     func(mock *ldx_mocks.MockClientWithResponsesInterface) {},
+			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			expectedOrgId: "default-org",
+			inputDir:      tempDir,
+			existingOrgID: "",
 			setupClientCreation: func() {
 				newClient = func(_ workflow.Engine, _ configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
 					return nil, errors.New("client creation failed")
@@ -304,40 +304,18 @@ func TestResolveOrganization(t *testing.T) {
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
 				mock.EXPECT().GetDefaultOrgId().Return("22222222-2222-2222-2222-222222222222", nil)
 			},
-			expectedOrgId:    "123e4567-e89b-12d3-a456-426614174000",
-			inputDir:         tempDir,
-			existingOrgValue: "123e4567-e89b-12d3-a456-426614174000",
+			expectedOrgId: "123e4567-e89b-12d3-a456-426614174000",
+			inputDir:      tempDir,
+			existingOrgID: "123e4567-e89b-12d3-a456-426614174000",
 		},
 		{
-			name: "existing org ID is default, fallback to LDX-Sync preferred",
-			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
-				mock.EXPECT().
-					GetConfigWithResponse(gomock.Any(), gomock.Any()).
-					Return(&v20241015.GetConfigResponse{
-						JSON200: &v20241015.ConfigResponse{
-							Data: v20241015.ConfigResource{
-								Attributes: v20241015.ConfigAttributes{
-									ConfigData: v20241015.ConfigData{
-										FolderConfigs: &[]v20241015.FolderConfig{
-											{
-												Organizations: &[]v20241015.Organization{
-													{Id: "ldx-preferred-org", PreferredByAlgorithm: boolPtr(true)},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
-					}, nil)
-			},
+			name: "existing org ID is default, returns existing org",
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
 				mock.EXPECT().GetDefaultOrgId().Return("11111111-1111-1111-1111-111111111111", nil)
 			},
-			expectedOrgId:    "ldx-preferred-org",
-			inputDir:         tempDir,
-			existingOrgValue: "11111111-1111-1111-1111-111111111111",
+			expectedOrgId: "11111111-1111-1111-1111-111111111111",
+			inputDir:      tempDir,
+			existingOrgID: "11111111-1111-1111-1111-111111111111",
 		},
 		{
 			name: "existing valid org slug (not default)",
@@ -345,51 +323,29 @@ func TestResolveOrganization(t *testing.T) {
 				mock.EXPECT().GetOrgIdFromSlug("my-org").Return("33333333-3333-3333-3333-333333333333", nil)
 				mock.EXPECT().GetDefaultOrgId().Return("22222222-2222-2222-2222-222222222222", nil)
 			},
-			expectedOrgId:    "33333333-3333-3333-3333-333333333333",
-			inputDir:         tempDir,
-			existingOrgValue: "my-org",
+			expectedOrgId: "33333333-3333-3333-3333-333333333333",
+			inputDir:      tempDir,
+			existingOrgID: "my-org",
 		},
 		{
-			name: "existing org slug is default, fallback to LDX-Sync preferred",
-			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
-				mock.EXPECT().
-					GetConfigWithResponse(gomock.Any(), gomock.Any()).
-					Return(&v20241015.GetConfigResponse{
-						JSON200: &v20241015.ConfigResponse{
-							Data: v20241015.ConfigResource{
-								Attributes: v20241015.ConfigAttributes{
-									ConfigData: v20241015.ConfigData{
-										FolderConfigs: &[]v20241015.FolderConfig{
-											{
-												Organizations: &[]v20241015.Organization{
-													{Id: "ldx-preferred-org", PreferredByAlgorithm: boolPtr(true)},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
-					}, nil)
-			},
+			name: "existing org slug is default, returns existing org",
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
 				mock.EXPECT().GetOrgIdFromSlug("default-org-slug").Return("11111111-1111-1111-1111-111111111111", nil)
 				mock.EXPECT().GetDefaultOrgId().Return("11111111-1111-1111-1111-111111111111", nil)
 			},
-			expectedOrgId:    "ldx-preferred-org",
-			inputDir:         tempDir,
-			existingOrgValue: "default-org-slug",
+			expectedOrgId: "11111111-1111-1111-1111-111111111111",
+			inputDir:      tempDir,
+			existingOrgID: "default-org-slug",
 		},
 		{
 			name: "existing invalid org slug",
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
 				mock.EXPECT().GetOrgIdFromSlug("invalid-org").Return("", errors.New("not found"))
 			},
-			expectedOrgId:    "",
-			expectedErr:      errors.New("not found"),
-			inputDir:         tempDir,
-			existingOrgValue: "invalid-org",
+			expectedOrgId: "",
+			expectedErr:   errors.New("not found"),
+			inputDir:      tempDir,
+			existingOrgID: "invalid-org",
 		},
 		{
 			name: "LDX fails, fallback to API default org fails",
@@ -401,10 +357,10 @@ func TestResolveOrganization(t *testing.T) {
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
 				mock.EXPECT().GetDefaultOrgId().Return("", errors.New("api is down"))
 			},
-			expectedOrgId:    "",
-			expectedErr:      errors.New("api is down"),
-			inputDir:         tempDir,
-			existingOrgValue: "",
+			expectedOrgId: "",
+			expectedErr:   errors.New("api is down"),
+			inputDir:      tempDir,
+			existingOrgID: "",
 		},
 	}
 
@@ -435,14 +391,14 @@ func TestResolveOrganization(t *testing.T) {
 
 			config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
-			result, err := ResolveOrganization(config, mockEngine, &logger, tt.inputDir, tt.existingOrgValue)
+			result, err := ResolveOrganization(config, mockEngine, &logger, tt.inputDir, tt.existingOrgID)
 			if tt.expectedErr != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedErr, err)
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, tt.expectedOrgId, result)
+			assert.Equal(t, tt.expectedOrgId, result.Id)
 		})
 	}
 }

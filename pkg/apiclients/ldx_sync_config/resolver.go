@@ -22,11 +22,18 @@ type LdxSyncConfigResult struct {
 	Error       error
 }
 
+// Organization is the struct we return to consumers. We redefine it so that consumers don't need to be aware of the
+// LDX-Sync api version.
+// For the initial release pf LDX-Sync they are identical so we use an alias.
+type Organization v20241015.Organization
+
 // newClient is a variable that holds the function to create a new LDX-Sync client.
 // It can be replaced in tests to inject a mock client.
 var (
 	newClient    = newClientImpl
 	newApiClient = newApiClientImpl
+	boolTrue     = true  // Defined so we can create pointers
+	boolFalse    = false // Defined so we can create pointers
 )
 
 func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
@@ -91,11 +98,21 @@ func getLdxSyncConfig(ldxClient v20241015.ClientWithResponsesInterface, orgId st
 // 2. Tries to find a preferred organization from LDX-Sync folder configurations.
 // 3. Falls back to the user's default organization from LDX-Sync.
 // 4. Falls back to the user's default organization from the Snyk API.
-func ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string, existingOrgValue any) (string, error) {
+
+// TODO typealias Org struct
+
+// TODO get user default
+
+// TODO: Change existingOrgValue to string. Return Org struct
+func ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string, existingOrgID string) (Organization, error) {
 	apiClient := newApiClient(engine, config)
 	// 1. Handle existing organization value
-	if orgId, err := handleExistingOrganization(existingOrgValue, apiClient, logger); orgId != "" || err != nil {
-		return orgId, err
+	org, err := handleExistingOrganization(existingOrgID, apiClient, logger)
+	if err != nil {
+		return Organization{}, err
+	}
+	if org.Id != "" {
+		return org, nil
 	}
 
 	// 2. Try LDX-Sync resolution
@@ -115,13 +132,13 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 
 	// Try to find preferred organization from folder configs
 	if configData.FolderConfigs != nil && len(*configData.FolderConfigs) > 0 {
-		// taking first folder config, because currently repo can have only 1 folderconfig
+		// taking first folder config, because currently repo can have only 1 folder config
 		firstFolderConfig := (*configData.FolderConfigs)[0]
 		if firstFolderConfig.Organizations != nil {
 			for _, org := range *firstFolderConfig.Organizations {
 				if org.PreferredByAlgorithm != nil && *org.PreferredByAlgorithm {
 					logger.Debug().Str("orgId", org.Id).Str("remoteUrl", cfgResult.RemoteUrl).Str("projectRoot", cfgResult.ProjectRoot).Msg("Resolved organization via LDX-Sync")
-					return org.Id, nil
+					return Organization(org), nil
 				}
 			}
 		}
@@ -134,56 +151,59 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 	return fallbackOrganization(&configData, apiClient, cfgResult.RemoteUrl, logger)
 }
 
-func handleExistingOrganization(existingValue any, apiClient api.ApiClient, logger *zerolog.Logger) (string, error) {
-	existingString, ok := existingValue.(string)
-	if existingValue == nil || !ok || len(existingString) == 0 {
-		logger.Debug().Msg("Existing organization value provided is not a string")
-		return "", nil
+func GetDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (Organization, error) {
+	defaultOrgId, err := apiClient.GetDefaultOrgId()
+	if err != nil {
+		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+		return Organization{}, err
 	}
 
-	orgId := existingString
-	_, err := uuid.Parse(orgId)
+	return Organization{Id: defaultOrgId, IsDefault: &boolTrue}, nil
+}
+
+func handleExistingOrganization(existingOrgID string, apiClient api.ApiClient, logger *zerolog.Logger) (Organization, error) {
+	if len(existingOrgID) == 0 {
+		logger.Debug().Msg("Existing organization value provided is not a string")
+		return Organization{}, nil
+	}
+
+	_, err := uuid.Parse(existingOrgID)
 	isSlugName := err != nil
 
 	if isSlugName {
-		orgId, err = apiClient.GetOrgIdFromSlug(existingString)
+		existingOrgID, err = apiClient.GetOrgIdFromSlug(existingOrgID)
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
-			return "", err
+			return Organization{}, err
 		}
 	}
 
-	defaultOrgId, err := apiClient.GetDefaultOrgId()
+	defaultOrg, err := GetDefaultOrganization(apiClient, logger)
 	if err != nil {
-		logger.Print("Failed to determine default value, so can't compare to the existing value, for \"ORGANIZATION\":", err)
-		return orgId, nil
+		// If we can't get the default org, we can't compare, so return the existing org
+		return Organization{Id: existingOrgID, IsDefault: &boolTrue}, nil
 	}
 
 	// special case for migrating users from defaultOrg to ldx-sync based one
-	if defaultOrgId == orgId {
-		return "", nil
+	if defaultOrg.Id == existingOrgID {
+		return Organization{Id: existingOrgID, IsDefault: &boolTrue}, nil
 	}
 
-	return orgId, nil
+	return Organization{Id: existingOrgID, IsDefault: &boolFalse}, nil
 }
 
-func fallbackOrganization(configData *v20241015.ConfigData, apiClient api.ApiClient, remoteUrl string, logger *zerolog.Logger) (string, error) {
+func fallbackOrganization(configData *v20241015.ConfigData, apiClient api.ApiClient, remoteUrl string, logger *zerolog.Logger) (Organization, error) {
 	// Fallback to default user organization from LDX-Sync response
 	if configData != nil && configData.Organizations != nil {
 		for _, org := range *configData.Organizations {
 			if org.IsDefault != nil && *org.IsDefault {
 				logger.Debug().Str("orgId", org.Id).Str("remoteUrl", remoteUrl).Msg("Resolved organization via LDX-Sync fallback (user default)")
-				return org.Id, nil
+				return Organization(org), nil
 			}
 		}
 		logger.Debug().Str("remoteUrl", remoteUrl).Msg("No default organization found in LDX-Sync config, falling back to API default")
 	}
 
 	// Fallback to default org resolution from API
-	orgId, err := apiClient.GetDefaultOrgId()
-	if err != nil {
-		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
-		return "", err
-	}
-	return orgId, nil
+	return GetDefaultOrganization(apiClient, logger)
 }
