@@ -393,11 +393,12 @@ func TestResolveOrganization(t *testing.T) {
 			existingOrgID: "invalid-org",
 		},
 		{
-			name: "existing org ID, GetDefaultOrgId fails, returns existing org",
+			name: "existing org ID, GetDefaultOrgId fails, returns error",
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
 				mock.EXPECT().GetDefaultOrgId().Return("", errors.New("api error"))
 			},
-			expectedOrgId: "123e4567-e89b-12d3-a456-426614174000",
+			expectedOrgId: "",
+			expectedErr:   errors.New("api error"),
 			inputDir:      tempDir,
 			existingOrgID: "123e4567-e89b-12d3-a456-426614174000",
 		},
