@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -764,17 +765,17 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 	testData := setupTestScenario(t)
 
 	expectedAPIErrors := &[]testapi.IoSnykApiCommonError{
-		{Detail: "Test error 1", Status: "500", Code: ptr("SNYK-ERROR-4001")},
-		{Detail: "Test error 2", Status: "400", Code: ptr("SNYK-ERROR-4002"), Title: ptr("Error 2")},
+		{Detail: "Test error 1", Status: "500", Code: utils.Ptr("SNYK-ERROR-4001")},
+		{Detail: "Test error 2", Status: "400", Code: utils.Ptr("SNYK-ERROR-4002"), Title: utils.Ptr("Error 2")},
 	}
 	expectedAPIWarnings := &[]testapi.IoSnykApiCommonError{
-		{Detail: "Test warning 1", Status: "200", Code: ptr("SNYK-WARN-4003")},
-		{Detail: "Test warning 2", Status: "200", Code: ptr("SNYK-WARN-4004"), Title: ptr("Warning 2")},
+		{Detail: "Test warning 1", Status: "200", Code: utils.Ptr("SNYK-WARN-4003")},
+		{Detail: "Test warning 2", Status: "200", Code: utils.Ptr("SNYK-WARN-4004"), Title: utils.Ptr("Warning 2")},
 	}
 	failReason := testapi.TestOutcomeReasonPolicyBreach
 	expectedBreachedPolicies := &testapi.PolicyRefSet{
 		Ids:         []uuid.UUID{uuid.New()},
-		LocalPolicy: ptr(true),
+		LocalPolicy: utils.Ptr(true),
 	}
 
 	params := testapi.StartTestParams{

@@ -599,8 +599,3 @@ func mockListFindingsResponse(t *testing.T, nextLink *string, hasData bool) []by
 	require.NoError(t, err)
 	return responseBodyBytes
 }
-
-// ptr returns a pointer to the given value. Useful for optional fields.
-func ptr[T any](v T) *T {
-	return &v
-}

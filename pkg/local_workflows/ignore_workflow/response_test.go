@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	v20241015 "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
+	utils2 "github.com/snyk/go-application-framework/pkg/utils"
 )
 
 func TestPolicyReviewToSarifStatus(t *testing.T) {
@@ -72,7 +73,7 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 				CreatedAt: now,
 				CreatedBy: &v20241015.Principal{
 					Name:  expectedUserName,
-					Email: stringPtr(expectedEmail),
+					Email: utils2.Ptr(expectedEmail),
 				},
 				Action: v20241015.PolicyActionIgnore{
 					Data: v20241015.PolicyActionIgnoreData{
@@ -110,7 +111,7 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 				CreatedAt: now,
 				CreatedBy: &v20241015.Principal{
 					Name:  expectedUserName,
-					Email: stringPtr(expectedEmail),
+					Email: utils2.Ptr(expectedEmail),
 				},
 				Action: v20241015.PolicyActionIgnore{
 					Data: v20241015.PolicyActionIgnoreData{
@@ -164,7 +165,7 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 						CreatedAt: now,
 						CreatedBy: &v20241015.Principal{
 							Name:  expectedUserName,
-							Email: stringPtr(expectedEmail),
+							Email: utils2.Ptr(expectedEmail),
 						},
 						Action: v20241015.PolicyActionIgnore{
 							Data: v20241015.PolicyActionIgnoreData{
@@ -183,9 +184,4 @@ func TestPolicyResponseToSarifSuppression(t *testing.T) {
 			})
 		}
 	})
-}
-
-// Helper function to create string pointers
-func stringPtr(s string) *string {
-	return &s
 }
