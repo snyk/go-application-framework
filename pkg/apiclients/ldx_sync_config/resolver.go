@@ -3,6 +3,7 @@ package ldx_sync_config
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -38,8 +39,11 @@ var (
 
 func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
 	client := engine.GetNetworkAccess().GetHttpClient()
-	url := config.GetString(configuration.API_URL)
-	return v20241015.NewClientWithResponses(url, v20241015.WithHTTPClient(client))
+	url2, err := url.JoinPath(config.GetString(configuration.API_URL), "rest")
+	if err != nil {
+		return nil, err
+	}
+	return v20241015.NewClientWithResponses(url2, v20241015.WithHTTPClient(client))
 }
 
 func newApiClientImpl(engine workflow.Engine, config configuration.Configuration) api.ApiClient {
@@ -60,9 +64,15 @@ func getLdxSyncConfig(ldxClient v20241015.ClientWithResponsesInterface, orgId st
 	}
 
 	params := &v20241015.GetConfigParams{
-		Version:   "2024-10-15",
-		RemoteUrl: &remoteUrl,
-		Org:       &orgId,
+		Version: "2024-10-15",
+	}
+
+	if orgId != "" {
+		params.Org = &orgId
+	}
+
+	if remoteUrl != "" {
+		params.RemoteUrl = &remoteUrl
 	}
 
 	response, err := ldxClient.GetConfigWithResponse(context.Background(), params)
@@ -179,9 +189,9 @@ func handleExistingOrganization(existingOrgID string, apiClient api.ApiClient, l
 		return Organization{Id: existingOrgID, IsDefault: &boolFalse}, nil
 	}
 
-	// If the existing org is the default org, return it
+	// If the existing org is the default org, return an empty organization so we use the LDX-Sync resolution
 	if defaultOrg.Id == existingOrgID {
-		return defaultOrg, nil
+		return Organization{}, nil
 	}
 
 	return Organization{Id: existingOrgID, IsDefault: &boolFalse}, nil
