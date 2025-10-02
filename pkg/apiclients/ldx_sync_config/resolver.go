@@ -3,7 +3,7 @@ package ldx_sync_config
 import (
 	"context"
 	"fmt"
-	"net/url"
+	url2 "net/url"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -38,11 +38,11 @@ var (
 
 func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
 	client := engine.GetNetworkAccess().GetHttpClient()
-	url2, err := url.JoinPath(config.GetString(configuration.API_URL), "rest")
+	url, err := url2.JoinPath(config.GetString(configuration.API_URL), "rest")
 	if err != nil {
 		return nil, err
 	}
-	return v20241015.NewClientWithResponses(url2, v20241015.WithHTTPClient(client))
+	return v20241015.NewClientWithResponses(url, v20241015.WithHTTPClient(client))
 }
 
 func newApiClientImpl(engine workflow.Engine, config configuration.Configuration) api.ApiClient {

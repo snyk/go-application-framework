@@ -310,7 +310,7 @@ func TestResolveOrganization(t *testing.T) {
 			existingOrgID: "123e4567-e89b-12d3-a456-426614174000",
 		},
 		{
-			name: "existing org ID is default, continues to LDX-Sync preferred",
+			name: "existing org ID is default, return LDX-Sync preferred",
 			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
@@ -351,7 +351,7 @@ func TestResolveOrganization(t *testing.T) {
 			existingOrgID: "my-org",
 		},
 		{
-			name: "existing org slug is default, continues to LDX-Sync preferred",
+			name: "existing org slug is default, return LDX-Sync preferred",
 			setupMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
