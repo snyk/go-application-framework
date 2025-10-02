@@ -5,11 +5,9 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
-)
 
-func stringPtr(s string) *string {
-	return &s
-}
+	"github.com/snyk/go-application-framework/pkg/utils"
+)
 
 func Test_mapSuppressions(t *testing.T) {
 	validUUID1 := "3b3b7c0c-7b1e-4b0e-8b0a-0b0b0b0b0b0b"
@@ -57,7 +55,7 @@ func Test_mapSuppressions(t *testing.T) {
 						Email: "",
 					},
 				},
-				Justification: stringPtr("Test justification"),
+				Justification: utils.Ptr("Test justification"),
 				Status:        TypesSuppressionStatus(sarif.Accepted),
 			},
 		},
@@ -73,7 +71,7 @@ func Test_mapSuppressions(t *testing.T) {
 							Category:   "fullCategory",
 							Expiration: &expirationDate,
 							IgnoredOn:  "2023-02-01T00:00:00Z",
-							IgnoredBy:  sarif.IgnoredBy{Name: "Admin User", Email: stringPtr("admin@example.com")},
+							IgnoredBy:  sarif.IgnoredBy{Name: "Admin User", Email: utils.Ptr("admin@example.com")},
 						},
 					},
 				},
@@ -89,7 +87,7 @@ func Test_mapSuppressions(t *testing.T) {
 						Email: "admin@example.com",
 					},
 				},
-				Justification: stringPtr("Full details justification"),
+				Justification: utils.Ptr("Full details justification"),
 				Status:        TypesSuppressionStatus(sarif.Accepted),
 			},
 		},
@@ -119,7 +117,7 @@ func Test_mapSuppressions(t *testing.T) {
 						Email: "",
 					},
 				},
-				Justification: stringPtr("Missing GUID test"),
+				Justification: utils.Ptr("Missing GUID test"),
 				Status:        TypesSuppressionStatus(sarif.Accepted),
 			},
 		},
@@ -133,7 +131,7 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 			expectedSupp: &TypesSuppression{
 				Id:            &validUUID2,
-				Justification: stringPtr("Accepted"),
+				Justification: utils.Ptr("Accepted"),
 				Details: &TypesSuppressionDetails{
 					Category:   "cat2",
 					Expiration: nil,
@@ -152,7 +150,7 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 			expectedSupp: &TypesSuppression{
 				Id:            &validUUID1,
-				Justification: stringPtr("Under review"),
+				Justification: utils.Ptr("Under review"),
 				Details: &TypesSuppressionDetails{
 					Category:   "reviewCategory",
 					Expiration: nil,
@@ -171,7 +169,7 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 			expectedSupp: &TypesSuppression{
 				Id:            &validUUID1,
-				Justification: stringPtr("Rejected"),
+				Justification: utils.Ptr("Rejected"),
 				Details: &TypesSuppressionDetails{
 					Category:   "rejectedCategory",
 					Expiration: nil,

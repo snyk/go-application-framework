@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=testapi.go -destination ../mocks/testapi.go -package mocks -imports testapi=github.com/snyk/go-application-framework/pkg/apiclients/testapi
@@ -598,7 +599,7 @@ func (r *testResult) fetchFindingsInternal(ctx context.Context) ([]FindingData, 
 
 	listParams := &ListFindingsParams{
 		Version: r.handle.client.config.APIVersion,
-		Limit:   ptr(int8(MaxFindingsPerPage)),
+		Limit:   utils.Ptr(int8(MaxFindingsPerPage)),
 	}
 
 	for {
@@ -699,11 +700,6 @@ func (r *testResult) handleFindingsError(err error, partialFindings []FindingDat
 		return partialFindings, false, fmt.Errorf("%w, returning partial results", err)
 	}
 	return nil, false, err
-}
-
-// ptr returns a pointer to the given value. Useful for optional fields.
-func ptr[T any](v T) *T {
-	return &v
 }
 
 // Jitter returns a random duration between 0.5 and 1.5 of the given duration.

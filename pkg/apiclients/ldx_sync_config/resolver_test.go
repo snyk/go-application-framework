@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -73,12 +74,12 @@ func TestResolveOrganization(t *testing.T) {
 										FolderConfigs: &[]v20241015.FolderConfig{
 											{
 												Organizations: &[]v20241015.Organization{
-													{Id: "org-preferred", PreferredByAlgorithm: boolPtr(true)},
+													{Id: "org-preferred", PreferredByAlgorithm: utils.Ptr(true)},
 												},
 											},
 										},
 										Organizations: &[]v20241015.Organization{
-											{Id: "org-default", IsDefault: boolPtr(true)},
+											{Id: "org-default", IsDefault: utils.Ptr(true)},
 										},
 									},
 								},
@@ -104,7 +105,7 @@ func TestResolveOrganization(t *testing.T) {
 										FolderConfigs: &[]v20241015.FolderConfig{
 											{
 												Organizations: &[]v20241015.Organization{
-													{Id: "org-preferred-vnd", PreferredByAlgorithm: boolPtr(true)},
+													{Id: "org-preferred-vnd", PreferredByAlgorithm: utils.Ptr(true)},
 												},
 											},
 										},
@@ -132,12 +133,12 @@ func TestResolveOrganization(t *testing.T) {
 										FolderConfigs: &[]v20241015.FolderConfig{
 											{
 												Organizations: &[]v20241015.Organization{
-													{Id: "org-other", PreferredByAlgorithm: boolPtr(false)},
+													{Id: "org-other", PreferredByAlgorithm: utils.Ptr(false)},
 												},
 											},
 										},
 										Organizations: &[]v20241015.Organization{
-											{Id: "org-default", IsDefault: boolPtr(true)},
+											{Id: "org-default", IsDefault: utils.Ptr(true)},
 										},
 									},
 								},
@@ -163,13 +164,13 @@ func TestResolveOrganization(t *testing.T) {
 										FolderConfigs: &[]v20241015.FolderConfig{
 											{
 												Organizations: &[]v20241015.Organization{
-													{Id: "org-1", PreferredByAlgorithm: boolPtr(false)},
+													{Id: "org-1", PreferredByAlgorithm: utils.Ptr(false)},
 													{Id: "org-2"},
 												},
 											},
 										},
 										Organizations: &[]v20241015.Organization{
-											{Id: "org-3", IsDefault: boolPtr(false)},
+											{Id: "org-3", IsDefault: utils.Ptr(false)},
 										},
 									},
 								},
@@ -197,7 +198,7 @@ func TestResolveOrganization(t *testing.T) {
 											{},
 										},
 										Organizations: &[]v20241015.Organization{
-											{Id: "org-default", IsDefault: boolPtr(true)},
+											{Id: "org-default", IsDefault: utils.Ptr(true)},
 										},
 									},
 								},
@@ -222,7 +223,7 @@ func TestResolveOrganization(t *testing.T) {
 									ConfigData: v20241015.ConfigData{
 										FolderConfigs: nil,
 										Organizations: &[]v20241015.Organization{
-											{Id: "org-default", IsDefault: boolPtr(true)},
+											{Id: "org-default", IsDefault: utils.Ptr(true)},
 										},
 									},
 								},
@@ -401,9 +402,4 @@ func TestResolveOrganization(t *testing.T) {
 			assert.Equal(t, tt.expectedOrgId, result.Id)
 		})
 	}
-}
-
-// Helper function to create bool pointers
-func boolPtr(b bool) *bool {
-	return &b
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
@@ -33,8 +34,6 @@ type Organization v20241015.Organization
 var (
 	newClient    = newClientImpl
 	newApiClient = newApiClientImpl
-	boolTrue     = true  // Defined so we can create pointers
-	boolFalse    = false // Defined so we can create pointers
 )
 
 func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
@@ -163,7 +162,7 @@ func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (Or
 		return Organization{}, err
 	}
 
-	return Organization{Id: defaultOrgId, IsDefault: &boolTrue}, nil
+	return Organization{Id: defaultOrgId, IsDefault: utils.Ptr(true)}, nil
 }
 
 func handleExistingOrganization(existingOrgID string, apiClient api.ApiClient, logger *zerolog.Logger) (Organization, error) {
@@ -186,7 +185,7 @@ func handleExistingOrganization(existingOrgID string, apiClient api.ApiClient, l
 	defaultOrg, err := getDefaultOrganization(apiClient, logger)
 	if err != nil {
 		// If we can't get the default org, we can't compare, so return the existing org
-		return Organization{Id: existingOrgID, IsDefault: &boolFalse}, nil
+		return Organization{Id: existingOrgID, IsDefault: utils.Ptr(false)}, nil
 	}
 
 	// If the existing org is the default org, return an empty organization so we use the LDX-Sync resolution
@@ -194,7 +193,7 @@ func handleExistingOrganization(existingOrgID string, apiClient api.ApiClient, l
 		return Organization{}, nil
 	}
 
-	return Organization{Id: existingOrgID, IsDefault: &boolFalse}, nil
+	return Organization{Id: existingOrgID, IsDefault: utils.Ptr(false)}, nil
 }
 
 func fallbackOrganization(configData *v20241015.ConfigData, apiClient api.ApiClient, remoteUrl string, logger *zerolog.Logger) (Organization, error) {
