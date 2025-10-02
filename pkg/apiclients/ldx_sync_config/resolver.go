@@ -185,7 +185,7 @@ func handleExistingOrganization(existingOrgID string, apiClient api.ApiClient, l
 	defaultOrg, err := getDefaultOrganization(apiClient, logger)
 	if err != nil {
 		// If we can't get the default org, we can't compare, so return the existing org
-		return Organization{Id: existingOrgID, IsDefault: utils.Ptr(false)}, nil
+		return Organization{Id: existingOrgID, IsDefault: utils.Ptr(false)}, err
 	}
 
 	// If the existing org is the default org, return an empty organization so we use the LDX-Sync resolution
