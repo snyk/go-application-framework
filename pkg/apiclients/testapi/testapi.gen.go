@@ -67,6 +67,13 @@ const (
 	FindingTypeSca   FindingType = "sca"
 )
 
+// Defines values for FixAppliedOutcome.
+const (
+	FullyResolved     FixAppliedOutcome = "fully_resolved"
+	PartiallyResolved FixAppliedOutcome = "partially_resolved"
+	Unresolved        FixAppliedOutcome = "unresolved"
+)
+
 // Defines values for GitUrlCoordinatesSubjectType.
 const (
 	GitUrlCoordinates GitUrlCoordinatesSubjectType = "git_url_coordinates"
@@ -128,6 +135,11 @@ const (
 	Pass PassFail = "pass"
 )
 
+// Defines values for PinPackageActionType.
+const (
+	PinPackage PinPackageActionType = "pin_package"
+)
+
 // Defines values for PolicyRef0.
 const (
 	PolicyRef0LocalPolicy PolicyRef0 = "local_policy"
@@ -146,6 +158,13 @@ const (
 // Defines values for ReachabilityEvidenceSource.
 const (
 	Reachability ReachabilityEvidenceSource = "reachability"
+)
+
+// Defines values for ReachabilityFilter.
+const (
+	ReachabilityFilterNoInfo      ReachabilityFilter = "no_info"
+	ReachabilityFilterNoPathFound ReachabilityFilter = "no_path_found"
+	ReachabilityFilterReachable   ReachabilityFilter = "reachable"
 )
 
 // Defines values for ReachabilityType.
@@ -238,6 +257,11 @@ const (
 	TestOutcomeReasonTimeout      TestOutcomeReason = "timeout"
 )
 
+// Defines values for UpgradePackageActionType.
+const (
+	UpgradePackage UpgradePackageActionType = "upgrade_package"
+)
+
 // Defines values for IoSnykApiCommonJsonApiVersion.
 const (
 	N10 IoSnykApiCommonJsonApiVersion = "1.0"
@@ -262,8 +286,13 @@ const (
 
 // Defines values for SnykvulndbOtherPackageEcosystemType.
 const (
-	SnykvulndbOtherPackageEcosystemTypeOther SnykvulndbOtherPackageEcosystemType = "other"
+	Other SnykvulndbOtherPackageEcosystemType = "other"
 )
+
+// Action Different types of managed OS package fix actions
+type Action struct {
+	union json.RawMessage
+}
 
 // ActualVersion Resolved API version
 type ActualVersion = string
@@ -506,6 +535,19 @@ type FindingData struct {
 			Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
 		} `json:"asset,omitempty"`
 
+		// Fix Fix for this finding, it comes expanded with all data preloaded
+		Fix *struct {
+			Data *struct {
+				// Attributes Inlined attributes included in the relationship, if it is expanded.
+				//
+				// Expansion is a Snyk variation on JSON API. See
+				// https://snyk.roadie.so/docs/default/component/sweater-comb/standards/rest/#expansion
+				Attributes *FixAttributes     `json:"attributes,omitempty"`
+				Id         openapi_types.UUID `json:"id"`
+				Type       string             `json:"type"`
+			} `json:"data,omitempty"`
+		} `json:"fix,omitempty"`
+
 		// Org Snyk organization scope in which the finding was discovered.
 		Org *struct {
 			Data *struct {
@@ -564,6 +606,18 @@ type FindingSummary struct {
 
 // FindingType Type of Finding which was discovered.
 type FindingType string
+
+// FixAppliedOutcome Indicates the outcome of a fix in terms of resolving the finding at hand
+type FixAppliedOutcome string
+
+// FixAttributes FixAttributes is the main payload modelling a fix
+type FixAttributes struct {
+	// Actions Different types of managed OS package fix actions
+	Actions *Action `json:"actions,omitempty"`
+
+	// Outcome Indicates whether applying these actions will address the finding or not
+	Outcome FixAppliedOutcome `json:"outcome"`
+}
 
 // GitUrlCoordinatesSubject Test subject representing a source tree located in a Git repository that
 // has a Snyk SCM integration.
@@ -670,6 +724,9 @@ type LocalPolicy struct {
 	//    dependency. E.g. bumping lodash from 1.1.1 to 1.1.2.
 	FailOnUpgradable *bool `json:"fail_on_upgradable,omitempty"`
 
+	// ReachabilityFilter Represent various reachability filters available for findings.
+	ReachabilityFilter *ReachabilityFilter `json:"reachability_filter,omitempty"`
+
 	// RiskScoreThreshold Findings of equal or greater risk score will fail the test.
 	RiskScoreThreshold *uint16 `json:"risk_score_threshold,omitempty"`
 
@@ -761,6 +818,25 @@ type PackageLocationType string
 
 // PassFail Indicate whether a Test passes or fails.
 type PassFail string
+
+// PinPackageAction Pin a package at a specific version. Pinning is a capability not supported
+// by all ecosystems, which causes a transitive dependency to be pinned at
+// a specific version with an override.
+//
+// For example, the `replace` go.mod directive can override package dependency
+// constraints, forcing a specific version to be used in the application.
+//
+// Pinning could break an application.
+//
+// Note: In practice pin actions today are solely used in python pip's packages as pip does not calculate upgrade paths
+type PinPackageAction struct {
+	PackageName string               `json:"package_name"`
+	PinVersion  string               `json:"pin_version"`
+	Type        PinPackageActionType `json:"type"`
+}
+
+// PinPackageActionType defines model for PinPackageAction.Type.
+type PinPackageActionType string
 
 // PolicyModification Prior attribute values and the reason they were modified.
 type PolicyModification struct {
@@ -860,6 +936,9 @@ type ReachabilityEvidence struct {
 // ReachabilityEvidenceSource defines model for ReachabilityEvidence.Source.
 type ReachabilityEvidenceSource string
 
+// ReachabilityFilter Represent various reachability filters available for findings.
+type ReachabilityFilter string
+
 // ReachabilityType Reachability enum for reachability signal.
 type ReachabilityType string
 
@@ -903,7 +982,7 @@ type SbomReachabilitySubject struct {
 // SbomReachabilitySubjectType defines model for SbomReachabilitySubject.Type.
 type SbomReachabilitySubjectType string
 
-// SbomSubject Test subject for SBOM test with reachability analysis.
+// SbomSubject Test subject for SBOM test without reachability analysis.
 type SbomSubject struct {
 	// Locator Locate the local paths from which the SBOM and source code were derived.
 	Locator LocalPathLocator `json:"locator"`
@@ -996,6 +1075,10 @@ type SnykLicenseProblem struct {
 	// as those publicly distributed.
 	Ecosystem SnykvulndbPackageEcosystem `json:"ecosystem"`
 	Id        string                     `json:"id"`
+
+	// Instructions License policy instructions. Legal instructions for the user on what to do
+	// when met with the license policy violation.
+	Instructions []SnykvulndbLicenseInstructions `json:"instructions"`
 
 	// License Software license identifier.
 	License string `json:"license"`
@@ -1356,6 +1439,33 @@ type TimeoutSpec struct {
 	Seconds uint32   `json:"seconds"`
 }
 
+// UpgradePackageAction Upgrade a package from one version to another.
+type UpgradePackageAction struct {
+	// PackageName The package that's receiving an upgrade to fix this vulnerability
+	PackageName string                   `json:"package_name"`
+	Type        UpgradePackageActionType `json:"type"`
+
+	// UpgradePaths Upgrading a package may lead to one or more paths to change. These paths are modelled as evidence
+	// in DependencyPathEvidence.
+	//
+	// Ultimately upgradePaths illustrates the minimum version upgrades that need to happen to apply this action.
+	UpgradePaths []UpgradePath `json:"upgrade_paths"`
+}
+
+// UpgradePackageActionType defines model for UpgradePackageAction.Type.
+type UpgradePackageActionType string
+
+// UpgradePath Upgrade path model all known dependency paths that will change when applying an upgrade action.
+type UpgradePath struct {
+	DependencyPath []Package `json:"dependency_path"`
+
+	// IsDrop A drop describes an upgrade path, where the vulnerability gets addressed by removing the vulnerable dependency.
+	// This typically happens when a package somewhere mid-way drops this library in newer versions.
+	//
+	// Note: For drops, the length of the upgradePath will be smaller than the length of the original dependencyPath.
+	IsDrop bool `json:"is_drop"`
+}
+
 // Uuid defines model for Uuid.
 type Uuid = openapi_types.UUID
 
@@ -1629,6 +1739,19 @@ type SnykvulndbExploitMaturityLevel struct {
 	Type SnykvulndbCvssSourceType `json:"type"`
 }
 
+// SnykvulndbLicenseInstructions License instructions are free-form, customer defined messages typically provided
+// by application security or legal teams. They appear in the CLI alongside detected
+// license violations to guide developers on how to handle specific licenses in their
+// dependencies.
+type SnykvulndbLicenseInstructions struct {
+	// Content License policy instructions. Legal instructions for the user on what to do
+	// when met with the license policy violation.
+	Content string `json:"content"`
+
+	// License Software license identifier.
+	License string `json:"license"`
+}
+
 // SnykvulndbOsPackageEcosystem Software packages supporting operating system software installation and
 // upgrades.
 //
@@ -1748,7 +1871,6 @@ type GetJobParams struct {
 	//
 	// The identifier is an opaque string. though at the time of writing it may either be a
 	// uuid or a urn containing a uuid and some metadata.
-	// to be safe, the
 	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
 }
 
@@ -1766,7 +1888,6 @@ type CreateTestParams struct {
 	//
 	// The identifier is an opaque string. though at the time of writing it may either be a
 	// uuid or a urn containing a uuid and some metadata.
-	// to be safe, the
 	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
 }
 
@@ -1784,7 +1905,6 @@ type GetTestParams struct {
 	//
 	// The identifier is an opaque string. though at the time of writing it may either be a
 	// uuid or a urn containing a uuid and some metadata.
-	// to be safe, the
 	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
 }
 
@@ -1811,7 +1931,6 @@ type ListFindingsParams struct {
 	//
 	// The identifier is an opaque string. though at the time of writing it may either be a
 	// uuid or a urn containing a uuid and some metadata.
-	// to be safe, the
 	SnykInteractionId *IoSnykApiRequestSnykApiRequestInteractionId `json:"snyk-interaction-id,omitempty"`
 }
 
@@ -2450,6 +2569,95 @@ func (a IoSnykApiV1testdepgraphRequestPackageManager) MarshalJSON() ([]byte, err
 		}
 	}
 	return json.Marshal(object)
+}
+
+// AsUpgradePackageAction returns the union data inside the Action as a UpgradePackageAction
+func (t Action) AsUpgradePackageAction() (UpgradePackageAction, error) {
+	var body UpgradePackageAction
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromUpgradePackageAction overwrites any union data inside the Action as the provided UpgradePackageAction
+func (t *Action) FromUpgradePackageAction(v UpgradePackageAction) error {
+	v.Type = "upgrade_package"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeUpgradePackageAction performs a merge with any union data inside the Action, using the provided UpgradePackageAction
+func (t *Action) MergeUpgradePackageAction(v UpgradePackageAction) error {
+	v.Type = "upgrade_package"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsPinPackageAction returns the union data inside the Action as a PinPackageAction
+func (t Action) AsPinPackageAction() (PinPackageAction, error) {
+	var body PinPackageAction
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPinPackageAction overwrites any union data inside the Action as the provided PinPackageAction
+func (t *Action) FromPinPackageAction(v PinPackageAction) error {
+	v.Type = "pin_package"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergePinPackageAction performs a merge with any union data inside the Action, using the provided PinPackageAction
+func (t *Action) MergePinPackageAction(v PinPackageAction) error {
+	v.Type = "pin_package"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t Action) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t Action) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "pin_package":
+		return t.AsPinPackageAction()
+	case "upgrade_package":
+		return t.AsUpgradePackageAction()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t Action) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *Action) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
 }
 
 // AsDependencyPathEvidence returns the union data inside the Evidence as a DependencyPathEvidence
