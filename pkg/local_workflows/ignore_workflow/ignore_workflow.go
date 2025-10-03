@@ -232,7 +232,7 @@ func ignoreCreateWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ 
 		return nil, err
 	}
 
-	payload := createPayload(repoUrl, branchName, expire, ignoreType, reason, findingsId)
+	payload := createPayload(invocationCtx, repoUrl, branchName, expire, ignoreType, reason, findingsId)
 	response, err := sendCreateIgnore(invocationCtx, payload, orgUuid)
 
 	if err != nil {
@@ -300,10 +300,24 @@ func createIgnoreWorkflowData(id workflow.Identifier, config configuration.Confi
 	return data, nil
 }
 
-func createPayload(repoUrl string, branchName string, expire *time.Time, ignoreType string, reason string, findingsId string) policyApi.CreatePolicyPayload {
+func createPayload(invocationCtx workflow.InvocationContext, repoUrl string, branchName string, expire *time.Time, ignoreType string, reason string, findingsId string) policyApi.CreatePolicyPayload {
 	meta := policyApi.Meta{}
 	meta["repo_url"] = repoUrl
 	meta["branch_name"] = branchName
+
+	// Determine source based on RuntimeInfo
+	var source *policyApi.PolicyAttributesSource
+	runtimeInfo := invocationCtx.GetRuntimeInfo()
+	if runtimeInfo != nil {
+		runtimeName := runtimeInfo.GetName()
+		if runtimeName == "snyk-ls" {
+			ideSource := policyApi.Ide
+			source = &ideSource
+		} else if runtimeName == "snyk-cli" {
+			cliSource := policyApi.Cli
+			source = &cliSource
+		}
+	}
 
 	var payload policyApi.CreateOrgPolicyApplicationVndAPIPlusJSONRequestBody
 	payload.Data.Meta = &meta
@@ -324,6 +338,7 @@ func createPayload(repoUrl string, branchName string, expire *time.Time, ignoreT
 		},
 		LogicalOperator: policyApi.And,
 	}
+	payload.Data.Attributes.Source = source
 	payload.Data.Type = policyApi.CreatePolicyPayloadDataTypePolicy
 	return payload
 }

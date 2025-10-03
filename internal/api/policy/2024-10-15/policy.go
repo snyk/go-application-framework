@@ -35,6 +35,15 @@ const (
 	PolicyAttributesActionTypeIgnore PolicyAttributesActionType = "ignore"
 )
 
+// Defines values for PolicyAttributesSource.
+const (
+	Api     PolicyAttributesSource = "api"
+	Cli     PolicyAttributesSource = "cli"
+	Ide     PolicyAttributesSource = "ide"
+	Unknown PolicyAttributesSource = "unknown"
+	Web     PolicyAttributesSource = "web"
+)
+
 // Defines values for PolicyConditionField.
 const (
 	Snykassetfindingv1 PolicyConditionField = "snyk/asset/finding/v1"
@@ -78,7 +87,6 @@ const (
 // Defines values for PolicyReview.
 const (
 	PolicyReviewApproved    PolicyReview = "approved"
-	PolicyReviewCancelled   PolicyReview = "cancelled"
 	PolicyReviewNotRequired PolicyReview = "not-required"
 	PolicyReviewPending     PolicyReview = "pending"
 	PolicyReviewRejected    PolicyReview = "rejected"
@@ -94,6 +102,34 @@ const (
 	UpdatePolicyReviewApproved UpdatePolicyReview = "approved"
 	UpdatePolicyReviewPending  UpdatePolicyReview = "pending"
 	UpdatePolicyReviewRejected UpdatePolicyReview = "rejected"
+)
+
+// Defines values for OrderBy.
+const (
+	OrderByCreated     OrderBy = "created"
+	OrderByExpires     OrderBy = "expires"
+	OrderByIgnoreType  OrderBy = "ignore-type"
+	OrderByRequestedBy OrderBy = "requested-by"
+)
+
+// Defines values for OrderDirection.
+const (
+	OrderDirectionAsc  OrderDirection = "asc"
+	OrderDirectionDesc OrderDirection = "desc"
+)
+
+// Defines values for GetOrgPoliciesParamsOrderBy.
+const (
+	GetOrgPoliciesParamsOrderByCreated     GetOrgPoliciesParamsOrderBy = "created"
+	GetOrgPoliciesParamsOrderByExpires     GetOrgPoliciesParamsOrderBy = "expires"
+	GetOrgPoliciesParamsOrderByIgnoreType  GetOrgPoliciesParamsOrderBy = "ignore-type"
+	GetOrgPoliciesParamsOrderByRequestedBy GetOrgPoliciesParamsOrderBy = "requested-by"
+)
+
+// Defines values for GetOrgPoliciesParamsOrderDirection.
+const (
+	GetOrgPoliciesParamsOrderDirectionAsc  GetOrgPoliciesParamsOrderDirection = "asc"
+	GetOrgPoliciesParamsOrderDirectionDesc GetOrgPoliciesParamsOrderDirection = "desc"
 )
 
 // ActualVersion Resolved API version
@@ -219,16 +255,23 @@ type PolicyAttributes struct {
 	ActionType      PolicyAttributesActionType `json:"action_type"`
 	ConditionsGroup PolicyConditionsGroup      `json:"conditions_group"`
 	Name            string                     `json:"name"`
+
+	// Source The source of the policy creation. Defaults to 'api' if not provided.
+	Source *PolicyAttributesSource `json:"source,omitempty"`
 }
 
 // PolicyAttributesActionType defines model for PolicyAttributes.ActionType.
 type PolicyAttributesActionType string
 
+// PolicyAttributesSource The source of the policy creation. Defaults to 'api' if not provided.
+type PolicyAttributesSource string
+
 // PolicyCondition defines model for PolicyCondition.
 type PolicyCondition struct {
 	// Field field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
 	// - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
-	// The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+	// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+	// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
 	Field PolicyConditionField `json:"field"`
 
 	// Operator Operator for the field to value matching. Currently
@@ -242,7 +285,8 @@ type PolicyCondition struct {
 
 // PolicyConditionField field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
 // - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
-// The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+// For a given issue, `snyk/asset/finding/v1` can be extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+// In addition, finding identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
 type PolicyConditionField string
 
 // PolicyConditionOperator Operator for the field to value matching. Currently
@@ -401,6 +445,12 @@ type EndingBefore = string
 // Limit defines model for Limit.
 type Limit = int32
 
+// OrderBy defines model for OrderBy.
+type OrderBy string
+
+// OrderDirection defines model for OrderDirection.
+type OrderDirection string
+
 // OrgId defines model for OrgId.
 type OrgId = openapi_types.UUID
 
@@ -409,6 +459,9 @@ type PolicyId = openapi_types.UUID
 
 // Review defines model for Review.
 type Review = []PolicyReview
+
+// Search defines model for Search.
+type Search = string
 
 // StartingAfter defines model for StartingAfter.
 type StartingAfter = string
@@ -448,6 +501,15 @@ type GetOrgPoliciesParams struct {
 	// Limit Number of results to return per page
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
+	// Search Search keyword for searching fields ignored_by.name, ignored_by.email, ignore_type in policy_rules
+	Search *Search `form:"search,omitempty" json:"search,omitempty"`
+
+	// OrderBy The column name to sort on
+	OrderBy *GetOrgPoliciesParamsOrderBy `form:"order_by,omitempty" json:"order_by,omitempty"`
+
+	// OrderDirection Sorting direction ASC/DESC
+	OrderDirection *GetOrgPoliciesParamsOrderDirection `form:"order_direction,omitempty" json:"order_direction,omitempty"`
+
 	// Review Policy rule review state e.g. approved
 	Review *Review `form:"review,omitempty" json:"review,omitempty"`
 
@@ -460,6 +522,12 @@ type GetOrgPoliciesParams struct {
 	// ExpiresNever Select only policies that never expire.
 	ExpiresNever *bool `form:"expires_never,omitempty" json:"expires_never,omitempty"`
 }
+
+// GetOrgPoliciesParamsOrderBy defines parameters for GetOrgPolicies.
+type GetOrgPoliciesParamsOrderBy string
+
+// GetOrgPoliciesParamsOrderDirection defines parameters for GetOrgPolicies.
+type GetOrgPoliciesParamsOrderDirection string
 
 // CreateOrgPolicyParams defines parameters for CreateOrgPolicy.
 type CreateOrgPolicyParams struct {
@@ -927,6 +995,54 @@ func NewGetOrgPoliciesRequest(server string, orgId OrgId, params *GetOrgPolicies
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Search != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "search", runtime.ParamLocationQuery, *params.Search); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.OrderBy != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order_by", runtime.ParamLocationQuery, *params.OrderBy); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.OrderDirection != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order_direction", runtime.ParamLocationQuery, *params.OrderDirection); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
