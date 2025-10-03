@@ -123,7 +123,7 @@ func UpdatePath(pathExtension string, prepend bool) string {
 	}
 
 	if currentPath == "" {
-		_ = os.Setenv(PathEnvVarName, pathExtension)
+		_ = os.Setenv(PathEnvVarName, pathExtension) //nolint:errcheck // Ignore lack of error handling
 		return pathExtension
 	}
 
@@ -140,6 +140,6 @@ func UpdatePath(pathExtension string, prepend bool) string {
 	newPathSlice := utils.Dedupe(combinedSliceWithDuplicates)
 
 	newPath := strings.Join(newPathSlice, string(os.PathListSeparator))
-	_ = os.Setenv(PathEnvVarName, newPath)
+	_ = os.Setenv(PathEnvVarName, newPath) //nolint:errcheck // Ignore lack of error handling
 	return newPath
 }

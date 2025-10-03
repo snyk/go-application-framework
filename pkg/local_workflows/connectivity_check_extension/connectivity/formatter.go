@@ -19,7 +19,7 @@ type Formatter struct {
 
 // output is a helper method that writes to the writer
 func (f *Formatter) output(str string) {
-	fmt.Fprintln(f.writer, str)
+	_, _ = fmt.Fprintln(f.writer, str) //nolint:errcheck // Ignore lack of error handling
 }
 
 // NewFormatter creates a new formatter using an io.Writer
