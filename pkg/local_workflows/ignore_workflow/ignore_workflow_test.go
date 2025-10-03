@@ -59,6 +59,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	mockUserInterface := mocks.NewMockUserInterface(ctrl)
 	mockEngine := mocks.NewMockEngine(ctrl)
+	mockRuntimeInfo := mocks.NewMockRuntimeInfo(ctrl)
 
 	mockUserInterface.EXPECT().Output(gomock.Any()).Return(nil).AnyTimes()
 	mockUserInterface.EXPECT().Input(gomock.Any()).Return("", nil).AnyTimes()
@@ -81,7 +82,9 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	invocationContextMock.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
 	invocationContextMock.EXPECT().GetUserInterface().Return(mockUserInterface).AnyTimes()
 	invocationContextMock.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(mockRuntimeInfo).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+	mockRuntimeInfo.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 	mockData := []workflow.Data{workflow.NewData(
 		workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "whoami"),
 		"text/plain",
@@ -167,22 +170,61 @@ func Test_createPolicy(t *testing.T) {
 }
 
 func Test_createPayload(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	expireDate, err := time.Parse(time.DateOnly, "2025-01-01")
 	assert.NoError(t, err)
 	ignoreType := string(policyApi.TemporaryIgnore)
 	reason := "Test reason"
 	findingsId := uuid.New().String()
 
-	payload := createPayload(testRepoUrl, testBranchName, &expireDate, ignoreType, reason, findingsId)
+	t.Run("with CLI source (snyk-cli)", func(t *testing.T) {
+		mockInvocationCtx := mocks.NewMockInvocationContext(ctrl)
+		mockRuntimeInfo := mocks.NewMockRuntimeInfo(ctrl)
 
-	assert.Equal(t, policyApi.CreatePolicyPayloadDataTypePolicy, payload.Data.Type, "Should have correct payload type")
-	assert.Equal(t, ignoreType, string(payload.Data.Attributes.Action.Data.IgnoreType), "Should have correct ignore type")
-	assert.Equal(t, reason, *payload.Data.Attributes.Action.Data.Reason, "Should have correct reason")
-	assert.NotEmpty(t, payload.Data.Attributes.ConditionsGroup.Conditions, "Should have condition")
-	assert.Equal(t, policyApi.Snykassetfindingv1, payload.Data.Attributes.ConditionsGroup.Conditions[0].Field, "Should have correct findings ID")
-	assert.Equal(t, policyApi.Includes, payload.Data.Attributes.ConditionsGroup.Conditions[0].Operator, "Condition operation must be include")
-	assert.Equal(t, findingsId, payload.Data.Attributes.ConditionsGroup.Conditions[0].Value, "Should have correct findings ID")
-	assert.Equal(t, expireDate, *payload.Data.Attributes.Action.Data.Expires, "Should have correct expiration date")
+		mockInvocationCtx.EXPECT().GetRuntimeInfo().Return(mockRuntimeInfo)
+		mockRuntimeInfo.EXPECT().GetName().Return("snyk-cli")
+
+		payload := createPayload(mockInvocationCtx, testRepoUrl, testBranchName, &expireDate, ignoreType, reason, findingsId)
+
+		assert.Equal(t, policyApi.CreatePolicyPayloadDataTypePolicy, payload.Data.Type, "Should have correct payload type")
+		assert.Equal(t, ignoreType, string(payload.Data.Attributes.Action.Data.IgnoreType), "Should have correct ignore type")
+		assert.Equal(t, reason, *payload.Data.Attributes.Action.Data.Reason, "Should have correct reason")
+		assert.NotEmpty(t, payload.Data.Attributes.ConditionsGroup.Conditions, "Should have condition")
+		assert.Equal(t, policyApi.Snykassetfindingv1, payload.Data.Attributes.ConditionsGroup.Conditions[0].Field, "Should have correct findings ID")
+		assert.Equal(t, policyApi.Includes, payload.Data.Attributes.ConditionsGroup.Conditions[0].Operator, "Condition operation must be include")
+		assert.Equal(t, findingsId, payload.Data.Attributes.ConditionsGroup.Conditions[0].Value, "Should have correct findings ID")
+		assert.Equal(t, expireDate, *payload.Data.Attributes.Action.Data.Expires, "Should have correct expiration date")
+
+		assert.NotNil(t, payload.Data.Attributes.Source, "Source should not be nil")
+		assert.Equal(t, policyApi.Cli, *payload.Data.Attributes.Source, "Source should be 'cli' for snyk-cli")
+	})
+
+	t.Run("with IDE source (snyk-ls)", func(t *testing.T) {
+		mockInvocationCtx := mocks.NewMockInvocationContext(ctrl)
+		mockRuntimeInfo := mocks.NewMockRuntimeInfo(ctrl)
+
+		mockInvocationCtx.EXPECT().GetRuntimeInfo().Return(mockRuntimeInfo)
+		mockRuntimeInfo.EXPECT().GetName().Return("snyk-ls")
+
+		payload := createPayload(mockInvocationCtx, testRepoUrl, testBranchName, &expireDate, ignoreType, reason, findingsId)
+
+		assert.NotNil(t, payload.Data.Attributes.Source, "Source should not be nil")
+		assert.Equal(t, policyApi.Ide, *payload.Data.Attributes.Source, "Source should be 'ide' for snyk-ls")
+	})
+
+	t.Run("with unknown runtime name source is not set", func(t *testing.T) {
+		mockInvocationCtx := mocks.NewMockInvocationContext(ctrl)
+		mockRuntimeInfo := mocks.NewMockRuntimeInfo(ctrl)
+
+		mockInvocationCtx.EXPECT().GetRuntimeInfo().Return(mockRuntimeInfo)
+		mockRuntimeInfo.EXPECT().GetName().Return("unknown-runtime")
+
+		payload := createPayload(mockInvocationCtx, testRepoUrl, testBranchName, &expireDate, ignoreType, reason, findingsId)
+
+		assert.Nil(t, payload.Data.Attributes.Source, "Source should be nil for unknown runtime names")
+	})
 }
 
 func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
@@ -343,6 +385,7 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	mockUserInterface := mocks.NewMockUserInterface(ctrl)
 	mockEngine := mocks.NewMockEngine(ctrl)
+	mockRuntimeInfo := mocks.NewMockRuntimeInfo(ctrl)
 
 	mockUserInterface.EXPECT().Output(gomock.Any()).Return(nil).AnyTimes()
 
@@ -360,7 +403,9 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 	invocationContextMock.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
 	invocationContextMock.EXPECT().GetUserInterface().Return(mockUserInterface).AnyTimes()
 	invocationContextMock.EXPECT().GetWorkflowIdentifier().Return(WORKFLOWID_IGNORE_CREATE).AnyTimes()
+	invocationContextMock.EXPECT().GetRuntimeInfo().Return(mockRuntimeInfo).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+	mockRuntimeInfo.EXPECT().GetName().Return("snyk-cli").AnyTimes()
 
 	mockWhoamiData := []workflow.Data{workflow.NewData(
 		workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "whoami"),

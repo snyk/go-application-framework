@@ -54,12 +54,12 @@ components:
         A header containing the version stage of the endpoint. This stage describes the guarantees snyk provides surrounding stability of the endpoint.
       schema:
         enum:
-          - wip
-          - experimental
-          - beta
-          - ga
-          - deprecated
-          - sunset
+        - wip
+        - experimental
+        - beta
+        - ga
+        - deprecated
+        - sunset
         example: ga
         type: string
   parameters:
@@ -82,6 +82,26 @@ components:
         minimum: 10
         multipleOf: 10
         type: integer
+    OrderBy:
+      description: The column name to sort on
+      in: query
+      name: order_by
+      schema:
+        enum:
+        - created
+        - expires
+        - ignore-type
+        - requested-by
+        type: string
+    OrderDirection:
+      description: Sorting direction ASC/DESC
+      in: query
+      name: order_direction
+      schema:
+        enum:
+        - asc
+        - desc
+        type: string
     OrgId:
       description: Org ID
       in: path
@@ -108,6 +128,13 @@ components:
           $ref: '#/components/schemas/PolicyReview'
         type: array
       style: form
+    Search:
+      description: Search keyword for searching fields ignored_by.name, ignored_by.email,
+        ignore_type in policy_rules
+      in: query
+      name: search
+      schema:
+        type: string
     StartingAfter:
       description: Return the page of results immediately after this cursor
       example: v1.eyJpZCI6IjEwMDAifQo=
@@ -273,14 +300,14 @@ components:
               $ref: '#/components/schemas/Meta'
             type:
               enum:
-                - policy
+              - policy
               type: string
           required:
-            - type
-            - attributes
+          - type
+          - attributes
           type: object
       required:
-        - data
+      - data
       type: object
     Error:
       additionalProperties: false
@@ -338,22 +365,22 @@ components:
           example: Bad request
           type: string
       required:
-        - status
-        - detail
+      - status
+      - detail
       type: object
     ErrorDocument:
       additionalProperties: false
       example:
         errors:
-          - detail: Permission denied for this resource
-            status: "403"
+        - detail: Permission denied for this resource
+          status: "403"
         jsonapi:
           version: "1.0"
       properties:
         errors:
           example:
-            - detail: Permission denied for this resource
-              status: "403"
+          - detail: Permission denied for this resource
+            status: "403"
           items:
             $ref: '#/components/schemas/Error'
           minItems: 1
@@ -361,8 +388,8 @@ components:
         jsonapi:
           $ref: '#/components/schemas/JsonApi'
       required:
-        - jsonapi
-        - errors
+      - jsonapi
+      - errors
       type: object
     ErrorLink:
       additionalProperties: false
@@ -385,27 +412,27 @@ components:
           pattern: ^(0|[1-9]\d*)\.(0|[1-9]\d*)$
           type: string
       required:
-        - version
+      - version
       type: object
     LinkProperty:
       example: https://example.com/api/resource
       oneOf:
-        - description: A string containing the link’s URL.
-          example: https://example.com/api/resource
-          type: string
-        - additionalProperties: false
-          example:
-            href: https://example.com/api/resource
-          properties:
-            href:
-              description: A string containing the link’s URL.
-              example: https://example.com/api/resource
-              type: string
-            meta:
-              $ref: '#/components/schemas/Meta'
-          required:
-            - href
-          type: object
+      - description: A string containing the link’s URL.
+        example: https://example.com/api/resource
+        type: string
+      - additionalProperties: false
+        example:
+          href: https://example.com/api/resource
+        properties:
+          href:
+            description: A string containing the link’s URL.
+            example: https://example.com/api/resource
+            type: string
+          meta:
+            $ref: '#/components/schemas/Meta'
+        required:
+        - href
+        type: object
     Links:
       additionalProperties: false
       properties:
@@ -430,8 +457,8 @@ components:
         key2:
           sub_key: sub_value
         key3:
-          - array_value1
-          - array_value2
+        - array_value1
+        - array_value2
       type: object
     PaginatedLinks:
       additionalProperties: false
@@ -457,7 +484,7 @@ components:
         data:
           $ref: '#/components/schemas/PolicyActionIgnoreData'
       required:
-        - data
+      - data
       type: object
     PolicyActionIgnoreData:
       additionalProperties: false
@@ -468,14 +495,15 @@ components:
           type: string
         ignore_type:
           enum:
-            - wont-fix
-            - not-vulnerable
-            - temporary-ignore
+          - wont-fix
+          - not-vulnerable
+          - temporary-ignore
           type: string
         reason:
+          maxLength: 10000
           type: string
       required:
-        - ignore_type
+      - ignore_type
       type: object
     PolicyAttributes:
       additionalProperties: false
@@ -484,28 +512,43 @@ components:
           $ref: '#/components/schemas/PolicyActionIgnore'
         action_type:
           enum:
-            - ignore
+          - ignore
           type: string
         conditions_group:
           $ref: '#/components/schemas/PolicyConditionsGroup'
         name:
+          maxLength: 255
+          type: string
+        source:
+          description: The source of the policy creation. Defaults to 'api' if not
+            provided.
+          enum:
+          - api
+          - cli
+          - ide
+          - web
+          - unknown
           type: string
       required:
-        - name
-        - conditions_group
-        - action
-        - action_type
+      - name
+      - conditions_group
+      - action
+      - action_type
       type: object
     PolicyCondition:
       additionalProperties: false
       properties:
         field:
-          description: |
-            field refers to the type of identifier used in the condition of the policy.  The available value is versioned and hierarchical:
-            - `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets (e.g. a repository).
-            The identities can be extracted from the fingerprints section of the SARIF, which is accessible via the Snyk CLI. More details can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).
+          description: "field refers to the type of identifier used in the condition
+            of the policy.  The available value is versioned and hierarchical:\n-
+            `snyk/asset/finding/v1` : identity of the finding scoped to a Snyk assets
+            (e.g. a repository).\nFor a given issue, `snyk/asset/finding/v1` can be
+            extracted from the `key_asset` field in the [issues API](https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/issues).
+            \nIn addition, finding identities can be extracted from the fingerprints
+            section of the SARIF, which is accessible via the Snyk CLI. More details
+            can be found in the [CLI documentation](https://docs.snyk.io/snyk-cli/scan-and-maintain-projects-using-the-cli/snyk-cli-for-snyk-code/view-snyk-code-cli-results#export-test-results).\n"
           enum:
-            - snyk/asset/finding/v1
+          - snyk/asset/finding/v1
           type: string
         operator:
           description: |
@@ -513,16 +556,16 @@ components:
             only 'includes' is supported, which does an exact
             string match on the value.
           enum:
-            - includes
+          - includes
           type: string
         value:
           description: |
             The value of the field to match on.
           type: string
       required:
-        - field
-        - operator
-        - value
+      - field
+      - operator
+      - value
       type: object
     PolicyConditionsGroup:
       properties:
@@ -536,11 +579,11 @@ components:
           description: The logical operator for the policy condition. Currently only
             'and' is supported.
           enum:
-            - and
+          - and
           type: string
       required:
-        - logical_operator
-        - conditions
+      - logical_operator
+      - conditions
       type: object
     PolicyEventAttributes:
       additionalProperties: false
@@ -558,10 +601,10 @@ components:
         type:
           $ref: '#/components/schemas/PolicyEventType'
       required:
-        - created_at
-        - type
-        - created_by
-        - changes
+      - created_at
+      - type
+      - created_by
+      - changes
       type: object
     PolicyEventChanges:
       additionalProperties: false
@@ -595,21 +638,21 @@ components:
           type: string
         type:
           enum:
-            - policy_event
+          - policy_event
           type: string
       required:
-        - id
-        - type
-        - attributes
+      - id
+      - type
+      - attributes
       type: object
     PolicyEventType:
       enum:
-        - approve
-        - reject
-        - cancel
-        - reopen
-        - edit
-        - create
+      - approve
+      - reject
+      - cancel
+      - reopen
+      - edit
+      - create
       type: string
     PolicyResponse:
       additionalProperties: false
@@ -623,12 +666,12 @@ components:
           type: string
         type:
           enum:
-            - policy
+          - policy
           type: string
       required:
-        - id
-        - type
-        - attributes
+      - id
+      - type
+      - attributes
       type: object
     PolicyResponseAttributes:
       additionalProperties: false
@@ -637,7 +680,7 @@ components:
           $ref: '#/components/schemas/PolicyActionIgnore'
         action_type:
           enum:
-            - ignore
+          - ignore
           type: string
         conditions_group:
           $ref: '#/components/schemas/PolicyConditionsGroup'
@@ -656,22 +699,21 @@ components:
           format: date-time
           type: string
       required:
-        - name
-        - conditions_group
-        - action
-        - action_type
-        - review
-        - created_at
-        - updated_at
+      - name
+      - conditions_group
+      - action
+      - action_type
+      - review
+      - created_at
+      - updated_at
       type: object
     PolicyReview:
       description: Review status.
       enum:
-        - pending
-        - approved
-        - rejected
-        - cancelled
-        - not-required
+      - pending
+      - approved
+      - rejected
+      - not-required
       type: string
     Principal:
       properties:
@@ -686,8 +728,8 @@ components:
           description: Name of the user or service account that created the policy
           type: string
       required:
-        - name
-        - id
+      - name
+      - id
       type: object
     QueryVersion:
       description: Requested API version
@@ -715,6 +757,7 @@ components:
         conditions_group:
           $ref: '#/components/schemas/PolicyConditionsGroup'
         name:
+          maxLength: 255
           type: string
         review:
           $ref: '#/components/schemas/UpdatePolicyReview'
@@ -736,14 +779,14 @@ components:
               $ref: '#/components/schemas/Meta'
             type:
               enum:
-                - policy
+              - policy
               type: string
           required:
-            - type
-            - attributes
+          - type
+          - attributes
           type: object
       required:
-        - data
+      - data
       type: object
     UpdatePolicyReview:
       description: |
@@ -751,9 +794,9 @@ components:
 
         To provide an optional message relating to the review state change, add a string 'message' property to the 'meta' object.
       enum:
-        - pending
-        - approved
-        - rejected
+      - pending
+      - approved
+      - rejected
       type: string
 info:
   title: policy-service
@@ -785,18 +828,18 @@ paths:
         "500":
           $ref: '#/components/responses/500'
       tags:
-        - OpenAPI
+      - OpenAPI
   /openapi/{version}:
     get:
       description: Get OpenAPI specification effective at version.
       operationId: getAPIVersion
       parameters:
-        - description: The requested version of the API
-          in: path
-          name: version
-          required: true
-          schema:
-            type: string
+      - description: The requested version of the API
+        in: path
+        name: version
+        required: true
+        schema:
+          type: string
       responses:
         "200":
           content:
@@ -820,45 +863,46 @@ paths:
         "500":
           $ref: '#/components/responses/500'
       tags:
-        - OpenAPI
+      - OpenAPI
   /orgs/{org_id}/policies:
     get:
-      description: |
-        Get all policies for the requested organisation.
-
-        *Org level Policy APIs Access Notice:* Access to our Org level Policy APIs is currently
-        restricted via "snykCodeConsistentIgnores" feature flag and will result in a 403 Forbidden error
-        without the flag enabled. Please contact your account representative for
-        eligibility requirements.
+      description: "Get all policies for the requested organisation.\n\n*Org level
+        Policy APIs Access Notice:* Org level Policy APIs are only available \nfor
+        use with Code Consistent Ignores. For information about how to enable Code
+        Consistent Ignores \nsee [this](https://docs.snyk.io/manage-risk/prioritize-issues-for-fixing/ignore-issues/consistent-ignores-for-snyk-code#enable-snyk-code-consistent-ignores)
+        \ndocumentation.\n"
       operationId: getOrgPolicies
       parameters:
-        - $ref: '#/components/parameters/Version'
-        - $ref: '#/components/parameters/StartingAfter'
-        - $ref: '#/components/parameters/EndingBefore'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/Review'
-        - description: Select only policies with an expiry strictly before the given
-            time.
-          in: query
-          name: expires_before
-          schema:
-            example: "2024-03-16T00:00:00Z"
-            format: date-time
-            type: string
-        - description: Select only policies with an expiry strictly past the given time.
-          in: query
-          name: expires_after
-          schema:
-            example: "2024-03-16T00:00:00Z"
-            format: date-time
-            type: string
-        - description: Select only policies that never expire.
-          in: query
-          name: expires_never
-          schema:
-            example: true
-            type: boolean
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/StartingAfter'
+      - $ref: '#/components/parameters/EndingBefore'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Search'
+      - $ref: '#/components/parameters/OrderBy'
+      - $ref: '#/components/parameters/OrderDirection'
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/Review'
+      - description: Select only policies with an expiry strictly before the given
+          time.
+        in: query
+        name: expires_before
+        schema:
+          example: "2024-03-16T00:00:00Z"
+          format: date-time
+          type: string
+      - description: Select only policies with an expiry strictly past the given time.
+        in: query
+        name: expires_after
+        schema:
+          example: "2024-03-16T00:00:00Z"
+          format: date-time
+          type: string
+      - description: Select only policies that never expire.
+        in: query
+        name: expires_never
+        schema:
+          example: true
+          type: boolean
       responses:
         "200":
           content:
@@ -875,8 +919,8 @@ paths:
                   links:
                     $ref: '#/components/schemas/PaginatedLinks'
                 required:
-                  - jsonapi
-                  - data
+                - jsonapi
+                - data
                 type: object
           description: The policies for the requested organisation.
           headers:
@@ -906,43 +950,37 @@ paths:
           $ref: '#/components/responses/404'
       summary: Get org-level policies
       tags:
-        - Policies
+      - Policies
       x-cerberus:
         authorization:
-          featureFlag:
-            tenant:
-              pathId: org_id
-            values:
-              - snykCodeConsistentIgnores
           resource:
             entitlements:
-              - api
+            - api
             pathId: org_id
             permissions:
-              - project.ignore.read
+            - project.ignore.read
             type: org
         enableAccessAudit: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-        - '@snyk/ignores'
+      - '@snyk/ignores'
+      - '@snyk/appsec_ignores'
       x-snyk-api-releases:
-        - "2024-10-15"
+      - "2024-10-15"
       x-snyk-api-resource: policies
       x-snyk-api-stability: ga
       x-snyk-api-version: "2024-10-15"
       x-stability-level: stable
     post:
-      description: |
-        Create a new org-level policy.
-
-        *Org level Policy APIs Access Notice:* Access to our Org level Policy APIs is currently
-        restricted via "snykCodeConsistentIgnores" feature flag and will result in a 403 Forbidden error
-        without the flag enabled. Please contact your account representative for
-        eligibility requirements.
+      description: "Create a new org-level policy.\n\n*Org level Policy APIs Access
+        Notice:* Org level Policy APIs are only available \nfor use with Code Consistent
+        Ignores. For information about how to enable Code Consistent Ignores \nsee
+        [this](https://docs.snyk.io/manage-risk/prioritize-issues-for-fixing/ignore-issues/consistent-ignores-for-snyk-code#enable-snyk-code-consistent-ignores)
+        \ndocumentation.\n"
       operationId: createOrgPolicy
       parameters:
-        - $ref: '#/components/parameters/Version'
-        - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/OrgId'
       requestBody:
         content:
           application/vnd.api+json:
@@ -962,8 +1000,8 @@ paths:
                   links:
                     $ref: '#/components/schemas/SelfLink'
                 required:
-                  - jsonapi
-                  - data
+                - jsonapi
+                - data
                 type: object
           description: A single policy is returned if it is successfully created.
           headers:
@@ -998,45 +1036,39 @@ paths:
           $ref: '#/components/responses/500'
       summary: Create a new org-level policy
       tags:
-        - Policies
+      - Policies
       x-cerberus:
         authorization:
-          featureFlag:
-            tenant:
-              pathId: org_id
-            values:
-              - snykCodeConsistentIgnores
           resource:
             entitlements:
-              - api
+            - api
             pathId: org_id
             permissions:
-              - project.ignore.create
+            - project.ignore.create
             type: org
         enableAccessAudit: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-        - '@snyk/ignores'
+      - '@snyk/ignores'
+      - '@snyk/appsec_ignores'
       x-snyk-api-releases:
-        - "2024-10-15"
+      - "2024-10-15"
       x-snyk-api-resource: policies
       x-snyk-api-stability: ga
       x-snyk-api-version: "2024-10-15"
       x-stability-level: stable
   /orgs/{org_id}/policies/{policy_id}:
     delete:
-      description: |
-        Delete an existing org-level policy.
-
-        *Org level Policy APIs Access Notice:* Access to our Org level Policy APIs is currently
-        restricted via "snykCodeConsistentIgnores" feature flag and will result in a 403 Forbidden error
-        without the flag enabled. Please contact your account representative for
-        eligibility requirements.
+      description: "Delete an existing org-level policy.\n\n*Org level Policy APIs
+        Access Notice:* Org level Policy APIs are only available \nfor use with Code
+        Consistent Ignores. For information about how to enable Code Consistent Ignores
+        \nsee [this](https://docs.snyk.io/manage-risk/prioritize-issues-for-fixing/ignore-issues/consistent-ignores-for-snyk-code#enable-snyk-code-consistent-ignores)
+        \ndocumentation.\n"
       operationId: deleteOrgPolicy
       parameters:
-        - $ref: '#/components/parameters/Version'
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/PolicyId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PolicyId'
       responses:
         "204":
           $ref: '#/components/responses/204'
@@ -1052,44 +1084,38 @@ paths:
           $ref: '#/components/responses/500'
       summary: Delete an org-level policy
       tags:
-        - Policies
+      - Policies
       x-cerberus:
         authorization:
-          featureFlag:
-            tenant:
-              pathId: org_id
-            values:
-              - snykCodeConsistentIgnores
           resource:
             entitlements:
-              - api
+            - api
             pathId: org_id
             permissions:
-              - project.ignore.delete
+            - project.ignore.delete
             type: org
         enableAccessAudit: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-        - '@snyk/ignores'
+      - '@snyk/ignores'
+      - '@snyk/appsec_ignores'
       x-snyk-api-releases:
-        - "2024-10-15"
+      - "2024-10-15"
       x-snyk-api-resource: policies
       x-snyk-api-stability: ga
       x-snyk-api-version: "2024-10-15"
       x-stability-level: stable
     get:
-      description: |
-        Get a specific org-level policy based on its ID.
-
-        *Org level Policy APIs Access Notice:* Access to our Org level Policy APIs is currently
-        restricted via "snykCodeConsistentIgnores" feature flag and will result in a 403 Forbidden error
-        without the flag enabled. Please contact your account representative for
-        eligibility requirements.
+      description: "Get a specific org-level policy based on its ID.\n\n*Org level
+        Policy APIs Access Notice:* Org level Policy APIs are only available \nfor
+        use with Code Consistent Ignores. For information about how to enable Code
+        Consistent Ignores \nsee [this](https://docs.snyk.io/manage-risk/prioritize-issues-for-fixing/ignore-issues/consistent-ignores-for-snyk-code#enable-snyk-code-consistent-ignores)
+        \ndocumentation.\n"
       operationId: getOrgPolicy
       parameters:
-        - $ref: '#/components/parameters/Version'
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/PolicyId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PolicyId'
       responses:
         "200":
           content:
@@ -1104,8 +1130,8 @@ paths:
                   links:
                     $ref: '#/components/schemas/Links'
                 required:
-                  - jsonapi
-                  - data
+                - jsonapi
+                - data
                 type: object
           description: The requested policy.
           headers:
@@ -1135,42 +1161,38 @@ paths:
           $ref: '#/components/responses/404'
       summary: Get an org-level policy
       tags:
-        - Policies
+      - Policies
       x-cerberus:
         authorization:
-          featureFlag:
-            tenant:
-              pathId: org_id
-            values:
-              - snykCodeConsistentIgnores
           resource:
             entitlements:
-              - api
+            - api
             pathId: org_id
             permissions:
-              - project.ignore.read
+            - project.ignore.read
             type: org
         enableAccessAudit: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-        - '@snyk/ignores'
+      - '@snyk/ignores'
+      - '@snyk/appsec_ignores'
       x-snyk-api-releases:
-        - "2024-10-15"
+      - "2024-10-15"
       x-snyk-api-resource: policies
       x-snyk-api-stability: ga
       x-snyk-api-version: "2024-10-15"
       x-stability-level: stable
     patch:
       description: "Update the org-level policy. \n\n*Org level Policy APIs Access
-        Notice:* Access to our Org level Policy APIs is currently\nrestricted via
-        \"snykCodeConsistentIgnores\" feature flag and will result in a 403 Forbidden
-        error\nwithout the flag enabled. Please contact your account representative
-        for\neligibility requirements.\n"
+        Notice:* Org level Policy APIs are only available \nfor use with Code Consistent
+        Ignores. For information about how to enable Code Consistent Ignores \nsee
+        [this](https://docs.snyk.io/manage-risk/prioritize-issues-for-fixing/ignore-issues/consistent-ignores-for-snyk-code#enable-snyk-code-consistent-ignores)
+        \ndocumentation.\n"
       operationId: updateOrgPolicy
       parameters:
-        - $ref: '#/components/parameters/Version'
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/PolicyId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PolicyId'
       requestBody:
         content:
           application/vnd.api+json:
@@ -1190,8 +1212,8 @@ paths:
                   links:
                     $ref: '#/components/schemas/SelfLink'
                 required:
-                  - jsonapi
-                  - data
+                - jsonapi
+                - data
                 type: object
           description: A single policy is returned if it is successfully updated.
           headers:
@@ -1226,27 +1248,23 @@ paths:
           $ref: '#/components/responses/409'
       summary: Update an org-level policy
       tags:
-        - Policies
+      - Policies
       x-cerberus:
         authorization:
-          featureFlag:
-            tenant:
-              pathId: org_id
-            values:
-              - snykCodeConsistentIgnores
           resource:
             entitlements:
-              - api
+            - api
             pathId: org_id
             permissions:
-              - project.ignore.edit
+            - project.ignore.edit
             type: org
         enableAccessAudit: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-        - '@snyk/ignores'
+      - '@snyk/ignores'
+      - '@snyk/appsec_ignores'
       x-snyk-api-releases:
-        - "2024-10-15"
+      - "2024-10-15"
       x-snyk-api-resource: policies
       x-snyk-api-stability: ga
       x-snyk-api-version: "2024-10-15"
@@ -1262,12 +1280,12 @@ paths:
         account representative for eligibility requirements.
       operationId: getOrgPolicyEvents
       parameters:
-        - $ref: '#/components/parameters/Version'
-        - $ref: '#/components/parameters/StartingAfter'
-        - $ref: '#/components/parameters/EndingBefore'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/PolicyId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/StartingAfter'
+      - $ref: '#/components/parameters/EndingBefore'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/PolicyId'
       responses:
         "200":
           content:
@@ -1284,8 +1302,8 @@ paths:
                   links:
                     $ref: '#/components/schemas/PaginatedLinks'
                 required:
-                  - jsonapi
-                  - data
+                - jsonapi
+                - data
                 type: object
           description: The requested policy.
           headers:
@@ -1315,40 +1333,41 @@ paths:
           $ref: '#/components/responses/404'
       summary: List org policy events
       tags:
-        - Policies
+      - Policies
       x-cerberus:
         authorization:
-          featureFlag:
-            tenant:
-              pathId: org_id
-            values:
-              - snykCodeConsistentIgnores
-              - ignoreApprovalWorkflow
           resource:
             entitlements:
-              - api
+            - api
             pathId: org_id
             permissions:
-              - project.ignore.read
+            - project.ignore.read
             type: org
         enableAccessAudit: true
+        featureFlag:
+          tenant:
+            pathId: org_id
+          values:
+          - snykCodeConsistentIgnores
+          - ignoreApprovalWorkflow
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-        - '@snyk/ignores'
+      - '@snyk/ignores'
+      - '@snyk/appsec_ignores'
       x-snyk-api-releases:
-        - 2024-10-13~beta
+      - 2024-10-13~beta
       x-snyk-api-resource: policyevents
       x-snyk-api-stability: beta
       x-snyk-api-version: 2024-10-13~beta
       x-stability-level: beta
 servers:
-  - description: policy-service
-    url: /rest
+- description: policy-service
+  url: /rest
 tags:
-  - description: The OpenAPI specification for policy-service.
-    name: OpenAPI
+- description: The OpenAPI specification for policy-service.
+  name: OpenAPI
 x-cerberus:
   authentication:
     strategies:
-      - InternalJWT: {}
+    - InternalJWT: {}
 x-snyk-api-version: "2024-10-15"
