@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -502,4 +505,41 @@ func TestNetworkImpl_ErrorHandler(t *testing.T) {
 		_, err := client.Get(server.URL)
 		assert.ErrorAs(t, err, &expectedErr)
 	})
+}
+
+func TestNetworkImpl_GetUnauthorizedHttpClient_NetworkStackErrorHandlerMiddleware(t *testing.T) {
+	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	network := NewNetworkAccess(config)
+	count := 0
+
+	// Add error handler to capture and verify the processed error
+	var capturedError error
+	network.AddErrorHandler(func(err error, ctx context.Context) error {
+		count++
+		capturedError = err
+		return err
+	})
+
+	client := network.GetUnauthorizedHttpClient()
+	assert.NotNil(t, client)
+
+	// Create a request to a non-existent domain to trigger a network error
+	req, err := http.NewRequest(http.MethodGet, "http://nonexistent-domain-that-should-not-exist.abcdefghijklmnopqrstuvwxyz", nil)
+	assert.NoError(t, err)
+
+	// Make the request - this should trigger DNS resolution error
+	_, err = client.Do(req)
+
+	// Verify that an error occurred and was processed by the middleware
+	assert.Error(t, err)
+	assert.NotNil(t, capturedError)
+
+	// Verify that the error was properly categorized by the NetworkStackErrorHandlerMiddleware
+	var snykError snyk_errors.Error
+	assert.True(t, errors.As(capturedError, &snykError))
+	assert.Equal(t, 1, count)
+
+	// Verify it's a DNS resolution error specifically
+	expectedDNSError := cli.NewDNSResolutionError("")
+	assert.Equal(t, expectedDNSError.ErrorCode, snykError.ErrorCode)
 }
