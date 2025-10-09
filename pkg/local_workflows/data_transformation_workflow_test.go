@@ -252,9 +252,6 @@ func parseFingerprint(fp local_models.Fingerprint) (scheme string, value string,
 	if orgProjectFp, err := fp.AsTypesCodeSastFingerprintProjectV1(); err == nil {
 		return string(orgProjectFp.Scheme), orgProjectFp.Value, true
 	}
-	if orgRepoFp, err := fp.AsTypesCodeSastFingerprintRepositoryV1(); err == nil {
-		return string(orgRepoFp.Scheme), orgRepoFp.Value, true
-	}
 	return "", "", false
 }
 
@@ -299,7 +296,6 @@ func Test_DataTransformation_with_V1Fingerprints(t *testing.T) {
 	fingerprintTests := map[string]string{
 		string(local_models.Snykassetfindingv1):         "879770c4-b25a-44cd-bba1-1869aa0a3fa7",
 		string(local_models.Snykorgprojectfindingv1):    "6730bc02-da66-4f52-953c-50b856b20cb5",
-		string(local_models.Snykorgrepositoryfindingv1): "580770c8-bba1-44cd-825a-5fa9990a3fa5",
 	}
 
 	for scheme, expectedValue := range fingerprintTests {
