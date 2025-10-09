@@ -159,7 +159,6 @@ func mapFingerprints(sfp sarif.Fingerprints) ([]Fingerprint, error) {
 		string(CodeSastV0):                 sfp.Num0,
 		string(CodeSastV1):                 sfp.Num1,
 		string(Snykassetfindingv1):         sfp.SnykAssetFindingV1,
-		string(Snykorgrepositoryfindingv1): sfp.SnykOrgRepositoryFindingV1,
 		string(Snykorgprojectfindingv1):    sfp.SnykOrgProjectFindingV1,
 	}
 
