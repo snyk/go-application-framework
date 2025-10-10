@@ -92,7 +92,7 @@ func (a *snykApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
 			return organization.Id, nil
 		}
 	}
-	return "", fmt.Errorf("org ID not found for slug %v", slugName)
+	return "", &OrgSlugNotFoundError{Slug: slugName}
 }
 
 // GetOrganizations retrieves organizations accessible to the authenticated user.
@@ -369,4 +369,15 @@ func NewApi(url string, httpClient *http.Client) ApiClient {
 
 func NewApiInstance() ApiClient {
 	return &snykApiClient{}
+}
+
+var _ error = (*OrgSlugNotFoundError)(nil)
+
+// OrgSlugNotFoundError is returned when an organization slug cannot be resolved to an ID
+type OrgSlugNotFoundError struct {
+	Slug string
+}
+
+func (e *OrgSlugNotFoundError) Error() string {
+	return fmt.Sprintf("org ID not found for slug %v", e.Slug)
 }
