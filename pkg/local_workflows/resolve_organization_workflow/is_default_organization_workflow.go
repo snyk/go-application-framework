@@ -95,8 +95,8 @@ func isDefaultOrganizationWorkflowEntryPointDI(
 
 	// Resolve the organization ID (handles UUID or slug)
 	orgID := isDefaultInput.Organization
-	_, err := uuid.Parse(orgID)
-	isSlug := err != nil
+	_, parseErr := uuid.Parse(orgID)
+	isSlug := parseErr != nil
 
 	if isSlug {
 		// It's a slug/name, resolve it to an ID

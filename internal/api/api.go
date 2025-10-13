@@ -371,6 +371,7 @@ func NewApiInstance() ApiClient {
 	return &snykApiClient{}
 }
 
+//nolint:errcheck // This is just a compile-time interface check
 var _ error = (*OrgSlugNotFoundError)(nil)
 
 // OrgSlugNotFoundError is returned when an organization slug cannot be resolved to an ID
