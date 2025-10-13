@@ -707,6 +707,32 @@ type LinkProperty1 struct {
 	Meta *Meta `json:"meta,omitempty"`
 }
 
+// LocalIgnore defines model for LocalIgnore.
+type LocalIgnore struct {
+	// CreatedAt When the ignore was first created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// ExpiresAt When the ignore will expire.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Path Dependency path to the vulnerable package to be ignored.
+	//
+	// If not provided, the ignore will apply to all packages with the given
+	// vulnerability ID.
+	Path *[]string `json:"path,omitempty"`
+
+	// Reason Reason for the ignore.
+	Reason *string `json:"reason,omitempty"`
+
+	// SkipIfFixable Skips the ignore rule if an actual fix is available.
+	SkipIfFixable *bool `json:"skip_if_fixable,omitempty"`
+
+	// VulnId The vulnerability ID of the finding to be ignored.
+	//
+	// This typically matches SnykVulnProblem.id for open source vulnerabilities.
+	VulnId string `json:"vuln_id"`
+}
+
 // LocalPathLocator LocalPathLocator locates a test subject by local file paths, relative to the
 // working copy top-level directory of the source code.
 type LocalPathLocator struct {
@@ -723,6 +749,9 @@ type LocalPolicy struct {
 	// FailOnUpgradable Use to fail a test when there is at least one vulnerable finding that can be fixed by upgrading the version of the related
 	//    dependency. E.g. bumping lodash from 1.1.1 to 1.1.2.
 	FailOnUpgradable *bool `json:"fail_on_upgradable,omitempty"`
+
+	// Ignores Defines ignore rules for known issues.
+	Ignores *[]LocalIgnore `json:"ignores,omitempty"`
 
 	// ReachabilityFilter Represent various reachability filters available for findings.
 	ReachabilityFilter *ReachabilityFilter `json:"reachability_filter,omitempty"`

@@ -976,6 +976,45 @@ components:
         required:
         - href
         type: object
+    LocalIgnore:
+      properties:
+        created_at:
+          description: When the ignore was first created.
+          format: date-time
+          type: string
+        expires_at:
+          description: When the ignore will expire.
+          format: date-time
+          type: string
+        path:
+          description: |-
+            Dependency path to the vulnerable package to be ignored.
+
+            If not provided, the ignore will apply to all packages with the given
+            vulnerability ID.
+          example:
+          - myapp@1.0.0
+          - org.apache.logging.log4j:log4j@2.6.2
+          items:
+            type: string
+          type: array
+        reason:
+          description: Reason for the ignore.
+          example: False positive
+          type: string
+        skip_if_fixable:
+          description: Skips the ignore rule if an actual fix is available.
+          type: boolean
+        vuln_id:
+          description: |-
+            The vulnerability ID of the finding to be ignored.
+
+            This typically matches SnykVulnProblem.id for open source vulnerabilities.
+          example: SNYK-JAVA-ORGAPACHELOGGINGLOG4J-31456
+          type: string
+      required:
+      - vuln_id
+      type: object
     LocalPathLocator:
       description: |-
         LocalPathLocator locates a test subject by local file paths, relative to the
@@ -1005,6 +1044,11 @@ components:
             Use to fail a test when there is at least one vulnerable finding that can be fixed by upgrading the version of the related
                dependency. E.g. bumping lodash from 1.1.1 to 1.1.2.
           type: boolean
+        ignores:
+          description: Defines ignore rules for known issues.
+          items:
+            $ref: '#/components/schemas/LocalIgnore'
+          type: array
         reachability_filter:
           $ref: '#/components/schemas/ReachabilityFilter'
         risk_score_threshold:
