@@ -20,6 +20,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/internal/constants"
+	errorutils "github.com/snyk/go-application-framework/pkg/local_workflows/error_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
@@ -107,6 +108,13 @@ func RenderError(err snyk_errors.Error, ctx context.Context) string {
 		link := constants.SNYK_DOCS_URL + constants.SNYK_DOCS_ERROR_CATALOG_PATH + fragment
 		err.Links = append([]string{link}, err.Links...)
 		title = title + fmt.Sprintf(" (%s)", err.ErrorCode)
+	}
+
+	if dirs, ok := errorutils.GetWorkingDirectory(&err); ok {
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Path:"),
+			value.Render(strings.Join(dirs, ", ")),
+		))
 	}
 
 	if err.StatusCode > http.StatusOK {
