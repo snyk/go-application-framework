@@ -21,6 +21,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	errorutils "github.com/snyk/go-application-framework/pkg/local_workflows/error_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -149,7 +150,9 @@ func EntryPointNative(invocationCtx workflow.InvocationContext, opts ...Optional
 
 	// Check for empty summary
 	if summary.Artifacts == 0 {
-		summaryData.AddError(code.NewUnsupportedProjectError("Snyk was unable to find supported files."))
+		errorAsMetaData := code.NewUnsupportedProjectError("Snyk was unable to find supported files.", errorutils.WithWorkingDirectory([]string{path}))
+		errorAsMetaData.StatusCode = 0
+		summaryData.AddError(errorAsMetaData)
 	}
 	output = append(output, summaryData)
 
