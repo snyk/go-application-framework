@@ -1,25 +1,42 @@
 package errorutils
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWorkingDirectoryBehavior(t *testing.T) {
-	t.Run("can set and retrieve working directories", func(t *testing.T) {
-		directories := []string{"/home/user/project", "/tmp/build"}
+// ============================================================================
+// Test Helper Functions
+// ============================================================================
 
+func createTestConfig(directories []string) configuration.Configuration {
+	config := configuration.New()
+	config.Set(configuration.INPUT_DIRECTORY, directories)
+	return config
+}
+
+// ============================================================================
+// Test Functions
+// ============================================================================
+
+func TestWorkingDirectoryBehavior(t *testing.T) {
+	testDirs := []string{"/home/user/project", "/tmp/build"}
+
+	t.Run("can set and retrieve working directories", func(t *testing.T) {
 		err := cli.NewGenericNetworkError(
 			"Network error occurred",
-			WithWorkingDirectory(directories),
+			WithWorkingDirectory(testDirs),
 		)
 
 		retrievedDirs, found := GetWorkingDirectory(&err)
 		assert.True(t, found)
-		assert.Equal(t, directories, retrievedDirs)
+		assert.Equal(t, testDirs, retrievedDirs)
 	})
 
 	t.Run("handles edge cases", func(t *testing.T) {
@@ -144,5 +161,127 @@ func TestWorkingDirectoryBehavior(t *testing.T) {
 		snykDirs, snykFound := GetWorkingDirectory(&snykErr)
 		assert.True(t, snykFound)
 		assert.Equal(t, directories, snykDirs)
+	})
+}
+
+func TestProcessSnykErrorsInChain(t *testing.T) {
+	// Create a processor that counts Snyk errors
+	var processedCount int
+	processor := func(_ *snyk_errors.Error) {
+		processedCount++
+	}
+
+	t.Run("handles plain Snyk error", func(t *testing.T) {
+		processedCount = 0
+		originalErr := cli.NewGeneralCLIFailureError("Test error")
+		result := ProcessSnykErrorsInChain(originalErr, processor)
+
+		// Should be the same type
+		assert.IsType(t, snyk_errors.Error{}, result)
+		// Should have processed exactly 1 Snyk error
+		assert.Equal(t, 1, processedCount)
+	})
+
+	t.Run("handles wrapped Snyk error", func(t *testing.T) {
+		processedCount = 0
+		originalErr := fmt.Errorf("wrapper: %w", cli.NewGeneralCLIFailureError("Wrapped error"))
+		result := ProcessSnykErrorsInChain(originalErr, processor)
+
+		// Should be a wrapped error (has Unwrap method)
+		_, hasUnwrap := result.(interface{ Unwrap() error })
+		assert.True(t, hasUnwrap)
+		// Should have processed exactly 1 Snyk error
+		assert.Equal(t, 1, processedCount)
+	})
+
+	t.Run("handles joined error with multiple Snyk errors", func(t *testing.T) {
+		processedCount = 0
+		originalErr := errors.Join(
+			errors.New("context error"),
+			cli.NewGeneralCLIFailureError("First Snyk error"),
+			errors.New("another context"),
+			fmt.Errorf("wrapper: %w", cli.NewGeneralCLIFailureError("Second Wrapped error")),
+		)
+
+		result := ProcessSnykErrorsInChain(originalErr, processor)
+
+		// Should be a joined error (has Unwrap method returning []error)
+		_, hasUnwrapSlice := result.(interface{ Unwrap() []error })
+		assert.True(t, hasUnwrapSlice)
+		// Should have processed exactly 2 Snyk errors
+		assert.Equal(t, 2, processedCount)
+	})
+
+	t.Run("handles non-Snyk error", func(t *testing.T) {
+		processedCount = 0
+		originalErr := errors.New("regular error")
+		result := ProcessSnykErrorsInChain(originalErr, processor)
+
+		// Should be unchanged
+		assert.Equal(t, originalErr, result)
+		// Should not have processed any Snyk errors
+		assert.Equal(t, 0, processedCount)
+	})
+
+	t.Run("handles nil error", func(t *testing.T) {
+		processedCount = 0
+		result := ProcessSnykErrorsInChain(nil, processor)
+		// Should return nil
+		assert.Nil(t, result)
+		// Should not have processed any Snyk errors
+		assert.Equal(t, 0, processedCount)
+	})
+}
+
+func TestDecorateTestError(t *testing.T) {
+	testDirs := []string{"/test/path"}
+	config := createTestConfig(testDirs)
+
+	// Use a simple Snyk error for all tests
+	testErr := cli.NewGeneralCLIFailureError("Test error")
+
+	t.Run("adds metadata on a single error", func(t *testing.T) {
+		result := DecorateTestError(testErr, config)
+
+		// Should not have metadata (nil list)
+		var snykErr snyk_errors.Error
+		assert.True(t, errors.As(result, &snykErr))
+		dirs, found := GetWorkingDirectory(&snykErr)
+		assert.True(t, found)
+		assert.Equal(t, testDirs, dirs)
+	})
+
+	t.Run("does not add metadata when directories are nil", func(t *testing.T) {
+		nilConfig := configuration.New()
+		nilConfig.Set(configuration.INPUT_DIRECTORY, nil)
+
+		result := DecorateTestError(testErr, nilConfig)
+
+		// Should not have metadata (nil list)
+		var snykErr snyk_errors.Error
+		assert.True(t, errors.As(result, &snykErr))
+		dirs, found := GetWorkingDirectory(&snykErr)
+		assert.False(t, found)
+		assert.Equal(t, []string{}, dirs)
+	})
+
+	t.Run("handles non-Snyk errors unchanged", func(t *testing.T) {
+		testDirs := []string{"/test/path"}
+		config := createTestConfig(testDirs)
+		regularErr := errors.New("regular error")
+
+		result := DecorateTestError(regularErr, config)
+
+		// Should be unchanged
+		assert.Equal(t, regularErr, result)
+	})
+
+	t.Run("handles nil error", func(t *testing.T) {
+		testDirs := []string{"/test/path"}
+		config := createTestConfig(testDirs)
+
+		result := DecorateTestError(nil, config)
+		// Should return nil
+		assert.Nil(t, result)
 	})
 }

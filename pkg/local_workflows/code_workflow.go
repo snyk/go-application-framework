@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	errorutils "github.com/snyk/go-application-framework/pkg/local_workflows/error_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
@@ -179,6 +180,8 @@ func codeWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workfl
 	} else {
 		result, err = code_workflow.EntryPointLegacy(invocationCtx)
 	}
+
+	err = errorutils.DecorateTestError(err, config)
 
 	return result, err
 }
