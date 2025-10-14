@@ -48,9 +48,10 @@ func InitIsDefaultOrganizationWorkflow(engine workflow.Engine) error {
 // isDefaultOrganizationWorkflowEntryPoint is the entry point for the is default organization workflow
 func isDefaultOrganizationWorkflowEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 	engine := invocationCtx.GetEngine()
+	config := invocationCtx.GetConfiguration()
 
 	// Create API client
-	apiClient := newApiClientImpl(engine)
+	apiClient := newApiClientImpl(engine, config)
 
 	// Call DI version with dependencies
 	return isDefaultOrganizationWorkflowEntryPointDI(invocationCtx, input, apiClient)

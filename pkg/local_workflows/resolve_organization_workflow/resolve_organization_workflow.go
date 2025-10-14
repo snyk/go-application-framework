@@ -56,17 +56,18 @@ func InitResolveOrganizationWorkflow(engine workflow.Engine) error {
 // resolveOrganizationWorkflowEntryPoint is the entry point for the resolve organization workflow
 func resolveOrganizationWorkflowEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 	engine := invocationCtx.GetEngine()
+	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
 	// Create LDX-Sync client (may be nil if creation fails)
-	ldxClient, err := newLdxSyncClientImpl(engine)
+	ldxClient, err := newLdxSyncClientImpl(engine, config)
 	if err != nil {
 		logger.Debug().Err(err).Msg("Failed to create LDX-Sync client, will fall back to API default organization")
 		ldxClient = nil
 	}
 
 	// Create API client
-	apiClient := newApiClientImpl(engine)
+	apiClient := newApiClientImpl(engine, config)
 
 	// Call DI version with dependencies
 	return resolveOrganizationWorkflowEntryPointDI(invocationCtx, input, ldxClient, apiClient)
@@ -232,8 +233,8 @@ func getLdxSyncConfig(ldxClient v20241015.ClientWithResponsesInterface, orgId st
 	}
 }
 
-func newLdxSyncClientImpl(engine workflow.Engine) (v20241015.ClientWithResponsesInterface, error) {
-	restURL, err := url.JoinPath(engine.GetConfiguration().GetString(configuration.API_URL), "rest")
+func newLdxSyncClientImpl(engine workflow.Engine, config configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
+	restURL, err := url.JoinPath(config.GetString(configuration.API_URL), "rest")
 	if err != nil {
 		return nil, err
 	}
@@ -241,8 +242,8 @@ func newLdxSyncClientImpl(engine workflow.Engine) (v20241015.ClientWithResponses
 	return v20241015.NewClientWithResponses(restURL, v20241015.WithHTTPClient(client))
 }
 
-func newApiClientImpl(engine workflow.Engine) api.ApiClient {
-	apiURL := engine.GetConfiguration().GetString(configuration.API_URL)
+func newApiClientImpl(engine workflow.Engine, config configuration.Configuration) api.ApiClient {
+	apiURL := config.GetString(configuration.API_URL)
 	client := engine.GetNetworkAccess().GetHttpClient()
 	return api.NewApi(apiURL, client)
 }
