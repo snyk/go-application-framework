@@ -502,3 +502,67 @@ func Test_CancellableAuthenticate_AuthorizationCodeGrant_ContextCanceled(t *test
 		t.Fatal("Test timed out after 2 seconds waiting for CancellableAuthenticate to return, which should have been canceled.")
 	}
 }
+
+func Test_Authenticate_UTMSource_UsesIntegrationName(t *testing.T) {
+	config := configuration.NewWithOpts()
+	expectedIntegrationName := "VSCODE"
+	config.Set(configuration.INTEGRATION_NAME, expectedIntegrationName)
+
+	var capturedURL string
+
+	// Create mock server that captures the authorization URL
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		mockAuthorizeHandler("", "")(w, r)
+	})
+	mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	config.Set(configuration.API_URL, ts.URL)
+	config.Set(configuration.WEB_APP_URL, ts.URL)
+
+	authenticator := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+	)
+
+	err := authenticator.Authenticate()
+	assert.NoError(t, err)
+
+	// Verify utm_source uses the integration name
+	assert.Contains(t, capturedURL, "utm_source="+expectedIntegrationName,
+		"Expected utm_source to be set to the integration name when INTEGRATION_NAME is configured")
+}
+
+func Test_Authenticate_UTMSource_EmptyIntegrationName(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(configuration.INTEGRATION_NAME, "")
+
+	var capturedURL string
+
+	// Create mock server that captures the authorization URL
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		mockAuthorizeHandler("", "")(w, r)
+	})
+	mux.HandleFunc("/oauth2/token", mockOAuth2TokenHandler(t))
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	config.Set(configuration.API_URL, ts.URL)
+	config.Set(configuration.WEB_APP_URL, ts.URL)
+
+	authenticator := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithOpenBrowserFunc(headlessOpenBrowserFunc(t)),
+	)
+
+	err := authenticator.Authenticate()
+	assert.NoError(t, err)
+
+	assert.NotContains(t, capturedURL, "utm_source",
+		"Expected utm_source to not be present when INTEGRATION_NAME is empty")
+}
