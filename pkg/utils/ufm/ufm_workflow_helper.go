@@ -11,6 +11,7 @@ func CreateData(id workflow.Identifier, results []testapi.TestResult) workflow.D
 		return nil
 	}
 
+	// TODO: look into serializing the results to json and then back to TestResult
 	data := workflow.NewData(workflow.NewTypeIdentifier(id, "TestResult"), content_type.UFM_RESULT, results)
 	return data
 }

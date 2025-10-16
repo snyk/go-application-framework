@@ -78,6 +78,54 @@ func getTestResultsFromWorkflowData(input []workflow.Data) ([]testapi.TestResult
 	return results, remainingData
 }
 
+func getWritersToUseUfm(config configuration.Configuration, outputDestination iUtils.OutputDestination) map[string]*WriterEntry {
+	// resulting map of writers and their templates
+	writerMap := map[string]*WriterEntry{}
+
+	// currently the only used default writer is sarif
+	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
+		if tmp := getDefaultWriter(config, outputDestination); tmp != nil {
+			writerMap[DEFAULT_WRITER] = tmp
+		}
+	}
+
+	// default file writers
+	fileWriters := []FileWriter{
+		{
+			OUTPUT_CONFIG_KEY_SARIF_FILE,
+			SARIF_MIME_TYPE,
+			presenters.ApplicationSarifTemplatesUfm,
+			true,
+		},
+		/*
+			skipping support for json file output by default, since there is no supporting rendering yet.
+			{
+				OUTPUT_CONFIG_KEY_JSON_FILE,
+				SARIF_MIME_TYPE,
+				ApplicationSarifTemplates,
+				true,
+			},*/
+	}
+
+	// use configured file writers if available
+	if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
+		fileWriters = tmp
+	}
+
+	for _, fileWriter := range fileWriters {
+		if config.IsSet(fileWriter.NameConfigKey) {
+			writerMap[fileWriter.NameConfigKey] = &WriterEntry{
+				writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
+				mimeType:        fileWriter.MimeType,
+				templates:       fileWriter.TemplateFiles,
+				renderEmptyData: fileWriter.WriteEmptyContent,
+			}
+		}
+	}
+
+	return writerMap
+}
+
 // HandleContentTypeUnifiedModel handles the unified model content type.
 func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.InvocationContext, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
 	var err error
@@ -91,7 +139,7 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 		return input, nil
 	}
 
-	writerMap := getWritersToUse(config, outputDestination)
+	writerMap := getWritersToUseUfm(config, outputDestination)
 	if len(writerMap) == 0 {
 		debugLogger.Info().Msg("No writers to use")
 		return input, nil
