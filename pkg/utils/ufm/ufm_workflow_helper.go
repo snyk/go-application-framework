@@ -6,7 +6,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func CreateData(id workflow.Identifier, results []testapi.TestResult) workflow.Data {
+func CreateWorkflowDataFromTestResults(id workflow.Identifier, results []testapi.TestResult) workflow.Data {
 	if len(results) == 0 {
 		return nil
 	}
@@ -16,7 +16,7 @@ func CreateData(id workflow.Identifier, results []testapi.TestResult) workflow.D
 	return data
 }
 
-func GetTestResults(data workflow.Data) []testapi.TestResult {
+func GetTestResultsFromWorkflowData(data workflow.Data) []testapi.TestResult {
 	if data.GetContentType() != content_type.UFM_RESULT {
 		return nil
 	}

@@ -19,10 +19,10 @@ func Test_CreateAndRetrieveDataFromUFM(t *testing.T) {
 
 	results := []testapi.TestResult{singleResult}
 
-	data := CreateData(workflow.NewWorkflowIdentifier("myflow`"), results)
+	data := CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("myflow`"), results)
 	assert.NotNil(t, data)
 
-	tmp := GetTestResults(data)
+	tmp := GetTestResultsFromWorkflowData(data)
 	assert.NotNil(t, tmp)
 	assert.Equal(t, len(results), len(tmp))
 	assert.Equal(t, results[0].GetTestID(), tmp[0].GetTestID())

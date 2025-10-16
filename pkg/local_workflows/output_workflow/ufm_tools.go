@@ -67,7 +67,7 @@ func getTestResultsFromWorkflowData(input []workflow.Data) ([]testapi.TestResult
 	remainingData := []workflow.Data{}
 
 	for _, data := range input {
-		tmp := ufm.GetTestResults(data)
+		tmp := ufm.GetTestResultsFromWorkflowData(data)
 		if tmp != nil {
 			results = append(results, tmp...)
 			continue
@@ -82,46 +82,48 @@ func getWritersToUseUfm(config configuration.Configuration, outputDestination iU
 	// resulting map of writers and their templates
 	writerMap := map[string]*WriterEntry{}
 
-	// currently the only used default writer is sarif
-	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-		if tmp := getDefaultWriter(config, outputDestination); tmp != nil {
-			writerMap[DEFAULT_WRITER] = tmp
-		}
-	}
+	// TODO Re-enable writers for UFM when rendering is implemented
 
-	// default file writers
-	fileWriters := []FileWriter{
-		{
-			OUTPUT_CONFIG_KEY_SARIF_FILE,
-			SARIF_MIME_TYPE,
-			presenters.ApplicationSarifTemplatesUfm,
-			true,
-		},
-		/*
-			skipping support for json file output by default, since there is no supporting rendering yet.
-			{
-				OUTPUT_CONFIG_KEY_JSON_FILE,
-				SARIF_MIME_TYPE,
-				ApplicationSarifTemplates,
-				true,
-			},*/
-	}
+	// // currently the only used default writer is sarif
+	// if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
+	// 	if tmp := getDefaultWriter(config, outputDestination); tmp != nil {
+	// 		writerMap[DEFAULT_WRITER] = tmp
+	// 	}
+	// }
 
-	// use configured file writers if available
-	if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
-		fileWriters = tmp
-	}
+	// // default file writers
+	// fileWriters := []FileWriter{
+	// 	{
+	// 		OUTPUT_CONFIG_KEY_SARIF_FILE,
+	// 		SARIF_MIME_TYPE,
+	// 		presenters.ApplicationSarifTemplatesUfm,
+	// 		true,
+	// 	},
+	// 	/*
+	// 		skipping support for json file output by default, since there is no supporting rendering yet.
+	// 		{
+	// 			OUTPUT_CONFIG_KEY_JSON_FILE,
+	// 			SARIF_MIME_TYPE,
+	// 			ApplicationSarifTemplates,
+	// 			true,
+	// 		},*/
+	// }
 
-	for _, fileWriter := range fileWriters {
-		if config.IsSet(fileWriter.NameConfigKey) {
-			writerMap[fileWriter.NameConfigKey] = &WriterEntry{
-				writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
-				mimeType:        fileWriter.MimeType,
-				templates:       fileWriter.TemplateFiles,
-				renderEmptyData: fileWriter.WriteEmptyContent,
-			}
-		}
-	}
+	// // use configured file writers if available
+	// if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
+	// 	fileWriters = tmp
+	// }
+
+	// for _, fileWriter := range fileWriters {
+	// 	if config.IsSet(fileWriter.NameConfigKey) {
+	// 		writerMap[fileWriter.NameConfigKey] = &WriterEntry{
+	// 			writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
+	// 			mimeType:        fileWriter.MimeType,
+	// 			templates:       fileWriter.TemplateFiles,
+	// 			renderEmptyData: fileWriter.WriteEmptyContent,
+	// 		}
+	// 	}
+	// }
 
 	return writerMap
 }
@@ -135,14 +137,14 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 	// Extract TestResults from workflow data
 	results, remainingData := getTestResultsFromWorkflowData(input)
 	if len(results) == 0 {
-		debugLogger.Info().Msg("No UFM to process")
-		return input, nil
+		debugLogger.Info().Msg("No UFM data to process")
+		return remainingData, nil
 	}
 
 	writerMap := getWritersToUseUfm(config, outputDestination)
 	if len(writerMap) == 0 {
-		debugLogger.Info().Msg("No writers to use")
-		return input, nil
+		debugLogger.Info().Msg("No UFM writers to use")
+		return remainingData, nil
 	}
 
 	threadCount := max(int64(config.GetInt(configuration.MAX_THREADS)), 1)
