@@ -2882,7 +2882,6 @@
             "1": "ae77ea27.4773f344.607187b5.d7919eeb.a1fb1152.5fce695c.fee35010.89d75565.630e4ed1.4773f344.aa4dda5f.d7919eeb.f30fb760.49b28873.85bdc101.83642794",
             "identity": "c2942d51-e62d-4d15-8ba4-a716e6368604",
             "snyk/org/project/finding/v1": "6730bc02-da66-4f52-953c-50b856b20cb5",
-            "snyk/org/repository/finding/v1": "580770c8-bba1-44cd-825a-5fa9990a3fa5",
             "snyk/asset/finding/v1": "879770c4-b25a-44cd-bba1-1869aa0a3fa7"
           },
           "codeFlows": [
@@ -2979,7 +2978,6 @@
             "1": "aac70831.4773f344.607187b5.9a6c48e6.2fce9a75.6f0d36d4.a4e722aa.b1b5c7cb.7a85a498.4773f344.d685e3e1.d7919eeb.8b312d3d.5fce695c.ea1fda40.89d75565",
             "identity": "0fc278c9-0bfe-4bdd-b206-f107a17c0101",
             "snyk/org/project/finding/v1": "bacdfa02-da66-4f52-953c-50b856b20cb5",
-            "snyk/org/repository/finding/v1": "580770c8-bba1-44cd-825a-5fa9990a3fa5",
             "snyk/asset/finding/v1": "879770c4-b25a-44cd-bba1-1869aa0a3fa7"
           },
           "codeFlows": [
