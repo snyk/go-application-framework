@@ -381,8 +381,6 @@ func Test_resolveOrganizationWorkflowEntryPoint_Integration(t *testing.T) {
 
 			// Setup workflow context
 			mockInvCtx := setupMockResolveOrgContext(t)
-			config := mockInvCtx.GetConfiguration()
-			config.Set(configuration.API_URL, "https://api.snyk.io")
 
 			// Create input
 			input := ResolveOrganizationInput{
