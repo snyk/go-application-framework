@@ -138,7 +138,7 @@ func ToSlice(input map[string]string, combineBy string) []string {
 	return result
 }
 
-// Removes a given key from the input map and uses FindKeyCaseInsensitive() for this. The resulting map is being returned.
+// Remove removes a given key from the input map and uses FindKeyCaseInsensitive() for this. The resulting map is being returned.
 // If the key was not found, the input map will be returned.
 //
 // Example:
@@ -155,7 +155,7 @@ func Remove(input map[string]string, key string) map[string]string {
 	return input
 }
 
-// This method tries to find the given key is in the map. It searches different cases of the key:
+// FindKeyCaseInsensitive tries to find the given key is in the map. It searches different cases of the key:
 //
 //  1. the exact match
 //  2. all lower case letters
@@ -187,7 +187,7 @@ func FindKeyCaseInsensitive(input map[string]string, key string) (string, bool) 
 	return key, found
 }
 
-// This method tries to find the given key is in the map and return its value. It searches different cases of the key:
+// FindValueCaseInsensitive tries to find the given key is in the map and return its value. It searches different cases of the key:
 //
 //  1. the exact match
 //  2. all lower case letters

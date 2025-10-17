@@ -338,7 +338,7 @@ func scrub(p []byte, scrubDict ScrubbingDict) []byte {
 			if entry.groupToRedact >= len(match) || match[entry.groupToRedact] == "" {
 				continue
 			}
-			s = strings.Replace(s, match[entry.groupToRedact], SANITIZE_REPLACEMENT_STRING, -1)
+			s = strings.ReplaceAll(s, match[entry.groupToRedact], SANITIZE_REPLACEMENT_STRING)
 		}
 	}
 	return []byte(s)

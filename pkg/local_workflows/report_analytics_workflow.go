@@ -162,7 +162,7 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 	if err != nil {
 		return fmt.Errorf("error sending request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // Ignore lack of error handling
 
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("error sending request: %v", resp.Status)

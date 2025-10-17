@@ -70,7 +70,7 @@ func (p *HTMLpresenter) Present(htmlString string) (string, error) {
 		if n.Type == html.ElementNode {
 			tagName := n.Data
 			var cssClass string
-			var hasClassAttribute bool = false
+			hasClassAttribute := false
 
 			for _, attr := range n.Attr {
 				if attr.Key == "class" {
