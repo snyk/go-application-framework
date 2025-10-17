@@ -33,9 +33,15 @@ func policyResponseToSarifSuppression(policyResponse *v20241015.PolicyResponse) 
 		expiresStr := policyResponse.Attributes.Action.Data.Expires.Format(time.RFC3339)
 		expires = &expiresStr
 	}
+
+	justification := ""
+	if policyResponse.Attributes.Action.Data.Reason != nil {
+		justification = *policyResponse.Attributes.Action.Data.Reason
+	}
+
 	return &sarif.Suppression{
 		Guid:          policyResponse.Id.String(),
-		Justification: *policyResponse.Attributes.Action.Data.Reason,
+		Justification: justification,
 		Status:        policyReviewToSarifStatus(policyResponse.Attributes.Review),
 		Properties: sarif.SuppressionProperties{
 			Expiration: expires,

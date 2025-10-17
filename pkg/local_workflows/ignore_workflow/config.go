@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/internal/api"
+	"github.com/snyk/go-application-framework/internal/api/contract"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
@@ -40,8 +41,43 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 
 	config.AddDefaultValue(ReasonKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		isSet := config.IsSet(ReasonKey)
-		return defaultFuncWithValidator(existingValue, isSet, isValidReason)
+		reasonRequired := config.GetBool(ConfigIgnoreReasonRequired)
+		return defaultFuncWithValidator(existingValue, isSet, getReasonValidator(reasonRequired))
 	})
+}
+
+func getOrgIgnoreSettings(engine workflow.Engine) (*contract.OrgSettingsResponse, error) {
+	config := engine.GetConfiguration()
+	org := config.GetString(configuration.ORGANIZATION)
+	client := engine.GetNetworkAccess().GetHttpClient()
+	url := config.GetString(configuration.API_URL)
+	apiClient := api.NewApi(url, client)
+
+	settings, err := apiClient.GetOrgSettings(org)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to access settings.")
+		return nil, err
+	}
+
+	engine.GetConfiguration().Set(ConfigIgnoreSettings, settings)
+	return settings, nil
+}
+
+func getOrgIgnoreSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
+	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		response, err := getOrgIgnoreSettings(engine)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return nil, err
+		}
+
+		return response, nil
+	}
+	return callback
 }
 
 func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
@@ -50,20 +86,34 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 			return existingValue, nil
 		}
 
-		config := engine.GetConfiguration()
-		org := config.GetString(configuration.ORGANIZATION)
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
-		apiClient := api.NewApi(url, client)
-
-		settings, err := apiClient.GetOrgSettings(org)
+		settings, err := getOrgIgnoreSettings(engine)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
-			return nil, err
+			return false, err
 		}
 
 		if settings.Ignores != nil && settings.Ignores.ApprovalWorkflowEnabled {
 			return true, nil
+		}
+
+		return false, nil
+	}
+}
+
+func getOrgIgnoreReasonRequired(engine workflow.Engine) configuration.DefaultValueFunction {
+	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		settings, err := getOrgIgnoreSettings(engine)
+		if err != nil {
+			engine.GetLogger().Err(err).Msg("Failed to access settings.")
+			return false, err
+		}
+
+		if settings.Ignores != nil {
+			return settings.Ignores.ReasonRequired, nil
 		}
 
 		return false, nil
@@ -146,6 +196,16 @@ func isValidFindingsId(input string) error {
 		return cli.NewValidationFailureError(fmt.Sprintf("Invalid Finding ID format: '%s'. Ensure the Finding ID is a valid UUID.", input))
 	}
 	return nil
+}
+
+func getReasonValidator(reasonRequired bool) func(string) error {
+	if reasonRequired {
+		return isValidReason
+	}
+
+	return func(input string) error {
+		return nil
+	}
 }
 
 func isValidReason(input string) error {
