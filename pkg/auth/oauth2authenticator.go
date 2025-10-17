@@ -397,14 +397,24 @@ func (o *oAuth2Authenticator) serveAndListen(ctx context.Context, srv *http.Serv
 
 		// fill redirect url now that the port is known
 		o.oauthConfig.RedirectURL = getRedirectUri(port)
-		authCodeUrl := o.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline,
+
+		// Build auth URL parameters
+		authParams := []oauth2.AuthCodeOption{
+			oauth2.AccessTypeOffline,
 			oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 			oauth2.SetAuthURLParam("response_type", "code"),
 			oauth2.SetAuthURLParam("scope", "offline_access"),
 			oauth2.SetAuthURLParam("version", "2021-08-11~experimental"),
-			oauth2.SetAuthURLParam("cross_region_routing", "true"))
+			oauth2.SetAuthURLParam("cross_region_routing", "true"),
+		}
 
+		integrationName := o.config.GetString(configuration.INTEGRATION_NAME)
+		if integrationName != "" {
+			authParams = append(authParams, oauth2.SetAuthURLParam("utm_source", integrationName))
+		}
+
+		authCodeUrl := o.oauthConfig.AuthCodeURL(state, authParams...)
 		// launch browser
 		go o.openBrowserFunc(authCodeUrl)
 
