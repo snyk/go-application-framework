@@ -1,65 +1,37 @@
 package presenters
 
 import (
-	"embed"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"text/template"
 
 	"github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 )
 
-const DefaultMimeType = "text/cli"
-const NoneMimeType = "unknown"
-const ApplicationJSONMimeType = "application/json"
-const ApplicationSarifMimeType = content_type.SARIF_JSON
-const CONFIG_JSON_STRIP_WHITESPACES = "internal_json_no_whitespaces"
-
-//go:embed templates/*
-var embeddedFiles embed.FS
-
-type TemplateImplFunction func() (*template.Template, template.FuncMap, error)
-
-type LocalFindingPresenter struct {
+type UfmPresenter struct {
 	TestPath     string
-	Input        []*local_models.LocalFinding
+	Input        []testapi.TestResult
 	config       configuration.Configuration
 	writer       io.Writer
 	runtimeinfo  runtimeinfo.RuntimeInfo
 	templateImpl map[string]TemplateImplFunction
 }
 
-// DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.
-var DefaultTemplateFiles = []string{
-	"templates/local_finding.tmpl",
-	"templates/finding.component.tmpl",
-}
+type UfmPresenterOptions func(presentation *UfmPresenter)
 
-var ApplicationSarifTemplates = []string{
-	"templates/local_finding.sarif.tmpl",
-}
-
-var ApplicationSarifTemplatesUfm = []string{
-	"templates/ufm.sarif.tmpl",
-}
-
-type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
-
-func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) LocalFindingPresenterOptions {
-	return func(p *LocalFindingPresenter) {
+func UfmWithRuntimeInfo(ri runtimeinfo.RuntimeInfo) UfmPresenterOptions {
+	return func(p *UfmPresenter) {
 		p.runtimeinfo = ri
 	}
 }
 
-func NewLocalFindingsRenderer(localFindingsDoc []*local_models.LocalFinding, config configuration.Configuration, writer io.Writer, options ...LocalFindingPresenterOptions) *LocalFindingPresenter {
-	p := &LocalFindingPresenter{
-		Input:  localFindingsDoc,
+func NewUfmRenderer(results []testapi.TestResult, config configuration.Configuration, writer io.Writer, options ...UfmPresenterOptions) *UfmPresenter {
+	p := &UfmPresenter{
+		Input:  results,
 		config: config,
 		writer: writer,
 		templateImpl: map[string]TemplateImplFunction{
@@ -98,7 +70,7 @@ func NewLocalFindingsRenderer(localFindingsDoc []*local_models.LocalFinding, con
 	return p
 }
 
-func (p *LocalFindingPresenter) getImplementationFromMimeType(mimeType string) (*template.Template, error) {
+func (p *UfmPresenter) getImplementationFromMimeType(mimeType string) (*template.Template, error) {
 	functionMapGeneral := getDefaultTemplateFuncMap(p.config, p.runtimeinfo)
 
 	if _, ok := p.templateImpl[mimeType]; !ok {
@@ -118,7 +90,7 @@ func (p *LocalFindingPresenter) getImplementationFromMimeType(mimeType string) (
 	return localFindingsTemplate, nil
 }
 
-func (p *LocalFindingPresenter) RegisterMimeType(mimeType string, implFactory TemplateImplFunction) error {
+func (p *UfmPresenter) RegisterMimeType(mimeType string, implFactory TemplateImplFunction) error {
 	if _, ok := p.templateImpl[mimeType]; ok {
 		return fmt.Errorf("mimetype \"%s\" is already registered", mimeType)
 	}
@@ -127,7 +99,7 @@ func (p *LocalFindingPresenter) RegisterMimeType(mimeType string, implFactory Te
 	return nil
 }
 
-func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
+func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
 	// mimetype specific
 	localFindingsTemplate, err := p.getImplementationFromMimeType(mimeType)
 	if err != nil {
@@ -151,33 +123,12 @@ func (p *LocalFindingPresenter) RenderTemplate(templateFiles []string, mimeType 
 	}
 
 	err = mainTmpl.Execute(writer, struct {
-		Results []*local_models.LocalFinding
+		Results []testapi.TestResult
 	}{
 		Results: p.Input,
 	})
 	if err != nil {
 		return err
-	}
-	return nil
-}
-
-func loadTemplates(files []string, tmpl *template.Template) error {
-	if len(files) == 0 {
-		return fmt.Errorf("a template file must be specified")
-	}
-
-	for _, filename := range files {
-		data, err := embeddedFiles.ReadFile(filename)
-		if err != nil {
-			data, err = os.ReadFile(filename)
-			if err != nil {
-				return fmt.Errorf("failed to read template file %s", filename)
-			}
-		}
-		tmpl, err = tmpl.Parse(string(data))
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
