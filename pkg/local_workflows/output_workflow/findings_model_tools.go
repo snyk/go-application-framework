@@ -128,7 +128,7 @@ func getDefaultWriter(config configuration.Configuration, outputDestination iUti
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
 		writer.mimeType = SARIF_MIME_TYPE
-		writer.templates = ApplicationSarifTemplates
+		writer.templates = presenters.ApplicationSarifTemplatesUfm
 	}
 
 	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {

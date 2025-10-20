@@ -84,12 +84,12 @@ func getWritersToUseUfm(config configuration.Configuration, outputDestination iU
 
 	// TODO Re-enable writers for UFM when rendering is implemented
 
-	// // currently the only used default writer is sarif
-	// if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-	// 	if tmp := getDefaultWriter(config, outputDestination); tmp != nil {
-	// 		writerMap[DEFAULT_WRITER] = tmp
-	// 	}
-	// }
+	// currently the only used default writer is sarif
+	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
+		if tmp := getDefaultWriter(config, outputDestination); tmp != nil {
+			writerMap[DEFAULT_WRITER] = tmp
+		}
+	}
 
 	// // default file writers
 	// fileWriters := []FileWriter{
