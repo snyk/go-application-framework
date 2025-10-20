@@ -652,3 +652,147 @@ func TestAPILogWriter_OversizedSingleEntry(t *testing.T) {
 
 	// The oversized message was trimmed from the buffer, so only normal message and trigger are sent
 }
+
+// Benchmark tests
+
+func BenchmarkAPILogWriter_WriteLevel(b *testing.B) {
+	config := APILogWriterConfig{
+		MaxBufferSize: 10 * 1024 * 1024, // 10MB
+		TriggerLevel:  zerolog.ErrorLevel,
+	}
+	writer := NewAPILogWriter(config, nil)
+	msg := []byte("benchmark log message")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = writer.WriteLevel(zerolog.InfoLevel, msg)
+	}
+}
+
+func BenchmarkAPILogWriter_WriteLevel_WithTrigger(b *testing.B) {
+	ctrl := gomock.NewController(b)
+	defer ctrl.Finish()
+
+	mockClient := ldxmocks.NewMockClientWithResponsesInterface(ctrl)
+	mockClient.EXPECT().
+		CreateLogMessageWithResponse(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params *v20241015.CreateLogMessageParams, body v20241015.CreateLogMessageJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateLogMessageResponse, error) {
+			return &v20241015.CreateLogMessageResponse{
+				HTTPResponse: &http.Response{StatusCode: 201},
+			}, nil
+		}).
+		AnyTimes()
+
+	config := APILogWriterConfig{
+		MaxBufferSize: 10 * 1024 * 1024, // 10MB
+		TriggerLevel:  zerolog.ErrorLevel,
+		LdxSyncClient: mockClient,
+		LogSource:     v20241015.LogSource{},
+	}
+	writer := NewAPILogWriter(config, nil)
+	infoMsg := []byte("benchmark info message")
+	errorMsg := []byte("benchmark error message")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = writer.WriteLevel(zerolog.InfoLevel, infoMsg)
+		if i%100 == 0 {
+			_, _ = writer.WriteLevel(zerolog.ErrorLevel, errorMsg)
+		}
+	}
+}
+
+func BenchmarkAPILogWriter_Batching(b *testing.B) {
+	entries := make([]LogEntry, 1000)
+	for i := 0; i < 1000; i++ {
+		entries[i] = LogEntry{
+			Level:     zerolog.InfoLevel,
+			Message:   fmt.Sprintf("log message %d", i),
+			Timestamp: time.Now(),
+		}
+	}
+
+	writer := &APILogWriter{
+		config: APILogWriterConfig{
+			MaxBufferSize: 10 * 1024 * 1024,
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = writer.batchEntriesBySize(entries)
+	}
+}
+
+func BenchmarkAPILogWriter_ToAPIFormat(b *testing.B) {
+	batch := make(Batch, 100)
+	for i := 0; i < 100; i++ {
+		batch[i] = LogEntry{
+			Level:     zerolog.InfoLevel,
+			Message:   fmt.Sprintf("log message %d", i),
+			Timestamp: time.Now(),
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = batch.ToAPIFormat()
+	}
+}
+
+func BenchmarkAPILogWriter_ConvertLevel(b *testing.B) {
+	levels := []zerolog.Level{
+		zerolog.DebugLevel,
+		zerolog.InfoLevel,
+		zerolog.WarnLevel,
+		zerolog.ErrorLevel,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = convertLogLevel(levels[i%len(levels)])
+	}
+}
+
+func BenchmarkAPILogWriter_ConcurrentWrites(b *testing.B) {
+	config := APILogWriterConfig{
+		MaxBufferSize: 10 * 1024 * 1024, // 10MB
+		TriggerLevel:  zerolog.ErrorLevel,
+	}
+	writer := NewAPILogWriter(config, nil)
+	msg := []byte("concurrent benchmark log message")
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			_, _ = writer.WriteLevel(zerolog.InfoLevel, msg)
+		}
+	})
+}
+
+func BenchmarkAPILogWriter_BufferTrimming(b *testing.B) {
+	config := APILogWriterConfig{
+		MaxBufferSize: 1024, // Small buffer to trigger trimming
+		TriggerLevel:  zerolog.ErrorLevel,
+	}
+	writer := NewAPILogWriter(config, nil)
+	msg := []byte("this is a log message that will cause buffer trimming")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = writer.WriteLevel(zerolog.InfoLevel, msg)
+	}
+}
+
+func BenchmarkLogEntry_ToJSON(b *testing.B) {
+	entry := LogEntry{
+		Level:     zerolog.InfoLevel,
+		Message:   "benchmark log message",
+		Timestamp: time.Now(),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = entry.toJSON()
+	}
+}
