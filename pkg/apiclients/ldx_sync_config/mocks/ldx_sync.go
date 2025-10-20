@@ -115,6 +115,46 @@ func (mr *MockClientInterfaceMockRecorder) CreateConfigWithBody(ctx, params, con
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConfigWithBody", reflect.TypeOf((*MockClientInterface)(nil).CreateConfigWithBody), varargs...)
 }
 
+// CreateLogMessage mocks base method.
+func (m *MockClientInterface) CreateLogMessage(ctx context.Context, params *v20241015.CreateLogMessageParams, body v20241015.CreateLogMessageJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, params, body}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateLogMessage", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateLogMessage indicates an expected call of CreateLogMessage.
+func (mr *MockClientInterfaceMockRecorder) CreateLogMessage(ctx, params, body interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, params, body}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLogMessage", reflect.TypeOf((*MockClientInterface)(nil).CreateLogMessage), varargs...)
+}
+
+// CreateLogMessageWithBody mocks base method.
+func (m *MockClientInterface) CreateLogMessageWithBody(ctx context.Context, params *v20241015.CreateLogMessageParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, params, contentType, body}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateLogMessageWithBody", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateLogMessageWithBody indicates an expected call of CreateLogMessageWithBody.
+func (mr *MockClientInterfaceMockRecorder) CreateLogMessageWithBody(ctx, params, contentType, body interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, params, contentType, body}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLogMessageWithBody", reflect.TypeOf((*MockClientInterface)(nil).CreateLogMessageWithBody), varargs...)
+}
+
 // DeleteConfig mocks base method.
 func (m *MockClientInterface) DeleteConfig(ctx context.Context, params *v20241015.DeleteConfigParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
@@ -296,6 +336,46 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateConfigWithResponse
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, params, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConfigWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).CreateConfigWithResponse), varargs...)
+}
+
+// CreateLogMessageWithBodyWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) CreateLogMessageWithBodyWithResponse(ctx context.Context, params *v20241015.CreateLogMessageParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateLogMessageResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, params, contentType, body}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateLogMessageWithBodyWithResponse", varargs...)
+	ret0, _ := ret[0].(*v20241015.CreateLogMessageResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateLogMessageWithBodyWithResponse indicates an expected call of CreateLogMessageWithBodyWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateLogMessageWithBodyWithResponse(ctx, params, contentType, body interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, params, contentType, body}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLogMessageWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).CreateLogMessageWithBodyWithResponse), varargs...)
+}
+
+// CreateLogMessageWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) CreateLogMessageWithResponse(ctx context.Context, params *v20241015.CreateLogMessageParams, body v20241015.CreateLogMessageJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateLogMessageResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, params, body}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateLogMessageWithResponse", varargs...)
+	ret0, _ := ret[0].(*v20241015.CreateLogMessageResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateLogMessageWithResponse indicates an expected call of CreateLogMessageWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateLogMessageWithResponse(ctx, params, body interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, params, body}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLogMessageWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).CreateLogMessageWithResponse), varargs...)
 }
 
 // DeleteConfigWithResponse mocks base method.

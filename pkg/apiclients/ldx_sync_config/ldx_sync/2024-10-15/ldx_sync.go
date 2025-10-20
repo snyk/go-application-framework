@@ -56,6 +56,29 @@ const (
 	ErrorDocument0JsonapiVersionN10 ErrorDocument0JsonapiVersion = "1.0"
 )
 
+// Defines values for LogMessageLevel.
+const (
+	LogMessageLevelDebug LogMessageLevel = "debug"
+	LogMessageLevelError LogMessageLevel = "error"
+	LogMessageLevelInfo  LogMessageLevel = "info"
+	LogMessageLevelWarn  LogMessageLevel = "warn"
+)
+
+// Defines values for LogPostingErrorDocumentJsonapiVersion.
+const (
+	LogPostingErrorDocumentJsonapiVersionN10 LogPostingErrorDocumentJsonapiVersion = "1.0"
+)
+
+// Defines values for PostLogResponseDataType.
+const (
+	Log PostLogResponseDataType = "log"
+)
+
+// Defines values for PostLogResponseJsonapiVersion.
+const (
+	PostLogResponseJsonapiVersionN10 PostLogResponseJsonapiVersion = "1.0"
+)
+
 // ActualVersion Resolved API version
 type ActualVersion = string
 
@@ -393,6 +416,53 @@ type LinkProperty1 struct {
 	Meta *Meta `json:"meta,omitempty"`
 }
 
+// LogMessage A single log message
+type LogMessage struct {
+	// Level The log level
+	Level *LogMessageLevel `json:"level,omitempty"`
+
+	// LogMessage The log message content
+	LogMessage *string `json:"log_message,omitempty"`
+}
+
+// LogMessageLevel The log level
+type LogMessageLevel string
+
+// LogPostingError defines model for LogPostingError.
+type LogPostingError struct {
+	// Detail A human-readable explanation specific to this occurrence of the problem
+	Detail string `json:"detail"`
+
+	// Status The HTTP status code applicable to this problem
+	Status string `json:"status"`
+}
+
+// LogPostingErrorDocument defines model for LogPostingErrorDocument.
+type LogPostingErrorDocument struct {
+	Errors  []LogPostingError `json:"errors"`
+	Jsonapi *struct {
+		Version *LogPostingErrorDocumentJsonapiVersion `json:"version,omitempty"`
+	} `json:"jsonapi,omitempty"`
+}
+
+// LogPostingErrorDocumentJsonapiVersion defines model for LogPostingErrorDocument.Jsonapi.Version.
+type LogPostingErrorDocumentJsonapiVersion string
+
+// LogSource Source information about the integration that generated all logs in this batch
+type LogSource struct {
+	// IntegrationEnvironment Environment where the integration is running
+	IntegrationEnvironment *string `json:"integration_environment,omitempty"`
+
+	// IntegrationEnvironmentVersion Version of the integration environment
+	IntegrationEnvironmentVersion *string `json:"integration_environment_version,omitempty"`
+
+	// IntegrationName Name of the integration (e.g., VS_CODE, JETBRAINS_IDE)
+	IntegrationName *string `json:"integration_name,omitempty"`
+
+	// IntegrationVersion Version of the integration
+	IntegrationVersion *string `json:"integration_version,omitempty"`
+}
+
 // Meta Free-form object that may contain non-standard information.
 type Meta map[string]interface{}
 
@@ -429,6 +499,31 @@ type Policy struct {
 	// LockedAttributes List of attributes that cannot be overridden locally
 	LockedAttributes *[]string `json:"locked_attributes,omitempty"`
 }
+
+// PostLogResponse defines model for PostLogResponse.
+type PostLogResponse struct {
+	Data struct {
+		// Id Unique identifier for the log entry
+		Id openapi_types.UUID `json:"id"`
+
+		// Type Resource type
+		Type PostLogResponseDataType `json:"type"`
+	} `json:"data"`
+	Jsonapi *struct {
+		Version *PostLogResponseJsonapiVersion `json:"version,omitempty"`
+	} `json:"jsonapi,omitempty"`
+	Links *struct {
+		// Self Link to this resource
+		Self *string `json:"self,omitempty"`
+	} `json:"links,omitempty"`
+	Meta *ResponseMeta `json:"meta,omitempty"`
+}
+
+// PostLogResponseDataType Resource type
+type PostLogResponseDataType string
+
+// PostLogResponseJsonapiVersion defines model for PostLogResponse.Jsonapi.Version.
+type PostLogResponseJsonapiVersion string
 
 // ProductConfig defines model for ProductConfig.
 type ProductConfig struct {
@@ -500,10 +595,16 @@ type N404 = ErrorDocument
 type N500 = ErrorDocument
 
 // ErrorResponseApplicationJSON defines model for ErrorResponse.
-type ErrorResponseApplicationJSON = ErrorDocument0
+type ErrorResponseApplicationJSON = LogPostingErrorDocument
 
 // ErrorResponseApplicationVndAPIPlusJSON defines model for ErrorResponse.
-type ErrorResponseApplicationVndAPIPlusJSON = ErrorDocument0
+type ErrorResponseApplicationVndAPIPlusJSON = LogPostingErrorDocument
+
+// ErrorResponse0ApplicationJSON defines model for ErrorResponse__0.
+type ErrorResponse0ApplicationJSON = ErrorDocument0
+
+// ErrorResponse0ApplicationVndAPIPlusJSON defines model for ErrorResponse__0.
+type ErrorResponse0ApplicationVndAPIPlusJSON = ErrorDocument0
 
 // DeleteConfigParams defines parameters for DeleteConfig.
 type DeleteConfigParams struct {
@@ -624,11 +725,28 @@ type CreateConfigParams struct {
 	RemoteUrl *string `form:"remote_url,omitempty" json:"remote_url,omitempty"`
 }
 
+// CreateLogMessageJSONBody defines parameters for CreateLogMessage.
+type CreateLogMessageJSONBody struct {
+	LogMessages []LogMessage `json:"log_messages"`
+
+	// Source Source information about the integration that generated all logs in this batch
+	Source LogSource `json:"source"`
+}
+
+// CreateLogMessageParams defines parameters for CreateLogMessage.
+type CreateLogMessageParams struct {
+	// Version API version in format YYYY-MM-DD
+	Version string `form:"version" json:"version"`
+}
+
 // UpdateConfigJSONRequestBody defines body for UpdateConfig for application/json ContentType.
 type UpdateConfigJSONRequestBody = ConfigurationRequest
 
 // CreateConfigJSONRequestBody defines body for CreateConfig for application/json ContentType.
 type CreateConfigJSONRequestBody = ConfigurationRequest
+
+// CreateLogMessageJSONRequestBody defines body for CreateLogMessage for application/json ContentType.
+type CreateLogMessageJSONRequestBody CreateLogMessageJSONBody
 
 // AsLinkProperty0 returns the union data inside the LinkProperty as a LinkProperty0
 func (t LinkProperty) AsLinkProperty0() (LinkProperty0, error) {
@@ -781,6 +899,11 @@ type ClientInterface interface {
 
 	CreateConfig(ctx context.Context, params *CreateConfigParams, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateLogMessageWithBody request with any body
+	CreateLogMessageWithBody(ctx context.Context, params *CreateLogMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateLogMessage(ctx context.Context, params *CreateLogMessageParams, body CreateLogMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAPIVersions request
 	ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -860,6 +983,30 @@ func (c *Client) CreateConfig(ctx context.Context, params *CreateConfigParams, b
 	return c.Client.Do(req)
 }
 
+func (c *Client) CreateLogMessageWithBody(ctx context.Context, params *CreateLogMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLogMessageRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateLogMessage(ctx context.Context, params *CreateLogMessageParams, body CreateLogMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLogMessageRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListAPIVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAPIVersionsRequest(c.Server)
 	if err != nil {
@@ -919,6 +1066,7 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 		}
 
 		if params.Tenant != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -930,9 +1078,11 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
+
 		}
 
 		if params.Group != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -944,9 +1094,11 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
+
 		}
 
 		if params.Org != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -958,9 +1110,11 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
+
 		}
 
 		if params.AssetId != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -972,9 +1126,11 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
+
 		}
 
 		if params.ProjectName != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -986,9 +1142,11 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
+
 		}
 
 		if params.RemoteUrl != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1000,6 +1158,7 @@ func NewDeleteConfigRequest(server string, params *DeleteConfigParams) (*http.Re
 					}
 				}
 			}
+
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -1048,6 +1207,7 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 		}
 
 		if params.Org != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1059,9 +1219,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.AssetId != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1073,9 +1235,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.ProjectName != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1087,9 +1251,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.RemoteUrl != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1101,9 +1267,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.Group != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1115,9 +1283,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.Tenant != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1129,9 +1299,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.IntegrationName != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_name", runtime.ParamLocationQuery, *params.IntegrationName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1143,9 +1315,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.IntegrationVersion != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_version", runtime.ParamLocationQuery, *params.IntegrationVersion); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1157,9 +1331,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.IntegrationEnvironment != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_environment", runtime.ParamLocationQuery, *params.IntegrationEnvironment); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1171,9 +1347,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.IntegrationEnvironmentVersion != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "integration_environment_version", runtime.ParamLocationQuery, *params.IntegrationEnvironmentVersion); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1185,9 +1363,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.StartingAfter != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "starting_after", runtime.ParamLocationQuery, *params.StartingAfter); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1199,9 +1379,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.EndingBefore != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ending_before", runtime.ParamLocationQuery, *params.EndingBefore); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1213,9 +1395,11 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		if params.Limit != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1227,6 +1411,7 @@ func NewGetConfigRequest(server string, params *GetConfigParams) (*http.Request,
 					}
 				}
 			}
+
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -1286,6 +1471,7 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 		}
 
 		if params.Tenant != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1297,9 +1483,11 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.Group != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1311,9 +1499,11 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.Org != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1325,9 +1515,11 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.AssetId != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1339,9 +1531,11 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.ProjectName != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1353,9 +1547,11 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.RemoteUrl != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1367,6 +1563,7 @@ func NewUpdateConfigRequestWithBody(server string, params *UpdateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -1428,6 +1625,7 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 		}
 
 		if params.Tenant != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1439,9 +1637,11 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.Group != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1453,9 +1653,11 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.Org != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1467,9 +1669,11 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.AssetId != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "asset_id", runtime.ParamLocationQuery, *params.AssetId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1481,9 +1685,11 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.ProjectName != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "project_name", runtime.ParamLocationQuery, *params.ProjectName); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1495,9 +1701,11 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					}
 				}
 			}
+
 		}
 
 		if params.RemoteUrl != nil {
+
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1507,6 +1715,65 @@ func NewCreateConfigRequestWithBody(server string, params *CreateConfigParams, c
 					for _, v2 := range v {
 						queryValues.Add(k, v2)
 					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateLogMessageRequest calls the generic CreateLogMessage builder with application/json body
+func NewCreateLogMessageRequest(server string, params *CreateLogMessageParams, body CreateLogMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateLogMessageRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateLogMessageRequestWithBody generates requests for CreateLogMessage with any type of body
+func NewCreateLogMessageRequestWithBody(server string, params *CreateLogMessageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/local_client_connector/logs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
 				}
 			}
 		}
@@ -1644,6 +1911,11 @@ type ClientWithResponsesInterface interface {
 
 	CreateConfigWithResponse(ctx context.Context, params *CreateConfigParams, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error)
 
+	// CreateLogMessageWithBodyWithResponse request with any body
+	CreateLogMessageWithBodyWithResponse(ctx context.Context, params *CreateLogMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLogMessageResponse, error)
+
+	CreateLogMessageWithResponse(ctx context.Context, params *CreateLogMessageParams, body CreateLogMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLogMessageResponse, error)
+
 	// ListAPIVersionsWithResponse request
 	ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error)
 
@@ -1654,12 +1926,12 @@ type ClientWithResponsesInterface interface {
 type DeleteConfigResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	JSON401                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON404                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON404 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON500                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON404                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON404 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponse0ApplicationVndAPIPlusJSON
 }
 
 // Status returns HTTPResponse.Status
@@ -1683,14 +1955,14 @@ type GetConfigResponse struct {
 	HTTPResponse             *http.Response
 	JSON200                  *ConfigResponse
 	ApplicationvndApiJSON200 *ConfigResponse
-	JSON400                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON401                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON404                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON404 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON500                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON400                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON404                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON404 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponse0ApplicationVndAPIPlusJSON
 }
 
 // Status returns HTTPResponse.Status
@@ -1714,14 +1986,14 @@ type UpdateConfigResponse struct {
 	HTTPResponse             *http.Response
 	JSON200                  *ConfigResponse
 	ApplicationvndApiJSON200 *ConfigResponse
-	JSON400                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON401                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON404                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON404 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON500                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON400                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON404                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON404 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponse0ApplicationVndAPIPlusJSON
 }
 
 // Status returns HTTPResponse.Status
@@ -1745,14 +2017,14 @@ type CreateConfigResponse struct {
 	HTTPResponse             *http.Response
 	JSON201                  *ConfigResponse
 	ApplicationvndApiJSON201 *ConfigResponse
-	JSON400                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON401                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON409                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON409 *ErrorResponseApplicationVndAPIPlusJSON
-	JSON500                  *ErrorResponseApplicationJSON
-	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON400                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON409                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON409 *ErrorResponse0ApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponse0ApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponse0ApplicationVndAPIPlusJSON
 }
 
 // Status returns HTTPResponse.Status
@@ -1765,6 +2037,37 @@ func (r CreateConfigResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateConfigResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateLogMessageResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON201                  *PostLogResponse
+	ApplicationvndApiJSON201 *PostLogResponse
+	JSON400                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON409                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON409 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateLogMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateLogMessageResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1875,6 +2178,23 @@ func (c *ClientWithResponses) CreateConfigWithResponse(ctx context.Context, para
 	return ParseCreateConfigResponse(rsp)
 }
 
+// CreateLogMessageWithBodyWithResponse request with arbitrary body returning *CreateLogMessageResponse
+func (c *ClientWithResponses) CreateLogMessageWithBodyWithResponse(ctx context.Context, params *CreateLogMessageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLogMessageResponse, error) {
+	rsp, err := c.CreateLogMessageWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateLogMessageResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateLogMessageWithResponse(ctx context.Context, params *CreateLogMessageParams, body CreateLogMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLogMessageResponse, error) {
+	rsp, err := c.CreateLogMessage(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateLogMessageResponse(rsp)
+}
+
 // ListAPIVersionsWithResponse request returning *ListAPIVersionsResponse
 func (c *ClientWithResponses) ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIVersionsResponse, error) {
 	rsp, err := c.ListAPIVersions(ctx, reqEditors...)
@@ -1908,42 +2228,42 @@ func ParseDeleteConfigResponse(rsp *http.Response) (*DeleteConfigResponse, error
 
 	switch {
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON401 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 404:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON404 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON500 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON401 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 404:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1976,28 +2296,28 @@ func ParseGetConfigResponse(rsp *http.Response) (*GetConfigResponse, error) {
 		response.JSON200 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON400 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON401 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 404:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON404 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2011,28 +2331,28 @@ func ParseGetConfigResponse(rsp *http.Response) (*GetConfigResponse, error) {
 		response.ApplicationvndApiJSON200 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON400 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON401 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 404:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2065,28 +2385,28 @@ func ParseUpdateConfigResponse(rsp *http.Response) (*UpdateConfigResponse, error
 		response.JSON200 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON400 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON401 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 404:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON404 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
-		var dest ErrorResponseApplicationJSON
+		var dest ErrorResponse0ApplicationJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2100,28 +2420,28 @@ func ParseUpdateConfigResponse(rsp *http.Response) (*UpdateConfigResponse, error
 		response.ApplicationvndApiJSON200 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON400 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON401 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 404:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
-		var dest ErrorResponseApplicationVndAPIPlusJSON
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2148,6 +2468,95 @@ func ParseCreateConfigResponse(rsp *http.Response) (*CreateConfigResponse, error
 	switch {
 	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 201:
 		var dest ConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
+		var dest ErrorResponse0ApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
+		var dest ErrorResponse0ApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 409:
+		var dest ErrorResponse0ApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
+		var dest ErrorResponse0ApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 201:
+		var dest ConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 409:
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
+		var dest ErrorResponse0ApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateLogMessageResponse parses an HTTP response from a CreateLogMessageWithResponse call
+func ParseCreateLogMessageResponse(rsp *http.Response) (*CreateLogMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateLogMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 201:
+		var dest PostLogResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2182,7 +2591,7 @@ func ParseCreateConfigResponse(rsp *http.Response) (*CreateConfigResponse, error
 		response.JSON500 = &dest
 
 	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 201:
-		var dest ConfigResponse
+		var dest PostLogResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

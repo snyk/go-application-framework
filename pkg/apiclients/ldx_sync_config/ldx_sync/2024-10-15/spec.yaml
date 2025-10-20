@@ -163,6 +163,28 @@ components:
       content:
         application/json:
           schema:
+            $ref: '#/components/schemas/LogPostingErrorDocument'
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/LogPostingErrorDocument'
+      description: Error response
+      headers:
+        deprecation:
+          $ref: '#/components/headers/Deprecation'
+        snyk-request-id:
+          $ref: '#/components/headers/SnykRequestId'
+        snyk-version-lifecycle-stage:
+          $ref: '#/components/headers/SnykVersionLifecycleStage'
+        snyk-version-requested:
+          $ref: '#/components/headers/SnykVersionRequested'
+        snyk-version-served:
+          $ref: '#/components/headers/SnykVersionServed'
+        sunset:
+          $ref: '#/components/headers/Sunset'
+    ErrorResponse__0:
+      content:
+        application/json:
+          schema:
             $ref: '#/components/schemas/ErrorDocument__0'
         application/vnd.api+json:
           schema:
@@ -790,6 +812,82 @@ components:
         required:
         - href
         type: object
+    LogMessage:
+      additionalProperties: false
+      description: A single log message
+      properties:
+        level:
+          description: The log level
+          enum:
+          - debug
+          - info
+          - warn
+          - error
+          example: info
+          type: string
+        log_message:
+          description: The log message content
+          example: Hello, World!
+          type: string
+      type: object
+    LogPostingError:
+      additionalProperties: false
+      properties:
+        detail:
+          description: A human-readable explanation specific to this occurrence of
+            the problem
+          example: Invalid request body
+          type: string
+        status:
+          description: The HTTP status code applicable to this problem
+          example: "400"
+          type: string
+      required:
+      - detail
+      - status
+      type: object
+    LogPostingErrorDocument:
+      additionalProperties: false
+      properties:
+        errors:
+          items:
+            $ref: '#/components/schemas/LogPostingError'
+          minItems: 1
+          type: array
+        jsonapi:
+          additionalProperties: false
+          properties:
+            version:
+              enum:
+              - "1.0"
+              example: "1.0"
+              type: string
+          type: object
+      required:
+      - errors
+      type: object
+    LogSource:
+      additionalProperties: false
+      description: Source information about the integration that generated all logs
+        in this batch
+      properties:
+        integration_environment:
+          description: Environment where the integration is running
+          example: production
+          type: string
+        integration_environment_version:
+          description: Version of the integration environment
+          example: 1.85.0
+          type: string
+        integration_name:
+          description: Name of the integration (e.g., VS_CODE, JETBRAINS_IDE)
+          example: VS_CODE
+          type: string
+        integration_version:
+          description: Version of the integration
+          example: 1.2.3
+          type: string
+      type: object
     Meta:
       additionalProperties: true
       description: Free-form object that may contain non-standard information.
@@ -857,6 +955,50 @@ components:
           items:
             type: string
           type: array
+      type: object
+    PostLogResponse:
+      additionalProperties: false
+      properties:
+        data:
+          additionalProperties: false
+          properties:
+            id:
+              description: Unique identifier for the log entry
+              example: 123e4567-e89b-12d3-a456-426614174000
+              format: uuid
+              type: string
+            type:
+              description: Resource type
+              enum:
+              - log
+              example: log
+              type: string
+          required:
+          - id
+          - type
+          type: object
+        jsonapi:
+          additionalProperties: false
+          properties:
+            version:
+              enum:
+              - "1.0"
+              example: "1.0"
+              type: string
+          type: object
+        links:
+          additionalProperties: false
+          properties:
+            self:
+              description: Link to this resource
+              example: https://api.snyk.io/rest/remote-client-connector/logs
+              format: uri
+              type: string
+          type: object
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
       type: object
     ProductConfig:
       additionalProperties: false
@@ -1012,11 +1154,11 @@ paths:
             sunset:
               $ref: '#/components/headers/Sunset'
         "401":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "404":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "500":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
       summary: Delete configuration
       tags:
       - Configuration
@@ -1174,13 +1316,13 @@ paths:
             sunset:
               $ref: '#/components/headers/Sunset'
         "400":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "401":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "404":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "500":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
       summary: Get configuration with automatic organization selection
       tags:
       - Configuration
@@ -1279,13 +1421,13 @@ paths:
             sunset:
               $ref: '#/components/headers/Sunset'
         "400":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "401":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "404":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "500":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
       summary: Update configuration
       tags:
       - Configuration
@@ -1384,13 +1526,13 @@ paths:
             sunset:
               $ref: '#/components/headers/Sunset'
         "400":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "401":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "409":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
         "500":
-          $ref: '#/components/responses/ErrorResponse'
+          $ref: '#/components/responses/ErrorResponse__0'
       summary: Create configuration
       tags:
       - Configuration
@@ -1400,6 +1542,87 @@ paths:
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: config
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-stability-level: beta
+  /local_client_connector/logs:
+    post:
+      description: Post a log message by logging it in the service
+      operationId: createLogMessage
+      parameters:
+      - description: API version in format YYYY-MM-DD
+        in: query
+        name: version
+        required: true
+        schema:
+          example: "2025-07-29"
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                log_messages:
+                  items:
+                    $ref: '#/components/schemas/LogMessage'
+                  type: array
+                source:
+                  $ref: '#/components/schemas/LogSource'
+              required:
+              - log_messages
+              - source
+              type: object
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostLogResponse'
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/PostLogResponse'
+          description: Log message posted successfully
+          headers:
+            deprecation:
+              $ref: '#/components/headers/Deprecation'
+            location:
+              description: URI of the created resource
+              schema:
+                format: uri
+                type: string
+            snyk-request-id:
+              $ref: '#/components/headers/SnykRequestId'
+            snyk-version-lifecycle-stage:
+              $ref: '#/components/headers/SnykVersionLifecycleStage'
+            snyk-version-requested:
+              $ref: '#/components/headers/SnykVersionRequested'
+            snyk-version-served:
+              $ref: '#/components/headers/SnykVersionServed'
+            sunset:
+              $ref: '#/components/headers/Sunset'
+        "400":
+          $ref: '#/components/responses/ErrorResponse'
+        "401":
+          $ref: '#/components/responses/ErrorResponse'
+        "409":
+          $ref: '#/components/responses/ErrorResponse'
+        "500":
+          $ref: '#/components/responses/ErrorResponse'
+      summary: Post a log message by logging it in the service
+      tags:
+      - Logging
+      x-cerberus:
+        authorization:
+          reason: org-scoped authorization is not sufficient here.
+          skip: true
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/ide'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      x-snyk-api-resource: logs
       x-snyk-api-stability: beta
       x-snyk-api-version: 2024-10-15~beta
       x-stability-level: beta
