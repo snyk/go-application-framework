@@ -37,7 +37,7 @@ import (
 func TestNewAPILogWriter_DefaultValues(t *testing.T) {
 	config := APILogWriterConfig{}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	assert.NotNil(t, writer)
 	assert.Equal(t, 10*1024*1024, writer.config.MaxBufferSize, "Should use default buffer size (10MB)")
@@ -55,7 +55,7 @@ func TestNewAPILogWriter_CustomValues(t *testing.T) {
 		LdxSyncClient: mockClient,
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	assert.NotNil(t, writer)
 	assert.Equal(t, 100, writer.config.MaxBufferSize)
@@ -69,7 +69,7 @@ func TestAPILogWriter_BuffersMessages(t *testing.T) {
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write info level messages (below trigger level)
 	for i := 0; i < 5; i++ {
@@ -89,7 +89,7 @@ func TestAPILogWriter_TrimsBufferWhenFull(t *testing.T) {
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write more messages than the buffer can hold
 	for i := 0; i < 15; i++ {
@@ -138,7 +138,7 @@ func TestAPILogWriter_SendsOnTriggerLevel(t *testing.T) {
 		LogSource:     v20241015.LogSource{},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write some info messages
 	for i := 0; i < 3; i++ {
@@ -175,7 +175,7 @@ func TestAPILogWriter_DoesNotSendBelowTriggerLevel(t *testing.T) {
 		LdxSyncClient: mockClient,
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write only info and warn messages (below error level)
 	_, _ = writer.WriteLevel(zerolog.InfoLevel, []byte("info message"))
@@ -212,7 +212,7 @@ func TestAPILogWriter_ThreadSafety(t *testing.T) {
 		LogSource:     v20241015.LogSource{},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Run concurrent writes
 	var wg sync.WaitGroup
@@ -265,7 +265,7 @@ func TestAPILogWriter_FlushSendsRemainingLogs(t *testing.T) {
 		LogSource:     v20241015.LogSource{},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write info messages (won't trigger automatic send)
 	for i := 0; i < 3; i++ {
@@ -293,7 +293,7 @@ func TestAPILogWriter_ClearBuffer(t *testing.T) {
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write some messages
 	for i := 0; i < 5; i++ {
@@ -341,7 +341,7 @@ func TestAPILogWriter_OnErrorCallback(t *testing.T) {
 		},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write error message to trigger send
 	_, err := writer.WriteLevel(zerolog.ErrorLevel, []byte("error message"))
@@ -378,7 +378,7 @@ func TestAPILogWriter_WritesToUnderlyingWriter(t *testing.T) {
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
 
-	writer := NewAPILogWriter(config, mockWriter)
+	writer := NewAPILogWriter(config)
 
 	// Write messages
 	for _, msg := range messages {
@@ -393,7 +393,7 @@ func TestAPILogWriter_WriteMethod(t *testing.T) {
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Use Write method (should default to Info level)
 	msg := "test message"
@@ -416,7 +416,7 @@ func TestAPILogWriter_LogEntryStructure(t *testing.T) {
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	msg := "test message"
 	beforeWrite := time.Now()
@@ -444,7 +444,7 @@ func TestAPILogWriter_NoClientDoesNotSend(t *testing.T) {
 		LdxSyncClient: nil, // No client
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write error message (would trigger send if client was set)
 	_, err := writer.WriteLevel(zerolog.ErrorLevel, []byte("error message"))
@@ -487,7 +487,7 @@ func TestAPILogWriter_ConvertLevel(t *testing.T) {
 		LogSource:     v20241015.LogSource{},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write messages with different levels
 	_, _ = writer.WriteLevel(zerolog.DebugLevel, []byte("debug message"))
@@ -528,7 +528,7 @@ func TestAPILogWriter_BatchesBySize(t *testing.T) {
 		LogSource:     v20241015.LogSource{},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Create a large message that will force batching
 	// Each message is roughly 100KB, so 15 messages = ~1.5MB, requiring 2 batches
@@ -587,7 +587,7 @@ func TestAPILogWriter_SingleBatchUnder1MB(t *testing.T) {
 		LogSource:     v20241015.LogSource{},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Write 100 small messages (well under 1MB total)
 	for i := 0; i < 100; i++ {
@@ -628,7 +628,7 @@ func TestAPILogWriter_OversizedSingleEntry(t *testing.T) {
 		LogSource:     v20241015.LogSource{},
 	}
 
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 
 	// Try to write an oversized message (>1MB)
 	// This will be added to buffer then immediately trimmed because it exceeds MaxBufferSize
@@ -660,7 +660,7 @@ func BenchmarkAPILogWriter_WriteLevel(b *testing.B) {
 		MaxBufferSize: 10 * 1024 * 1024, // 10MB
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 	msg := []byte("benchmark log message")
 
 	b.ResetTimer()
@@ -689,7 +689,7 @@ func BenchmarkAPILogWriter_WriteLevel_WithTrigger(b *testing.B) {
 		LdxSyncClient: mockClient,
 		LogSource:     v20241015.LogSource{},
 	}
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 	infoMsg := []byte("benchmark info message")
 	errorMsg := []byte("benchmark error message")
 
@@ -736,7 +736,7 @@ func BenchmarkAPILogWriter_ToAPIFormat(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = batch.ToAPIFormat()
+		_ = batch.toAPIFormat()
 	}
 }
 
@@ -759,7 +759,7 @@ func BenchmarkAPILogWriter_ConcurrentWrites(b *testing.B) {
 		MaxBufferSize: 10 * 1024 * 1024, // 10MB
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 	msg := []byte("concurrent benchmark log message")
 
 	b.ResetTimer()
@@ -775,7 +775,7 @@ func BenchmarkAPILogWriter_BufferTrimming(b *testing.B) {
 		MaxBufferSize: 1024, // Small buffer to trigger trimming
 		TriggerLevel:  zerolog.ErrorLevel,
 	}
-	writer := NewAPILogWriter(config, nil)
+	writer := NewAPILogWriter(config)
 	msg := []byte("this is a log message that will cause buffer trimming")
 
 	b.ResetTimer()

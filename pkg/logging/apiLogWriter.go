@@ -80,8 +80,8 @@ func toLogMessage(entry *LogEntry) v20241015.LogMessage {
 	}
 }
 
-// ToAPIFormat converts the batch to a slice of LogMessage
-func (b Batch) ToAPIFormat() []v20241015.LogMessage {
+// toAPIFormat converts the batch to a slice of LogMessage
+func (b Batch) toAPIFormat() []v20241015.LogMessage {
 	var logMessages []v20241015.LogMessage
 	for _, entry := range b {
 		logMessages = append(logMessages, toLogMessage(&entry))
@@ -110,11 +110,10 @@ type APILogWriter struct {
 	config            APILogWriterConfig
 	buffer            []LogEntry
 	currentBufferSize int // Current buffer size in bytes
-	underlyingWriter  zerolog.LevelWriter
 }
 
 // NewAPILogWriter creates a new API log writer with the given configuration
-func NewAPILogWriter(config APILogWriterConfig, underlyingWriter zerolog.LevelWriter) *APILogWriter {
+func NewAPILogWriter(config APILogWriterConfig) *APILogWriter {
 	if config.MaxBufferSize <= 0 {
 		config.MaxBufferSize = DefaultMaxBufferSize
 	}
@@ -127,7 +126,6 @@ func NewAPILogWriter(config APILogWriterConfig, underlyingWriter zerolog.LevelWr
 		config:            config,
 		buffer:            make([]LogEntry, 0),
 		currentBufferSize: 0,
-		underlyingWriter:  underlyingWriter,
 	}
 }
 
@@ -136,10 +134,6 @@ func (w *APILogWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
 	// First write to underlying writer if present
 	var writeErr error
 	bytesWritten := len(p)
-	if w.underlyingWriter != nil {
-		bytesWritten, writeErr = w.underlyingWriter.WriteLevel(level, p)
-	}
-
 	// Add to buffer
 	w.mu.Lock()
 	entry := LogEntry{
@@ -257,7 +251,7 @@ func (w *APILogWriter) batchEntriesBySize(entries []LogEntry) []Batch {
 // sendBatch sends a single batch of log entries to the API
 func (w *APILogWriter) sendBatch(batch Batch) {
 	// Convert batch to API format
-	logMessages := batch.ToAPIFormat()
+	logMessages := batch.toAPIFormat()
 
 	// Create request body with log messages and source
 	requestBody := v20241015.CreateLogMessageJSONRequestBody{
@@ -266,7 +260,7 @@ func (w *APILogWriter) sendBatch(batch Batch) {
 	}
 
 	// Send to API with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	version := "2024-10-15"
