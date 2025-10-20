@@ -1,8 +1,16 @@
 package sarif
 
 import (
-	"github.com/snyk/code-client-go/sarif"
+	"context"
+	"fmt"
+	"maps"
+	"slices"
 
+	"github.com/snyk/code-client-go/sarif"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
@@ -133,4 +141,37 @@ func ConvertTypeToDriverName(s string) string {
 	default:
 		return "Snyk Open Source"
 	}
+}
+
+func GetRulesFromTestResult(result testapi.TestResult, t testapi.FindingType) []map[string]string {
+	sarifRules := map[string]map[string]string{}
+
+	findings, _, err := result.Findings(context.Background())
+	if err != nil {
+		return []map[string]string{}
+	}
+
+	for _, finding := range findings {
+		if finding.Attributes.FindingType == t {
+			for _, problem := range finding.Attributes.Problems {
+				vulnProblem, err := problem.AsSnykVulnProblem()
+				if err != nil {
+					continue
+				}
+
+				if _, ok := sarifRules[vulnProblem.Id]; !ok {
+					sarifRules[vulnProblem.Id] = map[string]string{
+						"id":               vulnProblem.Id,
+						"shortDescription": fmt.Sprintf("%s severity - %s vulnerability in %s", cases.Title(language.English).String(string(vulnProblem.Severity)), finding.Attributes.Title, vulnProblem.PackageName),
+						// FullDescription: sarif.FullDescription{
+						// 	Text: fmt.Sprintf("%s severity - %s vulnerability in %s", cases.Title(language.English).String(string(vulnProblem.Severity)), finding.Attributes.Title, vulnProblem.PackageName),
+						// },
+						"help_text":     "",
+						"help_markdown": "markdown",
+					}
+				}
+			}
+		}
+	}
+	return slices.Collect(maps.Values(sarifRules))
 }
