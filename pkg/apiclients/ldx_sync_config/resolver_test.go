@@ -254,7 +254,7 @@ func TestResolveOrganization(t *testing.T) {
 				mock.EXPECT().
 					GetConfigWithResponse(gomock.Any(), gomock.Any()).
 					Return(&v20241015.GetConfigResponse{
-						JSON404:      &v20241015.ErrorResponseApplicationJSON{},
+						JSON404:      &v20241015.ErrorResponse0ApplicationJSON{},
 						HTTPResponse: &http.Response{StatusCode: http.StatusNotFound},
 					}, nil)
 			},
