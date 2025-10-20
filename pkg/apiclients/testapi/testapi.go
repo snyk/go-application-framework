@@ -385,7 +385,7 @@ func (h *testHandle) Wait(ctx context.Context) error {
 func handleJobInProgress(resp *GetJobResponse, jobID uuid.UUID) (stopPolling bool, err error) {
 	if resp.ApplicationvndApiJSON200 != nil {
 		status := resp.ApplicationvndApiJSON200.Data.Attributes.Status
-		if status == Errored {
+		if status == TestExecutionStatesErrored {
 			return true, fmt.Errorf("job reported status 'errored' (jobID: %s)", jobID)
 		}
 	}
