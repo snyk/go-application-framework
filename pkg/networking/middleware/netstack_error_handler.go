@@ -64,7 +64,7 @@ func (ns *NetworkStackErrorHandlerMiddleware) categorizeNetworkError(err error, 
 	case ns.isConnectionRefusedError(err):
 		err = cli.NewConnectionRefusedError(detail, cause)
 	default:
-		err = cli.NewGeneralCLIFailureError(detail, cause)
+		err = cli.NewGenericNetworkError(detail, cause)
 	}
 
 	err = addRequestDataToErr(err, req)

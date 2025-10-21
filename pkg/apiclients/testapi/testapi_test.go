@@ -152,8 +152,8 @@ func Test_StartTest_Success(t *testing.T) {
 		ExpectedCreateTestBody: &expectedRequestBody,
 		PollCounter:            testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending}, // First poll
-			{ShouldRedirect: true},    // Second poll, redirects
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
 		},
 		FinalTestResult: FinalTestResultConfig{
 			Outcome:           testapi.Pass,
@@ -330,8 +330,8 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending}, // First poll
-			{ShouldRedirect: true},    // Second poll, redirects to final result
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects to final result
 		},
 		FinalTestResult: FinalTestResultConfig{
 			Outcome:           testapi.Pass, // Final outcome is Pass
@@ -406,8 +406,8 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending}, // First poll
-			{ShouldRedirect: true},    // Second poll, redirects
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
 		},
 		FinalTestResult: FinalTestResultConfig{
 			Outcome:           testapi.Fail,
@@ -477,7 +477,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 		ExpectedCreateTestBody: &expectedRequestBody,
 		PollCounter:            testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending},
+			{Status: testapi.TestExecutionStatesPending},
 			{ShouldRedirect: true},
 		},
 		FinalTestResult: FinalTestResultConfig{
@@ -559,8 +559,8 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending}, // First poll
-			{Status: testapi.Errored}, // Second poll, job reports errored
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{Status: testapi.TestExecutionStatesErrored}, // Second poll, job reports errored
 		},
 		FinalTestResult: FinalTestResultConfig{
 			Outcome:           testapi.Pass, // Placeholder, not reached
@@ -627,7 +627,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 			{ // First poll: slow it down so Wait() can time out first
 				CustomHandler: func(w http.ResponseWriter, r *http.Request) {
 					time.Sleep(1500 * time.Millisecond)
-					jobResp := mockJobStatusResponse(t, testData.JobID, testapi.Pending)
+					jobResp := mockJobStatusResponse(t, testData.JobID, testapi.TestExecutionStatesPending)
 					w.WriteHeader(http.StatusOK)
 					_, errWrite := w.Write(jobResp)
 					assert.NoError(t, errWrite)
@@ -708,8 +708,8 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending}, // First poll: Pending
-			{ShouldRedirect: true},    // Second poll: Redirect
+			{Status: testapi.TestExecutionStatesPending}, // First poll: Pending
+			{ShouldRedirect: true},                       // Second poll: Redirect
 		},
 		FinalTestResult: FinalTestResultConfig{
 			CustomHandler: func(w http.ResponseWriter, r *http.Request) {
@@ -794,7 +794,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending},
+			{Status: testapi.TestExecutionStatesPending},
 			{ShouldRedirect: true},
 		},
 		FinalTestResult: FinalTestResultConfig{
@@ -885,7 +885,7 @@ func assertCommonTestResultFields(t *testing.T, result testapi.TestResult, expec
 // Helper function to assert a "Pass" outcome for a test result.
 func assertTestOutcomePass(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID) {
 	t.Helper()
-	assert.Equal(t, testapi.Finished, result.GetExecutionState())
+	assert.Equal(t, testapi.TestExecutionStatesFinished, result.GetExecutionState())
 	require.NotNil(t, result.GetPassFail())
 	assert.Equal(t, testapi.Pass, *result.GetPassFail())
 	require.NotNil(t, result.GetTestID())
@@ -965,7 +965,7 @@ func Test_NewTestClient_CustomLogger(t *testing.T) {
 // Helper function to assert a "Fail" outcome for a test result.
 func assertTestOutcomeFail(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID, expectedReason testapi.TestOutcomeReason) {
 	t.Helper()
-	assert.Equal(t, testapi.Finished, result.GetExecutionState())
+	assert.Equal(t, testapi.TestExecutionStatesFinished, result.GetExecutionState())
 	require.NotNil(t, result.GetPassFail())
 	assert.Equal(t, testapi.Fail, *result.GetPassFail())
 	require.NotNil(t, result.GetTestID())
@@ -1021,7 +1021,7 @@ func assertTestOneHighSeverityFinding(t *testing.T, findingsResult []testapi.Fin
 // Helper function to assert a finished test with specific outcome, errors, and warnings.
 func assertTestFinishedWithOutcomeErrorsAndWarnings(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID, expectedOutcome testapi.PassFail, expectedReason *testapi.TestOutcomeReason, expectedErrors *[]testapi.IoSnykApiCommonError, expectedWarnings *[]testapi.IoSnykApiCommonError) {
 	t.Helper()
-	assert.Equal(t, testapi.Finished, result.GetExecutionState())
+	assert.Equal(t, testapi.TestExecutionStatesFinished, result.GetExecutionState())
 	require.NotNil(t, result.GetPassFail())
 	assert.Equal(t, expectedOutcome, *result.GetPassFail())
 	require.NotNil(t, result.GetTestID())
@@ -1100,8 +1100,8 @@ func Test_Wait_CallsJitter(t *testing.T) {
 		APIVersion:  testapi.DefaultAPIVersion,
 		PollCounter: testData.PollCounter,
 		JobPollResponses: []JobPollResponseConfig{
-			{Status: testapi.Pending}, // First poll
-			{ShouldRedirect: true},    // Second poll, redirects
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
 		},
 		FinalTestResult: FinalTestResultConfig{
 			Outcome: testapi.Pass,

@@ -82,7 +82,7 @@ func Test_NetworkStackErrorHandlerMiddleware(t *testing.T) {
 		assert.True(t, errors.As(capturedError, &cliError))
 
 		// Check that it's a generic CLI failure error
-		expectedGenericError := cli.NewGeneralCLIFailureError("")
+		expectedGenericError := cli.NewGenericNetworkError("")
 		assert.Equal(t, expectedGenericError.ErrorCode, cliError.ErrorCode)
 	})
 
@@ -245,7 +245,7 @@ func Test_NetworkStackErrorHandlerMiddleware(t *testing.T) {
 		assert.True(t, errors.As(capturedError, &cliError))
 
 		// Check that it's a generic CLI failure error
-		expectedGenericError := cli.NewGeneralCLIFailureError("")
+		expectedGenericError := cli.NewGenericNetworkError("")
 		assert.Equal(t, expectedGenericError.ErrorCode, cliError.ErrorCode)
 	})
 }
@@ -458,7 +458,7 @@ func Test_categorizeNetworkError(t *testing.T) {
 		var cliError snyk_errors.Error
 		assert.True(t, errors.As(result, &cliError))
 
-		expectedGenericError := cli.NewGeneralCLIFailureError("")
+		expectedGenericError := cli.NewGenericNetworkError("")
 		assert.Equal(t, expectedGenericError.ErrorCode, cliError.ErrorCode)
 
 		// Verify it's not a TLS error
@@ -529,7 +529,7 @@ func Test_categorizeNetworkError(t *testing.T) {
 		var cliError snyk_errors.Error
 		assert.True(t, errors.As(result, &cliError))
 
-		expectedGenericError := cli.NewGeneralCLIFailureError("")
+		expectedGenericError := cli.NewGenericNetworkError("")
 		assert.Equal(t, expectedGenericError.ErrorCode, cliError.ErrorCode)
 	})
 }

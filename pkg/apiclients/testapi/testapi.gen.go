@@ -84,6 +84,18 @@ const (
 	Ghsa GithubSecurityAdvisoryProblemSource = "ghsa"
 )
 
+// Defines values for IgnoreActionType.
+const (
+	IgnoreActionTypeIgnore IgnoreActionType = "ignore"
+)
+
+// Defines values for IgnoreDetailsReasonType.
+const (
+	NotVulnerable   IgnoreDetailsReasonType = "not-vulnerable"
+	TemporaryIgnore IgnoreDetailsReasonType = "temporary-ignore"
+	WontFix         IgnoreDetailsReasonType = "wont-fix"
+)
+
 // Defines values for JobDataType.
 const (
 	TestJobs JobDataType = "test_jobs"
@@ -140,9 +152,23 @@ const (
 	PinPackage PinPackageActionType = "pin_package"
 )
 
+// Defines values for PolicyType.
+const (
+	LegacyPolicySnapshot PolicyType = "legacy_policy_snapshot"
+)
+
 // Defines values for PolicyRef0.
 const (
 	PolicyRef0LocalPolicy PolicyRef0 = "local_policy"
+)
+
+// Defines values for PolicyRuleReview.
+const (
+	PolicyRuleReviewApproved    PolicyRuleReview = "approved"
+	PolicyRuleReviewCancelled   PolicyRuleReview = "cancelled"
+	PolicyRuleReviewNotRequired PolicyRuleReview = "not-required"
+	PolicyRuleReviewPending     PolicyRuleReview = "pending"
+	PolicyRuleReviewRejected    PolicyRuleReview = "rejected"
 )
 
 // Defines values for ProjectEntityLocatorType.
@@ -200,6 +226,11 @@ const (
 	SeverityOther    Severity = "other"
 )
 
+// Defines values for SeverityChangeActionType.
+const (
+	SeverityChangeActionTypeSeverityChange SeverityChangeActionType = "severity-change"
+)
+
 // Defines values for SnykCloudRuleProblemSource.
 const (
 	SnykCloudRule SnykCloudRuleProblemSource = "snyk_cloud_rule"
@@ -213,6 +244,12 @@ const (
 // Defines values for SnykLicenseProblemSource.
 const (
 	SnykLicense SnykLicenseProblemSource = "snyk_license"
+)
+
+// Defines values for SnykPolicyRefOwner.
+const (
+	Group SnykPolicyRefOwner = "group"
+	Org   SnykPolicyRefOwner = "org"
 )
 
 // Defines values for SnykVulnProblemSource.
@@ -244,10 +281,10 @@ const (
 
 // Defines values for TestExecutionStates.
 const (
-	Errored  TestExecutionStates = "errored"
-	Finished TestExecutionStates = "finished"
-	Pending  TestExecutionStates = "pending"
-	Started  TestExecutionStates = "started"
+	TestExecutionStatesErrored  TestExecutionStates = "errored"
+	TestExecutionStatesFinished TestExecutionStates = "finished"
+	TestExecutionStatesPending  TestExecutionStates = "pending"
+	TestExecutionStatesStarted  TestExecutionStates = "started"
 )
 
 // Defines values for TestOutcomeReason.
@@ -296,6 +333,11 @@ type Action struct {
 
 // ActualVersion Resolved API version
 type ActualVersion = string
+
+// AppliedPolicy defines model for AppliedPolicy.
+type AppliedPolicy struct {
+	union json.RawMessage
+}
 
 // CveProblem CVE designation according to the public Common Vulnerability Exposure
 // database.
@@ -559,8 +601,13 @@ type FindingData struct {
 		// Policy Relate to the policy or policies applied to this finding.
 		Policy *struct {
 			Data *struct {
-				Id   openapi_types.UUID `json:"id"`
-				Type string             `json:"type"`
+				// Attributes Inlined attributes included in the relationship, if it is expanded.
+				//
+				// Expansion is a Snyk variation on JSON API. See
+				// https://snyk.roadie.so/docs/default/component/sweater-comb/standards/rest/#expansion
+				Attributes *PolicyAttributes  `json:"attributes,omitempty"`
+				Id         openapi_types.UUID `json:"id"`
+				Type       string             `json:"type"`
 			} `json:"data,omitempty"`
 			Links IoSnykApiCommonRelatedLink `json:"links"`
 
@@ -647,6 +694,53 @@ type GithubSecurityAdvisoryProblem struct {
 // GithubSecurityAdvisoryProblemSource defines model for GithubSecurityAdvisoryProblem.Source.
 type GithubSecurityAdvisoryProblemSource string
 
+// Ignore defines model for Ignore.
+type Ignore struct {
+	ActionType IgnoreActionType `json:"action_type"`
+	Ignore     IgnoreDetails    `json:"ignore"`
+
+	// PolicyRef Reference to a policy, serving as a container for a set of policy-rules and can be owned by the group or the org.
+	PolicyRef SnykPolicyRef `json:"policy_ref"`
+
+	// Rule A policy rule is the central entity of a policy, including an action as well as conditions
+	// when this policy applies.
+	// Only a subset of fields are included, for more details see the API documentation
+	// https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/policies/-policy_id-
+	Rule *PolicyRule `json:"rule,omitempty"`
+}
+
+// IgnoreActionType defines model for Ignore.ActionType.
+type IgnoreActionType string
+
+// IgnoreDetails defines model for IgnoreDetails.
+type IgnoreDetails struct {
+	Created *time.Time `json:"created,omitempty"`
+
+	// DisregardIfFixable Disregards the policy if set to true and the finding this policy is applied to is fixable
+	DisregardIfFixable *bool                    `json:"disregard_if_fixable,omitempty"`
+	Expires            *time.Time               `json:"expires,omitempty"`
+	IgnoredBy          *IgnoredBy               `json:"ignored_by,omitempty"`
+	Path               *[]string                `json:"path,omitempty"`
+	Reason             string                   `json:"reason"`
+	ReasonType         *IgnoreDetailsReasonType `json:"reason_type,omitempty"`
+	Source             string                   `json:"source"`
+}
+
+// IgnoreDetailsReasonType defines model for IgnoreDetails.ReasonType.
+type IgnoreDetailsReasonType string
+
+// IgnoredBy defines model for IgnoredBy.
+type IgnoredBy struct {
+	// Email Email of the user who created the ignore
+	Email *string `json:"email,omitempty"`
+
+	// Id User ID of the author of the ignore
+	Id openapi_types.UUID `json:"id"`
+
+	// Name Name of the user who created the ignore
+	Name string `json:"name"`
+}
+
 // JobAttributes JobAttributes represents the attributes of a Job resource
 type JobAttributes struct {
 	// CreatedAt Creation time of the job resource
@@ -707,6 +801,32 @@ type LinkProperty1 struct {
 	Meta *Meta `json:"meta,omitempty"`
 }
 
+// LocalIgnore defines model for LocalIgnore.
+type LocalIgnore struct {
+	// CreatedAt When the ignore was first created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// ExpiresAt When the ignore will expire.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Path Dependency path to the vulnerable package to be ignored.
+	//
+	// If not provided, the ignore will apply to all packages with the given
+	// vulnerability ID.
+	Path *[]string `json:"path,omitempty"`
+
+	// Reason Reason for the ignore.
+	Reason *string `json:"reason,omitempty"`
+
+	// SkipIfFixable Skips the ignore rule if an actual fix is available.
+	SkipIfFixable *bool `json:"skip_if_fixable,omitempty"`
+
+	// VulnId The vulnerability ID of the finding to be ignored.
+	//
+	// This typically matches SnykVulnProblem.id for open source vulnerabilities.
+	VulnId string `json:"vuln_id"`
+}
+
 // LocalPathLocator LocalPathLocator locates a test subject by local file paths, relative to the
 // working copy top-level directory of the source code.
 type LocalPathLocator struct {
@@ -723,6 +843,9 @@ type LocalPolicy struct {
 	// FailOnUpgradable Use to fail a test when there is at least one vulnerable finding that can be fixed by upgrading the version of the related
 	//    dependency. E.g. bumping lodash from 1.1.1 to 1.1.2.
 	FailOnUpgradable *bool `json:"fail_on_upgradable,omitempty"`
+
+	// Ignores Defines ignore rules for known issues.
+	Ignores *[]LocalIgnore `json:"ignores,omitempty"`
 
 	// ReachabilityFilter Represent various reachability filters available for findings.
 	ReachabilityFilter *ReachabilityFilter `json:"reachability_filter,omitempty"`
@@ -838,6 +961,21 @@ type PinPackageAction struct {
 // PinPackageActionType defines model for PinPackageAction.Type.
 type PinPackageActionType string
 
+// Policy defines model for Policy.
+type Policy struct {
+	AppliedPolicy AppliedPolicy      `json:"applied_policy"`
+	Id            openapi_types.UUID `json:"id"`
+	Type          PolicyType         `json:"type"`
+}
+
+// PolicyType defines model for Policy.Type.
+type PolicyType string
+
+// PolicyAttributes defines model for PolicyAttributes.
+type PolicyAttributes struct {
+	Policies []Policy `json:"policies"`
+}
+
 // PolicyModification Prior attribute values and the reason they were modified.
 type PolicyModification struct {
 	// Pointer A JSON Pointer (RFC 6901) reference to the modified value, relative to
@@ -867,6 +1005,21 @@ type PolicyRefSet struct {
 	Ids         []Uuid `json:"ids"`
 	LocalPolicy *bool  `json:"local_policy,omitempty"`
 }
+
+// PolicyRule A policy rule is the central entity of a policy, including an action as well as conditions
+// when this policy applies.
+// Only a subset of fields are included, for more details see the API documentation
+// https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/policies/-policy_id-
+type PolicyRule struct {
+	Created  time.Time          `json:"created"`
+	Id       openapi_types.UUID `json:"id"`
+	Modified time.Time          `json:"modified"`
+	Name     string             `json:"name"`
+	Review   PolicyRuleReview   `json:"review"`
+}
+
+// PolicyRuleReview defines model for PolicyRule.Review.
+type PolicyRuleReview string
 
 // Problem Problems are representative of the finding in other security domains and
 // systems with a well-known identifier.
@@ -1014,6 +1167,33 @@ type ScmRepoLocatorType string
 // Severity Indicate the severity of a finding discovered by a Test.
 type Severity string
 
+// SeverityChange defines model for SeverityChange.
+type SeverityChange struct {
+	ActionType SeverityChangeActionType `json:"action_type"`
+
+	// PolicyRef Reference to a policy, serving as a container for a set of policy-rules and can be owned by the group or the org.
+	PolicyRef SnykPolicyRef `json:"policy_ref"`
+
+	// Rule A policy rule is the central entity of a policy, including an action as well as conditions
+	// when this policy applies.
+	// Only a subset of fields are included, for more details see the API documentation
+	// https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/policies/-policy_id-
+	Rule           PolicyRule            `json:"rule"`
+	SeverityChange SeverityChangeDetails `json:"severity_change"`
+}
+
+// SeverityChangeActionType defines model for SeverityChange.ActionType.
+type SeverityChangeActionType string
+
+// SeverityChangeDetails defines model for SeverityChangeDetails.
+type SeverityChangeDetails struct {
+	// NewSeverity Indicate the severity of a finding discovered by a Test.
+	NewSeverity Severity `json:"new_severity"`
+
+	// OriginalSeverity Indicate the severity of a finding discovered by a Test.
+	OriginalSeverity Severity `json:"original_severity"`
+}
+
 // SnykCloudRuleProblem Configuration policy violation from Snyk's Cloud Rules Database.
 type SnykCloudRuleProblem struct {
 	Id     string                     `json:"id"`
@@ -1099,6 +1279,15 @@ type SnykLicenseProblem struct {
 
 // SnykLicenseProblemSource defines model for SnykLicenseProblem.Source.
 type SnykLicenseProblemSource string
+
+// SnykPolicyRef Reference to a policy, serving as a container for a set of policy-rules and can be owned by the group or the org.
+type SnykPolicyRef struct {
+	Id    openapi_types.UUID `json:"id"`
+	Owner SnykPolicyRefOwner `json:"owner"`
+}
+
+// SnykPolicyRefOwner defines model for SnykPolicyRef.Owner.
+type SnykPolicyRefOwner string
 
 // SnykVulnProblem Vulnerability from Snyk's Vulnerability Database.
 type SnykVulnProblem struct {
@@ -1249,8 +1438,20 @@ type SourceLocationType string
 // Suppressed findings do not contribute to the test outcome, but they are still
 // provided in the results.
 type Suppression struct {
+	// CreatedAt When the suppression was first created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// ExpiresAt When the suppression will expire.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
 	// Justification Reason given for an ignore pending approval.
 	Justification *string `json:"justification,omitempty"`
+
+	// Path Dependency path to the vulnerable package to be suppressed.
+	//
+	// If not provided, the suppression will apply to all packages with the given
+	// vulnerability ID.
+	Path *[]string `json:"path,omitempty"`
 
 	// Policy Policy responsible for the state of suppression represented here, if available.
 	Policy *PolicyRef `json:"policy,omitempty"`
@@ -2656,6 +2857,95 @@ func (t Action) MarshalJSON() ([]byte, error) {
 }
 
 func (t *Action) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsSeverityChange returns the union data inside the AppliedPolicy as a SeverityChange
+func (t AppliedPolicy) AsSeverityChange() (SeverityChange, error) {
+	var body SeverityChange
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSeverityChange overwrites any union data inside the AppliedPolicy as the provided SeverityChange
+func (t *AppliedPolicy) FromSeverityChange(v SeverityChange) error {
+	v.ActionType = "severity-change"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSeverityChange performs a merge with any union data inside the AppliedPolicy, using the provided SeverityChange
+func (t *AppliedPolicy) MergeSeverityChange(v SeverityChange) error {
+	v.ActionType = "severity-change"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsIgnore returns the union data inside the AppliedPolicy as a Ignore
+func (t AppliedPolicy) AsIgnore() (Ignore, error) {
+	var body Ignore
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIgnore overwrites any union data inside the AppliedPolicy as the provided Ignore
+func (t *AppliedPolicy) FromIgnore(v Ignore) error {
+	v.ActionType = "ignore"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIgnore performs a merge with any union data inside the AppliedPolicy, using the provided Ignore
+func (t *AppliedPolicy) MergeIgnore(v Ignore) error {
+	v.ActionType = "ignore"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AppliedPolicy) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"action_type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t AppliedPolicy) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "ignore":
+		return t.AsIgnore()
+	case "severity-change":
+		return t.AsSeverityChange()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t AppliedPolicy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AppliedPolicy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

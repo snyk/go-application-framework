@@ -89,8 +89,14 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
 
+	// Handle UFM models, if none found, continue with the rest
+	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, outputDestination)
+	if err != nil {
+		return output, err
+	}
+
 	// Handle findings models, if none found, continue with the rest
-	input, err := output_workflow.HandleContentTypeFindingsModel(input, invocation, outputDestination)
+	input, err = output_workflow.HandleContentTypeFindingsModel(input, invocation, outputDestination)
 	if err != nil {
 		return output, err
 	}

@@ -343,7 +343,7 @@ func mockStartTestResponse(t *testing.T, jobID openapi_types.UUID) []byte {
 		Type       testapi.CreateTest202DataType `json:"type"`
 	}{
 		Attributes: testapi.JobAttributes{
-			Status:    testapi.Pending, // Initial status is Pending
+			Status:    testapi.TestExecutionStatesPending, // Initial status is Pending
 			CreatedAt: time.Now(),
 		},
 		Id:   jobID,
@@ -402,7 +402,7 @@ func mockJobStatusResponse(t *testing.T, jobID openapi_types.UUID, status testap
 func mockJobRedirectResponse(t *testing.T, jobID openapi_types.UUID, relatedLink string, testID openapi_types.UUID) []byte {
 	t.Helper()
 	attributes := testapi.JobAttributes{
-		Status:    testapi.Finished,
+		Status:    testapi.TestExecutionStatesFinished,
 		CreatedAt: time.Now().Add(-1 * time.Minute),
 	}
 
@@ -476,7 +476,7 @@ func mockTestResultResponse(
 			BreachedPolicies: breachedPolicies,
 		},
 		State: &testapi.TestState{
-			Execution: testapi.Finished,
+			Execution: testapi.TestExecutionStatesFinished,
 			Errors:    apiErrors,
 			Warnings:  apiWarnings,
 		},
