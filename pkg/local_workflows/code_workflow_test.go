@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -456,5 +457,133 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 		config.Set(code_workflow.ConfigurarionSlceEnabled, true)
 		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
+	})
+}
+
+// Helper function to test key dependencies for configuration keys
+func testOrganizationDependency(
+	t *testing.T,
+	configKey string,
+	dependencyKey string,
+	configIsBoolean bool,
+) {
+	t.Helper()
+
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Minute))
+	config.Set(dependencyKey, "value1")
+
+	// Track how many times the callback is invoked
+	callCount := 0
+	testCallback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		callCount++
+		// Return a string that changes on each call. This allows us to check whether the returned value comes from
+		// the cache or this callback function.
+		return fmt.Sprintf("value-%d", callCount), nil
+	}
+
+	// Register the dependency
+	err := config.AddKeyDependency(configKey, dependencyKey)
+	assert.NoError(t, err)
+	config.AddDefaultValue(configKey, testCallback)
+
+	// First Get - should invoke callback
+	result1 := getValue(config, configKey, configIsBoolean)
+	assert.NotNil(t, result1)
+	assert.Equal(t, 1, callCount, "Callback should be invoked on first read")
+
+	// Second Get - should use cached value
+	result2 := getValue(config, configKey, configIsBoolean)
+	assert.Equal(t, result1, result2, "Cached value should be used on second read")
+	assert.Equal(t, 1, callCount, "Callback should not be called on second read")
+
+	// Change the value of the dependency - this should clear the cached value.
+	config.Set(dependencyKey, "value2")
+
+	// Third Get - should invoke callback again since cache was cleared
+	result3 := getValue(config, configKey, configIsBoolean)
+	assert.NotNil(t, result3)
+	assert.NotEqual(t, result1, result3, "Cached value should not be used after dependency changed")
+	assert.Equal(t, 2, callCount, "Callback should be called again after dependency changed")
+}
+
+func getValue(config configuration.Configuration, key string, isBoolean bool) interface{} {
+	if isBoolean {
+		return config.GetBool(key)
+	}
+	return config.Get(key)
+}
+
+// Helper function to test callback returns existing value
+func setupMockEngine(t *testing.T) *mocks.MockEngine {
+	t.Helper()
+
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := configuration.New()
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&zerolog.Logger{}).AnyTimes()
+	return mockEngine
+}
+
+func Test_GetSastSettingsConfig(t *testing.T) {
+	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+		testOrganizationDependency(
+			t,
+			code_workflow.ConfigurationSastSettings,
+			configuration.ORGANIZATION,
+			false,
+		)
+	})
+
+	t.Run("callback returns existing value when provided", func(t *testing.T) {
+		existingValue := &sast_contract.SastResponse{SastEnabled: true}
+
+		mockEngine := setupMockEngine(t)
+		result, err := getSastSettingsConfig(mockEngine)(mockEngine.GetConfiguration(), existingValue)
+		assert.NoError(t, err)
+		assert.Equal(t, existingValue, result, "Should return existing value when provided")
+	})
+}
+
+func Test_GetSastEnabled(t *testing.T) {
+	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+		testOrganizationDependency(
+			t,
+			code_workflow.ConfigurationSastEnabled,
+			configuration.ORGANIZATION,
+			true,
+		)
+	})
+
+	t.Run("callback function returns existing value when provided", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		result, err := getSastEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
+		assert.NoError(t, err)
+		assert.True(t, result.(bool), "Should return existing value when provided")
+	})
+}
+
+func Test_GetSlceEnabled(t *testing.T) {
+	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+		testOrganizationDependency(
+			t,
+			code_workflow.ConfigurarionSlceEnabled,
+			configuration.ORGANIZATION,
+			true,
+		)
+	})
+
+	t.Run("callback function returns existing value when provided", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		result, err := getSlceEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
+		assert.NoError(t, err)
+		assert.True(t, result.(bool), "Should return existing value when provided")
 	})
 }
