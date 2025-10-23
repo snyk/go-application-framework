@@ -697,7 +697,9 @@ func Test_GetSlceEnabled(t *testing.T) {
 		mockEngine := setupMockEngine(t)
 		result, err := getSlceEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
 		assert.NoError(t, err)
-		assert.True(t, result.(bool), "Should return existing value when provided")
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return existing value when provided")
 	})
 
 	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
@@ -708,7 +710,9 @@ func Test_GetSlceEnabled(t *testing.T) {
 
 		result, err := getSlceEnabled(mockEngine)(config, nil)
 		assert.NoError(t, err)
-		assert.True(t, result.(bool), "Should return LocalCodeEngine.Enabled from API response")
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return LocalCodeEngine.Enabled from API response")
 	})
 
 	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
@@ -719,6 +723,8 @@ func Test_GetSlceEnabled(t *testing.T) {
 
 		result, err := getSlceEnabled(mockEngine)(config, nil)
 		assert.Error(t, err)
-		assert.False(t, result.(bool), "Should return false when API call fails")
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.False(t, boolResult, "Should return false when API call fails")
 	})
 }
