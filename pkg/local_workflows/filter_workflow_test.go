@@ -207,5 +207,4 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 			}
 		}
 	})
-
 }
