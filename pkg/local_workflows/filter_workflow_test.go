@@ -2,12 +2,14 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -141,21 +143,33 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 		assert.Equal(t, input, output)
 	})
 	t.Run("updates findings summary with filtered totals", func(t *testing.T) {
-		ctx := setupMockFilterContext(t, "high")
+		threshold := "high"
+		ctx := setupMockFilterContext(t, threshold)
 		sarifBytes := loadJsonFile(t, "sarif-juice-shop.json")
 		summaryBytes := loadJsonFile(t, "juice-shop-summary.json")
 		findingsInput, err := TransformSarifToLocalFindingModel(sarifBytes, summaryBytes)
 		assert.NoError(t, err)
 		findingsBytes, err := json.Marshal(findingsInput)
 		assert.NoError(t, err)
-		input := []workflow.Data{workflow.NewData(
+
+		summaryData := workflow.NewData(
+			workflow.NewTypeIdentifier(WORKFLOWID_FILTER_FINDINGS, FilterFindingsWorkflowName),
+			content_type.TEST_SUMMARY,
+			summaryBytes,
+		)
+
+		findingsData := workflow.NewData(
 			workflow.NewTypeIdentifier(WORKFLOWID_FILTER_FINDINGS, FilterFindingsWorkflowName),
 			content_type.LOCAL_FINDING_MODEL,
 			findingsBytes,
-		)}
+		)
+
+		input := []workflow.Data{findingsData, summaryData}
 		output, err := filterFindingsEntryPoint(ctx, input)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(output))
+		assert.Equal(t, len(input), len(output))
+
+		// validate findings
 		var filteredFindings local_models.LocalFinding
 		err = json.Unmarshal(output[0].GetPayload().([]byte), &filteredFindings) //nolint:errcheck //in this test, the type is clear
 		assert.NoError(t, err)
@@ -177,5 +191,20 @@ func TestFilterFindingsEntryPoint(t *testing.T) {
 			},
 		}
 		assert.Equal(t, expectedCounts, filteredFindings.Summary.Counts)
+
+		// validate test summary
+		var filteredSummary json_schemas.TestSummary
+		err = json.Unmarshal(output[1].GetPayload().([]byte), &filteredSummary) //nolint:errcheck //in this test, the type is clear
+		assert.NoError(t, err)
+
+		filteredSeverityOrderAsc := presenters.FilterSeverityASC(filteredSummary.SeverityOrderAsc, threshold)
+
+		for _, result := range filteredSummary.Results {
+			if slices.Contains(filteredSeverityOrderAsc, result.Severity) {
+				assert.NotEqual(t, 0, result.Total, "Expected total to be non-zero for severity: %s", result.Severity)
+			} else {
+				assert.Equal(t, 0, result.Total, "Expected total to be zero for severity: %s", result.Severity)
+			}
+		}
 	})
 }

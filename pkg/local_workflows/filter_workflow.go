@@ -2,14 +2,18 @@ package localworkflows
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils/findings"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -61,7 +65,8 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 	}
 
 	for _, data := range input {
-		if strings.HasPrefix(data.GetContentType(), content_type.LOCAL_FINDING_MODEL) {
+		mimeType := data.GetContentType()
+		if strings.HasPrefix(mimeType, content_type.LOCAL_FINDING_MODEL) {
 			var findingsModel local_models.LocalFinding
 			findingsBytes, ok := data.GetPayload().([]byte)
 			if !ok {
@@ -122,10 +127,62 @@ func filterFindingsEntryPoint(invocationCtx workflow.InvocationContext, input []
 				filteredFindingsBytes,
 				workflow.WithInputData(data),
 			))
+		} else if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
+			outputSummary, err := filterSummaryOutput(config, data, logger)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Failed to filter test summary output")
+				output = append(output, data)
+			}
+			output = append(output, outputSummary)
+			continue
 		} else {
 			output = append(output, data)
 		}
 	}
+
+	return output, nil
+}
+
+func filterSummaryOutput(config configuration.Configuration, input workflow.Data, logger *zerolog.Logger) (workflow.Data, error) {
+	// Parse the summary data
+	summary := json_schemas.NewTestSummary("", "")
+	payload, ok := input.GetPayload().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid payload type: %T", input.GetPayload())
+	}
+	err := json.Unmarshal(payload, &summary)
+	if err != nil {
+		return input, err
+	}
+
+	minSeverity := config.GetString(configuration.FLAG_SEVERITY_THRESHOLD)
+	filteredSeverityOrderAsc := presenters.FilterSeverityASC(summary.SeverityOrderAsc, minSeverity)
+
+	// Filter out the results based on the configuration
+	var filteredResults []json_schemas.TestSummaryResult
+
+	for _, severity := range filteredSeverityOrderAsc {
+		for _, result := range summary.Results {
+			if severity == result.Severity {
+				filteredResults = append(filteredResults, result)
+			}
+		}
+	}
+
+	summary.Results = filteredResults
+
+	bytes, err := json.Marshal(summary)
+	if err != nil {
+		return input, err
+	}
+
+	workflowId := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "FilterTestSummary")
+	output := workflow.NewDataFromInput(
+		input,
+		workflowId,
+		content_type.TEST_SUMMARY,
+		bytes,
+		workflow.WithLogger(logger))
 
 	return output, nil
 }
