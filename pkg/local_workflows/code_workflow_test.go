@@ -560,7 +560,9 @@ func setupMockServerForSastSettings(t *testing.T, sastEnabled, localCodeEngineEn
 				},
 			}
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(response)
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("failed to encode response: %v", err)
+			}
 		}
 	}))
 }
@@ -617,7 +619,8 @@ func Test_GetSastSettingsConfig(t *testing.T) {
 		result, err := getSastSettingsConfig(mockEngine)(config, nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
-		sastResponse := result.(*sast_contract.SastResponse)
+		sastResponse, ok := result.(*sast_contract.SastResponse)
+		assert.True(t, ok, "result should be of type *sast_contract.SastResponse")
 		assert.True(t, sastResponse.SastEnabled)
 		assert.True(t, sastResponse.LocalCodeEngine.Enabled)
 	})
@@ -648,7 +651,9 @@ func Test_GetSastEnabled(t *testing.T) {
 		mockEngine := setupMockEngine(t)
 		result, err := getSastEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
 		assert.NoError(t, err)
-		assert.True(t, result.(bool), "Should return existing value when provided")
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return existing value when provided")
 	})
 
 	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
@@ -659,7 +664,9 @@ func Test_GetSastEnabled(t *testing.T) {
 
 		result, err := getSastEnabled(mockEngine)(config, nil)
 		assert.NoError(t, err)
-		assert.True(t, result.(bool), "Should return SastEnabled from API response")
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return SastEnabled from API response")
 	})
 
 	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
@@ -670,7 +677,9 @@ func Test_GetSastEnabled(t *testing.T) {
 
 		result, err := getSastEnabled(mockEngine)(config, nil)
 		assert.Error(t, err)
-		assert.False(t, result.(bool), "Should return false when API call fails")
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.False(t, boolResult, "Should return false when API call fails")
 	})
 }
 
