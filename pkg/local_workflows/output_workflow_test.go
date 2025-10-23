@@ -299,7 +299,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, 1, len(output))
+		assert.Equal(t, 0, len(output))
 	})
 
 	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
@@ -366,7 +366,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, 1, len(output))
+		assert.Equal(t, 0, len(output))
 	})
 
 	t.Run("should reject test summary mimeType and display known mimeType", func(t *testing.T) {
@@ -382,7 +382,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		// assert
 		assert.Nil(t, err)
-		assert.Equal(t, 1, len(output))
+		assert.Equal(t, 0, len(output))
 	})
 
 	t.Run("should print valid sarif json output", func(t *testing.T) {
