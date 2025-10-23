@@ -480,8 +480,12 @@ func testOrganizationDependency(
 	callCount := 0
 	testCallback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		callCount++
-		// Return a string that changes on each call. This allows us to check whether the returned value comes from
+		// Return a value that changes on each call. This allows us to check whether the returned value comes from
 		// the cache or this callback function.
+		if configIsBoolean {
+			// Alternate between true and false
+			return callCount%2 == 1, nil
+		}
 		return fmt.Sprintf("value-%d", callCount), nil
 	}
 
@@ -517,19 +521,72 @@ func getValue(config configuration.Configuration, key string, isBoolean bool) in
 	return config.Get(key)
 }
 
-// Helper function to test callback returns existing value
+// setupMockEngine creates a mock engine with basic expectations
 func setupMockEngine(t *testing.T) *mocks.MockEngine {
 	t.Helper()
 
-	// Setup
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	config := configuration.New()
+	return setupMockEngineWithConfig(t, ctrl, config, false)
+}
+
+// setupMockEngineWithConfig creates a mock engine with the given configuration
+func setupMockEngineWithConfig(t *testing.T, ctrl *gomock.Controller, config configuration.Configuration, withNetworkAccess bool) *mocks.MockEngine {
+	t.Helper()
+
 	mockEngine := mocks.NewMockEngine(ctrl)
 	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(&zerolog.Logger{}).AnyTimes()
+
+	if withNetworkAccess {
+		mockEngine.EXPECT().GetNetworkAccess().Return(networking.NewNetworkAccess(config)).AnyTimes()
+	}
+
 	return mockEngine
+}
+
+// setupMockServerForSastSettings creates a mock HTTP server that returns SAST settings
+func setupMockServerForSastSettings(t *testing.T, sastEnabled, localCodeEngineEnabled bool) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.String(), "/v1/cli-config/settings/sast") {
+			response := &sast_contract.SastResponse{
+				SastEnabled: sastEnabled,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{
+					Enabled: localCodeEngineEnabled,
+				},
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(response)
+		}
+	}))
+}
+
+// setupMockServerWithError creates a mock HTTP server that returns an error
+func setupMockServerWithError(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+}
+
+// setupMockEngineWithServer creates a mock engine configured with a test server
+func setupMockEngineWithServer(t *testing.T, server *httptest.Server) (*mocks.MockEngine, configuration.Configuration) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := configuration.New()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, "test-org")
+
+	mockEngine := setupMockEngineWithConfig(t, ctrl, config, true)
+	return mockEngine, config
 }
 
 func Test_GetSastSettingsConfig(t *testing.T) {
@@ -550,6 +607,31 @@ func Test_GetSastSettingsConfig(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, existingValue, result, "Should return existing value when provided")
 	})
+
+	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
+		server := setupMockServerForSastSettings(t, true, true)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastSettingsConfig(mockEngine)(config, nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		sastResponse := result.(*sast_contract.SastResponse)
+		assert.True(t, sastResponse.SastEnabled)
+		assert.True(t, sastResponse.LocalCodeEngine.Enabled)
+	})
+
+	t.Run("callback returns error when API call fails and existing value is nil", func(t *testing.T) {
+		server := setupMockServerWithError(t)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastSettingsConfig(mockEngine)(config, nil)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
 }
 
 func Test_GetSastEnabled(t *testing.T) {
@@ -568,6 +650,28 @@ func Test_GetSastEnabled(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, result.(bool), "Should return existing value when provided")
 	})
+
+	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
+		server := setupMockServerForSastSettings(t, true, false)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastEnabled(mockEngine)(config, nil)
+		assert.NoError(t, err)
+		assert.True(t, result.(bool), "Should return SastEnabled from API response")
+	})
+
+	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
+		server := setupMockServerWithError(t)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastEnabled(mockEngine)(config, nil)
+		assert.Error(t, err)
+		assert.False(t, result.(bool), "Should return false when API call fails")
+	})
 }
 
 func Test_GetSlceEnabled(t *testing.T) {
@@ -585,5 +689,27 @@ func Test_GetSlceEnabled(t *testing.T) {
 		result, err := getSlceEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
 		assert.NoError(t, err)
 		assert.True(t, result.(bool), "Should return existing value when provided")
+	})
+
+	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
+		server := setupMockServerForSastSettings(t, false, true)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSlceEnabled(mockEngine)(config, nil)
+		assert.NoError(t, err)
+		assert.True(t, result.(bool), "Should return LocalCodeEngine.Enabled from API response")
+	})
+
+	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
+		server := setupMockServerWithError(t)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSlceEnabled(mockEngine)(config, nil)
+		assert.Error(t, err)
+		assert.False(t, result.(bool), "Should return false when API call fails")
 	})
 }
