@@ -45,6 +45,12 @@ func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.Invocation
 }
 
 func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	config := engine.GetConfiguration()
+	err := config.AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for ConfigIgnoreApprovalEnabled")
+	}
+
 	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
