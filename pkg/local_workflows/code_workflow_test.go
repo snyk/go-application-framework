@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -456,5 +457,274 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 		config.Set(code_workflow.ConfigurarionSlceEnabled, true)
 		actual := useNativeImplementation(config, &logger, true)
 		assert.Equal(t, expected, actual)
+	})
+}
+
+// Helper function to test key dependencies for configuration keys
+func testOrganizationDependency(
+	t *testing.T,
+	configKey string,
+	dependencyKey string,
+	configIsBoolean bool,
+) {
+	t.Helper()
+
+	// Setup
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Minute))
+	config.Set(dependencyKey, "value1")
+
+	// Track how many times the callback is invoked
+	callCount := 0
+	testCallback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		callCount++
+		// Return a value that changes on each call. This allows us to check whether the returned value comes from
+		// the cache or this callback function.
+		if configIsBoolean {
+			// Alternate between true and false
+			return callCount%2 == 1, nil
+		}
+		return fmt.Sprintf("value-%d", callCount), nil
+	}
+
+	// Register the dependency
+	err := config.AddKeyDependency(configKey, dependencyKey)
+	assert.NoError(t, err)
+	config.AddDefaultValue(configKey, testCallback)
+
+	// First Get - should invoke callback
+	result1 := getValue(config, configKey, configIsBoolean)
+	assert.NotNil(t, result1)
+	assert.Equal(t, 1, callCount, "Callback should be invoked on first read")
+
+	// Second Get - should use cached value
+	result2 := getValue(config, configKey, configIsBoolean)
+	assert.Equal(t, result1, result2, "Cached value should be used on second read")
+	assert.Equal(t, 1, callCount, "Callback should not be called on second read")
+
+	// Change the value of the dependency - this should clear the cached value.
+	config.Set(dependencyKey, "value2")
+
+	// Third Get - should invoke callback again since cache was cleared
+	result3 := getValue(config, configKey, configIsBoolean)
+	assert.NotNil(t, result3)
+	assert.NotEqual(t, result1, result3, "Cached value should not be used after dependency changed")
+	assert.Equal(t, 2, callCount, "Callback should be called again after dependency changed")
+}
+
+func getValue(config configuration.Configuration, key string, isBoolean bool) interface{} {
+	if isBoolean {
+		return config.GetBool(key)
+	}
+	return config.Get(key)
+}
+
+// setupMockEngine creates a mock engine with basic expectations
+func setupMockEngine(t *testing.T) *mocks.MockEngine {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := configuration.New()
+	return setupMockEngineWithConfig(t, ctrl, config, false)
+}
+
+// setupMockEngineWithConfig creates a mock engine with the given configuration
+func setupMockEngineWithConfig(t *testing.T, ctrl *gomock.Controller, config configuration.Configuration, withNetworkAccess bool) *mocks.MockEngine {
+	t.Helper()
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&zerolog.Logger{}).AnyTimes()
+
+	if withNetworkAccess {
+		mockEngine.EXPECT().GetNetworkAccess().Return(networking.NewNetworkAccess(config)).AnyTimes()
+	}
+
+	return mockEngine
+}
+
+// setupMockServerForSastSettings creates a mock HTTP server that returns SAST settings
+func setupMockServerForSastSettings(t *testing.T, sastEnabled, localCodeEngineEnabled bool) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.String(), "/v1/cli-config/settings/sast") {
+			response := &sast_contract.SastResponse{
+				SastEnabled: sastEnabled,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{
+					Enabled: localCodeEngineEnabled,
+				},
+			}
+			w.WriteHeader(http.StatusOK)
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("failed to encode response: %v", err)
+			}
+		}
+	}))
+}
+
+// setupMockServerWithError creates a mock HTTP server that returns an error
+func setupMockServerWithError(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+}
+
+// setupMockEngineWithServer creates a mock engine configured with a test server
+func setupMockEngineWithServer(t *testing.T, server *httptest.Server) (*mocks.MockEngine, configuration.Configuration) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := configuration.New()
+	config.Set(configuration.API_URL, server.URL)
+	config.Set(configuration.ORGANIZATION, "test-org")
+
+	mockEngine := setupMockEngineWithConfig(t, ctrl, config, true)
+	return mockEngine, config
+}
+
+func Test_GetSastSettingsConfig(t *testing.T) {
+	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+		testOrganizationDependency(
+			t,
+			code_workflow.ConfigurationSastSettings,
+			configuration.ORGANIZATION,
+			false,
+		)
+	})
+
+	t.Run("callback returns existing value when provided", func(t *testing.T) {
+		existingValue := &sast_contract.SastResponse{SastEnabled: true}
+
+		mockEngine := setupMockEngine(t)
+		result, err := getSastSettingsConfig(mockEngine)(mockEngine.GetConfiguration(), existingValue)
+		assert.NoError(t, err)
+		assert.Equal(t, existingValue, result, "Should return existing value when provided")
+	})
+
+	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
+		server := setupMockServerForSastSettings(t, true, true)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastSettingsConfig(mockEngine)(config, nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		sastResponse, ok := result.(*sast_contract.SastResponse)
+		assert.True(t, ok, "result should be of type *sast_contract.SastResponse")
+		assert.True(t, sastResponse.SastEnabled)
+		assert.True(t, sastResponse.LocalCodeEngine.Enabled)
+	})
+
+	t.Run("callback returns error when API call fails and existing value is nil", func(t *testing.T) {
+		server := setupMockServerWithError(t)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastSettingsConfig(mockEngine)(config, nil)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
+}
+
+func Test_GetSastEnabled(t *testing.T) {
+	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+		testOrganizationDependency(
+			t,
+			code_workflow.ConfigurationSastEnabled,
+			configuration.ORGANIZATION,
+			true,
+		)
+	})
+
+	t.Run("callback function returns existing value when provided", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		result, err := getSastEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
+		assert.NoError(t, err)
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return existing value when provided")
+	})
+
+	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
+		server := setupMockServerForSastSettings(t, true, false)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastEnabled(mockEngine)(config, nil)
+		assert.NoError(t, err)
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return SastEnabled from API response")
+	})
+
+	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
+		server := setupMockServerWithError(t)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSastEnabled(mockEngine)(config, nil)
+		assert.Error(t, err)
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.False(t, boolResult, "Should return false when API call fails")
+	})
+}
+
+func Test_GetSlceEnabled(t *testing.T) {
+	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+		testOrganizationDependency(
+			t,
+			code_workflow.ConfigurarionSlceEnabled,
+			configuration.ORGANIZATION,
+			true,
+		)
+	})
+
+	t.Run("callback function returns existing value when provided", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		result, err := getSlceEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
+		assert.NoError(t, err)
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return existing value when provided")
+	})
+
+	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
+		server := setupMockServerForSastSettings(t, false, true)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSlceEnabled(mockEngine)(config, nil)
+		assert.NoError(t, err)
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.True(t, boolResult, "Should return LocalCodeEngine.Enabled from API response")
+	})
+
+	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
+		server := setupMockServerWithError(t)
+		defer server.Close()
+
+		mockEngine, config := setupMockEngineWithServer(t, server)
+
+		result, err := getSlceEnabled(mockEngine)(config, nil)
+		assert.Error(t, err)
+		boolResult, ok := result.(bool)
+		assert.True(t, ok, "result should be of type bool")
+		assert.False(t, boolResult, "Should return false when API call fails")
 	})
 }

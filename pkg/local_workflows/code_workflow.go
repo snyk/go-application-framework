@@ -62,6 +62,10 @@ func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error
 }
 
 func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
+	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurationSastSettings, configuration.ORGANIZATION)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
+	}
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
@@ -79,6 +83,10 @@ func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFun
 }
 
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurationSastEnabled, configuration.ORGANIZATION)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
+	}
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
@@ -96,6 +104,10 @@ func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 }
 
 func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
+	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurarionSlceEnabled, configuration.ORGANIZATION)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
+	}
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
