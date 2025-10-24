@@ -9,19 +9,16 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/go-application-framework/pkg/analytics"
-	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
-
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/golang/mock/gomock"
-
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPayloadToApi(t *testing.T) {
@@ -72,7 +69,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
-	mockClient := NewTestClient(func(req *http.Request) *http.Response {
+	mockClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
 		return &http.Response{
 			// error code!
 			StatusCode: http.StatusInternalServerError,
@@ -109,7 +106,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	require.NoError(t, testInitReportAnalyticsWorkflow(ctrl))
 
-	mockClient := newErrorProducingTestClient(func(req *http.Request) *http.Response { return nil })
+	mockClient := testutils.NewErrorProducingTestClient(func(req *http.Request) *http.Response { return nil })
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -319,7 +316,7 @@ func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 
 func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
 	t.Helper()
-	mockClient := NewTestClient(func(req *http.Request) *http.Response {
+	mockClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
 		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2024-03-07~experimental", req.URL.String())
 		require.Equal(t, "POST", req.Method)

@@ -43,7 +43,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 }
 
 // WORKFLOWID_CODE defines a new workflow identifier
-var WORKFLOWID_CODE workflow.Identifier = workflow.NewWorkflowIdentifier(codeWorkflowName)
+var WORKFLOWID_CODE = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
 func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error) {
 	config := engine.GetConfiguration()
@@ -51,14 +51,7 @@ func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error
 	client := engine.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	apiClient := api.NewApi(url, client)
-	tmp, err := apiClient.GetSastSettings(org)
-	if err != nil {
-		engine.GetLogger().Err(err).Msg("Failed to access settings.")
-		return nil, err
-	}
-
-	engine.GetConfiguration().Set(code_workflow.ConfigurationSastSettings, tmp)
-	return tmp, nil
+	return apiClient.GetSastSettings(org)
 }
 
 func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
@@ -66,7 +59,7 @@ func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFun
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
 	}
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
@@ -87,7 +80,7 @@ func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
 	}
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
@@ -108,7 +101,7 @@ func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
 	}
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
