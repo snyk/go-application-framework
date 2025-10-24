@@ -16,6 +16,7 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
@@ -832,4 +833,66 @@ func setupMockEngineForOrgSettings(t *testing.T, response *contract.OrgSettingsR
 
 	defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
 	return defaultValueFunc(nil, nil)
+}
+
+func Test_getOrgIgnoreApprovalEnabled_CacheDependentOnOrg(t *testing.T) {
+	// Setup config with caching enabled
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Minute))
+	config.Set(configuration.ORGANIZATION, "org-1")
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+
+	// Mock the API and track the call count
+	apiCallCount := 0
+	httpClient := localworkflows.NewTestClient(func(req *http.Request) *http.Response {
+		apiCallCount++
+		response := &contract.OrgSettingsResponse{
+			Ignores: &contract.OrgIgnoreSettings{
+				// Alternate response based on call count
+				ApprovalWorkflowEnabled: apiCallCount%2 == 1,
+			},
+		}
+		responseJSON, _ := json.Marshal(response)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBuffer(responseJSON)),
+		}
+	})
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
+	logger := zerolog.Logger{}
+
+	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
+	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+
+	// Create the default value function (which also registers the dependency)
+	defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
+	// Register the default value function
+	config.AddDefaultValue(ConfigIgnoreApprovalEnabled, defaultValueFunc)
+
+	// First call - should invoke API
+	result1, err := config.GetBoolWithError(ConfigIgnoreApprovalEnabled)
+	require.NoError(t, err)
+	assert.True(t, result1, "First call should return true")
+	assert.Equal(t, 1, apiCallCount, "API should be called on first read")
+
+	// Second call with same org - should use cache
+	result2, err := config.GetBoolWithError(ConfigIgnoreApprovalEnabled)
+	require.NoError(t, err)
+	assert.Equal(t, result1, result2, "Cached value should be used on second read")
+	assert.Equal(t, 1, apiCallCount, "API should not be called on second read (cached)")
+
+	// Change the organization - this should clear the cache
+	config.Set(configuration.ORGANIZATION, "org-2")
+
+	// Third call - cache should be invalidated, API called again
+	result3, err := config.GetBoolWithError(ConfigIgnoreApprovalEnabled)
+	require.NoError(t, err)
+	assert.False(t, result3, "Third call should return false (different response)")
+	assert.Equal(t, 2, apiCallCount, "API should be called again after org change")
 }
