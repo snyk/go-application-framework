@@ -8,5 +8,5 @@ import "os"
 func init() {
 	existingValue := os.Getenv(godebugEnvVarName)
 	existingValue = setFipState(existingValue, false)
-	os.Setenv(godebugEnvVarName, existingValue)
+	_ = os.Setenv(godebugEnvVarName, existingValue) //nolint:errcheck // Ignore lack of error handling
 }

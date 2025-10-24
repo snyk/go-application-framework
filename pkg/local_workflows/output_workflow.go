@@ -98,8 +98,8 @@ func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outp
 		singleDataAsString = string(singleData)
 	}
 
-	outputDestination.Println(singleDataAsString)
-	return nil
+	_, err := outputDestination.Println(singleDataAsString)
+	return err
 }
 
 func handleContentTypeJson(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
@@ -122,7 +122,10 @@ func handleContentTypeJson(config configuration.Configuration, input []workflow.
 	}
 
 	if printJsonToCmd {
-		outputDestination.Println(string(singleData))
+		_, err := outputDestination.Println(string(singleData))
+		if err != nil {
+			return err
+		}
 	}
 
 	if writeToFile {
