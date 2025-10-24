@@ -155,12 +155,11 @@ func mapFingerprints(sfp sarif.Fingerprints) ([]Fingerprint, error) {
 	var fingerprints []Fingerprint
 
 	schemeToValue := map[string]string{
-		string(Identity):                   sfp.Identity,
-		string(CodeSastV0):                 sfp.Num0,
-		string(CodeSastV1):                 sfp.Num1,
-		string(Snykassetfindingv1):         sfp.SnykAssetFindingV1,
-		string(Snykorgrepositoryfindingv1): sfp.SnykOrgRepositoryFindingV1,
-		string(Snykorgprojectfindingv1):    sfp.SnykOrgProjectFindingV1,
+		string(Identity):                sfp.Identity,
+		string(CodeSastV0):              sfp.Num0,
+		string(CodeSastV1):              sfp.Num1,
+		string(Snykassetfindingv1):      sfp.SnykAssetFindingV1,
+		string(Snykorgprojectfindingv1): sfp.SnykOrgProjectFindingV1,
 	}
 
 	for schemeStr, val := range schemeToValue {
