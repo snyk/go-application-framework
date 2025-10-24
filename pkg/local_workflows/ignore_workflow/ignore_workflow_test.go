@@ -851,7 +851,8 @@ func Test_getOrgIgnoreApprovalEnabled_CacheDependentOnOrg(t *testing.T) {
 				ApprovalWorkflowEnabled: apiCallCount%2 == 1,
 			},
 		}
-		responseJSON, _ := json.Marshal(response)
+		responseJSON, err := json.Marshal(response)
+		require.NoError(t, err)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewBuffer(responseJSON)),
