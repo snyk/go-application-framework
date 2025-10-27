@@ -44,11 +44,75 @@ func NewErrorProducingTestClient(fn roundTripErrorFn) *http.Client {
 	}
 }
 
+// CheckConfigCachesDependency tests that a config value properly invalidates its cache when a dependency changes.
+// This is for testing config-to-config dependencies (e.g., ConfigurationSastEnabled depends on ConfigurationSastSettings).
+func CheckConfigCachesDependency(
+	t *testing.T,
+	configKey string,
+	dependencyKey string,
+	defaultValueFuncFactory func(engine workflow.Engine) configuration.DefaultValueFunction,
+	dependencyValueBefore any,
+	dependencyValueAfter any,
+	expectedValueBefore any,
+	expectedValueAfter any,
+) {
+	t.Helper()
+
+	require.NotEqual(t, expectedValueBefore, expectedValueAfter, "expected values before and after key dependency change should be different")
+
+	// Setup config with caching enabled
+	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Minute))
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	logger := zerolog.Logger{}
+
+	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+
+	// Create the default value function (which also registers the dependency)
+	defaultValueFunc := defaultValueFuncFactory(mockEngine)
+	// Register the default value function, if it is not already registered
+	// (the factory returns nil if it is already registered)
+	if defaultValueFunc != nil {
+		wrappedDefaultValueFunc := func(config configuration.Configuration, existingValue any) (any, error) {
+			t.Logf("defaultValueFunc called")
+			return defaultValueFunc(config, existingValue)
+		}
+		config.AddDefaultValue(configKey, wrappedDefaultValueFunc)
+	}
+
+	// Set initial dependency value
+	config.Set(dependencyKey, dependencyValueBefore)
+
+	// First call - should compute from dependency
+	result1, err := config.GetWithError(configKey)
+	require.NoError(t, err)
+	assert.Equal(t, expectedValueBefore, result1, "First call should return value based on initial dependency")
+
+	// Second call with same dependency - should use cache
+	result2, err := config.GetWithError(configKey)
+	require.NoError(t, err)
+	assert.Equal(t, expectedValueBefore, result2, "Second call should return cached value")
+
+	// Change the dependency value
+	config.Set(dependencyKey, dependencyValueAfter)
+
+	// Third call - cache should be invalidated, should compute from new dependency
+	result3, err := config.GetWithError(configKey)
+	require.NoError(t, err)
+	assert.Equal(t, expectedValueAfter, result3, "Third call should return value based on new dependency (cache invalidated)")
+}
+
+// CheckCacheRespectOrgDependency tests ORGANIZATION-based cache invalidation with HTTP API call mocking.
+// Verifies cache is cleared when ORGANIZATION changes and API is called again with new org.
 func CheckCacheRespectOrgDependency(
 	t *testing.T,
 	configKey string,
 	httpResponseFn func(isFirstCall bool) any,
-	defaultValueFuncFactory func(engine workflow.Engine) configuration.DefaultValueFunction,
+	initFunc func(engine workflow.Engine) error,
 	expectedValueBeforeOrgChange any,
 	expectedValueAfterOrgChange any,
 ) {
@@ -88,20 +152,14 @@ func CheckCacheRespectOrgDependency(
 
 	mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+	// Pretend to support workflow registration (init functions may register workflows, but we don't use them)
+	mockEngine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
 	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 
-	// Create the default value function (which also registers the dependency)
-	defaultValueFunc := defaultValueFuncFactory(mockEngine)
-	// Register the default value function, if it is not already registered
-	// (the factory returns nil if it is already registered)
-	if defaultValueFunc != nil {
-		wrappedDefaultValueFunc := func(config configuration.Configuration, existingValue any) (any, error) {
-			t.Logf("defaultValueFunc called")
-			return defaultValueFunc(config, existingValue)
-		}
-		config.AddDefaultValue(configKey, wrappedDefaultValueFunc)
-	}
+	// Call the init function (which registers config defaults)
+	err := initFunc(mockEngine)
+	require.NoError(t, err, "initFunc should not return an error")
 
 	// First call - should invoke API
 	result1, err := config.GetWithError(configKey)

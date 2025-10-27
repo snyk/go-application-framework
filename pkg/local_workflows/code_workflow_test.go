@@ -565,7 +565,7 @@ func Test_getSastSettingsConfig(t *testing.T) {
 					LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: isFirstCall},
 				}
 			},
-			getSastSettingsConfig,
+			InitCodeWorkflow,
 			&sast_contract.SastResponse{
 				SastEnabled:     true,
 				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: true},
@@ -599,20 +599,44 @@ func Test_getSastEnabled(t *testing.T) {
 		assert.True(t, boolResult, "Should return existing value when provided")
 	})
 
-	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
-		server := setupMockServerForSastSettings(t, true, false)
-		defer server.Close()
+	t.Run("callback reads from ConfigurationSastSettings (pre-cached) when existing value is nil", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		config := mockEngine.GetConfiguration()
 
-		mockEngine, config := setupMockEngineWithServer(t, server)
+		// Set ConfigurationSastSettings in config
+		sastSettings := &sast_contract.SastResponse{
+			SastEnabled:     true,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+		}
+		config.Set(code_workflow.ConfigurationSastSettings, sastSettings)
 
 		result, err := getSastEnabled(mockEngine)(config, nil)
 		assert.NoError(t, err)
 		boolResult, ok := result.(bool)
 		assert.True(t, ok, "result should be of type bool")
-		assert.True(t, boolResult, "Should return SastEnabled from API response")
+		assert.True(t, boolResult, "Should return SastEnabled from ConfigurationSastSettings")
 	})
 
-	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+	t.Run("depends on ConfigurationSastSettings", func(t *testing.T) {
+		testutils.CheckConfigCachesDependency(
+			t,
+			code_workflow.ConfigurationSastEnabled,
+			code_workflow.ConfigurationSastSettings,
+			getSastEnabled,
+			&sast_contract.SastResponse{
+				SastEnabled:     true,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+			},
+			&sast_contract.SastResponse{
+				SastEnabled:     false,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+			},
+			true,
+			false,
+		)
+	})
+
+	t.Run("respects organization changes (full chain)", func(t *testing.T) {
 		testutils.CheckCacheRespectOrgDependency(
 			t,
 			code_workflow.ConfigurationSastEnabled,
@@ -622,7 +646,7 @@ func Test_getSastEnabled(t *testing.T) {
 					LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
 				}
 			},
-			getSastEnabled,
+			InitCodeWorkflow,
 			true,
 			false,
 		)
@@ -652,20 +676,44 @@ func Test_getSlceEnabled(t *testing.T) {
 		assert.True(t, boolResult, "Should return existing value when provided")
 	})
 
-	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
-		server := setupMockServerForSastSettings(t, false, true)
-		defer server.Close()
+	t.Run("callback reads from ConfigurationSastSettings (pre-cached) when existing value is nil", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		config := mockEngine.GetConfiguration()
 
-		mockEngine, config := setupMockEngineWithServer(t, server)
+		// Set ConfigurationSastSettings in config
+		sastSettings := &sast_contract.SastResponse{
+			SastEnabled:     false,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: true},
+		}
+		config.Set(code_workflow.ConfigurationSastSettings, sastSettings)
 
 		result, err := getSlceEnabled(mockEngine)(config, nil)
 		assert.NoError(t, err)
 		boolResult, ok := result.(bool)
 		assert.True(t, ok, "result should be of type bool")
-		assert.True(t, boolResult, "Should return LocalCodeEngine.Enabled from API response")
+		assert.True(t, boolResult, "Should return LocalCodeEngine.Enabled from ConfigurationSastSettings")
 	})
 
-	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+	t.Run("depends on ConfigurationSastSettings", func(t *testing.T) {
+		testutils.CheckConfigCachesDependency(
+			t,
+			code_workflow.ConfigurarionSlceEnabled,
+			code_workflow.ConfigurationSastSettings,
+			getSlceEnabled,
+			&sast_contract.SastResponse{
+				SastEnabled:     false,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: true},
+			},
+			&sast_contract.SastResponse{
+				SastEnabled:     false,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+			},
+			true,
+			false,
+		)
+	})
+
+	t.Run("respects organization changes (full chain)", func(t *testing.T) {
 		testutils.CheckCacheRespectOrgDependency(
 			t,
 			code_workflow.ConfigurarionSlceEnabled,
@@ -675,7 +723,7 @@ func Test_getSlceEnabled(t *testing.T) {
 					LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: isFirstCall},
 				}
 			},
-			getSlceEnabled,
+			InitCodeWorkflow,
 			true,
 			false,
 		)

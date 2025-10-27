@@ -3,7 +3,6 @@ package config_utils
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -18,7 +17,7 @@ func Test_AddFeatureFlagToConfig_CacheDependentOnOrg(t *testing.T) {
 				"ok": isFirstCall,
 			}
 		},
-		func(engine workflow.Engine) configuration.DefaultValueFunction {
+		func(engine workflow.Engine) error {
 			AddFeatureFlagToConfig(engine, testConfigKey, "testFeatureFlag")
 			return nil
 		},

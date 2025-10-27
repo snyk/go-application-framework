@@ -75,44 +75,57 @@ func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFun
 	return callback
 }
 
+func getSastResponseFromConfig(config configuration.Configuration) (*sast_contract.SastResponse, error) {
+	sastResponseGeneric, err := config.GetWithError(code_workflow.ConfigurationSastSettings)
+	if err != nil {
+		return nil, err
+	}
+	if sastResponseGeneric == nil {
+		return nil, fmt.Errorf("SAST settings are nil")
+	}
+	sastResponse, ok := sastResponseGeneric.(*sast_contract.SastResponse)
+	if !ok {
+		return nil, fmt.Errorf("SAST settings are not a SastResponse")
+	}
+	return sastResponse, nil
+}
+
 func getSastEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurationSastEnabled, configuration.ORGANIZATION)
+	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurationSastEnabled, code_workflow.ConfigurationSastSettings)
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
 	}
-	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
+	callback := func(config configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
-
-		response, err := getSastSettings(engine)
+		sastResponse, err := getSastResponseFromConfig(config)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
 			return false, err
 		}
 
-		return response.SastEnabled, nil
+		return sastResponse.SastEnabled, nil
 	}
 	return callback
 }
 
 func getSlceEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurarionSlceEnabled, configuration.ORGANIZATION)
+	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurarionSlceEnabled, code_workflow.ConfigurationSastSettings)
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
 	}
-	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
+	callback := func(config configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
-
-		response, err := getSastSettings(engine)
+		sastResponse, err := getSastResponseFromConfig(config)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
 			return false, err
 		}
 
-		return response.LocalCodeEngine.Enabled, nil
+		return sastResponse.LocalCodeEngine.Enabled, nil
 	}
 	return callback
 }

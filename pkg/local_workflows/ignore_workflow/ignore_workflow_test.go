@@ -846,7 +846,7 @@ func Test_getOrgIgnoreApprovalEnabled_CacheDependentOnOrg(t *testing.T) {
 				},
 			}
 		},
-		getOrgIgnoreApprovalEnabled,
+		InitIgnoreWorkflows,
 		true,
 		false,
 	)
