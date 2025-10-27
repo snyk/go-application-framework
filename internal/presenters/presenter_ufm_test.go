@@ -44,7 +44,6 @@ func validateSarifData(t *testing.T, data []byte) {
 }
 
 func Test_UfmPresenter_Sarif(t *testing.T) {
-
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))
 	ctlr := gomock.NewController(t)
 	testResult := mocks.NewMockTestResult(ctlr)
