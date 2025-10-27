@@ -55,7 +55,7 @@ func errorLevelToStyle(errLevel string) lipgloss.Style {
 		Foreground(lipgloss.Color("15"))
 
 	if errLevel == "warn" {
-		style.
+		style = style.
 			Background(lipgloss.Color("3")).
 			Foreground(lipgloss.Color("0"))
 	}
