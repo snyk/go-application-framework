@@ -1,0 +1,560 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Snyk Open Source",
+          "semanticVersion": "1.1301.0-dev.e9879b4629a06a8445bbe1b7a7938956a2097689",
+          "version": "1.1301.0-dev.e9879b4629a06a8445bbe1b7a7938956a2097689",
+          "informationUri": "https://docs.snyk.io/",
+          "properties": {
+            "artifactsScanned": 552
+          },
+          "rules": [
+            {
+              "id": "SNYK-JS-ASYNC-12239908",
+              "shortDescription": {
+                "text": "High severity - Directory Traversal vulnerability in async"
+              },
+              "fullDescription": {
+                "text": "(CVE-2024-39249) async@3.2.4"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: async\n* Introduced through: snyk@1.0.0-monorepo, snyk-config@5.2.0 and others\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-config@5.2.0 › async@3.2.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-lockfile-parser@2.3.1 › snyk-config@5.2.0 › async@3.2.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-nodejs-lockfile-parser@2.3.1 › snyk-config@5.2.0 › async@3.2.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-nodejs-lockfile-parser@1.58.19 › snyk-config@5.2.0 › async@3.2.4\n# Overview\n\nAffected versions of this package are vulnerable to Directory Traversal. Async <= 2.6.4 and <= 3.2.5 are vulnerable to ReDoS (Regular Expression Denial of Service) while parsing function in autoinject function.\n\n# Details\n\nA Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder. By manipulating files with \"dot-dot-slash (../)\" sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files and directories stored on file system, including application source code, configuration, and other critical system files.\n\nDirectory Traversal vulnerabilities can be generally divided into two types:\n\n- **Information Disclosure**: Allows the attacker to gain information about the folder structure or read the contents of sensitive files on the system.\n\n`st` is a module for serving static files on web pages, and contains a [vulnerability of this type](https://snyk.io/vuln/npm:st:20140206). In our example, we will serve files from the `public` route.\n\nIf an attacker requests the following URL from our server, it will in turn leak the sensitive private key of the root user.\n\n```\ncurl http://localhost:8080/public/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/root/.ssh/id_rsa\n```\n**Note** `%2e` is the URL encoded version of `.` (dot).\n\n- **Writing arbitrary files**: Allows the attacker to create or replace existing files. This type of vulnerability is also known as `Zip-Slip`. \n\nOne way to achieve this is by using a malicious `zip` archive that holds path traversal filenames. When each filename in the zip archive gets concatenated to the target extraction folder, without validation, the final path ends up outside of the target folder. If an executable or a configuration file is overwritten with a file containing malicious code, the problem can turn into an arbitrary code execution issue quite easily.\n\nThe following is an example of a `zip` archive with one benign file and one malicious file. Extracting the malicious file will result in traversing out of the target folder, ending up in `/root/.ssh/` overwriting the `authorized_keys` file:\n\n```\n2018-04-15 22:04:29 .....           19           19  good.txt\n2018-04-15 22:04:42 .....           20           20  ../../../../../../root/.ssh/authorized_keys\n```\n\n# Remediation\nUpgrade `async` to version  or higher.\n# References\n- [Vulnerable Code](https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L41)\n- [Vulnerable Code](https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L6)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-22",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 7.5,
+                "security-severity": "7.5"
+              }
+            },
+            {
+              "id": "SNYK-JS-BRACEEXPANSION-9789073",
+              "shortDescription": {
+                "text": "Low severity - Regular Expression Denial of Service (ReDoS) vulnerability in brace-expansion"
+              },
+              "fullDescription": {
+                "text": "(CVE-2025-5889) brace-expansion@1.1.11"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: brace-expansion\n* Introduced through: snyk@1.0.0-monorepo, glob@7.2.3 and others\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › glob@7.2.3 › minimatch@3.1.2 › brace-expansion@1.1.11\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › minimatch@3.1.2 › brace-expansion@1.1.11\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/code-client@4.23.5 › multimatch@5.0.0 › minimatch@3.1.2 › brace-expansion@1.1.11\n* _Introduced through_: snyk@1.0.0-monorepo › rimraf@2.7.1 › glob@7.2.3 › minimatch@3.1.2 › brace-expansion@1.1.11\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-mvn-plugin@4.3.2 › glob@7.2.3 › minimatch@3.1.2 › brace-expansion@1.1.11\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-sbt-plugin@3.1.0 › tmp@0.1.0 › rimraf@2.7.1 › glob@7.2.3 › minimatch@3.1.2 › brace-expansion@1.1.11\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-go-plugin@1.23.0 › tmp@0.2.1 › rimraf@3.0.2 › glob@7.2.3 › minimatch@3.1.2 › brace-expansion@1.1.11\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-gradle-plugin@5.1.0 › tmp@0.2.1 › rimraf@3.0.2 › glob@7.2.3 › minimatch@3.1.2 › brace-expansion@1.1.11\n# Overview\n[brace-expansion](https://github.com/juliangruber/brace-expansion) is a Brace expansion as known from sh/bash\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) in the `expand()` function, which is prone to catastrophic backtracking on very long malicious inputs.\n# PoC\n```js\r\nimport index from \"./index.js\";\r\n\r\nlet str = \"{a}\" + \",\".repeat(100000) + \"\\u0000\";\r\n\r\nlet startTime = performance.now();\r\n\r\nconst result = index(str);\r\n\r\nlet endTime = performance.now();\r\n\r\nlet timeTaken = endTime - startTime;\r\n\r\nconsole.log(`匹配耗时: ${timeTaken.toFixed(3)} 毫秒`);\r\n```\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n# Remediation\nUpgrade `brace-expansion` to version 1.1.12, 2.0.2, 3.0.1, 4.0.1 or higher.\n# References\n- [GitHub Advisory](https://github.com/advisories/GHSA-v6h2-p8h4-qcjw)\n- [GitHub Commit](https://github.com/juliangruber/brace-expansion/commit/0b6a9781e18e9d2769bb2931f4856d1360243ed2)\n- [GitHub Gist](https://gist.github.com/mmmsssttt404/37a40ce7d6e5ca604858fe30814d9466)\n- [GitHub PR](https://github.com/juliangruber/brace-expansion/pull/65)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-1333",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 2.3,
+                "security-severity": "2.3"
+              }
+            },
+            {
+              "id": "SNYK-JS-COOKIE-13271683",
+              "shortDescription": {
+                "text": "Medium severity - Arbitrary Code Injection vulnerability in cookie"
+              },
+              "fullDescription": {
+                "text": "(CVE-2024-47764) cookie@0.4.2"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: cookie\n* Introduced through: snyk@1.0.0-monorepo, @sentry/node@7.34.0 and others\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › @sentry/node@7.34.0 › cookie@0.4.2\n# Overview\n\nAffected versions of this package are vulnerable to Arbitrary Code Injection cookie is a basic HTTP cookie parser and serializer for HTTP servers. The cookie name could be used to set other fields of the cookie, resulting in an unexpected cookie value. A similar escape can be used for path and domain, which could be abused to alter other fields of the cookie. Upgrade to 0.7.0, which updates the validation for name, path, and domain.\n# Remediation\nUpgrade `cookie` to version 1.0.0 or higher.\n# References\n- [GitHub Advisory](https://github.com/jshttp/cookie/security/advisories/GHSA-pxg6-pf52-xh8x)\n- [GitHub Commit](https://github.com/jshttp/cookie/commit/e10042845354fea83bd8f34af72475eed1dadf5c)\n- [GitHub PR](https://github.com/jshttp/cookie/pull/167)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-74",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 6.9,
+                "security-severity": "6.9"
+              }
+            },
+            {
+              "id": "SNYK-JS-DEBUG-13283909",
+              "shortDescription": {
+                "text": "Medium severity - Regular Expression Denial of Service (ReDoS) vulnerability in debug"
+              },
+              "fullDescription": {
+                "text": "debug@4.3.4"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: debug\n* Introduced through: snyk@1.0.0-monorepo and debug@4.3.4\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/snyk-hex-plugin@2.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-cpp-plugin@2.24.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-go-plugin@1.23.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-gradle-plugin@5.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-module@3.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-mvn-plugin@4.3.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nuget-plugin@2.12.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-sbt-plugin@3.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @sentry/node@7.34.0 › https-proxy-agent@5.0.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-pipenv-pipfile@0.7.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-poetry@0.9.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-lockfile-parser@2.3.1 › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › docker-modem@3.0.8 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-poetry-lockfile-parser@1.9.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-python-plugin@3.1.2 › snyk-poetry-lockfile-parser@1.9.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-resolve-deps@4.9.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › snyk-module@3.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › snyk-try-require@2.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › snyk-try-require@2.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › snyk-module@3.3.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @sentry/node@7.34.0 › https-proxy-agent@5.0.1 › agent-base@6.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-pipenv-pipfile@0.7.1 › @snyk/child-process@0.4.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-poetry@0.9.1 › @snyk/child-process@0.4.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-nodejs-lockfile-parser@2.3.1 › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-nodejs-lockfile-parser@1.58.19 › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-resolve-deps@4.9.1 › snyk-module@3.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › snyk-module@3.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-resolve-deps@4.9.1 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › snyk-try-require@2.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › @snyk/rpm-parser@3.4.0 › debug@4.4.1\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › debug@4.4.3\n# Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) test\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n# Remediation\nA fix was pushed into the `master` branch but not yet published.\n# References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957#issuecomment-2523030187)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-1333",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 6.9,
+                "security-severity": "6.9"
+              }
+            },
+            {
+              "id": "SNYK-JS-DEBUG-14214893",
+              "shortDescription": {
+                "text": "Medium severity - Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity vulnerability in debug"
+              },
+              "fullDescription": {
+                "text": "(CVE-9999-1234) debug@4.3.4"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: debug\n* Introduced through: snyk@1.0.0-monorepo and debug@4.3.4\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/snyk-hex-plugin@2.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-cpp-plugin@2.24.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-go-plugin@1.23.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-gradle-plugin@5.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-module@3.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-mvn-plugin@4.3.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nuget-plugin@2.12.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-sbt-plugin@3.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @sentry/node@7.34.0 › https-proxy-agent@5.0.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-pipenv-pipfile@0.7.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-poetry@0.9.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-lockfile-parser@2.3.1 › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › docker-modem@3.0.8 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-poetry-lockfile-parser@1.9.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-python-plugin@3.1.2 › snyk-poetry-lockfile-parser@1.9.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-resolve-deps@4.9.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › snyk-module@3.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › snyk-try-require@2.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › snyk-try-require@2.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-policy@4.1.6 › snyk-module@3.3.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @sentry/node@7.34.0 › https-proxy-agent@5.0.1 › agent-base@6.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-pipenv-pipfile@0.7.1 › @snyk/child-process@0.4.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › @snyk/fix@1.0.0-monorepo › @snyk/fix-poetry@0.9.1 › @snyk/child-process@0.4.1 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-nodejs-lockfile-parser@2.3.1 › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-nodejs-lockfile-parser@1.58.19 › snyk-config@5.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-resolve-deps@4.9.1 › snyk-module@3.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › snyk-module@3.2.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-resolve-deps@4.9.1 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › snyk-resolve@1.1.0 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › snyk-try-require@2.0.2 › debug@4.3.4\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › @snyk/rpm-parser@3.4.0 › debug@4.4.1\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › debug@4.4.3\n# Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity. None\n# Remediation\nThere is no fixed version for `debug`.\n\n# References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-109",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 6.9,
+                "security-severity": "6.9"
+              }
+            },
+            {
+              "id": "SNYK-JS-GOT-2932019",
+              "shortDescription": {
+                "text": "Medium severity - Open Redirect vulnerability in got"
+              },
+              "fullDescription": {
+                "text": "(CVE-2022-33987) got@11.8.2"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: got\n* Introduced through: snyk@1.0.0-monorepo, snyk-nodejs-lockfile-parser@2.3.1 and others\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-lockfile-parser@2.3.1 › @yarnpkg/core@4.4.1 › got@11.8.2\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-nodejs-lockfile-parser@2.3.1 › @yarnpkg/core@4.4.1 › got@11.8.2\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-nodejs-lockfile-parser@1.58.19 › @yarnpkg/core@2.4.0 › got@11.8.2\n# Overview\n\nAffected versions of this package are vulnerable to Open Redirect due to missing verification of requested URLs. It allowed a victim to be redirected to a UNIX socket.\n# Remediation\nUpgrade `got` to version 11.8.5, 12.1.0 or higher.\n# References\n- [GitHub Diff](https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0)\n- [GitHub PR](https://github.com/sindresorhus/got/pull/2047)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-601",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 5.4,
+                "security-severity": "5.4"
+              }
+            },
+            {
+              "id": "SNYK-JS-LODASH-12239302",
+              "shortDescription": {
+                "text": "High severity - Denial of Service (DoS) vulnerability in lodash"
+              },
+              "fullDescription": {
+                "text": "(CVE-2024-6984) lodash@4.17.21"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: lodash\n* Introduced through: snyk@1.0.0-monorepo, snyk-nodejs-plugin@1.4.4 and others\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-resolve-deps@4.8.0 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nuget-plugin@2.12.0 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-lockfile-parser@2.3.1 › @yarnpkg/core@4.4.1 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-poetry-lockfile-parser@1.9.0 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-python-plugin@3.1.2 › snyk-poetry-lockfile-parser@1.9.0 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-resolve-deps@4.9.1 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-resolve-deps@4.8.0 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nuget-plugin@2.12.0 › dotnet-deps-parser@6.1.0 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-docker-plugin@8.8.1 › snyk-nodejs-lockfile-parser@2.3.1 › @yarnpkg/core@4.4.1 › lodash@4.17.21\n* _Introduced through_: snyk@1.0.0-monorepo › snyk-nodejs-plugin@1.4.4 › snyk-nodejs-lockfile-parser@1.58.19 › @yarnpkg/core@2.4.0 › lodash@4.17.21\n# Overview\n[lodash](https://www.npmjs.com/package/lodash) is a modern JavaScript utility library delivering modularity, performance, & extras.\n\nAffected versions of this package are vulnerable to Denial of Service (DoS). An issue was discovered in Juju that resulted in the leak of the sensitive context ID, which allows a local unprivileged attacker to access other sensitive data or relation accessible to the local charm.\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its intended and legitimate users.\n\nUnlike other vulnerabilities, DoS attacks usually do not aim at breaching security. Rather, they are focused on making websites and services unavailable to genuine users resulting in downtime.\n\nOne popular Denial of Service vulnerability is DDoS (a Distributed Denial of Service), an attack that attempts to clog network pipes to the system by generating a large volume of traffic from many machines.\n\nWhen it comes to open source libraries, DoS vulnerabilities allow attackers to trigger such a crash or crippling of the service by using a flaw either in the application code or from the use of open source libraries.\n\nTwo common types of DoS vulnerabilities:\n\n* High CPU/Memory Consumption- An attacker sending crafted requests that could cause the system to take a disproportionate amount of time to process. For example, [commons-fileupload:commons-fileupload](SNYK-JAVA-COMMONSFILEUPLOAD-30082).\n\n* Crash - An attacker sending crafted requests that could cause the system to crash. For Example,  [npm `ws` package](https://snyk.io/vuln/npm:ws:20171108)\n\n# Remediation\nUpgrade `lodash` to version  or higher.\n# References\n- [AAAA](https://www.cve.org/CVERecord?id=CVE-2024-6984)\n- [GitHub Advisory](https://github.com/juju/juju/security/advisories/GHSA-6vjm-54vp-mxhx)\n- [GitHub Commit](https://github.com/juju/juju/commit/da929676853092a29ddf8d589468cf85ba3efaf2)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-400",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 7.5,
+                "security-severity": "7.5"
+              }
+            },
+            {
+              "id": "SNYK-JS-MARKED-2342073",
+              "shortDescription": {
+                "text": "Medium severity - Regular Expression Denial of Service (ReDoS) vulnerability in marked"
+              },
+              "fullDescription": {
+                "text": "(CVE-2022-21681) marked@4.0.1"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: marked\n* Introduced through: snyk@1.0.0-monorepo and marked@4.0.1\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › marked@4.0.1\n# Overview\n[marked](https://marked.js.org/) is a low-level compiler for parsing markdown without caching or blocking for long periods of time.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) when passing unsanitized user input to `inline.reflinkSearch`, if it is not being parsed by a time-limited worker thread.\r\n\r\n# PoC\r\n```js\r\nimport * as marked from 'marked';\r\n\r\nconsole.log(marked.parse(`[x]: x\r\n\r\n\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](`));\r\n```\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n# Remediation\nUpgrade `marked` to version 4.0.10 or higher.\n# References\n- [GitHub Commit](https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-1333",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 5.3,
+                "security-severity": "5.3"
+              }
+            },
+            {
+              "id": "SNYK-JS-MARKED-2342082",
+              "shortDescription": {
+                "text": "Medium severity - Regular Expression Denial of Service (ReDoS) vulnerability in marked"
+              },
+              "fullDescription": {
+                "text": "(CVE-2022-21680) marked@4.0.1"
+              },
+              "help": {
+                "text": "",
+                "markdown": "* Package Manager: npm\n* Vulnerable module: marked\n* Introduced through: snyk@1.0.0-monorepo and marked@4.0.1\n### Detailed paths\n* _Introduced through_: snyk@1.0.0-monorepo › marked@4.0.1\n# Overview\n[marked](https://marked.js.org/) is a low-level compiler for parsing markdown without caching or blocking for long periods of time.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) when unsanitized user input is passed to `block.def`.\r\n\r\n# PoC\r\n```js\r\nimport * as marked from \"marked\";\r\nmarked.parse(`[x]:${' '.repeat(1500)}x ${' '.repeat(1500)} x`);\r\n```\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n# Remediation\nUpgrade `marked` to version 4.0.10 or higher.\n# References\n- [GitHub Commit](https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0)\n- [GitHub Release](https://github.com/markedjs/marked/releases/tag/v4.0.10)\n"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "CWE-1333",
+                  "npm"
+                ],
+                "cvssv3_baseScore": 5.3,
+                "security-severity": "5.3"
+              }
+            }
+          ]
+        }
+      },
+      "automationDetails": {
+        "id": "Snyk/Open Source/snyk/2025-10-28T16:05:34.304Z"
+      },
+      "results": [
+        {
+          "ruleId": "SNYK-JS-ASYNC-12239908",
+          "level": "error",
+          "message": {
+            "text": "This file introduces a vulnerable async package with a high severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "async@3.2.4"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-BRACEEXPANSION-9789073",
+          "level": "note",
+          "message": {
+            "text": "This file introduces a vulnerable brace-expansion package with a low severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "brace-expansion@1.1.11"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "Upgrade to glob@9.0.0"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "package.json"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 1
+                      },
+                      "insertedContent": {
+                        "text": "glob@9.0.0"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-COOKIE-13271683",
+          "level": "warning",
+          "message": {
+            "text": "This file introduces a vulnerable cookie package with a medium severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "cookie@0.4.2"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "Upgrade to @sentry/node@7.75.0"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "package.json"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 1
+                      },
+                      "insertedContent": {
+                        "text": "@sentry/node@7.75.0"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-DEBUG-13283909",
+          "level": "warning",
+          "message": {
+            "text": "This file introduces a vulnerable debug package with a medium severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "debug@4.3.4"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-DEBUG-14214893",
+          "level": "warning",
+          "message": {
+            "text": "This file introduces a vulnerable debug package with a medium severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "debug@4.3.4"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-GOT-2932019",
+          "level": "warning",
+          "message": {
+            "text": "This file introduces a vulnerable got package with a medium severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "got@11.8.2"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "Upgrade to snyk-nodejs-lockfile-parser@2.3.1"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "package.json"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 1
+                      },
+                      "insertedContent": {
+                        "text": "snyk-nodejs-lockfile-parser@2.3.1"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-LODASH-12239302",
+          "level": "error",
+          "message": {
+            "text": "This file introduces a vulnerable lodash package with a high severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "lodash@4.17.21"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-MARKED-2342073",
+          "level": "warning",
+          "message": {
+            "text": "This file introduces a vulnerable marked package with a medium severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "marked@4.0.1"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "Upgrade to marked@4.0.10"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "package.json"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 1
+                      },
+                      "insertedContent": {
+                        "text": "marked@4.0.10"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "SNYK-JS-MARKED-2342082",
+          "level": "warning",
+          "message": {
+            "text": "This file introduces a vulnerable marked package with a medium severity vulnerability."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "package.json"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "marked@4.0.1"
+                }
+              ]
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "Upgrade to marked@4.0.10"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "package.json"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 1
+                      },
+                      "insertedContent": {
+                        "text": "marked@4.0.10"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
