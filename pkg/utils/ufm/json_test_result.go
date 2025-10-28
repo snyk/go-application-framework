@@ -2,6 +2,7 @@ package ufm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -134,4 +135,19 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 	}
 
 	return result, nil
+}
+
+func NewSerializableTestResultFromBytes(jsonBytes []byte) ([]testapi.TestResult, error) {
+	var tmp []jsonTestResult
+	err := json.Unmarshal(jsonBytes, &tmp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal test result: %w", err)
+	}
+
+	testResults := make([]testapi.TestResult, len(tmp))
+	for i, r := range tmp {
+		testResults[i] = &r
+	}
+
+	return testResults, nil
 }

@@ -1,4 +1,4 @@
-package presenters
+package presenters_test
 
 import (
 	"bytes"
@@ -6,13 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
-	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/stretchr/testify/assert"
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -45,39 +43,27 @@ func validateSarifData(t *testing.T, data []byte) {
 
 func Test_UfmPresenter_Sarif(t *testing.T) {
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))
-	ctlr := gomock.NewController(t)
-	testResult := mocks.NewMockTestResult(ctlr)
-	results := []testapi.TestResult{testResult}
 
-	problem1 := testapi.Problem{}
-	err := problem1.FromSnykVulnProblem(testapi.SnykVulnProblem{
-		Id:             "CVE-2024-12345",
-		Source:         testapi.SnykVulnProblemSource("cve"),
-		PackageName:    "package-name",
-		PackageVersion: "package-version",
-		PublishedAt:    time.Now(),
-		Severity:       testapi.SeverityHigh,
-	})
+	expectedSarifBytes, err := os.ReadFile("testdata/ufm/original_cli.sarif")
 	assert.NoError(t, err)
 
-	finding1 := testapi.FindingData{
-		Attributes: &testapi.FindingAttributes{
-			Title:       "Finding example high sev",
-			FindingType: testapi.FindingTypeSca,
-			Problems:    []testapi.Problem{problem1},
-		},
-	}
+	testResultBytes, err := os.ReadFile("testdata/ufm/testresult_cli.json")
+	assert.NoError(t, err)
 
-	testResult.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{finding1}, true, nil).AnyTimes()
+	testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(testResult))
 
 	config := configuration.NewWithOpts()
 
 	writer := &bytes.Buffer{}
 
-	presenter := NewUfmRenderer(results, config, writer, UfmWithRuntimeInfo(ri))
-	err = presenter.RenderTemplate(ApplicationSarifTemplatesUfm, ApplicationSarifMimeType)
+	presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+	err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
 	assert.NoError(t, err)
 
 	validateSarifData(t, writer.Bytes())
-	t.Log(writer.String())
+	//	t.Log(writer.String())
+
+	assert.JSONEq(t, string(expectedSarifBytes), writer.String())
 }
