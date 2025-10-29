@@ -33,6 +33,15 @@
 								"properties": {
 									{{- $props := index $rule "properties" }}
 									{{- if $props }}
+									{{- $tags := index $props "tags" }}
+									{{- if $tags }}
+									"tags": [
+										{{- $tagsSize := sub (len $tags) 1 }}
+										{{- range $tagIndex, $tag := $tags }}
+										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
+										{{- end }}
+									],
+									{{- end }}
 									"cvssv3_baseScore": {{ index $props "cvssv3_baseScore" }},
 									"security-severity": {{ getQuotedString (index $props "security-severity") }}
 									{{- end }}
