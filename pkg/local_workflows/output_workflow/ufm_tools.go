@@ -91,39 +91,39 @@ func getWritersToUseUfm(config configuration.Configuration, outputDestination iU
 		}
 	}
 
-	// // default file writers
-	// fileWriters := []FileWriter{
-	// 	{
-	// 		OUTPUT_CONFIG_KEY_SARIF_FILE,
-	// 		SARIF_MIME_TYPE,
-	// 		presenters.ApplicationSarifTemplatesUfm,
-	// 		true,
-	// 	},
-	// 	/*
-	// 		skipping support for json file output by default, since there is no supporting rendering yet.
-	// 		{
-	// 			OUTPUT_CONFIG_KEY_JSON_FILE,
-	// 			SARIF_MIME_TYPE,
-	// 			ApplicationSarifTemplates,
-	// 			true,
-	// 		},*/
-	// }
+	// default file writers
+	fileWriters := []FileWriter{
+		{
+			OUTPUT_CONFIG_KEY_SARIF_FILE,
+			SARIF_MIME_TYPE,
+			presenters.ApplicationSarifTemplatesUfm,
+			true,
+		},
+		/*
+			skipping support for json file output by default, since there is no supporting rendering yet.
+			{
+				OUTPUT_CONFIG_KEY_JSON_FILE,
+				SARIF_MIME_TYPE,
+				ApplicationSarifTemplates,
+				true,
+			},*/
+	}
 
-	// // use configured file writers if available
-	// if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
-	// 	fileWriters = tmp
-	// }
+	// use configured file writers if available
+	if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
+		fileWriters = tmp
+	}
 
-	// for _, fileWriter := range fileWriters {
-	// 	if config.IsSet(fileWriter.NameConfigKey) {
-	// 		writerMap[fileWriter.NameConfigKey] = &WriterEntry{
-	// 			writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
-	// 			mimeType:        fileWriter.MimeType,
-	// 			templates:       fileWriter.TemplateFiles,
-	// 			renderEmptyData: fileWriter.WriteEmptyContent,
-	// 		}
-	// 	}
-	// }
+	for _, fileWriter := range fileWriters {
+		if config.IsSet(fileWriter.NameConfigKey) {
+			writerMap[fileWriter.NameConfigKey] = &WriterEntry{
+				writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
+				mimeType:        fileWriter.MimeType,
+				templates:       fileWriter.TemplateFiles,
+				renderEmptyData: fileWriter.WriteEmptyContent,
+			}
+		}
+	}
 
 	return writerMap
 }
