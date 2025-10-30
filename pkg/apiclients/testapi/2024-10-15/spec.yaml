@@ -209,16 +209,6 @@ components:
         sunset:
           $ref: '#/components/headers/SunsetHeader'
   schemas:
-    Action:
-      description: Different types of managed OS package fix actions
-      discriminator:
-        mapping:
-          pin_package: '#/components/schemas/PinPackageAction'
-          upgrade_package: '#/components/schemas/UpgradePackageAction'
-        propertyName: type
-      oneOf:
-      - $ref: '#/components/schemas/UpgradePackageAction'
-      - $ref: '#/components/schemas/PinPackageAction'
     ActualVersion:
       description: Resolved API version
       pattern: ^((([0-9]{4})-([0-1][0-9]))-((3[01])|(0[1-9])|([12][0-9]))(~(wip|work-in-progress|experimental|beta))?)$
@@ -359,6 +349,65 @@ components:
       required:
       - source
       - path
+      type: object
+    Diff:
+      description: |-
+        Fix suggestions in the unified diff format that introduce code changes
+        to remediate the vulnerability.
+      example:
+        format: diff
+        suggestions:
+        - diff: |
+            --- a/auth.ts
+            +++ b/auth.ts
+            @@ -1,1 +1,1 @@
+            -eval(userInput)
+            +safeEval(userInput)
+          external_id: 550e8400-e29b-41d4-a716-446655440000
+          rank: 1
+        - diff: |
+            --- a/auth.ts
+            +++ b/auth.ts
+            @@ -1,1 +1,1 @@
+            -password === input
+            +bcrypt.compare(input, password)
+          external_id: 550e8400-e29b-41d4-a716-446655440001
+          rank: 2
+      properties:
+        format:
+          enum:
+          - diff
+          type: string
+        suggestions:
+          description: |-
+            Alternative suggestions - choose one to fix the vulnerability.
+            The 'rank' field signals the relative confidence in each one.
+          items:
+            $ref: '#/components/schemas/DiffSuggestion'
+          type: array
+      required:
+      - format
+      - suggestions
+      type: object
+    DiffSuggestion:
+      description: A suggestion in unified diff format representing the code changes
+        to fix the vulnerability.
+      properties:
+        diff:
+          description: |-
+            Unified diff that contains changes for one or multiple files.
+            It already contains file path, but this can be extracted as a separate field if needed.
+          maxLength: 10485760
+          type: string
+        external_id:
+          description: The fix suggestion identifier from an external source.
+          format: uuid
+          type: string
+        rank:
+          format: uint8
+          type: integer
+      required:
+      - diff
       type: object
     Error:
       additionalProperties: false
@@ -834,6 +883,26 @@ components:
       - dast
       - other
       type: string
+    FixAction:
+      description: |-
+        Different fix formats in which the fix action is represented. We distinguish between advice and diff formats.
+
+        Advice - Fix advice in a display only / informational format. These are highly product line specific, so they have their own model.
+        - upgradePackageAdvice: Upgrade a direct package from one version to a newer one that resolves the vulnerability.
+        - pinPackageAdvice: Pin a package at a specific version.
+
+        Diff - Fix suggestions in the unified diff format that introduce code changes
+        to remediate the vulnerability. Can be used to represent fix actions for any product line.
+      discriminator:
+        mapping:
+          diff: '#/components/schemas/Diff'
+          pin_package_advice: '#/components/schemas/PinPackageAdvice'
+          upgrade_package_advice: '#/components/schemas/UpgradePackageAdvice'
+        propertyName: format
+      oneOf:
+      - $ref: '#/components/schemas/UpgradePackageAdvice'
+      - $ref: '#/components/schemas/PinPackageAdvice'
+      - $ref: '#/components/schemas/Diff'
     FixAppliedOutcome:
       description: Indicates the outcome of a fix in terms of resolving the finding
         at hand
@@ -845,8 +914,15 @@ components:
     FixAttributes:
       description: FixAttributes is the main payload modelling a fix
       properties:
-        actions:
-          $ref: '#/components/schemas/Action'
+        action:
+          allOf:
+          - $ref: '#/components/schemas/FixAction'
+          description: |-
+            Applying the steps specified by the action within the fix leads to resolving either completely or partially this finding.
+            An action may be a simple upgrade, a code swap, or may model sets of boolean operations.
+
+            For now only simple actions are modelled but could be extended to include more complex actions in the future.
+            See doc for more info: https://docs.google.com/document/d/151vAXurvX4k8fNOWspSI2Ou9OF1G5fj8LHa-NuKOfgw
         outcome:
           allOf:
           - $ref: '#/components/schemas/FixAppliedOutcome'
@@ -1277,7 +1353,7 @@ components:
       - pass
       - fail
       type: string
-    PinPackageAction:
+    PinPackageAdvice:
       description: |-
         Pin a package at a specific version. Pinning is a capability not supported
         by all ecosystems, which causes a transitive dependency to be pinned at
@@ -1290,20 +1366,20 @@ components:
 
         Note: In practice pin actions today are solely used in python pip's packages as pip does not calculate upgrade paths
       example:
+        format: pin_package_advice
         package_name: requests
         pin_version: 2.25.1
-        type: pin_package
       properties:
+        format:
+          enum:
+          - pin_package_advice
+          type: string
         package_name:
           type: string
         pin_version:
           type: string
-        type:
-          enum:
-          - pin_package
-          type: string
       required:
-      - type
+      - format
       - package_name
       - pin_version
       type: object
@@ -2429,11 +2505,11 @@ components:
       - seconds
       - outcome
       type: object
-    UpgradePackageAction:
+    UpgradePackageAdvice:
       description: Upgrade a package from one version to another.
       example:
+        format: upgrade_package_advice
         package_name: lodash
-        type: upgrade_package
         upgrade_paths:
         - dependency_path:
           - name: lodash
@@ -2442,12 +2518,12 @@ components:
             version: 4.7.6
           is_drop: false
       properties:
+        format:
+          enum:
+          - upgrade_package_advice
+          type: string
         package_name:
           description: The package that's receiving an upgrade to fix this vulnerability
-          type: string
-        type:
-          enum:
-          - upgrade_package
           type: string
         upgrade_paths:
           description: |-
@@ -2459,7 +2535,7 @@ components:
             $ref: '#/components/schemas/UpgradePath'
           type: array
       required:
-      - type
+      - format
       - package_name
       - upgrade_paths
       type: object
