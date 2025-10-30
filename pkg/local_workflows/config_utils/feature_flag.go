@@ -10,14 +10,18 @@ import (
 
 func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFlagName string) {
 	config := engine.GetConfiguration()
+	err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
+	if err != nil {
+		engine.GetLogger().Err(err).Msgf("Failed to add dependency for %s", configKey)
+	}
 
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		if existingValue == nil {
-			httpClient := engine.GetNetworkAccess().GetHttpClient()
-			return GetFeatureFlagValue(featureFlagName, config, httpClient)
-		} else {
+	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil {
 			return existingValue, nil
 		}
+
+		httpClient := engine.GetNetworkAccess().GetHttpClient()
+		return GetFeatureFlagValue(featureFlagName, config, httpClient)
 	}
 
 	config.AddDefaultValue(configKey, callback)

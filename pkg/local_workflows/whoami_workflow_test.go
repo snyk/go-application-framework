@@ -8,14 +8,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/rs/zerolog"
-
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
-
-	"github.com/stretchr/testify/assert"
 )
 
 const referenceUrl = "/rest/self?version=2024-04-22"
@@ -92,7 +91,7 @@ func setupMockContext(t *testing.T, payload string, experimental bool, json bool
 	var httpClient *http.Client = http.DefaultClient
 
 	if mockClient {
-		httpClient = NewTestClient(func(req *http.Request) *http.Response {
+		httpClient = testutils.NewTestClient(func(req *http.Request) *http.Response {
 			// Test request parameters
 			assert.Equal(t, referenceUrl, req.URL.String())
 			assert.Equal(t, "GET", req.Method)

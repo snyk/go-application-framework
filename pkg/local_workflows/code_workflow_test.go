@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
@@ -25,6 +24,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -460,67 +460,6 @@ func Test_Code_UseNativeImplementation(t *testing.T) {
 	})
 }
 
-// Helper function to test key dependencies for configuration keys
-func testOrganizationDependency(
-	t *testing.T,
-	configKey string,
-	dependencyKey string,
-	configIsBoolean bool,
-) {
-	t.Helper()
-
-	// Setup
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Minute))
-	config.Set(dependencyKey, "value1")
-
-	// Track how many times the callback is invoked
-	callCount := 0
-	testCallback := func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		callCount++
-		// Return a value that changes on each call. This allows us to check whether the returned value comes from
-		// the cache or this callback function.
-		if configIsBoolean {
-			// Alternate between true and false
-			return callCount%2 == 1, nil
-		}
-		return fmt.Sprintf("value-%d", callCount), nil
-	}
-
-	// Register the dependency
-	err := config.AddKeyDependency(configKey, dependencyKey)
-	assert.NoError(t, err)
-	config.AddDefaultValue(configKey, testCallback)
-
-	// First Get - should invoke callback
-	result1 := getValue(config, configKey, configIsBoolean)
-	assert.NotNil(t, result1)
-	assert.Equal(t, 1, callCount, "Callback should be invoked on first read")
-
-	// Second Get - should use cached value
-	result2 := getValue(config, configKey, configIsBoolean)
-	assert.Equal(t, result1, result2, "Cached value should be used on second read")
-	assert.Equal(t, 1, callCount, "Callback should not be called on second read")
-
-	// Change the value of the dependency - this should clear the cached value.
-	config.Set(dependencyKey, "value2")
-
-	// Third Get - should invoke callback again since cache was cleared
-	result3 := getValue(config, configKey, configIsBoolean)
-	assert.NotNil(t, result3)
-	assert.NotEqual(t, result1, result3, "Cached value should not be used after dependency changed")
-	assert.Equal(t, 2, callCount, "Callback should be called again after dependency changed")
-}
-
-func getValue(config configuration.Configuration, key string, isBoolean bool) interface{} {
-	if isBoolean {
-		return config.GetBool(key)
-	}
-	return config.Get(key)
-}
-
 // setupMockEngine creates a mock engine with basic expectations
 func setupMockEngine(t *testing.T) *mocks.MockEngine {
 	t.Helper()
@@ -591,16 +530,7 @@ func setupMockEngineWithServer(t *testing.T, server *httptest.Server) (*mocks.Mo
 	return mockEngine, config
 }
 
-func Test_GetSastSettingsConfig(t *testing.T) {
-	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
-		testOrganizationDependency(
-			t,
-			code_workflow.ConfigurationSastSettings,
-			configuration.ORGANIZATION,
-			false,
-		)
-	})
-
+func Test_getSastSettingsConfig(t *testing.T) {
 	t.Run("callback returns existing value when provided", func(t *testing.T) {
 		existingValue := &sast_contract.SastResponse{SastEnabled: true}
 
@@ -625,6 +555,28 @@ func Test_GetSastSettingsConfig(t *testing.T) {
 		assert.True(t, sastResponse.LocalCodeEngine.Enabled)
 	})
 
+	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
+		testutils.CheckCacheRespectOrgDependency(
+			t,
+			code_workflow.ConfigurationSastSettings,
+			func(isFirstCall bool) any {
+				return &sast_contract.SastResponse{
+					SastEnabled:     isFirstCall,
+					LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: isFirstCall},
+				}
+			},
+			InitCodeWorkflow,
+			&sast_contract.SastResponse{
+				SastEnabled:     true,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: true},
+			},
+			&sast_contract.SastResponse{
+				SastEnabled:     false,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+			},
+		)
+	})
+
 	t.Run("callback returns error when API call fails and existing value is nil", func(t *testing.T) {
 		server := setupMockServerWithError(t)
 		defer server.Close()
@@ -637,16 +589,7 @@ func Test_GetSastSettingsConfig(t *testing.T) {
 	})
 }
 
-func Test_GetSastEnabled(t *testing.T) {
-	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
-		testOrganizationDependency(
-			t,
-			code_workflow.ConfigurationSastEnabled,
-			configuration.ORGANIZATION,
-			true,
-		)
-	})
-
+func Test_getSastEnabled(t *testing.T) {
 	t.Run("callback function returns existing value when provided", func(t *testing.T) {
 		mockEngine := setupMockEngine(t)
 		result, err := getSastEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
@@ -656,17 +599,57 @@ func Test_GetSastEnabled(t *testing.T) {
 		assert.True(t, boolResult, "Should return existing value when provided")
 	})
 
-	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
-		server := setupMockServerForSastSettings(t, true, false)
-		defer server.Close()
+	t.Run("callback reads from ConfigurationSastSettings (pre-cached) when existing value is nil", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		config := mockEngine.GetConfiguration()
 
-		mockEngine, config := setupMockEngineWithServer(t, server)
+		// Set ConfigurationSastSettings in config
+		sastSettings := &sast_contract.SastResponse{
+			SastEnabled:     true,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+		}
+		config.Set(code_workflow.ConfigurationSastSettings, sastSettings)
 
 		result, err := getSastEnabled(mockEngine)(config, nil)
 		assert.NoError(t, err)
 		boolResult, ok := result.(bool)
 		assert.True(t, ok, "result should be of type bool")
-		assert.True(t, boolResult, "Should return SastEnabled from API response")
+		assert.True(t, boolResult, "Should return SastEnabled from ConfigurationSastSettings")
+	})
+
+	t.Run("depends on ConfigurationSastSettings", func(t *testing.T) {
+		testutils.CheckConfigCachesDependency(
+			t,
+			code_workflow.ConfigurationSastEnabled,
+			code_workflow.ConfigurationSastSettings,
+			getSastEnabled,
+			&sast_contract.SastResponse{
+				SastEnabled:     true,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+			},
+			&sast_contract.SastResponse{
+				SastEnabled:     false,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+			},
+			true,
+			false,
+		)
+	})
+
+	t.Run("respects organization changes (full chain)", func(t *testing.T) {
+		testutils.CheckCacheRespectOrgDependency(
+			t,
+			code_workflow.ConfigurationSastEnabled,
+			func(isFirstCall bool) any {
+				return &sast_contract.SastResponse{
+					SastEnabled:     isFirstCall,
+					LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+				}
+			},
+			InitCodeWorkflow,
+			true,
+			false,
+		)
 	})
 
 	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
@@ -683,16 +666,7 @@ func Test_GetSastEnabled(t *testing.T) {
 	})
 }
 
-func Test_GetSlceEnabled(t *testing.T) {
-	t.Run("adds organization dependency and clears cache on org change", func(t *testing.T) {
-		testOrganizationDependency(
-			t,
-			code_workflow.ConfigurarionSlceEnabled,
-			configuration.ORGANIZATION,
-			true,
-		)
-	})
-
+func Test_getSlceEnabled(t *testing.T) {
 	t.Run("callback function returns existing value when provided", func(t *testing.T) {
 		mockEngine := setupMockEngine(t)
 		result, err := getSlceEnabled(mockEngine)(mockEngine.GetConfiguration(), true)
@@ -702,17 +676,57 @@ func Test_GetSlceEnabled(t *testing.T) {
 		assert.True(t, boolResult, "Should return existing value when provided")
 	})
 
-	t.Run("callback fetches settings when existing value is nil", func(t *testing.T) {
-		server := setupMockServerForSastSettings(t, false, true)
-		defer server.Close()
+	t.Run("callback reads from ConfigurationSastSettings (pre-cached) when existing value is nil", func(t *testing.T) {
+		mockEngine := setupMockEngine(t)
+		config := mockEngine.GetConfiguration()
 
-		mockEngine, config := setupMockEngineWithServer(t, server)
+		// Set ConfigurationSastSettings in config
+		sastSettings := &sast_contract.SastResponse{
+			SastEnabled:     false,
+			LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: true},
+		}
+		config.Set(code_workflow.ConfigurationSastSettings, sastSettings)
 
 		result, err := getSlceEnabled(mockEngine)(config, nil)
 		assert.NoError(t, err)
 		boolResult, ok := result.(bool)
 		assert.True(t, ok, "result should be of type bool")
-		assert.True(t, boolResult, "Should return LocalCodeEngine.Enabled from API response")
+		assert.True(t, boolResult, "Should return LocalCodeEngine.Enabled from ConfigurationSastSettings")
+	})
+
+	t.Run("depends on ConfigurationSastSettings", func(t *testing.T) {
+		testutils.CheckConfigCachesDependency(
+			t,
+			code_workflow.ConfigurarionSlceEnabled,
+			code_workflow.ConfigurationSastSettings,
+			getSlceEnabled,
+			&sast_contract.SastResponse{
+				SastEnabled:     false,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: true},
+			},
+			&sast_contract.SastResponse{
+				SastEnabled:     false,
+				LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: false},
+			},
+			true,
+			false,
+		)
+	})
+
+	t.Run("respects organization changes (full chain)", func(t *testing.T) {
+		testutils.CheckCacheRespectOrgDependency(
+			t,
+			code_workflow.ConfigurarionSlceEnabled,
+			func(isFirstCall bool) any {
+				return &sast_contract.SastResponse{
+					SastEnabled:     false,
+					LocalCodeEngine: sast_contract.LocalCodeEngine{Enabled: isFirstCall},
+				}
+			},
+			InitCodeWorkflow,
+			true,
+			false,
+		)
 	})
 
 	t.Run("callback returns false and error when API call fails and existing value is nil", func(t *testing.T) {
