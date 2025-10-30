@@ -46,54 +46,6 @@
 									"security-severity": {{ getQuotedString (index $props "security-severity") }}
 									{{- end }}
 								}
-							{{- /* OLD COMMENTED PROPERTIES:
-							"properties": {
-								"tags": [
-									{{- $tagsSize := sub (len $rule.Properties.Tags) 1 }}
-									{{- range $tagIndex, $tag := $rule.Properties.Tags }}
-									{{ getQuotedString $tag }}{{if lt $tagIndex $tagsSize}},{{end}}
-									{{- end }}
-								],
-								"categories": [
-									{{- $categoriesSize := sub (len $rule.Properties.Categories) 1 }}
-									{{- range $catIndex, $category := $rule.Properties.Categories }}
-									{{ getQuotedString $category }}{{if lt $catIndex $categoriesSize}},{{end}}
-									{{- end }}
-								],
-								"exampleCommitFixes": [
-									{{- $examplesSize := sub (len $rule.Properties.ExampleCommitFixes) 1 }}
-									{{- range $exampleIndex, $example := $rule.Properties.ExampleCommitFixes }}
-									{
-
-										"commitURL": "{{ $example.CommitUrl }}",
-										"lines": [
-											{{- $lineSize := sub (len $example.Lines) 1 }}
-											{{- range $lineIndex, $line := $example.Lines }}
-											{
-												"line": {{ getQuotedString $line.Line -}},
-												"lineNumber": {{ $line.LineNumber }},
-												"lineChange": "{{ $line.LineChange }}"
-											}{{if lt $lineIndex $lineSize}},{{end}}
-											{{- end }}
-										]
-									}{{if lt $exampleIndex $examplesSize}},{{end}}
-									{{- end }}
-								],
-								"exampleCommitDescriptions": [
-									{{- $examplesSize := sub (len $rule.Properties.ExampleCommitDescriptions) 1 }}
-									{{- range $exampleIndex, $example := $rule.Properties.ExampleCommitDescriptions }}
-									"{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
-									{{- end }}
-								],
-								"precision": "{{ $rule.Properties.Precision }}",
-								"repoDatasetSize": {{ $rule.Properties.RepoDatasetSize }},
-								"cwe": [
-									{{- $cweSize := sub (len $rule.Properties.Cwe) 1 }}
-									{{- range $cweIndex, $cwe := $rule.Properties.Cwe }}
-									"{{ $cwe }}"{{if lt $cweIndex $cweSize}},{{end}}
-									{{- end }}
-								]
-							} */ -}}
 							}{{if lt $index $rulesSize}},{{end}}
 							{{- end }}
 						]
