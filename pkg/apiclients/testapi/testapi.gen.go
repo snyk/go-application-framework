@@ -700,7 +700,7 @@ type Ignore struct {
 	Ignore     IgnoreDetails    `json:"ignore"`
 
 	// PolicyRef Reference to a policy, serving as a container for a set of policy-rules and can be owned by the group or the org.
-	PolicyRef SnykPolicyRef `json:"policy_ref"`
+	PolicyRef *SnykPolicyRef `json:"policy_ref,omitempty"`
 
 	// Rule A policy rule is the central entity of a policy, including an action as well as conditions
 	// when this policy applies.
@@ -1455,6 +1455,9 @@ type Suppression struct {
 
 	// Policy Policy responsible for the state of suppression represented here, if available.
 	Policy *PolicyRef `json:"policy,omitempty"`
+
+	// SkipIfFixable Skip the suppression if an actual fix is available.
+	SkipIfFixable *bool `json:"skipIfFixable,omitempty"`
 
 	// Status Status of the suppression.
 	Status SuppressionStatus `json:"status"`
