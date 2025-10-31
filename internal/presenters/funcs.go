@@ -2,7 +2,9 @@ package presenters
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -237,13 +240,18 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
 		return sarif.SeverityToSarifLevel(string(s))
 	}
-	fnMap["getAutomationDetailsId"] = func(projectName string) string {
+	fnMap["getAutomationDetailsId"] = func(projectName string, testType string) string {
+		driverName := sarif.ConvertTypeToDriverName(testType)
+		driverName = strings.TrimSpace(strings.Replace(driverName, "Snyk", "", 1))
+
 		if projectName != "" {
 			projectName = projectName + "/"
 		}
-		return fmt.Sprintf("Snyk/Code/%s%s", projectName, time.Now().UTC().Format(time.RFC3339))
+		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
+	fnMap["getRulesFromTestResult"] = sarif.GetRulesFromTestResult
+	fnMap["getResultsFromTestResult"] = sarif.GetResultsFromTestResult
 	return fnMap
 }
 
@@ -308,6 +316,8 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["replaceString"] = func(str string, old string, replaceWith string) string {
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
+	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
+	defaultMap["getFindingsFromTestResult"] = getFindingsFromTestResult
 
 	return defaultMap
 }
@@ -362,4 +372,28 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 	}
 
 	return datetime.Format(outputFormat)
+}
+
+func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
+	findingTypes := map[testapi.FindingType]bool{}
+	findings, _, err := testResults.Findings(context.Background())
+	if err != nil {
+		return []testapi.FindingType{}
+	}
+
+	for _, findings := range findings {
+		if _, ok := findingTypes[findings.Attributes.FindingType]; ok {
+			continue
+		}
+		findingTypes[findings.Attributes.FindingType] = true
+	}
+	return slices.Collect(maps.Keys(findingTypes))
+}
+
+func getFindingsFromTestResult(testResults testapi.TestResult) []testapi.FindingData {
+	findings, _, err := testResults.Findings(context.Background())
+	if err != nil {
+		return []testapi.FindingData{}
+	}
+	return findings
 }

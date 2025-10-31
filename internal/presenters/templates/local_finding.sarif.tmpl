@@ -234,7 +234,7 @@
 					{{- end }}
 				},
 				"automationDetails": {
-					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") }}"
+					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") "sast" }}"
 				}
 			}
 		{{- end}}

@@ -1,0 +1,4652 @@
+[
+  {
+    "testId": "f216306e-842c-429b-aa94-57893e516cdd",
+    "testConfiguration": {
+      "local_policy": {
+        "fail_on_upgradable": false,
+        "ignores": [
+          {
+            "created_at": "2022-11-14T16:35:38.26Z",
+            "expires_at": "2122-12-14T16:35:38.252Z",
+            "reason": "--about lists all dependency licenses which is a requirement of MPL-2.0",
+            "vuln_id": "snyk:lic:npm:shescape:MPL-2.0"
+          },
+          {
+            "created_at": "2025-04-01T16:22:02.512Z",
+            "expires_at": "2025-05-01T16:22:02.505Z",
+            "reason": "None Given",
+            "vuln_id": "SNYK-JS-CROSSSPAWN-8303230"
+          },
+          {
+            "created_at": "2024-11-08T10:22:20.531Z",
+            "expires_at": "2025-01-01T00:12:20.523Z",
+            "reason": "Not directely exploitable",
+            "vuln_id": "SNYK-JS-SOURCEMAPSUPPORT-6112477"
+          }
+        ],
+        "severity_threshold": "none",
+        "suppress_pending_ignores": false
+      },
+      "timeout": {
+        "outcome": "fail",
+        "seconds": 1200
+      }
+    },
+    "createdAt": "2025-10-28T15:42:29.689452Z",
+    "testSubject": {
+      "locator": {
+        "paths": [
+          "package-lock.json"
+        ],
+        "type": "local_path"
+      },
+      "type": "dep_graph"
+    },
+    "executionState": "finished",
+    "passFail": "fail",
+    "outcomeReason": "policy_breach",
+    "effectiveSummary": {
+      "count": 13,
+      "count_by": {
+        "result_type": {
+          "dast": 0,
+          "other": 0,
+          "sast": 0,
+          "sca": 13
+        },
+        "severity": {
+          "critical": 0,
+          "high": 2,
+          "low": 1,
+          "medium": 10,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "rawSummary": {
+      "count": 13,
+      "count_by": {
+        "result_type": {
+          "dast": 0,
+          "other": 0,
+          "sast": 0,
+          "sca": 13
+        },
+        "severity": {
+          "critical": 0,
+          "high": 2,
+          "low": 1,
+          "medium": 10,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "findings": [
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n\nAffected versions of this package are vulnerable to Open Redirect due to missing verification of requested URLs. It allowed a victim to be redirected to a UNIX socket.\n## Remediation\nUpgrade `got` to version 11.8.5, 12.1.0 or higher.\n## References\n- [GitHub Diff](https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0)\n- [GitHub PR](https://github.com/sindresorhus/got/pull/2047)\n",
+          "evidence": [
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "1.58.19"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "2.4.0"
+                },
+                {
+                  "name": "got",
+                  "version": "11.8.2"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "4.4.1"
+                },
+                {
+                  "name": "got",
+                  "version": "11.8.2"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "4.4.1"
+                },
+                {
+                  "name": "got",
+                  "version": "11.8.2"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000001",
+          "locations": [
+            {
+              "package": {
+                "name": "got",
+                "version": "11.8.2"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "id": "CVE-2022-33987",
+              "source": "cve"
+            },
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<11.8.5",
+                ">=12.0.0 <12.1.0"
+              ],
+              "created_at": "2022-06-19T09:23:24.210132Z",
+              "credits": [
+                "Unknown"
+              ],
+              "cvss_base_score": 5.4,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.4,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-06T13:37:59.661917Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N"
+                },
+                {
+                  "assigner": "NVD",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:54:52.230794Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:58:23.299604Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+                }
+              ],
+              "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+              "disclosed_at": "2022-06-19T08:33:16Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.73924",
+                "probability": "0.00852"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-GOT-2932019",
+              "initially_fixed_in_versions": [
+                "11.8.5",
+                "12.1.0"
+              ],
+              "is_fixable": true,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-03-11T07:58:23.299604Z",
+              "package_name": "got",
+              "package_version": "",
+              "published_at": "2022-06-19T15:33:44.269688Z",
+              "references": [
+                {
+                  "title": "GitHub Diff",
+                  "url": "https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0"
+                },
+                {
+                  "title": "GitHub PR",
+                  "url": "https://github.com/sindresorhus/got/pull/2047"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-601",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Open Redirect"
+        },
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity. None\n## Remediation\nThere is no fixed version for `debug`.\n\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957)\n",
+          "evidence": [
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "@snyk/rpm-parser",
+                  "version": "3.4.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.4.1"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000002",
+          "locations": [
+            {
+              "package": {
+                "name": "debug",
+                "version": "4.4.1"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "*"
+              ],
+              "created_at": "2025-05-02T12:17:04.846156Z",
+              "credits": [
+                "provDannyLaw"
+              ],
+              "cvss_base_score": 6.9,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "4.0",
+                  "modified_at": "2025-05-02T12:17:05.259065Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:A/AC:L/AT:N/PR:H/UI:N/VC:L/VI:H/VA:L/SC:N/SI:N/SA:L"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-05-02T12:17:05.259065Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:A/AC:L/PR:H/UI:N/S:C/C:L/I:N/A:H"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:A/AC:L/AT:N/PR:H/UI:N/VC:L/VI:H/VA:L/SC:N/SI:N/SA:L",
+              "disclosed_at": "2024-02-21T18:17:18Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-DEBUG-14214893",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2025-05-02T12:17:05.259065Z",
+              "package_name": "debug",
+              "package_version": "",
+              "published_at": "2025-05-02T12:17:05.24083Z",
+              "references": [
+                {
+                  "title": "GitHub Issue",
+                  "url": "https://github.com/debug-js/debug/issues/957"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-109",
+              "source": "cwe"
+            },
+            {
+              "id": "CVE-9999-1234",
+              "source": "cve"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "debug",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "snyk-resolve-deps",
+                          "version": "4.9.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000005",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[brace-expansion](https://github.com/juliangruber/brace-expansion) is a Brace expansion as known from sh/bash\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) in the `expand()` function, which is prone to catastrophic backtracking on very long malicious inputs.\n## PoC\n```js\r\nimport index from \"./index.js\";\r\n\r\nlet str = \"{a}\" + \",\".repeat(100000) + \"\\u0000\";\r\n\r\nlet startTime = performance.now();\r\n\r\nconst result = index(str);\r\n\r\nlet endTime = performance.now();\r\n\r\nlet timeTaken = endTime - startTime;\r\n\r\nconsole.log(`匹配耗时: ${timeTaken.toFixed(3)} 毫秒`);\r\n```\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n## Remediation\nUpgrade `brace-expansion` to version 1.1.12, 2.0.2, 3.0.1, 4.0.1 or higher.\n## References\n- [GitHub Advisory](https://github.com/advisories/GHSA-v6h2-p8h4-qcjw)\n- [GitHub Commit](https://github.com/juliangruber/brace-expansion/commit/0b6a9781e18e9d2769bb2931f4856d1360243ed2)\n- [GitHub Gist](https://gist.github.com/mmmsssttt404/37a40ce7d6e5ca604858fe30814d9466)\n- [GitHub PR](https://github.com/juliangruber/brace-expansion/pull/65)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/code-client",
+                  "version": "4.23.5"
+                },
+                {
+                  "name": "multimatch",
+                  "version": "5.0.0"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-mvn-plugin",
+                  "version": "4.3.2"
+                },
+                {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-sbt-plugin",
+                  "version": "3.1.0"
+                },
+                {
+                  "name": "tmp",
+                  "version": "0.1.0"
+                },
+                {
+                  "name": "rimraf",
+                  "version": "2.7.1"
+                },
+                {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-go-plugin",
+                  "version": "1.23.0"
+                },
+                {
+                  "name": "tmp",
+                  "version": "0.2.1"
+                },
+                {
+                  "name": "rimraf",
+                  "version": "3.0.2"
+                },
+                {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-gradle-plugin",
+                  "version": "5.1.0"
+                },
+                {
+                  "name": "tmp",
+                  "version": "0.2.1"
+                },
+                {
+                  "name": "rimraf",
+                  "version": "3.0.2"
+                },
+                {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "rimraf",
+                  "version": "2.7.1"
+                },
+                {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000003",
+          "locations": [
+            {
+              "package": {
+                "name": "brace-expansion",
+                "version": "1.1.11"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "id": "GHSA-v6h2-p8h4-qcjw",
+              "source": "ghsa"
+            },
+            {
+              "id": "CVE-2025-5889",
+              "source": "cve"
+            },
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                ">=1.0.0 <1.1.12",
+                ">=2.0.0 <2.0.2",
+                ">=3.0.0 <3.0.1",
+                ">=4.0.0 <4.0.1"
+              ],
+              "created_at": "2025-04-22T10:41:28.859488Z",
+              "credits": [
+                "mmmsssttt404"
+              ],
+              "cvss_base_score": 2.3,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 2.3,
+                  "cvss_version": "4.0",
+                  "modified_at": "2025-06-16T08:51:48.041497Z",
+                  "severity": "low",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:L/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N/E:P"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 3.1,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-06-16T08:51:48.041497Z",
+                  "severity": "low",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:L/E:P"
+                },
+                {
+                  "assigner": "NVD",
+                  "base_score": 3.1,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-06-10T01:13:43.537639Z",
+                  "severity": "low",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:L"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 3.1,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-06-19T05:30:43.149011Z",
+                  "severity": "low",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:L"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:L/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N/E:P",
+              "disclosed_at": "2025-04-22T09:04:33Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.04237",
+                "probability": "0.00022"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "proof of concept",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "proof of concept",
+                    "type": "primary"
+                  }
+                ],
+                "sources": [
+                  "Snyk"
+                ]
+              },
+              "id": "SNYK-JS-BRACEEXPANSION-9789073",
+              "initially_fixed_in_versions": [
+                "1.1.12",
+                "2.0.2",
+                "3.0.1",
+                "4.0.1"
+              ],
+              "is_fixable": true,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2025-06-19T05:30:43.149011Z",
+              "package_name": "brace-expansion",
+              "package_version": "",
+              "published_at": "2025-06-12T06:58:37.742572Z",
+              "references": [
+                {
+                  "title": "GitHub Advisory",
+                  "url": "https://github.com/advisories/GHSA-v6h2-p8h4-qcjw"
+                },
+                {
+                  "title": "GitHub Commit",
+                  "url": "https://github.com/juliangruber/brace-expansion/commit/0b6a9781e18e9d2769bb2931f4856d1360243ed2"
+                },
+                {
+                  "title": "GitHub Gist",
+                  "url": "https://gist.github.com/mmmsssttt404/37a40ce7d6e5ca604858fe30814d9466"
+                },
+                {
+                  "title": "GitHub PR",
+                  "url": "https://github.com/juliangruber/brace-expansion/pull/65"
+                }
+              ],
+              "severity": "low",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-1333",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "low"
+          },
+          "risk": {},
+          "title": "Regular Expression Denial of Service (ReDoS)"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "brace-expansion",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "glob",
+                          "version": "9.0.0"
+                        },
+                        {
+                          "name": "minimatch",
+                          "version": "7.4.6"
+                        },
+                        {
+                          "name": "brace-expansion",
+                          "version": "2.0.2"
+                        }
+                      ],
+                      "is_drop": false
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "rimraf",
+                          "version": "4.3.1"
+                        },
+                        {
+                          "name": "glob",
+                          "version": "9.3.5"
+                        },
+                        {
+                          "name": "minimatch",
+                          "version": "8.0.4"
+                        },
+                        {
+                          "name": "brace-expansion",
+                          "version": "2.0.2"
+                        }
+                      ],
+                      "is_drop": false
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "snyk-go-plugin",
+                          "version": "1.24.0"
+                        },
+                        {
+                          "name": "tmp",
+                          "version": "0.2.2"
+                        },
+                        {
+                          "name": "rimraf",
+                          "version": "5.0.10"
+                        },
+                        {
+                          "name": "glob",
+                          "version": "10.4.5"
+                        },
+                        {
+                          "name": "minimatch",
+                          "version": "9.0.5"
+                        },
+                        {
+                          "name": "brace-expansion",
+                          "version": "2.0.2"
+                        }
+                      ],
+                      "is_drop": false
+                    }
+                  ]
+                },
+                "outcome": "partially_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000003",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[marked](https://marked.js.org/) is a low-level compiler for parsing markdown without caching or blocking for long periods of time.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) when unsanitized user input is passed to `block.def`.\r\n\r\n## PoC\r\n```js\r\nimport * as marked from \"marked\";\r\nmarked.parse(`[x]:${' '.repeat(1500)}x ${' '.repeat(1500)} x`);\r\n```\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n## Remediation\nUpgrade `marked` to version 4.0.10 or higher.\n## References\n- [GitHub Commit](https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0)\n- [GitHub Release](https://github.com/markedjs/marked/releases/tag/v4.0.10)\n",
+          "evidence": [
+            {
+              "reachability": "function",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "marked",
+                  "version": "4.0.1"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000004",
+          "locations": [
+            {
+              "package": {
+                "name": "marked",
+                "version": "4.0.1"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "id": "GHSA-rrrm-qjm4-v8hf",
+              "source": "ghsa"
+            },
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<4.0.10"
+              ],
+              "created_at": "2022-01-16T12:11:35.068696Z",
+              "credits": [
+                "MakeNowJust"
+              ],
+              "cvss_base_score": 5.3,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-06T13:42:56.34902Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L/E:P"
+                },
+                {
+                  "assigner": "NVD",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:54:28.135496Z",
+                  "severity": "high",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:58:24.376025Z",
+                  "severity": "high",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                }
+              ],
+              "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L/E:P",
+              "disclosed_at": "2022-01-14T21:04:41Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.64584",
+                "probability": "0.00490"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "proof of concept",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "proof of concept",
+                    "type": "primary"
+                  }
+                ],
+                "sources": [
+                  "Snyk"
+                ]
+              },
+              "id": "SNYK-JS-MARKED-2342082",
+              "initially_fixed_in_versions": [
+                "4.0.10"
+              ],
+              "is_fixable": true,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-03-11T07:58:24.376025Z",
+              "package_name": "marked",
+              "package_version": "",
+              "published_at": "2022-01-16T15:23:59.300943Z",
+              "references": [
+                {
+                  "title": "GitHub Commit",
+                  "url": "https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0"
+                },
+                {
+                  "title": "GitHub Release",
+                  "url": "https://github.com/markedjs/marked/releases/tag/v4.0.10"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CVE-2022-21680",
+              "source": "cve"
+            },
+            {
+              "id": "CWE-1333",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Regular Expression Denial of Service (ReDoS)"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "marked",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "marked",
+                          "version": "4.0.10"
+                        }
+                      ],
+                      "is_drop": false
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000004",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity. None\n## Remediation\nThere is no fixed version for `debug`.\n\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
+                },
+                {
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/snyk-hex-plugin",
+                  "version": "2.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-pipenv-pipfile",
+                  "version": "0.7.1"
+                },
+                {
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-python-plugin",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-mvn-plugin",
+                  "version": "4.3.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "docker-modem",
+                  "version": "3.0.8"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nuget-plugin",
+                  "version": "2.12.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-go-plugin",
+                  "version": "1.23.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@sentry/node",
+                  "version": "7.34.0"
+                },
+                {
+                  "name": "https-proxy-agent",
+                  "version": "5.0.1"
+                },
+                {
+                  "name": "agent-base",
+                  "version": "6.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-pipenv-pipfile",
+                  "version": "0.7.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-cpp-plugin",
+                  "version": "2.24.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@sentry/node",
+                  "version": "7.34.0"
+                },
+                {
+                  "name": "https-proxy-agent",
+                  "version": "5.0.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "1.58.19"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-sbt-plugin",
+                  "version": "3.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.3.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-gradle-plugin",
+                  "version": "5.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000005",
+          "locations": [
+            {
+              "package": {
+                "name": "debug",
+                "version": "4.3.4"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "*"
+              ],
+              "created_at": "2025-05-02T12:17:04.846156Z",
+              "credits": [
+                "provDannyLaw"
+              ],
+              "cvss_base_score": 6.9,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "4.0",
+                  "modified_at": "2025-05-02T12:17:05.259065Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:A/AC:L/AT:N/PR:H/UI:N/VC:L/VI:H/VA:L/SC:N/SI:N/SA:L"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-05-02T12:17:05.259065Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:A/AC:L/PR:H/UI:N/S:C/C:L/I:N/A:H"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:A/AC:L/AT:N/PR:H/UI:N/VC:L/VI:H/VA:L/SC:N/SI:N/SA:L",
+              "disclosed_at": "2024-02-21T18:17:18Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-DEBUG-14214893",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2025-05-02T12:17:05.259065Z",
+              "package_name": "debug",
+              "package_version": "",
+              "published_at": "2025-05-02T12:17:05.24083Z",
+              "references": [
+                {
+                  "title": "GitHub Issue",
+                  "url": "https://github.com/debug-js/debug/issues/957"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-109",
+              "source": "cwe"
+            },
+            {
+              "id": "CVE-9999-1234",
+              "source": "cve"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "debug",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "snyk-resolve-deps",
+                          "version": "4.9.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000005",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) test\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n## Remediation\nA fix was pushed into the `master` branch but not yet published.\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957#issuecomment-2523030187)\n",
+          "evidence": [
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "@snyk/rpm-parser",
+                  "version": "3.4.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.4.1"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000006",
+          "locations": [
+            {
+              "package": {
+                "name": "debug",
+                "version": "4.4.1"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<1.0.0",
+                ">=2.0.0"
+              ],
+              "created_at": "2024-12-10T12:05:49.468958Z",
+              "credits": [
+                "Qix-"
+              ],
+              "cvss_base_score": 6.9,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "4.0",
+                  "modified_at": "2024-12-10T14:02:14.067687Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-12-10T14:02:14.067687Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+              "disclosed_at": "2024-12-06T11:51:54Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-DEBUG-13283909",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-12-10T14:02:14.067687Z",
+              "package_name": "debug",
+              "package_version": "",
+              "published_at": "2024-12-10T12:05:49.760884Z",
+              "references": [
+                {
+                  "title": "GitHub Issue",
+                  "url": "https://github.com/debug-js/debug/issues/957%23issuecomment-2523030187"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-1333",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Regular Expression Denial of Service (ReDoS)"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "debug",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "snyk-resolve-deps",
+                          "version": "4.9.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000011",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n\nAffected versions of this package are vulnerable to Directory Traversal. Async <= 2.6.4 and <= 3.2.5 are vulnerable to ReDoS (Regular Expression Denial of Service) while parsing function in autoinject function.\n\n## Details\n\nA Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder. By manipulating files with \"dot-dot-slash (../)\" sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files and directories stored on file system, including application source code, configuration, and other critical system files.\n\nDirectory Traversal vulnerabilities can be generally divided into two types:\n\n- **Information Disclosure**: Allows the attacker to gain information about the folder structure or read the contents of sensitive files on the system.\n\n`st` is a module for serving static files on web pages, and contains a [vulnerability of this type](https://snyk.io/vuln/npm:st:20140206). In our example, we will serve files from the `public` route.\n\nIf an attacker requests the following URL from our server, it will in turn leak the sensitive private key of the root user.\n\n```\ncurl http://localhost:8080/public/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/root/.ssh/id_rsa\n```\n**Note** `%2e` is the URL encoded version of `.` (dot).\n\n- **Writing arbitrary files**: Allows the attacker to create or replace existing files. This type of vulnerability is also known as `Zip-Slip`. \n\nOne way to achieve this is by using a malicious `zip` archive that holds path traversal filenames. When each filename in the zip archive gets concatenated to the target extraction folder, without validation, the final path ends up outside of the target folder. If an executable or a configuration file is overwritten with a file containing malicious code, the problem can turn into an arbitrary code execution issue quite easily.\n\nThe following is an example of a `zip` archive with one benign file and one malicious file. Extracting the malicious file will result in traversing out of the target folder, ending up in `/root/.ssh/` overwriting the `authorized_keys` file:\n\n```\n2018-04-15 22:04:29 .....           19           19  good.txt\n2018-04-15 22:04:42 .....           20           20  ../../../../../../root/.ssh/authorized_keys\n```\n\n## Remediation\nUpgrade `async` to version  or higher.\n## References\n- [Vulnerable Code](https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L41)\n- [Vulnerable Code](https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L6)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "async",
+                  "version": "3.2.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "async",
+                  "version": "3.2.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "1.58.19"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "async",
+                  "version": "3.2.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "async",
+                  "version": "3.2.4"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000007",
+          "locations": [
+            {
+              "package": {
+                "name": "async",
+                "version": "3.2.4"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "*"
+              ],
+              "created_at": "2024-07-30T12:45:41.408492Z",
+              "credits": [
+                "Unknown"
+              ],
+              "cvss_base_score": 7.5,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-07-30T12:45:41.830747Z",
+                  "severity": "high",
+                  "type": "primary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-10-03T17:46:06.688298Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+                }
+              ],
+              "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "disclosed_at": "2024-07-01T20:40:50.935Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.38355",
+                "probability": "0.00166"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-ASYNC-12239908",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-10-03T17:46:06.688298Z",
+              "package_name": "async",
+              "package_version": "",
+              "published_at": "2024-07-30T12:45:41.784001Z",
+              "references": [
+                {
+                  "title": "Vulnerable Code",
+                  "url": "https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js%23L41"
+                },
+                {
+                  "title": "Vulnerable Code",
+                  "url": "https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js%23L6"
+                }
+              ],
+              "severity": "high",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-22",
+              "source": "cwe"
+            },
+            {
+              "id": "CVE-2024-39249",
+              "source": "cve"
+            }
+          ],
+          "rating": {
+            "severity": "high"
+          },
+          "risk": {},
+          "title": "Directory Traversal"
+        },
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n\nAffected versions of this package are vulnerable to Arbitrary Code Injection cookie is a basic HTTP cookie parser and serializer for HTTP servers. The cookie name could be used to set other fields of the cookie, resulting in an unexpected cookie value. A similar escape can be used for path and domain, which could be abused to alter other fields of the cookie. Upgrade to 0.7.0, which updates the validation for name, path, and domain.\n## Remediation\nUpgrade `cookie` to version 1.0.0 or higher.\n## References\n- [GitHub Advisory](https://github.com/jshttp/cookie/security/advisories/GHSA-pxg6-pf52-xh8x)\n- [GitHub Commit](https://github.com/jshttp/cookie/commit/e10042845354fea83bd8f34af72475eed1dadf5c)\n- [GitHub PR](https://github.com/jshttp/cookie/pull/167)\n",
+          "evidence": [
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@sentry/node",
+                  "version": "7.34.0"
+                },
+                {
+                  "name": "cookie",
+                  "version": "0.4.2"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000014",
+          "locations": [
+            {
+              "package": {
+                "name": "cookie",
+                "version": "0.4.2"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "id": "CWE-74",
+              "source": "cwe"
+            },
+            {
+              "id": "CVE-2024-47764",
+              "source": "cve"
+            },
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<1.0.0"
+              ],
+              "created_at": "2024-11-27T14:30:08.622354Z",
+              "credits": [
+                "Unknown"
+              ],
+              "cvss_base_score": 6.9,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "4.0",
+                  "modified_at": "2025-05-09T14:14:52.627873Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-05-09T14:14:52.627873Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 3.7,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-04-23T23:20:14.789876Z",
+                  "severity": "low",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N",
+              "disclosed_at": "2024-10-04T19:41:54Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.18419",
+                "probability": "0.00058"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-COOKIE-13271683",
+              "initially_fixed_in_versions": [
+                "1.0.0"
+              ],
+              "is_fixable": true,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2025-05-09T14:14:52.627873Z",
+              "package_name": "cookie",
+              "package_version": "",
+              "published_at": "2024-11-27T14:30:08.932074Z",
+              "references": [
+                {
+                  "title": "GitHub Advisory",
+                  "url": "https://github.com/jshttp/cookie/security/advisories/GHSA-pxg6-pf52-xh8x"
+                },
+                {
+                  "title": "GitHub Commit",
+                  "url": "https://github.com/jshttp/cookie/commit/e10042845354fea83bd8f34af72475eed1dadf5c"
+                },
+                {
+                  "title": "GitHub PR",
+                  "url": "https://github.com/jshttp/cookie/pull/167"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "GHSA-pxg6-pf52-xh8x",
+              "source": "ghsa"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Arbitrary Code Injection"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "cookie",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.75.0"
+                        }
+                      ],
+                      "is_drop": true
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000014",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[marked](https://marked.js.org/) is a low-level compiler for parsing markdown without caching or blocking for long periods of time.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) when passing unsanitized user input to `inline.reflinkSearch`, if it is not being parsed by a time-limited worker thread.\r\n\r\n## PoC\r\n```js\r\nimport * as marked from 'marked';\r\n\r\nconsole.log(marked.parse(`[x]: x\r\n\r\n\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](\\\\[\\\\](`));\r\n```\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n## Remediation\nUpgrade `marked` to version 4.0.10 or higher.\n## References\n- [GitHub Commit](https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "marked",
+                  "version": "4.0.1"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "function",
+              "source": "reachability"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000008",
+          "locations": [
+            {
+              "package": {
+                "name": "marked",
+                "version": "4.0.1"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<4.0.10"
+              ],
+              "created_at": "2022-01-16T09:07:08.101529Z",
+              "credits": [
+                "MakeNowJust"
+              ],
+              "cvss_base_score": 5.3,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-06T13:45:46.688612Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L/E:P"
+                },
+                {
+                  "assigner": "NVD",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:54:28.1453Z",
+                  "severity": "high",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:58:32.635919Z",
+                  "severity": "high",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                }
+              ],
+              "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L/E:P",
+              "disclosed_at": "2022-01-16T08:58:04Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.64257",
+                "probability": "0.00483"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "proof of concept",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "proof of concept",
+                    "type": "primary"
+                  }
+                ],
+                "sources": [
+                  "Snyk"
+                ]
+              },
+              "id": "SNYK-JS-MARKED-2342073",
+              "initially_fixed_in_versions": [
+                "4.0.10"
+              ],
+              "is_fixable": true,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-03-11T07:58:32.635919Z",
+              "package_name": "marked",
+              "package_version": "",
+              "published_at": "2022-01-16T14:42:47.883887Z",
+              "references": [
+                {
+                  "title": "GitHub Commit",
+                  "url": "https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CVE-2022-21681",
+              "source": "cve"
+            },
+            {
+              "id": "GHSA-5v2h-r2cx-5xgj",
+              "source": "ghsa"
+            },
+            {
+              "id": "CWE-1333",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Regular Expression Denial of Service (ReDoS)"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "marked",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "marked",
+                          "version": "4.0.10"
+                        }
+                      ],
+                      "is_drop": false
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000008",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[lodash](https://www.npmjs.com/package/lodash) is a modern JavaScript utility library delivering modularity, performance, & extras.\n\nAffected versions of this package are vulnerable to Denial of Service (DoS). An issue was discovered in Juju that resulted in the leak of the sensitive context ID, which allows a local unprivileged attacker to access other sensitive data or relation accessible to the local charm.\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its intended and legitimate users.\n\nUnlike other vulnerabilities, DoS attacks usually do not aim at breaching security. Rather, they are focused on making websites and services unavailable to genuine users resulting in downtime.\n\nOne popular Denial of Service vulnerability is DDoS (a Distributed Denial of Service), an attack that attempts to clog network pipes to the system by generating a large volume of traffic from many machines.\n\nWhen it comes to open source libraries, DoS vulnerabilities allow attackers to trigger such a crash or crippling of the service by using a flaw either in the application code or from the use of open source libraries.\n\nTwo common types of DoS vulnerabilities:\n\n* High CPU/Memory Consumption- An attacker sending crafted requests that could cause the system to take a disproportionate amount of time to process. For example, [commons-fileupload:commons-fileupload](SNYK-JAVA-COMMONSFILEUPLOAD-30082).\n\n* Crash - An attacker sending crafted requests that could cause the system to crash. For Example,  [npm `ws` package](https://snyk.io/vuln/npm:ws:20171108)\n\n## Remediation\nUpgrade `lodash` to version  or higher.\n## References\n- [AAAA](https://www.cve.org/CVERecord?id=CVE-2024-6984)\n- [GitHub Advisory](https://github.com/juju/juju/security/advisories/GHSA-6vjm-54vp-mxhx)\n- [GitHub Commit](https://github.com/juju/juju/commit/da929676853092a29ddf8d589468cf85ba3efaf2)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-python-plugin",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "4.4.1"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nuget-plugin",
+                  "version": "2.12.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "1.58.19"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "2.4.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nuget-plugin",
+                  "version": "2.12.0"
+                },
+                {
+                  "name": "dotnet-deps-parser",
+                  "version": "6.1.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "4.4.1"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000009",
+          "locations": [
+            {
+              "package": {
+                "name": "lodash",
+                "version": "4.17.21"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "*"
+              ],
+              "created_at": "2024-07-29T14:50:27.269552Z",
+              "credits": [
+                "Unknown"
+              ],
+              "cvss_base_score": 7.5,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-07-29T14:50:27.627232Z",
+                  "severity": "high",
+                  "type": "primary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                },
+                {
+                  "assigner": "NVD",
+                  "base_score": 3.8,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-09-12T01:14:24.633804Z",
+                  "severity": "low",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:L/I:N/A:N"
+                }
+              ],
+              "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "disclosed_at": "2024-07-29T14:40:25.994Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.02779",
+                "probability": "0.00018"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-LODASH-12239302",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-09-12T01:14:24.633804Z",
+              "package_name": "lodash",
+              "package_version": "",
+              "published_at": "2024-07-29T14:50:27.559032Z",
+              "references": [
+                {
+                  "title": "AAAA",
+                  "url": "https://www.cve.org/CVERecord?id=CVE-2024-6984"
+                },
+                {
+                  "title": "GitHub Advisory",
+                  "url": "https://github.com/juju/juju/security/advisories/GHSA-6vjm-54vp-mxhx"
+                },
+                {
+                  "title": "GitHub Commit",
+                  "url": "https://github.com/juju/juju/commit/da929676853092a29ddf8d589468cf85ba3efaf2"
+                }
+              ],
+              "severity": "high",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "GHSA-6vjm-54vp-mxhx",
+              "source": "ghsa"
+            },
+            {
+              "id": "CWE-400",
+              "source": "cwe"
+            },
+            {
+              "id": "CVE-2024-6984",
+              "source": "cve"
+            }
+          ],
+          "rating": {
+            "severity": "high"
+          },
+          "risk": {},
+          "title": "Denial of Service (DoS)"
+        },
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity. None\n## Remediation\nThere is no fixed version for `debug`.\n\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.4.3"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000010",
+          "locations": [
+            {
+              "package": {
+                "name": "debug",
+                "version": "4.4.3"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "*"
+              ],
+              "created_at": "2025-05-02T12:17:04.846156Z",
+              "credits": [
+                "provDannyLaw"
+              ],
+              "cvss_base_score": 6.9,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "4.0",
+                  "modified_at": "2025-05-02T12:17:05.259065Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:A/AC:L/AT:N/PR:H/UI:N/VC:L/VI:H/VA:L/SC:N/SI:N/SA:L"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "3.1",
+                  "modified_at": "2025-05-02T12:17:05.259065Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:A/AC:L/PR:H/UI:N/S:C/C:L/I:N/A:H"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:A/AC:L/AT:N/PR:H/UI:N/VC:L/VI:H/VA:L/SC:N/SI:N/SA:L",
+              "disclosed_at": "2024-02-21T18:17:18Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-DEBUG-14214893",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2025-05-02T12:17:05.259065Z",
+              "package_name": "debug",
+              "package_version": "",
+              "published_at": "2025-05-02T12:17:05.24083Z",
+              "references": [
+                {
+                  "title": "GitHub Issue",
+                  "url": "https://github.com/debug-js/debug/issues/957"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-109",
+              "source": "cwe"
+            },
+            {
+              "id": "CVE-9999-1234",
+              "source": "cve"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity"
+        },
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) test\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n## Remediation\nA fix was pushed into the `master` branch but not yet published.\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957#issuecomment-2523030187)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-mvn-plugin",
+                  "version": "4.3.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/snyk-hex-plugin",
+                  "version": "2.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@sentry/node",
+                  "version": "7.34.0"
+                },
+                {
+                  "name": "https-proxy-agent",
+                  "version": "5.0.1"
+                },
+                {
+                  "name": "agent-base",
+                  "version": "6.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-pipenv-pipfile",
+                  "version": "0.7.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@sentry/node",
+                  "version": "7.34.0"
+                },
+                {
+                  "name": "https-proxy-agent",
+                  "version": "5.0.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-sbt-plugin",
+                  "version": "3.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-python-plugin",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
+                },
+                {
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-pipenv-pipfile",
+                  "version": "0.7.1"
+                },
+                {
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nuget-plugin",
+                  "version": "2.12.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-gradle-plugin",
+                  "version": "5.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "docker-modem",
+                  "version": "3.0.8"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.3.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "1.58.19"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-go-plugin",
+                  "version": "1.23.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-cpp-plugin",
+                  "version": "2.24.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000011",
+          "locations": [
+            {
+              "package": {
+                "name": "debug",
+                "version": "4.3.4"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<1.0.0",
+                ">=2.0.0"
+              ],
+              "created_at": "2024-12-10T12:05:49.468958Z",
+              "credits": [
+                "Qix-"
+              ],
+              "cvss_base_score": 6.9,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "4.0",
+                  "modified_at": "2024-12-10T14:02:14.067687Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-12-10T14:02:14.067687Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+              "disclosed_at": "2024-12-06T11:51:54Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-DEBUG-13283909",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-12-10T14:02:14.067687Z",
+              "package_name": "debug",
+              "package_version": "",
+              "published_at": "2024-12-10T12:05:49.760884Z",
+              "references": [
+                {
+                  "title": "GitHub Issue",
+                  "url": "https://github.com/debug-js/debug/issues/957%23issuecomment-2523030187"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-1333",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Regular Expression Denial of Service (ReDoS)"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "actions": {
+                  "package_name": "debug",
+                  "type": "upgrade_package",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "snyk-resolve-deps",
+                          "version": "4.9.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@sentry/node",
+                          "version": "7.94.1"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    },
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "@snyk/fix",
+                          "version": "1.471.0"
+                        }
+                      ],
+                      "is_drop": true
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000011",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) test\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n## Remediation\nA fix was pushed into the `master` branch but not yet published.\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957#issuecomment-2523030187)\n",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.4.3"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "00000000-0000-0000-0000-000000000012",
+          "locations": [
+            {
+              "package": {
+                "name": "debug",
+                "version": "4.4.3"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<1.0.0",
+                ">=2.0.0"
+              ],
+              "created_at": "2024-12-10T12:05:49.468958Z",
+              "credits": [
+                "Qix-"
+              ],
+              "cvss_base_score": 6.9,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 6.9,
+                  "cvss_version": "4.0",
+                  "modified_at": "2024-12-10T14:02:14.067687Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N"
+                },
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-12-10T14:02:14.067687Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+                }
+              ],
+              "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+              "disclosed_at": "2024-12-06T11:51:54Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-DEBUG-13283909",
+              "initially_fixed_in_versions": [],
+              "is_fixable": false,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-12-10T14:02:14.067687Z",
+              "package_name": "debug",
+              "package_version": "",
+              "published_at": "2024-12-10T12:05:49.760884Z",
+              "references": [
+                {
+                  "title": "GitHub Issue",
+                  "url": "https://github.com/debug-js/debug/issues/957%23issuecomment-2523030187"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-1333",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Regular Expression Denial of Service (ReDoS)"
+        },
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      }
+    ],
+    "findingsComplete": true
+  }
+]

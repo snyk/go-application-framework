@@ -3,76 +3,48 @@
 		"$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
 		"version": "2.1.0",
 		"runs": [
-		{{- range $result := $.Results}}
+		{{- range $resultIndex, $result := $.TestResults}}
+			{{- $findingTypes := getFindingTypesFromTestResult $result }}
+			{{- $findingTypesSize := sub (len $findingTypes) 1 }}
+			{{- range $findingTypeIndex, $findingType := $findingTypes }}
 			{
 				"tool": {
 					"driver" : {
-						"name" : "{{- convertTypeToDriverName $result.Summary.Type }}",
+						"name" : "{{- convertTypeToDriverName (printf "%s" $findingType) }}",
 						"semanticVersion" : "{{- getRuntimeInfo "version" }}",
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",
 						"rules" : [
-							{{- $rulesSize := sub (len $result.Rules) 1 }}
-							{{- range $index, $rule := $result.Rules }}
+							{{- $rules := getRulesFromTestResult $result $findingType }}
+							{{- $rulesSize := sub (len $rules) 1 }}
+							{{- range $index, $rule := $rules }}
 							{
-								"id": "{{ $rule.Id }}",
-								"name": {{ getQuotedString $rule.Name }},
+								"id": {{ getQuotedString (index $rule "id") }},
 								"shortDescription": {
-									"text": {{ getQuotedString $rule.ShortDescription.Text }}
+									"text": {{ getQuotedString (index $rule "shortDescription") }}
 								},
-								"defaultConfiguration": {
-									"level": "{{ $rule.DefaultConfiguration.Level }}"
+								"fullDescription": {
+									"text": {{ getQuotedString (index $rule "fullDescription") }}
 								},
 								"help": {
-									"markdown": {{ getQuotedString $rule.Help.Markdown }},
-									"text": {{ getQuotedString $rule.Help.Text }}
+									"text": {{ getQuotedString (index $rule "help_text") }},
+									"markdown": {{ getQuotedString (index $rule "help_markdown") }}
 								},
 								"properties": {
+									{{- $props := index $rule "properties" }}
+									{{- if $props }}
+									{{- $tags := index $props "tags" }}
+									{{- if $tags }}
 									"tags": [
-										{{- $tagsSize := sub (len $rule.Properties.Tags) 1 }}
-										{{- range $tagIndex, $tag := $rule.Properties.Tags }}
-										{{ getQuotedString $tag }}{{if lt $tagIndex $tagsSize}},{{end}}
+										{{- $tagsSize := sub (len $tags) 1 }}
+										{{- range $tagIndex, $tag := $tags }}
+										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
 										{{- end }}
 									],
-									"categories": [
-										{{- $categoriesSize := sub (len $rule.Properties.Categories) 1 }}
-										{{- range $catIndex, $category := $rule.Properties.Categories }}
-										{{ getQuotedString $category }}{{if lt $catIndex $categoriesSize}},{{end}}
-										{{- end }}
-									],
-									"exampleCommitFixes": [
-										{{- $examplesSize := sub (len $rule.Properties.ExampleCommitFixes) 1 }}
-										{{- range $exampleIndex, $example := $rule.Properties.ExampleCommitFixes }}
-										{
-
-											"commitURL": "{{ $example.CommitUrl }}",
-											"lines": [
-												{{- $lineSize := sub (len $example.Lines) 1 }}
-												{{- range $lineIndex, $line := $example.Lines }}
-												{
-													"line": {{ getQuotedString $line.Line -}},
-													"lineNumber": {{ $line.LineNumber }},
-													"lineChange": "{{ $line.LineChange }}"
-												}{{if lt $lineIndex $lineSize}},{{end}}
-												{{- end }}
-											]
-										}{{if lt $exampleIndex $examplesSize}},{{end}}
-										{{- end }}
-									],
-									"exampleCommitDescriptions": [
-										{{- $examplesSize := sub (len $rule.Properties.ExampleCommitDescriptions) 1 }}
-										{{- range $exampleIndex, $example := $rule.Properties.ExampleCommitDescriptions }}
-										"{{ $example }}"{{if lt $exampleIndex $examplesSize}},{{end}}
-										{{- end }}
-									],
-									"precision": "{{ $rule.Properties.Precision }}",
-									"repoDatasetSize": {{ $rule.Properties.RepoDatasetSize }},
-									"cwe": [
-										{{- $cweSize := sub (len $rule.Properties.Cwe) 1 }}
-										{{- range $cweIndex, $cwe := $rule.Properties.Cwe }}
-										"{{ $cwe }}"{{if lt $cweIndex $cweSize}},{{end}}
-										{{- end }}
-									]
+									{{- end }}
+									"cvssv3_baseScore": {{ index $props "cvssv3_baseScore" }},
+									"security-severity": {{ getQuotedString (index $props "security-severity") }}
+									{{- end }}
 								}
 							}{{if lt $index $rulesSize}},{{end}}
 							{{- end }}
@@ -80,139 +52,90 @@
 					}
 				},
 				"results": [
-					{{- $findingsSize := sub (len $result.Findings) 1 }}
-					{{- range $index, $finding := $result.Findings }}
+					{{- $results := getResultsFromTestResult $result $findingType }}
+					{{- $resultsSize := sub (len $results) 1 }}
+					{{- range $index, $sarifResult := $results }}
+					{{- $message := index $sarifResult "message" }}
+					{{- $locations := index $sarifResult "locations" }}
+					{{- $fixes := index $sarifResult "fixes" }}
 					{
-						"ruleId": "{{ $finding.Attributes.ReferenceId.Identifier }}",
-						"ruleIndex": {{ $finding.Attributes.ReferenceId.Index }},
-						"level": "{{- SeverityToSarifLevel $finding.Attributes.Rating.Severity.Value }}",
+						"ruleId": {{ getQuotedString (index $sarifResult "ruleId") }},
+						"level": {{ getQuotedString (index $sarifResult "level") }},
 						"message": {
-							"text": {{- getQuotedString $finding.Attributes.Message.Text }},
-							"markdown": {{- getQuotedString $finding.Attributes.Message.Markdown }},
-							"arguments": [
-								{{- $messageArgSize := sub (len $finding.Attributes.Message.Arguments) 1 }}
-								{{- range $index, $messageArgument := $finding.Attributes.Message.Arguments }}
-								{{- getQuotedString $messageArgument }}{{if lt $index $messageArgSize}},{{end}}
-								{{- end }}
-							]
+							"text": {{ getQuotedString (index $message "text") }}
 						},
 						"locations": [
-							{{- $locationSize := sub (len $finding.Attributes.Locations) 1 }}
-							{{- range $index, $findingLocation := $finding.Attributes.Locations }}
+							{{- $locSize := sub (len $locations) 1 }}
+							{{- range $locIndex, $location := $locations }}
+							{{- $physicalLoc := index $location "physicalLocation" }}
+							{{- $artifactLoc := index $physicalLoc "artifactLocation" }}
+							{{- $region := index $physicalLoc "region" }}
+							{{- $logicalLocs := index $location "logicalLocations" }}
 							{
-							  "id": {{ $index }},
-							  "physicalLocation": {
-								"artifactLocation": {
-								  "uri": "{{- $findingLocation.SourceLocations.Filepath}}",
-								  "uriBaseId": "%SRCROOT%"
-								},
-								"region": {
-								  "startLine": {{- $findingLocation.SourceLocations.OriginalStartLine}},
-								  "endLine": {{- $findingLocation.SourceLocations.OriginalEndLine}},
-								  "startColumn": {{- $findingLocation.SourceLocations.OriginalStartColumn}},
-								  "endColumn": {{- $findingLocation.SourceLocations.OriginalEndColumn}}
-								}
-							  }
-							}{{if lt $index $locationSize}},{{end}}
-							{{- end}}
-						],
-						"fingerprints": {
-							{{- $fingerprintSize := sub (len $finding.Attributes.Fingerprint) 1 }}
-							{{- range $index, $finger := $finding.Attributes.Fingerprint }}
-							{{- $decodedFingerPrint := getUnionValue $finger }}
-							{{- $scheme := print $decodedFingerPrint.Scheme }}
-							"{{ replaceString $scheme "code-sast-v" "" }}": "{{ $decodedFingerPrint.Value }}"{{if lt $index $fingerprintSize}},{{end}}
-							{{- end }}
-						},
-						"codeFlows": [
-							{{- $clSize := sub (len $finding.Attributes.CodeFlows) 1 }}
-							{{- range $index, $cl := $finding.Attributes.CodeFlows }}
-							{
-								"threadFlows": [
-									{{- $tfSize := sub (len $cl.ThreadFlows) 1 }}
-									{{- range $index, $tf := $cl.ThreadFlows }}
+								"physicalLocation": {
+									"artifactLocation": {
+										"uri": {{ getQuotedString (index $artifactLoc "uri") }}
+									},
+									"region": {
+										"startLine": {{ index $region "startLine" }}
+									}
+								}{{- if $logicalLocs }},
+								"logicalLocations": [
+									{{- $logicalSize := sub (len $logicalLocs) 1 }}
+									{{- range $logicalIndex, $logicalLoc := $logicalLocs }}
 									{
-										"locations": [
-										{{- $locSize := sub (len $tf.Locations) 1 }}
-										{{- range $locIndex, $loc := $tf.Locations }}
-										{
-											"location": {
-												"id": {{ $locIndex }},
-												"physicalLocation": {
-													"artifactLocation": {
-													  "uri": "{{- $loc.Filepath}}",
-													  "uriBaseId": "%SRCROOT%"
-													},
-													"region": {
-													  "startLine": {{- $loc.OriginalStartLine}},
-													  "endLine": {{- $loc.OriginalEndLine}},
-													  "startColumn": {{- $loc.OriginalStartColumn}},
-													  "endColumn": {{- $loc.OriginalEndColumn}}
-													}
-												}
-											}
-										}{{if lt $locIndex $locSize}},{{end}}
-										{{- end }}
-										]
-									}{{if lt $index $tfSize}},{{end}}
+										"fullyQualifiedName": {{ getQuotedString (index $logicalLoc "fullyQualifiedName") }}
+									}{{if lt $logicalIndex $logicalSize}},{{end}}
 									{{- end }}
 								]
-							}{{if lt $index $clSize}},{{end}}
+								{{- end }}
+							}{{if lt $locIndex $locSize}},{{end}}
 							{{- end }}
-						],
-						{{- if $finding.Attributes.Suppression }}
-						"suppressions" : [
+						]{{- if $fixes }},
+						"fixes": [
+							{{- $fixSize := sub (len $fixes) 1 }}
+							{{- range $fixIndex, $fix := $fixes }}
+							{{- $fixDesc := index $fix "description" }}
+							{{- $artifactChanges := index $fix "artifactChanges" }}
 							{
-								{{- if $finding.Attributes.Suppression.Id }}
-								"guid": "{{ $finding.Attributes.Suppression.Id }}",
-								{{- end }}
-								"status": "{{ $finding.Attributes.Suppression.Status }}",
-								{{- if $finding.Attributes.Suppression.Justification }}
-								"justification": {{ getQuotedString $finding.Attributes.Suppression.Justification }},{{- end }}
-								"kind": "external"{{- if $finding.Attributes.Suppression.Details }},
-								"properties": {
-									"category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
-									{{- if $finding.Attributes.Suppression.Details.Expiration }}"expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",{{- end }}
-									"ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
-									"ignoredBy": {
-										  "name": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Name }},
-										  "email": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Email }}
-									}
-								}
-								{{- end }}
-							}
-						],
+								"description": {
+									"text": {{ getQuotedString (index $fixDesc "text") }}
+								},
+								"artifactChanges": [
+									{{- $changeSize := sub (len $artifactChanges) 1 }}
+									{{- range $changeIndex, $change := $artifactChanges }}
+									{{- $changeArtifact := index $change "artifactLocation" }}
+									{{- $replacements := index $change "replacements" }}
+									{
+										"artifactLocation": {
+											"uri": {{ getQuotedString (index $changeArtifact "uri") }}
+										},
+										"replacements": [
+											{{- $replaceSize := sub (len $replacements) 1 }}
+											{{- range $replaceIndex, $replacement := $replacements }}
+											{{- $deletedRegion := index $replacement "deletedRegion" }}
+											{{- $insertedContent := index $replacement "insertedContent" }}
+											{
+												"deletedRegion": {
+													"startLine": {{ index $deletedRegion "startLine" }}
+												},
+												"insertedContent": {
+													"text": {{ getQuotedString (index $insertedContent "text") }}
+												}
+											}{{if lt $replaceIndex $replaceSize}},{{end}}
+											{{- end }}
+										]
+									}{{if lt $changeIndex $changeSize}},{{end}}
+									{{- end }}
+								]
+							}{{if lt $fixIndex $fixSize}},{{end}}
+							{{- end }}
+						]
 						{{- end }}
-						"properties": {
-							{{if $finding.Attributes.IsAutofixable }}"isAutofixable": {{ $finding.Attributes.IsAutofixable }},{{ end }}
-							{{- if $finding.Attributes.Policy }}
-							"snykPolicy/v1": {
-								{{- if $finding.Attributes.Policy.OriginalLevel }}
-								"originalLevel": "{{ $finding.Attributes.Policy.OriginalLevel }}"{{if or $finding.Attributes.Policy.Severity $finding.Attributes.Policy.OriginalSeverity}},{{end}}
-								{{- end }}
-								{{- if $finding.Attributes.Policy.Severity }}
-								"severity": "{{ $finding.Attributes.Policy.Severity }}"{{if $finding.Attributes.Policy.OriginalSeverity}},{{end}}
-								{{- end }}
-								{{- if $finding.Attributes.Policy.OriginalSeverity }}
-								"originalSeverity": "{{ $finding.Attributes.Policy.OriginalSeverity }}"
-								{{- end }}
-							},
-							{{- end }}
-							"priorityScore": {{ $finding.Attributes.Rating.Priority.Score }},
-							"priorityScoreFactors": [
-							{{- $factorSize := sub (len $finding.Attributes.Rating.Priority.Factors) 1 }}
-							{{- range $index, $factor := $finding.Attributes.Rating.Priority.Factors }}
-							{{- $decodedFactor := getUnionValue $factor }}
-								  {
-									"label": {{ $decodedFactor.Value }},
-									"type": {{ getQuotedString $decodedFactor.Name }}
-								  }{{if lt $index $factorSize}},{{end}}
-							{{- end }}
-							]
-						}
-					}{{if lt $index $findingsSize}},{{end}}
+					}{{if lt $index $resultsSize}},{{end}}
 					{{- end}}
 				],
+				{{- /* TODO: Add properties section for SAST (coverage) and upload results
 				"properties": {
 					"coverage": [
 						{{- $coverageSize := sub (len $result.Summary.Coverage) 1 }}
@@ -233,10 +156,11 @@
 					}
 					{{- end }}
 				},
+				*/ -}}
 				"automationDetails": {
-					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") }}"
+					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") (printf "%s" $findingType) }}"
 				}
-			}
+			}{{if lt $findingTypeIndex $findingTypesSize}},{{end}}{{- end}}	
 		{{- end}}
 		]
 	}

@@ -12,6 +12,30 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+func getDefaultWriterUfm(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
+	var writer *WriterEntry
+
+	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
+		writer = &WriterEntry{
+			writer: &newLineCloser{
+				writer: outputDestination.GetWriter(),
+			},
+			mimeType:        SARIF_MIME_TYPE,
+			templates:       presenters.ApplicationSarifTemplatesUfm,
+			renderEmptyData: true,
+		}
+
+		writer.mimeType = SARIF_MIME_TYPE
+		writer.templates = presenters.ApplicationSarifTemplatesUfm
+	}
+
+	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
+		writer.templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
+	}
+
+	return writer
+}
+
 func getTotalNumberOfUnifiedFindings(results []testapi.TestResult) int {
 	if results == nil {
 		return 0
@@ -82,48 +106,44 @@ func getWritersToUseUfm(config configuration.Configuration, outputDestination iU
 	// resulting map of writers and their templates
 	writerMap := map[string]*WriterEntry{}
 
-	// TODO Re-enable writers for UFM when rendering is implemented
+	// currently the only used default writer is sarif
+	if tmp := getDefaultWriterUfm(config, outputDestination); tmp != nil {
+		writerMap[DEFAULT_WRITER] = tmp
+	}
 
-	// // currently the only used default writer is sarif
-	// if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-	// 	if tmp := getDefaultWriter(config, outputDestination); tmp != nil {
-	// 		writerMap[DEFAULT_WRITER] = tmp
-	// 	}
-	// }
+	// default file writers
+	fileWriters := []FileWriter{
+		{
+			OUTPUT_CONFIG_KEY_SARIF_FILE,
+			SARIF_MIME_TYPE,
+			presenters.ApplicationSarifTemplatesUfm,
+			true,
+		},
+		/*
+			skipping support for json file output by default, since there is no supporting rendering yet.
+			{
+				OUTPUT_CONFIG_KEY_JSON_FILE,
+				SARIF_MIME_TYPE,
+				ApplicationSarifTemplates,
+				true,
+			},*/
+	}
 
-	// // default file writers
-	// fileWriters := []FileWriter{
-	// 	{
-	// 		OUTPUT_CONFIG_KEY_SARIF_FILE,
-	// 		SARIF_MIME_TYPE,
-	// 		presenters.ApplicationSarifTemplatesUfm,
-	// 		true,
-	// 	},
-	// 	/*
-	// 		skipping support for json file output by default, since there is no supporting rendering yet.
-	// 		{
-	// 			OUTPUT_CONFIG_KEY_JSON_FILE,
-	// 			SARIF_MIME_TYPE,
-	// 			ApplicationSarifTemplates,
-	// 			true,
-	// 		},*/
-	// }
+	// use configured file writers if available
+	if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
+		fileWriters = tmp
+	}
 
-	// // use configured file writers if available
-	// if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
-	// 	fileWriters = tmp
-	// }
-
-	// for _, fileWriter := range fileWriters {
-	// 	if config.IsSet(fileWriter.NameConfigKey) {
-	// 		writerMap[fileWriter.NameConfigKey] = &WriterEntry{
-	// 			writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
-	// 			mimeType:        fileWriter.MimeType,
-	// 			templates:       fileWriter.TemplateFiles,
-	// 			renderEmptyData: fileWriter.WriteEmptyContent,
-	// 		}
-	// 	}
-	// }
+	for _, fileWriter := range fileWriters {
+		if config.IsSet(fileWriter.NameConfigKey) {
+			writerMap[fileWriter.NameConfigKey] = &WriterEntry{
+				writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
+				mimeType:        fileWriter.MimeType,
+				templates:       fileWriter.TemplateFiles,
+				renderEmptyData: fileWriter.WriteEmptyContent,
+			}
+		}
+	}
 
 	return writerMap
 }
