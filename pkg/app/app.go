@@ -34,11 +34,11 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 		logger.Print("Failed to add dependency for ORGANIZATION_SLUG:", err)
 	}
 
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
+		url := c.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
-		orgId := config.GetString(configuration.ORGANIZATION)
+		orgId := c.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
 			return existingValue, nil
 		}
@@ -57,9 +57,9 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 		logger.Print("Failed to add dependency for ORGANIZATION:", err)
 	}
 
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
+		url := c.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
 		existingString, ok := existingValue.(string)
 		if existingValue != nil && ok && len(existingString) > 0 {
@@ -140,7 +140,7 @@ func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog
 }
 
 func defaultInputDirectory() configuration.DefaultValueFunction {
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		// Check if we have a valid string value
 		existingString, isString := existingValue.(string)
 		if isString && len(existingString) > 0 {
@@ -171,8 +171,8 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
-func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+func defaultTempDirectory(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
 		if ri != nil && len(ri.GetVersion()) > 0 {
@@ -191,7 +191,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 			return existingValue, nil
 		}
 
-		tmpDir := pkg_utils.GetTemporaryDirectory(config.GetString(configuration.CACHE_PATH), version)
+		tmpDir := pkg_utils.GetTemporaryDirectory(c.GetString(configuration.CACHE_PATH), version)
 		err := pkg_utils.CreateAllDirectories(tmpDir, version)
 		if err != nil {
 			logger.Err(err)
@@ -203,7 +203,7 @@ func defaultTempDirectory(engine workflow.Engine, config configuration.Configura
 }
 
 func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
@@ -224,8 +224,8 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.Default
 	return callback
 }
 
-func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.DefaultValueFunction {
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+func defaultMaxNetworkRetryAttempts() configuration.DefaultValueFunction {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		const multipleAttempts = 3 // three here is chosen based on other places in the application
 		const singleAttempt = 1
 
@@ -233,7 +233,7 @@ func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.Defaul
 			return existingValue, nil
 		}
 
-		if engine.GetConfiguration().GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
+		if c.GetBool(configuration.PREVIEW_FEATURES_ENABLED) {
 			return multipleAttempts, nil
 		}
 		return singleAttempt, nil
@@ -268,7 +268,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
+	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, logger))
 
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
 
@@ -303,9 +303,9 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
 	}
 
-	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
+	config.AddDefaultValue(configuration.IS_FEDRAMP, func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
-			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
+			return api.IsFedramp(c.GetString(configuration.API_URL)), nil
 		} else {
 			return existingValue, nil
 		}
@@ -313,13 +313,13 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
-	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
-	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts(engine))
+	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles())
+	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 }
 
-func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
-	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+func customConfigFiles() configuration.DefaultValueFunction {
+	return func(c configuration.Configuration, existingValue any) (any, error) {
 		var files []string
 		// last file usually wins if the same values are configured
 		// Precedence should be:
@@ -332,7 +332,7 @@ func customConfigFiles(config configuration.Configuration) configuration.Default
 		files = append(files, ".snyk.env."+runtime.GOOS)
 		files = append(files, ".envrc."+runtime.GOOS)
 
-		configFile := config.GetString("configfile")
+		configFile := c.GetString("configfile")
 		if configFile != "" {
 			files = append(files, configFile)
 		}

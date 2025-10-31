@@ -15,13 +15,13 @@ func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFla
 		engine.GetLogger().Err(err).Msgf("Failed to add dependency for %s", configKey)
 	}
 
-	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
 		httpClient := engine.GetNetworkAccess().GetHttpClient()
-		return GetFeatureFlagValue(featureFlagName, config, httpClient)
+		return GetFeatureFlagValue(featureFlagName, c, httpClient)
 	}
 
 	config.AddDefaultValue(configKey, callback)

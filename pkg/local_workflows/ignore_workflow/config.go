@@ -19,27 +19,25 @@ import (
 func addCreateIgnoreDefaultConfigurationValues(invocationCtx workflow.InvocationContext) {
 	config := invocationCtx.GetConfiguration()
 
-	config.AddDefaultValue(RemoteRepoUrlKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		return remoteRepoUrlDefaultFunc(existingValue, config)
-	})
+	config.AddDefaultValue(RemoteRepoUrlKey, remoteRepoUrlDefaultFunc)
 
-	config.AddDefaultValue(IgnoreTypeKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		isSet := config.IsSet(IgnoreTypeKey)
+	config.AddDefaultValue(IgnoreTypeKey, func(c configuration.Configuration, existingValue any) (any, error) {
+		isSet := c.IsSet(IgnoreTypeKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidIgnoreType)
 	})
 
-	config.AddDefaultValue(ExpirationKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		isSet := config.IsSet(ExpirationKey)
+	config.AddDefaultValue(ExpirationKey, func(c configuration.Configuration, existingValue any) (any, error) {
+		isSet := c.IsSet(ExpirationKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidExpirationDate)
 	})
 
-	config.AddDefaultValue(FindingsIdKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		isSet := config.IsSet(FindingsIdKey)
+	config.AddDefaultValue(FindingsIdKey, func(c configuration.Configuration, existingValue any) (any, error) {
+		isSet := c.IsSet(FindingsIdKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidFindingsId)
 	})
 
-	config.AddDefaultValue(ReasonKey, func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		isSet := config.IsSet(ReasonKey)
+	config.AddDefaultValue(ReasonKey, func(c configuration.Configuration, existingValue any) (any, error) {
+		isSet := c.IsSet(ReasonKey)
 		return defaultFuncWithValidator(existingValue, isSet, isValidReason)
 	})
 }
@@ -51,15 +49,14 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for ConfigIgnoreApprovalEnabled")
 	}
 
-	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	return func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
-		config := engine.GetConfiguration()
-		org := config.GetString(configuration.ORGANIZATION)
+		org := c.GetString(configuration.ORGANIZATION)
 		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
+		url := c.GetString(configuration.API_URL)
 		apiClient := api.NewApi(url, client)
 
 		settings, err := apiClient.GetOrgSettings(org)
@@ -76,7 +73,7 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 	}
 }
 
-func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Configuration) (interface{}, error) {
+func remoteRepoUrlDefaultFunc(config configuration.Configuration, existingValue any) (any, error) {
 	if existingValue != nil && existingValue != "" {
 		return existingValue, nil
 	}
@@ -93,7 +90,7 @@ func remoteRepoUrlDefaultFunc(existingValue interface{}, config configuration.Co
 	return repoUrl, nil
 }
 
-func defaultFuncWithValidator(existingValue interface{}, isFlagSet bool, validatorFunc func(string) error) (interface{}, error) {
+func defaultFuncWithValidator(existingValue any, isFlagSet bool, validatorFunc func(string) error) (any, error) {
 	if isFlagSet {
 		value, ok := existingValue.(string)
 		if !ok {
