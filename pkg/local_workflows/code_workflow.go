@@ -48,7 +48,11 @@ var WORKFLOWID_CODE = workflow.NewWorkflowIdentifier(codeWorkflowName)
 func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
 	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurationSastSettings, configuration.ORGANIZATION)
 	if err != nil {
-		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings on ORGANIZATION.")
+	}
+	err = engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurationSastSettings, configuration.API_URL)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings on API_URL.")
 	}
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {

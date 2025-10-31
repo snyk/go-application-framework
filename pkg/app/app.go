@@ -31,7 +31,7 @@ import (
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	err := config.AddKeyDependency(configuration.ORGANIZATION_SLUG, configuration.ORGANIZATION)
 	if err != nil {
-		logger.Print("Failed to add dependency for ORGANIZATION_SLUG:", err)
+		logger.Err(err).Msg("Failed to add dependency for ORGANIZATION_SLUG on ORGANIZATION")
 	}
 
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
@@ -44,7 +44,7 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 		}
 		slugName, err := apiClient.GetSlugFromOrgId(orgId)
 		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
+			logger.Warn().Err(err).Msg("Failed to determine default value for ORGANIZATION_SLUG")
 		}
 		return slugName, nil
 	}
@@ -54,7 +54,7 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 func defaultFuncOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	err := config.AddKeyDependency(configuration.ORGANIZATION, configuration.API_URL)
 	if err != nil {
-		logger.Print("Failed to add dependency for ORGANIZATION:", err)
+		logger.Err(err).Msg("Failed to add dependency for ORGANIZATION on API_URL")
 	}
 
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
@@ -69,7 +69,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			if isSlugName {
 				orgId, err = apiClient.GetOrgIdFromSlug(existingString)
 				if err != nil {
-					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+					logger.Warn().Err(err).Msg("Failed to determine default value for ORGANIZATION")
 				} else {
 					return orgId, nil
 				}
@@ -80,7 +80,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 
 		orgId, err := apiClient.GetDefaultOrgId()
 		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+			logger.Warn().Err(err).Msg("Failed to determine default value for ORGANIZATION")
 		}
 
 		return orgId, err
@@ -91,11 +91,11 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	err := globalConfig.AddKeyDependency(configuration.API_URL, configuration.AUTHENTICATION_TOKEN)
 	if err != nil {
-		logger.Print("Failed to add dependency for API_URL:", err)
+		logger.Err(err).Msg("Failed to add dependency for API_URL on AUTHENTICATION_TOKEN")
 	}
 	err = globalConfig.AddKeyDependency(configuration.API_URL, auth.CONFIG_KEY_OAUTH_TOKEN)
 	if err != nil {
-		logger.Print("Failed to add dependency for API_URL:", err)
+		logger.Err(err).Msg("Failed to add dependency for API_URL on CONFIG_KEY_OAUTH_TOKEN")
 	}
 
 	callback := func(config configuration.Configuration, existingValue interface{}) (interface{}, error) {
@@ -139,6 +139,39 @@ func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog
 	return callback
 }
 
+func defaultWebAppUrl(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(configuration.WEB_APP_URL, configuration.API_URL)
+	if err != nil {
+		logger.Err(err).Msg("Failed to add dependency for WEB_APP_URL on API_URL")
+	}
+
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		canonicalApiUrl := c.GetString(configuration.API_URL)
+		appUrl, appUrlErr := api.DeriveAppUrl(canonicalApiUrl)
+		if appUrlErr != nil {
+			logger.Warn().Err(appUrlErr).Msg("Failed to determine default value for WEB_APP_URL")
+		}
+
+		return appUrl, nil
+	}
+	return callback
+}
+
+func defaultIsFedramp(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
+	if err != nil {
+		logger.Err(err).Msg("Failed to add dependency for IS_FEDRAMP on API_URL")
+	}
+
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+		return api.IsFedramp(c.GetString(configuration.API_URL)), nil
+	}
+	return callback
+}
+
 func defaultInputDirectory() configuration.DefaultValueFunction {
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		// Check if we have a valid string value
@@ -171,7 +204,12 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 	return callback
 }
 
-func defaultTempDirectory(engine workflow.Engine, logger *zerolog.Logger) configuration.DefaultValueFunction {
+func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(configuration.TEMP_DIR_PATH, configuration.CACHE_PATH)
+	if err != nil {
+		logger.Err(err).Msg("Failed to add dependency for TEMP_DIR_PATH on CACHE_PATH")
+	}
+
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
@@ -224,7 +262,46 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.Default
 	return callback
 }
 
-func defaultMaxNetworkRetryAttempts() configuration.DefaultValueFunction {
+func customConfigFiles(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(configuration.CUSTOM_CONFIG_FILES, "configfile")
+	if err != nil {
+		logger.Err(err).Msg("Failed to add dependency for CUSTOM_CONFIG_FILES on configfile")
+	}
+
+	return func(c configuration.Configuration, existingValue any) (any, error) {
+		var files []string
+		// last file usually wins if the same values are configured
+		// Precedence should be:
+		//   1. std files in current folder
+		//   2. given global config file
+		//   3. std files global
+
+		files = append(files, ".snyk.env")
+		files = append(files, ".envrc")
+		files = append(files, ".snyk.env."+runtime.GOOS)
+		files = append(files, ".envrc."+runtime.GOOS)
+
+		configFile := c.GetString("configfile")
+		if configFile != "" {
+			files = append(files, configFile)
+		}
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return files, err
+		}
+
+		files = append(files, filepath.Join(home, "/.snyk.env"))
+		return files, nil
+	}
+}
+
+func defaultMaxNetworkRetryAttempts(config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
+	err := config.AddKeyDependency(middleware.ConfigurationKeyRetryAttempts, configuration.PREVIEW_FEATURES_ENABLED)
+	if err != nil {
+		logger.Err(err).Msg("Failed to add dependency for ConfigurationKeyRetryAttempts on PREVIEW_FEATURES_ENABLED")
+	}
+
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		const multipleAttempts = 3 // three here is chosen based on other places in the application
 		const singleAttempt = 1
@@ -254,7 +331,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	dir, err := utils.SnykCacheDir()
 	if err != nil {
-		logger.Print("Failed to determine cache directory:", err)
+		logger.Warn().Err(err).Msg("Failed to determine cache directory")
 	}
 
 	config.AddDefaultValue(configuration.ANALYTICS_DISABLED, configuration.StandardDefaultValueFunction(false))
@@ -268,24 +345,10 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	// set default filesize threshold to 512MB
 	config.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
-	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, logger))
+	config.AddDefaultValue(configuration.TEMP_DIR_PATH, defaultTempDirectory(engine, config, logger))
 
 	config.AddDefaultValue(configuration.API_URL, defaultFuncApiUrl(config, logger))
-
-	err = config.AddKeyDependency(configuration.WEB_APP_URL, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for WEB_APP_URL:", err)
-	}
-
-	config.AddDefaultValue(configuration.WEB_APP_URL, func(c configuration.Configuration, existingValue any) (any, error) {
-		canonicalApiUrl := c.GetString(configuration.API_URL)
-		appUrl, appUrlErr := api.DeriveAppUrl(canonicalApiUrl)
-		if appUrlErr != nil {
-			logger.Print("Failed to determine default value for \"WEB_APP_URL\":", appUrlErr)
-		}
-
-		return appUrl, nil
-	})
+	config.AddDefaultValue(configuration.WEB_APP_URL, defaultWebAppUrl(config, logger))
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
@@ -298,53 +361,13 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 		}
 	})
 
-	err = config.AddKeyDependency(configuration.IS_FEDRAMP, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for IS_FEDRAMP:", err)
-	}
-
-	config.AddDefaultValue(configuration.IS_FEDRAMP, func(c configuration.Configuration, existingValue any) (any, error) {
-		if existingValue == nil {
-			return api.IsFedramp(c.GetString(configuration.API_URL)), nil
-		} else {
-			return existingValue, nil
-		}
-	})
+	config.AddDefaultValue(configuration.IS_FEDRAMP, defaultIsFedramp(config, logger))
 
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
-	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles())
-	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts())
+	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config, logger))
+	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts(config, logger))
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
-}
-
-func customConfigFiles() configuration.DefaultValueFunction {
-	return func(c configuration.Configuration, existingValue any) (any, error) {
-		var files []string
-		// last file usually wins if the same values are configured
-		// Precedence should be:
-		//   1. std files in current folder
-		//   2. given global config file
-		//   3. std files global
-
-		files = append(files, ".snyk.env")
-		files = append(files, ".envrc")
-		files = append(files, ".snyk.env."+runtime.GOOS)
-		files = append(files, ".envrc."+runtime.GOOS)
-
-		configFile := c.GetString("configfile")
-		if configFile != "" {
-			files = append(files, configFile)
-		}
-
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return files, err
-		}
-
-		files = append(files, filepath.Join(home, "/.snyk.env"))
-		return files, nil
-	}
 }
 
 // CreateAppEngine creates a new workflow engine.

@@ -46,7 +46,11 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 	config := engine.GetConfiguration()
 	err := config.AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION)
 	if err != nil {
-		engine.GetLogger().Err(err).Msg("Failed to add dependency for ConfigIgnoreApprovalEnabled")
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for ConfigIgnoreApprovalEnabled on ORGANIZATION")
+	}
+	err = config.AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.API_URL)
+	if err != nil {
+		engine.GetLogger().Err(err).Msg("Failed to add dependency for ConfigIgnoreApprovalEnabled on API_URL")
 	}
 
 	return func(c configuration.Configuration, existingValue any) (any, error) {
