@@ -495,7 +495,7 @@ func TestSarifAutomationDetailsId(t *testing.T) {
 		)
 
 		err = p.RenderTemplate(presenters.ApplicationSarifTemplates, presenters.ApplicationSarifMimeType)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		var sarifOutput SarifOutput
 		err = json.Unmarshal(writer.Bytes(), &sarifOutput)

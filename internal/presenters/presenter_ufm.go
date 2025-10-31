@@ -123,9 +123,9 @@ func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) e
 	}
 
 	err = mainTmpl.Execute(writer, struct {
-		Results []testapi.TestResult
+		TestResults []testapi.TestResult
 	}{
-		Results: p.Input,
+		TestResults: p.Input,
 	})
 	if err != nil {
 		return err
