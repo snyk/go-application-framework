@@ -49,6 +49,11 @@ const (
 	DependencyPath DependencyPathEvidenceSource = "dependency_path"
 )
 
+// Defines values for DiffFormat.
+const (
+	DiffFormatDiff DiffFormat = "diff"
+)
+
 // Defines values for ExecutionFlowEvidenceSource.
 const (
 	ExecutionFlow ExecutionFlowEvidenceSource = "execution_flow"
@@ -147,9 +152,9 @@ const (
 	Pass PassFail = "pass"
 )
 
-// Defines values for PinPackageActionType.
+// Defines values for PinPackageAdviceFormat.
 const (
-	PinPackage PinPackageActionType = "pin_package"
+	PinPackageAdviceFormatPinPackageAdvice PinPackageAdviceFormat = "pin_package_advice"
 )
 
 // Defines values for PolicyType.
@@ -294,9 +299,9 @@ const (
 	TestOutcomeReasonTimeout      TestOutcomeReason = "timeout"
 )
 
-// Defines values for UpgradePackageActionType.
+// Defines values for UpgradePackageAdviceFormat.
 const (
-	UpgradePackage UpgradePackageActionType = "upgrade_package"
+	UpgradePackageAdviceFormatUpgradePackageAdvice UpgradePackageAdviceFormat = "upgrade_package_advice"
 )
 
 // Defines values for IoSnykApiCommonJsonApiVersion.
@@ -325,11 +330,6 @@ const (
 const (
 	Other SnykvulndbOtherPackageEcosystemType = "other"
 )
-
-// Action Different types of managed OS package fix actions
-type Action struct {
-	union json.RawMessage
-}
 
 // ActualVersion Resolved API version
 type ActualVersion = string
@@ -418,6 +418,30 @@ type DependencyPathEvidence struct {
 
 // DependencyPathEvidenceSource defines model for DependencyPathEvidence.Source.
 type DependencyPathEvidenceSource string
+
+// Diff Fix suggestions in the unified diff format that introduce code changes
+// to remediate the vulnerability.
+type Diff struct {
+	Format DiffFormat `json:"format"`
+
+	// Suggestions Alternative suggestions - choose one to fix the vulnerability.
+	// The 'rank' field signals the relative confidence in each one.
+	Suggestions []DiffSuggestion `json:"suggestions"`
+}
+
+// DiffFormat defines model for Diff.Format.
+type DiffFormat string
+
+// DiffSuggestion A suggestion in unified diff format representing the code changes to fix the vulnerability.
+type DiffSuggestion struct {
+	// Diff Unified diff that contains changes for one or multiple files.
+	// It already contains file path, but this can be extracted as a separate field if needed.
+	Diff string `json:"diff"`
+
+	// ExternalId The fix suggestion identifier from an external source.
+	ExternalId *openapi_types.UUID `json:"external_id,omitempty"`
+	Rank       *uint8              `json:"rank,omitempty"`
+}
 
 // Error defines model for Error.
 type Error struct {
@@ -654,13 +678,29 @@ type FindingSummary struct {
 // FindingType Type of Finding which was discovered.
 type FindingType string
 
+// FixAction Different fix formats in which the fix action is represented. We distinguish between advice and diff formats.
+//
+// Advice - Fix advice in a display only / informational format. These are highly product line specific, so they have their own model.
+// - upgradePackageAdvice: Upgrade a direct package from one version to a newer one that resolves the vulnerability.
+// - pinPackageAdvice: Pin a package at a specific version.
+//
+// Diff - Fix suggestions in the unified diff format that introduce code changes
+// to remediate the vulnerability. Can be used to represent fix actions for any product line.
+type FixAction struct {
+	union json.RawMessage
+}
+
 // FixAppliedOutcome Indicates the outcome of a fix in terms of resolving the finding at hand
 type FixAppliedOutcome string
 
 // FixAttributes FixAttributes is the main payload modelling a fix
 type FixAttributes struct {
-	// Actions Different types of managed OS package fix actions
-	Actions *Action `json:"actions,omitempty"`
+	// Action Applying the steps specified by the action within the fix leads to resolving either completely or partially this finding.
+	// An action may be a simple upgrade, a code swap, or may model sets of boolean operations.
+	//
+	// For now only simple actions are modelled but could be extended to include more complex actions in the future.
+	// See doc for more info: https://docs.google.com/document/d/151vAXurvX4k8fNOWspSI2Ou9OF1G5fj8LHa-NuKOfgw
+	Action *FixAction `json:"action,omitempty"`
 
 	// Outcome Indicates whether applying these actions will address the finding or not
 	Outcome FixAppliedOutcome `json:"outcome"`
@@ -942,7 +982,7 @@ type PackageLocationType string
 // PassFail Indicate whether a Test passes or fails.
 type PassFail string
 
-// PinPackageAction Pin a package at a specific version. Pinning is a capability not supported
+// PinPackageAdvice Pin a package at a specific version. Pinning is a capability not supported
 // by all ecosystems, which causes a transitive dependency to be pinned at
 // a specific version with an override.
 //
@@ -952,14 +992,14 @@ type PassFail string
 // Pinning could break an application.
 //
 // Note: In practice pin actions today are solely used in python pip's packages as pip does not calculate upgrade paths
-type PinPackageAction struct {
-	PackageName string               `json:"package_name"`
-	PinVersion  string               `json:"pin_version"`
-	Type        PinPackageActionType `json:"type"`
+type PinPackageAdvice struct {
+	Format      PinPackageAdviceFormat `json:"format"`
+	PackageName string                 `json:"package_name"`
+	PinVersion  string                 `json:"pin_version"`
 }
 
-// PinPackageActionType defines model for PinPackageAction.Type.
-type PinPackageActionType string
+// PinPackageAdviceFormat defines model for PinPackageAdvice.Format.
+type PinPackageAdviceFormat string
 
 // Policy defines model for Policy.
 type Policy struct {
@@ -1643,11 +1683,12 @@ type TimeoutSpec struct {
 	Seconds uint32   `json:"seconds"`
 }
 
-// UpgradePackageAction Upgrade a package from one version to another.
-type UpgradePackageAction struct {
+// UpgradePackageAdvice Upgrade a package from one version to another.
+type UpgradePackageAdvice struct {
+	Format UpgradePackageAdviceFormat `json:"format"`
+
 	// PackageName The package that's receiving an upgrade to fix this vulnerability
-	PackageName string                   `json:"package_name"`
-	Type        UpgradePackageActionType `json:"type"`
+	PackageName string `json:"package_name"`
 
 	// UpgradePaths Upgrading a package may lead to one or more paths to change. These paths are modelled as evidence
 	// in DependencyPathEvidence.
@@ -1656,8 +1697,8 @@ type UpgradePackageAction struct {
 	UpgradePaths []UpgradePath `json:"upgrade_paths"`
 }
 
-// UpgradePackageActionType defines model for UpgradePackageAction.Type.
-type UpgradePackageActionType string
+// UpgradePackageAdviceFormat defines model for UpgradePackageAdvice.Format.
+type UpgradePackageAdviceFormat string
 
 // UpgradePath Upgrade path model all known dependency paths that will change when applying an upgrade action.
 type UpgradePath struct {
@@ -2775,95 +2816,6 @@ func (a IoSnykApiV1testdepgraphRequestPackageManager) MarshalJSON() ([]byte, err
 	return json.Marshal(object)
 }
 
-// AsUpgradePackageAction returns the union data inside the Action as a UpgradePackageAction
-func (t Action) AsUpgradePackageAction() (UpgradePackageAction, error) {
-	var body UpgradePackageAction
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromUpgradePackageAction overwrites any union data inside the Action as the provided UpgradePackageAction
-func (t *Action) FromUpgradePackageAction(v UpgradePackageAction) error {
-	v.Type = "upgrade_package"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeUpgradePackageAction performs a merge with any union data inside the Action, using the provided UpgradePackageAction
-func (t *Action) MergeUpgradePackageAction(v UpgradePackageAction) error {
-	v.Type = "upgrade_package"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsPinPackageAction returns the union data inside the Action as a PinPackageAction
-func (t Action) AsPinPackageAction() (PinPackageAction, error) {
-	var body PinPackageAction
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromPinPackageAction overwrites any union data inside the Action as the provided PinPackageAction
-func (t *Action) FromPinPackageAction(v PinPackageAction) error {
-	v.Type = "pin_package"
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergePinPackageAction performs a merge with any union data inside the Action, using the provided PinPackageAction
-func (t *Action) MergePinPackageAction(v PinPackageAction) error {
-	v.Type = "pin_package"
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t Action) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t Action) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "pin_package":
-		return t.AsPinPackageAction()
-	case "upgrade_package":
-		return t.AsUpgradePackageAction()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t Action) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *Action) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
 // AsSeverityChange returns the union data inside the AppliedPolicy as a SeverityChange
 func (t AppliedPolicy) AsSeverityChange() (SeverityChange, error) {
 	var body SeverityChange
@@ -3217,6 +3169,125 @@ func (t FindingLocation) MarshalJSON() ([]byte, error) {
 }
 
 func (t *FindingLocation) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsUpgradePackageAdvice returns the union data inside the FixAction as a UpgradePackageAdvice
+func (t FixAction) AsUpgradePackageAdvice() (UpgradePackageAdvice, error) {
+	var body UpgradePackageAdvice
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromUpgradePackageAdvice overwrites any union data inside the FixAction as the provided UpgradePackageAdvice
+func (t *FixAction) FromUpgradePackageAdvice(v UpgradePackageAdvice) error {
+	v.Format = "upgrade_package_advice"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeUpgradePackageAdvice performs a merge with any union data inside the FixAction, using the provided UpgradePackageAdvice
+func (t *FixAction) MergeUpgradePackageAdvice(v UpgradePackageAdvice) error {
+	v.Format = "upgrade_package_advice"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsPinPackageAdvice returns the union data inside the FixAction as a PinPackageAdvice
+func (t FixAction) AsPinPackageAdvice() (PinPackageAdvice, error) {
+	var body PinPackageAdvice
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPinPackageAdvice overwrites any union data inside the FixAction as the provided PinPackageAdvice
+func (t *FixAction) FromPinPackageAdvice(v PinPackageAdvice) error {
+	v.Format = "pin_package_advice"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergePinPackageAdvice performs a merge with any union data inside the FixAction, using the provided PinPackageAdvice
+func (t *FixAction) MergePinPackageAdvice(v PinPackageAdvice) error {
+	v.Format = "pin_package_advice"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDiff returns the union data inside the FixAction as a Diff
+func (t FixAction) AsDiff() (Diff, error) {
+	var body Diff
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDiff overwrites any union data inside the FixAction as the provided Diff
+func (t *FixAction) FromDiff(v Diff) error {
+	v.Format = "diff"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeDiff performs a merge with any union data inside the FixAction, using the provided Diff
+func (t *FixAction) MergeDiff(v Diff) error {
+	v.Format = "diff"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t FixAction) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"format"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t FixAction) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "diff":
+		return t.AsDiff()
+	case "pin_package_advice":
+		return t.AsPinPackageAdvice()
+	case "upgrade_package_advice":
+		return t.AsUpgradePackageAdvice()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t FixAction) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *FixAction) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
