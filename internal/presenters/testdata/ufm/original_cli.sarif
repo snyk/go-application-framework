@@ -6,8 +6,8 @@
       "tool": {
         "driver": {
           "name": "Snyk Open Source",
-          "semanticVersion": "1.1301.0-dev.e9879b4629a06a8445bbe1b7a7938956a2097689",
-          "version": "1.1301.0-dev.e9879b4629a06a8445bbe1b7a7938956a2097689",
+          "semanticVersion": "1.1301.0",
+          "version": "1.1301.0",
           "informationUri": "https://docs.snyk.io/",
           "properties": {
             "artifactsScanned": 552

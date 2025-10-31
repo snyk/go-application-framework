@@ -62,9 +62,6 @@ func normalizeToolProperties(run map[string]interface{}) {
 	if tool, ok := run["tool"].(map[string]interface{}); ok {
 		if driver, ok := tool["driver"].(map[string]interface{}); ok {
 			delete(driver, "properties")
-			// Normalize version numbers to avoid differences between test and actual CLI versions
-			driver["version"] = "*"
-			driver["semanticVersion"] = "*"
 		}
 	}
 }
@@ -309,7 +306,7 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 }
 
 func Test_UfmPresenter_Sarif(t *testing.T) {
-	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 
 	expectedSarifBytes, err := os.ReadFile("testdata/ufm/original_cli.sarif")
 	assert.NoError(t, err)
