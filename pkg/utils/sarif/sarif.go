@@ -163,6 +163,24 @@ func GetRulesFromTestResult(result testapi.TestResult, t testapi.FindingType) []
 			if vulnProblemPtr == nil {
 				continue
 			}
+
+			// decorate vulnProblem from location
+			for _, location := range finding.Attributes.Locations {
+				locationDiscriminator, err := location.Discriminator()
+				if err != nil {
+					continue
+				}
+
+				if locationDiscriminator == "package" {
+					packageLocation, err := location.AsPackageLocation()
+					if err != nil {
+						continue
+					}
+					vulnProblemPtr.PackageName = packageLocation.Package.Name
+					vulnProblemPtr.PackageVersion = packageLocation.Package.Version
+				}
+			}
+
 			vulnProblem := *vulnProblemPtr
 
 			if _, ok := sarifRules[vulnProblem.Id]; !ok {
