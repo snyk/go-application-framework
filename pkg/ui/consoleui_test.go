@@ -32,7 +32,7 @@ func Test_ProgressBar_Spinner(t *testing.T) {
 	err = bar.UpdateProgress(1.5)
 	assert.Error(t, err)
 
-	expected := "\r[K\\   0% Hello\r[K|  30% Hello\r[K/ 100% Hello\r\u001B[K"
+	expected := "\r\x1b[K\\   0% Hello\r\x1b[K|  30% Hello\r\x1b[K/ 100% Hello\r\u001B[K"
 	assert.Equal(t, expected, writer.String())
 }
 
@@ -56,7 +56,7 @@ func Test_ProgressBar_Spinner_Infinite(t *testing.T) {
 	err = bar.UpdateProgress(1.5)
 	assert.Error(t, err)
 
-	expected := "\r[K\\ Hello\r[K| Hello\r[K/ Hello\r\u001B[K"
+	expected := "\r\x1b[K\\ Hello\r\x1b[K| Hello\r\x1b[K/ Hello\r\u001B[K"
 	assert.Equal(t, expected, writer.String())
 }
 

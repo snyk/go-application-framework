@@ -144,9 +144,9 @@ func emptyTargetId() *url.URL {
 
 func gitBaseIdFromRemote(repoUrl string) (string, error) {
 	if strings.HasPrefix(repoUrl, "git@") {
-		formattedString := strings.Replace(repoUrl, "@", "/", -1)
-		formattedString = strings.Replace(formattedString, ":", "/", -1)
-		formattedString = strings.Replace(formattedString, ".git", "", -1)
+		formattedString := strings.ReplaceAll(repoUrl, "@", "/")
+		formattedString = strings.ReplaceAll(formattedString, ":", "/")
+		formattedString = strings.ReplaceAll(formattedString, ".git", "")
 		return formattedString, nil
 	}
 

@@ -107,7 +107,6 @@ type ConnectivityCheckResult struct {
 	OrgCheckError error          `json:"orgCheckError,omitempty"`
 }
 
-// AddTODO adds a new TODO item to the result
 // AddTODOf adds a TODO item to the result with printf-style formatting
 func (r *ConnectivityCheckResult) AddTODOf(level TodoLevel, format string, args ...interface{}) {
 	r.TODOs = append(r.TODOs, TODO{

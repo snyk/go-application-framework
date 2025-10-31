@@ -246,7 +246,7 @@ func mapLocations(res sarif.Result) []IoSnykReactiveFindingLocation {
 	return locations
 }
 
-// updateFindingsSummary updates the summary of the findings based on their severity levels
+// UpdateFindingSummary updates the summary of the findings based on their severity levels
 func UpdateFindingSummary(findingsModel *LocalFinding) {
 	updatedFindingCounts := NewFindingsCounts()
 	updatedFindingCounts.CountKeyOrderAsc = findingsModel.Summary.Counts.CountKeyOrderAsc
