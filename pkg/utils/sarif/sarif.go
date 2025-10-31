@@ -8,6 +8,13 @@ import (
 	"sort"
 	"strings"
 
+	"context"
+	"fmt"
+	"maps"
+	"slices"
+	"sort"
+	"strings"
+
 	"github.com/snyk/code-client-go/sarif"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
