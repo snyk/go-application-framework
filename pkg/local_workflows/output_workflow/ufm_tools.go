@@ -13,16 +13,18 @@ import (
 )
 
 func getDefaultWriterUfm(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
-	writer := &WriterEntry{
-		writer: &newLineCloser{
-			writer: outputDestination.GetWriter(),
-		},
-		mimeType:        SARIF_MIME_TYPE,
-		templates:       presenters.ApplicationSarifTemplatesUfm,
-		renderEmptyData: true,
-	}
+	var writer *WriterEntry
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
+		writer = &WriterEntry{
+			writer: &newLineCloser{
+				writer: outputDestination.GetWriter(),
+			},
+			mimeType:        SARIF_MIME_TYPE,
+			templates:       presenters.ApplicationSarifTemplatesUfm,
+			renderEmptyData: true,
+		}
+
 		writer.mimeType = SARIF_MIME_TYPE
 		writer.templates = presenters.ApplicationSarifTemplatesUfm
 	}
