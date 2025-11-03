@@ -958,6 +958,32 @@ func Test_Configuration_GetStringSliceString(t *testing.T) {
 	assert.Equal(t, expected[0], actualString)
 }
 
+func Test_Configuration_GetStringSliceFromString(t *testing.T) {
+	key := "key1"
+	expectedString := "/path/to/directory"
+	expectedSlice := []string{expectedString}
+	config := NewWithOpts()
+	config.Set(key, expectedString)
+
+	// access string as slice - should convert to single-element slice
+	actual := config.GetStringSlice(key)
+	assert.Equal(t, expectedSlice, actual)
+
+	// access string as string - should work as before
+	actualString := config.GetString(key)
+	assert.Equal(t, expectedString, actualString)
+}
+
+func Test_Configuration_GetStringSliceFromEmptyString(t *testing.T) {
+	key := "key1"
+	config := NewWithOpts()
+	config.Set(key, "")
+
+	// empty string should return empty slice
+	actual := config.GetStringSlice(key)
+	assert.Equal(t, []string{}, actual)
+}
+
 func Test_Configuration_AddKeyDependency_happy(t *testing.T) {
 	key1 := "key1"
 	key2 := "key2"

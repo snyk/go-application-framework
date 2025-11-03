@@ -645,6 +645,11 @@ func (ev *extendedViper) GetStringSlice(key string) []string {
 	switch v := result.(type) {
 	case []string:
 		return v
+	case string:
+		if len(v) > 0 {
+			return []string{v}
+		}
+		return output
 	}
 
 	return output
