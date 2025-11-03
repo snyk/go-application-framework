@@ -777,6 +777,48 @@ func TestDefaultInputDirectory(t *testing.T) {
 	})
 }
 
+func Test_defaultFuncOrganizationSlug_clonedConfig(t *testing.T) {
+	org1Id := "00000000-0000-0000-0000-000000000001"
+	org1Slug := "org-slug-1"
+	org2Id := "00000000-0000-0000-0000-000000000002"
+	org2Slug := "org-slug-2"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertions
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org1Id).Return(org1Slug, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org2Id).Return(org2Slug, nil).AnyTimes()
+
+	config := configuration.NewInMemory()
+	engine := workflow.NewWorkFlowEngine(config)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	// Set org in original config
+	config.Set(configuration.ORGANIZATION, org1Id)
+	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org1Slug, actualOrgSlug, "original config should have org1 slug")
+
+	// Clone the config
+	clonedConfig := config.Clone()
+
+	// Change org in cloned config
+	clonedConfig.Set(configuration.ORGANIZATION, org2Id)
+
+	// Verify cloned config has correct slug for org2 (not org1)
+	clonedOrgSlug := clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org2Slug, clonedOrgSlug, "cloned config should have org2 slug, not org1 slug")
+
+	// Verify original config still has org1
+	originalOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org1Slug, originalOrgSlug, "original config should still have org1 slug")
+}
+
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	config := configuration.NewWithOpts()
