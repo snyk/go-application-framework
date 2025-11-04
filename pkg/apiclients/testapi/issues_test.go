@@ -337,15 +337,14 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.Equal(t, 10, sourceLocations[0].FromLine)
 
 		// Verify SCA-specific methods return empty/error for SAST
-		_, err = issue.GetSnykVulnProblem()
-		assert.Error(t, err)
-		assert.Empty(t, issue.GetPackageName())
-		assert.Empty(t, issue.GetPackageVersion())
-		assert.Empty(t, issue.GetEcosystem())
-		assert.Empty(t, issue.GetDependencyPaths())
-		assert.Empty(t, issue.GetFixedInVersions())
-		assert.False(t, issue.GetIsFixable())
-		assert.Equal(t, float32(0.0), issue.GetCvssScore())
+		metadata := issue.GetMetadata()
+		assert.NotNil(t, metadata)
+		assert.Nil(t, metadata.Component)
+		assert.Empty(t, metadata.Technology)
+		assert.Empty(t, metadata.DependencyPaths)
+		assert.Empty(t, metadata.FixedInVersions)
+		assert.False(t, metadata.IsFixable)
+		assert.Equal(t, float32(0.0), metadata.CVSSScore)
 	})
 
 	t.Run("SCA issue preserves SCA-specific methods", func(t *testing.T) {
@@ -375,13 +374,15 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 
 		// Verify SCA-specific methods exist (even if they return empty values)
 		// These should not panic
-		_ = issue.GetPackageName()
-		_ = issue.GetPackageVersion()
-		_ = issue.GetEcosystem()
-		_ = issue.GetDependencyPaths()
-		_ = issue.GetFixedInVersions()
-		_ = issue.GetIsFixable()
-		_ = issue.GetCvssScore()
+		metadata := issue.GetMetadata()
+		if metadata != nil {
+			_ = metadata.Component
+			_ = metadata.Technology
+			_ = metadata.DependencyPaths
+			_ = metadata.FixedInVersions
+			_ = metadata.IsFixable
+			_ = metadata.CVSSScore
+		}
 	})
 }
 

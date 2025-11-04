@@ -6,6 +6,37 @@ import (
 	"strings"
 )
 
+// IssueMetadata provides generic metadata about an issue, abstracting away problem-specific details.
+// This structure allows accessing issue properties without exposing specific problem types.
+type IssueMetadata struct {
+	// Component identifies the affected component (e.g., package, library, service).
+	// For SCA findings, this represents the package name and version.
+	// For other finding types, this may represent the affected resource or artifact.
+	Component *Component
+
+	// Technology identifies the technology stack or ecosystem.
+	// For SCA findings, this is the package manager (e.g., "npm", "maven").
+	// For other finding types, this may be the language, framework, or platform.
+	Technology string
+
+	// Scoring information
+	CVSSScore float32 // CVSS base score if available
+
+	// Fix information
+	IsFixable       bool     // Whether a fix is available
+	FixedInVersions []string // Versions that fix this issue (if applicable)
+
+	// Dependency paths that introduce this issue (for SCA findings)
+	// Each path represents a dependency chain as a string.
+	DependencyPaths []string
+}
+
+// Component represents an affected component (package, library, service, etc.)
+type Component struct {
+	Name    string // Component name (e.g., package name, library name)
+	Version string // Component version (e.g., package version, library version)
+}
+
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
 
 // Issue defines the interface for accessing a single aggregated security issue.
@@ -89,46 +120,11 @@ type Issue interface {
 	// Returns nil if reachability information is not available.
 	GetReachability() *ReachabilityEvidence
 
-	// === SCA-Specific Methods ===
-
-	// GetSnykVulnProblem returns the SnykVulnProblem if this is an SCA issue.
-	// Returns nil and an error if this is not an SCA issue or no vulnerability problem exists.
-	GetSnykVulnProblem() (*SnykVulnProblem, error)
-
-	// GetEcosystem returns the package ecosystem/manager for this issue.
-	// Returns empty string if not applicable (e.g., for SAST findings).
-	GetEcosystem() string
-
-	// GetPackageName returns the package name for this issue.
-	// For SCA findings, this comes from the vulnerability problem or package location.
-	// Returns empty string if not applicable.
-	GetPackageName() string
-
-	// GetPackageVersion returns the package version for this issue.
-	// For SCA findings, this comes from the vulnerability problem or package location.
-	// Returns empty string if not applicable.
-	GetPackageVersion() string
-
-	// GetCvssScore returns the CVSS base score for this issue.
-	// For SCA findings, this comes from the SnykVulnProblem.
-	// Returns 0.0 if not available.
-	GetCvssScore() float32
-
-	// GetIsFixable returns whether this issue has a fix available.
-	// For SCA findings, this indicates if a package upgrade is available.
-	// For other finding types, this may indicate if a fix action exists.
-	GetIsFixable() bool
-
-	// GetFixedInVersions returns the list of versions that fix this issue.
-	// Only applicable for SCA findings.
-	// Returns empty slice if not applicable or no fixes available.
-	GetFixedInVersions() []string
-
-	// GetDependencyPaths returns the dependency paths that introduce this issue.
-	// Each path is a string representation of the dependency chain.
-	// Only applicable for SCA findings.
-	// Returns empty slice if not applicable.
-	GetDependencyPaths() []string
+	// GetMetadata returns generic metadata about this issue.
+	// This abstracts away problem-specific details and provides a unified view
+	// of issue properties regardless of the underlying problem type.
+	// Returns nil if no metadata is available.
+	GetMetadata() *IssueMetadata
 }
 
 // NewIssuesFromTestResult creates a list of Issues from a TestResult.
@@ -335,10 +331,6 @@ func (i *issue) GetSeverity() string {
 	return i.severity
 }
 
-// GetEcosystem returns the package ecosystem/manager for this issue.
-func (i *issue) GetEcosystem() string {
-	return i.ecosystem
-}
 
 // GetCWEs returns the CWE identifiers associated with this issue.
 func (i *issue) GetCWEs() []string {
@@ -360,42 +352,24 @@ func (i *issue) GetDescription() string {
 	return i.description
 }
 
-// GetSnykVulnProblem returns the SnykVulnProblem if this is an SCA issue.
-func (i *issue) GetSnykVulnProblem() (*SnykVulnProblem, error) {
-	if i.snykVulnProblem == nil {
-		return nil, fmt.Errorf("no SnykVulnProblem available for this issue")
+// GetMetadata returns generic metadata about this issue.
+func (i *issue) GetMetadata() *IssueMetadata {
+	var component *Component
+	if i.packageName != "" || i.packageVersion != "" {
+		component = &Component{
+			Name:    i.packageName,
+			Version: i.packageVersion,
+		}
 	}
-	return i.snykVulnProblem, nil
-}
 
-// GetPackageName returns the package name for this issue.
-func (i *issue) GetPackageName() string {
-	return i.packageName
-}
-
-// GetPackageVersion returns the package version for this issue.
-func (i *issue) GetPackageVersion() string {
-	return i.packageVersion
-}
-
-// GetCvssScore returns the CVSS base score for this issue.
-func (i *issue) GetCvssScore() float32 {
-	return i.cvssScore
-}
-
-// GetIsFixable returns whether this issue has a fix available.
-func (i *issue) GetIsFixable() bool {
-	return i.isFixable
-}
-
-// GetFixedInVersions returns the list of versions that fix this issue.
-func (i *issue) GetFixedInVersions() []string {
-	return i.fixedInVersions
-}
-
-// GetDependencyPaths returns the dependency paths that introduce this issue.
-func (i *issue) GetDependencyPaths() []string {
-	return i.dependencyPaths
+	return &IssueMetadata{
+		Component:       component,
+		Technology:      i.ecosystem,
+		CVSSScore:       i.cvssScore,
+		IsFixable:       i.isFixable,
+		FixedInVersions: i.fixedInVersions,
+		DependencyPaths: i.dependencyPaths,
+	}
 }
 
 // GetSourceLocations returns all source file locations for this issue.
@@ -586,29 +560,45 @@ func newIssue(findings []FindingData) (Issue, error) {
 
 			switch discriminator {
 			case "snyk_vuln":
-				if primaryProblem == nil {
-					vulnProblem, err := problem.AsSnykVulnProblem()
-					if err == nil {
+				// Always use the first snyk_vuln problem found for ID and metadata
+				// This ensures we use the vulnerability ID even if grouping used a fallback key
+				vulnProblem, err := problem.AsSnykVulnProblem()
+				if err == nil {
+					if primaryProblem == nil {
 						primaryProblem = &problem
 						snykVulnProblem = &vulnProblem
+					}
+					// Always set ID from vulnerability ID if available (overrides any fallback)
+					if vulnProblem.Id != "" {
 						id = vulnProblem.Id
+					}
+					// Set severity and other metadata from first vuln problem
+					if severity == "" {
 						severity = string(vulnProblem.Severity)
+					}
+					if cvssScore == 0.0 {
 						cvssScore = float32(vulnProblem.CvssBaseScore)
+					}
+					if !isFixable {
 						isFixable = vulnProblem.IsFixable
+					}
+					if len(fixedInVersions) == 0 {
 						fixedInVersions = vulnProblem.InitiallyFixedInVersions
-						// Extract ecosystem
+					}
+					// Extract ecosystem
+					if ecosystem == "" {
 						if buildEco, err := vulnProblem.Ecosystem.AsSnykvulndbBuildPackageEcosystem(); err == nil {
 							ecosystem = buildEco.PackageManager
 						} else if osEco, err := vulnProblem.Ecosystem.AsSnykvulndbOsPackageEcosystem(); err == nil {
 							ecosystem = osEco.OsName
 						}
-						// Use package name/version from vuln problem if not set from locations
-						if packageName == "" {
-							packageName = vulnProblem.PackageName
-						}
-						if packageVersion == "" {
-							packageVersion = vulnProblem.PackageVersion
-						}
+					}
+					// Use package name/version from vuln problem if not set from locations
+					if packageName == "" {
+						packageName = vulnProblem.PackageName
+					}
+					if packageVersion == "" {
+						packageVersion = vulnProblem.PackageVersion
 					}
 				}
 			case "cve":
