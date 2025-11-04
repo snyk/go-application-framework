@@ -34,11 +34,13 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 		logger.Print("Failed to add dependency for ORGANIZATION_SLUG:", err)
 	}
 
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
+		url := c.GetString(configuration.API_URL)
+		client := localNetworkStack.GetHttpClient()
 		apiClient := apiClientFactory(url, client)
-		orgId := config.GetString(configuration.ORGANIZATION)
+		orgId := c.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
 			return existingValue, nil
 		}

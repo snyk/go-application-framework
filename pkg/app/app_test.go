@@ -777,6 +777,106 @@ func TestDefaultInputDirectory(t *testing.T) {
 	})
 }
 
+func Test_defaultFuncOrganizationSlug_UsesClonedConfig(t *testing.T) {
+	org1Id := "00000000-0000-0000-0000-000000000001"
+	org1Slug := "org-slug-1"
+	org2Id := "00000000-0000-0000-0000-000000000002"
+	org2Slug := "org-slug-2"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertions
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org1Id).Return(org1Slug, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org2Id).Return(org2Slug, nil).AnyTimes()
+
+	config := configuration.NewInMemory()
+	engine := workflow.NewWorkFlowEngine(config)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	// Set org in original config
+	config.Set(configuration.ORGANIZATION, org1Id)
+	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org1Slug, actualOrgSlug, "original config should have org1 slug")
+
+	// Clone the config
+	clonedConfig := config.Clone()
+
+	// Change org in cloned config
+	clonedConfig.Set(configuration.ORGANIZATION, org2Id)
+
+	// Verify cloned config has correct slug for org2 (not org1)
+	clonedOrgSlug := clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org2Slug, clonedOrgSlug, "cloned config should have org2 slug, not org1 slug")
+
+	// Verify original config still has org1
+	originalOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org1Slug, originalOrgSlug, "original config should still have org1 slug")
+}
+
+func Test_defaultFuncOrganizationSlug_UsesClonedNetworkAccess(t *testing.T) {
+	orgId := "00000000-0000-0000-0000-000000000001"
+	orgSlug := "org-slug"
+
+	apiUrl1 := "https://api.snyk.io"
+	apiUrl2 := "https://api.eu.snyk.io"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(orgId).Return(orgSlug, nil).AnyTimes()
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, apiUrl1)
+	engine := workflow.NewWorkFlowEngine(config)
+
+	// Track all API calls with their URLs
+	var apiCalls []string
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		apiCalls = append(apiCalls, url)
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+	assert.Len(t, apiCalls, 0, "Should have no API client creations yet before the first fetch")
+
+	// Setup the org in the global config
+	config.Set(configuration.ORGANIZATION, orgId)
+	assert.Len(t, apiCalls, 0, "Set(ORGANIZATION) should not create any API clients")
+
+	// Fetch the org slug - this creates two API clients, one in the slug default func and one in the org default func
+	actualSlug1 := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, orgSlug, actualSlug1)
+	assert.Len(t, apiCalls, 2, "Getting slug creates two API clients")
+	assert.Equal(t, apiUrl1, apiCalls[0], "First API client (for org slug in global config) should use the global API URL")
+	assert.Equal(t, apiUrl1, apiCalls[1], "Second API client (for org in global config) should use the global API URL")
+
+	// Clone the config and change API URL, but re-set the org
+	clonedConfig := config.Clone()
+	clonedConfig.Set(configuration.API_URL, apiUrl2)
+	clonedConfig.Set(configuration.ORGANIZATION, orgId)
+	assert.Len(t, apiCalls, 2, "Cloning and setting API URL and org in the cloned config should not create any additional API clients")
+
+	// Fetch the org slug from cloned config - again, this creates two API clients
+	actualSlug2 := clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, orgSlug, actualSlug2)
+	assert.Len(t, apiCalls, 4, "Should have 4 API clients after the second fetch")
+	assert.Equal(t, apiUrl2, apiCalls[2], "Third API client (for org slug in cloned config) should use the new API URL")
+	assert.Equal(
+		t,
+		apiUrl1,
+		apiCalls[3],
+		"BUG: Forth API client (for org in cloned config) currently uses the global API URL, when it should use the new API URL "+
+			"- This will change once the network access cloning fix is applied in the defaultFuncOrganization function",
+	) // TODO - Change this when defaultFuncOrganization changes.
+}
+
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	config := configuration.NewWithOpts()
