@@ -197,7 +197,7 @@ func GetRulesFromIssues(issuesList []testapi.Issue, t testapi.FindingType) []map
 			}
 
 			// Build help markdown using generic metadata
-			helpMarkdown := buildHelpMarkdownGeneric(metadata, issue.GetDescription())
+			helpMarkdown := buildHelpMarkdownGeneric(metadata, issue.GetDescription(), t)
 
 			// Build properties with tags including CWEs
 			tags := []interface{}{"security"}
@@ -255,14 +255,7 @@ func GetRulesFromTestResult(result testapi.TestResult, t testapi.FindingType) []
 
 // GetResultsFromIssues extracts SARIF results from a list of Issues for a specific finding type.
 func GetResultsFromIssues(issuesList []testapi.Issue, t testapi.FindingType) []map[string]interface{} {
-	// Handle SCA findings
-	if t == testapi.FindingTypeSca {
-		return getScaResultsFromIssues(issuesList)
-	}
-	// TODO: Add SAST handling here later
-	// else if t == testapi.FindingTypeSast { return getSastResultsFromIssues(issuesList) }
-
-	return []map[string]interface{}{}
+	return getResultsFromIssues(issuesList, t)
 }
 
 // GetResultsFromTestResult extracts SARIF results from test results for a specific finding type.
@@ -276,15 +269,15 @@ func GetResultsFromTestResult(result testapi.TestResult, t testapi.FindingType) 
 	return GetResultsFromIssues(issuesList, t)
 }
 
-// getScaResultsFromIssues creates SARIF results from a list of SCA Issues.
-// For backward compatibility, creates one result per issue (vulnerability).
-// Issues are already grouped by vulnerability ID, so this matches the original behavior.
-func getScaResultsFromIssues(issuesList []testapi.Issue) []map[string]interface{} {
+// getResultsFromIssues creates SARIF results from a list of Issues for a specific finding type.
+// For backward compatibility, creates one result per issue (vulnerability for SCA).
+// Issues are already grouped by vulnerability ID or key, so this matches the original behavior.
+func getResultsFromIssues(issuesList []testapi.Issue, findingType testapi.FindingType) []map[string]interface{} {
 	var results []map[string]interface{}
 
 	for _, issue := range issuesList {
-		// Skip non-SCA issues
-		if issue.GetFindingType() != testapi.FindingTypeSca {
+		// Skip issues not matching the specified finding type
+		if issue.GetFindingType() != findingType {
 			continue
 		}
 
@@ -299,13 +292,13 @@ func getScaResultsFromIssues(issuesList []testapi.Issue) []map[string]interface{
 			continue
 		}
 
-		// Get issue ID (for SCA, this is the vulnerability ID)
+		// Get issue ID (vulnerability ID for SCA, rule ID for SAST, etc.)
 		issueID := issue.GetID()
 		if issueID == "" {
 			continue
 		}
 
-		// Create one result per issue (vulnerability) for backward compatibility
+		// Create one result per issue for backward compatibility
 		// Use the first finding for location information
 		firstFinding := findings[0]
 
@@ -322,7 +315,7 @@ func getScaResultsFromIssues(issuesList []testapi.Issue) []map[string]interface{
 		}
 
 		// Build location using metadata
-		location := buildScaLocation(firstFinding, metadata)
+		location := buildLocation(firstFinding, metadata)
 
 		// Build result
 		sarifLevel := SeverityToSarifLevel(severity)
@@ -335,7 +328,7 @@ func getScaResultsFromIssues(issuesList []testapi.Issue) []map[string]interface{
 
 		// Add fixes if available
 		if metadata.IsFixable && len(metadata.FixedInVersions) > 0 {
-			fixes := buildScaFixes(firstFinding, metadata)
+			fixes := buildFixes(firstFinding, metadata)
 			if fixes != nil {
 				sarifResult["fixes"] = fixes
 			}
@@ -358,17 +351,25 @@ func getScaResultsFromIssues(issuesList []testapi.Issue) []map[string]interface{
 }
 
 // buildHelpMarkdownGeneric constructs the help markdown section for SARIF rules using generic metadata
-func buildHelpMarkdownGeneric(metadata *testapi.IssueMetadata, description string) string {
+func buildHelpMarkdownGeneric(metadata *testapi.IssueMetadata, description string, findingType testapi.FindingType) string {
 	var sb strings.Builder
 
-	// Package Manager (Technology/Ecosystem)
+	// Technology/Ecosystem - use appropriate terminology based on finding type
 	if metadata.Technology != "" {
-		sb.WriteString(fmt.Sprintf("* Package Manager: %s\n", metadata.Technology))
+		if findingType == testapi.FindingTypeSca {
+			sb.WriteString(fmt.Sprintf("* Package Manager: %s\n", metadata.Technology))
+		} else {
+			sb.WriteString(fmt.Sprintf("* Technology: %s\n", metadata.Technology))
+		}
 	}
 
-	// Vulnerable module (Component)
+	// Component - use appropriate terminology based on finding type
 	if metadata.Component != nil {
-		sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", metadata.Component.Name))
+		if findingType == testapi.FindingTypeSca {
+			sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", metadata.Component.Name))
+		} else {
+			sb.WriteString(fmt.Sprintf("* Affected component: %s\n", metadata.Component.Name))
+		}
 	}
 
 	// Introduced through
@@ -400,7 +401,7 @@ func buildHelpMarkdownGeneric(metadata *testapi.IssueMetadata, description strin
 	return sb.String()
 }
 
-func buildScaLocation(finding testapi.FindingData, metadata *testapi.IssueMetadata) map[string]interface{} {
+func buildLocation(finding testapi.FindingData, metadata *testapi.IssueMetadata) map[string]interface{} {
 	// Default to line 1 for manifest files
 	uri := "package.json" // Default, should be determined from locations
 	startLine := 1
@@ -453,7 +454,7 @@ func buildScaLocation(finding testapi.FindingData, metadata *testapi.IssueMetada
 	}
 }
 
-func buildScaFixes(finding testapi.FindingData, metadata *testapi.IssueMetadata) []interface{} {
+func buildFixes(finding testapi.FindingData, metadata *testapi.IssueMetadata) []interface{} {
 	if len(metadata.FixedInVersions) == 0 {
 		return nil
 	}
