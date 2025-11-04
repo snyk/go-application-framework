@@ -35,8 +35,10 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 	}
 
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
-		client := engine.GetNetworkAccess().GetHttpClient()
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
 		url := c.GetString(configuration.API_URL)
+		client := localNetworkStack.GetHttpClient()
 		apiClient := apiClientFactory(url, client)
 		orgId := c.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
@@ -58,8 +60,10 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	}
 
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
-		client := engine.GetNetworkAccess().GetHttpClient()
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
 		url := c.GetString(configuration.API_URL)
+		client := localNetworkStack.GetHttpClient()
 		apiClient := apiClientFactory(url, client)
 		existingString, ok := existingValue.(string)
 		if existingValue != nil && ok && len(existingString) > 0 {

@@ -155,6 +155,8 @@ func CheckCacheRespectOrgDependency(
 	// Pretend to support workflow registration (init functions may register workflows, but we don't use them)
 	mockEngine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
+	mockNetworkAccess.EXPECT().Clone().Return(mockNetworkAccess).AnyTimes() // Don't actually clone, we don't need to for this test.
+	mockNetworkAccess.EXPECT().SetConfiguration(gomock.Any()).AnyTimes()    // Don't actually override the configuration, we don't need to for this test.
 	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 
 	// Call the init function (which registers config defaults)

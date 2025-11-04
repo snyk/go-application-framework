@@ -59,8 +59,10 @@ func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFun
 			return existingValue, nil
 		}
 
-		client := engine.GetNetworkAccess().GetHttpClient()
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
 		url := c.GetString(configuration.API_URL)
+		client := localNetworkStack.GetHttpClient()
 		org := c.GetString(configuration.ORGANIZATION)
 		apiClient := api.NewApi(url, client)
 		response, err := apiClient.GetSastSettings(org)

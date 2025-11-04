@@ -819,6 +819,54 @@ func Test_defaultFuncOrganizationSlug_clonedConfig(t *testing.T) {
 	assert.Equal(t, org1Slug, originalOrgSlug, "original config should still have org1 slug")
 }
 
+func Test_defaultFuncOrganization_usesClonedNetworkAccess(t *testing.T) {
+	org1Id := "00000000-0000-0000-0000-000000000001"
+	org2Id := "00000000-0000-0000-0000-000000000002"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertions - API client should be created with the URL from the cloned config
+	apiUrl1 := "https://api.snyk.io"
+	apiUrl2 := "https://api.eu.snyk.io"
+
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org1Id).Return("slug-1", nil).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId().Return(org2Id, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org2Id).Return("slug-2", nil).AnyTimes()
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, apiUrl1)
+	engine := workflow.NewWorkFlowEngine(config)
+
+	// Track which URL was used to create the API client
+	var capturedUrl string
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		capturedUrl = url
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	// Set org in original config
+	config.Set(configuration.ORGANIZATION, org1Id)
+	actualOrg1 := config.GetString(configuration.ORGANIZATION)
+	assert.Equal(t, org1Id, actualOrg1, "original config should return org1Id")
+	assert.Equal(t, apiUrl1, capturedUrl, "original config should use original API URL")
+
+	// Clone the config and change API URL
+	clonedConfig := config.Clone()
+	clonedConfig.Set(configuration.API_URL, apiUrl2)
+
+	// Unset org in cloned config to trigger default org lookup
+	clonedConfig.Unset(configuration.ORGANIZATION)
+
+	// Get org from cloned config - should use API URL from cloned config
+	actualOrg := clonedConfig.GetString(configuration.ORGANIZATION)
+	assert.Equal(t, org2Id, actualOrg, "cloned config should fetch default org")
+	assert.Equal(t, apiUrl2, capturedUrl, "cloned config should use cloned API URL for network requests")
+}
+
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	config := configuration.NewWithOpts()
