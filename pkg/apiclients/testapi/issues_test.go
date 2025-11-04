@@ -282,13 +282,18 @@ func TestNewIssuesFromTestResult_Grouping(t *testing.T) {
 		// Should have 2 issues (key-1 grouped, key-2 separate)
 		assert.Len(t, issuesList, 2)
 
-		// Verify first issue has 2 findings
-		if len(issuesList) > 0 {
-			assert.Len(t, issuesList[0].GetFindings(), 2)
-			assert.Equal(t, "key-1", issuesList[0].GetID())
-			// Verify rule ID matches key for SAST findings
-			assert.Equal(t, "key-1", issuesList[0].GetRuleID())
+		// Find the key-1 issue (should have 2 findings)
+		var key1Issue testapi.Issue
+		for _, issue := range issuesList {
+			if issue.GetID() == "key-1" {
+				key1Issue = issue
+				break
+			}
 		}
+		require.NotNil(t, key1Issue, "key-1 issue should exist")
+		assert.Len(t, key1Issue.GetFindings(), 2)
+		// Verify rule ID matches key for SAST findings
+		assert.Equal(t, "key-1", key1Issue.GetRuleID())
 	})
 }
 
