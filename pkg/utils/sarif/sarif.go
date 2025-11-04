@@ -174,7 +174,7 @@ func GetRulesFromIssues(issuesList []testapi.Issue, t testapi.FindingType) []map
 			if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
 				componentName, _ = val.(string)
 			}
-			
+
 			shortDesc := fmt.Sprintf("%s severity - %s vulnerability in %s",
 				cases.Title(language.English).String(severity),
 				issue.GetTitle(),
@@ -304,7 +304,7 @@ func getResultsFromIssues(issuesList []testapi.Issue, findingType testapi.Findin
 		if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
 			componentName, _ = val.(string)
 		}
-		
+
 		message := map[string]interface{}{
 			"text": fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
 				componentName,

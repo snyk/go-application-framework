@@ -102,12 +102,6 @@ type Issue interface {
 	// Returns empty slice if no source locations are found.
 	GetSourceLocations() []SourceLocation
 
-	// GetRuleID returns the rule ID for this issue, if applicable.
-	// For SAST findings, this may be extracted from problems or finding attributes.
-	// For SCA findings, this is typically the vulnerability ID.
-	// Returns empty string if not applicable or not found.
-	GetRuleID() string
-
 	// GetRiskScore returns the risk score (0-100) for this issue.
 	// Risk score is calculated based on severity, exploitability, and asset criticality.
 	// Extracted from the Risk attribute of findings.
@@ -295,7 +289,6 @@ type issue struct {
 	description       string
 	snykVulnProblem   *SnykVulnProblem
 	sourceLocations   []SourceLocation
-	ruleID            string
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
 	metadata          map[string]interface{} // case-insensitive key storage (lowercase keys)
@@ -331,7 +324,6 @@ func (i *issue) GetSeverity() string {
 	return i.severity
 }
 
-
 // GetCWEs returns the CWE identifiers associated with this issue.
 func (i *issue) GetCWEs() []string {
 	return i.cwes
@@ -364,11 +356,6 @@ func (i *issue) GetMetadata(key string) (interface{}, bool) {
 // GetSourceLocations returns all source file locations for this issue.
 func (i *issue) GetSourceLocations() []SourceLocation {
 	return i.sourceLocations
-}
-
-// GetRuleID returns the rule ID for this issue, if applicable.
-func (i *issue) GetRuleID() string {
-	return i.ruleID
 }
 
 // GetRiskScore returns the risk score (0-100) for this issue.
@@ -425,7 +412,6 @@ func newIssue(findings []FindingData) (Issue, error) {
 	var dependencyPaths []string
 	var snykVulnProblem *SnykVulnProblem
 	var sourceLocations []SourceLocation
-	var ruleID string
 	var riskScore uint16
 	var reachability *ReachabilityEvidence
 
@@ -613,15 +599,9 @@ func newIssue(findings []FindingData) (Issue, error) {
 	if id == "" && firstFinding != nil {
 		if firstFinding.Attributes != nil && firstFinding.Attributes.Key != "" {
 			id = firstFinding.Attributes.Key
-			ruleID = firstFinding.Attributes.Key // Rule ID may be the same as key for SAST
 		} else if firstFinding.Id != nil {
 			id = firstFinding.Id.String()
 		}
-	}
-
-	// For SCA findings, rule ID is typically the vulnerability ID
-	if findingType == FindingTypeSca && id != "" {
-		ruleID = id
 	}
 
 	// Deduplicate CWE and CVE lists, dependency paths, and source locations
@@ -632,7 +612,7 @@ func newIssue(findings []FindingData) (Issue, error) {
 
 	// Build metadata map with lowercase keys for case-insensitive access
 	metadata := make(map[string]interface{})
-	
+
 	// Add component information
 	if packageName != "" || packageVersion != "" {
 		component := map[string]string{
@@ -643,23 +623,23 @@ func newIssue(findings []FindingData) (Issue, error) {
 		metadata[strings.ToLower(MetadataKeyComponentName)] = packageName
 		metadata[strings.ToLower(MetadataKeyComponentVersion)] = packageVersion
 	}
-	
+
 	// Add technology/ecosystem
 	if ecosystem != "" {
 		metadata[strings.ToLower(MetadataKeyTechnology)] = ecosystem
 	}
-	
+
 	// Add CVSS score
 	if cvssScore > 0 {
 		metadata[strings.ToLower(MetadataKeyCVSSScore)] = cvssScore
 	}
-	
+
 	// Add fix information
 	metadata[strings.ToLower(MetadataKeyIsFixable)] = isFixable
 	if len(fixedInVersions) > 0 {
 		metadata[strings.ToLower(MetadataKeyFixedInVersions)] = fixedInVersions
 	}
-	
+
 	// Add dependency paths
 	if len(dependencyPaths) > 0 {
 		metadata[strings.ToLower(MetadataKeyDependencyPaths)] = dependencyPaths
@@ -679,7 +659,6 @@ func newIssue(findings []FindingData) (Issue, error) {
 		description:       description,
 		snykVulnProblem:   snykVulnProblem,
 		sourceLocations:   sourceLocations,
-		ruleID:            ruleID,
 		riskScore:         riskScore,
 		reachability:      reachability,
 		metadata:          metadata,

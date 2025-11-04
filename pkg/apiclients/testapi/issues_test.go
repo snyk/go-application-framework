@@ -292,8 +292,6 @@ func TestNewIssuesFromTestResult_Grouping(t *testing.T) {
 		}
 		require.NotNil(t, key1Issue, "key-1 issue should exist")
 		assert.Len(t, key1Issue.GetFindings(), 2)
-		// Verify rule ID matches key for SAST findings
-		assert.Equal(t, "key-1", key1Issue.GetRuleID())
 	})
 }
 
@@ -330,7 +328,6 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		// Verify general methods
 		assert.Equal(t, testapi.FindingTypeSast, issue.GetFindingType())
 		assert.Equal(t, "rule-123", issue.GetID())
-		assert.Equal(t, "rule-123", issue.GetRuleID())
 		assert.Equal(t, "high", issue.GetSeverity())
 		assert.Equal(t, "SQL Injection", issue.GetTitle())
 		assert.Equal(t, "Potential SQL injection vulnerability", issue.GetDescription())
@@ -392,7 +389,6 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		// Verify general methods work
 		assert.Equal(t, testapi.FindingTypeSca, issue.GetFindingType())
 		assert.NotEmpty(t, issue.GetID())
-		assert.Equal(t, issue.GetID(), issue.GetRuleID()) // Rule ID should match ID for SCA
 		assert.Equal(t, "Test SCA Issue", issue.GetTitle())
 
 		// Verify metadata access works (even if it returns empty values)
