@@ -336,15 +336,33 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.Equal(t, "src/main.go", sourceLocations[0].FilePath)
 		assert.Equal(t, 10, sourceLocations[0].FromLine)
 
-		// Verify SCA-specific methods return empty/error for SAST
-		metadata := issue.GetMetadata()
-		assert.NotNil(t, metadata)
-		assert.Nil(t, metadata.Component)
-		assert.Empty(t, metadata.Technology)
-		assert.Empty(t, metadata.DependencyPaths)
-		assert.Empty(t, metadata.FixedInVersions)
-		assert.False(t, metadata.IsFixable)
-		assert.Equal(t, float32(0.0), metadata.CVSSScore)
+		// Verify SCA-specific metadata returns empty for SAST
+		val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName)
+		if ok {
+			assert.Empty(t, val)
+		}
+		val, ok = issue.GetMetadata(testapi.MetadataKeyTechnology)
+		if ok {
+			assert.Empty(t, val)
+		}
+		val, ok = issue.GetMetadata(testapi.MetadataKeyDependencyPaths)
+		if ok {
+			assert.Empty(t, val)
+		}
+		val, ok = issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
+		if ok {
+			assert.Empty(t, val)
+		}
+		val, ok = issue.GetMetadata(testapi.MetadataKeyIsFixable)
+		if ok {
+			isFixable, _ := val.(bool)
+			assert.False(t, isFixable)
+		}
+		val, ok = issue.GetMetadata(testapi.MetadataKeyCVSSScore)
+		if ok {
+			cvssScore, _ := val.(float32)
+			assert.Equal(t, float32(0.0), cvssScore)
+		}
 	})
 
 	t.Run("SCA issue preserves SCA-specific methods", func(t *testing.T) {
@@ -372,17 +390,14 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.Equal(t, issue.GetID(), issue.GetRuleID()) // Rule ID should match ID for SCA
 		assert.Equal(t, "Test SCA Issue", issue.GetTitle())
 
-		// Verify SCA-specific methods exist (even if they return empty values)
+		// Verify metadata access works (even if it returns empty values)
 		// These should not panic
-		metadata := issue.GetMetadata()
-		if metadata != nil {
-			_ = metadata.Component
-			_ = metadata.Technology
-			_ = metadata.DependencyPaths
-			_ = metadata.FixedInVersions
-			_ = metadata.IsFixable
-			_ = metadata.CVSSScore
-		}
+		_, _ = issue.GetMetadata(testapi.MetadataKeyComponentName)
+		_, _ = issue.GetMetadata(testapi.MetadataKeyTechnology)
+		_, _ = issue.GetMetadata(testapi.MetadataKeyDependencyPaths)
+		_, _ = issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
+		_, _ = issue.GetMetadata(testapi.MetadataKeyIsFixable)
+		_, _ = issue.GetMetadata(testapi.MetadataKeyCVSSScore)
 	})
 }
 

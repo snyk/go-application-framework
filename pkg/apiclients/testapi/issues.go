@@ -6,36 +6,42 @@ import (
 	"strings"
 )
 
-// IssueMetadata provides generic metadata about an issue, abstracting away problem-specific details.
-// This structure allows accessing issue properties without exposing specific problem types.
-type IssueMetadata struct {
-	// Component identifies the affected component (e.g., package, library, service).
-	// For SCA findings, this represents the package name and version.
-	// For other finding types, this may represent the affected resource or artifact.
-	Component *Component
+// Metadata keys for common issue properties (case-insensitive)
+const (
+	// MetadataKeyComponent is the key for accessing the component information (name and version)
+	// Value type: map[string]string with keys "name" and "version"
+	MetadataKeyComponent = "component"
 
-	// Technology identifies the technology stack or ecosystem.
-	// For SCA findings, this is the package manager (e.g., "npm", "maven").
-	// For other finding types, this may be the language, framework, or platform.
-	Technology string
+	// MetadataKeyComponentName is the key for accessing just the component name
+	// Value type: string
+	MetadataKeyComponentName = "component-name"
 
-	// Scoring information
-	CVSSScore float32 // CVSS base score if available
+	// MetadataKeyComponentVersion is the key for accessing just the component version
+	// Value type: string
+	MetadataKeyComponentVersion = "component-version"
 
-	// Fix information
-	IsFixable       bool     // Whether a fix is available
-	FixedInVersions []string // Versions that fix this issue (if applicable)
+	// MetadataKeyTechnology is the key for the technology/ecosystem
+	// For SCA: package manager (e.g., "npm", "maven")
+	// For SAST: language/framework (e.g., "javascript", "python")
+	// Value type: string
+	MetadataKeyTechnology = "technology"
 
-	// Dependency paths that introduce this issue (for SCA findings)
-	// Each path represents a dependency chain as a string.
-	DependencyPaths []string
-}
+	// MetadataKeyCVSSScore is the key for CVSS base score
+	// Value type: float32
+	MetadataKeyCVSSScore = "cvss-score"
 
-// Component represents an affected component (package, library, service, etc.)
-type Component struct {
-	Name    string // Component name (e.g., package name, library name)
-	Version string // Component version (e.g., package version, library version)
-}
+	// MetadataKeyIsFixable is the key for whether a fix is available
+	// Value type: bool
+	MetadataKeyIsFixable = "is-fixable"
+
+	// MetadataKeyFixedInVersions is the key for versions that fix this issue
+	// Value type: []string
+	MetadataKeyFixedInVersions = "fixed-in-versions"
+
+	// MetadataKeyDependencyPaths is the key for dependency paths (SCA findings)
+	// Value type: []string
+	MetadataKeyDependencyPaths = "dependency-paths"
+)
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
 
@@ -120,11 +126,11 @@ type Issue interface {
 	// Returns nil if reachability information is not available.
 	GetReachability() *ReachabilityEvidence
 
-	// GetMetadata returns generic metadata about this issue.
-	// This abstracts away problem-specific details and provides a unified view
-	// of issue properties regardless of the underlying problem type.
-	// Returns nil if no metadata is available.
-	GetMetadata() *IssueMetadata
+	// GetMetadata returns metadata value for the given key (case-insensitive).
+	// Returns the value and true if found, nil and false otherwise.
+	// Use the MetadataKey* constants for well-known keys.
+	// Callers should perform type assertions on the returned interface{}.
+	GetMetadata(key string) (interface{}, bool)
 }
 
 // NewIssuesFromTestResult creates a list of Issues from a TestResult.
@@ -283,22 +289,16 @@ type issue struct {
 	id                string
 	severity          string
 	effectiveSeverity string
-	ecosystem         string
 	cwes              []string
 	cves              []string
 	title             string
 	description       string
-	packageName       string
-	packageVersion    string
-	cvssScore         float32
-	isFixable         bool
-	fixedInVersions   []string
-	dependencyPaths   []string
 	snykVulnProblem   *SnykVulnProblem
 	sourceLocations   []SourceLocation
 	ruleID            string
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
+	metadata          map[string]interface{} // case-insensitive key storage (lowercase keys)
 }
 
 // GetFindings returns all findings that are part of this issue.
@@ -352,24 +352,13 @@ func (i *issue) GetDescription() string {
 	return i.description
 }
 
-// GetMetadata returns generic metadata about this issue.
-func (i *issue) GetMetadata() *IssueMetadata {
-	var component *Component
-	if i.packageName != "" || i.packageVersion != "" {
-		component = &Component{
-			Name:    i.packageName,
-			Version: i.packageVersion,
-		}
+// GetMetadata returns metadata value for the given key (case-insensitive).
+func (i *issue) GetMetadata(key string) (interface{}, bool) {
+	if i.metadata == nil {
+		return nil, false
 	}
-
-	return &IssueMetadata{
-		Component:       component,
-		Technology:      i.ecosystem,
-		CVSSScore:       i.cvssScore,
-		IsFixable:       i.isFixable,
-		FixedInVersions: i.fixedInVersions,
-		DependencyPaths: i.dependencyPaths,
-	}
+	value, ok := i.metadata[strings.ToLower(key)]
+	return value, ok
 }
 
 // GetSourceLocations returns all source file locations for this issue.
@@ -641,6 +630,41 @@ func newIssue(findings []FindingData) (Issue, error) {
 	dependencyPaths = deduplicateStrings(dependencyPaths)
 	sourceLocations = deduplicateSourceLocations(sourceLocations)
 
+	// Build metadata map with lowercase keys for case-insensitive access
+	metadata := make(map[string]interface{})
+	
+	// Add component information
+	if packageName != "" || packageVersion != "" {
+		component := map[string]string{
+			"name":    packageName,
+			"version": packageVersion,
+		}
+		metadata[strings.ToLower(MetadataKeyComponent)] = component
+		metadata[strings.ToLower(MetadataKeyComponentName)] = packageName
+		metadata[strings.ToLower(MetadataKeyComponentVersion)] = packageVersion
+	}
+	
+	// Add technology/ecosystem
+	if ecosystem != "" {
+		metadata[strings.ToLower(MetadataKeyTechnology)] = ecosystem
+	}
+	
+	// Add CVSS score
+	if cvssScore > 0 {
+		metadata[strings.ToLower(MetadataKeyCVSSScore)] = cvssScore
+	}
+	
+	// Add fix information
+	metadata[strings.ToLower(MetadataKeyIsFixable)] = isFixable
+	if len(fixedInVersions) > 0 {
+		metadata[strings.ToLower(MetadataKeyFixedInVersions)] = fixedInVersions
+	}
+	
+	// Add dependency paths
+	if len(dependencyPaths) > 0 {
+		metadata[strings.ToLower(MetadataKeyDependencyPaths)] = dependencyPaths
+	}
+
 	return &issue{
 		findings:          findings,
 		findingType:       findingType,
@@ -649,22 +673,16 @@ func newIssue(findings []FindingData) (Issue, error) {
 		id:                id,
 		severity:          severity,
 		effectiveSeverity: effectiveSeverity,
-		ecosystem:         ecosystem,
 		cwes:              cwes,
 		cves:              cves,
 		title:             title,
 		description:       description,
-		packageName:       packageName,
-		packageVersion:    packageVersion,
-		cvssScore:         cvssScore,
-		isFixable:         isFixable,
-		fixedInVersions:   fixedInVersions,
-		dependencyPaths:   dependencyPaths,
 		snykVulnProblem:   snykVulnProblem,
 		sourceLocations:   sourceLocations,
 		ruleID:            ruleID,
 		riskScore:         riskScore,
 		reachability:      reachability,
+		metadata:          metadata,
 	}, nil
 }
 
