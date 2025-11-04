@@ -16,6 +16,7 @@ func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFla
 	}
 
 	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
+		// TODO - This function uses the outer (global) config and network access, so will not respect values set in the closures' (potentially cloned) configs.
 		if existingValue != nil {
 			return existingValue, nil
 		}
