@@ -286,7 +286,102 @@ func TestNewIssuesFromTestResult_Grouping(t *testing.T) {
 		if len(issuesList) > 0 {
 			assert.Len(t, issuesList[0].GetFindings(), 2)
 			assert.Equal(t, "key-1", issuesList[0].GetID())
+			// Verify rule ID matches key for SAST findings
+			assert.Equal(t, "key-1", issuesList[0].GetRuleID())
 		}
+	})
+}
+
+func TestIssue_GeneralizedMethods(t *testing.T) {
+	t.Run("SAST issue extracts severity from Rating", func(t *testing.T) {
+		location := testapi.SourceLocation{
+			FilePath: "src/main.go",
+			FromLine: 10,
+			Type:     testapi.Source,
+		}
+		var locationUnion testapi.FindingLocation
+		_ = locationUnion.MergeSourceLocation(location)
+
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "rule-123",
+					Title:       "SQL Injection",
+					Description: "Potential SQL injection vulnerability",
+					Rating: testapi.Rating{
+						Severity: testapi.Severity("high"),
+					},
+					Locations: []testapi.FindingLocation{locationUnion},
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		issue, err := testapi.NewIssueFromFindings(findings)
+		require.NoError(t, err)
+		require.NotNil(t, issue)
+
+		// Verify general methods
+		assert.Equal(t, testapi.FindingTypeSast, issue.GetFindingType())
+		assert.Equal(t, "rule-123", issue.GetID())
+		assert.Equal(t, "rule-123", issue.GetRuleID())
+		assert.Equal(t, "high", issue.GetSeverity())
+		assert.Equal(t, "SQL Injection", issue.GetTitle())
+		assert.Equal(t, "Potential SQL injection vulnerability", issue.GetDescription())
+
+		// Verify source locations
+		sourceLocations := issue.GetSourceLocations()
+		assert.Len(t, sourceLocations, 1)
+		assert.Equal(t, "src/main.go", sourceLocations[0].FilePath)
+		assert.Equal(t, 10, sourceLocations[0].FromLine)
+
+		// Verify SCA-specific methods return empty/error for SAST
+		_, err = issue.GetSnykVulnProblem()
+		assert.Error(t, err)
+		assert.Empty(t, issue.GetPackageName())
+		assert.Empty(t, issue.GetPackageVersion())
+		assert.Empty(t, issue.GetEcosystem())
+		assert.Empty(t, issue.GetDependencyPaths())
+		assert.Empty(t, issue.GetFixedInVersions())
+		assert.False(t, issue.GetIsFixable())
+		assert.Equal(t, float32(0.0), issue.GetCvssScore())
+	})
+
+	t.Run("SCA issue preserves SCA-specific methods", func(t *testing.T) {
+		// This test verifies backward compatibility - SCA issues should still work
+		// We'll use a minimal SCA finding structure
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Key:         "test-key",
+					Title:       "Test SCA Issue",
+					Description: "Test description",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		issue, err := testapi.NewIssueFromFindings(findings)
+		require.NoError(t, err)
+		require.NotNil(t, issue)
+
+		// Verify general methods work
+		assert.Equal(t, testapi.FindingTypeSca, issue.GetFindingType())
+		assert.NotEmpty(t, issue.GetID())
+		assert.Equal(t, issue.GetID(), issue.GetRuleID()) // Rule ID should match ID for SCA
+		assert.Equal(t, "Test SCA Issue", issue.GetTitle())
+
+		// Verify SCA-specific methods exist (even if they return empty values)
+		// These should not panic
+		_ = issue.GetPackageName()
+		_ = issue.GetPackageVersion()
+		_ = issue.GetEcosystem()
+		_ = issue.GetDependencyPaths()
+		_ = issue.GetFixedInVersions()
+		_ = issue.GetIsFixable()
+		_ = issue.GetCvssScore()
 	})
 }
 

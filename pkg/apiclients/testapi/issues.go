@@ -11,7 +11,10 @@ import (
 // Issue defines the interface for accessing a single aggregated security issue.
 // An issue represents a cohesive security problem derived from one or more related findings.
 // This interface is designed to be easily convertible to snyk-ls Issue format.
+// It supports all finding types (SCA, SAST, DAST, Other) with both general and type-specific methods.
 type Issue interface {
+	// === General Methods (applicable to all finding types) ===
+
 	// GetFindings returns all findings that are part of this issue.
 	GetFindings() []FindingData
 
@@ -24,27 +27,21 @@ type Issue interface {
 
 	// GetPrimaryProblem returns the primary problem for this issue.
 	// For SCA findings, this would be the SnykVulnProblem.
+	// For other finding types, this may be a CWE, CVE, or rule-based problem.
 	// Returns nil if no primary problem can be determined.
 	GetPrimaryProblem() *Problem
 
 	// GetID returns the unique identifier for this issue.
 	// For SCA findings, this is typically the vulnerability ID.
-	// For other finding types, this may be derived from the finding key or rule ID.
+	// For SAST findings, this may be the rule ID or finding key.
+	// For other finding types, this may be derived from the finding key.
 	GetID() string
 
 	// GetSeverity returns the severity of this issue.
+	// For SCA findings, this comes from the SnykVulnProblem.
+	// For other finding types, this comes from the Rating attribute.
 	// Returns empty string if severity cannot be determined.
 	GetSeverity() string
-
-	// GetEcosystem returns the package ecosystem/manager for this issue.
-	// Returns empty string if not applicable (e.g., for SAST findings).
-	GetEcosystem() string
-
-	// GetCWEs returns the CWE identifiers associated with this issue.
-	GetCWEs() []string
-
-	// GetCVEs returns the CVE identifiers associated with this issue.
-	GetCVEs() []string
 
 	// GetTitle returns the title of this issue.
 	// Typically comes from the first finding's title attribute.
@@ -54,9 +51,53 @@ type Issue interface {
 	// Typically comes from the first finding's description attribute.
 	GetDescription() string
 
+	// GetCWEs returns the CWE identifiers associated with this issue.
+	// Extracted from CWE problems across all findings.
+	GetCWEs() []string
+
+	// GetCVEs returns the CVE identifiers associated with this issue.
+	// Extracted from CVE problems across all findings.
+	GetCVEs() []string
+
+	// GetSourceLocations returns all source file locations for this issue.
+	// For SAST findings, this contains file paths and line numbers.
+	// For SCA findings, this may contain manifest file locations.
+	// Returns empty slice if no source locations are found.
+	GetSourceLocations() []SourceLocation
+
+	// GetRuleID returns the rule ID for this issue, if applicable.
+	// For SAST findings, this may be extracted from problems or finding attributes.
+	// For SCA findings, this is typically the vulnerability ID.
+	// Returns empty string if not applicable or not found.
+	GetRuleID() string
+
+	// GetRiskScore returns the risk score (0-100) for this issue.
+	// Risk score is calculated based on severity, exploitability, and asset criticality.
+	// Extracted from the Risk attribute of findings.
+	// Returns 0 if not available.
+	GetRiskScore() uint16
+
+	// GetEffectiveSeverity returns the effective severity, which may be overwritten by policy.
+	// This is the severity that should be used for prioritization and display.
+	// For SCA findings, this comes from the SnykVulnProblem or policy modifications.
+	// For other finding types, this comes from Rating or policy modifications.
+	// Returns empty string if not available.
+	GetEffectiveSeverity() string
+
+	// GetReachability returns the reachability assessment for this issue.
+	// Indicates whether vulnerable code is reachable in the application.
+	// Returns nil if reachability information is not available.
+	GetReachability() *ReachabilityEvidence
+
+	// === SCA-Specific Methods ===
+
 	// GetSnykVulnProblem returns the SnykVulnProblem if this is an SCA issue.
 	// Returns nil and an error if this is not an SCA issue or no vulnerability problem exists.
 	GetSnykVulnProblem() (*SnykVulnProblem, error)
+
+	// GetEcosystem returns the package ecosystem/manager for this issue.
+	// Returns empty string if not applicable (e.g., for SAST findings).
+	GetEcosystem() string
 
 	// GetPackageName returns the package name for this issue.
 	// For SCA findings, this comes from the vulnerability problem or package location.
@@ -69,17 +110,24 @@ type Issue interface {
 	GetPackageVersion() string
 
 	// GetCvssScore returns the CVSS base score for this issue.
+	// For SCA findings, this comes from the SnykVulnProblem.
 	// Returns 0.0 if not available.
 	GetCvssScore() float32
 
 	// GetIsFixable returns whether this issue has a fix available.
+	// For SCA findings, this indicates if a package upgrade is available.
+	// For other finding types, this may indicate if a fix action exists.
 	GetIsFixable() bool
 
 	// GetFixedInVersions returns the list of versions that fix this issue.
+	// Only applicable for SCA findings.
+	// Returns empty slice if not applicable or no fixes available.
 	GetFixedInVersions() []string
 
 	// GetDependencyPaths returns the dependency paths that introduce this issue.
 	// Each path is a string representation of the dependency chain.
+	// Only applicable for SCA findings.
+	// Returns empty slice if not applicable.
 	GetDependencyPaths() []string
 }
 
@@ -238,6 +286,7 @@ type issue struct {
 	primaryProblem    *Problem
 	id                string
 	severity          string
+	effectiveSeverity string
 	ecosystem         string
 	cwes              []string
 	cves              []string
@@ -250,6 +299,10 @@ type issue struct {
 	fixedInVersions   []string
 	dependencyPaths   []string
 	snykVulnProblem   *SnykVulnProblem
+	sourceLocations   []SourceLocation
+	ruleID            string
+	riskScore         uint16
+	reachability      *ReachabilityEvidence
 }
 
 // GetFindings returns all findings that are part of this issue.
@@ -345,6 +398,35 @@ func (i *issue) GetDependencyPaths() []string {
 	return i.dependencyPaths
 }
 
+// GetSourceLocations returns all source file locations for this issue.
+func (i *issue) GetSourceLocations() []SourceLocation {
+	return i.sourceLocations
+}
+
+// GetRuleID returns the rule ID for this issue, if applicable.
+func (i *issue) GetRuleID() string {
+	return i.ruleID
+}
+
+// GetRiskScore returns the risk score (0-100) for this issue.
+func (i *issue) GetRiskScore() uint16 {
+	return i.riskScore
+}
+
+// GetEffectiveSeverity returns the effective severity, which may be overwritten by policy.
+func (i *issue) GetEffectiveSeverity() string {
+	if i.effectiveSeverity != "" {
+		return i.effectiveSeverity
+	}
+	// Fallback to regular severity if effective severity not set
+	return i.severity
+}
+
+// GetReachability returns the reachability assessment for this issue.
+func (i *issue) GetReachability() *ReachabilityEvidence {
+	return i.reachability
+}
+
 // NewIssueFromFindings creates a single Issue instance from a group of related findings.
 // This is a helper function for creating issues from pre-grouped findings.
 func NewIssueFromFindings(findings []FindingData) (Issue, error) {
@@ -368,6 +450,7 @@ func newIssue(findings []FindingData) (Issue, error) {
 	var cves []string
 	var id string
 	var severity string
+	var effectiveSeverity string
 	var ecosystem string
 	var title string
 	var description string
@@ -378,6 +461,10 @@ func newIssue(findings []FindingData) (Issue, error) {
 	var fixedInVersions []string
 	var dependencyPaths []string
 	var snykVulnProblem *SnykVulnProblem
+	var sourceLocations []SourceLocation
+	var ruleID string
+	var riskScore uint16
+	var reachability *ReachabilityEvidence
 
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -394,6 +481,62 @@ func newIssue(findings []FindingData) (Issue, error) {
 
 		// Collect problems
 		allProblems = append(allProblems, finding.Attributes.Problems...)
+
+		// Extract source locations from locations
+		for _, location := range finding.Attributes.Locations {
+			locationDiscriminator, err := location.Discriminator()
+			if err != nil {
+				continue
+			}
+			if locationDiscriminator == "source" {
+				sourceLoc, err := location.AsSourceLocation()
+				if err == nil {
+					sourceLocations = append(sourceLocations, sourceLoc)
+				}
+			}
+		}
+
+		// Extract severity from Rating if not already set (for non-SCA findings)
+		if severity == "" && finding.Attributes.Rating.Severity != "" {
+			severity = string(finding.Attributes.Rating.Severity)
+		}
+
+		// Extract risk score from Risk attribute
+		if finding.Attributes.Risk.RiskScore != nil && riskScore == 0 {
+			riskScore = finding.Attributes.Risk.RiskScore.Value
+		}
+
+		// Extract effective severity from policy modifications if available
+		// Policy modifications may override the original severity
+		if finding.Attributes.PolicyModifications != nil {
+			for _, mod := range *finding.Attributes.PolicyModifications {
+				// Check if severity was modified (pointer would be "/rating/severity")
+				if mod.Pointer == "/rating/severity" && mod.Prior != nil {
+					// The current severity is the effective one (after policy modification)
+					// Store it as effective severity
+					if effectiveSeverity == "" && finding.Attributes.Rating.Severity != "" {
+						effectiveSeverity = string(finding.Attributes.Rating.Severity)
+					}
+				}
+			}
+		}
+
+		// Extract reachability evidence
+		if reachability == nil {
+			for _, ev := range finding.Attributes.Evidence {
+				discriminator, err := ev.Discriminator()
+				if err != nil {
+					continue
+				}
+				if discriminator == "reachability" {
+					reachEv, err := ev.AsReachabilityEvidence()
+					if err == nil {
+						reachability = &reachEv
+						break
+					}
+				}
+			}
+		}
 
 		// Extract dependency paths from evidence
 		for _, ev := range finding.Attributes.Evidence {
@@ -491,15 +634,22 @@ func newIssue(findings []FindingData) (Issue, error) {
 	if id == "" && firstFinding != nil {
 		if firstFinding.Attributes != nil && firstFinding.Attributes.Key != "" {
 			id = firstFinding.Attributes.Key
+			ruleID = firstFinding.Attributes.Key // Rule ID may be the same as key for SAST
 		} else if firstFinding.Id != nil {
 			id = firstFinding.Id.String()
 		}
 	}
 
-	// Deduplicate CWE and CVE lists and dependency paths
+	// For SCA findings, rule ID is typically the vulnerability ID
+	if findingType == FindingTypeSca && id != "" {
+		ruleID = id
+	}
+
+	// Deduplicate CWE and CVE lists, dependency paths, and source locations
 	cwes = deduplicateStrings(cwes)
 	cves = deduplicateStrings(cves)
 	dependencyPaths = deduplicateStrings(dependencyPaths)
+	sourceLocations = deduplicateSourceLocations(sourceLocations)
 
 	return &issue{
 		findings:          findings,
@@ -508,6 +658,7 @@ func newIssue(findings []FindingData) (Issue, error) {
 		primaryProblem:    primaryProblem,
 		id:                id,
 		severity:          severity,
+		effectiveSeverity: effectiveSeverity,
 		ecosystem:         ecosystem,
 		cwes:              cwes,
 		cves:              cves,
@@ -520,6 +671,10 @@ func newIssue(findings []FindingData) (Issue, error) {
 		fixedInVersions:   fixedInVersions,
 		dependencyPaths:   dependencyPaths,
 		snykVulnProblem:   snykVulnProblem,
+		sourceLocations:   sourceLocations,
+		ruleID:            ruleID,
+		riskScore:         riskScore,
+		reachability:      reachability,
 	}, nil
 }
 
@@ -531,6 +686,21 @@ func deduplicateStrings(slice []string) []string {
 		if !seen[s] {
 			seen[s] = true
 			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// deduplicateSourceLocations removes duplicate source locations from a slice.
+// Locations are considered duplicates if they have the same file path and line number.
+func deduplicateSourceLocations(slice []SourceLocation) []SourceLocation {
+	seen := make(map[string]bool)
+	result := make([]SourceLocation, 0, len(slice))
+	for _, loc := range slice {
+		key := fmt.Sprintf("%s:%d", loc.FilePath, loc.FromLine)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, loc)
 		}
 	}
 	return result
