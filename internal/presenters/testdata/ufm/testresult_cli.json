@@ -90,14 +90,35 @@
           "description": "## Overview\n\nAffected versions of this package are vulnerable to Open Redirect due to missing verification of requested URLs. It allowed a victim to be redirected to a UNIX socket.\n## Remediation\nUpgrade `got` to version 11.8.5, 12.1.0 or higher.\n## References\n- [GitHub Diff](https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0)\n- [GitHub PR](https://github.com/sindresorhus/got/pull/2047)\n",
           "evidence": [
             {
-              "reachability": "no_info",
-              "source": "reachability"
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "4.4.1"
+                },
+                {
+                  "name": "got",
+                  "version": "11.8.2"
+                }
+              ],
+              "source": "dependency_path"
             },
             {
               "path": [
                 {
                   "name": "snyk",
                   "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
                 },
                 {
                   "name": "snyk-nodejs-lockfile-parser",
@@ -140,31 +161,11 @@
               "source": "dependency_path"
             },
             {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
-                },
-                {
-                  "name": "snyk-nodejs-lockfile-parser",
-                  "version": "2.3.1"
-                },
-                {
-                  "name": "@yarnpkg/core",
-                  "version": "4.4.1"
-                },
-                {
-                  "name": "got",
-                  "version": "11.8.2"
-                }
-              ],
-              "source": "dependency_path"
+              "reachability": "no_info",
+              "source": "reachability"
             }
-          ],
+          ]
+          ,
           "finding_type": "sca",
           "key": "00000000-0000-0000-0000-000000000001",
           "locations": [
@@ -319,94 +320,6 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "@snyk/fix-poetry",
-                  "version": "0.9.1"
-                },
-                {
-                  "name": "@snyk/child-process",
-                  "version": "0.4.1"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-lockfile-parser",
-                  "version": "2.3.1"
-                },
-                {
-                  "name": "snyk-config",
-                  "version": "5.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-policy",
-                  "version": "4.1.6"
-                },
-                {
-                  "name": "snyk-resolve",
-                  "version": "1.1.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix-poetry",
-                  "version": "0.9.1"
-                },
-                {
                   "name": "debug",
                   "version": "4.3.4"
                 }
@@ -437,16 +350,8 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "@snyk/fix",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix-pipenv-pipfile",
-                  "version": "0.7.1"
-                },
-                {
-                  "name": "@snyk/child-process",
-                  "version": "0.4.1"
+                  "name": "snyk-config",
+                  "version": "5.2.0"
                 },
                 {
                   "name": "debug",
@@ -462,12 +367,8 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
-                },
-                {
-                  "name": "snyk-try-require",
-                  "version": "2.0.2"
+                  "name": "snyk-cpp-plugin",
+                  "version": "2.24.1"
                 },
                 {
                   "name": "debug",
@@ -477,8 +378,21 @@
               "source": "dependency_path"
             },
             {
-              "reachability": "no_info",
-              "source": "reachability"
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-go-plugin",
+                  "version": "1.23.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
             },
             {
               "path": [
@@ -487,16 +401,8 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.9.1"
-                },
-                {
-                  "name": "snyk-resolve",
-                  "version": "1.1.0"
+                  "name": "snyk-gradle-plugin",
+                  "version": "5.1.0"
                 },
                 {
                   "name": "debug",
@@ -529,140 +435,6 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
-                },
-                {
-                  "name": "snyk-module",
-                  "version": "3.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
-                },
-                {
-                  "name": "snyk-resolve",
-                  "version": "1.1.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-python-plugin",
-                  "version": "3.1.2"
-                },
-                {
-                  "name": "snyk-poetry-lockfile-parser",
-                  "version": "1.9.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.9.1"
-                },
-                {
-                  "name": "snyk-module",
-                  "version": "3.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
-                },
-                {
-                  "name": "snyk-try-require",
-                  "version": "2.0.2"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
                   "name": "snyk-mvn-plugin",
                   "version": "4.3.2"
                 },
@@ -680,8 +452,42 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-config",
-                  "version": "5.2.0"
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nuget-plugin",
+                  "version": "2.12.0"
                 },
                 {
                   "name": "debug",
@@ -701,8 +507,21 @@
                   "version": "4.1.6"
                 },
                 {
-                  "name": "snyk-try-require",
-                  "version": "2.0.2"
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-sbt-plugin",
+                  "version": "3.1.0"
                 },
                 {
                   "name": "debug",
@@ -718,8 +537,12 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
+                  "name": "@sentry/node",
+                  "version": "7.34.0"
+                },
+                {
+                  "name": "https-proxy-agent",
+                  "version": "5.0.1"
                 },
                 {
                   "name": "debug",
@@ -735,8 +558,46 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-pipenv-pipfile",
+                  "version": "0.7.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
                 },
                 {
                   "name": "snyk-nodejs-lockfile-parser",
@@ -781,8 +642,88 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-python-plugin",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
                 },
                 {
                   "name": "snyk-resolve-deps",
@@ -806,8 +747,12 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-nuget-plugin",
-                  "version": "2.12.0"
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
                 },
                 {
                   "name": "debug",
@@ -823,8 +768,75 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-go-plugin",
-                  "version": "1.23.0"
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.3.0"
                 },
                 {
                   "name": "debug",
@@ -873,21 +885,8 @@
                   "version": "0.7.1"
                 },
                 {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-cpp-plugin",
-                  "version": "2.24.1"
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
                 },
                 {
                   "name": "debug",
@@ -903,33 +902,16 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "@sentry/node",
-                  "version": "7.34.0"
-                },
-                {
-                  "name": "https-proxy-agent",
-                  "version": "5.0.1"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
+                  "name": "@snyk/fix",
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
                 },
                 {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.9.1"
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
                 },
                 {
                   "name": "debug",
@@ -949,29 +931,12 @@
                   "version": "8.8.1"
                 },
                 {
-                  "name": "snyk-poetry-lockfile-parser",
-                  "version": "1.9.0"
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
                 },
                 {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
+                  "name": "snyk-config",
+                  "version": "5.2.0"
                 },
                 {
                   "name": "debug",
@@ -1012,29 +977,16 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-sbt-plugin",
-                  "version": "3.1.0"
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
                 },
                 {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-policy",
-                  "version": "4.1.6"
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
                 },
                 {
                   "name": "snyk-module",
-                  "version": "3.3.0"
+                  "version": "3.2.0"
                 },
                 {
                   "name": "debug",
@@ -1050,38 +1002,8 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-gradle-plugin",
-                  "version": "5.1.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-policy",
-                  "version": "4.1.6"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
                 },
                 {
                   "name": "snyk-resolve-deps",
@@ -1097,6 +1019,85 @@
                 }
               ],
               "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
             }
           ],
           "finding_type": "sca",
@@ -1629,6 +1630,31 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
+                  "name": "rimraf",
+                  "version": "2.7.1"
+                },
+                {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
                   "name": "snyk-mvn-plugin",
                   "version": "4.3.2"
                 },
@@ -1734,31 +1760,6 @@
                 {
                   "name": "rimraf",
                   "version": "3.0.2"
-                },
-                {
-                  "name": "glob",
-                  "version": "7.2.3"
-                },
-                {
-                  "name": "minimatch",
-                  "version": "3.1.2"
-                },
-                {
-                  "name": "brace-expansion",
-                  "version": "1.1.11"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "rimraf",
-                  "version": "2.7.1"
                 },
                 {
                   "name": "glob",
@@ -2229,8 +2230,8 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-mvn-plugin",
-                  "version": "4.3.2"
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
                 },
                 {
                   "name": "debug",
@@ -2263,16 +2264,178 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
+                  "name": "snyk-config",
+                  "version": "5.2.0"
                 },
                 {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.9.1"
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-cpp-plugin",
+                  "version": "2.24.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-go-plugin",
+                  "version": "1.23.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-gradle-plugin",
+                  "version": "5.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
                 },
                 {
                   "name": "snyk-module",
-                  "version": "3.2.0"
+                  "version": "3.1.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-mvn-plugin",
+                  "version": "4.3.2"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nuget-plugin",
+                  "version": "2.12.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-policy",
+                  "version": "4.1.6"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-sbt-plugin",
+                  "version": "3.1.0"
                 },
                 {
                   "name": "debug",
@@ -2294,27 +2457,6 @@
                 {
                   "name": "https-proxy-agent",
                   "version": "5.0.1"
-                },
-                {
-                  "name": "agent-base",
-                  "version": "6.0.2"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-module",
-                  "version": "3.1.0"
                 },
                 {
                   "name": "debug",
@@ -2351,12 +2493,12 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "@sentry/node",
-                  "version": "7.34.0"
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "https-proxy-agent",
-                  "version": "5.0.1"
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
                 },
                 {
                   "name": "debug",
@@ -2372,8 +2514,54 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-sbt-plugin",
-                  "version": "3.1.0"
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "docker-modem",
+                  "version": "3.0.8"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
                 },
                 {
                   "name": "debug",
@@ -2410,222 +2598,33 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
                   "name": "snyk-resolve-deps",
                   "version": "4.8.0"
                 },
                 {
                   "name": "snyk-module",
                   "version": "3.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
-                },
-                {
-                  "name": "snyk-try-require",
-                  "version": "2.0.2"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix-poetry",
-                  "version": "0.9.1"
-                },
-                {
-                  "name": "@snyk/child-process",
-                  "version": "0.4.1"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
-                },
-                {
-                  "name": "snyk-poetry-lockfile-parser",
-                  "version": "1.9.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
-                },
-                {
-                  "name": "snyk-nodejs-lockfile-parser",
-                  "version": "2.3.1"
-                },
-                {
-                  "name": "snyk-config",
-                  "version": "5.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix-pipenv-pipfile",
-                  "version": "0.7.1"
-                },
-                {
-                  "name": "@snyk/child-process",
-                  "version": "0.4.1"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-config",
-                  "version": "5.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nuget-plugin",
-                  "version": "2.12.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
-                },
-                {
-                  "name": "snyk-resolve",
-                  "version": "1.1.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-gradle-plugin",
-                  "version": "5.1.0"
                 },
                 {
                   "name": "debug",
@@ -2683,8 +2682,12 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "@snyk/fix",
-                  "version": "1.0.0-monorepo"
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
                 },
                 {
                   "name": "debug",
@@ -2700,12 +2703,12 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
                 },
                 {
-                  "name": "docker-modem",
-                  "version": "3.0.8"
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
                 },
                 {
                   "name": "debug",
@@ -2763,12 +2766,16 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
+                  "name": "@sentry/node",
+                  "version": "7.34.0"
                 },
                 {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
+                  "name": "https-proxy-agent",
+                  "version": "5.0.1"
+                },
+                {
+                  "name": "agent-base",
+                  "version": "6.0.2"
                 },
                 {
                   "name": "debug",
@@ -2784,8 +2791,141 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-pipenv-pipfile",
+                  "version": "0.7.1"
+                },
+                {
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "@snyk/fix-poetry",
+                  "version": "0.9.1"
+                },
+                {
+                  "name": "@snyk/child-process",
+                  "version": "0.4.1"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "1.58.19"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.9.1"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
                   "name": "snyk-resolve-deps",
                   "version": "4.8.0"
+                },
+                {
+                  "name": "snyk-module",
+                  "version": "3.2.0"
                 },
                 {
                   "name": "debug",
@@ -2834,92 +2974,8 @@
                   "version": "4.8.0"
                 },
                 {
-                  "name": "snyk-try-require",
-                  "version": "2.0.2"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "reachability": "no_info",
-              "source": "reachability"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "snyk-nodejs-lockfile-parser",
-                  "version": "1.58.19"
-                },
-                {
-                  "name": "snyk-config",
-                  "version": "5.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-go-plugin",
-                  "version": "1.23.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-cpp-plugin",
-                  "version": "2.24.1"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "@snyk/fix-poetry",
-                  "version": "0.9.1"
+                  "name": "snyk-resolve",
+                  "version": "1.1.0"
                 },
                 {
                   "name": "debug",
@@ -2943,8 +2999,8 @@
                   "version": "4.8.0"
                 },
                 {
-                  "name": "snyk-module",
-                  "version": "3.2.0"
+                  "name": "snyk-try-require",
+                  "version": "2.0.2"
                 },
                 {
                   "name": "debug",
@@ -2954,63 +3010,8 @@
               "source": "dependency_path"
             },
             {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-lockfile-parser",
-                  "version": "2.3.1"
-                },
-                {
-                  "name": "snyk-config",
-                  "version": "5.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.9.1"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-policy",
-                  "version": "4.1.6"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
+              "reachability": "no_info",
+              "source": "reachability"
             }
           ],
           "finding_type": "sca",
@@ -3487,6 +3488,27 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "2.3.1"
+                },
+                {
+                  "name": "snyk-config",
+                  "version": "5.2.0"
+                },
+                {
+                  "name": "async",
+                  "version": "3.2.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
                   "name": "snyk-docker-plugin",
                   "version": "8.8.1"
                 },
@@ -3533,27 +3555,6 @@
             {
               "reachability": "no_info",
               "source": "reachability"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-lockfile-parser",
-                  "version": "2.3.1"
-                },
-                {
-                  "name": "snyk-config",
-                  "version": "5.2.0"
-                },
-                {
-                  "name": "async",
-                  "version": "3.2.4"
-                }
-              ],
-              "source": "dependency_path"
             }
           ],
           "finding_type": "sca",
@@ -4048,6 +4049,19 @@
                   "version": "1.4.4"
                 },
                 {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
                   "name": "snyk-resolve-deps",
                   "version": "4.8.0"
                 },
@@ -4065,37 +4079,8 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-python-plugin",
-                  "version": "3.1.2"
-                },
-                {
-                  "name": "snyk-poetry-lockfile-parser",
-                  "version": "1.9.0"
-                },
-                {
-                  "name": "lodash",
-                  "version": "4.17.21"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "reachability": "no_info",
-              "source": "reachability"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-docker-plugin",
-                  "version": "8.8.1"
-                },
-                {
-                  "name": "snyk-poetry-lockfile-parser",
-                  "version": "1.9.0"
+                  "name": "snyk-nuget-plugin",
+                  "version": "2.12.0"
                 },
                 {
                   "name": "lodash",
@@ -4132,8 +4117,33 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
+                  "name": "snyk-docker-plugin",
+                  "version": "8.8.1"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-python-plugin",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "snyk-poetry-lockfile-parser",
+                  "version": "1.9.0"
                 },
                 {
                   "name": "lodash",
@@ -4170,50 +4180,12 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-nuget-plugin",
-                  "version": "2.12.0"
-                },
-                {
-                  "name": "lodash",
-                  "version": "4.17.21"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
                   "name": "snyk-nodejs-plugin",
                   "version": "1.4.4"
                 },
                 {
-                  "name": "lodash",
-                  "version": "4.17.21"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
-                  "name": "snyk-nodejs-lockfile-parser",
-                  "version": "1.58.19"
-                },
-                {
-                  "name": "@yarnpkg/core",
-                  "version": "2.4.0"
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
                 },
                 {
                   "name": "lodash",
@@ -4267,8 +4239,38 @@
                 }
               ],
               "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-nodejs-lockfile-parser",
+                  "version": "1.58.19"
+                },
+                {
+                  "name": "@yarnpkg/core",
+                  "version": "2.4.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
             }
-          ],
+          ]
+          ,
           "finding_type": "sca",
           "key": "00000000-0000-0000-0000-000000000009",
           "locations": [

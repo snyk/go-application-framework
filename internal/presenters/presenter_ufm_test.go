@@ -171,9 +171,6 @@ func normalizeMarkdownHeadersAndPaths(markdown string) string {
 	// Normalize line endings first (Windows vs Unix)
 	markdown = strings.ReplaceAll(markdown, "\r\n", "\n")
 
-	// // Sort detailed paths to ignore ordering differences
-	// markdown = sortDetailedPaths(markdown)
-
 	return markdown
 }
 
