@@ -145,89 +145,108 @@ func ConvertTypeToDriverName(s string) string {
 	}
 }
 
-// GetRulesFromTestResult extracts SARIF rules from test results for a specific finding type.
-// Based on the TypeScript implementation in open-source-sarif-output.ts
-func GetRulesFromTestResult(result testapi.TestResult, t testapi.FindingType) []map[string]interface{} {
-	sarifRules := map[string]map[string]interface{}{}
+// shouldProcessIssue checks if an issue should be processed for SARIF rule generation
+func shouldProcessIssue(issue testapi.Issue, findingType testapi.FindingType) bool {
+	if issue.GetFindingType() != findingType {
+		return false
+	}
+	return len(issue.GetFindings()) > 0
+}
 
-	findings, _, err := result.Findings(context.Background())
-	if err != nil {
-		return []map[string]interface{}{}
+// buildSarifRule constructs a SARIF rule from an issue
+func buildSarifRule(issue testapi.Issue, issueID string, findingType testapi.FindingType) map[string]interface{} {
+	componentName := getMetadataString(issue, testapi.MetadataKeyComponentName)
+	componentVersion := getMetadataString(issue, testapi.MetadataKeyComponentVersion)
+
+	shortDesc := buildShortDescription(issue, componentName)
+	fullDesc := buildFullDescription(componentName, componentVersion, issue.GetCVEs())
+	helpMarkdown := buildHelpMarkdownGeneric(issue, findingType)
+	properties := buildRuleProperties(issue)
+
+	return map[string]interface{}{
+		"id":               issueID,
+		"shortDescription": shortDesc,
+		"fullDescription":  fullDesc,
+		"help_text":        "",
+		"help_markdown":    helpMarkdown,
+		"properties":       properties,
+	}
+}
+
+// buildShortDescription creates the short description for a SARIF rule
+func buildShortDescription(issue testapi.Issue, componentName string) string {
+	severity := issue.GetSeverity()
+	return fmt.Sprintf("%s severity - %s vulnerability in %s",
+		cases.Title(language.English).String(severity),
+		issue.GetTitle(),
+		componentName)
+}
+
+// buildFullDescription creates the full description for a SARIF rule
+func buildFullDescription(componentName, componentVersion string, cveIds []string) string {
+	fullDesc := fmt.Sprintf("%s@%s", componentName, componentVersion)
+	if len(cveIds) > 0 {
+		fullDesc = fmt.Sprintf("(%s) %s", strings.Join(cveIds, ", "), fullDesc)
+	}
+	return fullDesc
+}
+
+// buildRuleProperties builds the properties object for a SARIF rule
+func buildRuleProperties(issue testapi.Issue) map[string]interface{} {
+	tags := []interface{}{"security"}
+	for _, cwe := range issue.GetCWEs() {
+		tags = append(tags, cwe)
 	}
 
-	for _, finding := range findings {
-		if finding.Attributes.FindingType == t {
-			// Extract CVE and CWE IDs from all problems
-			cveIds, cweIds, vulnProblemPtr := extractProblemsData(finding.Attributes.Problems)
+	technology := getMetadataString(issue, testapi.MetadataKeyTechnology)
+	if technology != "" {
+		tags = append(tags, technology)
+	}
 
-			if vulnProblemPtr == nil {
-				continue
-			}
+	cvssScore := getMetadataFloat(issue, testapi.MetadataKeyCVSSScore)
+	return map[string]interface{}{
+		"cvssv3_baseScore":  cvssScore,
+		"security-severity": fmt.Sprintf("%.1f", cvssScore),
+		"tags":              tags,
+	}
+}
 
-			// decorate vulnProblem from location
-			for _, location := range finding.Attributes.Locations {
-				locationDiscriminator, err := location.Discriminator()
-				if err != nil {
-					continue
-				}
-
-				if locationDiscriminator == "package" {
-					packageLocation, err := location.AsPackageLocation()
-					if err != nil {
-						continue
-					}
-					vulnProblemPtr.PackageName = packageLocation.Package.Name
-					vulnProblemPtr.PackageVersion = packageLocation.Package.Version
-				}
-			}
-
-			vulnProblem := *vulnProblemPtr
-
-			if _, ok := sarifRules[vulnProblem.Id]; !ok {
-				// Build shortDescription
-				shortDesc := fmt.Sprintf("%s severity - %s vulnerability in %s",
-					cases.Title(language.English).String(string(vulnProblem.Severity)),
-					finding.Attributes.Title,
-					vulnProblem.PackageName)
-
-				// Build fullDescription with CVE IDs
-				fullDesc := fmt.Sprintf("%s@%s", vulnProblem.PackageName, vulnProblem.PackageVersion)
-				if len(cveIds) > 0 {
-					fullDesc = fmt.Sprintf("(%s) %s", strings.Join(cveIds, ", "), fullDesc)
-				}
-
-				// Build dependency paths from evidence
-				depPaths := buildDependencyPaths(finding.Attributes.Evidence)
-
-				// Build help markdown with package manager, vulnerable module, and detailed paths
-				helpMarkdown := buildHelpMarkdown(vulnProblem, depPaths, finding.Attributes.Description)
-
-				// Build properties with tags including CWEs
-				tags := []interface{}{"security"}
-				for _, cwe := range cweIds {
-					tags = append(tags, cwe)
-				}
-				// Add ecosystem if available
-				if ecosystemName := getEcosystemName(vulnProblem.Ecosystem); ecosystemName != "" {
-					tags = append(tags, ecosystemName)
-				}
-
-				properties := map[string]interface{}{
-					"cvssv3_baseScore":  vulnProblem.CvssBaseScore,
-					"security-severity": fmt.Sprintf("%.1f", vulnProblem.CvssBaseScore),
-					"tags":              tags,
-				}
-
-				sarifRules[vulnProblem.Id] = map[string]interface{}{
-					"id":               vulnProblem.Id,
-					"shortDescription": shortDesc,
-					"fullDescription":  fullDesc,
-					"help_text":        "",
-					"help_markdown":    helpMarkdown,
-					"properties":       properties,
-				}
-			}
+// getMetadataString is a helper to safely extract string metadata
+func getMetadataString(issue testapi.Issue, key string) string {
+	if val, ok := issue.GetMetadata(key); ok {
+		if str, ok := val.(string); ok {
+			return str
 		}
+	}
+	return ""
+}
+
+// getMetadataFloat is a helper to safely extract float32 metadata
+func getMetadataFloat(issue testapi.Issue, key string) float32 {
+	if val, ok := issue.GetMetadata(key); ok {
+		if f, ok := val.(float32); ok {
+			return f
+		}
+	}
+	return 0.0
+}
+
+// GetRulesFromIssues extracts SARIF rules from a list of Issues for a specific finding type.
+// Based on the TypeScript implementation in open-source-sarif-output.ts
+func GetRulesFromIssues(issuesList []testapi.Issue, t testapi.FindingType) []map[string]interface{} {
+	sarifRules := map[string]map[string]interface{}{}
+
+	for _, issue := range issuesList {
+		if !shouldProcessIssue(issue, t) {
+			continue
+		}
+
+		issueID := issue.GetID()
+		if issueID == "" || sarifRules[issueID] != nil {
+			continue
+		}
+
+		sarifRules[issueID] = buildSarifRule(issue, issueID, t)
 	}
 
 	// Convert map values to slice and sort by rule ID for deterministic output
@@ -244,90 +263,118 @@ func GetRulesFromTestResult(result testapi.TestResult, t testapi.FindingType) []
 	return rules
 }
 
-// GetResultsFromTestResult extracts SARIF results from test results for a specific finding type.
-// Groups findings by vulnerability ID to match TypeScript CLI behavior.
-func GetResultsFromTestResult(result testapi.TestResult, t testapi.FindingType) []map[string]interface{} {
-	findings, _, err := result.Findings(context.Background())
+// GetRulesFromTestResult extracts SARIF rules from test results for a specific finding type.
+// This function maintains backward compatibility by wrapping GetRulesFromIssues.
+// Based on the TypeScript implementation in open-source-sarif-output.ts
+func GetRulesFromTestResult(result testapi.TestResult, t testapi.FindingType) []map[string]interface{} {
+	ctx := context.Background()
+	issuesList, err := testapi.NewIssuesFromTestResult(ctx, result)
 	if err != nil {
 		return []map[string]interface{}{}
 	}
-
-	// Handle SCA findings - group by vulnerability ID
-	if t == testapi.FindingTypeSca {
-		return getScaResults(findings)
-	}
-	// TODO: Add SAST handling here later
-	// else if t == testapi.FindingTypeSast { return getSastResults(findings) }
-
-	return []map[string]interface{}{}
+	return GetRulesFromIssues(issuesList, t)
 }
 
-// getScaResults groups SCA findings by vulnerability ID and creates SARIF results
-func getScaResults(findings []testapi.FindingData) []map[string]interface{} {
-	// Group findings by vulnerability ID
-	vulnMap := make(map[string][]testapi.FindingData)
-	vulnProblems := make(map[string]testapi.SnykVulnProblem)
+// GetResultsFromIssues extracts SARIF results from a list of Issues for a specific finding type.
+func GetResultsFromIssues(issuesList []testapi.Issue, t testapi.FindingType) []map[string]interface{} {
+	return getResultsFromIssues(issuesList, t)
+}
 
-	for _, finding := range findings {
-		if finding.Attributes.FindingType != testapi.FindingTypeSca {
+// GetResultsFromTestResult extracts SARIF results from test results for a specific finding type.
+// This function maintains backward compatibility by wrapping GetResultsFromIssues.
+func GetResultsFromTestResult(result testapi.TestResult, t testapi.FindingType) []map[string]interface{} {
+	ctx := context.Background()
+	issuesList, err := testapi.NewIssuesFromTestResult(ctx, result)
+	if err != nil {
+		return []map[string]interface{}{}
+	}
+	return GetResultsFromIssues(issuesList, t)
+}
+
+// getResultsFromIssues creates SARIF results from a list of Issues for a specific finding type.
+// For backward compatibility, creates one result per issue (vulnerability for SCA).
+// Issues are already grouped by vulnerability ID or key, so this matches the original behavior.
+func getResultsFromIssues(issuesList []testapi.Issue, findingType testapi.FindingType) []map[string]interface{} {
+	var results []map[string]interface{}
+
+	for _, issue := range issuesList {
+		if !shouldProcessIssue(issue, findingType) {
 			continue
 		}
 
-		for _, problem := range finding.Attributes.Problems {
-			if discriminator, err := problem.Discriminator(); err == nil && discriminator != "snyk_vuln" {
-				continue
-			}
-
-			vulnProblem, err := problem.AsSnykVulnProblem()
-			if err != nil {
-				continue
-			}
-
-			vulnMap[vulnProblem.Id] = append(vulnMap[vulnProblem.Id], finding)
-			if _, exists := vulnProblems[vulnProblem.Id]; !exists {
-				vulnProblems[vulnProblem.Id] = vulnProblem
-			}
-		}
-	}
-
-	// Create SARIF results from grouped findings
-	var results []map[string]interface{}
-	for vulnId, groupedFindings := range vulnMap {
-		vulnProblem := vulnProblems[vulnId]
-
-		// Use the first finding for location information
-		firstFinding := groupedFindings[0]
-
-		// Build message
-		message := map[string]interface{}{
-			"text": fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
-				vulnProblem.PackageName,
-				vulnProblem.Severity),
+		issueID := issue.GetID()
+		if issueID == "" {
+			continue
 		}
 
-		// Build location
-		location := buildScaLocation(firstFinding, vulnProblem)
-
-		// Build result
-		sarifResult := map[string]interface{}{
-			"ruleId":    vulnProblem.Id,
-			"level":     SeverityToSarifLevel(string(vulnProblem.Severity)),
-			"message":   message,
-			"locations": []interface{}{location},
-		}
-
-		// Add fixes if available
-		if vulnProblem.IsFixable && len(vulnProblem.InitiallyFixedInVersions) > 0 {
-			fixes := buildScaFixes(firstFinding, vulnProblem)
-			if fixes != nil {
-				sarifResult["fixes"] = fixes
-			}
-		}
+		firstFinding := issue.GetFindings()[0]
+		sarifResult := buildSarifResult(issue, issueID, firstFinding)
+		addFixesIfAvailable(sarifResult, issue, firstFinding)
 
 		results = append(results, sarifResult)
 	}
 
-	// Sort results by ruleId for deterministic output
+	sortResultsByRuleId(results)
+	return results
+}
+
+// buildSarifResult constructs a SARIF result object from an issue
+func buildSarifResult(issue testapi.Issue, issueID string, firstFinding testapi.FindingData) map[string]interface{} {
+	severity := issue.GetSeverity()
+	componentName := getMetadataString(issue, testapi.MetadataKeyComponentName)
+
+	message := map[string]interface{}{
+		"text": fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
+			componentName,
+			severity),
+	}
+
+	location := buildLocation(firstFinding, issue)
+	sarifLevel := SeverityToSarifLevel(severity)
+
+	return map[string]interface{}{
+		"ruleId":    issueID,
+		"level":     sarifLevel,
+		"message":   message,
+		"locations": []interface{}{location},
+	}
+}
+
+// addFixesIfAvailable adds fix information to the SARIF result if available
+func addFixesIfAvailable(sarifResult map[string]interface{}, issue testapi.Issue, firstFinding testapi.FindingData) {
+	isFixable := getMetadataBool(issue, testapi.MetadataKeyIsFixable)
+	fixedVersions := getMetadataStrings(issue, testapi.MetadataKeyFixedInVersions)
+
+	if isFixable && len(fixedVersions) > 0 {
+		fixes := buildFixes(firstFinding, issue)
+		if fixes != nil {
+			sarifResult["fixes"] = fixes
+		}
+	}
+}
+
+// getMetadataBool is a helper to safely extract bool metadata
+func getMetadataBool(issue testapi.Issue, key string) bool {
+	if val, ok := issue.GetMetadata(key); ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+// getMetadataStrings is a helper to safely extract string slice metadata
+func getMetadataStrings(issue testapi.Issue, key string) []string {
+	if val, ok := issue.GetMetadata(key); ok {
+		if strs, ok := val.([]string); ok {
+			return strs
+		}
+	}
+	return []string{}
+}
+
+// sortResultsByRuleId sorts SARIF results by ruleId for deterministic output
+func sortResultsByRuleId(results []map[string]interface{}) {
 	sort.Slice(results, func(i, j int) bool {
 		ruleIdI, okI := results[i]["ruleId"].(string)
 		ruleIdJ, okJ := results[j]["ruleId"].(string)
@@ -336,120 +383,125 @@ func getScaResults(findings []testapi.FindingData) []map[string]interface{} {
 		}
 		return ruleIdI < ruleIdJ
 	})
-
-	return results
 }
 
-// extractProblemsData extracts CVE IDs, CWE IDs, and the vulnerability problem from a finding's problems
-func extractProblemsData(problems []testapi.Problem) ([]string, []string, *testapi.SnykVulnProblem) {
-	var cveIds []string
-	var cweIds []string
-	var vulnProblem *testapi.SnykVulnProblem
-
-	for _, problem := range problems {
-		discriminator, err := problem.Discriminator()
-		if err != nil {
-			continue
-		}
-
-		switch discriminator {
-		case "snyk_vuln":
-			if vulnProblem == nil {
-				if vp, err := problem.AsSnykVulnProblem(); err == nil {
-					vulnProblem = &vp
-				}
-			}
-		case "cve":
-			if cveProb, err := problem.AsCveProblem(); err == nil {
-				cveIds = append(cveIds, cveProb.Id)
-			}
-		case "cwe":
-			if cweProb, err := problem.AsCweProblem(); err == nil {
-				cweIds = append(cweIds, cweProb.Id)
-			}
-		}
-	}
-
-	return cveIds, cweIds, vulnProblem
-}
-
-// getEcosystemName extracts the ecosystem name (e.g., "npm") from the package ecosystem
-func getEcosystemName(ecosystem testapi.SnykvulndbPackageEcosystem) string {
-	// Try as build ecosystem first
-	if buildEco, err := ecosystem.AsSnykvulndbBuildPackageEcosystem(); err == nil {
-		return buildEco.PackageManager
-	}
-	// Try as OS ecosystem
-	if osEco, err := ecosystem.AsSnykvulndbOsPackageEcosystem(); err == nil {
-		return osEco.OsName
-	}
-	// Fallback to empty string
-	return ""
-}
-
-// buildDependencyPaths extracts dependency paths from finding evidence
-func buildDependencyPaths(evidence []testapi.Evidence) []string {
-	var paths []string
-
-	for _, ev := range evidence {
-		if discriminator, err := ev.Discriminator(); err == nil && discriminator == "dependency_path" {
-			if depPath, err := ev.AsDependencyPathEvidence(); err == nil {
-				var pathParts []string
-				for _, dep := range depPath.Path {
-					pathParts = append(pathParts, fmt.Sprintf("%s@%s", dep.Name, dep.Version))
-				}
-				if len(pathParts) > 0 {
-					paths = append(paths, strings.Join(pathParts, " › "))
-				}
-			}
-		}
-	}
-
-	return paths
-}
-
-// buildHelpMarkdown constructs the help markdown section for SARIF rules
-func buildHelpMarkdown(vulnProblem testapi.SnykVulnProblem, depPaths []string, description string) string {
+// buildHelpMarkdownGeneric constructs the help markdown section for SARIF rules
+func buildHelpMarkdownGeneric(issue testapi.Issue, findingType testapi.FindingType) string {
 	var sb strings.Builder
 
-	// Package Manager
-	ecosystemName := getEcosystemName(vulnProblem.Ecosystem)
-	sb.WriteString(fmt.Sprintf("* Package Manager: %s\n", ecosystemName))
-
-	// Vulnerable module
-	sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", vulnProblem.PackageName))
-
-	// Introduced through
-	if len(depPaths) > 0 {
-		// Get the root package from first path
-		firstPath := depPaths[0]
-		parts := strings.Split(firstPath, " › ")
-		if len(parts) > 1 {
-			sb.WriteString(fmt.Sprintf("* Introduced through: %s, %s and others\n", parts[0], parts[1]))
-		} else if len(parts) == 1 {
-			sb.WriteString(fmt.Sprintf("* Introduced through: %s\n", parts[0]))
-		}
-
-		// Detailed paths
-		sb.WriteString("### Detailed paths\n")
-		for _, path := range depPaths {
-			sb.WriteString(fmt.Sprintf("* _Introduced through_: %s\n", path))
-		}
-	} else {
-		sb.WriteString(fmt.Sprintf("* Introduced through: %s@%s\n", vulnProblem.PackageName, vulnProblem.PackageVersion))
-	}
-
-	// Description
-	sb.WriteString(description)
+	appendTechnologySection(&sb, issue, findingType)
+	componentName := appendComponentSection(&sb, issue, findingType)
+	appendDependencyPathsSection(&sb, issue, componentName)
+	appendDescriptionSection(&sb, issue)
 
 	return sb.String()
 }
 
-func buildScaLocation(finding testapi.FindingData, vulnProblem testapi.SnykVulnProblem) map[string]interface{} {
+// appendTechnologySection adds technology/ecosystem information to the markdown
+func appendTechnologySection(sb *strings.Builder, issue testapi.Issue, findingType testapi.FindingType) {
+	var technology string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyTechnology); ok {
+		if str, ok := val.(string); ok {
+			technology = str
+		}
+	}
+	if technology != "" {
+		if findingType == testapi.FindingTypeSca {
+			sb.WriteString(fmt.Sprintf("* Package Manager: %s\n", technology))
+		} else {
+			sb.WriteString(fmt.Sprintf("* Technology: %s\n", technology))
+		}
+	}
+}
+
+// appendComponentSection adds component information to the markdown and returns the component name
+func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingType testapi.FindingType) string {
+	var componentName string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
+		if str, ok := val.(string); ok {
+			componentName = str
+		}
+	}
+	if componentName != "" {
+		if findingType == testapi.FindingTypeSca {
+			sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", componentName))
+		} else {
+			sb.WriteString(fmt.Sprintf("* Affected component: %s\n", componentName))
+		}
+	}
+	return componentName
+}
+
+// appendDependencyPathsSection adds dependency path information to the markdown
+func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, componentName string) {
+	var dependencyPaths []string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyDependencyPaths); ok {
+		if strs, ok := val.([]string); ok {
+			dependencyPaths = strs
+		}
+	}
+
+	if len(dependencyPaths) > 0 {
+		appendDependencyPathsSummary(sb, dependencyPaths)
+		appendDetailedPaths(sb, dependencyPaths)
+	} else if componentName != "" {
+		appendFallbackIntroduction(sb, issue, componentName)
+	}
+}
+
+// appendDependencyPathsSummary adds a summary of dependency paths
+func appendDependencyPathsSummary(sb *strings.Builder, dependencyPaths []string) {
+	firstPath := dependencyPaths[0]
+	parts := strings.Split(firstPath, " › ")
+	if len(parts) > 1 {
+		sb.WriteString(fmt.Sprintf("* Introduced through: %s, %s and others\n", parts[0], parts[1]))
+	} else if len(parts) == 1 {
+		sb.WriteString(fmt.Sprintf("* Introduced through: %s\n", parts[0]))
+	}
+}
+
+// appendDetailedPaths adds detailed dependency path information
+func appendDetailedPaths(sb *strings.Builder, dependencyPaths []string) {
+	sb.WriteString("### Detailed paths\n")
+	for _, path := range dependencyPaths {
+		sb.WriteString(fmt.Sprintf("* _Introduced through_: %s\n", path))
+	}
+}
+
+// appendFallbackIntroduction adds a fallback introduction line when no dependency paths are available
+func appendFallbackIntroduction(sb *strings.Builder, issue testapi.Issue, componentName string) {
+	var componentVersion string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
+		if str, ok := val.(string); ok {
+			componentVersion = str
+		}
+	}
+	sb.WriteString(fmt.Sprintf("* Introduced through: %s@%s\n", componentName, componentVersion))
+}
+
+// appendDescriptionSection adds the issue description to the markdown
+func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
+	description := issue.GetDescription()
+	if description != "" {
+		sb.WriteString(description)
+	}
+}
+
+func buildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]interface{} {
 	// Default to line 1 for manifest files
 	uri := "package.json" // Default, should be determined from locations
 	startLine := 1
-	packageVersion := vulnProblem.PackageVersion
+	var packageName, packageVersion string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
+		if str, ok := val.(string); ok {
+			packageName = str
+		}
+	}
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
+		if str, ok := val.(string); ok {
+			packageVersion = str
+		}
+	}
 
 	// Try to extract actual file path and package version from locations
 	if len(finding.Attributes.Locations) > 0 {
@@ -462,10 +514,15 @@ func buildScaLocation(finding testapi.FindingData, vulnProblem testapi.SnykVulnP
 			startLine = sourceLoc.FromLine
 		}
 
-		// Extract package version from PackageLocation if available
+		// Extract package info from PackageLocation if available
 		pkgLoc, err := loc.AsPackageLocation()
-		if err == nil && pkgLoc.Package.Version != "" {
-			packageVersion = pkgLoc.Package.Version
+		if err == nil {
+			if pkgLoc.Package.Name != "" {
+				packageName = pkgLoc.Package.Name
+			}
+			if pkgLoc.Package.Version != "" {
+				packageVersion = pkgLoc.Package.Version
+			}
 		}
 	}
 
@@ -480,18 +537,31 @@ func buildScaLocation(finding testapi.FindingData, vulnProblem testapi.SnykVulnP
 		},
 		"logicalLocations": []interface{}{
 			map[string]interface{}{
-				"fullyQualifiedName": fmt.Sprintf("%s@%s", vulnProblem.PackageName, packageVersion),
+				"fullyQualifiedName": fmt.Sprintf("%s@%s", packageName, packageVersion),
 			},
 		},
 	}
 }
 
-func buildScaFixes(finding testapi.FindingData, vulnProblem testapi.SnykVulnProblem) []interface{} {
-	if len(vulnProblem.InitiallyFixedInVersions) == 0 {
+func buildFixes(finding testapi.FindingData, issue testapi.Issue) []interface{} {
+	var fixedVersions []string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyFixedInVersions); ok {
+		if strs, ok := val.([]string); ok {
+			fixedVersions = strs
+		}
+	}
+	if len(fixedVersions) == 0 {
 		return nil
 	}
 
-	fixedVersion := vulnProblem.InitiallyFixedInVersions[0]
+	fixedVersion := fixedVersions[0]
+	var packageName string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
+		if str, ok := val.(string); ok {
+			packageName = str
+		}
+	}
+
 	uri := "package.json"
 	startLine := 1
 
@@ -508,7 +578,7 @@ func buildScaFixes(finding testapi.FindingData, vulnProblem testapi.SnykVulnProb
 	return []interface{}{
 		map[string]interface{}{
 			"description": map[string]interface{}{
-				"text": fmt.Sprintf("Upgrade to %s@%s", vulnProblem.PackageName, fixedVersion),
+				"text": fmt.Sprintf("Upgrade to %s@%s", packageName, fixedVersion),
 			},
 			"artifactChanges": []interface{}{
 				map[string]interface{}{
