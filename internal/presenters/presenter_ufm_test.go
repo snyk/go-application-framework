@@ -9,12 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/xeipuuv/gojsonschema"
+
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
-	"github.com/stretchr/testify/assert"
-	"github.com/xeipuuv/gojsonschema"
 )
 
 func validateSarifData(t *testing.T, data []byte) {
@@ -106,32 +107,6 @@ func normalizeFixDescriptions(result map[string]interface{}) {
 	}
 }
 
-// normalizePackageVersions normalizes package versions in logicalLocations
-func normalizePackageVersions(result map[string]interface{}) {
-	if locations, ok := result["locations"].([]interface{}); ok {
-		for _, locInterface := range locations {
-			loc, ok := locInterface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if logicalLocs, ok := loc["logicalLocations"].([]interface{}); ok {
-				for _, logicalLocInterface := range logicalLocs {
-					logicalLoc, ok := logicalLocInterface.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if fqn, ok := logicalLoc["fullyQualifiedName"].(string); ok {
-						parts := strings.Split(fqn, "@")
-						if len(parts) == 2 {
-							logicalLoc["fullyQualifiedName"] = parts[0] + "@*"
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
 // normalizeMarkdownHeadersAndPaths normalizes markdown formatting
 func normalizeMarkdownHeadersAndPaths(markdown string) string {
 	// Normalize line endings first (Windows vs Unix)
@@ -202,9 +177,6 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 				// TODO: Fix package resolution for upgrade fixes
 				normalizeFixDescriptions(result)
-
-				// TODO: Package version selection in logicalLocations
-				normalizePackageVersions(result)
 			}
 		}
 	}
