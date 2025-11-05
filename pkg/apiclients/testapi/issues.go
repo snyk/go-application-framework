@@ -168,10 +168,10 @@ func NewIssuesFromTestResult(ctx context.Context, testResult TestResult) ([]Issu
 
 // selectGrouper chooses the appropriate grouping strategy based on finding types.
 func selectGrouper(findings []FindingData) issueGrouper {
-	// Check if we have SCA findings - use vulnerability-based grouping
+	// Check if we have SCA findings - use ID-based grouping (by problem ID)
 	for _, finding := range findings {
 		if finding.Attributes != nil && finding.Attributes.FindingType == FindingTypeSca {
-			return &vulnerabilityIssueGrouper{}
+			return &idBasedIssueGrouper{}
 		}
 	}
 	// Default to key-based grouping
@@ -184,11 +184,12 @@ type issueGrouper interface {
 	groupFindings(findings []FindingData) [][]FindingData
 }
 
-// vulnerabilityIssueGrouper groups findings by vulnerability ID for SCA findings.
-// Findings with the same vulnerability ID are grouped together as a single issue.
-type vulnerabilityIssueGrouper struct{}
+// idBasedIssueGrouper groups findings by problem ID.
+// Findings with the same problem ID are grouped together as a single issue.
+// Used primarily for SCA findings where multiple findings may reference the same vulnerability.
+type idBasedIssueGrouper struct{}
 
-func (g *vulnerabilityIssueGrouper) groupFindings(findings []FindingData) [][]FindingData {
+func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingData {
 	groups := make(map[string][]FindingData)
 
 	for _, finding := range findings {
@@ -196,14 +197,14 @@ func (g *vulnerabilityIssueGrouper) groupFindings(findings []FindingData) [][]Fi
 			continue
 		}
 
-		// Extract vulnerability ID from problems
-		vulnID := g.extractVulnerabilityID(finding)
-		if vulnID == "" {
-			// If no vulnerability ID found, treat each finding as its own issue
-			vulnID = g.getUniqueKey(finding)
+		// Extract problem ID from problems
+		problemID := g.extractProblemID(finding)
+		if problemID == "" {
+			// If no problem ID found, treat each finding as its own issue
+			problemID = g.getUniqueKey(finding)
 		}
 
-		groups[vulnID] = append(groups[vulnID], finding)
+		groups[problemID] = append(groups[problemID], finding)
 	}
 
 	result := make([][]FindingData, 0, len(groups))
@@ -214,24 +215,18 @@ func (g *vulnerabilityIssueGrouper) groupFindings(findings []FindingData) [][]Fi
 	return result
 }
 
-func (g *vulnerabilityIssueGrouper) extractVulnerabilityID(finding FindingData) string {
+func (g *idBasedIssueGrouper) extractProblemID(finding FindingData) string {
+	// Extract the first available ID from any problem type for grouping
+	// Works with snyk_vuln, CVE, CWE, etc. since they all have an ID field
 	for _, problem := range finding.Attributes.Problems {
-		discriminator, err := problem.Discriminator()
-		if err != nil {
-			continue
-		}
-
-		if discriminator == "snyk_vuln" {
-			vulnProblem, err := problem.AsSnykVulnProblem()
-			if err == nil {
-				return vulnProblem.Id
-			}
+		if id := problem.GetID(); id != "" {
+			return id
 		}
 	}
 	return ""
 }
 
-func (g *vulnerabilityIssueGrouper) getUniqueKey(finding FindingData) string {
+func (g *idBasedIssueGrouper) getUniqueKey(finding FindingData) string {
 	if finding.Id != nil {
 		return finding.Id.String()
 	}
@@ -580,6 +575,12 @@ func (b *issueBuilder) processProblems(finding FindingData) {
 
 // processSnykVulnProblem extracts data from a Snyk vulnerability problem
 func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
+	// Quick ID extraction without full unmarshal
+	if id := problem.GetID(); id != "" {
+		b.id = id
+	}
+
+	// Full unmarshal for detailed metadata
 	vulnProblem, err := problem.AsSnykVulnProblem()
 	if err != nil {
 		return
@@ -588,11 +589,6 @@ func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
 	if b.primaryProblem == nil {
 		b.primaryProblem = &problem
 		b.snykVulnProblem = &vulnProblem
-	}
-
-	// Always set ID from vulnerability ID if available
-	if vulnProblem.Id != "" {
-		b.id = vulnProblem.Id
 	}
 
 	// Set severity and other metadata from first vuln problem
@@ -629,17 +625,15 @@ func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
 
 // processCveProblem extracts CVE ID
 func (b *issueBuilder) processCveProblem(problem Problem) {
-	cveProb, err := problem.AsCveProblem()
-	if err == nil {
-		b.cves = append(b.cves, cveProb.Id)
+	if id := problem.GetID(); id != "" {
+		b.cves = append(b.cves, id)
 	}
 }
 
 // processCweProblem extracts CWE ID
 func (b *issueBuilder) processCweProblem(problem Problem) {
-	cweProb, err := problem.AsCweProblem()
-	if err == nil {
-		b.cwes = append(b.cwes, cweProb.Id)
+	if id := problem.GetID(); id != "" {
+		b.cwes = append(b.cwes, id)
 	}
 }
 
