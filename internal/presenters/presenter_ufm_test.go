@@ -166,49 +166,13 @@ func sortDetailedPaths(markdown string) string {
 	return strings.Join(otherLines, "\n")
 }
 
-// normalizeDetailedPathsSection normalizes the detailed paths section to wildcard
-func normalizeDetailedPathsSection(markdown string) string {
-	lines := strings.Split(markdown, "\n")
-	var normalizedLines []string
-	inDetailedPaths := false
-
-	for _, line := range lines {
-		// Always normalize the intro line
-		if strings.HasPrefix(line, "* Introduced through: ") {
-			normalizedLines = append(normalizedLines, "* Introduced through: *")
-			continue
-		}
-
-		// Skip the entire detailed paths section
-		if strings.Contains(line, "### Detailed paths") {
-			inDetailedPaths = true
-			normalizedLines = append(normalizedLines, "### Detailed paths")
-			normalizedLines = append(normalizedLines, "* _Introduced through_: *")
-			continue
-		}
-
-		// Skip path lines
-		if inDetailedPaths && strings.HasPrefix(line, "* _Introduced through_:") {
-			continue
-		}
-
-		// Exit detailed paths section when we hit a non-path line
-		if inDetailedPaths && !strings.HasPrefix(line, "* _Introduced through_:") && line != "" {
-			inDetailedPaths = false
-		}
-
-		normalizedLines = append(normalizedLines, line)
-	}
-	return strings.Join(normalizedLines, "\n")
-}
-
 // normalizeMarkdownHeadersAndPaths normalizes markdown formatting
 func normalizeMarkdownHeadersAndPaths(markdown string) string {
 	// Normalize line endings first (Windows vs Unix)
 	markdown = strings.ReplaceAll(markdown, "\r\n", "\n")
 
-	// Sort detailed paths to ignore ordering differences
-	markdown = sortDetailedPaths(markdown)
+	// // Sort detailed paths to ignore ordering differences
+	// markdown = sortDetailedPaths(markdown)
 
 	return markdown
 }

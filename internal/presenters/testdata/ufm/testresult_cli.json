@@ -100,16 +100,12 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
-                },
-                {
                   "name": "snyk-nodejs-lockfile-parser",
-                  "version": "1.58.19"
+                  "version": "2.3.1"
                 },
                 {
                   "name": "@yarnpkg/core",
-                  "version": "2.4.0"
+                  "version": "4.4.1"
                 },
                 {
                   "name": "got",
@@ -125,12 +121,16 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
                   "name": "snyk-nodejs-lockfile-parser",
-                  "version": "2.3.1"
+                  "version": "1.58.19"
                 },
                 {
                   "name": "@yarnpkg/core",
-                  "version": "4.4.1"
+                  "version": "2.4.0"
                 },
                 {
                   "name": "got",
@@ -295,6 +295,19 @@
           "cause_of_failure": false,
           "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity. None\n## Remediation\nThere is no fixed version for `debug`.\n\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957)\n",
           "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
             {
               "path": [
                 {
@@ -593,19 +606,6 @@
                 {
                   "name": "snyk-module",
                   "version": "3.2.0"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
                 },
                 {
                   "name": "debug",
@@ -1562,6 +1562,27 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
+                  "name": "glob",
+                  "version": "7.2.3"
+                },
+                {
+                  "name": "minimatch",
+                  "version": "3.1.2"
+                },
+                {
+                  "name": "brace-expansion",
+                  "version": "1.1.11"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
                   "name": "snyk-docker-plugin",
                   "version": "8.8.1"
                 },
@@ -1738,27 +1759,6 @@
                 {
                   "name": "rimraf",
                   "version": "2.7.1"
-                },
-                {
-                  "name": "glob",
-                  "version": "7.2.3"
-                },
-                {
-                  "name": "minimatch",
-                  "version": "3.1.2"
-                },
-                {
-                  "name": "brace-expansion",
-                  "version": "1.1.11"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
                 },
                 {
                   "name": "glob",
@@ -2209,6 +2209,19 @@
           "cause_of_failure": false,
           "description": "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) test\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n## Remediation\nA fix was pushed into the `master` branch but not yet published.\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957#issuecomment-2523030187)\n",
           "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
+                  "name": "debug",
+                  "version": "4.3.4"
+                }
+              ],
+              "source": "dependency_path"
+            },
             {
               "path": [
                 {
@@ -2974,19 +2987,6 @@
                 {
                   "name": "snyk-resolve-deps",
                   "version": "4.9.1"
-                },
-                {
-                  "name": "debug",
-                  "version": "4.3.4"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
                 },
                 {
                   "name": "debug",
@@ -4044,6 +4044,27 @@
                   "version": "1.0.0-monorepo"
                 },
                 {
+                  "name": "snyk-nodejs-plugin",
+                  "version": "1.4.4"
+                },
+                {
+                  "name": "snyk-resolve-deps",
+                  "version": "4.8.0"
+                },
+                {
+                  "name": "lodash",
+                  "version": "4.17.21"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                },
+                {
                   "name": "snyk-python-plugin",
                   "version": "3.1.2"
                 },
@@ -4109,27 +4130,6 @@
                 {
                   "name": "snyk",
                   "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-resolve-deps",
-                  "version": "4.8.0"
-                },
-                {
-                  "name": "lodash",
-                  "version": "4.17.21"
-                }
-              ],
-              "source": "dependency_path"
-            },
-            {
-              "path": [
-                {
-                  "name": "snyk",
-                  "version": "1.0.0-monorepo"
-                },
-                {
-                  "name": "snyk-nodejs-plugin",
-                  "version": "1.4.4"
                 },
                 {
                   "name": "snyk-resolve-deps",
