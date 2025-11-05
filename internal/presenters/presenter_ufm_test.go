@@ -207,18 +207,8 @@ func normalizeMarkdownHeadersAndPaths(markdown string) string {
 	// Normalize line endings first (Windows vs Unix)
 	markdown = strings.ReplaceAll(markdown, "\r\n", "\n")
 
-	// Normalize header levels
-	markdown = strings.ReplaceAll(markdown, "\n# Overview\n", "\n## Overview\n")
-	markdown = strings.ReplaceAll(markdown, "\n# Details\n", "\n## Details\n")
-	markdown = strings.ReplaceAll(markdown, "\n# PoC\n", "\n## PoC\n")
-	markdown = strings.ReplaceAll(markdown, "\n# Remediation\n", "\n## Remediation\n")
-	markdown = strings.ReplaceAll(markdown, "\n# References\n", "\n## References\n")
-
 	// Sort detailed paths to ignore ordering differences
 	markdown = sortDetailedPaths(markdown)
-
-	// Normalize detailed paths section (known gap: we don't aggregate paths from all findings)
-	markdown = normalizeDetailedPathsSection(markdown)
 
 	return markdown
 }
