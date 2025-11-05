@@ -303,7 +303,8 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 			Type:     testapi.Source,
 		}
 		var locationUnion testapi.FindingLocation
-		_ = locationUnion.MergeSourceLocation(location)
+		err := locationUnion.MergeSourceLocation(location)
+		require.NoError(t, err)
 
 		findings := []testapi.FindingData{
 			{
@@ -357,13 +358,15 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		}
 		val, ok = issue.GetMetadata(testapi.MetadataKeyIsFixable)
 		if ok {
-			isFixable, _ := val.(bool)
-			assert.False(t, isFixable)
+			if isFixable, isFixableOk := val.(bool); isFixableOk {
+				assert.False(t, isFixable)
+			}
 		}
 		val, ok = issue.GetMetadata(testapi.MetadataKeyCVSSScore)
 		if ok {
-			cvssScore, _ := val.(float32)
-			assert.Equal(t, float32(0.0), cvssScore)
+			if cvssScore, cvssScoreOk := val.(float32); cvssScoreOk {
+				assert.Equal(t, float32(0.0), cvssScore)
+			}
 		}
 	})
 

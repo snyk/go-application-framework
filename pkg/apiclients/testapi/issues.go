@@ -389,280 +389,340 @@ func newIssue(findings []FindingData) (Issue, error) {
 		return nil, &IssueError{Message: "findings cannot be empty"}
 	}
 
-	// All findings in an issue should have the same finding type
-	var findingType FindingType
-	var allProblems []Problem
-	var primaryProblem *Problem
-	var firstFinding *FindingData
+	builder := &issueBuilder{}
+	builder.processFindings(findings)
+	builder.deduplicate()
+	return builder.build(), nil
+}
 
-	// Extract metadata from findings
-	var cwes []string
-	var cves []string
-	var id string
-	var severity string
-	var effectiveSeverity string
-	var ecosystem string
-	var title string
-	var description string
-	var packageName string
-	var packageVersion string
-	var cvssScore float32
-	var isFixable bool
-	var fixedInVersions []string
-	var dependencyPaths []string
-	var snykVulnProblem *SnykVulnProblem
-	var sourceLocations []SourceLocation
-	var riskScore uint16
-	var reachability *ReachabilityEvidence
+// issueBuilder helps construct an Issue from FindingData
+type issueBuilder struct {
+	findingType       FindingType
+	allProblems       []Problem
+	primaryProblem    *Problem
+	firstFinding      *FindingData
+	cwes              []string
+	cves              []string
+	id                string
+	severity          string
+	effectiveSeverity string
+	ecosystem         string
+	title             string
+	description       string
+	packageName       string
+	packageVersion    string
+	cvssScore         float32
+	isFixable         bool
+	fixedInVersions   []string
+	dependencyPaths   []string
+	snykVulnProblem   *SnykVulnProblem
+	sourceLocations   []SourceLocation
+	riskScore         uint16
+	reachability      *ReachabilityEvidence
+	findings          []FindingData
+}
 
+// processFindings extracts data from all findings
+func (b *issueBuilder) processFindings(findings []FindingData) {
+	b.findings = findings
 	for _, finding := range findings {
 		if finding.Attributes == nil {
 			continue
 		}
+		b.processFinding(finding)
+	}
+	b.determineFallbackID()
+}
 
-		// Set finding type from first finding
-		if findingType == "" {
-			findingType = finding.Attributes.FindingType
-			firstFinding = &finding
-			title = finding.Attributes.Title
-			description = finding.Attributes.Description
+// processFinding extracts data from a single finding
+func (b *issueBuilder) processFinding(finding FindingData) {
+	b.setBasicInfo(finding)
+	b.allProblems = append(b.allProblems, finding.Attributes.Problems...)
+	b.extractSourceLocations(finding)
+	b.extractSeverityAndRisk(finding)
+	b.extractEffectiveSeverity(finding)
+	b.extractReachability(finding)
+	b.extractDependencyPaths(finding)
+	b.extractPackageInfo(finding)
+	b.processProblems(finding)
+}
+
+// setBasicInfo sets finding type, title, and description from the first finding
+func (b *issueBuilder) setBasicInfo(finding FindingData) {
+	if b.findingType == "" {
+		b.findingType = finding.Attributes.FindingType
+		b.firstFinding = &finding
+		b.title = finding.Attributes.Title
+		b.description = finding.Attributes.Description
+	}
+}
+
+// extractSourceLocations extracts source locations from finding locations
+func (b *issueBuilder) extractSourceLocations(finding FindingData) {
+	for _, location := range finding.Attributes.Locations {
+		locationDiscriminator, err := location.Discriminator()
+		if err != nil || locationDiscriminator != "source" {
+			continue
 		}
-
-		// Collect problems
-		allProblems = append(allProblems, finding.Attributes.Problems...)
-
-		// Extract source locations from locations
-		for _, location := range finding.Attributes.Locations {
-			locationDiscriminator, err := location.Discriminator()
-			if err != nil {
-				continue
-			}
-			if locationDiscriminator == "source" {
-				sourceLoc, err := location.AsSourceLocation()
-				if err == nil {
-					sourceLocations = append(sourceLocations, sourceLoc)
-				}
-			}
+		sourceLoc, err := location.AsSourceLocation()
+		if err == nil {
+			b.sourceLocations = append(b.sourceLocations, sourceLoc)
 		}
+	}
+}
 
-		// Extract severity from Rating if not already set (for non-SCA findings)
-		if severity == "" && finding.Attributes.Rating.Severity != "" {
-			severity = string(finding.Attributes.Rating.Severity)
-		}
+// extractSeverityAndRisk extracts severity and risk score from finding attributes
+func (b *issueBuilder) extractSeverityAndRisk(finding FindingData) {
+	if b.severity == "" && finding.Attributes.Rating.Severity != "" {
+		b.severity = string(finding.Attributes.Rating.Severity)
+	}
+	if finding.Attributes.Risk.RiskScore != nil && b.riskScore == 0 {
+		b.riskScore = finding.Attributes.Risk.RiskScore.Value
+	}
+}
 
-		// Extract risk score from Risk attribute
-		if finding.Attributes.Risk.RiskScore != nil && riskScore == 0 {
-			riskScore = finding.Attributes.Risk.RiskScore.Value
-		}
-
-		// Extract effective severity from policy modifications if available
-		// Policy modifications may override the original severity
-		if finding.Attributes.PolicyModifications != nil {
-			for _, mod := range *finding.Attributes.PolicyModifications {
-				// Check if severity was modified (pointer would be "/rating/severity")
-				if mod.Pointer == "/rating/severity" && mod.Prior != nil {
-					// The current severity is the effective one (after policy modification)
-					// Store it as effective severity
-					if effectiveSeverity == "" && finding.Attributes.Rating.Severity != "" {
-						effectiveSeverity = string(finding.Attributes.Rating.Severity)
-					}
-				}
-			}
-		}
-
-		// Extract reachability evidence
-		if reachability == nil {
-			for _, ev := range finding.Attributes.Evidence {
-				discriminator, err := ev.Discriminator()
-				if err != nil {
-					continue
-				}
-				if discriminator == "reachability" {
-					reachEv, err := ev.AsReachabilityEvidence()
-					if err == nil {
-						reachability = &reachEv
-						break
-					}
-				}
-			}
-		}
-
-		// Extract dependency paths from evidence
-		for _, ev := range finding.Attributes.Evidence {
-			discriminator, err := ev.Discriminator()
-			if err != nil {
-				continue
-			}
-			if discriminator == "dependency_path" {
-				depPath, err := ev.AsDependencyPathEvidence()
-				if err == nil {
-					var pathParts []string
-					for _, dep := range depPath.Path {
-						pathParts = append(pathParts, fmt.Sprintf("%s@%s", dep.Name, dep.Version))
-					}
-					if len(pathParts) > 0 {
-						dependencyPaths = append(dependencyPaths, strings.Join(pathParts, " › "))
-					}
-				}
-			}
-		}
-
-		// Extract package name/version from locations
-		for _, location := range finding.Attributes.Locations {
-			locationDiscriminator, err := location.Discriminator()
-			if err != nil {
-				continue
-			}
-			if locationDiscriminator == "package" {
-				pkgLoc, err := location.AsPackageLocation()
-				if err == nil {
-					if packageName == "" {
-						packageName = pkgLoc.Package.Name
-					}
-					if packageVersion == "" {
-						packageVersion = pkgLoc.Package.Version
-					}
-				}
-			}
-		}
-
-		// Extract CVE and CWE IDs, and determine primary problem
-		for _, problem := range finding.Attributes.Problems {
-			discriminator, err := problem.Discriminator()
-			if err != nil {
-				continue
-			}
-
-			switch discriminator {
-			case "snyk_vuln":
-				// Always use the first snyk_vuln problem found for ID and metadata
-				// This ensures we use the vulnerability ID even if grouping used a fallback key
-				vulnProblem, err := problem.AsSnykVulnProblem()
-				if err == nil {
-					if primaryProblem == nil {
-						primaryProblem = &problem
-						snykVulnProblem = &vulnProblem
-					}
-					// Always set ID from vulnerability ID if available (overrides any fallback)
-					if vulnProblem.Id != "" {
-						id = vulnProblem.Id
-					}
-					// Set severity and other metadata from first vuln problem
-					if severity == "" {
-						severity = string(vulnProblem.Severity)
-					}
-					if cvssScore == 0.0 {
-						cvssScore = float32(vulnProblem.CvssBaseScore)
-					}
-					if !isFixable {
-						isFixable = vulnProblem.IsFixable
-					}
-					if len(fixedInVersions) == 0 {
-						fixedInVersions = vulnProblem.InitiallyFixedInVersions
-					}
-					// Extract ecosystem
-					if ecosystem == "" {
-						if buildEco, err := vulnProblem.Ecosystem.AsSnykvulndbBuildPackageEcosystem(); err == nil {
-							ecosystem = buildEco.PackageManager
-						} else if osEco, err := vulnProblem.Ecosystem.AsSnykvulndbOsPackageEcosystem(); err == nil {
-							ecosystem = osEco.OsName
-						}
-					}
-					// Use package name/version from vuln problem if not set from locations
-					if packageName == "" {
-						packageName = vulnProblem.PackageName
-					}
-					if packageVersion == "" {
-						packageVersion = vulnProblem.PackageVersion
-					}
-				}
-			case "cve":
-				cveProb, err := problem.AsCveProblem()
-				if err == nil {
-					cves = append(cves, cveProb.Id)
-				}
-			case "cwe":
-				cweProb, err := problem.AsCweProblem()
-				if err == nil {
-					cwes = append(cwes, cweProb.Id)
-				}
-			}
-
-			// Fallback to first problem if no snyk_vuln found
-			if primaryProblem == nil && discriminator != "cve" && discriminator != "cwe" {
-				primaryProblem = &problem
+// extractEffectiveSeverity extracts effective severity from policy modifications
+func (b *issueBuilder) extractEffectiveSeverity(finding FindingData) {
+	if finding.Attributes.PolicyModifications == nil {
+		return
+	}
+	for _, mod := range *finding.Attributes.PolicyModifications {
+		if mod.Pointer == "/rating/severity" && mod.Prior != nil {
+			if b.effectiveSeverity == "" && finding.Attributes.Rating.Severity != "" {
+				b.effectiveSeverity = string(finding.Attributes.Rating.Severity)
 			}
 		}
 	}
+}
 
-	// If no ID determined from primary problem, use finding key or ID
-	if id == "" && firstFinding != nil {
-		if firstFinding.Attributes != nil && firstFinding.Attributes.Key != "" {
-			id = firstFinding.Attributes.Key
-		} else if firstFinding.Id != nil {
-			id = firstFinding.Id.String()
+// extractReachability extracts reachability evidence
+func (b *issueBuilder) extractReachability(finding FindingData) {
+	if b.reachability != nil {
+		return
+	}
+	for _, ev := range finding.Attributes.Evidence {
+		discriminator, err := ev.Discriminator()
+		if err != nil || discriminator != "reachability" {
+			continue
+		}
+		reachEv, err := ev.AsReachabilityEvidence()
+		if err == nil {
+			b.reachability = &reachEv
+			break
+		}
+	}
+}
+
+// extractDependencyPaths extracts dependency paths from evidence
+func (b *issueBuilder) extractDependencyPaths(finding FindingData) {
+	for _, ev := range finding.Attributes.Evidence {
+		discriminator, err := ev.Discriminator()
+		if err != nil || discriminator != "dependency_path" {
+			continue
+		}
+		depPath, err := ev.AsDependencyPathEvidence()
+		if err != nil {
+			continue
+		}
+		var pathParts []string
+		for _, dep := range depPath.Path {
+			pathParts = append(pathParts, fmt.Sprintf("%s@%s", dep.Name, dep.Version))
+		}
+		if len(pathParts) > 0 {
+			b.dependencyPaths = append(b.dependencyPaths, strings.Join(pathParts, " › "))
+		}
+	}
+}
+
+// extractPackageInfo extracts package name and version from package locations
+func (b *issueBuilder) extractPackageInfo(finding FindingData) {
+	for _, location := range finding.Attributes.Locations {
+		locationDiscriminator, err := location.Discriminator()
+		if err != nil || locationDiscriminator != "package" {
+			continue
+		}
+		pkgLoc, err := location.AsPackageLocation()
+		if err != nil {
+			continue
+		}
+		if b.packageName == "" {
+			b.packageName = pkgLoc.Package.Name
+		}
+		if b.packageVersion == "" {
+			b.packageVersion = pkgLoc.Package.Version
+		}
+	}
+}
+
+// processProblems processes all problems to extract CVEs, CWEs, and vulnerability info
+func (b *issueBuilder) processProblems(finding FindingData) {
+	for _, problem := range finding.Attributes.Problems {
+		discriminator, err := problem.Discriminator()
+		if err != nil {
+			continue
+		}
+
+		switch discriminator {
+		case "snyk_vuln":
+			b.processSnykVulnProblem(problem)
+		case "cve":
+			b.processCveProblem(problem)
+		case "cwe":
+			b.processCweProblem(problem)
+		}
+
+		// Fallback to first problem if no snyk_vuln found
+		if b.primaryProblem == nil && discriminator != "cve" && discriminator != "cwe" {
+			b.primaryProblem = &problem
+		}
+	}
+}
+
+// processSnykVulnProblem extracts data from a Snyk vulnerability problem
+func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
+	vulnProblem, err := problem.AsSnykVulnProblem()
+	if err != nil {
+		return
+	}
+
+	if b.primaryProblem == nil {
+		b.primaryProblem = &problem
+		b.snykVulnProblem = &vulnProblem
+	}
+
+	// Always set ID from vulnerability ID if available
+	if vulnProblem.Id != "" {
+		b.id = vulnProblem.Id
+	}
+
+	// Set severity and other metadata from first vuln problem
+	if b.severity == "" {
+		b.severity = string(vulnProblem.Severity)
+	}
+	if b.cvssScore == 0.0 {
+		b.cvssScore = float32(vulnProblem.CvssBaseScore)
+	}
+	if !b.isFixable {
+		b.isFixable = vulnProblem.IsFixable
+	}
+	if len(b.fixedInVersions) == 0 {
+		b.fixedInVersions = vulnProblem.InitiallyFixedInVersions
+	}
+
+	// Extract ecosystem
+	if b.ecosystem == "" {
+		if buildEco, err := vulnProblem.Ecosystem.AsSnykvulndbBuildPackageEcosystem(); err == nil {
+			b.ecosystem = buildEco.PackageManager
+		} else if osEco, err := vulnProblem.Ecosystem.AsSnykvulndbOsPackageEcosystem(); err == nil {
+			b.ecosystem = osEco.OsName
 		}
 	}
 
-	// Deduplicate CWE and CVE lists, dependency paths, and source locations
-	cwes = deduplicateStrings(cwes)
-	cves = deduplicateStrings(cves)
-	dependencyPaths = deduplicateStrings(dependencyPaths)
-	sourceLocations = deduplicateSourceLocations(sourceLocations)
+	// Use package name/version from vuln problem if not set from locations
+	if b.packageName == "" {
+		b.packageName = vulnProblem.PackageName
+	}
+	if b.packageVersion == "" {
+		b.packageVersion = vulnProblem.PackageVersion
+	}
+}
 
-	// Build metadata map with lowercase keys for case-insensitive access
+// processCveProblem extracts CVE ID
+func (b *issueBuilder) processCveProblem(problem Problem) {
+	cveProb, err := problem.AsCveProblem()
+	if err == nil {
+		b.cves = append(b.cves, cveProb.Id)
+	}
+}
+
+// processCweProblem extracts CWE ID
+func (b *issueBuilder) processCweProblem(problem Problem) {
+	cweProb, err := problem.AsCweProblem()
+	if err == nil {
+		b.cwes = append(b.cwes, cweProb.Id)
+	}
+}
+
+// determineFallbackID sets ID from finding key or ID if not already set
+func (b *issueBuilder) determineFallbackID() {
+	if b.id == "" && b.firstFinding != nil {
+		if b.firstFinding.Attributes != nil && b.firstFinding.Attributes.Key != "" {
+			b.id = b.firstFinding.Attributes.Key
+		} else if b.firstFinding.Id != nil {
+			b.id = b.firstFinding.Id.String()
+		}
+	}
+}
+
+// deduplicate removes duplicate values from collected data
+func (b *issueBuilder) deduplicate() {
+	b.cwes = deduplicateStrings(b.cwes)
+	b.cves = deduplicateStrings(b.cves)
+	b.dependencyPaths = deduplicateStrings(b.dependencyPaths)
+	b.sourceLocations = deduplicateSourceLocations(b.sourceLocations)
+}
+
+// build constructs the final Issue from collected data
+func (b *issueBuilder) build() *issue {
+	metadata := b.buildMetadata()
+
+	return &issue{
+		findings:          b.findings,
+		findingType:       b.findingType,
+		problems:          b.allProblems,
+		primaryProblem:    b.primaryProblem,
+		id:                b.id,
+		severity:          b.severity,
+		effectiveSeverity: b.effectiveSeverity,
+		cwes:              b.cwes,
+		cves:              b.cves,
+		title:             b.title,
+		description:       b.description,
+		snykVulnProblem:   b.snykVulnProblem,
+		sourceLocations:   b.sourceLocations,
+		riskScore:         b.riskScore,
+		reachability:      b.reachability,
+		metadata:          metadata,
+	}
+}
+
+// buildMetadata constructs the metadata map
+func (b *issueBuilder) buildMetadata() map[string]interface{} {
 	metadata := make(map[string]interface{})
 
 	// Add component information
-	if packageName != "" || packageVersion != "" {
+	if b.packageName != "" || b.packageVersion != "" {
 		component := map[string]string{
-			"name":    packageName,
-			"version": packageVersion,
+			"name":    b.packageName,
+			"version": b.packageVersion,
 		}
 		metadata[strings.ToLower(MetadataKeyComponent)] = component
-		metadata[strings.ToLower(MetadataKeyComponentName)] = packageName
-		metadata[strings.ToLower(MetadataKeyComponentVersion)] = packageVersion
+		metadata[strings.ToLower(MetadataKeyComponentName)] = b.packageName
+		metadata[strings.ToLower(MetadataKeyComponentVersion)] = b.packageVersion
 	}
 
 	// Add technology/ecosystem
-	if ecosystem != "" {
-		metadata[strings.ToLower(MetadataKeyTechnology)] = ecosystem
+	if b.ecosystem != "" {
+		metadata[strings.ToLower(MetadataKeyTechnology)] = b.ecosystem
 	}
 
 	// Add CVSS score
-	if cvssScore > 0 {
-		metadata[strings.ToLower(MetadataKeyCVSSScore)] = cvssScore
+	if b.cvssScore > 0 {
+		metadata[strings.ToLower(MetadataKeyCVSSScore)] = b.cvssScore
 	}
 
 	// Add fix information
-	metadata[strings.ToLower(MetadataKeyIsFixable)] = isFixable
-	if len(fixedInVersions) > 0 {
-		metadata[strings.ToLower(MetadataKeyFixedInVersions)] = fixedInVersions
+	metadata[strings.ToLower(MetadataKeyIsFixable)] = b.isFixable
+	if len(b.fixedInVersions) > 0 {
+		metadata[strings.ToLower(MetadataKeyFixedInVersions)] = b.fixedInVersions
 	}
 
 	// Add dependency paths
-	if len(dependencyPaths) > 0 {
-		metadata[strings.ToLower(MetadataKeyDependencyPaths)] = dependencyPaths
+	if len(b.dependencyPaths) > 0 {
+		metadata[strings.ToLower(MetadataKeyDependencyPaths)] = b.dependencyPaths
 	}
 
-	return &issue{
-		findings:          findings,
-		findingType:       findingType,
-		problems:          allProblems,
-		primaryProblem:    primaryProblem,
-		id:                id,
-		severity:          severity,
-		effectiveSeverity: effectiveSeverity,
-		cwes:              cwes,
-		cves:              cves,
-		title:             title,
-		description:       description,
-		snykVulnProblem:   snykVulnProblem,
-		sourceLocations:   sourceLocations,
-		riskScore:         riskScore,
-		reachability:      reachability,
-		metadata:          metadata,
-	}, nil
+	return metadata
 }
 
 // deduplicateStrings removes duplicate strings from a slice.

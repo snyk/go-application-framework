@@ -145,88 +145,108 @@ func ConvertTypeToDriverName(s string) string {
 	}
 }
 
+// shouldProcessIssue checks if an issue should be processed for SARIF rule generation
+func shouldProcessIssue(issue testapi.Issue, findingType testapi.FindingType) bool {
+	if issue.GetFindingType() != findingType {
+		return false
+	}
+	return len(issue.GetFindings()) > 0
+}
+
+// buildSarifRule constructs a SARIF rule from an issue
+func buildSarifRule(issue testapi.Issue, issueID string, findingType testapi.FindingType) map[string]interface{} {
+	componentName := getMetadataString(issue, testapi.MetadataKeyComponentName)
+	componentVersion := getMetadataString(issue, testapi.MetadataKeyComponentVersion)
+
+	shortDesc := buildShortDescription(issue, componentName)
+	fullDesc := buildFullDescription(componentName, componentVersion, issue.GetCVEs())
+	helpMarkdown := buildHelpMarkdownGeneric(issue, findingType)
+	properties := buildRuleProperties(issue)
+
+	return map[string]interface{}{
+		"id":               issueID,
+		"shortDescription": shortDesc,
+		"fullDescription":  fullDesc,
+		"help_text":        "",
+		"help_markdown":    helpMarkdown,
+		"properties":       properties,
+	}
+}
+
+// buildShortDescription creates the short description for a SARIF rule
+func buildShortDescription(issue testapi.Issue, componentName string) string {
+	severity := issue.GetSeverity()
+	return fmt.Sprintf("%s severity - %s vulnerability in %s",
+		cases.Title(language.English).String(severity),
+		issue.GetTitle(),
+		componentName)
+}
+
+// buildFullDescription creates the full description for a SARIF rule
+func buildFullDescription(componentName, componentVersion string, cveIds []string) string {
+	fullDesc := fmt.Sprintf("%s@%s", componentName, componentVersion)
+	if len(cveIds) > 0 {
+		fullDesc = fmt.Sprintf("(%s) %s", strings.Join(cveIds, ", "), fullDesc)
+	}
+	return fullDesc
+}
+
+// buildRuleProperties builds the properties object for a SARIF rule
+func buildRuleProperties(issue testapi.Issue) map[string]interface{} {
+	tags := []interface{}{"security"}
+	for _, cwe := range issue.GetCWEs() {
+		tags = append(tags, cwe)
+	}
+
+	technology := getMetadataString(issue, testapi.MetadataKeyTechnology)
+	if technology != "" {
+		tags = append(tags, technology)
+	}
+
+	cvssScore := getMetadataFloat(issue, testapi.MetadataKeyCVSSScore)
+	return map[string]interface{}{
+		"cvssv3_baseScore":  cvssScore,
+		"security-severity": fmt.Sprintf("%.1f", cvssScore),
+		"tags":              tags,
+	}
+}
+
+// getMetadataString is a helper to safely extract string metadata
+func getMetadataString(issue testapi.Issue, key string) string {
+	if val, ok := issue.GetMetadata(key); ok {
+		if str, ok := val.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+// getMetadataFloat is a helper to safely extract float32 metadata
+func getMetadataFloat(issue testapi.Issue, key string) float32 {
+	if val, ok := issue.GetMetadata(key); ok {
+		if f, ok := val.(float32); ok {
+			return f
+		}
+	}
+	return 0.0
+}
+
 // GetRulesFromIssues extracts SARIF rules from a list of Issues for a specific finding type.
 // Based on the TypeScript implementation in open-source-sarif-output.ts
 func GetRulesFromIssues(issuesList []testapi.Issue, t testapi.FindingType) []map[string]interface{} {
 	sarifRules := map[string]map[string]interface{}{}
 
 	for _, issue := range issuesList {
-		// Only process issues of the specified finding type
-		if issue.GetFindingType() != t {
+		if !shouldProcessIssue(issue, t) {
 			continue
 		}
 
-		findings := issue.GetFindings()
-		if len(findings) == 0 {
-			continue
-		}
-
-		// Get issue ID (for SCA, this is the vulnerability ID)
 		issueID := issue.GetID()
-		if issueID == "" {
+		if issueID == "" || sarifRules[issueID] != nil {
 			continue
 		}
 
-		if _, ok := sarifRules[issueID]; !ok {
-			// Build shortDescription
-			severity := issue.GetSeverity()
-			var componentName string
-			if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
-				componentName, _ = val.(string)
-			}
-
-			shortDesc := fmt.Sprintf("%s severity - %s vulnerability in %s",
-				cases.Title(language.English).String(severity),
-				issue.GetTitle(),
-				componentName)
-
-			// Build fullDescription with CVE IDs
-			var componentVersion string
-			if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
-				componentVersion, _ = val.(string)
-			}
-			fullDesc := fmt.Sprintf("%s@%s", componentName, componentVersion)
-			cveIds := issue.GetCVEs()
-			if len(cveIds) > 0 {
-				fullDesc = fmt.Sprintf("(%s) %s", strings.Join(cveIds, ", "), fullDesc)
-			}
-
-			// Build help markdown
-			helpMarkdown := buildHelpMarkdownGeneric(issue, t)
-
-			// Build properties with tags including CWEs
-			tags := []interface{}{"security"}
-			for _, cwe := range issue.GetCWEs() {
-				tags = append(tags, cwe)
-			}
-			// Add technology/ecosystem if available
-			var technology string
-			if val, ok := issue.GetMetadata(testapi.MetadataKeyTechnology); ok {
-				technology, _ = val.(string)
-			}
-			if technology != "" {
-				tags = append(tags, technology)
-			}
-
-			var cvssScore float32
-			if val, ok := issue.GetMetadata(testapi.MetadataKeyCVSSScore); ok {
-				cvssScore, _ = val.(float32)
-			}
-			properties := map[string]interface{}{
-				"cvssv3_baseScore":  cvssScore,
-				"security-severity": fmt.Sprintf("%.1f", cvssScore),
-				"tags":              tags,
-			}
-
-			sarifRules[issueID] = map[string]interface{}{
-				"id":               issueID,
-				"shortDescription": shortDesc,
-				"fullDescription":  fullDesc,
-				"help_text":        "",
-				"help_markdown":    helpMarkdown,
-				"properties":       properties,
-			}
-		}
+		sarifRules[issueID] = buildSarifRule(issue, issueID, t)
 	}
 
 	// Convert map values to slice and sort by rule ID for deterministic output
@@ -278,71 +298,83 @@ func getResultsFromIssues(issuesList []testapi.Issue, findingType testapi.Findin
 	var results []map[string]interface{}
 
 	for _, issue := range issuesList {
-		// Skip issues not matching the specified finding type
-		if issue.GetFindingType() != findingType {
+		if !shouldProcessIssue(issue, findingType) {
 			continue
 		}
 
-		findings := issue.GetFindings()
-		if len(findings) == 0 {
-			continue
-		}
-
-		// Get issue ID (vulnerability ID for SCA, rule ID for SAST, etc.)
 		issueID := issue.GetID()
 		if issueID == "" {
 			continue
 		}
 
-		// Create one result per issue for backward compatibility
-		// Use the first finding for location information
-		firstFinding := findings[0]
-
-		// Build message
-		severity := issue.GetSeverity()
-		var componentName string
-		if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
-			componentName, _ = val.(string)
-		}
-
-		message := map[string]interface{}{
-			"text": fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
-				componentName,
-				severity),
-		}
-
-		// Build location
-		location := buildLocation(firstFinding, issue)
-
-		// Build result
-		sarifLevel := SeverityToSarifLevel(severity)
-		sarifResult := map[string]interface{}{
-			"ruleId":    issueID,
-			"level":     sarifLevel,
-			"message":   message,
-			"locations": []interface{}{location},
-		}
-
-		// Add fixes if available
-		var isFixable bool
-		if val, ok := issue.GetMetadata(testapi.MetadataKeyIsFixable); ok {
-			isFixable, _ = val.(bool)
-		}
-		var fixedVersions []string
-		if val, ok := issue.GetMetadata(testapi.MetadataKeyFixedInVersions); ok {
-			fixedVersions, _ = val.([]string)
-		}
-		if isFixable && len(fixedVersions) > 0 {
-			fixes := buildFixes(firstFinding, issue)
-			if fixes != nil {
-				sarifResult["fixes"] = fixes
-			}
-		}
+		firstFinding := issue.GetFindings()[0]
+		sarifResult := buildSarifResult(issue, issueID, firstFinding)
+		addFixesIfAvailable(sarifResult, issue, firstFinding)
 
 		results = append(results, sarifResult)
 	}
 
-	// Sort results by ruleId for deterministic output
+	sortResultsByRuleId(results)
+	return results
+}
+
+// buildSarifResult constructs a SARIF result object from an issue
+func buildSarifResult(issue testapi.Issue, issueID string, firstFinding testapi.FindingData) map[string]interface{} {
+	severity := issue.GetSeverity()
+	componentName := getMetadataString(issue, testapi.MetadataKeyComponentName)
+
+	message := map[string]interface{}{
+		"text": fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
+			componentName,
+			severity),
+	}
+
+	location := buildLocation(firstFinding, issue)
+	sarifLevel := SeverityToSarifLevel(severity)
+
+	return map[string]interface{}{
+		"ruleId":    issueID,
+		"level":     sarifLevel,
+		"message":   message,
+		"locations": []interface{}{location},
+	}
+}
+
+// addFixesIfAvailable adds fix information to the SARIF result if available
+func addFixesIfAvailable(sarifResult map[string]interface{}, issue testapi.Issue, firstFinding testapi.FindingData) {
+	isFixable := getMetadataBool(issue, testapi.MetadataKeyIsFixable)
+	fixedVersions := getMetadataStrings(issue, testapi.MetadataKeyFixedInVersions)
+
+	if isFixable && len(fixedVersions) > 0 {
+		fixes := buildFixes(firstFinding, issue)
+		if fixes != nil {
+			sarifResult["fixes"] = fixes
+		}
+	}
+}
+
+// getMetadataBool is a helper to safely extract bool metadata
+func getMetadataBool(issue testapi.Issue, key string) bool {
+	if val, ok := issue.GetMetadata(key); ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+// getMetadataStrings is a helper to safely extract string slice metadata
+func getMetadataStrings(issue testapi.Issue, key string) []string {
+	if val, ok := issue.GetMetadata(key); ok {
+		if strs, ok := val.([]string); ok {
+			return strs
+		}
+	}
+	return []string{}
+}
+
+// sortResultsByRuleId sorts SARIF results by ruleId for deterministic output
+func sortResultsByRuleId(results []map[string]interface{}) {
 	sort.Slice(results, func(i, j int) bool {
 		ruleIdI, okI := results[i]["ruleId"].(string)
 		ruleIdJ, okJ := results[j]["ruleId"].(string)
@@ -351,18 +383,27 @@ func getResultsFromIssues(issuesList []testapi.Issue, findingType testapi.Findin
 		}
 		return ruleIdI < ruleIdJ
 	})
-
-	return results
 }
 
 // buildHelpMarkdownGeneric constructs the help markdown section for SARIF rules
 func buildHelpMarkdownGeneric(issue testapi.Issue, findingType testapi.FindingType) string {
 	var sb strings.Builder
 
-	// Technology/Ecosystem - use appropriate terminology based on finding type
+	appendTechnologySection(&sb, issue, findingType)
+	componentName := appendComponentSection(&sb, issue, findingType)
+	appendDependencyPathsSection(&sb, issue, componentName)
+	appendDescriptionSection(&sb, issue)
+
+	return sb.String()
+}
+
+// appendTechnologySection adds technology/ecosystem information to the markdown
+func appendTechnologySection(sb *strings.Builder, issue testapi.Issue, findingType testapi.FindingType) {
 	var technology string
 	if val, ok := issue.GetMetadata(testapi.MetadataKeyTechnology); ok {
-		technology, _ = val.(string)
+		if str, ok := val.(string); ok {
+			technology = str
+		}
 	}
 	if technology != "" {
 		if findingType == testapi.FindingTypeSca {
@@ -371,11 +412,15 @@ func buildHelpMarkdownGeneric(issue testapi.Issue, findingType testapi.FindingTy
 			sb.WriteString(fmt.Sprintf("* Technology: %s\n", technology))
 		}
 	}
+}
 
-	// Component - use appropriate terminology based on finding type
+// appendComponentSection adds component information to the markdown and returns the component name
+func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingType testapi.FindingType) string {
 	var componentName string
 	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
-		componentName, _ = val.(string)
+		if str, ok := val.(string); ok {
+			componentName = str
+		}
 	}
 	if componentName != "" {
 		if findingType == testapi.FindingTypeSca {
@@ -384,43 +429,62 @@ func buildHelpMarkdownGeneric(issue testapi.Issue, findingType testapi.FindingTy
 			sb.WriteString(fmt.Sprintf("* Affected component: %s\n", componentName))
 		}
 	}
+	return componentName
+}
 
-	// Introduced through
+// appendDependencyPathsSection adds dependency path information to the markdown
+func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, componentName string) {
 	var dependencyPaths []string
 	if val, ok := issue.GetMetadata(testapi.MetadataKeyDependencyPaths); ok {
-		dependencyPaths, _ = val.([]string)
+		if strs, ok := val.([]string); ok {
+			dependencyPaths = strs
+		}
 	}
+
 	if len(dependencyPaths) > 0 {
-		// Get the root package from first path
-		firstPath := dependencyPaths[0]
-		parts := strings.Split(firstPath, " › ")
-		if len(parts) > 1 {
-			sb.WriteString(fmt.Sprintf("* Introduced through: %s, %s and others\n", parts[0], parts[1]))
-		} else if len(parts) == 1 {
-			sb.WriteString(fmt.Sprintf("* Introduced through: %s\n", parts[0]))
-		}
-
-		// Detailed paths
-		sb.WriteString("### Detailed paths\n")
-		for _, path := range dependencyPaths {
-			sb.WriteString(fmt.Sprintf("* _Introduced through_: %s\n", path))
-		}
+		appendDependencyPathsSummary(sb, dependencyPaths)
+		appendDetailedPaths(sb, dependencyPaths)
 	} else if componentName != "" {
-		// Fallback if no dependency paths available
-		var componentVersion string
-		if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
-			componentVersion, _ = val.(string)
-		}
-		sb.WriteString(fmt.Sprintf("* Introduced through: %s@%s\n", componentName, componentVersion))
+		appendFallbackIntroduction(sb, issue, componentName)
 	}
+}
 
-	// Description
+// appendDependencyPathsSummary adds a summary of dependency paths
+func appendDependencyPathsSummary(sb *strings.Builder, dependencyPaths []string) {
+	firstPath := dependencyPaths[0]
+	parts := strings.Split(firstPath, " › ")
+	if len(parts) > 1 {
+		sb.WriteString(fmt.Sprintf("* Introduced through: %s, %s and others\n", parts[0], parts[1]))
+	} else if len(parts) == 1 {
+		sb.WriteString(fmt.Sprintf("* Introduced through: %s\n", parts[0]))
+	}
+}
+
+// appendDetailedPaths adds detailed dependency path information
+func appendDetailedPaths(sb *strings.Builder, dependencyPaths []string) {
+	sb.WriteString("### Detailed paths\n")
+	for _, path := range dependencyPaths {
+		sb.WriteString(fmt.Sprintf("* _Introduced through_: %s\n", path))
+	}
+}
+
+// appendFallbackIntroduction adds a fallback introduction line when no dependency paths are available
+func appendFallbackIntroduction(sb *strings.Builder, issue testapi.Issue, componentName string) {
+	var componentVersion string
+	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
+		if str, ok := val.(string); ok {
+			componentVersion = str
+		}
+	}
+	sb.WriteString(fmt.Sprintf("* Introduced through: %s@%s\n", componentName, componentVersion))
+}
+
+// appendDescriptionSection adds the issue description to the markdown
+func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 	description := issue.GetDescription()
 	if description != "" {
 		sb.WriteString(description)
 	}
-
-	return sb.String()
 }
 
 func buildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]interface{} {
@@ -429,10 +493,14 @@ func buildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]
 	startLine := 1
 	var packageName, packageVersion string
 	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
-		packageName, _ = val.(string)
+		if str, ok := val.(string); ok {
+			packageName = str
+		}
 	}
 	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
-		packageVersion, _ = val.(string)
+		if str, ok := val.(string); ok {
+			packageVersion = str
+		}
 	}
 
 	// Try to extract actual file path and package version from locations
@@ -478,7 +546,9 @@ func buildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]
 func buildFixes(finding testapi.FindingData, issue testapi.Issue) []interface{} {
 	var fixedVersions []string
 	if val, ok := issue.GetMetadata(testapi.MetadataKeyFixedInVersions); ok {
-		fixedVersions, _ = val.([]string)
+		if strs, ok := val.([]string); ok {
+			fixedVersions = strs
+		}
 	}
 	if len(fixedVersions) == 0 {
 		return nil
@@ -487,7 +557,9 @@ func buildFixes(finding testapi.FindingData, issue testapi.Issue) []interface{} 
 	fixedVersion := fixedVersions[0]
 	var packageName string
 	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
-		packageName, _ = val.(string)
+		if str, ok := val.(string); ok {
+			packageName = str
+		}
 	}
 
 	uri := "package.json"
