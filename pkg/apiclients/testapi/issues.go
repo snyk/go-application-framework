@@ -696,30 +696,30 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 			"name":    b.packageName,
 			"version": b.packageVersion,
 		}
-		metadata[strings.ToLower(MetadataKeyComponent)] = component
-		metadata[strings.ToLower(MetadataKeyComponentName)] = b.packageName
-		metadata[strings.ToLower(MetadataKeyComponentVersion)] = b.packageVersion
+		metadata[MetadataKeyComponent] = component
+		metadata[MetadataKeyComponentName] = b.packageName
+		metadata[MetadataKeyComponentVersion] = b.packageVersion
 	}
 
 	// Add technology/ecosystem
 	if b.ecosystem != "" {
-		metadata[strings.ToLower(MetadataKeyTechnology)] = b.ecosystem
+		metadata[MetadataKeyTechnology] = b.ecosystem
 	}
 
 	// Add CVSS score
 	if b.cvssScore > 0 {
-		metadata[strings.ToLower(MetadataKeyCVSSScore)] = b.cvssScore
+		metadata[MetadataKeyCVSSScore] = b.cvssScore
 	}
 
 	// Add fix information
-	metadata[strings.ToLower(MetadataKeyIsFixable)] = b.isFixable
+	metadata[MetadataKeyIsFixable] = b.isFixable
 	if len(b.fixedInVersions) > 0 {
-		metadata[strings.ToLower(MetadataKeyFixedInVersions)] = b.fixedInVersions
+		metadata[MetadataKeyFixedInVersions] = b.fixedInVersions
 	}
 
 	// Add dependency paths
 	if len(b.dependencyPaths) > 0 {
-		metadata[strings.ToLower(MetadataKeyDependencyPaths)] = b.dependencyPaths
+		metadata[MetadataKeyDependencyPaths] = b.dependencyPaths
 	}
 
 	return metadata
