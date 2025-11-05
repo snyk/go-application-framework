@@ -231,16 +231,6 @@ func normalizeRuleDescriptions(rules []interface{}) {
 			continue
 		}
 
-		// Normalize fullDescription to remove package versions
-		if fullDesc, ok := rule["fullDescription"].(map[string]interface{}); ok {
-			if text, ok := fullDesc["text"].(string); ok {
-				parts := strings.Split(text, "@")
-				if len(parts) > 1 {
-					fullDesc["text"] = strings.Join(parts[:len(parts)-1], "@") + "@"
-				}
-			}
-		}
-
 		// Normalize help markdown
 		if help, ok := rule["help"].(map[string]interface{}); ok {
 			if markdown, ok := help["markdown"].(string); ok {
