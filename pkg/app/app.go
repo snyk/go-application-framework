@@ -34,11 +34,13 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 		logger.Print("Failed to add dependency for ORGANIZATION_SLUG:", err)
 	}
 
-	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
+		url := c.GetString(configuration.API_URL)
+		client := localNetworkStack.GetHttpClient()
 		apiClient := apiClientFactory(url, client)
-		orgId := config.GetString(configuration.ORGANIZATION)
+		orgId := c.GetString(configuration.ORGANIZATION)
 		if len(orgId) == 0 {
 			return existingValue, nil
 		}
@@ -58,6 +60,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	}
 
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// TODO - This function uses the outer (global) config and network access, so will not respect values set in the closures' (potentially cloned) configs.
 		client := engine.GetNetworkAccess().GetHttpClient()
 		url := config.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
@@ -173,6 +176,7 @@ func defaultInputDirectory() configuration.DefaultValueFunction {
 
 func defaultTempDirectory(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger) configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
 		version := "0.0.0"
 		ri := engine.GetRuntimeInfo()
 		if ri != nil && len(ri.GetVersion()) > 0 {
@@ -226,6 +230,7 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.Default
 
 func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
 		const multipleAttempts = 3 // three here is chosen based on other places in the application
 		const singleAttempt = 1
 
@@ -304,6 +309,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	}
 
 	config.AddDefaultValue(configuration.IS_FEDRAMP, func(_ configuration.Configuration, existingValue any) (any, error) {
+		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
 		if existingValue == nil {
 			return api.IsFedramp(config.GetString(configuration.API_URL)), nil
 		} else {
@@ -320,6 +326,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {
 	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
 		var files []string
 		// last file usually wins if the same values are configured
 		// Precedence should be:

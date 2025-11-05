@@ -46,6 +46,7 @@ func GetCodeFlagSet() *pflag.FlagSet {
 var WORKFLOWID_CODE = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
 func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error) {
+	// TODO - This function uses the global config and network access, so will not respect values set in the default funcs' closures' (potentially cloned) configs.
 	config := engine.GetConfiguration()
 	org := config.GetString(configuration.ORGANIZATION)
 	client := engine.GetNetworkAccess().GetHttpClient()

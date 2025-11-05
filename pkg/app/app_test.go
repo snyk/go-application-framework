@@ -777,6 +777,100 @@ func TestDefaultInputDirectory(t *testing.T) {
 	})
 }
 
+func Test_defaultFuncOrganizationSlug_UsesClonedConfig(t *testing.T) {
+	org1Id := "00000000-0000-0000-0000-000000000001"
+	org1Slug := "org-slug-1"
+	org2Id := "00000000-0000-0000-0000-000000000002"
+	org2Slug := "org-slug-2"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	// mock assertions
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org1Id).Return(org1Slug, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(org2Id).Return(org2Slug, nil).AnyTimes()
+
+	config := configuration.NewInMemory()
+	engine := workflow.NewWorkFlowEngine(config)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	// Set org in original config
+	config.Set(configuration.ORGANIZATION, org1Id)
+	actualOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org1Slug, actualOrgSlug, "original config should have org1 slug")
+
+	// Clone the config
+	clonedConfig := config.Clone()
+
+	// Change org in cloned config
+	clonedConfig.Set(configuration.ORGANIZATION, org2Id)
+
+	// Verify cloned config has correct slug for org2 (not org1)
+	clonedOrgSlug := clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org2Slug, clonedOrgSlug, "cloned config should have org2 slug, not org1 slug")
+
+	// Verify original config still has org1
+	originalOrgSlug := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, org1Slug, originalOrgSlug, "original config should still have org1 slug")
+}
+
+func Test_defaultFuncOrganizationSlug_UsesClonedNetworkAccess(t *testing.T) {
+	orgId := "00000000-0000-0000-0000-000000000001"
+	orgSlug := "org-slug"
+
+	globalAPIEndpoint := "https://api.snyk.io"
+	cloneAPIEndpoint := "https://api.eu.snyk.io"
+
+	// setup mock
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+
+	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(orgId).Return(orgSlug, nil).AnyTimes()
+
+	config := configuration.NewInMemory()
+	config.Set(configuration.API_URL, globalAPIEndpoint)
+	engine := workflow.NewWorkFlowEngine(config)
+
+	// Track API client creations with their URLs
+	var apiCalls []string
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		apiCalls = append(apiCalls, url)
+		return mockApiClient
+	}
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	// Use an immutable default value function for the org to avoid defaultFuncOrganization (which we are not testing here)
+	config.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(orgId))
+
+	// Verify no API calls were made before the first fetch
+	assert.Len(t, apiCalls, 0, "Not expectig any API calls before the first fetch")
+
+	// Fetch slug from the global config and verify an API call was made on the first endpoint
+	actualSlug1 := config.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, orgSlug, actualSlug1)
+	assert.Equal(t, []string{globalAPIEndpoint}, apiCalls, "First fetch should create 1 API client using global API URL")
+
+	// Clone the config and change the API URL
+	clonedConfig := config.Clone()
+	clonedConfig.Set(configuration.API_URL, cloneAPIEndpoint)
+	assert.Len(t, apiCalls, 1, "Cloning and changing API URL should not create API clients")
+
+	// Fetch slug from the cloned config and verify an API call was made on the second endpoint
+	actualSlug2 := clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
+	assert.Equal(t, orgSlug, actualSlug2)
+	assert.Equal(t,
+		[]string{globalAPIEndpoint, cloneAPIEndpoint},
+		apiCalls,
+		"Second fetch should create a second API client using the cloned config's API URL",
+	)
+}
+
 func Test_auth_oauth(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	config := configuration.NewWithOpts()
