@@ -823,8 +823,8 @@ func Test_defaultFuncOrganizationSlug_UsesClonedNetworkAccess(t *testing.T) {
 	orgId := "00000000-0000-0000-0000-000000000001"
 	orgSlug := "org-slug"
 
-	apiUrl1 := "https://api.snyk.io"
-	apiUrl2 := "https://api.eu.snyk.io"
+	globalAPIEndpoint := "https://api.snyk.io"
+	cloneAPIEndpoint := "https://api.eu.snyk.io"
 
 	// setup mock
 	ctrl := gomock.NewController(t)
@@ -834,47 +834,41 @@ func Test_defaultFuncOrganizationSlug_UsesClonedNetworkAccess(t *testing.T) {
 	mockApiClient.EXPECT().GetSlugFromOrgId(orgId).Return(orgSlug, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
-	config.Set(configuration.API_URL, apiUrl1)
+	config.Set(configuration.API_URL, globalAPIEndpoint)
 	engine := workflow.NewWorkFlowEngine(config)
 
-	// Track all API calls with their URLs
+	// Track API client creations with their URLs
 	var apiCalls []string
 	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
 		apiCalls = append(apiCalls, url)
 		return mockApiClient
 	}
 	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
-	assert.Len(t, apiCalls, 0, "Should have no API client creations yet before the first fetch")
 
-	// Setup the org in the global config
-	config.Set(configuration.ORGANIZATION, orgId)
-	assert.Len(t, apiCalls, 0, "Set(ORGANIZATION) should not create any API clients")
+	// Use an immutable default value function for the org to avoid defaultFuncOrganization (which we are not testing here)
+	config.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(orgId))
 
-	// Fetch the org slug - this creates two API clients, one in the slug default func and one in the org default func
+	// Verify no API calls were made before the first fetch
+	assert.Len(t, apiCalls, 0, "Not expectig any API calls before the first fetch")
+
+	// Fetch slug from the global config and verify an API call was made on the first endpoint
 	actualSlug1 := config.GetString(configuration.ORGANIZATION_SLUG)
 	assert.Equal(t, orgSlug, actualSlug1)
-	assert.Len(t, apiCalls, 2, "Getting slug creates two API clients")
-	assert.Equal(t, apiUrl1, apiCalls[0], "First API client (for org slug in global config) should use the global API URL")
-	assert.Equal(t, apiUrl1, apiCalls[1], "Second API client (for org in global config) should use the global API URL")
+	assert.Equal(t, []string{globalAPIEndpoint}, apiCalls, "First fetch should create 1 API client using global API URL")
 
-	// Clone the config and change API URL, but re-set the org
+	// Clone the config and change the API URL
 	clonedConfig := config.Clone()
-	clonedConfig.Set(configuration.API_URL, apiUrl2)
-	clonedConfig.Set(configuration.ORGANIZATION, orgId)
-	assert.Len(t, apiCalls, 2, "Cloning and setting API URL and org in the cloned config should not create any additional API clients")
+	clonedConfig.Set(configuration.API_URL, cloneAPIEndpoint)
+	assert.Len(t, apiCalls, 1, "Cloning and changing API URL should not create API clients")
 
-	// Fetch the org slug from cloned config - again, this creates two API clients
+	// Fetch slug from the cloned config and verify an API call was made on the second endpoint
 	actualSlug2 := clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
 	assert.Equal(t, orgSlug, actualSlug2)
-	assert.Len(t, apiCalls, 4, "Should have 4 API clients after the second fetch")
-	assert.Equal(t, apiUrl2, apiCalls[2], "Third API client (for org slug in cloned config) should use the new API URL")
-	assert.Equal(
-		t,
-		apiUrl1,
-		apiCalls[3],
-		"BUG: Forth API client (for org in cloned config) currently uses the global API URL, when it should use the new API URL "+
-			"- This will change once the network access cloning fix is applied in the defaultFuncOrganization function",
-	) // TODO - Change this when defaultFuncOrganization changes.
+	assert.Equal(t,
+		[]string{globalAPIEndpoint, cloneAPIEndpoint},
+		apiCalls,
+		"Second fetch should create a second API client using the cloned config's API URL",
+	)
 }
 
 func Test_auth_oauth(t *testing.T) {
