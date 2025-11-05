@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
@@ -131,39 +130,6 @@ func normalizePackageVersions(result map[string]interface{}) {
 			}
 		}
 	}
-}
-
-// sortDetailedPaths sorts the "* _Introduced through_:" lines in markdown
-func sortDetailedPaths(markdown string) string {
-	lines := strings.Split(markdown, "\n")
-	var pathLines []string
-	var otherLines []string
-	inDetailedPaths := false
-
-	for _, line := range lines {
-		if strings.Contains(line, "### Detailed paths") {
-			inDetailedPaths = true
-			otherLines = append(otherLines, line)
-		} else if inDetailedPaths && strings.HasPrefix(line, "* _Introduced through_:") {
-			pathLines = append(pathLines, line)
-		} else {
-			if inDetailedPaths && !strings.HasPrefix(line, "* _Introduced through_:") && line != "" {
-				inDetailedPaths = false
-			}
-			if len(pathLines) > 0 {
-				sort.Strings(pathLines)
-				otherLines = append(otherLines, pathLines...)
-				pathLines = nil
-			}
-			otherLines = append(otherLines, line)
-		}
-	}
-	if len(pathLines) > 0 {
-		sort.Strings(pathLines)
-		otherLines = append(otherLines, pathLines...)
-	}
-
-	return strings.Join(otherLines, "\n")
 }
 
 // normalizeMarkdownHeadersAndPaths normalizes markdown formatting
