@@ -78,8 +78,6 @@ func normalizeRules(driver map[string]interface{}) {
 				continue
 			}
 
-			ruleID, _ := rule["id"].(string) //nolint:errcheck // test helper, ok to ignore
-
 			// Normalize CVSS score formatting and remove undefined values
 			if props, ok := rule["properties"].(map[string]interface{}); ok {
 				if secSev, ok := props["security-severity"].(string); ok {
@@ -90,15 +88,6 @@ func normalizeRules(driver map[string]interface{}) {
 						// Ensure consistent decimal format (e.g., "6" -> "6.0")
 						props["security-severity"] = secSev + ".0"
 					}
-				}
-			}
-
-			// Normalize license issue wording in help markdown
-			if help, ok := rule["help"].(map[string]interface{}); ok {
-				if markdown, ok := help["markdown"].(string); ok && strings.HasPrefix(ruleID, "snyk:lic:") {
-					// Normalize "Vulnerable module" to "Module" for license issues
-					markdown = strings.ReplaceAll(markdown, "* Vulnerable module:", "* Module:")
-					help["markdown"] = markdown
 				}
 			}
 		}
@@ -112,28 +101,6 @@ func normalizeRules(driver map[string]interface{}) {
 // normalizeResults normalizes result messages for comparison
 func normalizeResults(run map[string]interface{}) {
 	if results, ok := run["results"].([]interface{}); ok {
-		for _, resultInterface := range results {
-			result, ok := resultInterface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			ruleID, _ := result["ruleId"].(string) //nolint:errcheck // test helper, ok to ignore
-
-			// Normalize license issue messages in expected data
-			// (Expected data uses "vulnerability", we correctly use "license issue")
-			if strings.HasPrefix(ruleID, "snyk:lic:") {
-				if message, ok := result["message"].(map[string]interface{}); ok {
-					if text, ok := message["text"].(string); ok {
-						// Replace "vulnerability" with "license issue" for license findings
-						text = strings.ReplaceAll(text, " vulnerability.", " license issue.")
-						text = strings.ReplaceAll(text, "vulnerable ", "")
-						message["text"] = text
-					}
-				}
-			}
-		}
-
 		// Sort results by ruleId for consistent comparison
 		sortByRuleID(results)
 		run["results"] = results

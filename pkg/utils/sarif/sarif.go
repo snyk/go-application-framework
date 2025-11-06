@@ -225,13 +225,6 @@ func FormatIssueMessage(issue testapi.Issue) string {
 		componentNameStr = "package"
 	}
 
-	// Check if this is a license issue (ID starts with "snyk:lic:")
-	issueID := issue.GetID()
-	if len(issueID) >= 9 && issueID[:9] == "snyk:lic:" {
-		return fmt.Sprintf("This file introduces a %s package with a %s severity license issue.",
-			componentNameStr, issue.GetSeverity())
-	}
-
 	return fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
 		componentNameStr, issue.GetSeverity())
 }
