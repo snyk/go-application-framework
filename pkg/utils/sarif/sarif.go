@@ -547,42 +547,59 @@ func buildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]
 	}
 }
 
-func buildFixes(finding testapi.FindingData, issue testapi.Issue) []interface{} {
-	var fixedVersions []string
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyFixedInVersions); ok {
-		if strs, ok := val.([]string); ok {
-			fixedVersions = strs
-		}
-	}
-	if len(fixedVersions) == 0 {
+func buildFixes(finding testapi.FindingData, _ testapi.Issue) []interface{} {
+	if finding.Relationships == nil || finding.Relationships.Fix == nil || finding.Relationships.Fix.Data == nil {
 		return nil
 	}
 
-	fixedVersion := fixedVersions[0]
-	var packageName string
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
-		if str, ok := val.(string); ok {
-			packageName = str
-		}
+	fixData := finding.Relationships.Fix.Data
+	if fixData.Attributes == nil || fixData.Attributes.Action == nil {
+		return nil
 	}
 
+	upgradeAdvice, err := fixData.Attributes.Action.AsUpgradePackageAdvice()
+	if err != nil {
+		return nil
+	}
+
+	packageName := upgradeAdvice.PackageName
+	if packageName == "" {
+		return nil
+	}
+
+	// TODO: where to get the uri from?
 	uri := "package.json"
 	startLine := 1
-
-	// Try to extract actual file path from locations
 	if len(finding.Attributes.Locations) > 0 {
 		loc := finding.Attributes.Locations[0]
-		sourceLoc, err := loc.AsSourceLocation()
-		if err == nil && sourceLoc.FilePath != "" {
+
+		if sourceLoc, err := loc.AsSourceLocation(); err == nil && sourceLoc.FilePath != "" {
 			uri = sourceLoc.FilePath
 			startLine = sourceLoc.FromLine
 		}
 	}
 
-	return []interface{}{
-		map[string]interface{}{
+	var fixes []interface{}
+	for _, upgradePath := range upgradeAdvice.UpgradePaths {
+		if len(upgradePath.DependencyPath) < 2 {
+			continue
+		}
+
+		// Get the direct dependency to upgrade (second package in path, after root)
+		directDependency := upgradePath.DependencyPath[1]
+		directPackageName := directDependency.Name
+		directVersion := directDependency.Version
+
+		packageVersion := fmt.Sprintf("%s@%s", directPackageName, directVersion)
+
+		// Always show as an upgrade, regardless of isDrop
+		// isDrop indicates that the vulnerable dependency will be removed from the tree,
+		// but the fix action is still to upgrade the direct dependency
+		fixDescription := fmt.Sprintf("Upgrade to %s", packageVersion)
+
+		fix := map[string]interface{}{
 			"description": map[string]interface{}{
-				"text": fmt.Sprintf("Upgrade to %s@%s", packageName, fixedVersion),
+				"text": fixDescription,
 			},
 			"artifactChanges": []interface{}{
 				map[string]interface{}{
@@ -595,12 +612,21 @@ func buildFixes(finding testapi.FindingData, issue testapi.Issue) []interface{} 
 								"startLine": startLine,
 							},
 							"insertedContent": map[string]interface{}{
-								"text": fixedVersion,
+								"text": packageVersion,
 							},
 						},
 					},
 				},
 			},
-		},
+		}
+
+		fixes = append(fixes, fix)
 	}
+
+	// Only one or no upgrade paths are expected
+	if len(fixes) > 0 {
+		return []interface{}{fixes[0]}
+	}
+
+	return nil
 }

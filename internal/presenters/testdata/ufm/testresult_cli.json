@@ -1204,7 +1204,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "debug",
                   "type": "upgrade_package",
                   "upgrade_paths": [
@@ -1445,7 +1445,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "debug",
                   "type": "upgrade_package",
                   "upgrade_paths": [
@@ -1930,7 +1930,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "brace-expansion",
                   "type": "upgrade_package",
                   "upgrade_paths": [
@@ -2177,7 +2177,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "marked",
                   "type": "upgrade_package",
                   "upgrade_paths": [
@@ -3115,7 +3115,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "debug",
                   "type": "upgrade_package",
                   "upgrade_paths": [
@@ -3353,7 +3353,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "debug",
                   "type": "upgrade_package",
                   "upgrade_paths": [
@@ -3828,7 +3828,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "cookie",
                   "type": "upgrade_package",
                   "upgrade_paths": [
@@ -4005,7 +4005,7 @@
           "fix": {
             "data": {
               "attributes": {
-                "actions": {
+                "action": {
                   "package_name": "marked",
                   "type": "upgrade_package",
                   "upgrade_paths": [

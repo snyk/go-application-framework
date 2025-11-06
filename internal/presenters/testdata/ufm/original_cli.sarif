@@ -408,30 +408,6 @@
                 }
               ]
             }
-          ],
-          "fixes": [
-            {
-              "description": {
-                "text": "Upgrade to snyk-nodejs-lockfile-parser@2.3.1"
-              },
-              "artifactChanges": [
-                {
-                  "artifactLocation": {
-                    "uri": "package.json"
-                  },
-                  "replacements": [
-                    {
-                      "deletedRegion": {
-                        "startLine": 1
-                      },
-                      "insertedContent": {
-                        "text": "snyk-nodejs-lockfile-parser@2.3.1"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
           ]
         },
         {

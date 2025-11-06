@@ -66,72 +66,6 @@ func normalizeToolProperties(run map[string]interface{}) {
 	}
 }
 
-// normalizeFixDescriptions normalizes fix descriptions and artifact content to wildcard
-func normalizeFixDescriptions(result map[string]interface{}) {
-	if fixes, ok := result["fixes"].([]interface{}); ok {
-		for _, fixInterface := range fixes {
-			fix, ok := fixInterface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			// Normalize description text
-			if desc, ok := fix["description"].(map[string]interface{}); ok {
-				if text, ok := desc["text"].(string); ok {
-					if strings.HasPrefix(text, "Upgrade to ") {
-						desc["text"] = "Upgrade to *"
-					}
-				}
-			}
-			// Normalize insertedContent text in artifactChanges
-			if artifactChanges, ok := fix["artifactChanges"].([]interface{}); ok {
-				for _, acInterface := range artifactChanges {
-					ac, ok := acInterface.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if replacements, ok := ac["replacements"].([]interface{}); ok {
-						for _, repInterface := range replacements {
-							rep, ok := repInterface.(map[string]interface{})
-							if !ok {
-								continue
-							}
-							if insertedContent, ok := rep["insertedContent"].(map[string]interface{}); ok {
-								// Normalize package@version to just *
-								insertedContent["text"] = "*"
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-// normalizeMarkdownHeadersAndPaths normalizes markdown formatting
-func normalizeMarkdownHeadersAndPaths(markdown string) string {
-	// Normalize line endings first (Windows vs Unix)
-	markdown = strings.ReplaceAll(markdown, "\r\n", "\n")
-
-	return markdown
-}
-
-// normalizeRuleDescriptions normalizes rule fullDescription and help markdown
-func normalizeRuleDescriptions(rules []interface{}) {
-	for _, ruleInterface := range rules {
-		rule, ok := ruleInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Normalize help markdown
-		if help, ok := rule["help"].(map[string]interface{}); ok {
-			if markdown, ok := help["markdown"].(string); ok {
-				help["markdown"] = normalizeMarkdownHeadersAndPaths(markdown)
-			}
-		}
-	}
-}
-
 // normalizeSarifForComparison removes or normalizes fields with known gaps
 // to allow testing of correctly implemented features while documenting TODOs
 func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]interface{} {
@@ -157,28 +91,6 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 		// TODO: Add tool.driver.properties.artifactsScanned (missing in actual output)
 		normalizeToolProperties(run)
-
-		// Normalize rules descriptions and markdown formatting
-		if tool, ok := run["tool"].(map[string]interface{}); ok {
-			if driver, ok := tool["driver"].(map[string]interface{}); ok {
-				if rules, ok := driver["rules"].([]interface{}); ok {
-					normalizeRuleDescriptions(rules)
-				}
-			}
-		}
-
-		// Normalize results
-		if results, ok := run["results"].([]interface{}); ok {
-			for _, resultInterface := range results {
-				result, ok := resultInterface.(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				// TODO: Fix package resolution for upgrade fixes
-				normalizeFixDescriptions(result)
-			}
-		}
 	}
 
 	return sarif
