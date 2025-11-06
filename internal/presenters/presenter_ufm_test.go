@@ -107,31 +107,6 @@ func normalizeFixDescriptions(result map[string]interface{}) {
 	}
 }
 
-// normalizeMarkdownHeadersAndPaths normalizes markdown formatting
-func normalizeMarkdownHeadersAndPaths(markdown string) string {
-	// Normalize line endings first (Windows vs Unix)
-	markdown = strings.ReplaceAll(markdown, "\r\n", "\n")
-
-	return markdown
-}
-
-// normalizeRuleDescriptions normalizes rule fullDescription and help markdown
-func normalizeRuleDescriptions(rules []interface{}) {
-	for _, ruleInterface := range rules {
-		rule, ok := ruleInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Normalize help markdown
-		if help, ok := rule["help"].(map[string]interface{}); ok {
-			if markdown, ok := help["markdown"].(string); ok {
-				help["markdown"] = normalizeMarkdownHeadersAndPaths(markdown)
-			}
-		}
-	}
-}
-
 // normalizeSarifForComparison removes or normalizes fields with known gaps
 // to allow testing of correctly implemented features while documenting TODOs
 func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]interface{} {
@@ -158,27 +133,18 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 		// TODO: Add tool.driver.properties.artifactsScanned (missing in actual output)
 		normalizeToolProperties(run)
 
-		// Normalize rules descriptions and markdown formatting
-		if tool, ok := run["tool"].(map[string]interface{}); ok {
-			if driver, ok := tool["driver"].(map[string]interface{}); ok {
-				if rules, ok := driver["rules"].([]interface{}); ok {
-					normalizeRuleDescriptions(rules)
-				}
-			}
-		}
+		// // Normalize results
+		// if results, ok := run["results"].([]interface{}); ok {
+		// 	for _, resultInterface := range results {
+		// 		result, ok := resultInterface.(map[string]interface{})
+		// 		if !ok {
+		// 			continue
+		// 		}
 
-		// Normalize results
-		if results, ok := run["results"].([]interface{}); ok {
-			for _, resultInterface := range results {
-				result, ok := resultInterface.(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				// TODO: Fix package resolution for upgrade fixes
-				normalizeFixDescriptions(result)
-			}
-		}
+		// 		// TODO: Fix package resolution for upgrade fixes
+		// 		normalizeFixDescriptions(result)
+		// 	}
+		// }
 	}
 
 	return sarif
