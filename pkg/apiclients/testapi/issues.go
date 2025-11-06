@@ -3,6 +3,7 @@ package testapi
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -450,7 +451,7 @@ type issueBuilder struct {
 	cvssScore         float32
 	isFixable         bool
 	fixedInVersions   []string
-	dependencyPaths   []string
+	dependencyPaths   [][]string // Each element is a path (array of package@version strings)
 	snykVulnProblem   *SnykVulnProblem
 	sourceLocations   []SourceLocation
 	riskScore         uint16
@@ -577,7 +578,8 @@ func (b *issueBuilder) extractDependencyPaths(finding FindingData) {
 			pathParts = append(pathParts, fmt.Sprintf("%s@%s", dep.Name, dep.Version))
 		}
 		if len(pathParts) > 0 {
-			b.dependencyPaths = append(b.dependencyPaths, strings.Join(pathParts, " › "))
+			// Store as array of parts, formatting done in rendering layer
+			b.dependencyPaths = append(b.dependencyPaths, pathParts)
 		}
 	}
 }
@@ -705,7 +707,7 @@ func (b *issueBuilder) determineFallbackID() {
 func (b *issueBuilder) deduplicate() {
 	b.cwes = deduplicateStrings(b.cwes)
 	b.cves = deduplicateStrings(b.cves)
-	b.dependencyPaths = deduplicateStrings(b.dependencyPaths)
+	b.dependencyPaths = deduplicateDependencyPaths(b.dependencyPaths)
 	b.sourceLocations = deduplicateSourceLocations(b.sourceLocations)
 }
 
@@ -783,6 +785,35 @@ func deduplicateStrings(slice []string) []string {
 			result = append(result, s)
 		}
 	}
+	return result
+}
+
+// deduplicateDependencyPaths removes duplicate dependency paths from a slice.
+// Paths are considered duplicates if they have the same sequence of packages.
+func deduplicateDependencyPaths(paths [][]string) [][]string {
+	if len(paths) == 0 {
+		return paths
+	}
+
+	result := make([][]string, 0, len(paths))
+
+	// Add first path
+	result = append(result, paths[0])
+
+	// Check each subsequent path against already added paths
+	for i := 1; i < len(paths); i++ {
+		isDuplicate := false
+		for _, existing := range result {
+			if slices.Equal(paths[i], existing) {
+				isDuplicate = true
+				break
+			}
+		}
+		if !isDuplicate {
+			result = append(result, paths[i])
+		}
+	}
+
 	return result
 }
 

@@ -293,10 +293,17 @@ func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingTyp
 
 // appendDependencyPathsSection adds dependency path information to the markdown
 func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, componentName string) {
-	var dependencyPaths []string
+	var dependencyPaths [][]string
 	if val, ok := issue.GetData(testapi.DataKeyDependencyPaths); ok {
-		if strs, ok := val.([]string); ok {
-			dependencyPaths = strs
+		// Handle new format: [][]string (array of paths, each path is array of parts)
+		if paths, ok := val.([][]string); ok {
+			dependencyPaths = paths
+		} else if strs, ok := val.([]string); ok {
+			// Backward compatibility: convert old format (pre-joined strings) to new format
+			for _, pathStr := range strs {
+				parts := strings.Split(pathStr, " › ")
+				dependencyPaths = append(dependencyPaths, parts)
+			}
 		}
 	}
 
@@ -309,25 +316,33 @@ func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, comp
 }
 
 // appendDependencyPathsSummary adds a summary of dependency paths
-func appendDependencyPathsSummary(sb *strings.Builder, dependencyPaths []string) {
-	firstPath := dependencyPaths[0]
-	parts := strings.Split(firstPath, " › ")
+func appendDependencyPathsSummary(sb *strings.Builder, dependencyPaths [][]string) {
+	if len(dependencyPaths) == 0 {
+		return
+	}
 
+	firstPath := dependencyPaths[0]
 	introduction := "* Introduced through: %s\n"
-	dependencyPath := parts[0]
-	if len(parts) > 2 {
-		dependencyPath = fmt.Sprintf("%s, %s and others", parts[0], parts[1])
-	} else if len(parts) == 2 {
-		dependencyPath = fmt.Sprintf("%s and %s", parts[0], parts[1])
+
+	if len(firstPath) == 0 {
+		return
+	}
+
+	dependencyPath := firstPath[0]
+	if len(firstPath) > 2 {
+		dependencyPath = fmt.Sprintf("%s, %s and others", firstPath[0], firstPath[1])
+	} else if len(firstPath) == 2 {
+		dependencyPath = fmt.Sprintf("%s and %s", firstPath[0], firstPath[1])
 	}
 	fmt.Fprintf(sb, introduction, dependencyPath)
 }
 
 // appendDetailedPaths adds detailed dependency path information
-func appendDetailedPaths(sb *strings.Builder, dependencyPaths []string) {
+func appendDetailedPaths(sb *strings.Builder, dependencyPaths [][]string) {
 	sb.WriteString("### Detailed paths\n")
-	for _, path := range dependencyPaths {
-		sb.WriteString(fmt.Sprintf("* _Introduced through_: %s\n", path))
+	for _, pathParts := range dependencyPaths {
+		formattedPath := strings.Join(pathParts, " › ")
+		sb.WriteString(fmt.Sprintf("* _Introduced through_: %s\n", formattedPath))
 	}
 }
 
