@@ -3,7 +3,6 @@ package testapi_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -13,39 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// mockIssuesExtractor is a mock implementation of IssuesExtractor for testing.
-type mockIssuesExtractor struct {
-	ctrl     *gomock.Controller
-	recorder *mockIssuesExtractorMockRecorder
-}
-
-type mockIssuesExtractorMockRecorder struct {
-	mock *mockIssuesExtractor
-}
-
-func NewMockIssuesExtractor(ctrl *gomock.Controller) *mockIssuesExtractor {
-	mock := &mockIssuesExtractor{ctrl: ctrl}
-	mock.recorder = &mockIssuesExtractorMockRecorder{mock}
-	return mock
-}
-
-func (m *mockIssuesExtractor) EXPECT() *mockIssuesExtractorMockRecorder {
-	return m.recorder
-}
-
-func (m *mockIssuesExtractor) ExtractFindings(ctx context.Context) ([]testapi.FindingData, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExtractFindings", ctx)
-	ret0, _ := ret[0].([]testapi.FindingData) //nolint:errcheck // type assertion in mock
-	ret1, _ := ret[1].(error)                 //nolint:errcheck // type assertion in mock
-	return ret0, ret1
-}
-
-func (mr *mockIssuesExtractorMockRecorder) ExtractFindings(ctx interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExtractFindings", reflect.TypeOf((*mockIssuesExtractor)(nil).ExtractFindings), ctx)
-}
 
 func TestNewIssuesFromTestResult(t *testing.T) {
 	ctx := context.Background()

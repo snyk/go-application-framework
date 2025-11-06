@@ -221,14 +221,44 @@ func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingD
 }
 
 func (g *idBasedIssueGrouper) extractProblemID(finding FindingData) string {
-	// Extract the first available ID from any problem type for grouping
-	// Works with snyk_vuln, CVE, CWE, etc. since they all have an ID field
+	// Prefer Snyk IDs for consistent grouping
+	// Snyk IDs can be in two formats:
+	//   1. "SNYK-" prefix (e.g., SNYK-JS-LODASH-590103)
+	//   2. "snyk:" prefix (e.g., snyk:lic:npm:shescape:MPL-2.0)
+	// If no Snyk ID is found, fall back to the first available ID (CVE, CWE, etc.)
+	var fallbackID string
+
 	for _, problem := range finding.Attributes.Problems {
-		if id := problem.GetID(); id != "" {
+		id := problem.GetID()
+		if id == "" {
+			continue
+		}
+
+		// Check for Snyk ID pattern (case-insensitive, without allocations)
+		if isSnykID(id) {
 			return id
 		}
+
+		// Store first non-empty ID as fallback
+		if fallbackID == "" {
+			fallbackID = id
+		}
 	}
-	return ""
+
+	return fallbackID
+}
+
+// isSnykID checks if an ID starts with "snyk" (case-insensitive)
+func isSnykID(id string) bool {
+	if len(id) < 4 {
+		return false
+	}
+
+	// Manual case-insensitive check to avoid string allocation
+	return (id[0] == 's' || id[0] == 'S') &&
+		(id[1] == 'n' || id[1] == 'N') &&
+		(id[2] == 'y' || id[2] == 'Y') &&
+		(id[3] == 'k' || id[3] == 'K')
 }
 
 func (g *idBasedIssueGrouper) getUniqueKey(finding FindingData) string {
