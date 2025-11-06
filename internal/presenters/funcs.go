@@ -251,7 +251,6 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	}
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
 	fnMap["getRulesFromTestResult"] = sarif.GetRulesFromTestResult
-	fnMap["getResultsFromTestResult"] = sarif.GetResultsFromTestResult
 	fnMap["getIssuesFromTestResult"] = getIssuesFromTestResult
 	fnMap["severityToSarifLevel"] = func(severity string) string {
 		return sarif.SeverityToSarifLevel(severity)
