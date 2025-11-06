@@ -250,14 +250,20 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
-	fnMap["getRulesFromTestResult"] = sarif.GetRulesFromTestResult
 	fnMap["getIssuesFromTestResult"] = getIssuesFromTestResult
 	fnMap["severityToSarifLevel"] = func(severity string) string {
 		return sarif.SeverityToSarifLevel(severity)
 	}
+	// Result helper functions
 	fnMap["buildLocationFromIssue"] = buildLocationFromIssue
 	fnMap["buildFixesFromIssue"] = buildFixesFromIssue
 	fnMap["formatIssueMessage"] = formatIssueMessage
+	// Rule helper functions
+	fnMap["buildRuleShortDescription"] = buildRuleShortDescription
+	fnMap["buildRuleFullDescription"] = buildRuleFullDescription
+	fnMap["buildRuleHelpMarkdown"] = buildRuleHelpMarkdown
+	fnMap["buildRuleTags"] = buildRuleTags
+	fnMap["getRuleCVSSScore"] = getRuleCVSSScore
 	return fnMap
 }
 
@@ -480,4 +486,72 @@ func buildFixesFromIssue(issue testapi.Issue) []interface{} {
 
 	// Use the existing buildFixes logic from sarif package
 	return sarif.BuildFixes(findings[0], issue)
+}
+
+// buildRuleShortDescription creates the short description for a SARIF rule
+func buildRuleShortDescription(issue testapi.Issue) string {
+	componentName, _ := issue.GetMetadata(testapi.MetadataKeyComponentName)
+	componentNameStr := fmt.Sprintf("%v", componentName)
+	if componentNameStr == "" || componentNameStr == "<nil>" {
+		componentNameStr = "package"
+	}
+	severity := issue.GetSeverity()
+	title := issue.GetTitle()
+
+	// Capitalize first letter of severity
+	if len(severity) > 0 {
+		severity = strings.ToUpper(severity[:1]) + severity[1:]
+	}
+
+	return fmt.Sprintf("%s severity - %s vulnerability in %s", severity, title, componentNameStr)
+}
+
+// buildRuleFullDescription creates the full description for a SARIF rule
+func buildRuleFullDescription(issue testapi.Issue) string {
+	componentName, _ := issue.GetMetadata(testapi.MetadataKeyComponentName)
+	componentVersion, _ := issue.GetMetadata(testapi.MetadataKeyComponentVersion)
+
+	componentNameStr := fmt.Sprintf("%v", componentName)
+	componentVersionStr := fmt.Sprintf("%v", componentVersion)
+
+	fullDesc := fmt.Sprintf("%s@%s", componentNameStr, componentVersionStr)
+	cveIds := issue.GetCVEs()
+	if len(cveIds) > 0 {
+		fullDesc = fmt.Sprintf("(%s) %s", strings.Join(cveIds, ", "), fullDesc)
+	}
+	return fullDesc
+}
+
+// buildRuleHelpMarkdown creates the help markdown for a SARIF rule
+func buildRuleHelpMarkdown(issue testapi.Issue, findingType testapi.FindingType) string {
+	return sarif.BuildHelpMarkdown(issue, findingType)
+}
+
+// buildRuleTags creates the tags array for a SARIF rule
+func buildRuleTags(issue testapi.Issue) []interface{} {
+	tags := []interface{}{"security"}
+	for _, cwe := range issue.GetCWEs() {
+		tags = append(tags, cwe)
+	}
+
+	technology, ok := issue.GetMetadata(testapi.MetadataKeyTechnology)
+	if ok {
+		if techStr, ok := technology.(string); ok && techStr != "" {
+			tags = append(tags, techStr)
+		}
+	}
+
+	return tags
+}
+
+// getRuleCVSSScore extracts the CVSS score from issue metadata
+func getRuleCVSSScore(issue testapi.Issue) float32 {
+	cvssScore, ok := issue.GetMetadata(testapi.MetadataKeyCVSSScore)
+	if !ok {
+		return 0.0
+	}
+	if score, ok := cvssScore.(float32); ok {
+		return score
+	}
+	return 0.0
 }

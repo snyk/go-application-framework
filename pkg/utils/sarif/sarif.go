@@ -1,16 +1,10 @@
 package sarif
 
 import (
-	"context"
 	"fmt"
-	"maps"
-	"slices"
-	"sort"
 	"strings"
 
 	"github.com/snyk/code-client-go/sarif"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -145,138 +139,8 @@ func ConvertTypeToDriverName(s string) string {
 	}
 }
 
-// shouldProcessIssue checks if an issue should be processed for SARIF rule generation
-func shouldProcessIssue(issue testapi.Issue, findingType testapi.FindingType) bool {
-	if issue.GetFindingType() != findingType {
-		return false
-	}
-	return len(issue.GetFindings()) > 0
-}
-
-// buildSarifRule constructs a SARIF rule from an issue
-func buildSarifRule(issue testapi.Issue, issueID string, findingType testapi.FindingType) map[string]interface{} {
-	componentName := getMetadataString(issue, testapi.MetadataKeyComponentName)
-	componentVersion := getMetadataString(issue, testapi.MetadataKeyComponentVersion)
-
-	shortDesc := buildShortDescription(issue, componentName)
-	fullDesc := buildFullDescription(componentName, componentVersion, issue.GetCVEs())
-	helpMarkdown := buildHelpMarkdownGeneric(issue, findingType)
-	properties := buildRuleProperties(issue)
-
-	return map[string]interface{}{
-		"id":               issueID,
-		"shortDescription": shortDesc,
-		"fullDescription":  fullDesc,
-		"help_text":        "",
-		"help_markdown":    helpMarkdown,
-		"properties":       properties,
-	}
-}
-
-// buildShortDescription creates the short description for a SARIF rule
-func buildShortDescription(issue testapi.Issue, componentName string) string {
-	severity := issue.GetSeverity()
-	return fmt.Sprintf("%s severity - %s vulnerability in %s",
-		cases.Title(language.English).String(severity),
-		issue.GetTitle(),
-		componentName)
-}
-
-// buildFullDescription creates the full description for a SARIF rule
-func buildFullDescription(componentName, componentVersion string, cveIds []string) string {
-	fullDesc := fmt.Sprintf("%s@%s", componentName, componentVersion)
-	if len(cveIds) > 0 {
-		fullDesc = fmt.Sprintf("(%s) %s", strings.Join(cveIds, ", "), fullDesc)
-	}
-	return fullDesc
-}
-
-// buildRuleProperties builds the properties object for a SARIF rule
-func buildRuleProperties(issue testapi.Issue) map[string]interface{} {
-	tags := []interface{}{"security"}
-	for _, cwe := range issue.GetCWEs() {
-		tags = append(tags, cwe)
-	}
-
-	technology := getMetadataString(issue, testapi.MetadataKeyTechnology)
-	if technology != "" {
-		tags = append(tags, technology)
-	}
-
-	cvssScore := getMetadataFloat(issue, testapi.MetadataKeyCVSSScore)
-	return map[string]interface{}{
-		"cvssv3_baseScore":  cvssScore,
-		"security-severity": fmt.Sprintf("%.1f", cvssScore),
-		"tags":              tags,
-	}
-}
-
-// getMetadataString is a helper to safely extract string metadata
-func getMetadataString(issue testapi.Issue, key string) string {
-	if val, ok := issue.GetMetadata(key); ok {
-		if str, ok := val.(string); ok {
-			return str
-		}
-	}
-	return ""
-}
-
-// getMetadataFloat is a helper to safely extract float32 metadata
-func getMetadataFloat(issue testapi.Issue, key string) float32 {
-	if val, ok := issue.GetMetadata(key); ok {
-		if f, ok := val.(float32); ok {
-			return f
-		}
-	}
-	return 0.0
-}
-
-// GetRulesFromIssues extracts SARIF rules from a list of Issues for a specific finding type.
-// Based on the TypeScript implementation in open-source-sarif-output.ts
-func GetRulesFromIssues(issuesList []testapi.Issue, t testapi.FindingType) []map[string]interface{} {
-	sarifRules := map[string]map[string]interface{}{}
-
-	for _, issue := range issuesList {
-		if !shouldProcessIssue(issue, t) {
-			continue
-		}
-
-		issueID := issue.GetID()
-		if issueID == "" || sarifRules[issueID] != nil {
-			continue
-		}
-
-		sarifRules[issueID] = buildSarifRule(issue, issueID, t)
-	}
-
-	// Convert map values to slice and sort by rule ID for deterministic output
-	rules := slices.Collect(maps.Values(sarifRules))
-	sort.Slice(rules, func(i, j int) bool {
-		idI, okI := rules[i]["id"].(string)
-		idJ, okJ := rules[j]["id"].(string)
-		if !okI || !okJ {
-			return false
-		}
-		return idI < idJ
-	})
-
-	return rules
-}
-
-// GetRulesFromTestResult extracts SARIF rules from test results for a specific finding type.
-// This function maintains backward compatibility by wrapping GetRulesFromIssues.
-// Based on the TypeScript implementation in open-source-sarif-output.ts
-func GetRulesFromTestResult(result testapi.TestResult, t testapi.FindingType) []map[string]interface{} {
-	ctx := context.Background()
-	issuesList, err := testapi.NewIssuesFromTestResult(ctx, result)
-	if err != nil {
-		return []map[string]interface{}{}
-	}
-	return GetRulesFromIssues(issuesList, t)
-}
-
-// buildHelpMarkdownGeneric constructs the help markdown section for SARIF rules
-func buildHelpMarkdownGeneric(issue testapi.Issue, findingType testapi.FindingType) string {
+// BuildHelpMarkdown constructs the help markdown section for SARIF rules
+func BuildHelpMarkdown(issue testapi.Issue, findingType testapi.FindingType) string {
 	var sb strings.Builder
 
 	appendTechnologySection(&sb, issue, findingType)

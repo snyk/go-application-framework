@@ -14,41 +14,37 @@
 						"semanticVersion" : "{{- getRuntimeInfo "version" }}",
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",
-						"rules" : [
-							{{- $rules := getRulesFromTestResult $result $findingType }}
-							{{- $rulesSize := sub (len $rules) 1 }}
-							{{- range $index, $rule := $rules }}
-							{
-								"id": {{ getQuotedString (index $rule "id") }},
-								"shortDescription": {
-									"text": {{ getQuotedString (index $rule "shortDescription") }}
-								},
-								"fullDescription": {
-									"text": {{ getQuotedString (index $rule "fullDescription") }}
-								},
-								"help": {
-									"text": {{ getQuotedString (index $rule "help_text") }},
-									"markdown": {{ getQuotedString (index $rule "help_markdown") }}
-								},
-								"properties": {
-									{{- $props := index $rule "properties" }}
-									{{- if $props }}
-									{{- $tags := index $props "tags" }}
-									{{- if $tags }}
-									"tags": [
-										{{- $tagsSize := sub (len $tags) 1 }}
-										{{- range $tagIndex, $tag := $tags }}
-										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
-										{{- end }}
-									],
+					"rules" : [
+						{{- $issues := getIssuesFromTestResult $result $findingType }}
+						{{- $issuesSize := sub (len $issues) 1 }}
+						{{- range $index, $issue := $issues }}
+						{{- $tags := buildRuleTags $issue }}
+						{{- $cvssScore := getRuleCVSSScore $issue }}
+						{
+							"id": {{ getQuotedString $issue.GetID }},
+							"shortDescription": {
+								"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
+							},
+							"fullDescription": {
+								"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
+							},
+							"help": {
+								"text": "",
+								"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
+							},
+							"properties": {
+								"tags": [
+									{{- $tagsSize := sub (len $tags) 1 }}
+									{{- range $tagIndex, $tag := $tags }}
+									{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
 									{{- end }}
-									"cvssv3_baseScore": {{ index $props "cvssv3_baseScore" }},
-									"security-severity": {{ getQuotedString (index $props "security-severity") }}
-									{{- end }}
-								}
-							}{{if lt $index $rulesSize}},{{end}}
-							{{- end }}
-						]
+								],
+								"cvssv3_baseScore": {{ $cvssScore }},
+								"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}
+							}
+						}{{if lt $index $issuesSize}},{{end}}
+						{{- end }}
+					]
 					}
 				},
 			"results": [
