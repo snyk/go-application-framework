@@ -453,11 +453,15 @@ func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, comp
 func appendDependencyPathsSummary(sb *strings.Builder, dependencyPaths []string) {
 	firstPath := dependencyPaths[0]
 	parts := strings.Split(firstPath, " › ")
-	if len(parts) > 1 {
-		sb.WriteString(fmt.Sprintf("* Introduced through: %s, %s and others\n", parts[0], parts[1]))
-	} else if len(parts) == 1 {
-		sb.WriteString(fmt.Sprintf("* Introduced through: %s\n", parts[0]))
+
+	introduction := "* Introduced through: %s\n"
+	dependencyPath := parts[0]
+	if len(parts) > 2 {
+		dependencyPath = fmt.Sprintf("%s, %s and others", parts[0], parts[1])
+	} else if len(parts) == 2 {
+		dependencyPath = fmt.Sprintf("%s and %s", parts[0], parts[1])
 	}
+	fmt.Fprintf(sb, introduction, dependencyPath)
 }
 
 // appendDetailedPaths adds detailed dependency path information
@@ -483,7 +487,7 @@ func appendFallbackIntroduction(sb *strings.Builder, issue testapi.Issue, compon
 func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 	description := issue.GetDescription()
 	if description != "" {
-		sb.WriteString(description)
+		sb.WriteString(strings.ReplaceAll(description, "##", "#"))
 	}
 }
 

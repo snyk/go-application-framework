@@ -6,16 +6,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
-	"github.com/stretchr/testify/assert"
-	"github.com/xeipuuv/gojsonschema"
 )
 
 func validateSarifData(t *testing.T, data []byte) {
@@ -107,118 +107,10 @@ func normalizeFixDescriptions(result map[string]interface{}) {
 	}
 }
 
-// normalizePackageVersions normalizes package versions in logicalLocations
-func normalizePackageVersions(result map[string]interface{}) {
-	if locations, ok := result["locations"].([]interface{}); ok {
-		for _, locInterface := range locations {
-			loc, ok := locInterface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if logicalLocs, ok := loc["logicalLocations"].([]interface{}); ok {
-				for _, logicalLocInterface := range logicalLocs {
-					logicalLoc, ok := logicalLocInterface.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if fqn, ok := logicalLoc["fullyQualifiedName"].(string); ok {
-						parts := strings.Split(fqn, "@")
-						if len(parts) == 2 {
-							logicalLoc["fullyQualifiedName"] = parts[0] + "@*"
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-// sortDetailedPaths sorts the "* _Introduced through_:" lines in markdown
-func sortDetailedPaths(markdown string) string {
-	lines := strings.Split(markdown, "\n")
-	var pathLines []string
-	var otherLines []string
-	inDetailedPaths := false
-
-	for _, line := range lines {
-		if strings.Contains(line, "### Detailed paths") {
-			inDetailedPaths = true
-			otherLines = append(otherLines, line)
-		} else if inDetailedPaths && strings.HasPrefix(line, "* _Introduced through_:") {
-			pathLines = append(pathLines, line)
-		} else {
-			if inDetailedPaths && !strings.HasPrefix(line, "* _Introduced through_:") && line != "" {
-				inDetailedPaths = false
-			}
-			if len(pathLines) > 0 {
-				sort.Strings(pathLines)
-				otherLines = append(otherLines, pathLines...)
-				pathLines = nil
-			}
-			otherLines = append(otherLines, line)
-		}
-	}
-	if len(pathLines) > 0 {
-		sort.Strings(pathLines)
-		otherLines = append(otherLines, pathLines...)
-	}
-
-	return strings.Join(otherLines, "\n")
-}
-
-// normalizeDetailedPathsSection normalizes the detailed paths section to wildcard
-func normalizeDetailedPathsSection(markdown string) string {
-	lines := strings.Split(markdown, "\n")
-	var normalizedLines []string
-	inDetailedPaths := false
-
-	for _, line := range lines {
-		// Always normalize the intro line
-		if strings.HasPrefix(line, "* Introduced through: ") {
-			normalizedLines = append(normalizedLines, "* Introduced through: *")
-			continue
-		}
-
-		// Skip the entire detailed paths section
-		if strings.Contains(line, "### Detailed paths") {
-			inDetailedPaths = true
-			normalizedLines = append(normalizedLines, "### Detailed paths")
-			normalizedLines = append(normalizedLines, "* _Introduced through_: *")
-			continue
-		}
-
-		// Skip path lines
-		if inDetailedPaths && strings.HasPrefix(line, "* _Introduced through_:") {
-			continue
-		}
-
-		// Exit detailed paths section when we hit a non-path line
-		if inDetailedPaths && !strings.HasPrefix(line, "* _Introduced through_:") && line != "" {
-			inDetailedPaths = false
-		}
-
-		normalizedLines = append(normalizedLines, line)
-	}
-	return strings.Join(normalizedLines, "\n")
-}
-
 // normalizeMarkdownHeadersAndPaths normalizes markdown formatting
 func normalizeMarkdownHeadersAndPaths(markdown string) string {
 	// Normalize line endings first (Windows vs Unix)
 	markdown = strings.ReplaceAll(markdown, "\r\n", "\n")
-
-	// Normalize header levels
-	markdown = strings.ReplaceAll(markdown, "\n# Overview\n", "\n## Overview\n")
-	markdown = strings.ReplaceAll(markdown, "\n# Details\n", "\n## Details\n")
-	markdown = strings.ReplaceAll(markdown, "\n# PoC\n", "\n## PoC\n")
-	markdown = strings.ReplaceAll(markdown, "\n# Remediation\n", "\n## Remediation\n")
-	markdown = strings.ReplaceAll(markdown, "\n# References\n", "\n## References\n")
-
-	// Sort detailed paths to ignore ordering differences
-	markdown = sortDetailedPaths(markdown)
-
-	// Normalize detailed paths section (known gap: we don't aggregate paths from all findings)
-	markdown = normalizeDetailedPathsSection(markdown)
 
 	return markdown
 }
@@ -229,16 +121,6 @@ func normalizeRuleDescriptions(rules []interface{}) {
 		rule, ok := ruleInterface.(map[string]interface{})
 		if !ok {
 			continue
-		}
-
-		// Normalize fullDescription to remove package versions
-		if fullDesc, ok := rule["fullDescription"].(map[string]interface{}); ok {
-			if text, ok := fullDesc["text"].(string); ok {
-				parts := strings.Split(text, "@")
-				if len(parts) > 1 {
-					fullDesc["text"] = strings.Join(parts[:len(parts)-1], "@") + "@"
-				}
-			}
 		}
 
 		// Normalize help markdown
@@ -295,9 +177,6 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 				// TODO: Fix package resolution for upgrade fixes
 				normalizeFixDescriptions(result)
-
-				// TODO: Package version selection in logicalLocations
-				normalizePackageVersions(result)
 			}
 		}
 	}
