@@ -120,6 +120,11 @@ type Issue interface {
 	// Returns nil if reachability information is not available.
 	GetReachability() *ReachabilityEvidence
 
+	// GetSuppression returns the suppression information for this issue.
+	// Indicates if the finding is suppressed by a policy decision.
+	// Returns nil if the issue is not suppressed.
+	GetSuppression() *Suppression
+
 	// GetMetadata returns metadata value for the given key (case-insensitive).
 	// Returns the value and true if found, nil and false otherwise.
 	// Use the MetadataKey* constants for well-known keys.
@@ -286,6 +291,7 @@ type issue struct {
 	sourceLocations   []SourceLocation
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
+	suppression       *Suppression
 	metadata          map[string]interface{} // case-insensitive key storage (lowercase keys)
 }
 
@@ -372,6 +378,11 @@ func (i *issue) GetReachability() *ReachabilityEvidence {
 	return i.reachability
 }
 
+// GetSuppression returns the suppression information for this issue.
+func (i *issue) GetSuppression() *Suppression {
+	return i.suppression
+}
+
 // NewIssueFromFindings creates a single Issue instance from a group of related findings.
 // This is a helper function for creating issues from pre-grouped findings.
 func NewIssueFromFindings(findings []FindingData) (Issue, error) {
@@ -414,6 +425,7 @@ type issueBuilder struct {
 	sourceLocations   []SourceLocation
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
+	suppression       *Suppression
 	findings          []FindingData
 }
 
@@ -437,6 +449,7 @@ func (b *issueBuilder) processFinding(finding FindingData) {
 	b.extractSeverityAndRisk(finding)
 	b.extractEffectiveSeverity(finding)
 	b.extractReachability(finding)
+	b.extractSuppression(finding)
 	b.extractDependencyPaths(finding)
 	b.extractPackageInfo(finding)
 	b.processProblems(finding)
@@ -505,6 +518,16 @@ func (b *issueBuilder) extractReachability(finding FindingData) {
 			b.reachability = &reachEv
 			break
 		}
+	}
+}
+
+// extractSuppression extracts suppression information
+func (b *issueBuilder) extractSuppression(finding FindingData) {
+	if b.suppression != nil {
+		return
+	}
+	if finding.Attributes.Suppression != nil {
+		b.suppression = finding.Attributes.Suppression
 	}
 }
 
@@ -676,6 +699,7 @@ func (b *issueBuilder) build() *issue {
 		sourceLocations:   b.sourceLocations,
 		riskScore:         b.riskScore,
 		reachability:      b.reachability,
+		suppression:       b.suppression,
 		metadata:          metadata,
 	}
 }

@@ -329,15 +329,22 @@ func buildSarifResult(issue testapi.Issue, issueID string, firstFinding testapi.
 			severity),
 	}
 
-	location := buildLocation(firstFinding, issue)
+	location := BuildLocation(firstFinding, issue)
 	sarifLevel := SeverityToSarifLevel(severity)
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"ruleId":    issueID,
 		"level":     sarifLevel,
 		"message":   message,
 		"locations": []interface{}{location},
 	}
+
+	// Add suppression information if available - pass raw suppression to template for formatting
+	if suppression := issue.GetSuppression(); suppression != nil {
+		result["suppression"] = suppression
+	}
+
+	return result
 }
 
 // addFixesIfAvailable adds fix information to the SARIF result if available
@@ -346,7 +353,7 @@ func addFixesIfAvailable(sarifResult map[string]interface{}, issue testapi.Issue
 	fixedVersions := getMetadataStrings(issue, testapi.MetadataKeyFixedInVersions)
 
 	if isFixable && len(fixedVersions) > 0 {
-		fixes := buildFixes(firstFinding, issue)
+		fixes := BuildFixes(firstFinding, issue)
 		if fixes != nil {
 			sarifResult["fixes"] = fixes
 		}
@@ -491,7 +498,8 @@ func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 	}
 }
 
-func buildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]interface{} {
+// BuildLocation constructs a SARIF location object from finding and issue data
+func BuildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]interface{} {
 	// Default to line 1 for manifest files
 	uri := "package.json" // Default, should be determined from locations
 	startLine := 1
@@ -547,7 +555,8 @@ func buildLocation(finding testapi.FindingData, issue testapi.Issue) map[string]
 	}
 }
 
-func buildFixes(finding testapi.FindingData, _ testapi.Issue) []interface{} {
+// BuildFixes extracts fix information from a finding's relationship data
+func BuildFixes(finding testapi.FindingData, _ testapi.Issue) []interface{} {
 	if finding.Relationships == nil || finding.Relationships.Fix == nil || finding.Relationships.Fix.Data == nil {
 		return nil
 	}

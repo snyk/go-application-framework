@@ -252,6 +252,13 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
 	fnMap["getRulesFromTestResult"] = sarif.GetRulesFromTestResult
 	fnMap["getResultsFromTestResult"] = sarif.GetResultsFromTestResult
+	fnMap["getIssuesFromTestResult"] = getIssuesFromTestResult
+	fnMap["severityToSarifLevel"] = func(severity string) string {
+		return sarif.SeverityToSarifLevel(severity)
+	}
+	fnMap["buildLocationFromIssue"] = buildLocationFromIssue
+	fnMap["buildFixesFromIssue"] = buildFixesFromIssue
+	fnMap["formatIssueMessage"] = formatIssueMessage
 	return fnMap
 }
 
@@ -396,4 +403,82 @@ func getFindingsFromTestResult(testResults testapi.TestResult) []testapi.Finding
 		return []testapi.FindingData{}
 	}
 	return findings
+}
+
+// getIssuesFromTestResult converts test results to Issues and filters by finding type
+func getIssuesFromTestResult(testResults testapi.TestResult, findingType testapi.FindingType) []testapi.Issue {
+	ctx := context.Background()
+	issuesList, err := testapi.NewIssuesFromTestResult(ctx, testResults)
+	if err != nil {
+		return []testapi.Issue{}
+	}
+
+	// Filter issues by finding type
+	var filteredIssues []testapi.Issue
+	for _, issue := range issuesList {
+		if issue.GetFindingType() == findingType {
+			filteredIssues = append(filteredIssues, issue)
+		}
+	}
+
+	// Sort by ID for deterministic output
+	slices.SortFunc(filteredIssues, func(a, b testapi.Issue) int {
+		return strings.Compare(a.GetID(), b.GetID())
+	})
+
+	return filteredIssues
+}
+
+// formatIssueMessage creates the SARIF message text for an issue
+func formatIssueMessage(issue testapi.Issue) string {
+	componentName, _ := issue.GetMetadata(testapi.MetadataKeyComponentName)
+	componentNameStr := fmt.Sprintf("%v", componentName)
+	if componentNameStr == "" || componentNameStr == "<nil>" {
+		componentNameStr = "package"
+	}
+	return fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
+		componentNameStr, issue.GetSeverity())
+}
+
+// buildLocationFromIssue builds SARIF location from issue
+// Delegates to sarif.BuildLocation for the actual implementation
+func buildLocationFromIssue(issue testapi.Issue) map[string]interface{} {
+	findings := issue.GetFindings()
+	if len(findings) == 0 {
+		return nil
+	}
+
+	// Use the existing buildLocation logic from sarif package
+	return sarif.BuildLocation(findings[0], issue)
+}
+
+// buildFixesFromIssue builds SARIF fixes array from issue
+// Matches the logic in sarif.addFixesIfAvailable - checks metadata first
+func buildFixesFromIssue(issue testapi.Issue) []interface{} {
+	findings := issue.GetFindings()
+	if len(findings) == 0 {
+		return nil
+	}
+
+	// Check metadata to determine if fixes should be shown (matches old behavior)
+	isFixable, ok := issue.GetMetadata(testapi.MetadataKeyIsFixable)
+	if !ok {
+		return nil
+	}
+	isFixableBool, ok := isFixable.(bool)
+	if !ok || !isFixableBool {
+		return nil
+	}
+
+	fixedVersionsVal, ok := issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
+	if !ok {
+		return nil
+	}
+	fixedVersions, ok := fixedVersionsVal.([]string)
+	if !ok || len(fixedVersions) == 0 {
+		return nil
+	}
+
+	// Use the existing buildFixes logic from sarif package
+	return sarif.BuildFixes(findings[0], issue)
 }
