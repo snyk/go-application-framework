@@ -615,13 +615,15 @@ func (b *issueBuilder) processProblems(finding FindingData) {
 		switch discriminator {
 		case "snyk_vuln":
 			b.processSnykVulnProblem(problem)
+		case "snyk_license":
+			b.processSnykLicenseProblem(problem)
 		case "cve":
 			b.processCveProblem(problem)
 		case "cwe":
 			b.processCweProblem(problem)
 		}
 
-		// Fallback to first problem if no snyk_vuln found
+		// Fallback to first problem if no snyk_vuln or snyk_license found
 		if b.primaryProblem == nil && discriminator != "cve" && discriminator != "cwe" {
 			b.primaryProblem = &problem
 		}
@@ -675,6 +677,43 @@ func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
 	}
 	if b.packageVersion == "" {
 		b.packageVersion = vulnProblem.PackageVersion
+	}
+}
+
+// processSnykLicenseProblem extracts data from a Snyk license problem
+func (b *issueBuilder) processSnykLicenseProblem(problem Problem) {
+	// Extract the license ID - this is critical for grouping license issues
+	if id := problem.GetID(); id != "" {
+		b.id = id
+	}
+
+	if b.primaryProblem == nil {
+		b.primaryProblem = &problem
+	}
+
+	// Try to extract license-specific metadata
+	licenseProblem, err := problem.AsSnykLicenseProblem()
+	if err != nil {
+		return
+	}
+
+	// Set severity from license problem
+	if b.severity == "" {
+		b.severity = string(licenseProblem.Severity)
+	}
+
+	// Extract ecosystem
+	if b.ecosystem == "" {
+		if buildEco, err := licenseProblem.Ecosystem.AsSnykvulndbBuildPackageEcosystem(); err == nil {
+			b.ecosystem = buildEco.PackageManager
+		} else if osEco, err := licenseProblem.Ecosystem.AsSnykvulndbOsPackageEcosystem(); err == nil {
+			b.ecosystem = osEco.OsName
+		}
+	}
+
+	// Use package name from license problem if not set from locations
+	if b.packageName == "" {
+		b.packageName = licenseProblem.PackageName
 	}
 }
 
