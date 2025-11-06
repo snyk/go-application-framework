@@ -162,7 +162,12 @@ func normalizeRuleHelp(run map[string]interface{}) {
 		}
 		// Remove help.markdown to avoid comparing vulnerability descriptions
 		if help, ok := rule["help"].(map[string]interface{}); ok {
-			delete(help, "markdown")
+			// compare markdown up to 5000 bytes
+			if markdown, ok := help["markdown"].(string); ok {
+				if len(markdown) > 5000 {
+					help["markdown"] = markdown[:5000]
+				}
+			}
 		}
 		// Normalize tags order
 		if props, ok := rule["properties"].(map[string]interface{}); ok {
