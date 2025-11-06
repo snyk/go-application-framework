@@ -259,7 +259,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildRuleHelpMarkdown"] = sarif.BuildHelpMarkdown
 	fnMap["buildRuleTags"] = sarif.BuildRuleTags
 	fnMap["getRuleCVSSScore"] = sarif.GetRuleCVSSScore
-	fnMap["buildLocationFromIssue"] = buildLocationFromIssue // Adapter: extracts finding + calls sarif.BuildLocation
+	fnMap["buildLocationFromIssue"] = sarif.BuildLocation
 	fnMap["buildFixesFromIssue"] = sarif.BuildFixesFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
 	return fnMap
@@ -422,14 +422,4 @@ func getIssuesFromTestResult(testResults testapi.TestResult, findingType testapi
 	})
 
 	return filteredIssues
-}
-
-// buildLocationFromIssue is a template helper that extracts the first finding
-// and delegates to sarif.BuildLocation
-func buildLocationFromIssue(issue testapi.Issue) map[string]interface{} {
-	findings := issue.GetFindings()
-	if len(findings) == 0 {
-		return nil
-	}
-	return sarif.BuildLocation(findings[0], issue)
 }
