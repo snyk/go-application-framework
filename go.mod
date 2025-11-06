@@ -13,7 +13,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
-	github.com/snyk/code-client-go v1.24.2
+	github.com/snyk/code-client-go v1.24.3
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -32,7 +32,6 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/snyk/error-catalog-golang-public v0.0.0-20251008132755-b542bb643649
 	github.com/subosito/gotenv v1.6.0
-	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/net v0.38.0
 	golang.org/x/sync v0.13.0
 	golang.org/x/term v0.31.0
