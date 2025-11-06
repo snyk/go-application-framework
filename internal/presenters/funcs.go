@@ -237,6 +237,7 @@ func hasSuppression(finding local_models.FindingResource) bool {
 
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
+	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
 		return sarif.SeverityToSarifLevel(string(s))
 	}
@@ -250,7 +251,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
-	fnMap["getIssuesFromTestResult"] = getIssuesFromTestResult
+	// severityToSarifLevel is for string types (ufm.sarif.tmpl)
 	fnMap["severityToSarifLevel"] = sarif.SeverityToSarifLevel
 	// SARIF building functions
 	fnMap["buildRuleShortDescription"] = sarif.BuildRuleShortDescription
@@ -326,7 +327,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getFindingsFromTestResult"] = getFindingsFromTestResult
+	defaultMap["getIssuesFromTestResult"] = getIssuesFromTestResult
 
 	return defaultMap
 }
@@ -397,14 +398,6 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 		findingTypes[findings.Attributes.FindingType] = true
 	}
 	return slices.Collect(maps.Keys(findingTypes))
-}
-
-func getFindingsFromTestResult(testResults testapi.TestResult) []testapi.FindingData {
-	findings, _, err := testResults.Findings(context.Background())
-	if err != nil {
-		return []testapi.FindingData{}
-	}
-	return findings
 }
 
 // getIssuesFromTestResult converts test results to Issues and filters by finding type
