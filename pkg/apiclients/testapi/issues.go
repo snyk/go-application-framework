@@ -6,41 +6,41 @@ import (
 	"strings"
 )
 
-// Metadata keys for common issue properties (case-insensitive)
+// Data keys for common issue properties (case-insensitive)
 const (
-	// MetadataKeyComponent is the key for accessing the component information (name and version)
+	// DataKeyComponent is the key for accessing the component information (name and version)
 	// Value type: map[string]string with keys "name" and "version"
-	MetadataKeyComponent = "component"
+	DataKeyComponent = "component"
 
-	// MetadataKeyComponentName is the key for accessing just the component name
+	// DataKeyComponentName is the key for accessing just the component name
 	// Value type: string
-	MetadataKeyComponentName = "component-name"
+	DataKeyComponentName = "component-name"
 
-	// MetadataKeyComponentVersion is the key for accessing just the component version
+	// DataKeyComponentVersion is the key for accessing just the component version
 	// Value type: string
-	MetadataKeyComponentVersion = "component-version"
+	DataKeyComponentVersion = "component-version"
 
-	// MetadataKeyTechnology is the key for the technology/ecosystem
+	// DataKeyTechnology is the key for the technology/ecosystem
 	// For SCA: package manager (e.g., "npm", "maven")
 	// For SAST: language/framework (e.g., "javascript", "python")
 	// Value type: string
-	MetadataKeyTechnology = "technology"
+	DataKeyTechnology = "technology"
 
-	// MetadataKeyCVSSScore is the key for CVSS base score
+	// DataKeyCVSSScore is the key for CVSS base score
 	// Value type: float32
-	MetadataKeyCVSSScore = "cvss-score"
+	DataKeyCVSSScore = "cvss-score"
 
-	// MetadataKeyIsFixable is the key for whether a fix is available
+	// DataKeyIsFixable is the key for whether a fix is available
 	// Value type: bool
-	MetadataKeyIsFixable = "is-fixable"
+	DataKeyIsFixable = "is-fixable"
 
-	// MetadataKeyFixedInVersions is the key for versions that fix this issue
+	// DataKeyFixedInVersions is the key for versions that fix this issue
 	// Value type: []string
-	MetadataKeyFixedInVersions = "fixed-in-versions"
+	DataKeyFixedInVersions = "fixed-in-versions"
 
-	// MetadataKeyDependencyPaths is the key for dependency paths (SCA findings)
+	// DataKeyDependencyPaths is the key for dependency paths (SCA findings)
 	// Value type: []string
-	MetadataKeyDependencyPaths = "dependency-paths"
+	DataKeyDependencyPaths = "dependency-paths"
 )
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
@@ -125,11 +125,11 @@ type Issue interface {
 	// Returns nil if the issue is not suppressed.
 	GetSuppression() *Suppression
 
-	// GetMetadata returns metadata value for the given key (case-insensitive).
+	// GetData returns metadata value for the given key (case-insensitive).
 	// Returns the value and true if found, nil and false otherwise.
-	// Use the MetadataKey* constants for well-known keys.
+	// Use the DataKey* constants for well-known keys.
 	// Callers should perform type assertions on the returned interface{}.
-	GetMetadata(key string) (interface{}, bool)
+	GetData(key string) (interface{}, bool)
 }
 
 // NewIssuesFromTestResult creates a list of Issues from a TestResult.
@@ -345,8 +345,8 @@ func (i *issue) GetDescription() string {
 	return i.description
 }
 
-// GetMetadata returns metadata value for the given key (case-insensitive).
-func (i *issue) GetMetadata(key string) (interface{}, bool) {
+// GetData returns metadata value for the given key (case-insensitive).
+func (i *issue) GetData(key string) (interface{}, bool) {
 	if i.metadata == nil {
 		return nil, false
 	}
@@ -714,30 +714,30 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 			"name":    b.packageName,
 			"version": b.packageVersion,
 		}
-		metadata[MetadataKeyComponent] = component
-		metadata[MetadataKeyComponentName] = b.packageName
-		metadata[MetadataKeyComponentVersion] = b.packageVersion
+		metadata[DataKeyComponent] = component
+		metadata[DataKeyComponentName] = b.packageName
+		metadata[DataKeyComponentVersion] = b.packageVersion
 	}
 
 	// Add technology/ecosystem
 	if b.ecosystem != "" {
-		metadata[MetadataKeyTechnology] = b.ecosystem
+		metadata[DataKeyTechnology] = b.ecosystem
 	}
 
 	// Add CVSS score
 	if b.cvssScore > 0 {
-		metadata[MetadataKeyCVSSScore] = b.cvssScore
+		metadata[DataKeyCVSSScore] = b.cvssScore
 	}
 
 	// Add fix information
-	metadata[MetadataKeyIsFixable] = b.isFixable
+	metadata[DataKeyIsFixable] = b.isFixable
 	if len(b.fixedInVersions) > 0 {
-		metadata[MetadataKeyFixedInVersions] = b.fixedInVersions
+		metadata[DataKeyFixedInVersions] = b.fixedInVersions
 	}
 
 	// Add dependency paths
 	if len(b.dependencyPaths) > 0 {
-		metadata[MetadataKeyDependencyPaths] = b.dependencyPaths
+		metadata[DataKeyDependencyPaths] = b.dependencyPaths
 	}
 
 	return metadata

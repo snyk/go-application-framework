@@ -153,7 +153,7 @@ func BuildHelpMarkdown(issue testapi.Issue, findingType testapi.FindingType) str
 
 // BuildRuleShortDescription creates the short description for a SARIF rule
 func BuildRuleShortDescription(issue testapi.Issue) string {
-	componentName, _ := issue.GetMetadata(testapi.MetadataKeyComponentName)
+	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
 	componentNameStr := fmt.Sprintf("%v", componentName)
 	if componentNameStr == "" || componentNameStr == "<nil>" {
 		componentNameStr = "package"
@@ -171,8 +171,8 @@ func BuildRuleShortDescription(issue testapi.Issue) string {
 
 // BuildRuleFullDescription creates the full description for a SARIF rule
 func BuildRuleFullDescription(issue testapi.Issue) string {
-	componentName, _ := issue.GetMetadata(testapi.MetadataKeyComponentName)
-	componentVersion, _ := issue.GetMetadata(testapi.MetadataKeyComponentVersion)
+	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
+	componentVersion, _ := issue.GetData(testapi.DataKeyComponentVersion)
 
 	componentNameStr := fmt.Sprintf("%v", componentName)
 	componentVersionStr := fmt.Sprintf("%v", componentVersion)
@@ -192,7 +192,7 @@ func BuildRuleTags(issue testapi.Issue) []interface{} {
 		tags = append(tags, cwe)
 	}
 
-	technology, ok := issue.GetMetadata(testapi.MetadataKeyTechnology)
+	technology, ok := issue.GetData(testapi.DataKeyTechnology)
 	if ok {
 		if techStr, ok := technology.(string); ok && techStr != "" {
 			tags = append(tags, techStr)
@@ -204,7 +204,7 @@ func BuildRuleTags(issue testapi.Issue) []interface{} {
 
 // GetRuleCVSSScore extracts the CVSS score from issue metadata
 func GetRuleCVSSScore(issue testapi.Issue) float32 {
-	cvssScore, ok := issue.GetMetadata(testapi.MetadataKeyCVSSScore)
+	cvssScore, ok := issue.GetData(testapi.DataKeyCVSSScore)
 	if !ok {
 		return 0.0
 	}
@@ -216,7 +216,7 @@ func GetRuleCVSSScore(issue testapi.Issue) float32 {
 
 // FormatIssueMessage creates the SARIF message text for an issue
 func FormatIssueMessage(issue testapi.Issue) string {
-	componentName, _ := issue.GetMetadata(testapi.MetadataKeyComponentName)
+	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
 	componentNameStr := fmt.Sprintf("%v", componentName)
 	if componentNameStr == "" || componentNameStr == "<nil>" {
 		componentNameStr = "package"
@@ -234,7 +234,7 @@ func BuildFixesFromIssue(issue testapi.Issue) []interface{} {
 	}
 
 	// Check metadata to determine if fixes should be shown (maintains backward compatibility)
-	isFixable, ok := issue.GetMetadata(testapi.MetadataKeyIsFixable)
+	isFixable, ok := issue.GetData(testapi.DataKeyIsFixable)
 	if !ok {
 		return nil
 	}
@@ -243,7 +243,7 @@ func BuildFixesFromIssue(issue testapi.Issue) []interface{} {
 		return nil
 	}
 
-	fixedVersionsVal, ok := issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
+	fixedVersionsVal, ok := issue.GetData(testapi.DataKeyFixedInVersions)
 	if !ok {
 		return nil
 	}
@@ -259,7 +259,7 @@ func BuildFixesFromIssue(issue testapi.Issue) []interface{} {
 // appendTechnologySection adds technology/ecosystem information to the markdown
 func appendTechnologySection(sb *strings.Builder, issue testapi.Issue, findingType testapi.FindingType) {
 	var technology string
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyTechnology); ok {
+	if val, ok := issue.GetData(testapi.DataKeyTechnology); ok {
 		if str, ok := val.(string); ok {
 			technology = str
 		}
@@ -276,7 +276,7 @@ func appendTechnologySection(sb *strings.Builder, issue testapi.Issue, findingTy
 // appendComponentSection adds component information to the markdown and returns the component name
 func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingType testapi.FindingType) string {
 	var componentName string
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
+	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
 		if str, ok := val.(string); ok {
 			componentName = str
 		}
@@ -294,7 +294,7 @@ func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingTyp
 // appendDependencyPathsSection adds dependency path information to the markdown
 func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, componentName string) {
 	var dependencyPaths []string
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyDependencyPaths); ok {
+	if val, ok := issue.GetData(testapi.DataKeyDependencyPaths); ok {
 		if strs, ok := val.([]string); ok {
 			dependencyPaths = strs
 		}
@@ -334,7 +334,7 @@ func appendDetailedPaths(sb *strings.Builder, dependencyPaths []string) {
 // appendFallbackIntroduction adds a fallback introduction line when no dependency paths are available
 func appendFallbackIntroduction(sb *strings.Builder, issue testapi.Issue, componentName string) {
 	var componentVersion string
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
+	if val, ok := issue.GetData(testapi.DataKeyComponentVersion); ok {
 		if str, ok := val.(string); ok {
 			componentVersion = str
 		}
@@ -363,12 +363,12 @@ func BuildLocation(issue testapi.Issue) map[string]interface{} {
 	uri := "package.json" // Default, should be determined from locations
 	startLine := 1
 	var packageName, packageVersion string
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName); ok {
+	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
 		if str, ok := val.(string); ok {
 			packageName = str
 		}
 	}
-	if val, ok := issue.GetMetadata(testapi.MetadataKeyComponentVersion); ok {
+	if val, ok := issue.GetData(testapi.DataKeyComponentVersion); ok {
 		if str, ok := val.(string); ok {
 			packageVersion = str
 		}

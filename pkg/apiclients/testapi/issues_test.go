@@ -340,29 +340,29 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.Equal(t, 10, sourceLocations[0].FromLine)
 
 		// Verify SCA-specific metadata returns empty for SAST
-		val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName)
+		val, ok := issue.GetData(testapi.DataKeyComponentName)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyTechnology)
+		val, ok = issue.GetData(testapi.DataKeyTechnology)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyDependencyPaths)
+		val, ok = issue.GetData(testapi.DataKeyDependencyPaths)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
+		val, ok = issue.GetData(testapi.DataKeyFixedInVersions)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyIsFixable)
+		val, ok = issue.GetData(testapi.DataKeyIsFixable)
 		if ok {
 			if isFixable, isFixableOk := val.(bool); isFixableOk {
 				assert.False(t, isFixable)
 			}
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyCVSSScore)
+		val, ok = issue.GetData(testapi.DataKeyCVSSScore)
 		if ok {
 			if cvssScore, cvssScoreOk := val.(float32); cvssScoreOk {
 				assert.Equal(t, float32(0.0), cvssScore)
@@ -396,12 +396,12 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 
 		// Verify metadata access works (even if it returns empty values)
 		// These should not panic
-		_, _ = issue.GetMetadata(testapi.MetadataKeyComponentName)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyTechnology)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyDependencyPaths)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyIsFixable)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyCVSSScore)
+		_, _ = issue.GetData(testapi.DataKeyComponentName)
+		_, _ = issue.GetData(testapi.DataKeyTechnology)
+		_, _ = issue.GetData(testapi.DataKeyDependencyPaths)
+		_, _ = issue.GetData(testapi.DataKeyFixedInVersions)
+		_, _ = issue.GetData(testapi.DataKeyIsFixable)
+		_, _ = issue.GetData(testapi.DataKeyCVSSScore)
 	})
 }
 
