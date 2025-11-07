@@ -125,11 +125,11 @@
 						{
 							"kind": "external",
 							{{- $status := printf "%s" $suppression.Status }}
-							{{- if eq $status "accepted" }}
+							{{- if eq $status "ignored" }}
 							"status": "accepted"
-							{{- else if eq $status "under_review" }}
+							{{- else if eq $status "pending_ignore_approval" }}
 							"status": "underReview"
-							{{- else if eq $status "rejected" }}
+							{{- else if eq $status "other" }}
 							"status": "rejected"
 							{{- else }}
 							"status": "accepted"
