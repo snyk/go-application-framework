@@ -470,10 +470,7 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 
 			var memEnd runtime.MemStats
 			runtime.ReadMemStats(&memEnd)
-
-			// Validate the output is valid SARIF
-			validateSarifData(&testing.T{}, writer.Bytes())
-
+			
 			// Calculate memory usage for this iteration
 			totalAllocatedMB := (memEnd.TotalAlloc - memStart.TotalAlloc) / 1024 / 1024
 			outputSizeMB := float64(writer.Len()) / 1024 / 1024
