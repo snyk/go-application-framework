@@ -3,49 +3,16 @@ package testapi_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
-	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
-
-// mockIssuesExtractor is a mock implementation of IssuesExtractor for testing.
-type mockIssuesExtractor struct {
-	ctrl     *gomock.Controller
-	recorder *mockIssuesExtractorMockRecorder
-}
-
-type mockIssuesExtractorMockRecorder struct {
-	mock *mockIssuesExtractor
-}
-
-func NewMockIssuesExtractor(ctrl *gomock.Controller) *mockIssuesExtractor {
-	mock := &mockIssuesExtractor{ctrl: ctrl}
-	mock.recorder = &mockIssuesExtractorMockRecorder{mock}
-	return mock
-}
-
-func (m *mockIssuesExtractor) EXPECT() *mockIssuesExtractorMockRecorder {
-	return m.recorder
-}
-
-func (m *mockIssuesExtractor) ExtractFindings(ctx context.Context) ([]testapi.FindingData, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExtractFindings", ctx)
-	ret0, _ := ret[0].([]testapi.FindingData) //nolint:errcheck // type assertion in mock
-	ret1, _ := ret[1].(error)                 //nolint:errcheck // type assertion in mock
-	return ret0, ret1
-}
-
-func (mr *mockIssuesExtractorMockRecorder) ExtractFindings(ctx interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExtractFindings", reflect.TypeOf((*mockIssuesExtractor)(nil).ExtractFindings), ctx)
-}
 
 func TestNewIssuesFromTestResult(t *testing.T) {
 	ctx := context.Background()
@@ -186,7 +153,7 @@ func TestNewIssuesFromTestResult(t *testing.T) {
 
 func TestNewIssueFromFindings(t *testing.T) {
 	t.Run("successfully creates issue from findings", func(t *testing.T) {
-		findings := []testapi.FindingData{
+		findings := []*testapi.FindingData{
 			{
 				Attributes: &testapi.FindingAttributes{
 					FindingType: testapi.FindingTypeSca,
@@ -208,7 +175,7 @@ func TestNewIssueFromFindings(t *testing.T) {
 	})
 
 	t.Run("returns error when findings is empty", func(t *testing.T) {
-		issue, err := testapi.NewIssueFromFindings([]testapi.FindingData{})
+		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{})
 		assert.Error(t, err)
 		assert.Nil(t, issue)
 		assert.Contains(t, err.Error(), "findings cannot be empty")
@@ -306,7 +273,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		err := locationUnion.MergeSourceLocation(location)
 		require.NoError(t, err)
 
-		findings := []testapi.FindingData{
+		findings := []*testapi.FindingData{
 			{
 				Attributes: &testapi.FindingAttributes{
 					FindingType: testapi.FindingTypeSast,
@@ -340,29 +307,29 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		assert.Equal(t, 10, sourceLocations[0].FromLine)
 
 		// Verify SCA-specific metadata returns empty for SAST
-		val, ok := issue.GetMetadata(testapi.MetadataKeyComponentName)
+		val, ok := issue.GetData(testapi.DataKeyComponentName)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyTechnology)
+		val, ok = issue.GetData(testapi.DataKeyTechnology)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyDependencyPaths)
+		val, ok = issue.GetData(testapi.DataKeyDependencyPaths)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
+		val, ok = issue.GetData(testapi.DataKeyFixedInVersions)
 		if ok {
 			assert.Empty(t, val)
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyIsFixable)
+		val, ok = issue.GetData(testapi.DataKeyIsFixable)
 		if ok {
 			if isFixable, isFixableOk := val.(bool); isFixableOk {
 				assert.False(t, isFixable)
 			}
 		}
-		val, ok = issue.GetMetadata(testapi.MetadataKeyCVSSScore)
+		val, ok = issue.GetData(testapi.DataKeyCVSSScore)
 		if ok {
 			if cvssScore, cvssScoreOk := val.(float32); cvssScoreOk {
 				assert.Equal(t, float32(0.0), cvssScore)
@@ -373,7 +340,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 	t.Run("SCA issue preserves SCA-specific methods", func(t *testing.T) {
 		// This test verifies backward compatibility - SCA issues should still work
 		// We'll use a minimal SCA finding structure
-		findings := []testapi.FindingData{
+		findings := []*testapi.FindingData{
 			{
 				Attributes: &testapi.FindingAttributes{
 					FindingType: testapi.FindingTypeSca,
@@ -396,12 +363,12 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 
 		// Verify metadata access works (even if it returns empty values)
 		// These should not panic
-		_, _ = issue.GetMetadata(testapi.MetadataKeyComponentName)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyTechnology)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyDependencyPaths)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyFixedInVersions)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyIsFixable)
-		_, _ = issue.GetMetadata(testapi.MetadataKeyCVSSScore)
+		_, _ = issue.GetData(testapi.DataKeyComponentName)
+		_, _ = issue.GetData(testapi.DataKeyTechnology)
+		_, _ = issue.GetData(testapi.DataKeyDependencyPaths)
+		_, _ = issue.GetData(testapi.DataKeyFixedInVersions)
+		_, _ = issue.GetData(testapi.DataKeyIsFixable)
+		_, _ = issue.GetData(testapi.DataKeyCVSSScore)
 	})
 }
 
@@ -418,5 +385,154 @@ func TestIssueError(t *testing.T) {
 		assert.Contains(t, err.Error(), "test error")
 		assert.Contains(t, err.Error(), "root cause")
 		assert.Equal(t, cause, err.Unwrap())
+	})
+}
+
+func TestGetIssuesFromTestResult(t *testing.T) {
+	t.Run("successfully filters issues by finding type", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Key:         "sca-issue-2",
+					Title:       "SCA Issue 2",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "sast-issue-1",
+					Title:       "SAST Issue 1",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Key:         "sca-issue-1",
+					Title:       "SCA Issue 1",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		require.NoError(t, err)
+		require.NotNil(t, issues)
+		assert.Len(t, issues, 2)
+
+		// Verify all returned issues have the correct finding type
+		for _, issue := range issues {
+			assert.Equal(t, testapi.FindingTypeSca, issue.GetFindingType())
+		}
+
+		// Verify sorting by ID
+		assert.Equal(t, "sca-issue-1", issues[0].GetID())
+		assert.Equal(t, "sca-issue-2", issues[1].GetID())
+	})
+
+	t.Run("returns empty slice when no issues match finding type", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Key:         "sca-issue-1",
+					Title:       "SCA Issue 1",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSast)
+		require.NoError(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("returns error when test result is nil", func(t *testing.T) {
+		issues, err := testapi.GetIssuesFromTestResult(nil, testapi.FindingTypeSca)
+		assert.Error(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("returns error when findings fetch fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		mockResult.EXPECT().Findings(gomock.Any()).Return(nil, false, errors.New("fetch error")).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		assert.Error(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("handles empty findings", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		mockResult.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		require.NoError(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("correctly sorts multiple issues by ID", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "zebra",
+					Title:       "Issue Z",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "apple",
+					Title:       "Issue A",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "middle",
+					Title:       "Issue M",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSast)
+		require.NoError(t, err)
+		require.NotNil(t, issues)
+		assert.Len(t, issues, 3)
+
+		// Verify alphabetical sorting by ID
+		assert.Equal(t, "apple", issues[0].GetID())
+		assert.Equal(t, "middle", issues[1].GetID())
+		assert.Equal(t, "zebra", issues[2].GetID())
 	})
 }

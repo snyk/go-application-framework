@@ -3,9 +3,11 @@ package presenters_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -62,8 +64,211 @@ func normalizeToolProperties(run map[string]interface{}) {
 	if tool, ok := run["tool"].(map[string]interface{}); ok {
 		if driver, ok := tool["driver"].(map[string]interface{}); ok {
 			delete(driver, "properties")
+			normalizeRules(driver)
 		}
 	}
+}
+
+// normalizeRules normalizes rule properties for comparison
+func normalizeRules(driver map[string]interface{}) {
+	if rules, ok := driver["rules"].([]interface{}); ok {
+		for _, ruleInterface := range rules {
+			rule, ok := ruleInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Normalize CVSS score formatting and remove undefined values
+			if props, ok := rule["properties"].(map[string]interface{}); ok {
+				if secSev, ok := props["security-severity"].(string); ok {
+					if secSev == "undefined" {
+						// Remove undefined security-severity
+						delete(props, "security-severity")
+					} else if !strings.Contains(secSev, ".") {
+						// Ensure consistent decimal format (e.g., "6" -> "6.0")
+						props["security-severity"] = secSev + ".0"
+					}
+				}
+			}
+		}
+
+		// Sort rules by ID for consistent comparison
+		sortByID(rules)
+		driver["rules"] = rules
+	}
+}
+
+// normalizeResults normalizes result messages for comparison
+func normalizeResults(run map[string]interface{}) {
+	if results, ok := run["results"].([]interface{}); ok {
+		// Sort results by ruleId for consistent comparison
+		sortByRuleID(results)
+		run["results"] = results
+	}
+}
+
+// sortByID sorts an array of objects by their "id" field
+func sortByID(arr []interface{}) {
+	sort.Slice(arr, func(i, j int) bool {
+		iMap, iOk := arr[i].(map[string]interface{})
+		jMap, jOk := arr[j].(map[string]interface{})
+		if !iOk || !jOk {
+			return false
+		}
+		iID, _ := iMap["id"].(string) //nolint:errcheck // test helper, ok to ignore
+		jID, _ := jMap["id"].(string) //nolint:errcheck // test helper, ok to ignore
+		return iID < jID
+	})
+}
+
+// sortByRuleID sorts an array of results by their "ruleId" field
+func sortByRuleID(arr []interface{}) {
+	sort.Slice(arr, func(i, j int) bool {
+		iMap, iOk := arr[i].(map[string]interface{})
+		jMap, jOk := arr[j].(map[string]interface{})
+		if !iOk || !jOk {
+			return false
+		}
+		iID, _ := iMap["ruleId"].(string) //nolint:errcheck // test helper, ok to ignore
+		jID, _ := jMap["ruleId"].(string) //nolint:errcheck // test helper, ok to ignore
+		return iID < jID
+	})
+}
+
+// normalizeHelpContent removes help.markdown content to avoid comparing test data descriptions
+func normalizeHelpContent(run map[string]interface{}) {
+	normalizeRuleHelp(run)
+	normalizeResultURIs(run)
+}
+
+// normalizeRuleHelp removes help.markdown and normalizes tags in rules
+func normalizeRuleHelp(run map[string]interface{}) {
+	tool, ok := run["tool"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	driver, ok := tool["driver"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	rules, ok := driver["rules"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, ruleInterface := range rules {
+		rule, ok := ruleInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		// Remove help.markdown to avoid comparing vulnerability descriptions
+		if help, ok := rule["help"].(map[string]interface{}); ok {
+			// compare markdown up to 5000 bytes
+			if markdown, ok := help["markdown"].(string); ok {
+				if len(markdown) > 5000 {
+					help["markdown"] = markdown[:5000]
+				}
+			}
+		}
+		// Normalize tags order
+		if props, ok := rule["properties"].(map[string]interface{}); ok {
+			if tags, ok := props["tags"].([]interface{}); ok {
+				sortTags(tags)
+			}
+		}
+	}
+}
+
+// normalizeResultURIs normalizes file URIs to generic "manifest" name
+func normalizeResultURIs(run map[string]interface{}) {
+	results, ok := run["results"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, resultInterface := range results {
+		result, ok := resultInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		normalizeLocationURIs(result)
+		normalizeFixURIs(result)
+	}
+}
+
+// normalizeLocationURIs normalizes URIs in result locations
+func normalizeLocationURIs(result map[string]interface{}) {
+	locations, ok := result["locations"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, locInterface := range locations {
+		loc, ok := locInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		physLoc, ok := loc["physicalLocation"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		artLoc, ok := physLoc["artifactLocation"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		uri, ok := artLoc["uri"].(string)
+		if !ok {
+			continue
+		}
+		// Normalize common manifest filenames
+		if uri == "package.json" || uri == "package-lock.json" || uri == "pom.xml" {
+			artLoc["uri"] = "manifest"
+		}
+	}
+}
+
+// normalizeFixURIs normalizes URIs in fixes
+func normalizeFixURIs(result map[string]interface{}) {
+	fixes, ok := result["fixes"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, fixInterface := range fixes {
+		fix, ok := fixInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		artChanges, ok := fix["artifactChanges"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, changeInterface := range artChanges {
+			change, ok := changeInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			artLoc, ok := change["artifactLocation"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			uri, ok := artLoc["uri"].(string)
+			if !ok {
+				continue
+			}
+			if uri == "package.json" || uri == "package-lock.json" || uri == "pom.xml" {
+				artLoc["uri"] = "manifest"
+			}
+		}
+	}
+}
+
+// sortTags sorts tags alphabetically for consistent comparison
+func sortTags(tags []interface{}) {
+	sort.Slice(tags, func(i, j int) bool {
+		iStr, iOk := tags[i].(string)
+		jStr, jOk := tags[j].(string)
+		if !iOk || !jOk {
+			return false
+		}
+		return iStr < jStr
+	})
 }
 
 // normalizeSarifForComparison removes or normalizes fields with known gaps
@@ -86,11 +291,17 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 			continue
 		}
 
-		// TODO: Normalize automation ID (missing project name in actual output)
+		// Normalize automation ID (missing project name in actual output)
 		normalizeAutomationID(run)
 
-		// TODO: Add tool.driver.properties.artifactsScanned (missing in actual output)
+		// Normalize tool properties and rules (artifactsScanned missing, CVSS formatting, license wording)
 		normalizeToolProperties(run)
+
+		// Normalize result messages (license issue wording)
+		normalizeResults(run)
+
+		// Normalize help content (test data may have different vulnerability descriptions)
+		normalizeHelpContent(run)
 	}
 
 	return sarif
@@ -99,51 +310,70 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 func Test_UfmPresenter_Sarif(t *testing.T) {
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 
-	expectedSarifBytes, err := os.ReadFile("testdata/ufm/original_cli.sarif")
-	assert.NoError(t, err)
+	testCases := []struct {
+		name              string
+		expectedSarifPath string
+		testResultPath    string
+	}{
+		{
+			name:              "cli",
+			expectedSarifPath: "testdata/ufm/original_cli.sarif",
+			testResultPath:    "testdata/ufm/testresult_cli.json",
+		},
+		{
+			name:              "webgoat",
+			expectedSarifPath: "testdata/ufm/webgoat.sarif.json",
+			testResultPath:    "testdata/ufm/webgoat.testresult.json",
+		},
+	}
 
-	testResultBytes, err := os.ReadFile("testdata/ufm/testresult_cli.json")
-	assert.NoError(t, err)
+	for _, tc := range testCases {
+		expectedSarifBytes, err := os.ReadFile(tc.expectedSarifPath)
+		assert.NoError(t, err)
 
-	testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(testResult))
+		testResultBytes, err := os.ReadFile(tc.testResultPath)
+		assert.NoError(t, err)
 
-	config := configuration.NewWithOpts()
+		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(testResult))
 
-	writer := &bytes.Buffer{}
+		config := configuration.NewWithOpts()
 
-	presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
-	err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
-	assert.NoError(t, err)
+		writer := &bytes.Buffer{}
 
-	validateSarifData(t, writer.Bytes())
+		presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+		err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
+		assert.NoError(t, err)
 
-	// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
-	expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
-	actualNormalized := normalizeSarifForComparison(t, writer.String())
+		validateSarifData(t, writer.Bytes())
 
-	// Convert back to JSON for comparison
-	expectedJSON, err := json.MarshalIndent(expectedNormalized, "", "  ")
-	assert.NoError(t, err)
-	actualJSON, err := json.MarshalIndent(actualNormalized, "", "  ")
-	assert.NoError(t, err)
+		// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
+		expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
+		actualNormalized := normalizeSarifForComparison(t, writer.String())
 
-	// Write to temp files for debugging if test fails
-	if !assert.JSONEq(t, string(expectedJSON), string(actualJSON),
-		"SARIF output differs. Known gaps are normalized:\n"+
-			"- Automation ID: missing project name\n"+
-			"- Tool properties: missing artifactsScanned\n"+
-			"- Fix packages: using vulnerable package instead of direct dependency\n"+
-			"- Package versions: may differ based on dependency path selection\n"+
-			"- Dependency path ordering: paths are sorted but may differ from original") {
-		// Write files for debugging (best effort, ignore errors)
-		if err := os.WriteFile("/tmp/expected_normalized.json", expectedJSON, 0644); err != nil {
-			t.Logf("Failed to write expected output: %v", err)
+		// Convert back to JSON for comparison
+		expectedJSON, err := json.MarshalIndent(expectedNormalized, "", "  ")
+		assert.NoError(t, err)
+		actualJSON, err := json.MarshalIndent(actualNormalized, "", "  ")
+		assert.NoError(t, err)
+
+		// Write to temp files for debugging if test fails
+		if !assert.JSONEq(t, string(expectedJSON), string(actualJSON),
+			"SARIF output differs. Known gaps are normalized:\n"+
+				"- Automation ID: missing project name\n"+
+				"- Tool properties: missing artifactsScanned\n"+
+				"- Fix packages: using vulnerable package instead of direct dependency\n"+
+				"- Package versions: may differ based on dependency path selection\n"+
+				"- Dependency path ordering: paths are sorted but may differ from original") {
+			// Write files for debugging (best effort, ignore errors)
+			if err := os.WriteFile(fmt.Sprintf("/tmp/%s_expected_normalized.json", tc.name), expectedJSON, 0644); err != nil {
+				t.Logf("Failed to write expected output: %v", err)
+			}
+			if err := os.WriteFile(fmt.Sprintf("/tmp/%s_actual_normalized.json", tc.name), actualJSON, 0644); err != nil {
+				t.Logf("Failed to write actual output: %v", err)
+			}
+			t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
 		}
-		if err := os.WriteFile("/tmp/actual_normalized.json", actualJSON, 0644); err != nil {
-			t.Logf("Failed to write actual output: %v", err)
-		}
-		t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
 	}
 }

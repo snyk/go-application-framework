@@ -7,6 +7,8 @@
 			{{- $findingTypes := getFindingTypesFromTestResult $result }}
 			{{- $findingTypesSize := sub (len $findingTypes) 1 }}
 			{{- range $findingTypeIndex, $findingType := $findingTypes }}
+			{{- $issues := getIssuesFromTestResult $result $findingType }}
+			{{- $issuesSize := sub (len $issues) 1 }}
 			{
 				"tool": {
 					"driver" : {
@@ -14,127 +16,133 @@
 						"semanticVersion" : "{{- getRuntimeInfo "version" }}",
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",
-						"rules" : [
-							{{- $rules := getRulesFromTestResult $result $findingType }}
-							{{- $rulesSize := sub (len $rules) 1 }}
-							{{- range $index, $rule := $rules }}
-							{
-								"id": {{ getQuotedString (index $rule "id") }},
-								"shortDescription": {
-									"text": {{ getQuotedString (index $rule "shortDescription") }}
-								},
-								"fullDescription": {
-									"text": {{ getQuotedString (index $rule "fullDescription") }}
-								},
-								"help": {
-									"text": {{ getQuotedString (index $rule "help_text") }},
-									"markdown": {{ getQuotedString (index $rule "help_markdown") }}
-								},
-								"properties": {
-									{{- $props := index $rule "properties" }}
-									{{- if $props }}
-									{{- $tags := index $props "tags" }}
-									{{- if $tags }}
-									"tags": [
-										{{- $tagsSize := sub (len $tags) 1 }}
-										{{- range $tagIndex, $tag := $tags }}
-										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
-										{{- end }}
-									],
+					"rules" : [
+						{{- range $index, $issue := $issues }}
+						{{- $tags := buildRuleTags $issue }}
+						{{- $cvssScore := getRuleCVSSScore $issue }}
+						{
+							"id": {{ getQuotedString $issue.GetID }},
+							"shortDescription": {
+								"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
+							},
+							"fullDescription": {
+								"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
+							},
+							"help": {
+								"text": "",
+								"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
+							},
+							"properties": {
+								"tags": [
+									{{- $tagsSize := sub (len $tags) 1 }}
+									{{- range $tagIndex, $tag := $tags }}
+									{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
 									{{- end }}
-									"cvssv3_baseScore": {{ index $props "cvssv3_baseScore" }},
-									"security-severity": {{ getQuotedString (index $props "security-severity") }}
-									{{- end }}
-								}
-							}{{if lt $index $rulesSize}},{{end}}
-							{{- end }}
-						]
+								]{{if ge $cvssScore 0.0}},
+								"cvssv3_baseScore": {{ $cvssScore }},
+								"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
+							}
+						}{{if lt $index $issuesSize}},{{end}}
+						{{- end }}
+					]
 					}
 				},
-				"results": [
-					{{- $results := getResultsFromTestResult $result $findingType }}
-					{{- $resultsSize := sub (len $results) 1 }}
-					{{- range $index, $sarifResult := $results }}
-					{{- $message := index $sarifResult "message" }}
-					{{- $locations := index $sarifResult "locations" }}
-					{{- $fixes := index $sarifResult "fixes" }}
-					{
-						"ruleId": {{ getQuotedString (index $sarifResult "ruleId") }},
-						"level": {{ getQuotedString (index $sarifResult "level") }},
-						"message": {
-							"text": {{ getQuotedString (index $message "text") }}
-						},
-						"locations": [
-							{{- $locSize := sub (len $locations) 1 }}
-							{{- range $locIndex, $location := $locations }}
-							{{- $physicalLoc := index $location "physicalLocation" }}
-							{{- $artifactLoc := index $physicalLoc "artifactLocation" }}
-							{{- $region := index $physicalLoc "region" }}
-							{{- $logicalLocs := index $location "logicalLocations" }}
-							{
-								"physicalLocation": {
-									"artifactLocation": {
-										"uri": {{ getQuotedString (index $artifactLoc "uri") }}
-									},
-									"region": {
-										"startLine": {{ index $region "startLine" }}
-									}
-								}{{- if $logicalLocs }},
-								"logicalLocations": [
-									{{- $logicalSize := sub (len $logicalLocs) 1 }}
-									{{- range $logicalIndex, $logicalLoc := $logicalLocs }}
-									{
-										"fullyQualifiedName": {{ getQuotedString (index $logicalLoc "fullyQualifiedName") }}
-									}{{if lt $logicalIndex $logicalSize}},{{end}}
-									{{- end }}
-								]
-								{{- end }}
-							}{{if lt $locIndex $locSize}},{{end}}
-							{{- end }}
-						]{{- if $fixes }},
-						"fixes": [
-							{{- $fixSize := sub (len $fixes) 1 }}
-							{{- range $fixIndex, $fix := $fixes }}
-							{{- $fixDesc := index $fix "description" }}
-							{{- $artifactChanges := index $fix "artifactChanges" }}
-							{
-								"description": {
-									"text": {{ getQuotedString (index $fixDesc "text") }}
+			"results": [
+				{{- $manifestPath := getManifestPath $result }}
+				{{- range $index, $issue := $issues }}
+				{{- $location := buildLocationFromIssue $issue }}
+				{{- $fixes := buildFixesFromIssue $issue }}
+				{{- $suppression := $issue.GetSuppression }}
+				{
+					"ruleId": {{ getQuotedString $issue.GetID }},
+					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
+					"message": {
+						"text": {{ getQuotedString (formatIssueMessage $issue) }}
+					},
+					"locations": [
+						{{- if $location }}
+						{{- $physicalLoc := index $location "physicalLocation" }}
+						{{- $region := index $physicalLoc "region" }}
+						{{- $logicalLocs := index $location "logicalLocations" }}
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": {{ getQuotedString $manifestPath }}
 								},
-								"artifactChanges": [
-									{{- $changeSize := sub (len $artifactChanges) 1 }}
-									{{- range $changeIndex, $change := $artifactChanges }}
-									{{- $changeArtifact := index $change "artifactLocation" }}
-									{{- $replacements := index $change "replacements" }}
-									{
-										"artifactLocation": {
-											"uri": {{ getQuotedString (index $changeArtifact "uri") }}
-										},
-										"replacements": [
-											{{- $replaceSize := sub (len $replacements) 1 }}
-											{{- range $replaceIndex, $replacement := $replacements }}
-											{{- $deletedRegion := index $replacement "deletedRegion" }}
-											{{- $insertedContent := index $replacement "insertedContent" }}
-											{
-												"deletedRegion": {
-													"startLine": {{ index $deletedRegion "startLine" }}
-												},
-												"insertedContent": {
-													"text": {{ getQuotedString (index $insertedContent "text") }}
-												}
-											}{{if lt $replaceIndex $replaceSize}},{{end}}
-											{{- end }}
-										]
-									}{{if lt $changeIndex $changeSize}},{{end}}
-									{{- end }}
-								]
-							}{{if lt $fixIndex $fixSize}},{{end}}
-							{{- end }}
-						]
+								"region": {
+									"startLine": {{ index $region "startLine" }}
+								}
+							},
+							"logicalLocations": [
+								{{- range $logLoc := $logicalLocs }}
+								{
+									"fullyQualifiedName": {{ getQuotedString (index $logLoc "fullyQualifiedName") }}
+								}
+								{{- end }}
+							]
+						}
 						{{- end }}
-					}{{if lt $index $resultsSize}},{{end}}
-					{{- end}}
-				],
+					]
+					{{- if $fixes }},
+					"fixes": [
+						{{- $fixSize := sub (len $fixes) 1 }}
+						{{- range $fixIndex, $fix := $fixes }}
+						{
+							"description": {
+								"text": {{ getQuotedString (index (index $fix "description") "text") }}
+							},
+							"artifactChanges": [
+								{{- $artifactChanges := index $fix "artifactChanges" }}
+								{{- $changeSize := sub (len $artifactChanges) 1 }}
+								{{- range $changeIndex, $change := $artifactChanges }}
+								{
+									"artifactLocation": {
+										"uri": {{ getQuotedString $manifestPath }}
+									},
+									"replacements": [
+										{{- $replacements := index $change "replacements" }}
+										{{- $replaceSize := sub (len $replacements) 1 }}
+										{{- range $replaceIndex, $replacement := $replacements }}
+										{
+											"deletedRegion": {
+												"startLine": {{ index (index $replacement "deletedRegion") "startLine" }}
+											},
+											"insertedContent": {
+												"text": {{ getQuotedString (index (index $replacement "insertedContent") "text") }}
+											}
+										}{{if lt $replaceIndex $replaceSize}},{{end}}
+										{{- end }}
+									]
+								}{{if lt $changeIndex $changeSize}},{{end}}
+								{{- end }}
+							]
+						}{{if lt $fixIndex $fixSize}},{{end}}
+						{{- end }}
+					]
+					{{- end }}
+					{{- if $suppression }},
+					"suppressions": [
+						{
+							"kind": "external",
+							{{- $status := printf "%s" $suppression.Status }}
+							{{- if eq $status "ignored" }}
+							"status": "accepted"
+							{{- else if eq $status "pending_ignore_approval" }}
+							"status": "underReview"
+							{{- else if eq $status "other" }}
+							"status": "rejected"
+							{{- else }}
+							"status": "accepted"
+							{{- end }}
+							{{- if $suppression.Justification }},
+							"justification": {{ getQuotedString $suppression.Justification }}
+							{{- end }}
+						}
+					]
+					{{- end }}
+				}{{if lt $index $issuesSize}},{{end}}
+				{{- end}}
+			],
 				{{- /* TODO: Add properties section for SAST (coverage) and upload results
 				"properties": {
 					"coverage": [

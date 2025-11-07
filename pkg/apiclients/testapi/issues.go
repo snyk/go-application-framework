@@ -3,44 +3,45 @@ package testapi
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 )
 
-// Metadata keys for common issue properties (case-insensitive)
+// Data keys for common issue properties (case-insensitive)
 const (
-	// MetadataKeyComponent is the key for accessing the component information (name and version)
+	// DataKeyComponent is the key for accessing the component information (name and version)
 	// Value type: map[string]string with keys "name" and "version"
-	MetadataKeyComponent = "component"
+	DataKeyComponent = "component"
 
-	// MetadataKeyComponentName is the key for accessing just the component name
+	// DataKeyComponentName is the key for accessing just the component name
 	// Value type: string
-	MetadataKeyComponentName = "component-name"
+	DataKeyComponentName = "component-name"
 
-	// MetadataKeyComponentVersion is the key for accessing just the component version
+	// DataKeyComponentVersion is the key for accessing just the component version
 	// Value type: string
-	MetadataKeyComponentVersion = "component-version"
+	DataKeyComponentVersion = "component-version"
 
-	// MetadataKeyTechnology is the key for the technology/ecosystem
+	// DataKeyTechnology is the key for the technology/ecosystem
 	// For SCA: package manager (e.g., "npm", "maven")
 	// For SAST: language/framework (e.g., "javascript", "python")
 	// Value type: string
-	MetadataKeyTechnology = "technology"
+	DataKeyTechnology = "technology"
 
-	// MetadataKeyCVSSScore is the key for CVSS base score
+	// DataKeyCVSSScore is the key for CVSS base score
 	// Value type: float32
-	MetadataKeyCVSSScore = "cvss-score"
+	DataKeyCVSSScore = "cvss-score"
 
-	// MetadataKeyIsFixable is the key for whether a fix is available
+	// DataKeyIsFixable is the key for whether a fix is available
 	// Value type: bool
-	MetadataKeyIsFixable = "is-fixable"
+	DataKeyIsFixable = "is-fixable"
 
-	// MetadataKeyFixedInVersions is the key for versions that fix this issue
+	// DataKeyFixedInVersions is the key for versions that fix this issue
 	// Value type: []string
-	MetadataKeyFixedInVersions = "fixed-in-versions"
+	DataKeyFixedInVersions = "fixed-in-versions"
 
-	// MetadataKeyDependencyPaths is the key for dependency paths (SCA findings)
-	// Value type: []string
-	MetadataKeyDependencyPaths = "dependency-paths"
+	// DataKeyDependencyPaths is the key for dependency paths (SCA findings)
+	// Value type: [][]Package
+	DataKeyDependencyPaths = "dependency-paths"
 )
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
@@ -53,14 +54,14 @@ type Issue interface {
 	// === General Methods (applicable to all finding types) ===
 
 	// GetFindings returns all findings that are part of this issue.
-	GetFindings() []FindingData
+	GetFindings() []*FindingData
 
 	// GetFindingType returns the finding type of this issue.
 	// All findings in an issue should have the same finding type.
 	GetFindingType() FindingType
 
 	// GetProblems returns all problems from all findings in this issue.
-	GetProblems() []Problem
+	GetProblems() []*Problem
 
 	// GetPrimaryProblem returns the primary problem for this issue.
 	// For SCA findings, this would be the SnykVulnProblem.
@@ -120,11 +121,16 @@ type Issue interface {
 	// Returns nil if reachability information is not available.
 	GetReachability() *ReachabilityEvidence
 
-	// GetMetadata returns metadata value for the given key (case-insensitive).
+	// GetSuppression returns the suppression information for this issue.
+	// Indicates if the finding is suppressed by a policy decision.
+	// Returns nil if the issue is not suppressed.
+	GetSuppression() *Suppression
+
+	// GetData returns metadata value for the given key (case-insensitive).
 	// Returns the value and true if found, nil and false otherwise.
-	// Use the MetadataKey* constants for well-known keys.
+	// Use the DataKey* constants for well-known keys.
 	// Callers should perform type assertions on the returned interface{}.
-	GetMetadata(key string) (interface{}, bool)
+	GetData(key string) (interface{}, bool)
 }
 
 // NewIssuesFromTestResult creates a list of Issues from a TestResult.
@@ -137,13 +143,19 @@ func NewIssuesFromTestResult(ctx context.Context, testResult TestResult) ([]Issu
 	}
 
 	// Extract findings
-	findings, _, err := testResult.Findings(ctx)
+	findingsData, _, err := testResult.Findings(ctx)
 	if err != nil {
 		return nil, &IssueError{Message: "failed to extract findings", Cause: err}
 	}
 
-	if len(findings) == 0 {
+	if len(findingsData) == 0 {
 		return []Issue{}, nil
+	}
+
+	// Convert to pointer slice for memory efficiency
+	findings := make([]*FindingData, len(findingsData))
+	for i := range findingsData {
+		findings[i] = &findingsData[i]
 	}
 
 	// Determine grouping strategy based on finding types
@@ -167,7 +179,7 @@ func NewIssuesFromTestResult(ctx context.Context, testResult TestResult) ([]Issu
 }
 
 // selectGrouper chooses the appropriate grouping strategy based on finding types.
-func selectGrouper(findings []FindingData) issueGrouper {
+func selectGrouper(findings []*FindingData) issueGrouper {
 	// Check if we have SCA findings - use ID-based grouping (by problem ID)
 	for _, finding := range findings {
 		if finding.Attributes != nil && finding.Attributes.FindingType == FindingTypeSca {
@@ -181,7 +193,7 @@ func selectGrouper(findings []FindingData) issueGrouper {
 // issueGrouper defines the interface for grouping findings into cohesive security issues.
 // This is an internal interface - grouping logic is hidden from users.
 type issueGrouper interface {
-	groupFindings(findings []FindingData) [][]FindingData
+	groupFindings(findings []*FindingData) [][]*FindingData
 }
 
 // idBasedIssueGrouper groups findings by problem ID.
@@ -189,8 +201,8 @@ type issueGrouper interface {
 // Used primarily for SCA findings where multiple findings may reference the same vulnerability.
 type idBasedIssueGrouper struct{}
 
-func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingData {
-	groups := make(map[string][]FindingData)
+func (g *idBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
+	groups := make(map[string][]*FindingData)
 
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -207,7 +219,7 @@ func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingD
 		groups[problemID] = append(groups[problemID], finding)
 	}
 
-	result := make([][]FindingData, 0, len(groups))
+	result := make([][]*FindingData, 0, len(groups))
 	for _, group := range groups {
 		result = append(result, group)
 	}
@@ -215,18 +227,48 @@ func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingD
 	return result
 }
 
-func (g *idBasedIssueGrouper) extractProblemID(finding FindingData) string {
-	// Extract the first available ID from any problem type for grouping
-	// Works with snyk_vuln, CVE, CWE, etc. since they all have an ID field
+func (g *idBasedIssueGrouper) extractProblemID(finding *FindingData) string {
+	// Prefer Snyk IDs for consistent grouping
+	// Snyk IDs can be in two formats:
+	//   1. "SNYK-" prefix (e.g., SNYK-JS-LODASH-590103)
+	//   2. "snyk:" prefix (e.g., snyk:lic:npm:shescape:MPL-2.0)
+	// If no Snyk ID is found, fall back to the first available ID (CVE, CWE, etc.)
+	var fallbackID string
+
 	for _, problem := range finding.Attributes.Problems {
-		if id := problem.GetID(); id != "" {
+		id := problem.GetID()
+		if id == "" {
+			continue
+		}
+
+		// Check for Snyk ID pattern (case-insensitive, without allocations)
+		if isSnykID(id) {
 			return id
 		}
+
+		// Store first non-empty ID as fallback
+		if fallbackID == "" {
+			fallbackID = id
+		}
 	}
-	return ""
+
+	return fallbackID
 }
 
-func (g *idBasedIssueGrouper) getUniqueKey(finding FindingData) string {
+// isSnykID checks if an ID starts with "snyk" (case-insensitive)
+func isSnykID(id string) bool {
+	if len(id) < 4 {
+		return false
+	}
+
+	// Manual case-insensitive check to avoid string allocation
+	return (id[0] == 's' || id[0] == 'S') &&
+		(id[1] == 'n' || id[1] == 'N') &&
+		(id[2] == 'y' || id[2] == 'Y') &&
+		(id[3] == 'k' || id[3] == 'K')
+}
+
+func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
 	if finding.Id != nil {
 		return finding.Id.String()
 	}
@@ -240,8 +282,8 @@ func (g *idBasedIssueGrouper) getUniqueKey(finding FindingData) string {
 // Findings with the same key are grouped together as a single issue.
 type keyBasedIssueGrouper struct{}
 
-func (g *keyBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingData {
-	groups := make(map[string][]FindingData)
+func (g *keyBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
+	groups := make(map[string][]*FindingData)
 
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -261,7 +303,7 @@ func (g *keyBasedIssueGrouper) groupFindings(findings []FindingData) [][]Finding
 		groups[key] = append(groups[key], finding)
 	}
 
-	result := make([][]FindingData, 0, len(groups))
+	result := make([][]*FindingData, 0, len(groups))
 	for _, group := range groups {
 		result = append(result, group)
 	}
@@ -271,9 +313,9 @@ func (g *keyBasedIssueGrouper) groupFindings(findings []FindingData) [][]Finding
 
 // issue is the concrete implementation of the Issue interface.
 type issue struct {
-	findings          []FindingData
+	findings          []*FindingData
 	findingType       FindingType
-	problems          []Problem
+	problems          []*Problem
 	primaryProblem    *Problem
 	id                string
 	severity          string
@@ -286,11 +328,12 @@ type issue struct {
 	sourceLocations   []SourceLocation
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
+	suppression       *Suppression
 	metadata          map[string]interface{} // case-insensitive key storage (lowercase keys)
 }
 
 // GetFindings returns all findings that are part of this issue.
-func (i *issue) GetFindings() []FindingData {
+func (i *issue) GetFindings() []*FindingData {
 	return i.findings
 }
 
@@ -300,7 +343,7 @@ func (i *issue) GetFindingType() FindingType {
 }
 
 // GetProblems returns all problems from all findings in this issue.
-func (i *issue) GetProblems() []Problem {
+func (i *issue) GetProblems() []*Problem {
 	return i.problems
 }
 
@@ -339,8 +382,8 @@ func (i *issue) GetDescription() string {
 	return i.description
 }
 
-// GetMetadata returns metadata value for the given key (case-insensitive).
-func (i *issue) GetMetadata(key string) (interface{}, bool) {
+// GetData returns metadata value for the given key (case-insensitive).
+func (i *issue) GetData(key string) (interface{}, bool) {
 	if i.metadata == nil {
 		return nil, false
 	}
@@ -372,14 +415,19 @@ func (i *issue) GetReachability() *ReachabilityEvidence {
 	return i.reachability
 }
 
+// GetSuppression returns the suppression information for this issue.
+func (i *issue) GetSuppression() *Suppression {
+	return i.suppression
+}
+
 // NewIssueFromFindings creates a single Issue instance from a group of related findings.
 // This is a helper function for creating issues from pre-grouped findings.
-func NewIssueFromFindings(findings []FindingData) (Issue, error) {
+func NewIssueFromFindings(findings []*FindingData) (Issue, error) {
 	return newIssue(findings)
 }
 
 // newIssue creates a single Issue instance from a group of related findings.
-func newIssue(findings []FindingData) (Issue, error) {
+func newIssue(findings []*FindingData) (Issue, error) {
 	if len(findings) == 0 {
 		return nil, &IssueError{Message: "findings cannot be empty"}
 	}
@@ -393,7 +441,7 @@ func newIssue(findings []FindingData) (Issue, error) {
 // issueBuilder helps construct an Issue from FindingData
 type issueBuilder struct {
 	findingType       FindingType
-	allProblems       []Problem
+	allProblems       []*Problem
 	primaryProblem    *Problem
 	firstFinding      *FindingData
 	cwes              []string
@@ -409,16 +457,17 @@ type issueBuilder struct {
 	cvssScore         float32
 	isFixable         bool
 	fixedInVersions   []string
-	dependencyPaths   []string
+	dependencyPaths   [][]Package // Each element is a path (array of packages with name and version)
 	snykVulnProblem   *SnykVulnProblem
 	sourceLocations   []SourceLocation
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
-	findings          []FindingData
+	suppression       *Suppression
+	findings          []*FindingData
 }
 
 // processFindings extracts data from all findings
-func (b *issueBuilder) processFindings(findings []FindingData) {
+func (b *issueBuilder) processFindings(findings []*FindingData) {
 	b.findings = findings
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -430,30 +479,33 @@ func (b *issueBuilder) processFindings(findings []FindingData) {
 }
 
 // processFinding extracts data from a single finding
-func (b *issueBuilder) processFinding(finding FindingData) {
+func (b *issueBuilder) processFinding(finding *FindingData) {
 	b.setBasicInfo(finding)
-	b.allProblems = append(b.allProblems, finding.Attributes.Problems...)
+	for i := range finding.Attributes.Problems {
+		b.allProblems = append(b.allProblems, &finding.Attributes.Problems[i])
+	}
 	b.extractSourceLocations(finding)
 	b.extractSeverityAndRisk(finding)
 	b.extractEffectiveSeverity(finding)
 	b.extractReachability(finding)
+	b.extractSuppression(finding)
 	b.extractDependencyPaths(finding)
 	b.extractPackageInfo(finding)
 	b.processProblems(finding)
 }
 
 // setBasicInfo sets finding type, title, and description from the first finding
-func (b *issueBuilder) setBasicInfo(finding FindingData) {
+func (b *issueBuilder) setBasicInfo(finding *FindingData) {
 	if b.findingType == "" {
 		b.findingType = finding.Attributes.FindingType
-		b.firstFinding = &finding
+		b.firstFinding = finding
 		b.title = finding.Attributes.Title
 		b.description = finding.Attributes.Description
 	}
 }
 
 // extractSourceLocations extracts source locations from finding locations
-func (b *issueBuilder) extractSourceLocations(finding FindingData) {
+func (b *issueBuilder) extractSourceLocations(finding *FindingData) {
 	for _, location := range finding.Attributes.Locations {
 		locationDiscriminator, err := location.Discriminator()
 		if err != nil || locationDiscriminator != "source" {
@@ -467,7 +519,7 @@ func (b *issueBuilder) extractSourceLocations(finding FindingData) {
 }
 
 // extractSeverityAndRisk extracts severity and risk score from finding attributes
-func (b *issueBuilder) extractSeverityAndRisk(finding FindingData) {
+func (b *issueBuilder) extractSeverityAndRisk(finding *FindingData) {
 	if b.severity == "" && finding.Attributes.Rating.Severity != "" {
 		b.severity = string(finding.Attributes.Rating.Severity)
 	}
@@ -477,7 +529,7 @@ func (b *issueBuilder) extractSeverityAndRisk(finding FindingData) {
 }
 
 // extractEffectiveSeverity extracts effective severity from policy modifications
-func (b *issueBuilder) extractEffectiveSeverity(finding FindingData) {
+func (b *issueBuilder) extractEffectiveSeverity(finding *FindingData) {
 	if finding.Attributes.PolicyModifications == nil {
 		return
 	}
@@ -491,7 +543,7 @@ func (b *issueBuilder) extractEffectiveSeverity(finding FindingData) {
 }
 
 // extractReachability extracts reachability evidence
-func (b *issueBuilder) extractReachability(finding FindingData) {
+func (b *issueBuilder) extractReachability(finding *FindingData) {
 	if b.reachability != nil {
 		return
 	}
@@ -508,8 +560,18 @@ func (b *issueBuilder) extractReachability(finding FindingData) {
 	}
 }
 
+// extractSuppression extracts suppression information
+func (b *issueBuilder) extractSuppression(finding *FindingData) {
+	if b.suppression != nil {
+		return
+	}
+	if finding.Attributes.Suppression != nil {
+		b.suppression = finding.Attributes.Suppression
+	}
+}
+
 // extractDependencyPaths extracts dependency paths from evidence
-func (b *issueBuilder) extractDependencyPaths(finding FindingData) {
+func (b *issueBuilder) extractDependencyPaths(finding *FindingData) {
 	for _, ev := range finding.Attributes.Evidence {
 		discriminator, err := ev.Discriminator()
 		if err != nil || discriminator != "dependency_path" {
@@ -519,18 +581,15 @@ func (b *issueBuilder) extractDependencyPaths(finding FindingData) {
 		if err != nil {
 			continue
 		}
-		var pathParts []string
-		for _, dep := range depPath.Path {
-			pathParts = append(pathParts, fmt.Sprintf("%s@%s", dep.Name, dep.Version))
-		}
-		if len(pathParts) > 0 {
-			b.dependencyPaths = append(b.dependencyPaths, strings.Join(pathParts, " › "))
+		if len(depPath.Path) > 0 {
+			// Store structured Package data, formatting done in rendering layer
+			b.dependencyPaths = append(b.dependencyPaths, depPath.Path)
 		}
 	}
 }
 
 // extractPackageInfo extracts package name and version from package locations
-func (b *issueBuilder) extractPackageInfo(finding FindingData) {
+func (b *issueBuilder) extractPackageInfo(finding *FindingData) {
 	for _, location := range finding.Attributes.Locations {
 		locationDiscriminator, err := location.Discriminator()
 		if err != nil || locationDiscriminator != "package" {
@@ -550,7 +609,7 @@ func (b *issueBuilder) extractPackageInfo(finding FindingData) {
 }
 
 // processProblems processes all problems to extract CVEs, CWEs, and vulnerability info
-func (b *issueBuilder) processProblems(finding FindingData) {
+func (b *issueBuilder) processProblems(finding *FindingData) {
 	for _, problem := range finding.Attributes.Problems {
 		discriminator, err := problem.Discriminator()
 		if err != nil {
@@ -559,14 +618,16 @@ func (b *issueBuilder) processProblems(finding FindingData) {
 
 		switch discriminator {
 		case "snyk_vuln":
-			b.processSnykVulnProblem(problem)
+			b.processSnykVulnProblem(&problem)
+		case "snyk_license":
+			b.processSnykLicenseProblem(&problem)
 		case "cve":
-			b.processCveProblem(problem)
+			b.processCveProblem(&problem)
 		case "cwe":
-			b.processCweProblem(problem)
+			b.processCweProblem(&problem)
 		}
 
-		// Fallback to first problem if no snyk_vuln found
+		// Fallback to first problem if no snyk_vuln or snyk_license found
 		if b.primaryProblem == nil && discriminator != "cve" && discriminator != "cwe" {
 			b.primaryProblem = &problem
 		}
@@ -574,7 +635,7 @@ func (b *issueBuilder) processProblems(finding FindingData) {
 }
 
 // processSnykVulnProblem extracts data from a Snyk vulnerability problem
-func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
+func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 	// Quick ID extraction without full unmarshal
 	if id := problem.GetID(); id != "" {
 		b.id = id
@@ -587,7 +648,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
 	}
 
 	if b.primaryProblem == nil {
-		b.primaryProblem = &problem
+		b.primaryProblem = problem
 		b.snykVulnProblem = &vulnProblem
 	}
 
@@ -623,15 +684,52 @@ func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
 	}
 }
 
+// processSnykLicenseProblem extracts data from a Snyk license problem
+func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
+	// Extract the license ID - this is critical for grouping license issues
+	if id := problem.GetID(); id != "" {
+		b.id = id
+	}
+
+	if b.primaryProblem == nil {
+		b.primaryProblem = problem
+	}
+
+	// Try to extract license-specific metadata
+	licenseProblem, err := problem.AsSnykLicenseProblem()
+	if err != nil {
+		return
+	}
+
+	// Set severity from license problem
+	if b.severity == "" {
+		b.severity = string(licenseProblem.Severity)
+	}
+
+	// Extract ecosystem
+	if b.ecosystem == "" {
+		if buildEco, err := licenseProblem.Ecosystem.AsSnykvulndbBuildPackageEcosystem(); err == nil {
+			b.ecosystem = buildEco.PackageManager
+		} else if osEco, err := licenseProblem.Ecosystem.AsSnykvulndbOsPackageEcosystem(); err == nil {
+			b.ecosystem = osEco.OsName
+		}
+	}
+
+	// Use package name from license problem if not set from locations
+	if b.packageName == "" {
+		b.packageName = licenseProblem.PackageName
+	}
+}
+
 // processCveProblem extracts CVE ID
-func (b *issueBuilder) processCveProblem(problem Problem) {
+func (b *issueBuilder) processCveProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
 		b.cves = append(b.cves, id)
 	}
 }
 
 // processCweProblem extracts CWE ID
-func (b *issueBuilder) processCweProblem(problem Problem) {
+func (b *issueBuilder) processCweProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
 		b.cwes = append(b.cwes, id)
 	}
@@ -652,7 +750,7 @@ func (b *issueBuilder) determineFallbackID() {
 func (b *issueBuilder) deduplicate() {
 	b.cwes = deduplicateStrings(b.cwes)
 	b.cves = deduplicateStrings(b.cves)
-	b.dependencyPaths = deduplicateStrings(b.dependencyPaths)
+	b.dependencyPaths = deduplicateDependencyPaths(b.dependencyPaths)
 	b.sourceLocations = deduplicateSourceLocations(b.sourceLocations)
 }
 
@@ -676,6 +774,7 @@ func (b *issueBuilder) build() *issue {
 		sourceLocations:   b.sourceLocations,
 		riskScore:         b.riskScore,
 		reachability:      b.reachability,
+		suppression:       b.suppression,
 		metadata:          metadata,
 	}
 }
@@ -690,61 +789,73 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 			"name":    b.packageName,
 			"version": b.packageVersion,
 		}
-		metadata[MetadataKeyComponent] = component
-		metadata[MetadataKeyComponentName] = b.packageName
-		metadata[MetadataKeyComponentVersion] = b.packageVersion
+		metadata[DataKeyComponent] = component
+		metadata[DataKeyComponentName] = b.packageName
+		metadata[DataKeyComponentVersion] = b.packageVersion
 	}
 
 	// Add technology/ecosystem
 	if b.ecosystem != "" {
-		metadata[MetadataKeyTechnology] = b.ecosystem
+		metadata[DataKeyTechnology] = b.ecosystem
 	}
 
 	// Add CVSS score
 	if b.cvssScore > 0 {
-		metadata[MetadataKeyCVSSScore] = b.cvssScore
+		metadata[DataKeyCVSSScore] = b.cvssScore
 	}
 
 	// Add fix information
-	metadata[MetadataKeyIsFixable] = b.isFixable
+	metadata[DataKeyIsFixable] = b.isFixable
 	if len(b.fixedInVersions) > 0 {
-		metadata[MetadataKeyFixedInVersions] = b.fixedInVersions
+		metadata[DataKeyFixedInVersions] = b.fixedInVersions
 	}
 
 	// Add dependency paths
 	if len(b.dependencyPaths) > 0 {
-		metadata[MetadataKeyDependencyPaths] = b.dependencyPaths
+		metadata[DataKeyDependencyPaths] = b.dependencyPaths
 	}
 
 	return metadata
 }
 
-// deduplicateStrings removes duplicate strings from a slice.
-func deduplicateStrings(slice []string) []string {
-	seen := make(map[string]bool)
-	result := make([]string, 0, len(slice))
-	for _, s := range slice {
-		if !seen[s] {
-			seen[s] = true
-			result = append(result, s)
+// deduplicate removes duplicate elements from a slice based on a key extraction function.
+// The keyFunc extracts a comparable key from each element for deduplication.
+func deduplicate[T any, K comparable](slice []T, keyFunc func(T) K) []T {
+	seen := make(map[K]bool)
+	result := make([]T, 0, len(slice))
+	for _, item := range slice {
+		key := keyFunc(item)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, item)
 		}
 	}
 	return result
 }
 
+// deduplicateStrings removes duplicate strings from a slice.
+func deduplicateStrings(slice []string) []string {
+	return deduplicate(slice, func(s string) string { return s })
+}
+
+// deduplicateDependencyPaths removes duplicate dependency paths from a slice.
+// Paths are considered duplicates if they have the same sequence of packages.
+func deduplicateDependencyPaths(paths [][]Package) [][]Package {
+	return deduplicate(paths, func(path []Package) string {
+		parts := make([]string, len(path))
+		for i, pkg := range path {
+			parts[i] = fmt.Sprintf("%s@%s", pkg.Name, pkg.Version)
+		}
+		return strings.Join(parts, "\x00") // Use null byte as separator to ensure uniqueness
+	})
+}
+
 // deduplicateSourceLocations removes duplicate source locations from a slice.
 // Locations are considered duplicates if they have the same file path and line number.
 func deduplicateSourceLocations(slice []SourceLocation) []SourceLocation {
-	seen := make(map[string]bool)
-	result := make([]SourceLocation, 0, len(slice))
-	for _, loc := range slice {
-		key := fmt.Sprintf("%s:%d", loc.FilePath, loc.FromLine)
-		if !seen[key] {
-			seen[key] = true
-			result = append(result, loc)
-		}
-	}
-	return result
+	return deduplicate(slice, func(loc SourceLocation) string {
+		return fmt.Sprintf("%s:%d", loc.FilePath, loc.FromLine)
+	})
 }
 
 // IssueError represents an error that occurred during issue extraction or creation.
@@ -762,4 +873,28 @@ func (e *IssueError) Error() string {
 
 func (e *IssueError) Unwrap() error {
 	return e.Cause
+}
+
+// GetIssuesFromTestResult converts test results to Issues and filters by finding type
+func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) ([]Issue, error) {
+	ctx := context.Background()
+	issuesList, err := NewIssuesFromTestResult(ctx, testResults)
+	if err != nil {
+		return []Issue{}, err
+	}
+
+	// Filter issues by finding type
+	var filteredIssues []Issue
+	for _, issue := range issuesList {
+		if issue.GetFindingType() == findingType {
+			filteredIssues = append(filteredIssues, issue)
+		}
+	}
+
+	// Sort by ID for deterministic output
+	slices.SortFunc(filteredIssues, func(a, b Issue) int {
+		return strings.Compare(a.GetID(), b.GetID())
+	})
+
+	return filteredIssues, nil
 }

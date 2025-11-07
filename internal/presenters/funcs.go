@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
 
@@ -237,6 +238,7 @@ func hasSuppression(finding local_models.FindingResource) bool {
 
 func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap := template.FuncMap{}
+	// SeverityToSarifLevel is for local_models types (local_finding.sarif.tmpl)
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
 		return sarif.SeverityToSarifLevel(string(s))
 	}
@@ -250,8 +252,18 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName
-	fnMap["getRulesFromTestResult"] = sarif.GetRulesFromTestResult
-	fnMap["getResultsFromTestResult"] = sarif.GetResultsFromTestResult
+	// severityToSarifLevel is for string types (ufm.sarif.tmpl)
+	fnMap["severityToSarifLevel"] = sarif.SeverityToSarifLevel
+	// SARIF building functions
+	fnMap["buildRuleShortDescription"] = sarif.BuildRuleShortDescription
+	fnMap["buildRuleFullDescription"] = sarif.BuildRuleFullDescription
+	fnMap["buildRuleHelpMarkdown"] = sarif.BuildHelpMarkdown
+	fnMap["buildRuleTags"] = sarif.BuildRuleTags
+	fnMap["getRuleCVSSScore"] = sarif.GetRuleCVSSScore
+	fnMap["buildLocationFromIssue"] = sarif.BuildLocation
+	fnMap["buildFixesFromIssue"] = sarif.BuildFixesFromIssue
+	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
+	fnMap["getManifestPath"] = getManifestPathFromTestResult
 	return fnMap
 }
 
@@ -317,7 +329,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getFindingsFromTestResult"] = getFindingsFromTestResult
+	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType testapi.FindingType) []testapi.Issue {
+		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
+	}
 
 	return defaultMap
 }
@@ -390,10 +404,21 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 	return slices.Collect(maps.Keys(findingTypes))
 }
 
-func getFindingsFromTestResult(testResults testapi.TestResult) []testapi.FindingData {
-	findings, _, err := testResults.Findings(context.Background())
+// getManifestPathFromTestResult extracts the manifest file path from test result
+func getManifestPathFromTestResult(testResults testapi.TestResult) string {
+	// Get the test subject
+	testSubject := testResults.GetTestSubject()
+
+	// Try to extract as DepGraphSubject
+	depGraph, err := testSubject.AsDepGraphSubject()
 	if err != nil {
-		return []testapi.FindingData{}
+		return "package.json" // Default fallback
 	}
-	return findings
+
+	// Get the first path from locator
+	if len(depGraph.Locator.Paths) > 0 {
+		return depGraph.Locator.Paths[0]
+	}
+
+	return "package.json" // Default fallback
 }
