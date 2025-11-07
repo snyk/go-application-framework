@@ -822,61 +822,40 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 	return metadata
 }
 
-// deduplicateStrings removes duplicate strings from a slice.
-func deduplicateStrings(slice []string) []string {
-	seen := make(map[string]bool)
-	result := make([]string, 0, len(slice))
-	for _, s := range slice {
-		if !seen[s] {
-			seen[s] = true
-			result = append(result, s)
+// deduplicate removes duplicate elements from a slice based on a key extraction function.
+// The keyFunc extracts a comparable key from each element for deduplication.
+func deduplicate[T any, K comparable](slice []T, keyFunc func(T) K) []T {
+	seen := make(map[K]bool)
+	result := make([]T, 0, len(slice))
+	for _, item := range slice {
+		key := keyFunc(item)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, item)
 		}
 	}
 	return result
+}
+
+// deduplicateStrings removes duplicate strings from a slice.
+func deduplicateStrings(slice []string) []string {
+	return deduplicate(slice, func(s string) string { return s })
 }
 
 // deduplicateDependencyPaths removes duplicate dependency paths from a slice.
 // Paths are considered duplicates if they have the same sequence of packages.
 func deduplicateDependencyPaths(paths [][]string) [][]string {
-	if len(paths) == 0 {
-		return paths
-	}
-
-	result := make([][]string, 0, len(paths))
-
-	// Add first path
-	result = append(result, paths[0])
-
-	// Check each subsequent path against already added paths
-	for i := 1; i < len(paths); i++ {
-		isDuplicate := false
-		for _, existing := range result {
-			if slices.Equal(paths[i], existing) {
-				isDuplicate = true
-				break
-			}
-		}
-		if !isDuplicate {
-			result = append(result, paths[i])
-		}
-	}
-
-	return result
+	return deduplicate(paths, func(path []string) string {
+		return strings.Join(path, "\x00") // Use null byte as separator to ensure uniqueness
+	})
 }
 
 // deduplicateSourceLocations removes duplicate source locations from a slice.
 // Locations are considered duplicates if they have the same file path and line number.
 func deduplicateSourceLocations(slice []SourceLocation) []SourceLocation {
-	seen := make(map[string]bool)
-	result := make([]SourceLocation, 0, len(slice))
-	for _, loc := range slice {
-		key := fmt.Sprintf("%s:%d", loc.FilePath, loc.FromLine)
-		if !seen[key] {
-			seen[key] = true
-			result = append(result, loc)
-		}
-	}
-	return result
+	return deduplicate(slice, func(loc SourceLocation) string {
+		return fmt.Sprintf("%s:%d", loc.FilePath, loc.FromLine)
+	})
 }
 
 // IssueError represents an error that occurred during issue extraction or creation.

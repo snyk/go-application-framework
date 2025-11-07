@@ -240,3 +240,133 @@ func createProblem(t *testing.T, id, source string) Problem {
 	require.NoError(t, err)
 	return problem
 }
+
+func TestDeduplicate(t *testing.T) {
+	t.Run("deduplicates integers using identity", func(t *testing.T) {
+		input := []int{1, 2, 3, 2, 4, 3, 5, 1}
+		result := deduplicate(input, func(n int) int { return n })
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, result)
+	})
+
+	t.Run("deduplicates structs using custom key", func(t *testing.T) {
+		type person struct {
+			id   int
+			name string
+		}
+		input := []person{
+			{id: 1, name: "Alice"},
+			{id: 2, name: "Bob"},
+			{id: 1, name: "Alice Duplicate"},
+			{id: 3, name: "Charlie"},
+		}
+		result := deduplicate(input, func(p person) int { return p.id })
+		assert.Len(t, result, 3)
+		assert.Equal(t, 1, result[0].id)
+		assert.Equal(t, 2, result[1].id)
+		assert.Equal(t, 3, result[2].id)
+	})
+
+	t.Run("handles empty slice", func(t *testing.T) {
+		result := deduplicate([]string{}, func(s string) string { return s })
+		assert.Empty(t, result)
+	})
+
+	t.Run("preserves order", func(t *testing.T) {
+		input := []string{"a", "b", "c", "b", "d", "a"}
+		result := deduplicate(input, func(s string) string { return s })
+		assert.Equal(t, []string{"a", "b", "c", "d"}, result)
+	})
+}
+
+func TestDeduplicateStrings(t *testing.T) {
+	t.Run("removes duplicate strings", func(t *testing.T) {
+		input := []string{"apple", "banana", "apple", "cherry", "banana"}
+		result := deduplicateStrings(input)
+		assert.Equal(t, []string{"apple", "banana", "cherry"}, result)
+	})
+
+	t.Run("handles empty slice", func(t *testing.T) {
+		result := deduplicateStrings([]string{})
+		assert.Empty(t, result)
+	})
+
+	t.Run("handles single element", func(t *testing.T) {
+		result := deduplicateStrings([]string{"only"})
+		assert.Equal(t, []string{"only"}, result)
+	})
+}
+
+func TestDeduplicateDependencyPaths(t *testing.T) {
+	t.Run("removes duplicate paths", func(t *testing.T) {
+		input := [][]string{
+			{"a", "b", "c"},
+			{"x", "y", "z"},
+			{"a", "b", "c"},
+			{"p", "q"},
+		}
+		result := deduplicateDependencyPaths(input)
+		assert.Len(t, result, 3)
+		assert.Equal(t, []string{"a", "b", "c"}, result[0])
+		assert.Equal(t, []string{"x", "y", "z"}, result[1])
+		assert.Equal(t, []string{"p", "q"}, result[2])
+	})
+
+	t.Run("handles empty slice", func(t *testing.T) {
+		result := deduplicateDependencyPaths([][]string{})
+		assert.Empty(t, result)
+	})
+
+	t.Run("distinguishes different orderings", func(t *testing.T) {
+		input := [][]string{
+			{"a", "b"},
+			{"b", "a"},
+		}
+		result := deduplicateDependencyPaths(input)
+		assert.Len(t, result, 2, "Different orderings should not be deduplicated")
+	})
+
+	t.Run("handles paths with special characters", func(t *testing.T) {
+		input := [][]string{
+			{"pkg:with:colon", "nested"},
+			{"pkg:with:colon", "nested"},
+			{"normal", "path"},
+		}
+		result := deduplicateDependencyPaths(input)
+		assert.Len(t, result, 2)
+	})
+}
+
+func TestDeduplicateSourceLocations(t *testing.T) {
+	intPtr := func(i int) *int { return &i }
+
+	t.Run("removes duplicate locations", func(t *testing.T) {
+		input := []SourceLocation{
+			{FilePath: "main.go", FromLine: 10, ToLine: intPtr(15)},
+			{FilePath: "util.go", FromLine: 20, ToLine: intPtr(25)},
+			{FilePath: "main.go", FromLine: 10, ToLine: intPtr(20)}, // Same file:line as first
+			{FilePath: "main.go", FromLine: 30, ToLine: intPtr(35)},
+		}
+		result := deduplicateSourceLocations(input)
+		assert.Len(t, result, 3)
+		assert.Equal(t, "main.go", result[0].FilePath)
+		assert.Equal(t, 10, result[0].FromLine)
+		assert.Equal(t, "util.go", result[1].FilePath)
+		assert.Equal(t, 20, result[1].FromLine)
+		assert.Equal(t, "main.go", result[2].FilePath)
+		assert.Equal(t, 30, result[2].FromLine)
+	})
+
+	t.Run("handles empty slice", func(t *testing.T) {
+		result := deduplicateSourceLocations([]SourceLocation{})
+		assert.Empty(t, result)
+	})
+
+	t.Run("preserves ToLine differences", func(t *testing.T) {
+		input := []SourceLocation{
+			{FilePath: "test.go", FromLine: 10, ToLine: intPtr(15)},
+			{FilePath: "test.go", FromLine: 10, ToLine: intPtr(20)}, // Different ToLine, same FromLine
+		}
+		result := deduplicateSourceLocations(input)
+		assert.Len(t, result, 1, "Only FilePath:FromLine is used for deduplication")
+	})
+}
