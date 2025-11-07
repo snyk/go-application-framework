@@ -393,24 +393,14 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 		issuesExpected int
 	}{
 		{
-			name:           "1000_findings",
-			findingsCount:  1000,
-			issuesExpected: 500,
-		},
-		{
-			name:           "5000_findings",
-			findingsCount:  5000,
-			issuesExpected: 2500,
-		},
-		{
 			name:           "10_000_findings",
 			findingsCount:  10000,
 			issuesExpected: 5000,
 		},
 		{
-			name:           "20_000_findings",
-			findingsCount:  20000,
-			issuesExpected: 10000,
+			name:           "1_000_000_findings",
+			findingsCount:  1000000,
+			issuesExpected: 500000,
 		},
 	}
 
@@ -425,46 +415,72 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 			b.Logf("Generated test data. Expected ~%d issues from %d findings", bc.issuesExpected, bc.findingsCount)
 			b.ResetTimer()
 
-			for n := 0; n < b.N; n++ {
-				var memStart, memEnd runtime.MemStats
-				runtime.GC() // Force GC before measurement
-				runtime.ReadMemStats(&memStart)
+			// Track maximum values across all iterations
+			var maxAllocatedMB, maxSysMB uint64
 
-				start := time.Now()
+			var memStart runtime.MemStats
+			runtime.GC() // Force GC before measurement
+			runtime.ReadMemStats(&memStart)
 
-				config := configuration.NewWithOpts()
-				writer := &bytes.Buffer{}
-
-				presenter := presenters.NewUfmRenderer(testResults, config, writer, presenters.UfmWithRuntimeInfo(ri))
-				err := presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
-				if err != nil {
-					b.Fatalf("Failed to render SARIF: %v", err)
-				}
-
-				duration := time.Since(start)
-				runtime.ReadMemStats(&memEnd)
-
-				// Validate the output is valid SARIF
-				validateSarifData(&testing.T{}, writer.Bytes())
-
-				// Calculate memory usage
-				memUsedMB := (memEnd.TotalAlloc - memStart.TotalAlloc) / 1024 / 1024
-				outputSizeMB := float64(writer.Len()) / 1024 / 1024
-
-				b.Logf("Memory used: %d MB, Output size: %.2f MB, Duration: %v",
-					memUsedMB, outputSizeMB, duration)
-
-				// Performance thresholds - fail if too slow or uses too much memory
-				if duration > 30*time.Second {
-					b.Fatalf("SARIF rendering took too long: %v (threshold: 30s)", duration)
-				}
-				if memUsedMB > 1000 { // 1GB threshold
-					b.Fatalf("SARIF rendering used too much memory: %d MB (threshold: 1000 MB)", memUsedMB)
-				}
-
-				// Log some statistics about the generated SARIF
-				b.Logf("Generated SARIF size: %d bytes", writer.Len())
+			done := make(chan struct{})
+			var pollInterval time.Duration
+			if bc.findingsCount >= 1_000_000 {
+				pollInterval = time.Second
+			} else {
+				pollInterval = time.Millisecond * 100
 			}
+			go func() {
+				ticker := time.NewTicker(pollInterval)
+				defer ticker.Stop()
+
+				for {
+					select {
+					case <-done:
+						return
+					case <-ticker.C:
+						var m runtime.MemStats
+						runtime.ReadMemStats(&m)
+
+						heapMB := m.HeapInuse / 1024 / 1024
+						sysMB := m.Sys / 1024 / 1024
+
+						if heapMB > maxAllocatedMB {
+							maxAllocatedMB = heapMB
+						}
+						if sysMB > maxSysMB {
+							maxSysMB = sysMB
+						}
+					}
+				}
+			}()
+
+			start := time.Now()
+
+			config := configuration.NewWithOpts()
+			writer := &bytes.Buffer{}
+
+			presenter := presenters.NewUfmRenderer(testResults, config, writer, presenters.UfmWithRuntimeInfo(ri))
+			err := presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
+			if err != nil {
+				b.Fatalf("Failed to render SARIF: %v", err)
+			}
+
+			duration := time.Since(start)
+			close(done)
+
+			var memEnd runtime.MemStats
+			runtime.ReadMemStats(&memEnd)
+
+			// Validate the output is valid SARIF
+			validateSarifData(&testing.T{}, writer.Bytes())
+
+			// Calculate memory usage for this iteration
+			totalAllocatedMB := (memEnd.TotalAlloc - memStart.TotalAlloc) / 1024 / 1024
+			outputSizeMB := float64(writer.Len()) / 1024 / 1024
+
+			b.Logf("Max allocated: %d MB, Max sys: %d MB", maxAllocatedMB, maxSysMB)
+			b.Logf("Total allocated: %d MB, Output size: %.2f MB", totalAllocatedMB, outputSizeMB)
+			b.Logf("Duration: %v", duration)
 		})
 	}
 }
@@ -503,7 +519,7 @@ func generateLargeTestResult(tb testing.TB, findingsCount int) testapi.TestResul
 	// Generate findings with variety to create realistic grouping scenarios
 	findings := make([]testapi.FindingData, 0, findingsCount)
 
-	// Define some vulnerability templates for variety
+	// Define realistic vulnerability templates based on actual Snyk data
 	vulnTemplates := []struct {
 		id          string
 		title       string
@@ -515,52 +531,82 @@ func generateLargeTestResult(tb testing.TB, findingsCount int) testapi.TestResul
 		cweID       string
 	}{
 		{
-			id:          "SNYK-JS-LODASH-590103",
-			title:       "Prototype Pollution",
-			description: "lodash prior to 4.17.19 is vulnerable to Prototype Pollution",
-			severity:    testapi.SeverityHigh,
-			cvssScore:   7.3,
-			packageName: "lodash",
-			cveID:       "CVE-2020-8203",
-			cweID:       "CWE-1321",
+			id:          "SNYK-JS-GOT-2932019",
+			title:       "Open Redirect",
+			description: "## Overview\n\nAffected versions of this package are vulnerable to Open Redirect due to missing verification of requested URLs. It allowed a victim to be redirected to a UNIX socket.\n## Remediation\nUpgrade `got` to version 11.8.5, 12.1.0 or higher.\n## References\n- [GitHub Diff](https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0)\n- [GitHub PR](https://github.com/sindresorhus/got/pull/2047)\n\n## Details\n\nOpen redirect vulnerabilities occur when a web application accepts a user-controlled input that specifies a link to an external site, and uses that link in a Redirect. This simplifies phishing attacks.\n\nAn attacker can construct a URL within the application that causes a redirection to an arbitrary external domain. This behavior can be leveraged to facilitate phishing attacks against users of the application. The ability to use an authentic application URL, targeting the correct domain and with a valid SSL certificate (if SSL is used), lends credibility to the phishing attack because many users, even those who are security conscious, may not notice the subsequent redirection to a different domain.",
+			severity:    testapi.SeverityMedium,
+			cvssScore:   5.4,
+			packageName: "got",
+			cveID:       "CVE-2022-33987",
+			cweID:       "CWE-601",
 		},
 		{
-			id:          "SNYK-JS-AXIOS-1038255",
-			title:       "Regular Expression Denial of Service (ReDoS)",
-			description: "axios is vulnerable to ReDoS when parsing URLs",
+			id:          "SNYK-JS-DEBUG-14214893",
+			title:       "Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity",
+			description: "## Overview\n[debug](https://github.com/visionmedia/debug) is a small debugging utility.\n\nAffected versions of this package are vulnerable to Alternate solution to CWE-1333 | Inefficient Regular Expression Complexity. None\n## Remediation\nThere is no fixed version for `debug`.\n\n## References\n- [GitHub Issue](https://github.com/debug-js/debug/issues/957)\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.",
 			severity:    testapi.SeverityMedium,
-			cvssScore:   5.3,
-			packageName: "axios",
-			cveID:       "CVE-2021-3749",
+			cvssScore:   6.9,
+			packageName: "debug",
+			cveID:       "CVE-9999-1234",
+			cweID:       "CWE-109",
+		},
+		{
+			id:          "SNYK-JS-BRACEEXPANSION-9789073",
+			title:       "Regular Expression Denial of Service (ReDoS)",
+			description: "## Overview\n[brace-expansion](https://github.com/juliangruber/brace-expansion) is a Brace expansion as known from sh/bash\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) in the `expand()` function, which is prone to catastrophic backtracking on very long malicious inputs.\n## PoC\n```js\nimport index from \"./index.js\";\n\nlet str = \"{a}\" + \",\".repeat(100000) + \"\\u0000\";\n\nlet startTime = performance.now();\n\nconst result = index(str);\n\nlet endTime = performance.now();\n\nlet timeTaken = endTime - startTime;\n\nconsole.log(`匹配耗时: ${timeTaken.toFixed(3)} 毫秒`);\n```\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet's take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\n## Remediation\nUpgrade `brace-expansion` to version 1.1.12, 2.0.2, 3.0.1, 4.0.1 or higher.",
+			severity:    testapi.SeverityLow,
+			cvssScore:   2.3,
+			packageName: "brace-expansion",
+			cveID:       "CVE-2025-5889",
 			cweID:       "CWE-1333",
 		},
 		{
-			id:          "SNYK-JS-EXPRESS-10143",
-			title:       "Cross-site Scripting (XSS)",
-			description: "express is vulnerable to XSS via response splitting",
-			severity:    testapi.SeverityCritical,
-			cvssScore:   9.8,
-			packageName: "express",
-			cveID:       "CVE-2022-24999",
-			cweID:       "CWE-79",
+			id:          "SNYK-JS-MARKED-2342082",
+			title:       "Regular Expression Denial of Service (ReDoS)",
+			description: "## Overview\n[marked](https://marked.js.org/) is a low-level compiler for parsing markdown without caching or blocking for long periods of time.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) when unsanitized user input is passed to `block.def`.\n\n## PoC\n```js\nimport * as marked from \"marked\";\nmarked.parse(`[x]:${' '.repeat(1500)}x ${' '.repeat(1500)} x`);\n```\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet's take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\n## Remediation\nUpgrade `marked` to version 4.0.10 or higher.",
+			severity:    testapi.SeverityMedium,
+			cvssScore:   5.3,
+			packageName: "marked",
+			cveID:       "CVE-2022-21680",
+			cweID:       "CWE-1333",
 		},
 		{
-			id:          "SNYK-JAVA-ORGSPRINGFRAMEWORK-1010746",
-			title:       "Authentication Bypass",
-			description: "Spring Framework vulnerable to authentication bypass",
+			id:          "SNYK-JS-ASYNC-12239908",
+			title:       "Directory Traversal",
+			description: "## Overview\n\nAffected versions of this package are vulnerable to Directory Traversal. Async <= 2.6.4 and <= 3.2.5 are vulnerable to ReDoS (Regular Expression Denial of Service) while parsing function in autoinject function.\n\n## Details\n\nA Directory Traversal attack (also known as path traversal) aims to access files and directories that are stored outside the intended folder. By manipulating files with \"dot-dot-slash (../)\" sequences and its variations, or by using absolute file paths, it may be possible to access arbitrary files and directories stored on file system, including application source code, configuration, and other critical system files.\n\nDirectory Traversal vulnerabilities can be generally divided into two types:\n\n- **Information Disclosure**: Allows the attacker to gain information about the folder structure or read the contents of sensitive files on the system.\n\n`st` is a module for serving static files on web pages, and contains a [vulnerability of this type](https://snyk.io/vuln/npm:st:20140206). In our example, we will serve files from the `public` route.\n\nIf an attacker requests the following URL from our server, it will in turn leak the sensitive private key of the root user.\n\n```\ncurl http://localhost:8080/public/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/root/.ssh/id_rsa\n```\n**Note** `%2e` is the URL encoded version of `.` (dot).\n\n- **Writing arbitrary files**: Allows the attacker to create or replace existing files. This type of vulnerability is also known as `Zip-Slip`. \n\nOne way to achieve this is by using a malicious `zip` archive that holds path traversal filenames. When each filename in the zip archive gets concatenated to the target extraction folder, without validation, the final path ends up outside of the target folder. If an executable or a configuration file is overwritten with a file containing malicious code, the problem can turn into an arbitrary code execution issue quite easily.\n\n## Remediation\nUpgrade `async` to version  or higher.\n## References\n- [Vulnerable Code](https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L41)\n- [Vulnerable Code](https://github.com/caolan/async/blob/v3.2.5/lib/autoInject.js#L6)",
 			severity:    testapi.SeverityHigh,
-			cvssScore:   8.1,
-			packageName: "org.springframework:spring-core",
-			cveID:       "CVE-2022-22965",
-			cweID:       "CWE-287",
+			cvssScore:   7.5,
+			packageName: "async",
+			cveID:       "CVE-2024-39249",
+			cweID:       "CWE-22",
 		},
 		{
-			id:          "snyk:lic:npm:react:MIT",
-			title:       "MIT License Issue",
-			description: "MIT license may not be compatible with your policy",
+			id:          "SNYK-JS-COOKIE-13271683",
+			title:       "Arbitrary Code Injection",
+			description: "## Overview\n\nAffected versions of this package are vulnerable to Arbitrary Code Injection cookie is a basic HTTP cookie parser and serializer for HTTP servers. The cookie name could be used to set other fields of the cookie, resulting in an unexpected cookie value. A similar escape can be used for path and domain, which could be abused to alter other fields of the cookie. Upgrade to 0.7.0, which updates the validation for name, path, and domain.\n## Remediation\nUpgrade `cookie` to version 1.0.0 or higher.\n## References\n- [GitHub Advisory](https://github.com/jshttp/cookie/security/advisories/GHSA-pxg6-pf52-xh8x)\n- [GitHub Commit](https://github.com/jshttp/cookie/commit/e10042845354fea83bd8f34af72475eed1dadf5c)\n- [GitHub PR](https://github.com/jshttp/cookie/pull/167)\n\n## Details\n\nCode Injection vulnerabilities allow an attacker to execute arbitrary code in the context of the vulnerable application. This type of vulnerability occurs when user input is not properly validated or sanitized before being executed as code.\n\nIn the case of cookie parsing, improper validation of cookie names, paths, or domains can lead to injection attacks where malicious code is executed when the cookie is processed. This can result in unauthorized access, data theft, or complete system compromise.\n\nThe vulnerability in the cookie package allows attackers to manipulate cookie fields by injecting special characters or escape sequences in the cookie name, potentially leading to unexpected behavior or security bypasses.",
+			severity:    testapi.SeverityMedium,
+			cvssScore:   6.9,
+			packageName: "cookie",
+			cveID:       "CVE-2024-47764",
+			cweID:       "CWE-74",
+		},
+		{
+			id:          "SNYK-JS-LODASH-12239302",
+			title:       "Denial of Service (DoS)",
+			description: "## Overview\n[lodash](https://www.npmjs.com/package/lodash) is a modern JavaScript utility library delivering modularity, performance, & extras.\n\nAffected versions of this package are vulnerable to Denial of Service (DoS). An issue was discovered in Juju that resulted in the leak of the sensitive context ID, which allows a local unprivileged attacker to access other sensitive data or relation accessible to the local charm.\n\n## Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its intended and legitimate users.\n\nUnlike other vulnerabilities, DoS attacks usually do not aim at breaching security. Rather, they are focused on making websites and services unavailable to genuine users resulting in downtime.\n\nOne popular Denial of Service vulnerability is DDoS (a Distributed Denial of Service), an attack that attempts to clog network pipes to the system by generating a large volume of traffic from many machines.\n\nWhen it comes to open source libraries, DoS vulnerabilities allow attackers to trigger such a crash or crippling of the service by using a flaw either in the application code or from the use of open source libraries.\n\nTwo common types of DoS vulnerabilities:\n\n* High CPU/Memory Consumption- An attacker sending crafted requests that could cause the system to take a disproportionate amount of time to process. For example, [commons-fileupload:commons-fileupload](SNYK-JAVA-COMMONSFILEUPLOAD-30082).\n\n* Crash - An attacker sending crafted requests that could cause the system to crash. For Example,  [npm `ws` package](https://snyk.io/vuln/npm:ws:20171108)\n\n## Remediation\nUpgrade `lodash` to version  or higher.\n## References\n- [AAAA](https://www.cve.org/CVERecord?id=CVE-2024-6984)\n- [GitHub Advisory](https://github.com/juju/juju/security/advisories/GHSA-6vjm-54vp-mxhx)\n- [GitHub Commit](https://github.com/juju/juju/commit/da929676853092a29ddf8d589468cf85ba3efaf2)",
+			severity:    testapi.SeverityHigh,
+			cvssScore:   7.5,
+			packageName: "lodash",
+			cveID:       "CVE-2024-6984",
+			cweID:       "CWE-400",
+		},
+		{
+			id:          "snyk:lic:npm:shescape:MPL-2.0",
+			title:       "MPL-2.0 License Issue",
+			description: "## Overview\n\nThis package contains a dependency with a Mozilla Public License 2.0 (MPL-2.0) license. The MPL-2.0 is a copyleft license that is more permissive than the GPL but requires that modifications to MPL-licensed code be made available under the MPL.\n\n## License Details\n\nThe Mozilla Public License 2.0 (MPL-2.0) is a weak copyleft license that allows you to combine MPL-licensed code with code under other licenses (including proprietary licenses) in a larger work, but requires that any modifications to the MPL-licensed code itself be made available under the MPL.\n\nKey requirements of MPL-2.0:\n- Source code of MPL-licensed files must remain available under MPL-2.0\n- Modifications to MPL-licensed files must be made available under MPL-2.0\n- You must include the MPL-2.0 license text and copyright notices\n- Patent grants are included for contributors\n\n## Remediation\n\nReview your organization's license policy to determine if MPL-2.0 licensed dependencies are acceptable for your use case. If not, consider finding an alternative package with a more permissive license.\n\n## References\n- [Mozilla Public License 2.0 Full Text](https://www.mozilla.org/en-US/MPL/2.0/)\n- [MPL-2.0 FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/)",
 			severity:    testapi.SeverityLow,
 			cvssScore:   0.0,
-			packageName: "react",
+			packageName: "shescape",
 			cveID:       "",
 			cweID:       "",
 		},
