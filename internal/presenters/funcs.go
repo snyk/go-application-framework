@@ -329,8 +329,8 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType testapi.FindingType) {
-		utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
+	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType testapi.FindingType) []testapi.Issue {
+		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
 	}
 
 	return defaultMap
