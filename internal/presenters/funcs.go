@@ -328,7 +328,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getIssuesFromTestResult"] = getIssuesFromTestResult
+	defaultMap["getIssuesFromTestResult"] = testapi.GetIssuesFromTestResult
 
 	return defaultMap
 }
@@ -399,30 +399,6 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 		findingTypes[findings.Attributes.FindingType] = true
 	}
 	return slices.Collect(maps.Keys(findingTypes))
-}
-
-// getIssuesFromTestResult converts test results to Issues and filters by finding type
-func getIssuesFromTestResult(testResults testapi.TestResult, findingType testapi.FindingType) []testapi.Issue {
-	ctx := context.Background()
-	issuesList, err := testapi.NewIssuesFromTestResult(ctx, testResults)
-	if err != nil {
-		return []testapi.Issue{}
-	}
-
-	// Filter issues by finding type
-	var filteredIssues []testapi.Issue
-	for _, issue := range issuesList {
-		if issue.GetFindingType() == findingType {
-			filteredIssues = append(filteredIssues, issue)
-		}
-	}
-
-	// Sort by ID for deterministic output
-	slices.SortFunc(filteredIssues, func(a, b testapi.Issue) int {
-		return strings.Compare(a.GetID(), b.GetID())
-	})
-
-	return filteredIssues
 }
 
 // getManifestPathFromTestResult extracts the manifest file path from test result

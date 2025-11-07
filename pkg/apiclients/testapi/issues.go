@@ -895,3 +895,27 @@ func (e *IssueError) Error() string {
 func (e *IssueError) Unwrap() error {
 	return e.Cause
 }
+
+// GetIssuesFromTestResult converts test results to Issues and filters by finding type
+func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) []Issue {
+	ctx := context.Background()
+	issuesList, err := NewIssuesFromTestResult(ctx, testResults)
+	if err != nil {
+		return []Issue{}
+	}
+
+	// Filter issues by finding type
+	var filteredIssues []Issue
+	for _, issue := range issuesList {
+		if issue.GetFindingType() == findingType {
+			filteredIssues = append(filteredIssues, issue)
+		}
+	}
+
+	// Sort by ID for deterministic output
+	slices.SortFunc(filteredIssues, func(a, b Issue) int {
+		return strings.Compare(a.GetID(), b.GetID())
+	})
+
+	return filteredIssues
+}
