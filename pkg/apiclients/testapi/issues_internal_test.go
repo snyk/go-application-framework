@@ -298,38 +298,48 @@ func TestDeduplicateStrings(t *testing.T) {
 
 func TestDeduplicateDependencyPaths(t *testing.T) {
 	t.Run("removes duplicate paths", func(t *testing.T) {
-		input := [][]string{
-			{"a", "b", "c"},
-			{"x", "y", "z"},
-			{"a", "b", "c"},
-			{"p", "q"},
+		input := [][]Package{
+			{{Name: "a", Version: "1.0"}, {Name: "b", Version: "2.0"}, {Name: "c", Version: "3.0"}},
+			{{Name: "x", Version: "1.0"}, {Name: "y", Version: "2.0"}, {Name: "z", Version: "3.0"}},
+			{{Name: "a", Version: "1.0"}, {Name: "b", Version: "2.0"}, {Name: "c", Version: "3.0"}},
+			{{Name: "p", Version: "1.0"}, {Name: "q", Version: "2.0"}},
 		}
 		result := deduplicateDependencyPaths(input)
 		assert.Len(t, result, 3)
-		assert.Equal(t, []string{"a", "b", "c"}, result[0])
-		assert.Equal(t, []string{"x", "y", "z"}, result[1])
-		assert.Equal(t, []string{"p", "q"}, result[2])
+		assert.Equal(t, "a", result[0][0].Name)
+		assert.Equal(t, "x", result[1][0].Name)
+		assert.Equal(t, "p", result[2][0].Name)
 	})
 
 	t.Run("handles empty slice", func(t *testing.T) {
-		result := deduplicateDependencyPaths([][]string{})
+		result := deduplicateDependencyPaths([][]Package{})
 		assert.Empty(t, result)
 	})
 
 	t.Run("distinguishes different orderings", func(t *testing.T) {
-		input := [][]string{
-			{"a", "b"},
-			{"b", "a"},
+		input := [][]Package{
+			{{Name: "a", Version: "1.0"}, {Name: "b", Version: "2.0"}},
+			{{Name: "b", Version: "2.0"}, {Name: "a", Version: "1.0"}},
 		}
 		result := deduplicateDependencyPaths(input)
 		assert.Len(t, result, 2, "Different orderings should not be deduplicated")
 	})
 
-	t.Run("handles paths with special characters", func(t *testing.T) {
-		input := [][]string{
-			{"pkg:with:colon", "nested"},
-			{"pkg:with:colon", "nested"},
-			{"normal", "path"},
+	t.Run("distinguishes different versions", func(t *testing.T) {
+		input := [][]Package{
+			{{Name: "pkg", Version: "1.0"}, {Name: "nested", Version: "2.0"}},
+			{{Name: "pkg", Version: "1.0"}, {Name: "nested", Version: "2.0"}},
+			{{Name: "pkg", Version: "2.0"}, {Name: "nested", Version: "2.0"}},
+		}
+		result := deduplicateDependencyPaths(input)
+		assert.Len(t, result, 2, "Different versions should not be deduplicated")
+	})
+
+	t.Run("handles packages with special characters in names", func(t *testing.T) {
+		input := [][]Package{
+			{{Name: "pkg:with:colon", Version: "1.0"}, {Name: "nested@special", Version: "2.0"}},
+			{{Name: "pkg:with:colon", Version: "1.0"}, {Name: "nested@special", Version: "2.0"}},
+			{{Name: "normal", Version: "1.0"}, {Name: "path", Version: "2.0"}},
 		}
 		result := deduplicateDependencyPaths(input)
 		assert.Len(t, result, 2)

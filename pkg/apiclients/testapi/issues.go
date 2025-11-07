@@ -40,7 +40,7 @@ const (
 	DataKeyFixedInVersions = "fixed-in-versions"
 
 	// DataKeyDependencyPaths is the key for dependency paths (SCA findings)
-	// Value type: []string
+	// Value type: [][]Package
 	DataKeyDependencyPaths = "dependency-paths"
 )
 
@@ -457,7 +457,7 @@ type issueBuilder struct {
 	cvssScore         float32
 	isFixable         bool
 	fixedInVersions   []string
-	dependencyPaths   [][]string // Each element is a path (array of package@version strings)
+	dependencyPaths   [][]Package // Each element is a path (array of packages with name and version)
 	snykVulnProblem   *SnykVulnProblem
 	sourceLocations   []SourceLocation
 	riskScore         uint16
@@ -581,13 +581,9 @@ func (b *issueBuilder) extractDependencyPaths(finding *FindingData) {
 		if err != nil {
 			continue
 		}
-		var pathParts []string
-		for _, dep := range depPath.Path {
-			pathParts = append(pathParts, fmt.Sprintf("%s@%s", dep.Name, dep.Version))
-		}
-		if len(pathParts) > 0 {
-			// Store as array of parts, formatting done in rendering layer
-			b.dependencyPaths = append(b.dependencyPaths, pathParts)
+		if len(depPath.Path) > 0 {
+			// Store structured Package data, formatting done in rendering layer
+			b.dependencyPaths = append(b.dependencyPaths, depPath.Path)
 		}
 	}
 }
@@ -844,9 +840,13 @@ func deduplicateStrings(slice []string) []string {
 
 // deduplicateDependencyPaths removes duplicate dependency paths from a slice.
 // Paths are considered duplicates if they have the same sequence of packages.
-func deduplicateDependencyPaths(paths [][]string) [][]string {
-	return deduplicate(paths, func(path []string) string {
-		return strings.Join(path, "\x00") // Use null byte as separator to ensure uniqueness
+func deduplicateDependencyPaths(paths [][]Package) [][]Package {
+	return deduplicate(paths, func(path []Package) string {
+		parts := make([]string, len(path))
+		for i, pkg := range path {
+			parts[i] = fmt.Sprintf("%s@%s", pkg.Name, pkg.Version)
+		}
+		return strings.Join(parts, "\x00") // Use null byte as separator to ensure uniqueness
 	})
 }
 

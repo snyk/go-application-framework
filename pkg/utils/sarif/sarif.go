@@ -305,8 +305,17 @@ func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingTyp
 func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, componentName string) {
 	var dependencyPaths [][]string
 	if val, ok := issue.GetData(testapi.DataKeyDependencyPaths); ok {
-		// Handle new format: [][]string (array of paths, each path is array of parts)
-		if paths, ok := val.([][]string); ok {
+		// Handle new format: [][]Package (structured data)
+		if paths, ok := val.([][]testapi.Package); ok {
+			for _, path := range paths {
+				formattedPath := make([]string, len(path))
+				for i, pkg := range path {
+					formattedPath[i] = fmt.Sprintf("%s@%s", pkg.Name, pkg.Version)
+				}
+				dependencyPaths = append(dependencyPaths, formattedPath)
+			}
+		} else if paths, ok := val.([][]string); ok {
+			// Backward compatibility: [][]string format
 			dependencyPaths = paths
 		} else if strs, ok := val.([]string); ok {
 			// Backward compatibility: convert old format (pre-joined strings) to new format
