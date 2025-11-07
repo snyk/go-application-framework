@@ -206,12 +206,15 @@ func BuildRuleTags(issue testapi.Issue) []interface{} {
 func GetRuleCVSSScore(issue testapi.Issue) float32 {
 	cvssScore, ok := issue.GetData(testapi.DataKeyCVSSScore)
 	if !ok {
-		return 0.0
+		return -1.0 // Sentinel value indicating no score available
 	}
 	if score, ok := cvssScore.(float32); ok {
+		if score == 0.0 {
+			return -1.0 // Treat 0 as no score (e.g., for license issues)
+		}
 		return score
 	}
-	return 0.0
+	return -1.0
 }
 
 // FormatIssueMessage creates the SARIF message text for an issue
@@ -221,6 +224,7 @@ func FormatIssueMessage(issue testapi.Issue) string {
 	if componentNameStr == "" || componentNameStr == "<nil>" {
 		componentNameStr = "package"
 	}
+
 	return fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
 		componentNameStr, issue.GetSeverity())
 }
@@ -283,7 +287,13 @@ func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingTyp
 	}
 	if componentName != "" {
 		if findingType == testapi.FindingTypeSca {
-			sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", componentName))
+			// Check if this is a license issue (ID starts with "snyk:lic:")
+			issueID := issue.GetID()
+			if len(issueID) >= 9 && issueID[:9] == "snyk:lic:" {
+				sb.WriteString(fmt.Sprintf("* Module: %s\n", componentName))
+			} else {
+				sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", componentName))
+			}
 		} else {
 			sb.WriteString(fmt.Sprintf("* Affected component: %s\n", componentName))
 		}

@@ -38,9 +38,9 @@
 									{{- range $tagIndex, $tag := $tags }}
 									{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
 									{{- end }}
-								],
+								]{{if ge $cvssScore 0.0}},
 								"cvssv3_baseScore": {{ $cvssScore }},
-								"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}
+								"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
 							}
 						}{{if lt $index $issuesSize}},{{end}}
 						{{- end }}
@@ -50,6 +50,7 @@
 			"results": [
 				{{- $issues := getIssuesFromTestResult $result $findingType }}
 				{{- $issuesSize := sub (len $issues) 1 }}
+				{{- $manifestPath := getManifestPath $result }}
 				{{- range $index, $issue := $issues }}
 				{{- $location := buildLocationFromIssue $issue }}
 				{{- $fixes := buildFixesFromIssue $issue }}
@@ -63,13 +64,12 @@
 					"locations": [
 						{{- if $location }}
 						{{- $physicalLoc := index $location "physicalLocation" }}
-						{{- $artifactLoc := index $physicalLoc "artifactLocation" }}
 						{{- $region := index $physicalLoc "region" }}
 						{{- $logicalLocs := index $location "logicalLocations" }}
 						{
 							"physicalLocation": {
 								"artifactLocation": {
-									"uri": {{ getQuotedString (index $artifactLoc "uri") }}
+									"uri": {{ getQuotedString $manifestPath }}
 								},
 								"region": {
 									"startLine": {{ index $region "startLine" }}
@@ -99,7 +99,7 @@
 								{{- range $changeIndex, $change := $artifactChanges }}
 								{
 									"artifactLocation": {
-										"uri": {{ getQuotedString (index (index $change "artifactLocation") "uri") }}
+										"uri": {{ getQuotedString $manifestPath }}
 									},
 									"replacements": [
 										{{- $replacements := index $change "replacements" }}
