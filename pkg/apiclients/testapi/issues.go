@@ -54,14 +54,14 @@ type Issue interface {
 	// === General Methods (applicable to all finding types) ===
 
 	// GetFindings returns all findings that are part of this issue.
-	GetFindings() []FindingData
+	GetFindings() []*FindingData
 
 	// GetFindingType returns the finding type of this issue.
 	// All findings in an issue should have the same finding type.
 	GetFindingType() FindingType
 
 	// GetProblems returns all problems from all findings in this issue.
-	GetProblems() []Problem
+	GetProblems() []*Problem
 
 	// GetPrimaryProblem returns the primary problem for this issue.
 	// For SCA findings, this would be the SnykVulnProblem.
@@ -143,13 +143,19 @@ func NewIssuesFromTestResult(ctx context.Context, testResult TestResult) ([]Issu
 	}
 
 	// Extract findings
-	findings, _, err := testResult.Findings(ctx)
+	findingsData, _, err := testResult.Findings(ctx)
 	if err != nil {
 		return nil, &IssueError{Message: "failed to extract findings", Cause: err}
 	}
 
-	if len(findings) == 0 {
+	if len(findingsData) == 0 {
 		return []Issue{}, nil
+	}
+
+	// Convert to pointer slice for memory efficiency
+	findings := make([]*FindingData, len(findingsData))
+	for i := range findingsData {
+		findings[i] = &findingsData[i]
 	}
 
 	// Determine grouping strategy based on finding types
@@ -173,7 +179,7 @@ func NewIssuesFromTestResult(ctx context.Context, testResult TestResult) ([]Issu
 }
 
 // selectGrouper chooses the appropriate grouping strategy based on finding types.
-func selectGrouper(findings []FindingData) issueGrouper {
+func selectGrouper(findings []*FindingData) issueGrouper {
 	// Check if we have SCA findings - use ID-based grouping (by problem ID)
 	for _, finding := range findings {
 		if finding.Attributes != nil && finding.Attributes.FindingType == FindingTypeSca {
@@ -187,7 +193,7 @@ func selectGrouper(findings []FindingData) issueGrouper {
 // issueGrouper defines the interface for grouping findings into cohesive security issues.
 // This is an internal interface - grouping logic is hidden from users.
 type issueGrouper interface {
-	groupFindings(findings []FindingData) [][]FindingData
+	groupFindings(findings []*FindingData) [][]*FindingData
 }
 
 // idBasedIssueGrouper groups findings by problem ID.
@@ -195,8 +201,8 @@ type issueGrouper interface {
 // Used primarily for SCA findings where multiple findings may reference the same vulnerability.
 type idBasedIssueGrouper struct{}
 
-func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingData {
-	groups := make(map[string][]FindingData)
+func (g *idBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
+	groups := make(map[string][]*FindingData)
 
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -213,7 +219,7 @@ func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingD
 		groups[problemID] = append(groups[problemID], finding)
 	}
 
-	result := make([][]FindingData, 0, len(groups))
+	result := make([][]*FindingData, 0, len(groups))
 	for _, group := range groups {
 		result = append(result, group)
 	}
@@ -221,7 +227,7 @@ func (g *idBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingD
 	return result
 }
 
-func (g *idBasedIssueGrouper) extractProblemID(finding FindingData) string {
+func (g *idBasedIssueGrouper) extractProblemID(finding *FindingData) string {
 	// Prefer Snyk IDs for consistent grouping
 	// Snyk IDs can be in two formats:
 	//   1. "SNYK-" prefix (e.g., SNYK-JS-LODASH-590103)
@@ -262,7 +268,7 @@ func isSnykID(id string) bool {
 		(id[3] == 'k' || id[3] == 'K')
 }
 
-func (g *idBasedIssueGrouper) getUniqueKey(finding FindingData) string {
+func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
 	if finding.Id != nil {
 		return finding.Id.String()
 	}
@@ -276,8 +282,8 @@ func (g *idBasedIssueGrouper) getUniqueKey(finding FindingData) string {
 // Findings with the same key are grouped together as a single issue.
 type keyBasedIssueGrouper struct{}
 
-func (g *keyBasedIssueGrouper) groupFindings(findings []FindingData) [][]FindingData {
-	groups := make(map[string][]FindingData)
+func (g *keyBasedIssueGrouper) groupFindings(findings []*FindingData) [][]*FindingData {
+	groups := make(map[string][]*FindingData)
 
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -297,7 +303,7 @@ func (g *keyBasedIssueGrouper) groupFindings(findings []FindingData) [][]Finding
 		groups[key] = append(groups[key], finding)
 	}
 
-	result := make([][]FindingData, 0, len(groups))
+	result := make([][]*FindingData, 0, len(groups))
 	for _, group := range groups {
 		result = append(result, group)
 	}
@@ -307,9 +313,9 @@ func (g *keyBasedIssueGrouper) groupFindings(findings []FindingData) [][]Finding
 
 // issue is the concrete implementation of the Issue interface.
 type issue struct {
-	findings          []FindingData
+	findings          []*FindingData
 	findingType       FindingType
-	problems          []Problem
+	problems          []*Problem
 	primaryProblem    *Problem
 	id                string
 	severity          string
@@ -327,7 +333,7 @@ type issue struct {
 }
 
 // GetFindings returns all findings that are part of this issue.
-func (i *issue) GetFindings() []FindingData {
+func (i *issue) GetFindings() []*FindingData {
 	return i.findings
 }
 
@@ -337,7 +343,7 @@ func (i *issue) GetFindingType() FindingType {
 }
 
 // GetProblems returns all problems from all findings in this issue.
-func (i *issue) GetProblems() []Problem {
+func (i *issue) GetProblems() []*Problem {
 	return i.problems
 }
 
@@ -416,12 +422,12 @@ func (i *issue) GetSuppression() *Suppression {
 
 // NewIssueFromFindings creates a single Issue instance from a group of related findings.
 // This is a helper function for creating issues from pre-grouped findings.
-func NewIssueFromFindings(findings []FindingData) (Issue, error) {
+func NewIssueFromFindings(findings []*FindingData) (Issue, error) {
 	return newIssue(findings)
 }
 
 // newIssue creates a single Issue instance from a group of related findings.
-func newIssue(findings []FindingData) (Issue, error) {
+func newIssue(findings []*FindingData) (Issue, error) {
 	if len(findings) == 0 {
 		return nil, &IssueError{Message: "findings cannot be empty"}
 	}
@@ -435,7 +441,7 @@ func newIssue(findings []FindingData) (Issue, error) {
 // issueBuilder helps construct an Issue from FindingData
 type issueBuilder struct {
 	findingType       FindingType
-	allProblems       []Problem
+	allProblems       []*Problem
 	primaryProblem    *Problem
 	firstFinding      *FindingData
 	cwes              []string
@@ -457,11 +463,11 @@ type issueBuilder struct {
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
 	suppression       *Suppression
-	findings          []FindingData
+	findings          []*FindingData
 }
 
 // processFindings extracts data from all findings
-func (b *issueBuilder) processFindings(findings []FindingData) {
+func (b *issueBuilder) processFindings(findings []*FindingData) {
 	b.findings = findings
 	for _, finding := range findings {
 		if finding.Attributes == nil {
@@ -473,9 +479,11 @@ func (b *issueBuilder) processFindings(findings []FindingData) {
 }
 
 // processFinding extracts data from a single finding
-func (b *issueBuilder) processFinding(finding FindingData) {
+func (b *issueBuilder) processFinding(finding *FindingData) {
 	b.setBasicInfo(finding)
-	b.allProblems = append(b.allProblems, finding.Attributes.Problems...)
+	for i := range finding.Attributes.Problems {
+		b.allProblems = append(b.allProblems, &finding.Attributes.Problems[i])
+	}
 	b.extractSourceLocations(finding)
 	b.extractSeverityAndRisk(finding)
 	b.extractEffectiveSeverity(finding)
@@ -487,17 +495,17 @@ func (b *issueBuilder) processFinding(finding FindingData) {
 }
 
 // setBasicInfo sets finding type, title, and description from the first finding
-func (b *issueBuilder) setBasicInfo(finding FindingData) {
+func (b *issueBuilder) setBasicInfo(finding *FindingData) {
 	if b.findingType == "" {
 		b.findingType = finding.Attributes.FindingType
-		b.firstFinding = &finding
+		b.firstFinding = finding
 		b.title = finding.Attributes.Title
 		b.description = finding.Attributes.Description
 	}
 }
 
 // extractSourceLocations extracts source locations from finding locations
-func (b *issueBuilder) extractSourceLocations(finding FindingData) {
+func (b *issueBuilder) extractSourceLocations(finding *FindingData) {
 	for _, location := range finding.Attributes.Locations {
 		locationDiscriminator, err := location.Discriminator()
 		if err != nil || locationDiscriminator != "source" {
@@ -511,7 +519,7 @@ func (b *issueBuilder) extractSourceLocations(finding FindingData) {
 }
 
 // extractSeverityAndRisk extracts severity and risk score from finding attributes
-func (b *issueBuilder) extractSeverityAndRisk(finding FindingData) {
+func (b *issueBuilder) extractSeverityAndRisk(finding *FindingData) {
 	if b.severity == "" && finding.Attributes.Rating.Severity != "" {
 		b.severity = string(finding.Attributes.Rating.Severity)
 	}
@@ -521,7 +529,7 @@ func (b *issueBuilder) extractSeverityAndRisk(finding FindingData) {
 }
 
 // extractEffectiveSeverity extracts effective severity from policy modifications
-func (b *issueBuilder) extractEffectiveSeverity(finding FindingData) {
+func (b *issueBuilder) extractEffectiveSeverity(finding *FindingData) {
 	if finding.Attributes.PolicyModifications == nil {
 		return
 	}
@@ -535,7 +543,7 @@ func (b *issueBuilder) extractEffectiveSeverity(finding FindingData) {
 }
 
 // extractReachability extracts reachability evidence
-func (b *issueBuilder) extractReachability(finding FindingData) {
+func (b *issueBuilder) extractReachability(finding *FindingData) {
 	if b.reachability != nil {
 		return
 	}
@@ -553,7 +561,7 @@ func (b *issueBuilder) extractReachability(finding FindingData) {
 }
 
 // extractSuppression extracts suppression information
-func (b *issueBuilder) extractSuppression(finding FindingData) {
+func (b *issueBuilder) extractSuppression(finding *FindingData) {
 	if b.suppression != nil {
 		return
 	}
@@ -563,7 +571,7 @@ func (b *issueBuilder) extractSuppression(finding FindingData) {
 }
 
 // extractDependencyPaths extracts dependency paths from evidence
-func (b *issueBuilder) extractDependencyPaths(finding FindingData) {
+func (b *issueBuilder) extractDependencyPaths(finding *FindingData) {
 	for _, ev := range finding.Attributes.Evidence {
 		discriminator, err := ev.Discriminator()
 		if err != nil || discriminator != "dependency_path" {
@@ -585,7 +593,7 @@ func (b *issueBuilder) extractDependencyPaths(finding FindingData) {
 }
 
 // extractPackageInfo extracts package name and version from package locations
-func (b *issueBuilder) extractPackageInfo(finding FindingData) {
+func (b *issueBuilder) extractPackageInfo(finding *FindingData) {
 	for _, location := range finding.Attributes.Locations {
 		locationDiscriminator, err := location.Discriminator()
 		if err != nil || locationDiscriminator != "package" {
@@ -605,7 +613,7 @@ func (b *issueBuilder) extractPackageInfo(finding FindingData) {
 }
 
 // processProblems processes all problems to extract CVEs, CWEs, and vulnerability info
-func (b *issueBuilder) processProblems(finding FindingData) {
+func (b *issueBuilder) processProblems(finding *FindingData) {
 	for _, problem := range finding.Attributes.Problems {
 		discriminator, err := problem.Discriminator()
 		if err != nil {
@@ -614,13 +622,13 @@ func (b *issueBuilder) processProblems(finding FindingData) {
 
 		switch discriminator {
 		case "snyk_vuln":
-			b.processSnykVulnProblem(problem)
+			b.processSnykVulnProblem(&problem)
 		case "snyk_license":
-			b.processSnykLicenseProblem(problem)
+			b.processSnykLicenseProblem(&problem)
 		case "cve":
-			b.processCveProblem(problem)
+			b.processCveProblem(&problem)
 		case "cwe":
-			b.processCweProblem(problem)
+			b.processCweProblem(&problem)
 		}
 
 		// Fallback to first problem if no snyk_vuln or snyk_license found
@@ -631,7 +639,7 @@ func (b *issueBuilder) processProblems(finding FindingData) {
 }
 
 // processSnykVulnProblem extracts data from a Snyk vulnerability problem
-func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
+func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 	// Quick ID extraction without full unmarshal
 	if id := problem.GetID(); id != "" {
 		b.id = id
@@ -644,7 +652,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
 	}
 
 	if b.primaryProblem == nil {
-		b.primaryProblem = &problem
+		b.primaryProblem = problem
 		b.snykVulnProblem = &vulnProblem
 	}
 
@@ -681,14 +689,14 @@ func (b *issueBuilder) processSnykVulnProblem(problem Problem) {
 }
 
 // processSnykLicenseProblem extracts data from a Snyk license problem
-func (b *issueBuilder) processSnykLicenseProblem(problem Problem) {
+func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	// Extract the license ID - this is critical for grouping license issues
 	if id := problem.GetID(); id != "" {
 		b.id = id
 	}
 
 	if b.primaryProblem == nil {
-		b.primaryProblem = &problem
+		b.primaryProblem = problem
 	}
 
 	// Try to extract license-specific metadata
@@ -718,14 +726,14 @@ func (b *issueBuilder) processSnykLicenseProblem(problem Problem) {
 }
 
 // processCveProblem extracts CVE ID
-func (b *issueBuilder) processCveProblem(problem Problem) {
+func (b *issueBuilder) processCveProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
 		b.cves = append(b.cves, id)
 	}
 }
 
 // processCweProblem extracts CWE ID
-func (b *issueBuilder) processCweProblem(problem Problem) {
+func (b *issueBuilder) processCweProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
 		b.cwes = append(b.cwes, id)
 	}

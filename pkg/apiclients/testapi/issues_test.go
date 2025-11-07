@@ -152,7 +152,7 @@ func TestNewIssuesFromTestResult(t *testing.T) {
 
 func TestNewIssueFromFindings(t *testing.T) {
 	t.Run("successfully creates issue from findings", func(t *testing.T) {
-		findings := []testapi.FindingData{
+		findings := []*testapi.FindingData{
 			{
 				Attributes: &testapi.FindingAttributes{
 					FindingType: testapi.FindingTypeSca,
@@ -174,7 +174,7 @@ func TestNewIssueFromFindings(t *testing.T) {
 	})
 
 	t.Run("returns error when findings is empty", func(t *testing.T) {
-		issue, err := testapi.NewIssueFromFindings([]testapi.FindingData{})
+		issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{})
 		assert.Error(t, err)
 		assert.Nil(t, issue)
 		assert.Contains(t, err.Error(), "findings cannot be empty")
@@ -272,7 +272,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		err := locationUnion.MergeSourceLocation(location)
 		require.NoError(t, err)
 
-		findings := []testapi.FindingData{
+		findings := []*testapi.FindingData{
 			{
 				Attributes: &testapi.FindingAttributes{
 					FindingType: testapi.FindingTypeSast,
@@ -339,7 +339,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 	t.Run("SCA issue preserves SCA-specific methods", func(t *testing.T) {
 		// This test verifies backward compatibility - SCA issues should still work
 		// We'll use a minimal SCA finding structure
-		findings := []testapi.FindingData{
+		findings := []*testapi.FindingData{
 			{
 				Attributes: &testapi.FindingAttributes{
 					FindingType: testapi.FindingTypeSca,

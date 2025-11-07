@@ -257,7 +257,7 @@ func BuildFixesFromIssue(issue testapi.Issue) []interface{} {
 	}
 
 	// Use the existing buildFixes logic
-	return BuildFixes(findings[0], issue)
+	return BuildFixes(findings[0])
 }
 
 // appendTechnologySection adds technology/ecosystem information to the markdown
@@ -440,7 +440,7 @@ func BuildLocation(issue testapi.Issue) map[string]interface{} {
 }
 
 // BuildFixes extracts fix information from a finding's relationship data
-func BuildFixes(finding testapi.FindingData, _ testapi.Issue) []interface{} {
+func BuildFixes(finding *testapi.FindingData) []interface{} {
 	if finding.Relationships == nil || finding.Relationships.Fix == nil || finding.Relationships.Fix.Data == nil {
 		return nil
 	}

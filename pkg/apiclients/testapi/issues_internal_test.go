@@ -48,7 +48,7 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 	grouper := &idBasedIssueGrouper{}
 
 	t.Run("prefers SNYK- ID over CVE", func(t *testing.T) {
-		finding := FindingData{
+		finding := &FindingData{
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
 				Problems: []Problem{
@@ -64,7 +64,7 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 	})
 
 	t.Run("prefers snyk: ID over CVE", func(t *testing.T) {
-		finding := FindingData{
+		finding := &FindingData{
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
 				Problems: []Problem{
@@ -80,7 +80,7 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 	})
 
 	t.Run("returns first Snyk ID when multiple exist", func(t *testing.T) {
-		finding := FindingData{
+		finding := &FindingData{
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
 				Problems: []Problem{
@@ -95,7 +95,7 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 	})
 
 	t.Run("falls back to CVE when no Snyk ID", func(t *testing.T) {
-		finding := FindingData{
+		finding := &FindingData{
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
 				Problems: []Problem{
@@ -110,7 +110,7 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 	})
 
 	t.Run("handles mixed case Snyk ID", func(t *testing.T) {
-		finding := FindingData{
+		finding := &FindingData{
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
 				Problems: []Problem{
@@ -125,7 +125,7 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 	})
 
 	t.Run("returns empty string when no problems", func(t *testing.T) {
-		finding := FindingData{
+		finding := &FindingData{
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
 				Problems:    []Problem{},
@@ -138,7 +138,7 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 
 	t.Run("falls back to unique key when no problem IDs", func(t *testing.T) {
 		findingID := uuid.New()
-		finding := FindingData{
+		finding := &FindingData{
 			Id: &findingID,
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
@@ -161,7 +161,7 @@ func TestIdBasedIssueGrouper_GroupFindings(t *testing.T) {
 	grouper := &idBasedIssueGrouper{}
 
 	t.Run("groups findings with same Snyk ID", func(t *testing.T) {
-		findings := []FindingData{
+		findings := []*FindingData{
 			{
 				Attributes: &FindingAttributes{
 					FindingType: FindingTypeSca,
@@ -204,7 +204,7 @@ func TestIdBasedIssueGrouper_GroupFindings(t *testing.T) {
 	})
 
 	t.Run("prefers Snyk ID even when problems are in different order", func(t *testing.T) {
-		findings := []FindingData{
+		findings := []*FindingData{
 			{
 				Attributes: &FindingAttributes{
 					FindingType: FindingTypeSca,
