@@ -7,6 +7,8 @@
 			{{- $findingTypes := getFindingTypesFromTestResult $result }}
 			{{- $findingTypesSize := sub (len $findingTypes) 1 }}
 			{{- range $findingTypeIndex, $findingType := $findingTypes }}
+			{{- $issues := getIssuesFromTestResult $result $findingType }}
+			{{- $issuesSize := sub (len $issues) 1 }}
 			{
 				"tool": {
 					"driver" : {
@@ -15,8 +17,6 @@
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",
 					"rules" : [
-						{{- $issues := getIssuesFromTestResult $result $findingType }}
-						{{- $issuesSize := sub (len $issues) 1 }}
 						{{- range $index, $issue := $issues }}
 						{{- $tags := buildRuleTags $issue }}
 						{{- $cvssScore := getRuleCVSSScore $issue }}
@@ -48,8 +48,6 @@
 					}
 				},
 			"results": [
-				{{- $issues := getIssuesFromTestResult $result $findingType }}
-				{{- $issuesSize := sub (len $issues) 1 }}
 				{{- $manifestPath := getManifestPath $result }}
 				{{- range $index, $issue := $issues }}
 				{{- $location := buildLocationFromIssue $issue }}
