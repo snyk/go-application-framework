@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
 
@@ -328,7 +329,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getIssuesFromTestResult"] = testapi.GetIssuesFromTestResult
+	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType testapi.FindingType) {
+		utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
+	}
 
 	return defaultMap
 }

@@ -7,10 +7,11 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
-	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
 func TestNewIssuesFromTestResult(t *testing.T) {
@@ -384,5 +385,154 @@ func TestIssueError(t *testing.T) {
 		assert.Contains(t, err.Error(), "test error")
 		assert.Contains(t, err.Error(), "root cause")
 		assert.Equal(t, cause, err.Unwrap())
+	})
+}
+
+func TestGetIssuesFromTestResult(t *testing.T) {
+	t.Run("successfully filters issues by finding type", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Key:         "sca-issue-2",
+					Title:       "SCA Issue 2",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "sast-issue-1",
+					Title:       "SAST Issue 1",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Key:         "sca-issue-1",
+					Title:       "SCA Issue 1",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		require.NoError(t, err)
+		require.NotNil(t, issues)
+		assert.Len(t, issues, 2)
+
+		// Verify all returned issues have the correct finding type
+		for _, issue := range issues {
+			assert.Equal(t, testapi.FindingTypeSca, issue.GetFindingType())
+		}
+
+		// Verify sorting by ID
+		assert.Equal(t, "sca-issue-1", issues[0].GetID())
+		assert.Equal(t, "sca-issue-2", issues[1].GetID())
+	})
+
+	t.Run("returns empty slice when no issues match finding type", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSca,
+					Key:         "sca-issue-1",
+					Title:       "SCA Issue 1",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSast)
+		require.NoError(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("returns error when test result is nil", func(t *testing.T) {
+		issues, err := testapi.GetIssuesFromTestResult(nil, testapi.FindingTypeSca)
+		assert.Error(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("returns error when findings fetch fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		mockResult.EXPECT().Findings(gomock.Any()).Return(nil, false, errors.New("fetch error")).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		assert.Error(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("handles empty findings", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		mockResult.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		require.NoError(t, err)
+		assert.Len(t, issues, 0)
+	})
+
+	t.Run("correctly sorts multiple issues by ID", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockResult := mocks.NewMockTestResult(ctrl)
+		findings := []testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "zebra",
+					Title:       "Issue Z",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "apple",
+					Title:       "Issue A",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+			{
+				Attributes: &testapi.FindingAttributes{
+					FindingType: testapi.FindingTypeSast,
+					Key:         "middle",
+					Title:       "Issue M",
+				},
+				Id: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
+
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSast)
+		require.NoError(t, err)
+		require.NotNil(t, issues)
+		assert.Len(t, issues, 3)
+
+		// Verify alphabetical sorting by ID
+		assert.Equal(t, "apple", issues[0].GetID())
+		assert.Equal(t, "middle", issues[1].GetID())
+		assert.Equal(t, "zebra", issues[2].GetID())
 	})
 }

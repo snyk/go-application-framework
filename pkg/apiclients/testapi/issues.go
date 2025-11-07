@@ -897,11 +897,11 @@ func (e *IssueError) Unwrap() error {
 }
 
 // GetIssuesFromTestResult converts test results to Issues and filters by finding type
-func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) []Issue {
+func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) ([]Issue, error) {
 	ctx := context.Background()
 	issuesList, err := NewIssuesFromTestResult(ctx, testResults)
 	if err != nil {
-		return []Issue{}
+		return []Issue{}, err
 	}
 
 	// Filter issues by finding type
@@ -917,5 +917,5 @@ func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) []
 		return strings.Compare(a.GetID(), b.GetID())
 	})
 
-	return filteredIssues
+	return filteredIssues, nil
 }
