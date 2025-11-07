@@ -303,65 +303,157 @@ func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingTyp
 
 // appendDependencyPathsSection adds dependency path information to the markdown
 func appendDependencyPathsSection(sb *strings.Builder, issue testapi.Issue, componentName string) {
-	var dependencyPaths [][]string
-	if val, ok := issue.GetData(testapi.DataKeyDependencyPaths); ok {
-		// Handle new format: [][]Package (structured data)
-		if paths, ok := val.([][]testapi.Package); ok {
-			for _, path := range paths {
-				formattedPath := make([]string, len(path))
-				for i, pkg := range path {
-					formattedPath[i] = fmt.Sprintf("%s@%s", pkg.Name, pkg.Version)
-				}
-				dependencyPaths = append(dependencyPaths, formattedPath)
-			}
-		} else if paths, ok := val.([][]string); ok {
-			// Backward compatibility: [][]string format
-			dependencyPaths = paths
-		} else if strs, ok := val.([]string); ok {
-			// Backward compatibility: convert old format (pre-joined strings) to new format
-			for _, pathStr := range strs {
-				parts := strings.Split(pathStr, " › ")
-				dependencyPaths = append(dependencyPaths, parts)
-			}
+	val, ok := issue.GetData(testapi.DataKeyDependencyPaths)
+	if !ok {
+		if componentName != "" {
+			appendFallbackIntroduction(sb, issue, componentName)
 		}
+		return
 	}
 
-	if len(dependencyPaths) > 0 {
-		appendDependencyPathsSummary(sb, dependencyPaths)
-		appendDetailedPaths(sb, dependencyPaths)
-	} else if componentName != "" {
+	// Handle new format: [][]Package (structured data)
+	if paths, ok := val.([][]testapi.Package); ok {
+		if len(paths) > 0 {
+			appendDependencyPathsSummaryFromPackages(sb, paths)
+			appendDetailedPathsFromPackages(sb, paths)
+		}
+		return
+	}
+
+	// Backward compatibility: [][]string format
+	if paths, ok := val.([][]string); ok {
+		if len(paths) > 0 {
+			appendDependencyPathsSummary(sb, paths)
+			appendDetailedPaths(sb, paths)
+		}
+		return
+	}
+
+	// Backward compatibility: []string format (old pre-joined strings)
+	if strs, ok := val.([]string); ok {
+		if len(strs) > 0 {
+			appendDependencyPathsFromStrings(sb, strs)
+		}
+		return
+	}
+
+	// No valid paths found
+	if componentName != "" {
 		appendFallbackIntroduction(sb, issue, componentName)
 	}
 }
 
-// appendDependencyPathsSummary adds a summary of dependency paths
+// appendDependencyPathsSummaryFromPackages writes summary directly without intermediate allocations
+func appendDependencyPathsSummaryFromPackages(sb *strings.Builder, paths [][]testapi.Package) {
+	if len(paths) == 0 || len(paths[0]) == 0 {
+		return
+	}
+
+	firstPath := paths[0]
+	sb.WriteString("* Introduced through: ")
+
+	// Format first package
+	sb.WriteString(firstPath[0].Name)
+	sb.WriteByte('@')
+	sb.WriteString(firstPath[0].Version)
+
+	if len(firstPath) > 2 {
+		sb.WriteString(", ")
+		sb.WriteString(firstPath[1].Name)
+		sb.WriteByte('@')
+		sb.WriteString(firstPath[1].Version)
+		sb.WriteString(" and others")
+	} else if len(firstPath) == 2 {
+		sb.WriteString(" and ")
+		sb.WriteString(firstPath[1].Name)
+		sb.WriteByte('@')
+		sb.WriteString(firstPath[1].Version)
+	}
+
+	sb.WriteByte('\n')
+}
+
+// appendDetailedPathsFromPackages writes paths directly without intermediate strings
+func appendDetailedPathsFromPackages(sb *strings.Builder, paths [][]testapi.Package) {
+	sb.WriteString("### Detailed paths\n")
+	for _, path := range paths {
+		sb.WriteString("* _Introduced through_: ")
+		for i, pkg := range path {
+			if i > 0 {
+				sb.WriteString(" › ")
+			}
+			sb.WriteString(pkg.Name)
+			sb.WriteByte('@')
+			sb.WriteString(pkg.Version)
+		}
+		sb.WriteByte('\n')
+	}
+}
+
+// appendDependencyPathsSummary adds a summary of dependency paths ([][]string format)
 func appendDependencyPathsSummary(sb *strings.Builder, dependencyPaths [][]string) {
-	if len(dependencyPaths) == 0 {
+	if len(dependencyPaths) == 0 || len(dependencyPaths[0]) == 0 {
 		return
 	}
 
 	firstPath := dependencyPaths[0]
-	introduction := "* Introduced through: %s\n"
+	sb.WriteString("* Introduced through: ")
+	sb.WriteString(firstPath[0])
 
-	if len(firstPath) == 0 {
-		return
-	}
-
-	dependencyPath := firstPath[0]
 	if len(firstPath) > 2 {
-		dependencyPath = fmt.Sprintf("%s, %s and others", firstPath[0], firstPath[1])
+		sb.WriteString(", ")
+		sb.WriteString(firstPath[1])
+		sb.WriteString(" and others")
 	} else if len(firstPath) == 2 {
-		dependencyPath = fmt.Sprintf("%s and %s", firstPath[0], firstPath[1])
+		sb.WriteString(" and ")
+		sb.WriteString(firstPath[1])
 	}
-	fmt.Fprintf(sb, introduction, dependencyPath)
+
+	sb.WriteByte('\n')
 }
 
-// appendDetailedPaths adds detailed dependency path information
+// appendDetailedPaths adds detailed dependency path information ([][]string format)
 func appendDetailedPaths(sb *strings.Builder, dependencyPaths [][]string) {
 	sb.WriteString("### Detailed paths\n")
 	for _, pathParts := range dependencyPaths {
-		formattedPath := strings.Join(pathParts, " › ")
-		sb.WriteString(fmt.Sprintf("* _Introduced through_: %s\n", formattedPath))
+		sb.WriteString("* _Introduced through_: ")
+		for i, part := range pathParts {
+			if i > 0 {
+				sb.WriteString(" › ")
+			}
+			sb.WriteString(part)
+		}
+		sb.WriteByte('\n')
+	}
+}
+
+// appendDependencyPathsFromStrings handles old format (pre-joined strings)
+func appendDependencyPathsFromStrings(sb *strings.Builder, paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+
+	// Summary from first path
+	firstPath := paths[0]
+	parts := strings.SplitN(firstPath, " › ", 3) // Only split what we need
+	sb.WriteString("* Introduced through: ")
+	sb.WriteString(parts[0])
+	if len(parts) > 2 {
+		sb.WriteString(", ")
+		sb.WriteString(parts[1])
+		sb.WriteString(" and others")
+	} else if len(parts) == 2 {
+		sb.WriteString(" and ")
+		sb.WriteString(parts[1])
+	}
+	sb.WriteByte('\n')
+
+	// Detailed paths
+	sb.WriteString("### Detailed paths\n")
+	for _, pathStr := range paths {
+		sb.WriteString("* _Introduced through_: ")
+		sb.WriteString(pathStr)
+		sb.WriteByte('\n')
 	}
 }
 
