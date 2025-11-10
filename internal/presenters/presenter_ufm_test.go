@@ -430,47 +430,45 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 	}
 
 	for _, bc := range benchmarkCases {
-		b.Run(bc.name, func(b *testing.B) {
-			testResult := generateLargeTestResult(b, bc.findingsCount, bc.issuesExpected)
-			testResults := []testapi.TestResult{testResult}
+		testResult := generateLargeTestResult(b, bc.findingsCount, bc.issuesExpected)
+		testResults := []testapi.TestResult{testResult}
 
-			b.Logf("Generated %d findings grouped into %d issues", bc.findingsCount, bc.issuesExpected)
-			b.ResetTimer()
+		b.Logf("Generated %d findings grouped into %d issues", bc.findingsCount, bc.issuesExpected)
+		b.ResetTimer()
 
-			var maxHeapMB, maxSysMB uint64
-			done := make(chan struct{})
-			pollInterval := time.Millisecond * 100
-			if bc.findingsCount >= 1_000_000 {
-				pollInterval = time.Second
-			}
+		var maxHeapMB, maxSysMB uint64
+		done := make(chan struct{})
+		pollInterval := time.Millisecond * 100
+		if bc.findingsCount >= 1_000_000 {
+			pollInterval = time.Second
+		}
 
-			go poolForHeapAndSys(done, &maxHeapMB, &maxSysMB, pollInterval)
+		go poolForHeapAndSys(done, &maxHeapMB, &maxSysMB, pollInterval)
 
-			runtime.GC()
-			start := time.Now()
+		runtime.GC()
+		start := time.Now()
 
-			config := configuration.NewWithOpts()
-			writer := &bytes.Buffer{}
+		config := configuration.NewWithOpts()
+		writer := &bytes.Buffer{}
 
-			presenter := presenters.NewUfmRenderer(testResults, config, writer, presenters.UfmWithRuntimeInfo(ri))
-			err := presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
+		presenter := presenters.NewUfmRenderer(testResults, config, writer, presenters.UfmWithRuntimeInfo(ri))
+		err := presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
 
-			duration := time.Since(start)
-			close(done)
+		duration := time.Since(start)
+		close(done)
 
-			if err != nil {
-				b.Fatalf("Failed to render SARIF: %v", err)
-			}
+		if err != nil {
+			b.Fatalf("Failed to render SARIF: %v", err)
+		}
 
-			outputSizeMB := float64(writer.Len()) / 1024 / 1024
+		outputSizeMB := float64(writer.Len()) / 1024 / 1024
 
-			if writer.Len() == 0 {
-				b.Fatalf("SARIF output is empty!")
-			}
+		if writer.Len() == 0 {
+			b.Fatalf("SARIF output is empty!")
+		}
 
-			b.Logf("Duration: %v | Peak heap: %d MB, Peak sys: %d MB | Output: %.2f MB",
-				duration, maxHeapMB, maxSysMB, outputSizeMB)
-		})
+		b.Logf("Duration: %v | Peak heap: %d MB, Peak sys: %d MB | Output: %.2f MB",
+			duration, maxHeapMB, maxSysMB, outputSizeMB)
 	}
 }
 
