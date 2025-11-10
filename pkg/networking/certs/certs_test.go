@@ -25,7 +25,10 @@ func Test_GetExtraCaCert_InvalidPathSpecified(t *testing.T) {
 
 func Test_GetExtraCaCert_InvalidCertSpecified(t *testing.T) {
 	file, err := os.CreateTemp(t.TempDir(), "")
-	defer func() { _ = file.Close() }()
+	defer func() {
+		closeErr := file.Close()
+		assert.NoError(t, closeErr)
+	}()
 	assert.NoError(t, err)
 	_, err = file.Write([]byte{'h', 'e', 'l', 'l', 'o'})
 	assert.NoError(t, err)
@@ -42,7 +45,10 @@ func Test_GetExtraCaCert_CertSpecified(t *testing.T) {
 	certPem, _, err := MakeSelfSignedCert("mycert", []string{"dns"}, logger)
 	assert.NoError(t, err)
 	file, err := os.CreateTemp(t.TempDir(), "")
-	defer func() { _ = file.Close() }()
+	defer func() {
+		closeErr := file.Close()
+		assert.NoError(t, closeErr)
+	}()
 	assert.NoError(t, err)
 	_, err = file.Write(certPem)
 	assert.NoError(t, err)
@@ -60,7 +66,10 @@ func Test_AppendExtraCaCert_AddOneCert(t *testing.T) {
 	certPem, _, err := MakeSelfSignedCert("mycert", []string{"dns"}, logger)
 	assert.NoError(t, err)
 	file, err := os.CreateTemp(t.TempDir(), "")
-	defer func() { _ = file.Close() }()
+	defer func() {
+		closeErr := file.Close()
+		assert.NoError(t, closeErr)
+	}()
 	assert.NoError(t, err)
 	_, err = file.Write(extraCertPem)
 	assert.NoError(t, err)
@@ -78,7 +87,10 @@ func Test_AppendExtraCaCert_AddNoCert(t *testing.T) {
 	certPem, _, err := MakeSelfSignedCert("mycert", []string{"dns"}, logger)
 	assert.NoError(t, err)
 	file, err := os.CreateTemp(t.TempDir(), "")
-	defer func() { _ = file.Close() }()
+	defer func() {
+		closeErr := file.Close()
+		assert.NoError(t, closeErr)
+	}()
 	assert.NoError(t, err)
 	_, err = file.Write([]byte(extraCertPem))
 	assert.NoError(t, err)

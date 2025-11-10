@@ -234,7 +234,8 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.NoError(t, err)
 	t.Cleanup(func() {
-		listener.Close()
+		closeErr := listener.Close()
+		assert.NoError(t, closeErr)
 	})
 
 	serverURL := fmt.Sprintf("https://localhost:%d/", listener.Addr().(*net.TCPAddr).Port) //nolint:errcheck //in this test, the type is clear

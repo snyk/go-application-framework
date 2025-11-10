@@ -184,8 +184,7 @@ func (a *snykApiClient) GetFeatureFlag(flagname string, orgId string) (bool, err
 	if err != nil {
 		return defaultResult, fmt.Errorf("unable to retrieve feature flag: %w", err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }() //nolint:errcheck // Ignore lack of error handling
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -232,8 +231,7 @@ func (a *snykApiClient) GetSastSettings(orgId string) (*sast_contract.SastRespon
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve settings: %w", err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }() //nolint:errcheck // Ignore lack of error handling
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -255,8 +253,7 @@ func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsRespo
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve org settings: %w", err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }() //nolint:errcheck // Ignore lack of error handling
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -291,7 +288,7 @@ func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsRespo
 // apiVersion := "2022-01-12"
 // response, err := clientGet(myApiClient, "/organizations", &apiVersion, "limit", "50")
 func clientGet(a *snykApiClient, endpoint string, version *string, queryParams ...string) ([]byte, error) {
-	var apiVersion string = constants.SNYK_DEFAULT_API_VERSION
+	apiVersion := constants.SNYK_DEFAULT_API_VERSION
 	if version != nil && *version != "" {
 		apiVersion = *version
 	}
@@ -316,7 +313,7 @@ func clientGet(a *snykApiClient, endpoint string, version *string, queryParams .
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }() //nolint:errcheck // Ignore lack of error handling
 	return body, nil
 }
 

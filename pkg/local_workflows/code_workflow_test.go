@@ -365,7 +365,8 @@ func Test_Code_FF_CODE_CONSISTENT_IGNORES(t *testing.T) {
 		}
 
 		assert.NoError(t, err)
-		fmt.Fprintln(w, string(data))
+		_, err = fmt.Fprintln(w, string(data))
+		assert.NoError(t, err)
 	}))
 	defer ts.Close()
 

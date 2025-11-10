@@ -109,7 +109,10 @@ func handleCreateTestRequest(t *testing.T, w http.ResponseWriter, r *http.Reques
 	if config.ExpectedCreateTestBody != nil {
 		bodyBytes, bodyErr := io.ReadAll(r.Body)
 		require.NoError(t, bodyErr)
-		defer r.Body.Close()
+		defer func() {
+			closeErr := r.Body.Close()
+			assert.NoError(t, closeErr)
+		}()
 		expectedBodyBytes, err := json.Marshal(config.ExpectedCreateTestBody)
 		require.NoError(t, err)
 		assert.JSONEq(t, string(expectedBodyBytes), string(bodyBytes))

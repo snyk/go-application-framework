@@ -360,7 +360,7 @@ func mustReverse(v interface{}) ([]interface{}, error) {
 
 		return nl, nil
 	default:
-		return nil, fmt.Errorf("Cannot find reverse on type %s", tp)
+		return nil, fmt.Errorf("cannot find reverse on type %s", tp)
 	}
 }
 

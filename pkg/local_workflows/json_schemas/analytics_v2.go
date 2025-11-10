@@ -1,6 +1,7 @@
 package json_schemas
 
 // TODO: this should be dynamically fetched if possible; it is owned by Analytics API not by GAF
+
 const AnalyticsV2EventSchema = `{
   "$schema": "http://json-schema.org/draft-04/schema#",
   "type": "object",

@@ -20,7 +20,7 @@ const (
 	jsonFlag           = "json"
 )
 
-// define a new workflow identifier for this workflow
+// WORKFLOWID_WHOAMI defines a new workflow identifier for this workflow
 var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(whoAmIworkflowName)
 
 // InitWhoAmIWorkflow initializes the whoAmI workflow before registering it with the engine.

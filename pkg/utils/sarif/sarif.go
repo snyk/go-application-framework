@@ -14,34 +14,31 @@ const (
 	summaryType = "sast"
 )
 
-// Convert Sarif Level to internal Severity
+// SarifLevelToSeverity converts Sarif Level to internal Severity
 func SarifLevelToSeverity(level string) string {
-	var severity string
-	if level == "note" {
-		severity = "low"
-	} else if level == "warning" {
-		severity = "medium"
-	} else if level == "error" {
-		severity = "high"
-	} else {
-		severity = "unmapped"
+	switch level {
+	case "note":
+		return "low"
+	case "warning":
+		return "medium"
+	case "error":
+		return "high"
+	default:
+		return "unmapped"
 	}
-
-	return severity
 }
 
 func SeverityToSarifLevel(severity string) string {
-	var level string
-	if severity == "low" {
-		level = "note"
-	} else if severity == "medium" {
-		level = "warning"
-	} else if severity == "high" || severity == "critical" {
-		level = "error"
-	} else {
-		level = "unmapped"
+	switch severity {
+	case "low":
+		return "note"
+	case "medium":
+		return "warning"
+	case "high", "critical":
+		return "error"
+	default:
+		return "unmapped"
 	}
-	return level
 }
 
 // CreateCodeSummary Iterates through the sarif data and create a summary out of it.
