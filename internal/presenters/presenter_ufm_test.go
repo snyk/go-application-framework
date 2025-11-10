@@ -392,11 +392,11 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 		findingsCount  int
 		issuesExpected int
 	}{
-		// {
-		// 	name:           "10_000_findings",
-		// 	findingsCount:  10000,
-		// 	issuesExpected: 5000,
-		// },
+		{
+			name:           "10_000_findings",
+			findingsCount:  10000,
+			issuesExpected: 5000,
+		},
 		{
 			name:           "1_000_000_findings",
 			findingsCount:  1000000,
