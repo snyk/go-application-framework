@@ -392,11 +392,11 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 		findingsCount  int
 		issuesExpected int
 	}{
-		{
-			name:           "10_000_findings",
-			findingsCount:  10000,
-			issuesExpected: 5000,
-		},
+		// {
+		// 	name:           "10_000_findings",
+		// 	findingsCount:  10000,
+		// 	issuesExpected: 5000,
+		// },
 		{
 			name:           "1_000_000_findings",
 			findingsCount:  1000000,
@@ -406,29 +406,20 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 
 	for _, bc := range benchmarkCases {
 		b.Run(bc.name, func(b *testing.B) {
-			b.Logf("Generating test data with %d findings...", bc.findingsCount)
-
-			// Generate large test result with many findings
-			testResult := generateLargeTestResult(b, bc.findingsCount)
+			testResult := generateLargeTestResult(b, bc.findingsCount, bc.issuesExpected)
 			testResults := []testapi.TestResult{testResult}
 
-			b.Logf("Generated test data. Expected ~%d issues from %d findings", bc.issuesExpected, bc.findingsCount)
+			b.Logf("Generated %d findings grouped into %d issues", bc.findingsCount, bc.issuesExpected)
 			b.ResetTimer()
 
-			// Track maximum values across all iterations
-			var maxAllocatedMB, maxSysMB uint64
-
-			var memStart runtime.MemStats
-			runtime.GC() // Force GC before measurement
-			runtime.ReadMemStats(&memStart)
-
+			var maxHeapMB, maxSysMB uint64
 			done := make(chan struct{})
-			var pollInterval time.Duration
+
+			pollInterval := time.Millisecond * 100
 			if bc.findingsCount >= 1_000_000 {
 				pollInterval = time.Second
-			} else {
-				pollInterval = time.Millisecond * 100
 			}
+
 			go func() {
 				ticker := time.NewTicker(pollInterval)
 				defer ticker.Stop()
@@ -444,8 +435,8 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 						heapMB := m.HeapInuse / 1024 / 1024
 						sysMB := m.Sys / 1024 / 1024
 
-						if heapMB > maxAllocatedMB {
-							maxAllocatedMB = heapMB
+						if heapMB > maxHeapMB {
+							maxHeapMB = heapMB
 						}
 						if sysMB > maxSysMB {
 							maxSysMB = sysMB
@@ -454,6 +445,7 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 				}
 			}()
 
+			runtime.GC()
 			start := time.Now()
 
 			config := configuration.NewWithOpts()
@@ -461,33 +453,37 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 
 			presenter := presenters.NewUfmRenderer(testResults, config, writer, presenters.UfmWithRuntimeInfo(ri))
 			err := presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
-			if err != nil {
-				b.Fatalf("Failed to render SARIF: %v", err)
-			}
 
 			duration := time.Since(start)
 			close(done)
 
-			var memEnd runtime.MemStats
-			runtime.ReadMemStats(&memEnd)
+			if err != nil {
+				b.Fatalf("Failed to render SARIF: %v", err)
+			}
 
-			// Calculate memory usage for this iteration
-			totalAllocatedMB := (memEnd.TotalAlloc - memStart.TotalAlloc) / 1024 / 1024
 			outputSizeMB := float64(writer.Len()) / 1024 / 1024
 
-			b.Logf("Max allocated: %d MB, Max sys: %d MB", maxAllocatedMB, maxSysMB)
-			b.Logf("Total allocated: %d MB, Output size: %.2f MB", totalAllocatedMB, outputSizeMB)
-			b.Logf("Duration: %v", duration)
+			if writer.Len() == 0 {
+				b.Fatalf("SARIF output is empty!")
+			}
+
+			b.Logf("Duration: %v | Peak heap: %d MB, Peak sys: %d MB | Output: %.2f MB",
+				duration, maxHeapMB, maxSysMB, outputSizeMB)
 		})
 	}
 }
 
 // generateLargeTestResult creates a test result with the specified number of findings
 // for benchmarking memory usage and performance.
-//
-//nolint:gocyclo // setup function, complexity is acceptable
-func generateLargeTestResult(tb testing.TB, findingsCount int) testapi.TestResult {
+// issuesExpected determines how many unique issues to create by grouping findings.
+func generateLargeTestResult(tb testing.TB, findingsCount, issuesExpected int) testapi.TestResult {
 	tb.Helper()
+
+	// Calculate grouping factor based on expected issues
+	groupingFactor := findingsCount / issuesExpected
+	if groupingFactor < 1 {
+		groupingFactor = 1
+	}
 
 	testID := uuid.New()
 	createdAt := time.Now().UTC().Truncate(time.Second)
@@ -509,11 +505,18 @@ func generateLargeTestResult(tb testing.TB, findingsCount int) testapi.TestResul
 		},
 	}
 
-	// Create test subject - use a simple approach
-	testSubject := testapi.TestSubject{}
-	// For simplicity, we'll create the subject manually in the JSON structure
+	var testSubject testapi.TestSubject
+	err := testSubject.FromDepGraphSubject(testapi.DepGraphSubject{
+		Locator: testapi.LocalPathLocator{
+			Paths: []string{"package-lock.json"},
+			Type:  testapi.LocalPath,
+		},
+		Type: testapi.DepGraphSubjectTypeDepGraph,
+	})
+	if err != nil {
+		tb.Fatalf("Failed to create test subject: %v", err)
+	}
 
-	// Generate findings with variety to create realistic grouping scenarios
 	findings := make([]testapi.FindingData, 0, findingsCount)
 
 	// Define realistic vulnerability templates based on actual Snyk data
@@ -611,132 +614,33 @@ func generateLargeTestResult(tb testing.TB, findingsCount int) testapi.TestResul
 
 	// Generate findings using templates with variations
 	for i := 0; i < findingsCount; i++ {
-		template := vulnTemplates[i%len(vulnTemplates)]
-		findingID := uuid.New()
+		// Group findings based on groupingFactor
+		// groupingFactor=2: findings 0,1 share key; 2,3 share key; etc.
+		// groupingFactor=3: findings 0,1,2 share key; 3,4,5 share key; etc.
+		groupID := i / groupingFactor
 
-		// Create variations to ensure some grouping but not complete duplication
-		var findingKey string
-		var vulnID string
-		if i%2 == 0 {
-			// Create unique findings (won't be grouped)
-			findingKey = fmt.Sprintf("%s-%d", template.id, i)
-			vulnID = fmt.Sprintf("%s-%d", template.id, i)
-		} else {
-			// Create findings that will be grouped together
-			groupID := i / 2 // Group every 2 findings together
-			findingKey = fmt.Sprintf("%s-group-%d", template.id, groupID)
-			vulnID = template.id
-		}
+		// Use the groupID to select base template, but make the vulnerability ID unique per group
+		// This ensures we get the expected number of issues in the SARIF output
+		baseTemplate := vulnTemplates[groupID%len(vulnTemplates)]
 
-		// Create problems
-		var problems []testapi.Problem
+		// Create a template with unique ID for this group
+		template := baseTemplate
+		template.id = fmt.Sprintf("%s-group-%d", baseTemplate.id, groupID)
+		findingKey := template.id
 
-		// Add Snyk vulnerability problem
-		if template.id != "" && !strings.Contains(template.id, "lic:") {
-			var snykVulnProblem testapi.Problem
-			var ecosystem testapi.SnykvulndbPackageEcosystem
-			err := ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
-				PackageManager: "npm",
-			})
-			if err != nil {
-				tb.Fatalf("Failed to create ecosystem: %v", err)
-			}
-
-			err = snykVulnProblem.FromSnykVulnProblem(testapi.SnykVulnProblem{
-				Id:                       vulnID,
-				Source:                   testapi.SnykVuln,
-				Severity:                 template.severity,
-				CvssBaseScore:            testapi.SnykvulndbCvssScore(template.cvssScore),
-				PackageName:              template.packageName,
-				PackageVersion:           fmt.Sprintf("1.%d.0", i%10),
-				IsFixable:                i%2 == 0, // 50% fixable
-				InitiallyFixedInVersions: []string{fmt.Sprintf("1.%d.1", i%10+1)},
-				Ecosystem:                ecosystem,
-			})
-			if err != nil {
-				tb.Fatalf("Failed to create Snyk vuln problem: %v", err)
-			}
-			problems = append(problems, snykVulnProblem)
-		} else if strings.Contains(template.id, "lic:") {
-			// Add license problem
-			var licenseProblem testapi.Problem
-			var ecosystem testapi.SnykvulndbPackageEcosystem
-			err := ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
-				PackageManager: "npm",
-			})
-			if err != nil {
-				tb.Fatalf("Failed to create ecosystem: %v", err)
-			}
-
-			err = licenseProblem.FromSnykLicenseProblem(testapi.SnykLicenseProblem{
-				Id:          vulnID,
-				Source:      testapi.SnykLicense,
-				Severity:    template.severity,
-				PackageName: template.packageName,
-				Ecosystem:   ecosystem,
-			})
-			if err != nil {
-				tb.Fatalf("Failed to create Snyk license problem: %v", err)
-			}
-			problems = append(problems, licenseProblem)
-		}
-
-		// Add CVE problem if available
-		if template.cveID != "" {
-			var cveProblem testapi.Problem
-			err := cveProblem.FromCveProblem(testapi.CveProblem{
-				Id:     template.cveID,
-				Source: testapi.Cve,
-			})
-			if err != nil {
-				tb.Fatalf("Failed to create CVE problem: %v", err)
-			}
-			problems = append(problems, cveProblem)
-		}
-
-		// Add CWE problem if available
-		if template.cweID != "" {
-			var cweProblem testapi.Problem
-			err := cweProblem.FromCweProblem(testapi.CweProblem{
-				Id:     template.cweID,
-				Source: testapi.Cwe,
-			})
-			if err != nil {
-				tb.Fatalf("Failed to create CWE problem: %v", err)
-			}
-			problems = append(problems, cweProblem)
-		}
+		// Create problems with the unique vulnerability ID
+		problems := createProblems(tb, template, i)
 
 		// Create package location
-		var packageLocation testapi.FindingLocation
-		err := packageLocation.FromPackageLocation(testapi.PackageLocation{
-			Package: testapi.Package{
-				Name:    template.packageName,
-				Version: fmt.Sprintf("1.%d.0", i%10),
-			},
-			Type: testapi.PackageLocationTypePackage,
-		})
-		if err != nil {
-			tb.Fatalf("Failed to create package location: %v", err)
-		}
+		packageVersion := fmt.Sprintf("1.%d.0", i%10)
+		packageLocation := createPackageLocation(tb, template.packageName, packageVersion)
 
 		// Create dependency path evidence
-		var depPathEvidence testapi.Evidence
-		err = depPathEvidence.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
-			Path: []testapi.Package{
-				{Name: "root-package", Version: "1.0.0"},
-				{Name: fmt.Sprintf("intermediate-%d", i%5), Version: fmt.Sprintf("2.%d.0", i%3)},
-				{Name: template.packageName, Version: fmt.Sprintf("1.%d.0", i%10)},
-			},
-			Source: testapi.DependencyPath,
-		})
-		if err != nil {
-			tb.Fatalf("Failed to create dependency path evidence: %v", err)
-		}
+		depPathEvidence := createDependencyPathEvidence(tb, template.packageName, packageVersion, i)
 
 		// Create finding attributes
 		findingAttrs := testapi.FindingAttributes{
-			CauseOfFailure: i%10 == 0, // 10% cause failure
+			CauseOfFailure: i%10 == 0,
 			Description:    fmt.Sprintf("%s (instance %d)", template.description, i),
 			Evidence:       []testapi.Evidence{depPathEvidence},
 			FindingType:    testapi.FindingTypeSca,
@@ -749,6 +653,7 @@ func generateLargeTestResult(tb testing.TB, findingsCount int) testapi.TestResul
 		}
 
 		// Create finding data
+		findingID := uuid.New()
 		findingDataType := testapi.Findings
 		findingData := testapi.FindingData{
 			Attributes: &findingAttrs,
@@ -827,4 +732,140 @@ func generateLargeTestResult(tb testing.TB, findingsCount int) testapi.TestResul
 	}
 
 	return results[0]
+}
+
+// createProblems creates the problem list for a finding based on the template.
+func createProblems(tb testing.TB, template struct {
+	id          string
+	title       string
+	description string
+	severity    testapi.Severity
+	cvssScore   float64
+	packageName string
+	cveID       string
+	cweID       string
+}, findingIndex int) []testapi.Problem {
+	tb.Helper()
+
+	var problems []testapi.Problem
+
+	// Add Snyk vulnerability or license problem
+	if template.id != "" && !strings.Contains(template.id, "lic:") {
+		var snykVulnProblem testapi.Problem
+		var ecosystem testapi.SnykvulndbPackageEcosystem
+		err := ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
+			PackageManager: "npm",
+		})
+		if err != nil {
+			tb.Fatalf("Failed to create ecosystem: %v", err)
+		}
+
+		isFixable := findingIndex%2 == 0
+		var fixedVersions []string
+		if isFixable {
+			fixedVersions = []string{fmt.Sprintf("1.%d.1", findingIndex%10+1)}
+		}
+
+		err = snykVulnProblem.FromSnykVulnProblem(testapi.SnykVulnProblem{
+			Id:                       template.id,
+			Source:                   testapi.SnykVuln,
+			Severity:                 template.severity,
+			CvssBaseScore:            testapi.SnykvulndbCvssScore(template.cvssScore),
+			PackageName:              template.packageName,
+			PackageVersion:           fmt.Sprintf("1.%d.0", findingIndex%10),
+			IsFixable:                isFixable,
+			InitiallyFixedInVersions: fixedVersions,
+			Ecosystem:                ecosystem,
+		})
+		if err != nil {
+			tb.Fatalf("Failed to create Snyk vuln problem: %v", err)
+		}
+		problems = append(problems, snykVulnProblem)
+	} else if strings.Contains(template.id, "lic:") {
+		var licenseProblem testapi.Problem
+		var ecosystem testapi.SnykvulndbPackageEcosystem
+		err := ecosystem.FromSnykvulndbBuildPackageEcosystem(testapi.SnykvulndbBuildPackageEcosystem{
+			PackageManager: "npm",
+		})
+		if err != nil {
+			tb.Fatalf("Failed to create ecosystem: %v", err)
+		}
+
+		err = licenseProblem.FromSnykLicenseProblem(testapi.SnykLicenseProblem{
+			Id:          template.id,
+			Source:      testapi.SnykLicense,
+			Severity:    template.severity,
+			PackageName: template.packageName,
+			Ecosystem:   ecosystem,
+		})
+		if err != nil {
+			tb.Fatalf("Failed to create Snyk license problem: %v", err)
+		}
+		problems = append(problems, licenseProblem)
+	}
+
+	// Add CVE problem if available
+	if template.cveID != "" {
+		var cveProblem testapi.Problem
+		err := cveProblem.FromCveProblem(testapi.CveProblem{
+			Id:     template.cveID,
+			Source: testapi.Cve,
+		})
+		if err != nil {
+			tb.Fatalf("Failed to create CVE problem: %v", err)
+		}
+		problems = append(problems, cveProblem)
+	}
+
+	// Add CWE problem if available
+	if template.cweID != "" {
+		var cweProblem testapi.Problem
+		err := cweProblem.FromCweProblem(testapi.CweProblem{
+			Id:     template.cweID,
+			Source: testapi.Cwe,
+		})
+		if err != nil {
+			tb.Fatalf("Failed to create CWE problem: %v", err)
+		}
+		problems = append(problems, cweProblem)
+	}
+
+	return problems
+}
+
+// createPackageLocation creates a package location for a finding.
+func createPackageLocation(tb testing.TB, packageName, packageVersion string) testapi.FindingLocation {
+	tb.Helper()
+
+	var packageLocation testapi.FindingLocation
+	err := packageLocation.FromPackageLocation(testapi.PackageLocation{
+		Package: testapi.Package{
+			Name:    packageName,
+			Version: packageVersion,
+		},
+		Type: testapi.PackageLocationTypePackage,
+	})
+	if err != nil {
+		tb.Fatalf("Failed to create package location: %v", err)
+	}
+	return packageLocation
+}
+
+// createDependencyPathEvidence creates dependency path evidence for a finding.
+func createDependencyPathEvidence(tb testing.TB, packageName, packageVersion string, findingIndex int) testapi.Evidence {
+	tb.Helper()
+
+	var depPathEvidence testapi.Evidence
+	err := depPathEvidence.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
+		Path: []testapi.Package{
+			{Name: "root-package", Version: "1.0.0"},
+			{Name: fmt.Sprintf("intermediate-%d", findingIndex%5), Version: fmt.Sprintf("2.%d.0", findingIndex%3)},
+			{Name: packageName, Version: packageVersion},
+		},
+		Source: testapi.DependencyPath,
+	})
+	if err != nil {
+		tb.Fatalf("Failed to create dependency path evidence: %v", err)
+	}
+	return depPathEvidence
 }
