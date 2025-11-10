@@ -26,8 +26,17 @@ type jsonTestResult struct {
 	BreachedPolicies  *testapi.PolicyRefSet           `json:"breachedPolicies,omitempty"`
 	EffectiveSummary  *testapi.FindingSummary         `json:"effectiveSummary,omitempty"`
 	RawSummary        *testapi.FindingSummary         `json:"rawSummary,omitempty"`
-	FindingsData      []testapi.FindingData           `json:"findings,omitempty"`
 	FindingsComplete  bool                            `json:"findingsComplete"`
+
+	// Optimized wire format: central problem store (optional, for serialization)
+	ProblemStore map[string]json.RawMessage `json:"problemStore,omitempty"`
+	ProblemRefs  map[string][]string        `json:"_problemRefs,omitempty"`
+
+	// Findings (problems removed when using problemStore)
+	FindingsData []testapi.FindingData `json:"findings,omitempty"`
+
+	// In-memory cache of full findings (not serialized, used after deserialization)
+	fullFindings []testapi.FindingData `json:"-"`
 }
 
 // GetTestID returns the test ID.
@@ -98,11 +107,27 @@ func (j *jsonTestResult) GetRawSummary() *testapi.FindingSummary {
 // Findings returns the stored findings without making any API calls.
 // The complete parameter indicates whether all findings were successfully fetched.
 func (j *jsonTestResult) Findings(ctx context.Context) (resultFindings []testapi.FindingData, complete bool, err error) {
+	// Return fullFindings if available (reconstructed from optimized format)
+	if j.fullFindings != nil {
+		return j.fullFindings, j.FindingsComplete, nil
+	}
+
+	// Optimized format: lazy reconstruction on first access
+	if len(j.ProblemStore) > 0 && len(j.ProblemRefs) > 0 {
+		if err := ReconstructFindings(j); err != nil {
+			return nil, false, fmt.Errorf("failed to reconstruct findings: %w", err)
+		}
+		return j.fullFindings, j.FindingsComplete, nil
+	}
+
+	// Old format: return as-is (mainly used in tests, no optimization needed)
 	return j.FindingsData, j.FindingsComplete, nil
 }
 
 // NewSerializableTestResult converts a testapi.TestResult to a JSON-serializable format.
-// It fetches findings from the source TestResult and stores them in the returned struct.
+// It fetches findings from the source TestResult and optimizes the format by:
+// 1. Extracting problems into a central problemStore
+// 2. Replacing problems in findings with references
 // The returned TestResult can be safely marshaled to JSON using json.Marshal.
 func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (testapi.TestResult, error) {
 	if tr == nil {
@@ -114,6 +139,9 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch findings: %w", err)
 	}
+
+	// Build optimized format
+	problemStore, problemRefs, optimizedFindings := BuildOptimizedFormat(findings)
 
 	// Create the JSON-serializable result
 	result := &jsonTestResult{
@@ -130,11 +158,66 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 		BreachedPolicies:  tr.GetBreachedPolicies(),
 		EffectiveSummary:  tr.GetEffectiveSummary(),
 		RawSummary:        tr.GetRawSummary(),
-		FindingsData:      findings,
 		FindingsComplete:  complete,
+		ProblemStore:      problemStore,
+		ProblemRefs:       problemRefs,
+		FindingsData:      optimizedFindings,
+		fullFindings:      findings, // Keep original for Findings() method
 	}
 
 	return result, nil
+}
+
+// BuildOptimizedFormat extracts problems into a central store and creates references.
+// Returns: problemStore, problemRefs, optimizedFindings
+func BuildOptimizedFormat(findings []testapi.FindingData) (map[string]json.RawMessage, map[string][]string, []testapi.FindingData) {
+	problemStore := make(map[string]json.RawMessage)
+	problemRefs := make(map[string][]string)
+	optimizedFindings := make([]testapi.FindingData, len(findings))
+	anonCounter := 0
+
+	for i, finding := range findings {
+		if finding.Attributes == nil || len(finding.Attributes.Problems) == 0 {
+			optimizedFindings[i] = finding
+			continue
+		}
+
+		// Extract problems and build references
+		refs := make([]string, 0, len(finding.Attributes.Problems))
+		for _, problem := range finding.Attributes.Problems {
+			problemID := problem.GetID()
+			if problemID == "" {
+				// No ID - assign unique key
+				problemID = fmt.Sprintf("_anon_%d", anonCounter)
+				anonCounter++
+			}
+
+			// Add to store if not present
+			if _, exists := problemStore[problemID]; !exists {
+				if problemJSON, err := json.Marshal(problem); err == nil {
+					problemStore[problemID] = problemJSON
+				}
+			}
+
+			refs = append(refs, problemID)
+		}
+
+		// Store refs for this finding
+		if finding.Id != nil && len(refs) > 0 {
+			problemRefs[finding.Id.String()] = refs
+		}
+
+		// Create finding without problems
+		optimizedFinding := finding
+		if optimizedFinding.Attributes != nil {
+			attrCopy := *optimizedFinding.Attributes
+			attrCopy.Problems = nil // Remove problems from wire format
+			optimizedFinding.Attributes = &attrCopy
+		}
+		optimizedFindings[i] = optimizedFinding
+	}
+
+	return problemStore, problemRefs, optimizedFindings
 }
 
 func NewSerializableTestResultFromBytes(jsonBytes []byte) ([]testapi.TestResult, error) {
@@ -145,9 +228,104 @@ func NewSerializableTestResultFromBytes(jsonBytes []byte) ([]testapi.TestResult,
 	}
 
 	testResults := make([]testapi.TestResult, len(tmp))
-	for i, r := range tmp {
-		testResults[i] = &r
+	for i := range tmp {
+		testResults[i] = &tmp[i]
 	}
 
 	return testResults, nil
+}
+
+// ReconstructFindings rebuilds full findings from problemStore and problemRefs.
+// It returns an error if any problems fail to reconstruct.
+// After successful reconstruction, it clears the optimized data to free memory.
+func ReconstructFindings(result *jsonTestResult) error {
+	if result == nil {
+		return fmt.Errorf("result cannot be nil")
+	}
+
+	// If already reconstructed, nothing to do
+	if result.fullFindings != nil {
+		return nil
+	}
+
+	fullFindings := make([]testapi.FindingData, len(result.FindingsData))
+	var reconstructionErrors []string
+
+	for i, finding := range result.FindingsData {
+		fullFinding := finding
+
+		// Reconstruct problems from references
+		if finding.Id != nil && finding.Attributes != nil {
+			if problemIDs, ok := result.ProblemRefs[finding.Id.String()]; ok {
+				problems := make([]testapi.Problem, 0, len(problemIDs))
+				for _, problemID := range problemIDs {
+					if problemJSON, exists := result.ProblemStore[problemID]; exists {
+						var problem testapi.Problem
+						if err := json.Unmarshal(problemJSON, &problem); err != nil {
+							reconstructionErrors = append(reconstructionErrors,
+								fmt.Sprintf("failed to unmarshal problem %s: %v", problemID, err))
+							continue
+						}
+						problems = append(problems, problem)
+					} else {
+						reconstructionErrors = append(reconstructionErrors,
+							fmt.Sprintf("problem %s referenced but not found in problemStore", problemID))
+					}
+				}
+
+				// Restore problems to attributes
+				attrCopy := *fullFinding.Attributes
+				attrCopy.Problems = problems
+				fullFinding.Attributes = &attrCopy
+			}
+		}
+
+		fullFindings[i] = fullFinding
+	}
+
+	// If there were errors, return them
+	if len(reconstructionErrors) > 0 {
+		return fmt.Errorf("reconstruction errors: %v", reconstructionErrors)
+	}
+
+	// Store reconstructed findings (with in-memory deduplication)
+	deduplicateProblemsInFindings(fullFindings)
+	result.fullFindings = fullFindings
+
+	// Clear optimized data to free memory (no longer needed)
+	result.ProblemStore = nil
+	result.ProblemRefs = nil
+	result.FindingsData = nil
+
+	return nil
+}
+
+// deduplicateProblemsInFindings deduplicates problems across findings in memory.
+func deduplicateProblemsInFindings(findings []testapi.FindingData) {
+	problemCache := make(map[string]*testapi.Problem)
+
+	for i := range findings {
+		if findings[i].Attributes == nil || len(findings[i].Attributes.Problems) == 0 {
+			continue
+		}
+
+		deduplicatedProblems := make([]testapi.Problem, 0, len(findings[i].Attributes.Problems))
+		for j := range findings[i].Attributes.Problems {
+			problem := &findings[i].Attributes.Problems[j]
+			problemID := problem.GetID()
+
+			if problemID != "" {
+				if cached, exists := problemCache[problemID]; exists {
+					deduplicatedProblems = append(deduplicatedProblems, *cached)
+				} else {
+					problemCache[problemID] = problem
+					deduplicatedProblems = append(deduplicatedProblems, *problem)
+				}
+			} else {
+				deduplicatedProblems = append(deduplicatedProblems, *problem)
+			}
+		}
+
+		findings[i].Attributes.Problems = deduplicatedProblems
+	}
 }
