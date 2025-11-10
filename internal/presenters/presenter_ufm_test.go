@@ -404,6 +404,31 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 		},
 	}
 
+	poolForHeapAndSys := func(done chan struct{}, maxHeapMB *uint64, maxSysMB *uint64, pollInterval time.Duration) {
+		ticker := time.NewTicker(pollInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				var m runtime.MemStats
+				runtime.ReadMemStats(&m)
+
+				heapMB := m.HeapInuse / 1024 / 1024
+				sysMB := m.Sys / 1024 / 1024
+
+				if heapMB > *maxHeapMB {
+					*maxHeapMB = heapMB
+				}
+				if sysMB > *maxSysMB {
+					*maxSysMB = sysMB
+				}
+			}
+		}
+	}
+
 	for _, bc := range benchmarkCases {
 		b.Run(bc.name, func(b *testing.B) {
 			testResult := generateLargeTestResult(b, bc.findingsCount, bc.issuesExpected)
@@ -414,36 +439,12 @@ func BenchmarkUfmPresenter_Sarif_MemoryUsage(b *testing.B) {
 
 			var maxHeapMB, maxSysMB uint64
 			done := make(chan struct{})
-
 			pollInterval := time.Millisecond * 100
 			if bc.findingsCount >= 1_000_000 {
 				pollInterval = time.Second
 			}
 
-			go func() {
-				ticker := time.NewTicker(pollInterval)
-				defer ticker.Stop()
-
-				for {
-					select {
-					case <-done:
-						return
-					case <-ticker.C:
-						var m runtime.MemStats
-						runtime.ReadMemStats(&m)
-
-						heapMB := m.HeapInuse / 1024 / 1024
-						sysMB := m.Sys / 1024 / 1024
-
-						if heapMB > maxHeapMB {
-							maxHeapMB = heapMB
-						}
-						if sysMB > maxSysMB {
-							maxSysMB = sysMB
-						}
-					}
-				}
-			}()
+			go poolForHeapAndSys(done, &maxHeapMB, &maxSysMB, pollInterval)
 
 			runtime.GC()
 			start := time.Now()
