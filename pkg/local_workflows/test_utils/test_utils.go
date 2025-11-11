@@ -156,6 +156,10 @@ func CheckCacheRespectOrgDependency(
 	mockEngine.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
 	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
+	// Default value functions may clone network access to ensure they use the correct API URL from cloned configs
+	// for this test we can just return the same network access object and ignore any configs set on it
+	mockNetworkAccess.EXPECT().Clone().Return(mockNetworkAccess).AnyTimes()
+	mockNetworkAccess.EXPECT().SetConfiguration(gomock.Any()).AnyTimes()
 
 	// Call the init function (which registers config defaults)
 	err := initFunc(mockEngine)

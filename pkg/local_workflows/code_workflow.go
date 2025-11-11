@@ -45,27 +45,23 @@ func GetCodeFlagSet() *pflag.FlagSet {
 // WORKFLOWID_CODE defines a new workflow identifier
 var WORKFLOWID_CODE = workflow.NewWorkflowIdentifier(codeWorkflowName)
 
-func getSastSettings(engine workflow.Engine) (*sast_contract.SastResponse, error) {
-	// TODO - This function uses the global config and network access, so will not respect values set in the default funcs' closures' (potentially cloned) configs.
-	config := engine.GetConfiguration()
-	org := config.GetString(configuration.ORGANIZATION)
-	client := engine.GetNetworkAccess().GetHttpClient()
-	url := config.GetString(configuration.API_URL)
-	apiClient := api.NewApi(url, client)
-	return apiClient.GetSastSettings(org)
-}
-
 func getSastSettingsConfig(engine workflow.Engine) configuration.DefaultValueFunction {
 	err := engine.GetConfiguration().AddKeyDependency(code_workflow.ConfigurationSastSettings, configuration.ORGANIZATION)
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for SAST settings.")
 	}
-	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
-		response, err := getSastSettings(engine)
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
+		url := c.GetString(configuration.API_URL)
+		client := localNetworkStack.GetHttpClient()
+		org := c.GetString(configuration.ORGANIZATION)
+		apiClient := api.NewApi(url, client)
+		response, err := apiClient.GetSastSettings(org)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
 			return nil, err
