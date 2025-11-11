@@ -263,6 +263,21 @@ func normalizeFixURIs(result map[string]interface{}) {
 	}
 }
 
+// normalizeSuppressions removes suppressions from results for consistent comparison
+func normalizeSuppressions(run map[string]interface{}) {
+	results, ok := run["results"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, resultInterface := range results {
+		result, ok := resultInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		delete(result, "suppressions")
+	}
+}
+
 // sortTags sorts tags alphabetically for consistent comparison
 func sortTags(tags []interface{}) {
 	sort.Slice(tags, func(i, j int) bool {
@@ -306,6 +321,9 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 		// Normalize help content (test data may have different vulnerability descriptions)
 		normalizeHelpContent(run)
+
+		// Normalize suppressions (not included in original SARIF)
+		normalizeSuppressions(run)
 	}
 
 	return sarif
@@ -367,6 +385,7 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			"SARIF output differs. Known gaps are normalized:\n"+
 				"- Automation ID: missing project name\n"+
 				"- Tool properties: missing artifactsScanned\n"+
+				"- Suppressions: not included in original SARIF\n"+
 				"- Fix packages: using vulnerable package instead of direct dependency\n"+
 				"- Package versions: may differ based on dependency path selection\n"+
 				"- Dependency path ordering: paths are sorted but may differ from original") {
