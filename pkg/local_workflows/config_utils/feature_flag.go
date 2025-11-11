@@ -15,14 +15,15 @@ func AddFeatureFlagToConfig(engine workflow.Engine, configKey string, featureFla
 		engine.GetLogger().Err(err).Msgf("Failed to add dependency for %s", configKey)
 	}
 
-	callback := func(_ configuration.Configuration, existingValue any) (any, error) {
-		// TODO - This function uses the outer (global) config and network access, so will not respect values set in the closures' (potentially cloned) configs.
+	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
-		httpClient := engine.GetNetworkAccess().GetHttpClient()
-		return GetFeatureFlagValue(featureFlagName, config, httpClient)
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
+		httpClient := localNetworkStack.GetHttpClient()
+		return GetFeatureFlagValue(featureFlagName, c, httpClient)
 	}
 
 	config.AddDefaultValue(configKey, callback)
