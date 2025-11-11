@@ -231,18 +231,28 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 	})
 
 	listenerReady := make(chan struct{})
+	serverStopped := make(chan error)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.NoError(t, err)
 	t.Cleanup(func() {
 		listener.Close()
+
+		// Now wait for server goroutine to exit
+		serveErr, ok := <-serverStopped
+		if !ok {
+			t.Log("server stopped channel closed before server stopped")
+			return
+		}
+		t.Log("server stopped", serveErr)
 	})
 
 	serverURL := fmt.Sprintf("https://localhost:%d/", listener.Addr().(*net.TCPAddr).Port) //nolint:errcheck //in this test, the type is clear
 	listen := func() {
+		defer close(serverStopped)  // Signal that server has stopped even if we don't write to the channel
 		listenerReady <- struct{}{} // Signal that listener is ready (using empty struct)
 		//nolint:gosec // client timeouts not a concern in tests
 		serveErr := http.ServeTLS(listener, nil, certFile.Name(), keyFile.Name())
-		t.Log("server stopped", serveErr)
+		serverStopped <- serveErr
 	}
 	go listen()
 
