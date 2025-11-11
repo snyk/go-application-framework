@@ -382,59 +382,84 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 		name          string
 		rule          string
 		baseDir       string
+		invalidRules  []string
 		expectedGlobs []string
 	}{
+		{
+			name:          "invalid rules are ignored",
+			rule:          ".",
+			baseDir:       "/tmp/test",
+			invalidRules:  []string{"."},
+			expectedGlobs: []string{},
+		},
+		{
+			name:         "handles special characters",
+			rule:         "*$",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				"/tmp/test/**/*\\$",
+				"/tmp/test/**/*\\$/**",
+			},
+		},
 		{
 			name:          "single slash has no effect",
 			rule:          "/",
 			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
 			expectedGlobs: []string{},
 		},
 		{
 			name:          "negated single slash has no effect",
 			rule:          "!/",
 			baseDir:       "/tmp/test",
+			invalidRules:  []string{},
 			expectedGlobs: []string{},
 		},
 		{
-			name:    "slash with star ignores everything",
-			rule:    "/*",
-			baseDir: "/tmp/test",
+			name:         "slash with star ignores everything",
+			rule:         "/*",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/*/**",
 				"/tmp/test/*",
 			},
 		},
 		{
-			name:    "root directory pattern",
-			rule:    "/foo",
-			baseDir: "/tmp/test",
+			name:         "root directory pattern",
+			rule:         "/foo",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/foo/**",
 				"/tmp/test/foo",
 			},
 		},
 		{
-			name:    "root directory with trailing slash",
-			rule:    "/foo/",
-			baseDir: "/tmp/test",
+			name:         "root directory with trailing slash",
+			rule:         "/foo/",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/foo/**",
 			},
 		},
 		{
-			name:    "non-root directory pattern",
-			rule:    "foo",
-			baseDir: "/tmp/test",
+			name:         "non-root directory pattern",
+			rule:         "foo",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/**/foo/**",
 				"/tmp/test/**/foo",
 			},
 		},
 		{
-			name:    "non-root directory with trailing slash",
-			rule:    "foo/",
-			baseDir: "/tmp/test",
+			name:         "non-root directory with trailing slash",
+			rule:         "foo/",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/**/foo/**",
 			},
@@ -443,7 +468,7 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir)
+			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, tc.invalidRules)
 			assert.ElementsMatch(t, tc.expectedGlobs, globs,
 				"Rule: %q, Expected: %v, Got: %v", tc.rule, tc.expectedGlobs, globs)
 		})
