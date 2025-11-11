@@ -270,6 +270,8 @@ components:
           $ref: "#/components/schemas/Platform"
         performance:
           $ref: "#/components/schemas/Performance"
+        configuration:
+          $ref: "#/components/schemas/Configuration"
 
     Target:
       type: object
@@ -309,6 +311,9 @@ components:
         code:
           type: string
           description: The HTTP specific error code.
+        context:
+          type: string
+          description: Additional context information about the error, such as the URL path or extension name.
 
     Application:
       type: object
@@ -364,6 +369,22 @@ components:
           type: string
         arch:
           type: string
+        os_name:
+          type: string
+          description: The actual operating system name (e.g., Ubuntu, macOS, Windows 11)
+        os_version:
+          type: string
+          description: The operating system version (e.g., 22.04, 14.2.1, 10.0.22621)
+        dependencies:
+          type: object
+          description: |
+            Dependency versions relevant to the platform.
+            
+            Key-value pairs where keys are dependency names (e.g., "glibc") and values are version strings.
+          additionalProperties:
+            type: string
+          example:
+            glibc: "2.31"
 
     Performance:
       type: object
@@ -374,6 +395,34 @@ components:
         duration_ms:
           type: integer
           format: int64
+        extension:
+          type: object
+          description: |
+            Custom performance metrics as key-value pairs.
+            
+            Keys are metric names (e.g., "code.test.durationMs", "code.test.custom.FilesUploadCount").
+            Values are metric values in milliseconds or counts.
+          additionalProperties:
+            type: integer
+            format: int64
+          example:
+            code.test.durationMs: 12
+            code.test.custom.FilesUploadCount: 1000
+            code.test.custom.FilesUploadDurationMs: 10
+
+    Configuration:
+      type: object
+      description: Configuration-related runtime information
+      properties:
+        http_proxy:
+          type: boolean
+          description: Indicates if HTTP proxy is configured and being used.
+        extra_ca_certificates:
+          type: boolean
+          description: Indicates if extra CA certificates are configured.
+        insecure_https:
+          type: boolean
+          description: Indicates if insecure HTTPS (skipping certificate verification) is enabled.
 
     JsonApi:
       type: object
