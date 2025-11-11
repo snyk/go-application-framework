@@ -121,10 +121,10 @@ type Issue interface {
 	// Returns nil if reachability information is not available.
 	GetReachability() *ReachabilityEvidence
 
-	// GetSuppression returns the suppression information for this issue.
-	// Indicates if the finding is suppressed by a policy decision.
-	// Returns nil if the issue is not suppressed.
-	GetSuppression() *Suppression
+	// GetIgnoreDetails returns the ignore/suppression details for this issue.
+	// This combines suppression information with linked policy data.
+	// Returns nil if the issue is not ignored/suppressed.
+	GetIgnoreDetails() IssueIgnoreDetails
 
 	// GetData returns metadata value for the given key (case-insensitive).
 	// Returns the value and true if found, nil and false otherwise.
@@ -421,9 +421,12 @@ func (i *issue) GetReachability() *ReachabilityEvidence {
 	return i.reachability
 }
 
-// GetSuppression returns the suppression information for this issue.
-func (i *issue) GetSuppression() *Suppression {
-	return i.suppression
+// GetIgnoreDetails returns the ignore/suppression details for this issue.
+func (i *issue) GetIgnoreDetails() IssueIgnoreDetails {
+	if i.suppression == nil {
+		return nil
+	}
+	return newIgnoreDetailsFromSuppression(i.suppression, i.findings)
 }
 
 // NewIssueFromFindings creates a single Issue instance from a group of related findings.
