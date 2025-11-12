@@ -347,57 +347,64 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			expectedSarifPath: "testdata/ufm/webgoat.sarif.json",
 			testResultPath:    "testdata/ufm/webgoat.testresult.json",
 		},
+		{
+			name:              "webgoat with suppression",
+			expectedSarifPath: "testdata/ufm/webgoat.ignore.sarif.json",
+			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
+		},
 	}
 
 	for _, tc := range testCases {
-		expectedSarifBytes, err := os.ReadFile(tc.expectedSarifPath)
-		assert.NoError(t, err)
+		t.Run(tc.name, func(t *testing.T) {
+			expectedSarifBytes, err := os.ReadFile(tc.expectedSarifPath)
+			assert.NoError(t, err)
 
-		testResultBytes, err := os.ReadFile(tc.testResultPath)
-		assert.NoError(t, err)
+			testResultBytes, err := os.ReadFile(tc.testResultPath)
+			assert.NoError(t, err)
 
-		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(testResult))
+			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+			assert.NoError(t, err)
+			assert.Equal(t, 1, len(testResult))
 
-		config := configuration.NewWithOpts()
+			config := configuration.NewWithOpts()
 
-		writer := &bytes.Buffer{}
+			writer := &bytes.Buffer{}
 
-		presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
-		err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
-		assert.NoError(t, err)
+			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+			err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
+			assert.NoError(t, err)
 
-		validateSarifData(t, writer.Bytes())
+			validateSarifData(t, writer.Bytes())
 
-		// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
-		expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
-		actualNormalized := normalizeSarifForComparison(t, writer.String())
+			// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
+			expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
+			actualNormalized := normalizeSarifForComparison(t, writer.String())
 
-		// Convert back to JSON for comparison
-		expectedJSON, err := json.MarshalIndent(expectedNormalized, "", "  ")
-		assert.NoError(t, err)
-		actualJSON, err := json.MarshalIndent(actualNormalized, "", "  ")
-		assert.NoError(t, err)
+			// Convert back to JSON for comparison
+			expectedJSON, err := json.MarshalIndent(expectedNormalized, "", "  ")
+			assert.NoError(t, err)
+			actualJSON, err := json.MarshalIndent(actualNormalized, "", "  ")
+			assert.NoError(t, err)
 
-		// Write to temp files for debugging if test fails
-		if !assert.JSONEq(t, string(expectedJSON), string(actualJSON),
-			"SARIF output differs. Known gaps are normalized:\n"+
-				"- Automation ID: missing project name\n"+
-				"- Tool properties: missing artifactsScanned\n"+
-				"- Suppressions: not included in original SARIF\n"+
-				"- Fix packages: using vulnerable package instead of direct dependency\n"+
-				"- Package versions: may differ based on dependency path selection\n"+
-				"- Dependency path ordering: paths are sorted but may differ from original") {
-			// Write files for debugging (best effort, ignore errors)
-			if err := os.WriteFile(fmt.Sprintf("/tmp/%s_expected_normalized.json", tc.name), expectedJSON, 0644); err != nil {
-				t.Logf("Failed to write expected output: %v", err)
+			// Write to temp files for debugging if test fails
+			if !assert.JSONEq(t, string(expectedJSON), string(actualJSON),
+				"SARIF output differs. Known gaps are normalized:\n"+
+					"- Automation ID: missing project name\n"+
+					"- Tool properties: missing artifactsScanned\n"+
+					"- Suppressions: not included in original SARIF\n"+
+					"- Fix packages: using vulnerable package instead of direct dependency\n"+
+					"- Package versions: may differ based on dependency path selection\n"+
+					"- Dependency path ordering: paths are sorted but may differ from original") {
+				// Write files for debugging (best effort, ignore errors)
+				if err := os.WriteFile(fmt.Sprintf("/tmp/%s_expected_normalized.json", tc.name), expectedJSON, 0644); err != nil {
+					t.Logf("Failed to write expected output: %v", err)
+				}
+				if err := os.WriteFile(fmt.Sprintf("/tmp/%s_actual_normalized.json", tc.name), actualJSON, 0644); err != nil {
+					t.Logf("Failed to write actual output: %v", err)
+				}
+				t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
 			}
-			if err := os.WriteFile(fmt.Sprintf("/tmp/%s_actual_normalized.json", tc.name), actualJSON, 0644); err != nil {
-				t.Logf("Failed to write actual output: %v", err)
-			}
-			t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
-		}
+		})
 	}
 }
 
