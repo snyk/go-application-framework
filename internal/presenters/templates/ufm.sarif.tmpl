@@ -123,7 +123,10 @@
 					{{- if $ignoreDetails }},
 					"suppressions": [
 						{
-							"kind": "external",
+							{{- $policyID := $ignoreDetails.GetPolicyID }}
+							{{- if $policyID }}
+							"guid": {{ getQuotedString $policyID }},
+							{{- end }}
 							{{- $status := printf "%s" $ignoreDetails.GetStatus }}
 							{{- if eq $status "ignored" }}
 							"status": "accepted"
@@ -133,15 +136,37 @@
 							"status": "rejected"
 							{{- else }}
 							"status": "accepted"
-							{{- end }}
+							{{- end }},
 							{{- $justification := $ignoreDetails.GetJustification }}
-							{{- if $justification }},
-							"justification": {{ getQuotedString $justification }}
+							{{- if $justification }}
+							"justification": {{ getQuotedString $justification }},
 							{{- end }}
+							"kind": "external"
+							{{- $reasonType := $ignoreDetails.GetIgnoreReasonType }}
+							{{- $createdAt := $ignoreDetails.GetCreatedAt }}
 							{{- $expiresAt := $ignoreDetails.GetExpiresAt }}
-							{{- if $expiresAt }},
+							{{- $ignoredBy := $ignoreDetails.GetIgnoredBy }}
+							{{- if or $reasonType $createdAt $expiresAt $ignoredBy }},
 							"properties": {
-								"expiration": "{{ $expiresAt.Format "2006-01-02T15:04:05Z07:00" }}"
+								{{- if $reasonType }}
+								"category": {{ getQuotedString (printf "%v" $reasonType) }}{{if or $expiresAt $createdAt $ignoredBy}},{{end}}
+								{{- end }}
+								{{- if $expiresAt }}
+								"expiration": "{{ $expiresAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if or $createdAt $ignoredBy}},{{end}}
+								{{- end }}
+								{{- if $createdAt }}
+								"ignoredOn": "{{ $createdAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if $ignoredBy}},{{end}}
+								{{- end }}
+								{{- if $ignoredBy }}
+								"ignoredBy": {
+									"name": {{ getQuotedString $ignoredBy.Name }},
+									{{- if $ignoredBy.Email }}
+									"email": {{ getQuotedString $ignoredBy.Email }}
+									{{- else }}
+									"email": ""
+									{{- end }}
+								}
+								{{- end }}
 							}
 							{{- end }}
 						}

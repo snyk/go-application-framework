@@ -60,6 +60,9 @@ type IssueIgnoreDetails interface {
 
 	// GetDisregardIfFixable returns whether to disregard if fixable from the policy action.
 	GetDisregardIfFixable() *bool
+
+	// GetIgnoredBy returns the user who created the ignore action.
+	GetIgnoredBy() *IgnoredBy
 }
 
 // issueIgnoreDetailsImpl is the concrete implementation of IssueIgnoreDetails.
@@ -166,6 +169,13 @@ func (id *issueIgnoreDetailsImpl) GetDisregardIfFixable() *bool {
 		return nil
 	}
 	return id.ignoreData.Ignore.DisregardIfFixable
+}
+
+func (id *issueIgnoreDetailsImpl) GetIgnoredBy() *IgnoredBy {
+	if id.ignoreData == nil {
+		return nil
+	}
+	return id.ignoreData.Ignore.IgnoredBy
 }
 
 // newIgnoreDetailsFromSuppression creates an IssueIgnoreDetails from suppression data and findings.
