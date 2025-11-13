@@ -242,7 +242,12 @@ func (g *idBasedIssueGrouper) extractProblemID(finding *FindingData) string {
 		}
 
 		// Check for Snyk ID pattern (case-insensitive, without allocations)
-		if isSnykID(id) {
+		discriminator, err := problem.Discriminator()
+		if err != nil {
+			continue
+		}
+
+		if startsWithSnyk(discriminator) {
 			return id
 		}
 
@@ -255,9 +260,9 @@ func (g *idBasedIssueGrouper) extractProblemID(finding *FindingData) string {
 	return fallbackID
 }
 
-// isSnykID checks if an ID starts with "snyk" (case-insensitive)
-func isSnykID(id string) bool {
-	if len(id) < 4 {
+// startsWithSnyk checks if an ID starts with "snyk" (case-insensitive)
+func startsWithSnyk(id string) bool {
+	if len(id) < 5 {
 		return false
 	}
 
@@ -265,7 +270,8 @@ func isSnykID(id string) bool {
 	return (id[0] == 's' || id[0] == 'S') &&
 		(id[1] == 'n' || id[1] == 'N') &&
 		(id[2] == 'y' || id[2] == 'Y') &&
-		(id[3] == 'k' || id[3] == 'K')
+		(id[3] == 'k' || id[3] == 'K') &&
+		(id[4] == '_')
 }
 
 func (g *idBasedIssueGrouper) getUniqueKey(finding *FindingData) string {
@@ -628,7 +634,7 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 		}
 
 		// Fallback to first problem if no snyk_vuln or snyk_license found
-		if b.primaryProblem == nil && discriminator != "cve" && discriminator != "cwe" {
+		if b.primaryProblem == nil && startsWithSnyk(discriminator) {
 			b.primaryProblem = &problem
 		}
 	}
@@ -657,7 +663,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 		b.severity = string(vulnProblem.Severity)
 	}
 	if b.cvssScore == 0.0 {
-		b.cvssScore = float32(vulnProblem.CvssBaseScore)
+		b.cvssScore = vulnProblem.CvssBaseScore
 	}
 	if !b.isFixable {
 		b.isFixable = vulnProblem.IsFixable
