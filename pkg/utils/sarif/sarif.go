@@ -355,7 +355,12 @@ func appendDependencyPathsSummaryFromPackages(sb *strings.Builder, paths [][]tes
 	// Format first package
 	sb.WriteString(firstPath[0].Name)
 	sb.WriteByte('@')
-	sb.WriteString(firstPath[0].Version)
+
+	version := firstPath[0].Version
+	if version == "" {
+		version = "*"
+	}
+	sb.WriteString(version)
 
 	if len(firstPath) > 2 {
 		sb.WriteString(", ")
@@ -384,7 +389,11 @@ func appendDetailedPathsFromPackages(sb *strings.Builder, paths [][]testapi.Pack
 			}
 			sb.WriteString(pkg.Name)
 			sb.WriteByte('@')
-			sb.WriteString(pkg.Version)
+			if pkg.Version == "" {
+				sb.WriteString("*")
+			} else {
+				sb.WriteString(pkg.Version)
+			}
 		}
 		sb.WriteByte('\n')
 	}

@@ -200,7 +200,7 @@
 				"automationDetails": {
 					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") (printf "%s" $findingType) }}"
 				}
-			}{{if lt $findingTypeIndex $findingTypesSize}},{{end}}{{- end}}	
+			}{{if or (lt $findingTypeIndex $findingTypesSize) (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}	
 		{{- end}}
 		]
 	}
