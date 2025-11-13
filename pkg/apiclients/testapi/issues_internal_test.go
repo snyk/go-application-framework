@@ -10,21 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsSnykID(t *testing.T) {
+func TestStartsWithSnyk(t *testing.T) {
 	tests := []struct {
 		name     string
 		id       string
 		expected bool
 	}{
 		// Valid Snyk IDs
-		{"uppercase with hyphen", "SNYK-JS-LODASH-590103", true},
-		{"lowercase with hyphen", "snyk-js-lodash-590103", true},
-		{"mixed case with hyphen", "Snyk-JS-LODASH-590103", true},
-		{"uppercase with colon", "SNYK:LIC:NPM:PACKAGE:MPL-2.0", true},
-		{"lowercase with colon", "snyk:lic:npm:shescape:MPL-2.0", true},
-		{"mixed case with colon", "Snyk:lic:npm:package:MIT", true},
-		{"just snyk", "snyk", true},
-		{"snyk with no delimiter", "snyktest", true},
+		{"vuln", "snyk_vuln", true},
+		{"license", "snyk_license", true},
 
 		// Invalid/non-Snyk IDs
 		{"CVE", "CVE-2021-1234", false},
@@ -38,8 +32,8 @@ func TestIsSnykID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isSnykID(tt.id)
-			assert.Equal(t, tt.expected, result, "isSnykID(%q) = %v, want %v", tt.id, result, tt.expected)
+			result := startsWithSnyk(tt.id)
+			assert.Equal(t, tt.expected, result, "startsWithSnyk(%q) = %v, want %v", tt.id, result, tt.expected)
 		})
 	}
 }
@@ -47,7 +41,7 @@ func TestIsSnykID(t *testing.T) {
 func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 	grouper := &idBasedIssueGrouper{}
 
-	t.Run("prefers SNYK- ID over CVE", func(t *testing.T) {
+	t.Run("prefers SNYK_ ID over CVE", func(t *testing.T) {
 		finding := &FindingData{
 			Attributes: &FindingAttributes{
 				FindingType: FindingTypeSca,
@@ -115,13 +109,13 @@ func TestIdBasedIssueGrouper_ExtractProblemID(t *testing.T) {
 				FindingType: FindingTypeSca,
 				Problems: []Problem{
 					createProblem(t, "CVE-2021-1234", "cve"),
-					createProblem(t, "Snyk-JS-LODASH-590103", "snyk_vuln"),
+					createProblem(t, "SNYK-JS-LODASH-590103", "snyk_vuln"),
 				},
 			},
 		}
 
 		id := grouper.extractProblemID(finding)
-		assert.Equal(t, "Snyk-JS-LODASH-590103", id)
+		assert.Equal(t, "SNYK-JS-LODASH-590103", id)
 	})
 
 	t.Run("returns empty string when no problems", func(t *testing.T) {
