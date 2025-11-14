@@ -28,38 +28,14 @@ type IssueIgnoreDetails interface {
 	GetPath() *[]string
 
 	// GetSkipIfFixable returns whether to skip the suppression if a fix is available.
-	GetSkipIfFixable() *bool
-
-	// === Policy Information ===
-
-	// IsLocalPolicy returns true if this is a local policy, false if managed.
-	// Returns nil if policy type cannot be determined.
-	IsLocalPolicy() *bool
+	SkipIfFixable() *bool
 
 	// GetPolicyID returns the managed policy ID if this is a managed policy.
 	// Returns nil for local policies or if no policy is associated.
 	GetPolicyID() *string
 
-	// === Ignore Action Details ===
-	// These methods return data from the expanded policy ignore action if available.
-
-	// GetIgnoreReason returns the reason for ignoring from the policy action.
-	GetIgnoreReason() string
-
-	// GetIgnoreSource returns the source of the ignore action (cli, web, etc.).
-	GetIgnoreSource() string
-
 	// GetIgnoreReasonType returns the type/category of the ignore reason.
-	GetIgnoreReasonType() *IgnoreDetailsReasonType
-
-	// GetIgnoreCreated returns when the ignore was created from the policy action.
-	GetIgnoreCreated() *time.Time
-
-	// GetIgnoreExpires returns when the ignore expires from the policy action.
-	GetIgnoreExpires() *time.Time
-
-	// GetDisregardIfFixable returns whether to disregard if fixable from the policy action.
-	GetDisregardIfFixable() *bool
+	GetIgnoreReasonType() string
 
 	// GetIgnoredBy returns the user who created the ignore action.
 	GetIgnoredBy() *IgnoredBy
@@ -67,10 +43,9 @@ type IssueIgnoreDetails interface {
 
 // issueIgnoreDetailsImpl is the concrete implementation of IssueIgnoreDetails.
 type issueIgnoreDetailsImpl struct {
-	suppression   *Suppression
-	isLocalPolicy *bool
-	policyID      *string
-	ignoreData    *Ignore
+	suppression *Suppression
+	policyID    *string
+	ignoreData  *Ignore
 }
 
 // === Suppression Status Methods ===
@@ -110,7 +85,7 @@ func (id *issueIgnoreDetailsImpl) GetPath() *[]string {
 	return id.suppression.Path
 }
 
-func (id *issueIgnoreDetailsImpl) GetSkipIfFixable() *bool {
+func (id *issueIgnoreDetailsImpl) SkipIfFixable() *bool {
 	if id.suppression == nil {
 		return nil
 	}
@@ -118,10 +93,6 @@ func (id *issueIgnoreDetailsImpl) GetSkipIfFixable() *bool {
 }
 
 // === Policy Information Methods ===
-
-func (id *issueIgnoreDetailsImpl) IsLocalPolicy() *bool {
-	return id.isLocalPolicy
-}
 
 func (id *issueIgnoreDetailsImpl) GetPolicyID() *string {
 	return id.policyID
@@ -143,32 +114,11 @@ func (id *issueIgnoreDetailsImpl) GetIgnoreSource() string {
 	return id.ignoreData.Ignore.Source
 }
 
-func (id *issueIgnoreDetailsImpl) GetIgnoreReasonType() *IgnoreDetailsReasonType {
-	if id.ignoreData == nil {
-		return nil
+func (id *issueIgnoreDetailsImpl) GetIgnoreReasonType() string {
+	if id.ignoreData == nil || id.ignoreData.Ignore.ReasonType == nil {
+		return ""
 	}
-	return id.ignoreData.Ignore.ReasonType
-}
-
-func (id *issueIgnoreDetailsImpl) GetIgnoreCreated() *time.Time {
-	if id.ignoreData == nil {
-		return nil
-	}
-	return id.ignoreData.Ignore.Created
-}
-
-func (id *issueIgnoreDetailsImpl) GetIgnoreExpires() *time.Time {
-	if id.ignoreData == nil {
-		return nil
-	}
-	return id.ignoreData.Ignore.Expires
-}
-
-func (id *issueIgnoreDetailsImpl) GetDisregardIfFixable() *bool {
-	if id.ignoreData == nil {
-		return nil
-	}
-	return id.ignoreData.Ignore.DisregardIfFixable
+	return string(*id.ignoreData.Ignore.ReasonType)
 }
 
 func (id *issueIgnoreDetailsImpl) GetIgnoredBy() *IgnoredBy {
@@ -193,25 +143,18 @@ func newIgnoreDetailsFromSuppression(suppression *Suppression, findings []*Findi
 		// Determine policy type and ID by checking the structure
 		// PolicyRef is a union of either a string (local) or an object with ID (managed)
 
-		// First, try as a string (local policy)
-		if localRef, err := suppression.Policy.AsPolicyRef0(); err == nil && localRef == PolicyRef0LocalPolicy {
-			// It's a local policy
-			isLocal := true
-			result.isLocalPolicy = &isLocal
-		} else {
+		if localRef, err := suppression.Policy.AsPolicyRef0(); !(err == nil && localRef == PolicyRef0LocalPolicy) {
 			// Try as a managed policy (has ID field)
 			if managedRef, err := suppression.Policy.AsManagedPolicyRef(); err == nil && managedRef.Id != uuid.Nil {
 				// It's a managed policy with a valid ID
-				isLocal := false
-				result.isLocalPolicy = &isLocal
 				idStr := managedRef.Id.String()
 				result.policyID = &idStr
+
+				// Try to find the matching expanded policy data in findings
+				result.ignoreData = findMatchingIgnoreData(suppression.Policy, findings)
 			}
 			// If both fail, policy type cannot be determined (isLocalPolicy remains nil)
 		}
-
-		// Try to find the matching expanded policy data in findings
-		result.ignoreData = findMatchingIgnoreData(suppression.Policy, findings)
 	}
 
 	return result
@@ -223,11 +166,11 @@ func findMatchingIgnoreData(policyRef *PolicyRef, findings []*FindingData) *Igno
 		return nil
 	}
 
-	policyIDToMatch, isLocalPolicy := extractPolicyTypeFromRef(policyRef)
+	policyIDToMatch := extractPolicyTypeFromRef(policyRef)
 
 	// Search through findings for matching policy
 	for _, finding := range findings {
-		if ignoreAction := searchFindingForIgnoreAction(finding, policyIDToMatch, isLocalPolicy); ignoreAction != nil {
+		if ignoreAction := searchFindingForIgnoreAction(finding, policyIDToMatch); ignoreAction != nil {
 			return ignoreAction
 		}
 	}
@@ -236,23 +179,18 @@ func findMatchingIgnoreData(policyRef *PolicyRef, findings []*FindingData) *Igno
 }
 
 // extractPolicyTypeFromRef determines if a PolicyRef is local or managed and returns the policy ID.
-func extractPolicyTypeFromRef(policyRef *PolicyRef) (*string, bool) {
-	// First, try as a string (local policy)
-	if localRef, err := policyRef.AsPolicyRef0(); err == nil && localRef == PolicyRef0LocalPolicy {
-		return nil, true
-	}
-
+func extractPolicyTypeFromRef(policyRef *PolicyRef) *string {
 	// Try as a managed policy (has ID field)
 	if managedRef, err := policyRef.AsManagedPolicyRef(); err == nil && managedRef.Id != uuid.Nil {
 		idStr := managedRef.Id.String()
-		return &idStr, false
+		return &idStr
 	}
 
-	return nil, false
+	return nil
 }
 
 // searchFindingForIgnoreAction searches a finding for a matching ignore action.
-func searchFindingForIgnoreAction(finding *FindingData, policyIDToMatch *string, isLocalPolicy bool) *Ignore {
+func searchFindingForIgnoreAction(finding *FindingData, policyIDToMatch *string) *Ignore {
 	if finding.Relationships == nil || finding.Relationships.Policy == nil {
 		return nil
 	}
@@ -262,19 +200,14 @@ func searchFindingForIgnoreAction(finding *FindingData, policyIDToMatch *string,
 		return nil
 	}
 
-	// For managed policies, match the policy relationship ID
-	if policyIDToMatch != nil && policyRel.Data.Id.String() != *policyIDToMatch {
-		return nil // This relationship is for a different policy
-	}
-
 	// Look for Ignore action in the policy attributes
-	return findIgnoreActionInPolicies(policyRel.Data.Attributes.Policies, policyIDToMatch, isLocalPolicy)
+	return findIgnoreActionInPolicies(policyRel.Data.Attributes.Policies, policyIDToMatch)
 }
 
 // findIgnoreActionInPolicies searches for an ignore action in a list of policies.
-func findIgnoreActionInPolicies(policies []Policy, policyIDToMatch *string, isLocalPolicy bool) *Ignore {
+func findIgnoreActionInPolicies(policies []Policy, policyIDToMatch *string) *Ignore {
 	for _, policy := range policies {
-		if ignoreAction := extractIgnoreActionFromPolicy(policy, policyIDToMatch, isLocalPolicy); ignoreAction != nil {
+		if ignoreAction := extractIgnoreActionFromPolicy(policy, policyIDToMatch); ignoreAction != nil {
 			return ignoreAction
 		}
 	}
@@ -282,7 +215,7 @@ func findIgnoreActionInPolicies(policies []Policy, policyIDToMatch *string, isLo
 }
 
 // extractIgnoreActionFromPolicy extracts an ignore action from a policy if it matches criteria.
-func extractIgnoreActionFromPolicy(policy Policy, policyIDToMatch *string, isLocalPolicy bool) *Ignore {
+func extractIgnoreActionFromPolicy(policy Policy, policyIDToMatch *string) *Ignore {
 	// Check discriminator first to ensure it's an ignore action
 	discriminator, err := policy.AppliedPolicy.Discriminator()
 	if err != nil || discriminator != "ignore" {
@@ -294,16 +227,9 @@ func extractIgnoreActionFromPolicy(policy Policy, policyIDToMatch *string, isLoc
 		return nil
 	}
 
-	// For local policies, we found an ignore action in a local policy context
-	if isLocalPolicy {
-		return &ignoreAction
-	}
-
 	// For managed policies, verify the PolicyRef in the Ignore action matches
-	if policyIDToMatch != nil && ignoreAction.PolicyRef != nil {
-		if ignoreAction.PolicyRef.Id.String() == *policyIDToMatch {
-			return &ignoreAction
-		}
+	if policyIDToMatch != nil && policy.Id.String() == *policyIDToMatch {
+		return &ignoreAction
 	}
 
 	return nil

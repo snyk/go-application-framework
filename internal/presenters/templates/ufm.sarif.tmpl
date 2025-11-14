@@ -149,7 +149,7 @@
 							{{- if or $reasonType $createdAt $expiresAt $ignoredBy }},
 							"properties": {
 								{{- if $reasonType }}
-								"category": {{ getQuotedString (printf "%v" $reasonType) }}{{if or $expiresAt $createdAt $ignoredBy}},{{end}}
+								"category": {{ getQuotedString $reasonType }}{{if or $expiresAt $createdAt $ignoredBy}},{{end}}
 								{{- end }}
 								{{- if $expiresAt }}
 								"expiration": "{{ $expiresAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if or $createdAt $ignoredBy}},{{end}}
