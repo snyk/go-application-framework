@@ -334,8 +334,8 @@ type issue struct {
 	sourceLocations   []SourceLocation
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
-	suppression       *Suppression
 	metadata          map[string]interface{} // case-insensitive key storage (lowercase keys)
+	ignoreDetail      IssueIgnoreDetails
 }
 
 // GetFindings returns all findings that are part of this issue.
@@ -423,10 +423,7 @@ func (i *issue) GetReachability() *ReachabilityEvidence {
 
 // GetIgnoreDetails returns the ignore/suppression details for this issue.
 func (i *issue) GetIgnoreDetails() IssueIgnoreDetails {
-	if i.suppression == nil {
-		return nil
-	}
-	return newIgnoreDetailsFromSuppression(i.suppression, i.findings)
+	return i.ignoreDetail
 }
 
 // NewIssueFromFindings creates a single Issue instance from a group of related findings.
@@ -471,8 +468,8 @@ type issueBuilder struct {
 	sourceLocations   []SourceLocation
 	riskScore         uint16
 	reachability      *ReachabilityEvidence
-	suppression       *Suppression
 	findings          []*FindingData
+	ignoreDetails     []IssueIgnoreDetails
 }
 
 // processFindings extracts data from all findings
@@ -489,18 +486,27 @@ func (b *issueBuilder) processFindings(findings []*FindingData) {
 
 // processFinding extracts data from a single finding
 func (b *issueBuilder) processFinding(finding *FindingData) {
+	// ignore all data if the given finding is ignored
+	ignoreDetails := finding.GetIgnoreDetails()
+	b.ignoreDetails = append(b.ignoreDetails, ignoreDetails)
+
+	// skipping the details of an ignored finding seems reasonable but currently breaks tests, which is why it is for now commented
+	//if ignoreDetails != nil && ignoreDetails.IsActive() {
+	//	return
+	//}
+
 	b.setBasicInfo(finding)
 	for i := range finding.Attributes.Problems {
 		b.allProblems = append(b.allProblems, &finding.Attributes.Problems[i])
 	}
+
+	b.extractPackageInfo(finding)
+	b.processProblems(finding)
 	b.extractSourceLocations(finding)
 	b.extractSeverityAndRisk(finding)
 	b.extractEffectiveSeverity(finding)
 	b.extractReachability(finding)
-	b.extractSuppression(finding)
 	b.extractDependencyPaths(finding)
-	b.extractPackageInfo(finding)
-	b.processProblems(finding)
 }
 
 // setBasicInfo sets finding type, title, and description from the first finding
@@ -566,16 +572,6 @@ func (b *issueBuilder) extractReachability(finding *FindingData) {
 			b.reachability = &reachEv
 			break
 		}
-	}
-}
-
-// extractSuppression extracts suppression information
-func (b *issueBuilder) extractSuppression(finding *FindingData) {
-	if b.suppression != nil {
-		return
-	}
-	if finding.Attributes.Suppression != nil {
-		b.suppression = finding.Attributes.Suppression
 	}
 }
 
@@ -766,6 +762,7 @@ func (b *issueBuilder) deduplicate() {
 // build constructs the final Issue from collected data
 func (b *issueBuilder) build() *issue {
 	metadata := b.buildMetadata()
+	activeIgnoreDetail := determineActiveIgnoreDetail(b.ignoreDetails)
 
 	return &issue{
 		findings:          b.findings,
@@ -783,9 +780,27 @@ func (b *issueBuilder) build() *issue {
 		sourceLocations:   b.sourceLocations,
 		riskScore:         b.riskScore,
 		reachability:      b.reachability,
-		suppression:       b.suppression,
 		metadata:          metadata,
+		ignoreDetail:      activeIgnoreDetail,
 	}
+}
+
+func determineActiveIgnoreDetail(ignoreDetails []IssueIgnoreDetails) IssueIgnoreDetails {
+	activeIgnores := 0
+	var firstIgnoreDetail IssueIgnoreDetails
+	for _, detail := range ignoreDetails {
+		if detail != nil && detail.IsActive() {
+			firstIgnoreDetail = detail
+			activeIgnores++
+		}
+	}
+
+	// if all findings are ignored, return the first ignore details
+	if activeIgnores == len(ignoreDetails) {
+		return firstIgnoreDetail
+	}
+
+	return nil
 }
 
 // buildMetadata constructs the metadata map
