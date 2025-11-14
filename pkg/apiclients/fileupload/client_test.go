@@ -126,18 +126,16 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 	t.Run("error handling with better context", func(t *testing.T) {
 		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision.LoadedFile{}, allowList, nil)
 
-		nonexistentPath := filepath.Join(string(filepath.Separator), "nonexistent", "file.go")
-		anotherMissingPath := filepath.Join(string(filepath.Separator), "another", "missing", "path.txt")
 		paths := []string{
-			nonexistentPath,
-			anotherMissingPath,
+			"/nonexistent/file.go",
+			"/another/missing/path.txt",
 		}
 
 		_, err := client.CreateRevisionFromPaths(ctx, paths, fileupload.UploadOptions{})
 		require.Error(t, err)
 		var fileAccessErr *uploadrevision.FileAccessError
 		assert.ErrorAs(t, err, &fileAccessErr)
-		assert.Equal(t, nonexistentPath, fileAccessErr.FilePath)
+		assert.Equal(t, "/nonexistent/file.go", fileAccessErr.FilePath)
 		assert.ErrorContains(t, fileAccessErr.Err, "no such file or directory")
 	})
 }
