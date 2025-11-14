@@ -456,16 +456,9 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 		return sarif
 	}
 
-	// TODO: preserve SARIF runs even if there are no findings
-	filteredRuns := make([]interface{}, 0)
 	for _, runInterface := range runs {
 		run, ok := runInterface.(map[string]interface{})
 		if !ok {
-			continue
-		}
-
-		results, ok := run["results"].([]interface{})
-		if !ok || len(results) == 0 {
 			continue
 		}
 
@@ -483,11 +476,8 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 		// Normalize suppressions (not included in original SARIF)
 		normalizeSuppressions(run)
-
-		filteredRuns = append(filteredRuns, run)
 	}
 
-	sarif["runs"] = filteredRuns
 	return sarif
 }
 

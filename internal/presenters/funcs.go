@@ -401,7 +401,13 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 		}
 		findingTypes[findings.Attributes.FindingType] = true
 	}
-	return slices.Collect(maps.Keys(findingTypes))
+
+	findingTypesList := slices.Collect(maps.Keys(findingTypes))
+	if len(findingTypesList) == 0 {
+		return []testapi.FindingType{"no findings type found"}
+	}
+
+	return findingTypesList
 }
 
 // getManifestPathFromTestResult extracts the manifest file path from test result
