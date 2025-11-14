@@ -19,6 +19,16 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
 )
 
+var mainpath = filepath.Join("src", "main.go")
+var utilspath = filepath.Join("src", "utils.go")
+var helperpath = filepath.Join("src", "utils", "helper.go")
+var docpath = filepath.Join("docs", "README.md")
+var gomodpath = filepath.Join("src", "go.mod")
+var scriptpath = filepath.Join("src", "script.js")
+var packagelockpath = filepath.Join("src", "package.json")
+var nonexistpath = filepath.Join("nonexistent", "file.go")
+var missingpath = filepath.Join("another", "missing", "path.txt")
+
 // CreateTmpFiles is an utility function used to create temporary files in tests.
 func createTmpFiles(t *testing.T, files []uploadrevision.LoadedFile) (dir *os.File) {
 	t.Helper()
@@ -75,8 +85,8 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 
 	t.Run("mixed files and directories", func(t *testing.T) {
 		allFiles := []uploadrevision.LoadedFile{
-			{Path: "src/main.go", Content: "package main"},
-			{Path: "src/utils.go", Content: "package utils"},
+			{Path: mainpath, Content: "package main"},
+			{Path: utilspath, Content: "package utils"},
 			{Path: "config.yaml", Content: "version: 1"},
 			{Path: "README.md", Content: "# Project"},
 		}
@@ -107,8 +117,8 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 
 	t.Run("get filters error", func(t *testing.T) {
 		allFiles := []uploadrevision.LoadedFile{
-			{Path: "src/main.go", Content: "package main"},
-			{Path: "src/utils.go", Content: "package utils"},
+			{Path: mainpath, Content: "package main"},
+			{Path: utilspath, Content: "package utils"},
 			{Path: "config.yaml", Content: "version: 1"},
 			{Path: "README.md", Content: "# Project"},
 		}
@@ -128,15 +138,15 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision.LoadedFile{}, allowList, nil)
 
 		paths := []string{
-			"/nonexistent/file.go",
-			"/another/missing/path.txt",
+			nonexistpath,
+			missingpath,
 		}
 
 		_, err := client.CreateRevisionFromPaths(ctx, paths, fileupload.UploadOptions{})
 		require.Error(t, err)
 		var fileAccessErr *uploadrevision.FileAccessError
 		assert.ErrorAs(t, err, &fileAccessErr)
-		assert.Equal(t, "/nonexistent/file.go", fileAccessErr.FilePath)
+		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
 		assert.ErrorContains(t, fileAccessErr.Err, "no such file or directory")
 	})
 }
@@ -181,11 +191,11 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	t.Run("uploading a directory with nested files", func(t *testing.T) {
 		expectedFiles := []uploadrevision.LoadedFile{
 			{
-				Path:    "src/main.go",
+				Path:    filepath.Join("src", "main.go"),
 				Content: "package main\n\nfunc main() {}",
 			},
 			{
-				Path:    "src/utils/helper.go",
+				Path:    filepath.Join("src", "utils", "helper.go"),
 				Content: "package utils\n\nfunc Helper() {}",
 			},
 		}
@@ -207,19 +217,19 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				Content: "root level file",
 			},
 			{
-				Path:    "src/main.go",
+				Path:    mainpath,
 				Content: "package main\n\nfunc main() {}",
 			},
 			{
-				Path:    "src/utils/helper.go",
+				Path:    helperpath,
 				Content: "package utils\n\nfunc Helper() {}",
 			},
 			{
-				Path:    "docs/README.md",
+				Path:    docpath,
 				Content: "# Project Documentation",
 			},
 			{
-				Path:    "src/go.mod",
+				Path:    gomodpath,
 				Content: "foo bar",
 			},
 		}
@@ -427,25 +437,25 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	t.Run("uploading a directory applies filtering", func(t *testing.T) {
 		expectedFiles := []uploadrevision.LoadedFile{
 			{
-				Path:    "src/main.go",
+				Path:    mainpath,
 				Content: "package main\n\nfunc main() {}",
 			},
 			{
-				Path:    "src/utils/helper.go",
+				Path:    helperpath,
 				Content: "package utils\n\nfunc Helper() {}",
 			},
 			{
-				Path:    "src/go.mod",
+				Path:    gomodpath,
 				Content: "foo bar",
 			},
 		}
 		additionalFiles := []uploadrevision.LoadedFile{
 			{
-				Path:    "src/script.js",
+				Path:    scriptpath,
 				Content: "console.log('hi')",
 			},
 			{
-				Path:    "src/package.json",
+				Path:    packagelockpath,
 				Content: "{}",
 			},
 		}
@@ -466,23 +476,23 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	t.Run("uploading a directory with filtering disabled", func(t *testing.T) {
 		allFiles := []uploadrevision.LoadedFile{
 			{
-				Path:    "src/main.go",
+				Path:    mainpath,
 				Content: "package main\n\nfunc main() {}",
 			},
 			{
-				Path:    "src/utils/helper.go",
+				Path:    helperpath,
 				Content: "package utils\n\nfunc Helper() {}",
 			},
 			{
-				Path:    "src/go.mod",
+				Path:    gomodpath,
 				Content: "foo bar",
 			},
 			{
-				Path:    "src/script.js",
+				Path:    scriptpath,
 				Content: "console.log('hi')",
 			},
 			{
-				Path:    "src/package.json",
+				Path:    packagelockpath,
 				Content: "{}",
 			},
 		}
