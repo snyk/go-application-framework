@@ -61,8 +61,7 @@ func TestIssue_GetIgnoreDetails_SuppressionWithoutPolicy(t *testing.T) {
 	assert.Equal(t, status, ignoreDetails.GetStatus())
 	assert.NotNil(t, ignoreDetails.GetCreatedAt())
 
-	assert.Nil(t, ignoreDetails.IsLocalPolicy())
-	assert.Empty(t, ignoreDetails.GetIgnoreReason())
+	assert.Empty(t, ignoreDetails.GetJustification())
 }
 
 func TestIssue_GetIgnoreDetails_LocalPolicy(t *testing.T) {
@@ -93,9 +92,6 @@ func TestIssue_GetIgnoreDetails_LocalPolicy(t *testing.T) {
 	ignoreDetails := issue.GetIgnoreDetails()
 	require.NotNil(t, ignoreDetails)
 
-	isLocalPolicy := ignoreDetails.IsLocalPolicy()
-	require.NotNil(t, isLocalPolicy)
-	assert.True(t, *isLocalPolicy)
 	assert.Nil(t, ignoreDetails.GetPolicyID())
 }
 
@@ -129,10 +125,6 @@ func TestIssue_GetIgnoreDetails_ManagedPolicy(t *testing.T) {
 
 	ignoreDetails := issue.GetIgnoreDetails()
 	require.NotNil(t, ignoreDetails)
-
-	isLocalPolicy := ignoreDetails.IsLocalPolicy()
-	require.NotNil(t, isLocalPolicy)
-	assert.False(t, *isLocalPolicy)
 
 	managedPolicyID := ignoreDetails.GetPolicyID()
 	require.NotNil(t, managedPolicyID)
