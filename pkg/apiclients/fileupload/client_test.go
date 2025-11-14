@@ -147,7 +147,6 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		var fileAccessErr *uploadrevision.FileAccessError
 		assert.ErrorAs(t, err, &fileAccessErr)
 		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
-		assert.ErrorContains(t, fileAccessErr.Err, "no such file or directory")
 	})
 }
 

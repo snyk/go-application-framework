@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -364,12 +365,20 @@ func TestClient_UploadFiles_SpecialFileError(t *testing.T) {
 				}, "test-directory"
 			},
 		},
-		{
+	}
+
+	// on non windows os test this case
+	if runtime.GOOS != "windows" {
+		tests = append(tests, struct {
+			name          string
+			setupFS       func() (fstest.MapFS, string)
+			setupRealFile func() string
+		}{
 			name: "device file",
 			setupRealFile: func() string {
 				return "/dev/null"
 			},
-		},
+		})
 	}
 
 	for _, tt := range tests {
