@@ -52,7 +52,7 @@
 				{{- range $index, $issue := $issues }}
 				{{- $location := buildLocationFromIssue $issue }}
 				{{- $fixes := buildFixesFromIssue $issue }}
-				{{- $suppression := $issue.GetSuppression }}
+				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
 				{
 					"ruleId": {{ getQuotedString $issue.GetID }},
 					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
@@ -120,11 +120,14 @@
 						{{- end }}
 					]
 					{{- end }}
-					{{- if $suppression }},
+					{{- if $ignoreDetails }},
 					"suppressions": [
 						{
-							"kind": "external",
-							{{- $status := printf "%s" $suppression.Status }}
+							{{- $policyID := $ignoreDetails.GetPolicyID }}
+							{{- if $policyID }}
+							"guid": {{ getQuotedString $policyID }},
+							{{- end }}
+							{{- $status := printf "%s" $ignoreDetails.GetStatus }}
 							{{- if eq $status "ignored" }}
 							"status": "accepted"
 							{{- else if eq $status "pending_ignore_approval" }}
@@ -133,9 +136,38 @@
 							"status": "rejected"
 							{{- else }}
 							"status": "accepted"
+							{{- end }},
+							{{- $justification := $ignoreDetails.GetJustification }}
+							{{- if $justification }}
+							"justification": {{ getQuotedString $justification }},
 							{{- end }}
-							{{- if $suppression.Justification }},
-							"justification": {{ getQuotedString $suppression.Justification }}
+							"kind": "external"
+							{{- $reasonType := $ignoreDetails.GetIgnoreReasonType }}
+							{{- $createdAt := $ignoreDetails.GetCreatedAt }}
+							{{- $expiresAt := $ignoreDetails.GetExpiresAt }}
+							{{- $ignoredBy := $ignoreDetails.GetIgnoredBy }}
+							{{- if or $reasonType $createdAt $expiresAt $ignoredBy }},
+							"properties": {
+								{{- if $reasonType }}
+								"category": {{ getQuotedString $reasonType }}{{if or $expiresAt $createdAt $ignoredBy}},{{end}}
+								{{- end }}
+								{{- if $expiresAt }}
+								"expiration": "{{ $expiresAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if or $createdAt $ignoredBy}},{{end}}
+								{{- end }}
+								{{- if $createdAt }}
+								"ignoredOn": "{{ $createdAt.Format "2006-01-02T15:04:05Z07:00" }}"{{if $ignoredBy}},{{end}}
+								{{- end }}
+								{{- if $ignoredBy }}
+								"ignoredBy": {
+									"name": {{ getQuotedString $ignoredBy.Name }},
+									{{- if $ignoredBy.Email }}
+									"email": {{ getQuotedString $ignoredBy.Email }}
+									{{- else }}
+									"email": ""
+									{{- end }}
+								}
+								{{- end }}
+							}
 							{{- end }}
 						}
 					]
@@ -168,7 +200,7 @@
 				"automationDetails": {
 					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") (printf "%s" $findingType) }}"
 				}
-			}{{if lt $findingTypeIndex $findingTypesSize}},{{end}}{{- end}}	
+			}{{if or (lt $findingTypeIndex $findingTypesSize) (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}	
 		{{- end}}
 		]
 	}

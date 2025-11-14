@@ -4,6 +4,20 @@
     "testConfiguration": {
       "local_policy": {
         "fail_on_upgradable": false,
+        "ignores": [
+          {
+            "created_at": "2025-11-11T11:44:46.474Z",
+            "expires_at": "2026-12-12T00:00:00Z",
+            "reason": "False positive",
+            "vuln_id": "SNYK-JAVA-ORGAPACHETOMCATEMBED-13723930"
+          },
+          {
+            "created_at": "2025-11-11T08:24:09.272Z",
+            "expires_at": "2025-12-11T08:24:09.27Z",
+            "reason": "None Given",
+            "vuln_id": "SNYK-JAVA-ORGJRUBY-10557729"
+          }
+        ],
         "severity_threshold": "low",
         "suppress_pending_ignores": false
       },
@@ -895,6 +909,14 @@
           ],
           "rating": { "severity": "medium" },
           "risk": { "risk_score": { "value": 87 } },
+          "suppression": {
+            "created_at": "2025-11-11T11:44:46.474Z",
+            "expires_at": "2026-12-12T00:00:00Z",
+            "justification": "False positive",
+            "path": ["*"],
+            "policy": "local_policy",
+            "status": "ignored"
+          },
           "title": "Improper Resource Shutdown or Release"
         },
         "id": "1252152c-d497-438d-bbb3-61082d22df5e",
@@ -3842,6 +3864,14 @@
           ],
           "rating": { "severity": "high" },
           "risk": { "risk_score": { "value": 97 } },
+          "suppression": {
+            "created_at": "2025-11-11T08:24:09.272Z",
+            "expires_at": "2025-12-11T08:24:09.27Z",
+            "justification": "None Given",
+            "path": ["*"],
+            "policy": "local_policy",
+            "status": "ignored"
+          },
           "title": "Memory Allocation with Excessive Size Value"
         },
         "id": "753e2b56-adbe-4cd3-91b7-57c4cd65faee",

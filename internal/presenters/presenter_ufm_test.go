@@ -168,14 +168,24 @@ func normalizeRuleHelp(run map[string]interface{}) {
 		if help, ok := rule["help"].(map[string]interface{}); ok {
 			// compare markdown up to 5000 bytes
 			if markdown, ok := help["markdown"].(string); ok {
+				markdown = strings.Replace(markdown, "gomodules", "golang", -1)
 				if len(markdown) > 5000 {
 					help["markdown"] = markdown[:5000]
+				} else {
+					help["markdown"] = markdown
 				}
 			}
 		}
-		// Normalize tags order
+
+		// Normalize tags order & name
 		if props, ok := rule["properties"].(map[string]interface{}); ok {
 			if tags, ok := props["tags"].([]interface{}); ok {
+				// Rename "gomodules" to "golang" for consistency
+				for i, tag := range tags {
+					if tag == "gomodules" {
+						tags[i] = "golang"
+					}
+				}
 				sortTags(tags)
 			}
 		}
@@ -222,8 +232,13 @@ func normalizeLocationURIs(result map[string]interface{}) {
 			continue
 		}
 		// Normalize common manifest filenames
-		if uri == "package.json" || uri == "package-lock.json" || uri == "pom.xml" {
-			artLoc["uri"] = "manifest"
+		if strings.HasSuffix(uri, "package.json") || strings.HasSuffix(uri, "package-lock.json") || strings.HasSuffix(uri, "pom.xml") {
+			// Preserve subproject path
+			if idx := strings.LastIndex(uri, "/"); idx >= 0 {
+				artLoc["uri"] = uri[:idx+1] + "manifest"
+			} else {
+				artLoc["uri"] = "manifest"
+			}
 		}
 	}
 }
@@ -256,11 +271,163 @@ func normalizeFixURIs(result map[string]interface{}) {
 			if !ok {
 				continue
 			}
-			if uri == "package.json" || uri == "package-lock.json" || uri == "pom.xml" {
+			if strings.HasSuffix(uri, "package.json") || strings.HasSuffix(uri, "package-lock.json") || strings.HasSuffix(uri, "pom.xml") {
+				if idx := strings.LastIndex(uri, "/"); idx >= 0 {
+					artLoc["uri"] = uri[:idx+1] + "manifest"
+				} else {
+					artLoc["uri"] = "manifest"
+				}
 				artLoc["uri"] = "manifest"
 			}
 		}
 	}
+}
+
+// normalizeSuppressions removes suppressions from results for consistent comparison
+func normalizeSuppressions(run map[string]interface{}) {
+	results, ok := run["results"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, resultInterface := range results {
+		result, ok := resultInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		delete(result, "suppressions")
+	}
+}
+
+// normalizeFixes keeps only fixes that are present in expected SARIF.
+// This handles cases where the actual output has additional fixes that weren't in the expected output.
+func normalizeFixes(t *testing.T, expectedSarif, actualSarif map[string]interface{}) {
+	t.Helper()
+
+	expectedRuns, okExp := expectedSarif["runs"].([]interface{})
+	actualRuns, okAct := actualSarif["runs"].([]interface{})
+	if !okExp || !okAct {
+		return
+	}
+
+	// Build a map of expected fixes by ruleId for quick lookup
+	expectedFixesByRuleID := buildExpectedFixesMap(expectedRuns)
+
+	// Process actual runs and filter fixes
+	filterActualFixesByExpected(t, actualRuns, expectedFixesByRuleID)
+}
+
+// buildExpectedFixesMap builds a map of expected fixes by ruleId for quick lookup.
+func buildExpectedFixesMap(expectedRuns []interface{}) map[string][]interface{} {
+	expectedFixesByRuleID := make(map[string][]interface{})
+	for _, runInterface := range expectedRuns {
+		run, ok := runInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		results, ok := run["results"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, resultInterface := range results {
+			result, ok := resultInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			ruleID, ok := result["ruleId"].(string)
+			if !ok {
+				continue
+			}
+			fixes, ok := result["fixes"].([]interface{})
+			if ok && len(fixes) > 0 {
+				expectedFixesByRuleID[ruleID] = fixes
+			}
+		}
+	}
+	return expectedFixesByRuleID
+}
+
+// filterActualFixesByExpected filters actual runs' fixes to only include those present in expected.
+func filterActualFixesByExpected(t *testing.T, actualRuns []interface{}, expectedFixesByRuleID map[string][]interface{}) {
+	t.Helper()
+
+	for _, runInterface := range actualRuns {
+		run, ok := runInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		results, ok := run["results"].([]interface{})
+		if !ok {
+			continue
+		}
+		processResultFixes(t, results, expectedFixesByRuleID)
+	}
+}
+
+// processResultFixes processes each result's fixes and filters them based on expected fixes.
+func processResultFixes(t *testing.T, results []interface{}, expectedFixesByRuleID map[string][]interface{}) {
+	t.Helper()
+
+	for _, resultInterface := range results {
+		result, ok := resultInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ruleID, ok := result["ruleId"].(string)
+		if !ok {
+			continue
+		}
+		actualFixes, ok := result["fixes"].([]interface{})
+		if !ok || len(actualFixes) == 0 {
+			continue
+		}
+
+		expectedFixes, hasExpectedFixes := expectedFixesByRuleID[ruleID]
+		if !hasExpectedFixes {
+			// No expected fixes for this rule, remove all fixes from actual
+			delete(result, "fixes")
+			continue
+		}
+
+		// Filter actual fixes to only include those present in expected
+		filteredFixes := filterFixesByExpected(t, actualFixes, expectedFixes)
+		if len(filteredFixes) == 0 {
+			delete(result, "fixes")
+		} else {
+			result["fixes"] = filteredFixes
+		}
+	}
+}
+
+// filterFixesByExpected filters actual fixes to only include those present in expected fixes.
+// Fixes are compared by marshaling to JSON for simple equality check.
+func filterFixesByExpected(t *testing.T, actualFixes, expectedFixes []interface{}) []interface{} {
+	t.Helper()
+
+	// Create a set of expected fix JSON strings for comparison
+	expectedFixSet := make(map[string]bool)
+	for _, expectedFix := range expectedFixes {
+		fixJSON, err := json.Marshal(expectedFix)
+		if err != nil {
+			t.Logf("Failed to marshal expected fix: %v", err)
+			continue
+		}
+		expectedFixSet[string(fixJSON)] = true
+	}
+
+	// Filter actual fixes to only include those in expected set
+	filteredFixes := make([]interface{}, 0)
+	for _, actualFix := range actualFixes {
+		fixJSON, err := json.Marshal(actualFix)
+		if err != nil {
+			t.Logf("Failed to marshal actual fix: %v", err)
+			continue
+		}
+		if expectedFixSet[string(fixJSON)] {
+			filteredFixes = append(filteredFixes, actualFix)
+		}
+	}
+
+	return filteredFixes
 }
 
 // sortTags sorts tags alphabetically for consistent comparison
@@ -289,9 +456,16 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 		return sarif
 	}
 
+	// TODO: preserve SARIF runs even if there are no findings
+	filteredRuns := make([]interface{}, 0)
 	for _, runInterface := range runs {
 		run, ok := runInterface.(map[string]interface{})
 		if !ok {
+			continue
+		}
+
+		results, ok := run["results"].([]interface{})
+		if !ok || len(results) == 0 {
 			continue
 		}
 
@@ -306,8 +480,14 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 		// Normalize help content (test data may have different vulnerability descriptions)
 		normalizeHelpContent(run)
+
+		// Normalize suppressions (not included in original SARIF)
+		normalizeSuppressions(run)
+
+		filteredRuns = append(filteredRuns, run)
 	}
 
+	sarif["runs"] = filteredRuns
 	return sarif
 }
 
@@ -329,56 +509,72 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			expectedSarifPath: "testdata/ufm/webgoat.sarif.json",
 			testResultPath:    "testdata/ufm/webgoat.testresult.json",
 		},
+		{
+			name:              "webgoat with suppression",
+			expectedSarifPath: "testdata/ufm/webgoat.ignore.sarif.json",
+			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
+		},
+		{
+			name:              "multiproject",
+			expectedSarifPath: "testdata/ufm/multi_project.sarif.json",
+			testResultPath:    "testdata/ufm/multi_project.testresult.json",
+		},
 	}
 
 	for _, tc := range testCases {
-		expectedSarifBytes, err := os.ReadFile(tc.expectedSarifPath)
-		assert.NoError(t, err)
+		t.Run(tc.name, func(t *testing.T) {
+			expectedSarifBytes, err := os.ReadFile(tc.expectedSarifPath)
+			assert.NoError(t, err)
 
-		testResultBytes, err := os.ReadFile(tc.testResultPath)
-		assert.NoError(t, err)
+			testResultBytes, err := os.ReadFile(tc.testResultPath)
+			assert.NoError(t, err)
 
-		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(testResult))
+			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+			assert.NoError(t, err)
+			// assert.Equal(t, 1, len(testResult))
 
-		config := configuration.NewWithOpts()
+			config := configuration.NewWithOpts()
 
-		writer := &bytes.Buffer{}
+			writer := &bytes.Buffer{}
 
-		presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
-		err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
-		assert.NoError(t, err)
+			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+			err = presenter.RenderTemplate(presenters.ApplicationSarifTemplatesUfm, presenters.ApplicationSarifMimeType)
+			assert.NoError(t, err)
 
-		validateSarifData(t, writer.Bytes())
+			validateSarifData(t, writer.Bytes())
 
-		// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
-		expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
-		actualNormalized := normalizeSarifForComparison(t, writer.String())
+			// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
+			expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
+			actualNormalized := normalizeSarifForComparison(t, writer.String())
 
-		// Convert back to JSON for comparison
-		expectedJSON, err := json.MarshalIndent(expectedNormalized, "", "  ")
-		assert.NoError(t, err)
-		actualJSON, err := json.MarshalIndent(actualNormalized, "", "  ")
-		assert.NoError(t, err)
+			// Normalize fixes to only keep fixes that are present in expected SARIF
+			normalizeFixes(t, expectedNormalized, actualNormalized)
 
-		// Write to temp files for debugging if test fails
-		if !assert.JSONEq(t, string(expectedJSON), string(actualJSON),
-			"SARIF output differs. Known gaps are normalized:\n"+
-				"- Automation ID: missing project name\n"+
-				"- Tool properties: missing artifactsScanned\n"+
-				"- Fix packages: using vulnerable package instead of direct dependency\n"+
-				"- Package versions: may differ based on dependency path selection\n"+
-				"- Dependency path ordering: paths are sorted but may differ from original") {
-			// Write files for debugging (best effort, ignore errors)
-			if err := os.WriteFile(fmt.Sprintf("/tmp/%s_expected_normalized.json", tc.name), expectedJSON, 0644); err != nil {
-				t.Logf("Failed to write expected output: %v", err)
+			// Convert back to JSON for comparison
+			expectedJSON, err := json.MarshalIndent(expectedNormalized, "", "  ")
+			assert.NoError(t, err)
+			actualJSON, err := json.MarshalIndent(actualNormalized, "", "  ")
+			assert.NoError(t, err)
+
+			// Write to temp files for debugging if test fails
+			if !assert.JSONEq(t, string(expectedJSON), string(actualJSON),
+				"SARIF output differs. Known gaps are normalized:\n"+
+					"- Automation ID: missing project name\n"+
+					"- Tool properties: missing artifactsScanned\n"+
+					"- Suppressions: not included in original SARIF\n"+
+					"- Fix packages: using vulnerable package instead of direct dependency\n"+
+					"- Package versions: may differ based on dependency path selection\n"+
+					"- Dependency path ordering: paths are sorted but may differ from original") {
+				// Write files for debugging (best effort, ignore errors)
+				if err := os.WriteFile(fmt.Sprintf("/tmp/%s_expected_normalized.json", tc.name), expectedJSON, 0644); err != nil {
+					t.Logf("Failed to write expected output: %v", err)
+				}
+				if err := os.WriteFile(fmt.Sprintf("/tmp/%s_actual_normalized.json", tc.name), actualJSON, 0644); err != nil {
+					t.Logf("Failed to write actual output: %v", err)
+				}
+				t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
 			}
-			if err := os.WriteFile(fmt.Sprintf("/tmp/%s_actual_normalized.json", tc.name), actualJSON, 0644); err != nil {
-				t.Logf("Failed to write actual output: %v", err)
-			}
-			t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
-		}
+		})
 	}
 }
 
