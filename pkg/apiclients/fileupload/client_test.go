@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -522,7 +523,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 		}
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, filepath.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -547,7 +548,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, filepath.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
 		require.NoError(t, err)
 
 		var fileSizeErr *uploadrevision.FileSizeLimitError
@@ -580,7 +581,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, filepath.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
 		require.NoError(t, err)
 
 		var filePathErr *uploadrevision.FilePathLengthLimitError
@@ -606,7 +607,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, filepath.Join(dir.Name(), "script.js"), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"), fileupload.UploadOptions{})
 		require.NoError(t, err)
 
 		assert.Len(t, res.FilteredFiles, 1)
@@ -625,7 +626,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, filepath.Join(dir.Name(), "script.js"), fileupload.UploadOptions{SkipDeeproxyFiltering: true})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"), fileupload.UploadOptions{SkipDeeproxyFiltering: true})
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
