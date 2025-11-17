@@ -48,12 +48,9 @@
 					}
 				},
 			"results": [
-				{{- $targetFile := index $result.GetMetadata "display-target-file" }}
+				{{- $manifestPath := getManifestPath $result }}
 				{{- range $index, $issue := $issues }}
-				{{- $location := buildLocationFromIssue $issue $targetFile }}
-				{{- $physicalLoc := index $location "physicalLocation" }}
-				{{- $region := index $physicalLoc "region" }}
-				{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
+				{{- $location := buildLocationFromIssue $issue }}
 				{{- $fixes := buildFixesFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
 				{
@@ -64,12 +61,13 @@
 					},
 					"locations": [
 						{{- if $location }}
-					
+						{{- $physicalLoc := index $location "physicalLocation" }}
+						{{- $region := index $physicalLoc "region" }}
 						{{- $logicalLocs := index $location "logicalLocations" }}
 						{
 							"physicalLocation": {
 								"artifactLocation": {
-									"uri": {{ getQuotedString (index $artifactLocation "uri") }}
+									"uri": {{ getQuotedString $manifestPath }}
 								},
 								"region": {
 									"startLine": {{ index $region "startLine" }}
@@ -99,7 +97,7 @@
 								{{- range $changeIndex, $change := $artifactChanges }}
 								{
 									"artifactLocation": {
-										"uri": {{ getQuotedString (index $artifactLocation "uri") }}
+										"uri": {{ getQuotedString $manifestPath }}
 									},
 									"replacements": [
 										{{- $replacements := index $change "replacements" }}
