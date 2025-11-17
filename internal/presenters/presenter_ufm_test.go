@@ -203,7 +203,6 @@ func normalizeResultURIs(run map[string]interface{}) {
 		if !ok {
 			continue
 		}
-		// normalizeLocationURIs(result)
 		normalizeFixURIs(result)
 	}
 }
