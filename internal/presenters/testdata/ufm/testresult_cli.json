@@ -32,12 +32,15 @@
         "seconds": 1200
       }
     },
+    "metadata": {
+      "project-name": "snyk",
+      "display-target-file": "package.json",
+      "target-directory": "test-project"
+    },
     "createdAt": "2025-10-28T15:42:29.689452Z",
     "testSubject": {
       "locator": {
-        "paths": [
-          "package-lock.json"
-        ],
+        "paths": ["package-lock.json"],
         "type": "local_path"
       },
       "type": "dep_graph"
@@ -164,8 +167,7 @@
               "reachability": "no_info",
               "source": "reachability"
             }
-          ]
-          ,
+          ],
           "finding_type": "sca",
           "key": "00000000-0000-0000-0000-000000000001",
           "locations": [
@@ -186,14 +188,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "<11.8.5",
-                ">=12.0.0 <12.1.0"
-              ],
+              "affected_versions": ["<11.8.5", ">=12.0.0 <12.1.0"],
               "created_at": "2022-06-19T09:23:24.210132Z",
-              "credits": [
-                "Unknown"
-              ],
+              "credits": ["Unknown"],
               "cvss_base_score": 5.4,
               "cvss_sources": [
                 {
@@ -252,10 +249,7 @@
                 "sources": []
               },
               "id": "SNYK-JS-GOT-2932019",
-              "initially_fixed_in_versions": [
-                "11.8.5",
-                "12.1.0"
-              ],
+              "initially_fixed_in_versions": ["11.8.5", "12.1.0"],
               "is_fixable": true,
               "is_malicious": false,
               "is_social_media_trending": false,
@@ -1116,13 +1110,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "*"
-              ],
+              "affected_versions": ["*"],
               "created_at": "2025-05-02T12:17:04.846156Z",
-              "credits": [
-                "provDannyLaw"
-              ],
+              "credits": ["provDannyLaw"],
               "cvss_base_score": 6.9,
               "cvss_sources": [
                 {
@@ -1357,13 +1347,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "*"
-              ],
+              "affected_versions": ["*"],
               "created_at": "2025-05-02T12:17:04.846156Z",
-              "credits": [
-                "provDannyLaw"
-              ],
+              "credits": ["provDannyLaw"],
               "cvss_base_score": 6.9,
               "cvss_sources": [
                 {
@@ -1808,9 +1794,7 @@
                 ">=4.0.0 <4.0.1"
               ],
               "created_at": "2025-04-22T10:41:28.859488Z",
-              "credits": [
-                "mmmsssttt404"
-              ],
+              "credits": ["mmmsssttt404"],
               "cvss_base_score": 2.3,
               "cvss_sources": [
                 {
@@ -1875,9 +1859,7 @@
                     "type": "primary"
                   }
                 ],
-                "sources": [
-                  "Snyk"
-                ]
+                "sources": ["Snyk"]
               },
               "id": "SNYK-JS-BRACEEXPANSION-9789073",
               "initially_fixed_in_versions": [
@@ -2067,13 +2049,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "<4.0.10"
-              ],
+              "affected_versions": ["<4.0.10"],
               "created_at": "2022-01-16T12:11:35.068696Z",
-              "credits": [
-                "MakeNowJust"
-              ],
+              "credits": ["MakeNowJust"],
               "cvss_base_score": 5.3,
               "cvss_sources": [
                 {
@@ -2129,14 +2107,10 @@
                     "type": "primary"
                   }
                 ],
-                "sources": [
-                  "Snyk"
-                ]
+                "sources": ["Snyk"]
               },
               "id": "SNYK-JS-MARKED-2342082",
-              "initially_fixed_in_versions": [
-                "4.0.10"
-              ],
+              "initially_fixed_in_versions": ["4.0.10"],
               "is_fixable": true,
               "is_malicious": false,
               "is_social_media_trending": false,
@@ -3030,14 +3004,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "<1.0.0",
-                ">=2.0.0"
-              ],
+              "affected_versions": ["<1.0.0", ">=2.0.0"],
               "created_at": "2024-12-10T12:05:49.468958Z",
-              "credits": [
-                "Qix-"
-              ],
+              "credits": ["Qix-"],
               "cvss_base_score": 6.9,
               "cvss_sources": [
                 {
@@ -3268,14 +3237,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "<1.0.0",
-                ">=2.0.0"
-              ],
+              "affected_versions": ["<1.0.0", ">=2.0.0"],
               "created_at": "2024-12-10T12:05:49.468958Z",
-              "credits": [
-                "Qix-"
-              ],
+              "credits": ["Qix-"],
               "cvss_base_score": 6.9,
               "cvss_sources": [
                 {
@@ -3573,13 +3537,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "*"
-              ],
+              "affected_versions": ["*"],
               "created_at": "2024-07-30T12:45:41.408492Z",
-              "credits": [
-                "Unknown"
-              ],
+              "credits": ["Unknown"],
               "cvss_base_score": 7.5,
               "cvss_sources": [
                 {
@@ -3720,13 +3680,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "<1.0.0"
-              ],
+              "affected_versions": ["<1.0.0"],
               "created_at": "2024-11-27T14:30:08.622354Z",
-              "credits": [
-                "Unknown"
-              ],
+              "credits": ["Unknown"],
               "cvss_base_score": 6.9,
               "cvss_sources": [
                 {
@@ -3785,9 +3741,7 @@
                 "sources": []
               },
               "id": "SNYK-JS-COOKIE-13271683",
-              "initially_fixed_in_versions": [
-                "1.0.0"
-              ],
+              "initially_fixed_in_versions": ["1.0.0"],
               "is_fixable": true,
               "is_malicious": false,
               "is_social_media_trending": false,
@@ -3895,13 +3849,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "<4.0.10"
-              ],
+              "affected_versions": ["<4.0.10"],
               "created_at": "2022-01-16T09:07:08.101529Z",
-              "credits": [
-                "MakeNowJust"
-              ],
+              "credits": ["MakeNowJust"],
               "cvss_base_score": 5.3,
               "cvss_sources": [
                 {
@@ -3957,14 +3907,10 @@
                     "type": "primary"
                   }
                 ],
-                "sources": [
-                  "Snyk"
-                ]
+                "sources": ["Snyk"]
               },
               "id": "SNYK-JS-MARKED-2342073",
-              "initially_fixed_in_versions": [
-                "4.0.10"
-              ],
+              "initially_fixed_in_versions": ["4.0.10"],
               "is_fixable": true,
               "is_malicious": false,
               "is_social_media_trending": false,
@@ -4269,8 +4215,7 @@
               "reachability": "no_info",
               "source": "reachability"
             }
-          ]
-          ,
+          ],
           "finding_type": "sca",
           "key": "00000000-0000-0000-0000-000000000009",
           "locations": [
@@ -4287,13 +4232,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "*"
-              ],
+              "affected_versions": ["*"],
               "created_at": "2024-07-29T14:50:27.269552Z",
-              "credits": [
-                "Unknown"
-              ],
+              "credits": ["Unknown"],
               "cvss_base_score": 7.5,
               "cvss_sources": [
                 {
@@ -4434,13 +4375,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "*"
-              ],
+              "affected_versions": ["*"],
               "created_at": "2025-05-02T12:17:04.846156Z",
-              "credits": [
-                "provDannyLaw"
-              ],
+              "credits": ["provDannyLaw"],
               "cvss_base_score": 6.9,
               "cvss_sources": [
                 {
@@ -4564,14 +4501,9 @@
             {
               "affected_hash_ranges": [],
               "affected_hashes": [],
-              "affected_versions": [
-                "<1.0.0",
-                ">=2.0.0"
-              ],
+              "affected_versions": ["<1.0.0", ">=2.0.0"],
               "created_at": "2024-12-10T12:05:49.468958Z",
-              "credits": [
-                "Qix-"
-              ],
+              "credits": ["Qix-"],
               "cvss_base_score": 6.9,
               "cvss_sources": [
                 {

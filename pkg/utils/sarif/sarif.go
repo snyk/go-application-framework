@@ -486,7 +486,7 @@ func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 }
 
 // BuildLocation constructs a SARIF location object from issue data
-func BuildLocation(issue testapi.Issue) map[string]interface{} {
+func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{} {
 	// Extract first finding from issue
 	findings := issue.GetFindings()
 	if len(findings) == 0 {
@@ -495,7 +495,7 @@ func BuildLocation(issue testapi.Issue) map[string]interface{} {
 	finding := findings[0]
 
 	// Default to line 1 for manifest files
-	uri := "package.json" // Default, should be determined from locations
+	uri := targetFile
 	startLine := 1
 	var packageName, packageVersion string
 	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
@@ -510,7 +510,7 @@ func BuildLocation(issue testapi.Issue) map[string]interface{} {
 	}
 
 	// Try to extract actual file path and package version from locations
-	if finding.Attributes != nil && len(finding.Attributes.Locations) > 0 {
+	if finding.Attributes != nil && len(finding.Attributes.Locations) > 0 && uri == "" {
 		loc := finding.Attributes.Locations[0]
 
 		// Try source location first

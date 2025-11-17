@@ -27,7 +27,7 @@ type jsonTestResult struct {
 	EffectiveSummary  *testapi.FindingSummary         `json:"effectiveSummary,omitempty"`
 	RawSummary        *testapi.FindingSummary         `json:"rawSummary,omitempty"`
 	FindingsComplete  bool                            `json:"findingsComplete"`
-
+	Metadata          map[string]string               `json:"metadata,omitempty"`
 	// Optimized wire format: central problem store (optional, for serialization)
 	ProblemStore map[string]json.RawMessage `json:"problemStore,omitempty"`
 	ProblemRefs  map[string][]string        `json:"_problemRefs,omitempty"`
@@ -104,6 +104,16 @@ func (j *jsonTestResult) GetRawSummary() *testapi.FindingSummary {
 	return j.RawSummary
 }
 
+// SetMetadata sets the metadata for the given key.
+func (j *jsonTestResult) SetMetadata(key string, value string) {
+	j.Metadata[key] = value
+}
+
+// GetMetadata returns the metadata for the given key.
+func (j *jsonTestResult) GetMetadata() map[string]string {
+	return j.Metadata
+}
+
 // Findings returns the stored findings without making any API calls.
 // The complete parameter indicates whether all findings were successfully fetched.
 func (j *jsonTestResult) Findings(ctx context.Context) (resultFindings []testapi.FindingData, complete bool, err error) {
@@ -163,6 +173,7 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 		ProblemRefs:       problemRefs,
 		FindingsData:      optimizedFindings,
 		fullFindings:      findings, // Keep original for Findings() method
+		Metadata:          tr.GetMetadata(),
 	}
 
 	return result, nil

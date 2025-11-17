@@ -12,6 +12,11 @@
         "seconds": 1200
       }
     },
+    "metadata": {
+      "project-name": "",
+      "display-target-file": "pom.xml",
+      "target-directory": "webgoat"
+    },
     "createdAt": "2025-11-12T17:39:33.615146Z",
     "testSubject": {
       "locator": {

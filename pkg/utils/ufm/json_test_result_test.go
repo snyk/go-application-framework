@@ -37,6 +37,7 @@ func TestNewSerializableTestResult(t *testing.T) {
 	mock.EXPECT().GetBreachedPolicies().Return(nil).AnyTimes()
 	mock.EXPECT().GetEffectiveSummary().Return(nil).AnyTimes()
 	mock.EXPECT().GetRawSummary().Return(nil).AnyTimes()
+	mock.EXPECT().GetMetadata().Return(nil).AnyTimes()
 	mock.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil).Times(1)
 
 	// Test conversion

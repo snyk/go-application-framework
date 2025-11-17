@@ -56,7 +56,7 @@ func normalizeAutomationID(run map[string]interface{}) {
 		if id, ok := automationDetails["id"].(string); ok {
 			parts := strings.Split(id, "/")
 			if len(parts) >= 2 {
-				automationDetails["id"] = strings.Join(parts[:2], "/") + "/*"
+				automationDetails["id"] = strings.Join(parts[:len(parts)-1], "/") + "/*"
 			}
 		}
 	}
@@ -203,43 +203,7 @@ func normalizeResultURIs(run map[string]interface{}) {
 		if !ok {
 			continue
 		}
-		normalizeLocationURIs(result)
 		normalizeFixURIs(result)
-	}
-}
-
-// normalizeLocationURIs normalizes URIs in result locations
-func normalizeLocationURIs(result map[string]interface{}) {
-	locations, ok := result["locations"].([]interface{})
-	if !ok {
-		return
-	}
-	for _, locInterface := range locations {
-		loc, ok := locInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		physLoc, ok := loc["physicalLocation"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		artLoc, ok := physLoc["artifactLocation"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		uri, ok := artLoc["uri"].(string)
-		if !ok {
-			continue
-		}
-		// Normalize common manifest filenames
-		if strings.HasSuffix(uri, "package.json") || strings.HasSuffix(uri, "package-lock.json") || strings.HasSuffix(uri, "pom.xml") {
-			// Preserve subproject path
-			if idx := strings.LastIndex(uri, "/"); idx >= 0 {
-				artLoc["uri"] = uri[:idx+1] + "manifest"
-			} else {
-				artLoc["uri"] = "manifest"
-			}
-		}
 	}
 }
 

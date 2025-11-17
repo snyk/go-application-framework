@@ -263,7 +263,6 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildLocationFromIssue"] = sarif.BuildLocation
 	fnMap["buildFixesFromIssue"] = sarif.BuildFixesFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
-	fnMap["getManifestPath"] = getManifestPathFromTestResult
 	return fnMap
 }
 
@@ -408,23 +407,4 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 	}
 
 	return findingTypesList
-}
-
-// getManifestPathFromTestResult extracts the manifest file path from test result
-func getManifestPathFromTestResult(testResults testapi.TestResult) string {
-	// Get the test subject
-	testSubject := testResults.GetTestSubject()
-
-	// Try to extract as DepGraphSubject
-	depGraph, err := testSubject.AsDepGraphSubject()
-	if err != nil {
-		return "package.json" // Default fallback
-	}
-
-	// Get the first path from locator
-	if len(depGraph.Locator.Paths) > 0 {
-		return depGraph.Locator.Paths[0]
-	}
-
-	return "package.json" // Default fallback
 }
