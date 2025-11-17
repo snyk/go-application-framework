@@ -23,6 +23,11 @@
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
     },
+    "metadata": {
+      "project-name": "org.owasp.webgoat:webgoat",
+      "display-target-file": "pom.xml",
+      "target-directory": "webgoat"
+    },
     "createdAt": "2025-11-06T14:45:12.489805Z",
     "testSubject": {
       "locator": { "paths": ["pom.xml"], "type": "local_path" },

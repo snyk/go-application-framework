@@ -123,6 +123,20 @@ func (mr *MockTestResultMockRecorder) GetExecutionState() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionState", reflect.TypeOf((*MockTestResult)(nil).GetExecutionState))
 }
 
+// GetMetadata mocks base method.
+func (m *MockTestResult) GetMetadata() map[string]string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMetadata")
+	ret0, _ := ret[0].(map[string]string)
+	return ret0
+}
+
+// GetMetadata indicates an expected call of GetMetadata.
+func (mr *MockTestResultMockRecorder) GetMetadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetadata", reflect.TypeOf((*MockTestResult)(nil).GetMetadata))
+}
+
 // GetOutcomeReason mocks base method.
 func (m *MockTestResult) GetOutcomeReason() *testapi.TestOutcomeReason {
 	m.ctrl.T.Helper()
@@ -233,6 +247,18 @@ func (m *MockTestResult) GetWarnings() *[]testapi.IoSnykApiCommonError {
 func (mr *MockTestResultMockRecorder) GetWarnings() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWarnings", reflect.TypeOf((*MockTestResult)(nil).GetWarnings))
+}
+
+// SetMetadata mocks base method.
+func (m *MockTestResult) SetMetadata(key, value string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetMetadata", key, value)
+}
+
+// SetMetadata indicates an expected call of SetMetadata.
+func (mr *MockTestResultMockRecorder) SetMetadata(key, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMetadata", reflect.TypeOf((*MockTestResult)(nil).SetMetadata), key, value)
 }
 
 // MockTestHandle is a mock of TestHandle interface.

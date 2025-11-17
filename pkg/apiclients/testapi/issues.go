@@ -42,6 +42,22 @@ const (
 	// DataKeyDependencyPaths is the key for dependency paths (SCA findings)
 	// Value type: [][]Package
 	DataKeyDependencyPaths = "dependency-paths"
+
+	// DataKeyPackageManager is the key for the package manager/ecosystem
+	// Value type: string
+	DataKeyPackageManager = "package-manager"
+
+	// DataKeyProjectName is the key for the project name
+	// Value type: string
+	DataKeyProjectName = "project-name"
+
+	// DataKeyDisplayTargetFile is the key for the display target file path
+	// Value type: string
+	DataKeyDisplayTargetFile = "display-target-file"
+
+	// DataKeyTargetDirectory is the key for the target directory path
+	// Value type: string
+	DataKeyTargetDirectory = "target-directory"
 )
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks

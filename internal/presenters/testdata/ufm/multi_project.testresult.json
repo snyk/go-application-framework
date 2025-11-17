@@ -9,6 +9,11 @@
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
     },
+    "metadata": {
+      "project-name": "tpwe",
+      "display-target-file": "dotnet/obj/project.assets.json",
+      "target-directory": "multi-project"
+    },
     "createdAt": "2025-11-13T15:29:14.585711Z",
     "testSubject": {
       "locator": {
@@ -815,6 +820,11 @@
         "suppress_pending_ignores": false
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
+    },
+    "metadata": {
+      "project-name": "package.json",
+      "display-target-file": "ghost/package.json",
+      "target-directory": "multi-project"
     },
     "createdAt": "2025-11-13T15:29:14.491151Z",
     "testSubject": {
@@ -4375,6 +4385,11 @@
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
     },
+    "metadata": {
+      "project-name": "golangproject",
+      "display-target-file": "golang/go.mod",
+      "target-directory": "multi-project"
+    },
     "createdAt": "2025-11-13T15:29:14.506347Z",
     "testSubject": {
       "locator": { "paths": ["golang/go.mod"], "type": "local_path" },
@@ -4525,6 +4540,11 @@
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
     },
+    "metadata": {
+      "project-name": "demo:maven-demo",
+      "display-target-file": "maven/pom.xml",
+      "target-directory": "multi-project"
+    },
     "createdAt": "2025-11-13T15:29:14.480432Z",
     "testSubject": {
       "locator": { "paths": ["maven/pom.xml"], "type": "local_path" },
@@ -4571,6 +4591,11 @@
         "suppress_pending_ignores": false
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
+    },
+    "metadata": {
+      "project-name": "not-python",
+      "display-target-file": "not-python/requirements.txt",
+      "target-directory": "multi-project"
     },
     "createdAt": "2025-11-13T15:29:14.440374Z",
     "testSubject": {
@@ -6385,6 +6410,11 @@
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
     },
+    "metadata": {
+      "project-name": "python",
+      "display-target-file": "python/requirements.txt",
+      "target-directory": "multi-project"
+    },
     "createdAt": "2025-11-13T15:29:18.009229Z",
     "testSubject": {
       "locator": { "paths": ["python/requirements.txt"], "type": "local_path" },
@@ -8194,6 +8224,11 @@
         "suppress_pending_ignores": false
       },
       "timeout": { "outcome": "fail", "seconds": 1200 }
+    },
+    "metadata": {
+      "project-name": "tsc",
+      "display-target-file": "tsc/package.json",
+      "target-directory": "multi-project"
     },
     "createdAt": "2025-11-13T15:29:19.594887Z",
     "testSubject": {
