@@ -13,10 +13,10 @@
       }
     },
     "metadata": {
-      "project-name": "webgoat",
+      "project-name": "org.owasp.webgoat:webgoat",
       "display-target-file": "pom.xml",
       "target-directory": "webgoat",
-      "dependency-count": 163
+      "dependency-count": 171
     },
     "createdAt": "2025-11-12T17:39:33.615146Z",
     "testSubject": {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -251,18 +252,66 @@ func normalizeFixURIs(result map[string]interface{}) {
 }
 
 // normalizeSuppressions removes suppressions from results for consistent comparison
-func normalizeSuppressions(run map[string]interface{}) {
+func normalizeSuppressions(run map[string]interface{}, ignoreSuppressions bool) {
 	results, ok := run["results"].([]interface{})
 	if !ok {
 		return
 	}
+
+	// just generally remove all suppressions available
+	if ignoreSuppressions {
+		for _, resultInterface := range results {
+			result, ok := resultInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			delete(result, "suppressions")
+		}
+		return
+	}
+
+	// otherwise use suppression information to remove rules and results to be comparable with the legacy output
+	var driver map[string]interface{}
+	var newRules []interface{}
+	var rules []interface{}
+	if tool, ok := run["tool"].(map[string]interface{}); ok {
+		if driver, ok = tool["driver"].(map[string]interface{}); ok {
+			if tmp, ok := driver["rules"].([]interface{}); ok {
+				rules = tmp
+			}
+		}
+	}
+
+	// create a new results slice
+	newResults := make([]interface{}, 0)
+	suppressedResults := []string{}
+
 	for _, resultInterface := range results {
 		result, ok := resultInterface.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		delete(result, "suppressions")
+
+		if result["suppressions"] != nil {
+			suppressedResults = append(suppressedResults, result["ruleId"].(string))
+			continue
+		}
+
+		newResults = append(newResults, resultInterface)
 	}
+
+	for _, rule := range rules {
+		if ruleAsMap, ok := rule.(map[string]interface{}); ok {
+			if slices.Contains(suppressedResults, ruleAsMap["id"].(string)) {
+				continue
+			}
+
+			newRules = append(newRules, rule)
+		}
+	}
+
+	run["results"] = newResults
+	driver["rules"] = newRules
 }
 
 // normalizeFixes keeps only fixes that are present in expected SARIF.
@@ -411,7 +460,7 @@ func sortTags(tags []interface{}) {
 
 // normalizeSarifForComparison removes or normalizes fields with known gaps
 // to allow testing of correctly implemented features while documenting TODOs
-func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]interface{} {
+func normalizeSarifForComparison(t *testing.T, sarifJSON string, ignoreSuppressions bool) map[string]interface{} {
 	t.Helper()
 
 	var sarif map[string]interface{}
@@ -429,6 +478,9 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 			continue
 		}
 
+		// Normalize suppressions (not included in original SARIF)
+		normalizeSuppressions(run, ignoreSuppressions)
+
 		// Normalize automation ID (missing project name in actual output)
 		normalizeAutomationID(run)
 
@@ -440,9 +492,6 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 		// Normalize help content (test data may have different vulnerability descriptions)
 		normalizeHelpContent(run)
-
-		// Normalize suppressions (not included in original SARIF)
-		normalizeSuppressions(run)
 	}
 
 	return sarif
@@ -452,29 +501,34 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 
 	testCases := []struct {
-		name              string
-		expectedSarifPath string
-		testResultPath    string
+		name               string
+		expectedSarifPath  string
+		testResultPath     string
+		ignoreSuppressions bool
 	}{
 		{
-			name:              "cli",
-			expectedSarifPath: "testdata/ufm/original_cli.sarif",
-			testResultPath:    "testdata/ufm/testresult_cli.json",
+			name:               "cli",
+			expectedSarifPath:  "testdata/ufm/original_cli.sarif",
+			testResultPath:     "testdata/ufm/testresult_cli.json",
+			ignoreSuppressions: true,
 		},
 		{
-			name:              "webgoat",
-			expectedSarifPath: "testdata/ufm/webgoat.sarif.json",
-			testResultPath:    "testdata/ufm/webgoat.testresult.json",
+			name:               "webgoat",
+			expectedSarifPath:  "testdata/ufm/webgoat.sarif.json",
+			testResultPath:     "testdata/ufm/webgoat.testresult.json",
+			ignoreSuppressions: true,
 		},
 		{
-			name:              "webgoat with suppression",
-			expectedSarifPath: "testdata/ufm/webgoat.ignore.sarif.json",
-			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
+			name:               "webgoat_with_suppression",
+			expectedSarifPath:  "testdata/ufm/webgoat.ignore.sarif.json",
+			testResultPath:     "testdata/ufm/webgoat.ignore.testresult.json",
+			ignoreSuppressions: false,
 		},
 		{
-			name:              "multiproject",
-			expectedSarifPath: "testdata/ufm/multi_project.sarif.json",
-			testResultPath:    "testdata/ufm/multi_project.testresult.json",
+			name:               "multiproject",
+			expectedSarifPath:  "testdata/ufm/multi_project.sarif.json",
+			testResultPath:     "testdata/ufm/multi_project.testresult.json",
+			ignoreSuppressions: true,
 		},
 	}
 
@@ -501,8 +555,8 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			validateSarifData(t, writer.Bytes())
 
 			// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
-			expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
-			actualNormalized := normalizeSarifForComparison(t, writer.String())
+			expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes), tc.ignoreSuppressions)
+			actualNormalized := normalizeSarifForComparison(t, writer.String(), tc.ignoreSuppressions)
 
 			// Normalize fixes to only keep fixes that are present in expected SARIF
 			normalizeFixes(t, expectedNormalized, actualNormalized)
@@ -528,7 +582,7 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 				if err := os.WriteFile(fmt.Sprintf("/tmp/%s_actual_normalized.json", tc.name), actualJSON, 0644); err != nil {
 					t.Logf("Failed to write actual output: %v", err)
 				}
-				t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
+				t.Logf("Wrote normalized outputs to /tmp/%s_expected_normalized.json and /tmp/%s_actual_normalized.json for debugging", tc.name, tc.name)
 			}
 		})
 	}
