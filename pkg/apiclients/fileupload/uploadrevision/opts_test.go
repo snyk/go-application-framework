@@ -30,7 +30,8 @@ func Test_WithHTTPClient(t *testing.T) {
 		require.NoError(t, err)
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write(resp)
+		_, err = w.Write(resp)
+		assert.NoError(t, err)
 	}))
 	defer srv.Close()
 	customClient := srv.Client()

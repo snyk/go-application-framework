@@ -35,7 +35,7 @@ func TestClients(t *testing.T) {
 			getClient: func(t *testing.T, _ uuid.UUID, expectedAllow AllowList) (Client, func()) {
 				t.Helper()
 
-				c := NewFakeClient(expectedAllow, nil)
+				c := NewFakeClient(expectedAllow)
 
 				return c, func() {}
 			},

@@ -91,7 +91,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 			{Path: "README.md", Content: "# Project"},
 		}
 
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList, nil)
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList)
 
 		paths := []string{
 			filepath.Join(dir.Name(), "src"),       // Directory
@@ -116,7 +116,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 	})
 
 	t.Run("error handling with better context", func(t *testing.T) {
-		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision.LoadedFile{}, allowList, nil)
+		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision.LoadedFile{}, allowList)
 
 		paths := []string{
 			nonexistpath,
@@ -157,7 +157,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				Content: "content2",
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -179,7 +179,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				Content: "package utils\n\nfunc Helper() {}",
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -213,7 +213,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				Content: "foo bar",
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -248,7 +248,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				TotalPayloadSizeLimit: 100,
 				FilePathLengthLimit:   20,
 			},
-		}, allFiles, allowList, nil)
+		}, allFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -291,7 +291,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				TotalPayloadSizeLimit: 70, // 70 bytes - forces batching by size
 				FilePathLengthLimit:   20,
 			},
-		}, expectedFiles, allowList, nil)
+		}, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -329,7 +329,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				TotalPayloadSizeLimit: 200,
 				FilePathLengthLimit:   20,
 			},
-		}, expectedFiles, allowList, nil)
+		}, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -373,7 +373,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				TotalPayloadSizeLimit: 100,
 				FilePathLengthLimit:   20,
 			},
-		}, expectedFiles, allowList, nil)
+		}, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -403,7 +403,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				TotalPayloadSizeLimit: 200,
 				FilePathLengthLimit:   20,
 			},
-		}, expectedFiles, allowList, nil)
+		}, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -438,7 +438,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 			},
 		}
 
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList, nil)
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList)
 
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
@@ -472,7 +472,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 				Content: "content1",
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
@@ -497,7 +497,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 				TotalPayloadSizeLimit: 10_000,
 				FilePathLengthLimit:   20,
 			},
-		}, expectedFiles, allowList, nil)
+		}, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
@@ -530,7 +530,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 				TotalPayloadSizeLimit: 10_000,
 				FilePathLengthLimit:   5,
 			},
-		}, expectedFiles, allowList, nil)
+		}, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
@@ -556,7 +556,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 			},
 		}
 
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList)
 
 		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"))
 		require.NoError(t, err)
@@ -592,7 +592,6 @@ func setupTest(
 	llcfg uploadrevision.FakeClientConfig,
 	files []uploadrevision.LoadedFile,
 	allowList filters.AllowList,
-	filtersErr error,
 ) (context.Context, *uploadrevision.FakeSealableClient, *fileupload.HTTPClient, *os.File) {
 	t.Helper()
 
@@ -600,7 +599,7 @@ func setupTest(
 	orgID := uuid.New()
 
 	fakeSealeableClient := uploadrevision.NewFakeSealableClient(llcfg)
-	fakeFiltersClient := filters.NewFakeClient(allowList, filtersErr)
+	fakeFiltersClient := filters.NewFakeClient(allowList)
 	client := fileupload.NewClient(
 		nil,
 		fileupload.Config{

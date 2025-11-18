@@ -12,10 +12,10 @@ type FakeClient struct {
 
 var _ Client = (*FakeClient)(nil)
 
-func NewFakeClient(allowList AllowList, err error) *FakeClient {
+func NewFakeClient(allowList AllowList) *FakeClient {
 	return &FakeClient{
 		getFilters: func(ctx context.Context, orgID uuid.UUID) (AllowList, error) {
-			return allowList, err
+			return allowList, nil
 		},
 	}
 }

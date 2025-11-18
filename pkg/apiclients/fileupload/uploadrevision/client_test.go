@@ -504,7 +504,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision.HTTPSealab
 			assert.Equal(t, "application/vnd.api+json", r.Header.Get("Content-Type"))
 
 			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte(`{
+			_, err := w.Write([]byte(`{
 				"data": {
 					"attributes": {
 						"revision_type": "snapshot",
@@ -514,6 +514,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision.HTTPSealab
 					"type": "upload_revision"
 				}
 			}`))
+			assert.NoError(t, err)
 
 		// Upload files
 		case r.Method == http.MethodPost &&
@@ -549,7 +550,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision.HTTPSealab
 			assert.Equal(t, "application/vnd.api+json", r.Header.Get("Content-Type"))
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{
+			_, err := w.Write([]byte(`{
 				"data": {
 					"attributes": {
 						"revision_type": "snapshot",
@@ -559,6 +560,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision.HTTPSealab
 					"type": "upload_revision"
 				}
 			}`))
+			assert.NoError(t, err)
 
 		default:
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
