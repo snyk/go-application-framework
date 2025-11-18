@@ -23,7 +23,7 @@ type Filters struct {
 }
 
 // UploadOptions configures the behavior of file upload operations.
-type UploadOptions struct {
+type uploadOptions struct {
 	SkipDeeproxyFiltering bool
 }
 

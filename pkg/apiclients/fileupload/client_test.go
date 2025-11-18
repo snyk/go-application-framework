@@ -98,7 +98,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 			filepath.Join(dir.Name(), "README.md"), // Individual file
 		}
 
-		res, err := client.CreateRevisionFromPaths(ctx, paths, fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromPaths(ctx, paths)
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -115,25 +115,6 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		assert.Contains(t, uploadedPaths, "README.md")
 	})
 
-	t.Run("get filters error", func(t *testing.T) {
-		allFiles := []uploadrevision.LoadedFile{
-			{Path: mainpath, Content: "package main"},
-			{Path: utilspath, Content: "package utils"},
-			{Path: "config.yaml", Content: "version: 1"},
-			{Path: "README.md", Content: "# Project"},
-		}
-
-		ctx, _, client, dir := setupTest(t, llcfg, allFiles, filters.AllowList{}, assert.AnError)
-
-		paths := []string{
-			filepath.Join(dir.Name(), "src"),       // Directory
-			filepath.Join(dir.Name(), "README.md"), // Individual file
-		}
-
-		_, err := client.CreateRevisionFromPaths(ctx, paths, fileupload.UploadOptions{})
-		require.ErrorContains(t, err, "failed to load deeproxy filters")
-	})
-
 	t.Run("error handling with better context", func(t *testing.T) {
 		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision.LoadedFile{}, allowList, nil)
 
@@ -142,7 +123,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 			missingpath,
 		}
 
-		_, err := client.CreateRevisionFromPaths(ctx, paths, fileupload.UploadOptions{})
+		_, err := client.CreateRevisionFromPaths(ctx, paths)
 		require.Error(t, err)
 		var fileAccessErr *uploadrevision.FileAccessError
 		assert.ErrorAs(t, err, &fileAccessErr)
@@ -178,7 +159,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 		}
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -200,7 +181,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 		}
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -234,7 +215,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 		}
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -269,7 +250,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 			},
 		}, allFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		var fileSizeErr *uploadrevision.FileSizeLimitError
@@ -312,7 +293,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -350,7 +331,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -394,7 +375,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -424,49 +405,10 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
-		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
-		require.NoError(t, err)
-		expectEqualFiles(t, expectedFiles, uploadedFiles)
-	})
-
-	t.Run("uploading a directory applies filtering", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
-			{
-				Path:    mainpath,
-				Content: "package main\n\nfunc main() {}",
-			},
-			{
-				Path:    helperpath,
-				Content: "package utils\n\nfunc Helper() {}",
-			},
-			{
-				Path:    gomodpath,
-				Content: "foo bar",
-			},
-		}
-		additionalFiles := []uploadrevision.LoadedFile{
-			{
-				Path:    scriptpath,
-				Content: "console.log('hi')",
-			},
-			{
-				Path:    packagelockpath,
-				Content: "{}",
-			},
-		}
-		//nolint:gocritic // Not an issue for tests.
-		allFiles := append(expectedFiles, additionalFiles...)
-
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList, nil)
-
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{})
-		require.NoError(t, err)
-
-		assert.Len(t, res.FilteredFiles, 2)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
 		require.NoError(t, err)
 		expectEqualFiles(t, expectedFiles, uploadedFiles)
@@ -498,7 +440,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromDir(ctx, dir.Name(), fileupload.UploadOptions{SkipDeeproxyFiltering: true})
+		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -532,7 +474,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 		}
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -557,7 +499,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
 
 		var fileSizeErr *uploadrevision.FileSizeLimitError
@@ -590,7 +532,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 			},
 		}, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), fileupload.UploadOptions{})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
 
 		var filePathErr *uploadrevision.FilePathLengthLimitError
@@ -606,25 +548,6 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 		expectEqualFiles(t, nil, uploadedFiles)
 	})
 
-	t.Run("uploading a file applies filtering", func(t *testing.T) {
-		allFiles := []uploadrevision.LoadedFile{
-			{
-				Path:    "script.js",
-				Content: "console.log('hi')",
-			},
-		}
-
-		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList, nil)
-
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"), fileupload.UploadOptions{})
-		require.NoError(t, err)
-
-		assert.Len(t, res.FilteredFiles, 1)
-		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
-		require.NoError(t, err)
-		expectEqualFiles(t, nil, uploadedFiles)
-	})
-
 	t.Run("uploading a file with filtering disabled", func(t *testing.T) {
 		expectedFiles := []uploadrevision.LoadedFile{
 			{
@@ -635,7 +558,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList, nil)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"), fileupload.UploadOptions{SkipDeeproxyFiltering: true})
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"))
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)

@@ -9,9 +9,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/util"
+
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
-	"github.com/snyk/go-application-framework/pkg/apiclients/util"
 )
 
 func TestUploadFileIntegration(t *testing.T) {
@@ -24,7 +25,7 @@ func TestUploadFileIntegration(t *testing.T) {
 
 	dir := util.CreateTmpFiles(t, files)
 
-	res, err := fileUploadClient.CreateRevisionFromFile(t.Context(), filepath.Join(dir.Name(), files[0].Path), fileupload.UploadOptions{})
+	res, err := fileUploadClient.CreateRevisionFromFile(t.Context(), filepath.Join(dir.Name(), files[0].Path))
 	if err != nil {
 		t.Errorf("failed to create fileupload revision: %s", err.Error())
 	}
@@ -43,7 +44,7 @@ func TestUploadDirectoryIntegration(t *testing.T) {
 
 	dir := util.CreateTmpFiles(t, files)
 
-	res, err := fileUploadClient.CreateRevisionFromDir(t.Context(), dir.Name(), fileupload.UploadOptions{})
+	res, err := fileUploadClient.CreateRevisionFromDir(t.Context(), dir.Name())
 	if err != nil {
 		t.Errorf("failed to create fileupload revision: %s", err.Error())
 	}
@@ -61,7 +62,7 @@ func TestUploadLargeFileIntegration(t *testing.T) {
 
 	dir := util.CreateTmpFiles(t, files)
 
-	res, err := fileUploadClient.CreateRevisionFromFile(t.Context(), filepath.Join(dir.Name(), files[0].Path), fileupload.UploadOptions{})
+	res, err := fileUploadClient.CreateRevisionFromFile(t.Context(), filepath.Join(dir.Name(), files[0].Path))
 	if err != nil {
 		t.Errorf("failed to create fileupload revision: %s", err.Error())
 	}

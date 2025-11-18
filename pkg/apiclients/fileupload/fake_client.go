@@ -32,7 +32,7 @@ func (f *FakeClient) WithError(err error) *FakeClient {
 	return f
 }
 
-func (f *FakeClient) CreateRevisionFromDir(ctx context.Context, dirPath string, opts UploadOptions) (UploadResult, error) {
+func (f *FakeClient) CreateRevisionFromDir(ctx context.Context, dirPath string) (UploadResult, error) {
 	if f.err != nil {
 		return UploadResult{}, f.err
 	}
@@ -46,10 +46,10 @@ func (f *FakeClient) CreateRevisionFromDir(ctx context.Context, dirPath string, 
 		return UploadResult{}, fmt.Errorf("the provided path is not a directory: %s", dirPath)
 	}
 
-	return f.CreateRevisionFromPaths(ctx, []string{dirPath}, opts)
+	return f.CreateRevisionFromPaths(ctx, []string{dirPath})
 }
 
-func (f *FakeClient) CreateRevisionFromFile(ctx context.Context, filePath string, opts UploadOptions) (UploadResult, error) {
+func (f *FakeClient) CreateRevisionFromFile(ctx context.Context, filePath string) (UploadResult, error) {
 	if f.err != nil {
 		return UploadResult{}, f.err
 	}
@@ -63,10 +63,10 @@ func (f *FakeClient) CreateRevisionFromFile(ctx context.Context, filePath string
 		return UploadResult{}, fmt.Errorf("the provided path is not a regular file: %s", filePath)
 	}
 
-	return f.CreateRevisionFromPaths(ctx, []string{filePath}, opts)
+	return f.CreateRevisionFromPaths(ctx, []string{filePath})
 }
 
-func (f *FakeClient) CreateRevisionFromPaths(ctx context.Context, paths []string, opts UploadOptions) (UploadResult, error) {
+func (f *FakeClient) CreateRevisionFromPaths(ctx context.Context, paths []string) (UploadResult, error) {
 	if f.err != nil {
 		return UploadResult{}, f.err
 	}
