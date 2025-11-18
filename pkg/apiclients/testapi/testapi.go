@@ -120,8 +120,8 @@ type TestResult interface {
 	GetEffectiveSummary() *FindingSummary
 	GetRawSummary() *FindingSummary
 
-	SetMetadata(key string, value string)
-	GetMetadata() map[string]string
+	SetMetadata(key string, value interface{})
+	GetMetadata() map[string]interface{}
 
 	Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error)
 }
@@ -200,7 +200,7 @@ type testResult struct {
 	findingsError    error         // Error encountered during findings fetch, if any
 	findingsOnce     sync.Once     // Ensures findings are fetched only once
 
-	metadata map[string]string
+	metadata map[string]interface{}
 
 	// Unexported reference to the parent handle to access client and orgID for fetching
 	handle *testHandle // Populated when testResult is created
@@ -246,12 +246,12 @@ func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveS
 func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
 
 // SetMetadata sets the metadata for the given key.
-func (r *testResult) SetMetadata(key string, value string) {
+func (r *testResult) SetMetadata(key string, value interface{}) {
 	r.metadata[key] = value
 }
 
 // GetMetadata returns the metadata for the given key.
-func (r *testResult) GetMetadata() map[string]string {
+func (r *testResult) GetMetadata() map[string]interface{} {
 	return r.metadata
 }
 
@@ -542,7 +542,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
 		handle:            h,
-		metadata:          make(map[string]string),
+		metadata:          make(map[string]interface{}),
 	}
 
 	if attrs.State != nil {

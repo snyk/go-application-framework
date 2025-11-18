@@ -124,10 +124,10 @@ func (mr *MockTestResultMockRecorder) GetExecutionState() *gomock.Call {
 }
 
 // GetMetadata mocks base method.
-func (m *MockTestResult) GetMetadata() map[string]string {
+func (m *MockTestResult) GetMetadata() map[string]interface{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMetadata")
-	ret0, _ := ret[0].(map[string]string)
+	ret0, _ := ret[0].(map[string]interface{})
 	return ret0
 }
 
@@ -250,7 +250,7 @@ func (mr *MockTestResultMockRecorder) GetWarnings() *gomock.Call {
 }
 
 // SetMetadata mocks base method.
-func (m *MockTestResult) SetMetadata(key, value string) {
+func (m *MockTestResult) SetMetadata(key string, value interface{}) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetMetadata", key, value)
 }

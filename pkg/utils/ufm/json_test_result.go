@@ -27,7 +27,7 @@ type jsonTestResult struct {
 	EffectiveSummary  *testapi.FindingSummary         `json:"effectiveSummary,omitempty"`
 	RawSummary        *testapi.FindingSummary         `json:"rawSummary,omitempty"`
 	FindingsComplete  bool                            `json:"findingsComplete"`
-	Metadata          map[string]string               `json:"metadata,omitempty"`
+	Metadata          map[string]interface{}          `json:"metadata,omitempty"`
 	// Optimized wire format: central problem store (optional, for serialization)
 	ProblemStore map[string]json.RawMessage `json:"problemStore,omitempty"`
 	ProblemRefs  map[string][]string        `json:"_problemRefs,omitempty"`
@@ -105,12 +105,12 @@ func (j *jsonTestResult) GetRawSummary() *testapi.FindingSummary {
 }
 
 // SetMetadata sets the metadata for the given key.
-func (j *jsonTestResult) SetMetadata(key string, value string) {
+func (j *jsonTestResult) SetMetadata(key string, value interface{}) {
 	j.Metadata[key] = value
 }
 
 // GetMetadata returns the metadata for the given key.
-func (j *jsonTestResult) GetMetadata() map[string]string {
+func (j *jsonTestResult) GetMetadata() map[string]interface{} {
 	return j.Metadata
 }
 

@@ -9,6 +9,7 @@
 			{{- range $findingTypeIndex, $findingType := $findingTypes }}
 			{{- $issues := getIssuesFromTestResult $result $findingType }}
 			{{- $issuesSize := sub (len $issues) 1 }}
+			{{- $metadata := $result.GetMetadata }}
 			{
 				"tool": {
 					"driver" : {
@@ -41,6 +42,10 @@
 								]{{if ge $cvssScore 0.0}},
 								"cvssv3_baseScore": {{ $cvssScore }},
 								"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
+								{{- $dependencyCount := index $metadata "dependency-count" }}
+								{{- if $dependencyCount }},
+								"artifactsScanned": {{ $dependencyCount }}
+								{{- end }}
 							}
 						}{{if lt $index $issuesSize}},{{end}}
 						{{- end }}
@@ -200,7 +205,7 @@
 				},
 				*/ -}}
 				"automationDetails": {
-					{{- $projectName := index $result.GetMetadata "project-name" }}
+					{{- $projectName := index $metadata "project-name" }}
 					"id": "{{- getAutomationDetailsId $projectName (printf "%s" $findingType) }}"
 				}
 			}{{if or (lt $findingTypeIndex $findingTypesSize) (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}	
