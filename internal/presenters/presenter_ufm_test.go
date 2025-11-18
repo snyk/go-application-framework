@@ -55,8 +55,12 @@ func normalizeAutomationID(run map[string]interface{}) {
 	if automationDetails, ok := run["automationDetails"].(map[string]interface{}); ok {
 		if id, ok := automationDetails["id"].(string); ok {
 			parts := strings.Split(id, "/")
+			offset := 1
+			if len(parts) >= 5 {
+				offset = 2
+			}
 			if len(parts) >= 2 {
-				automationDetails["id"] = strings.Join(parts[:len(parts)-1], "/") + "/*"
+				automationDetails["id"] = strings.Join(parts[:len(parts)-offset], "/") + "/*"
 			}
 		}
 	}
@@ -67,7 +71,6 @@ func normalizeAutomationID(run map[string]interface{}) {
 func normalizeToolProperties(run map[string]interface{}) {
 	if tool, ok := run["tool"].(map[string]interface{}); ok {
 		if driver, ok := tool["driver"].(map[string]interface{}); ok {
-			delete(driver, "properties")
 			normalizeRules(driver)
 		}
 	}
@@ -429,7 +432,7 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 		// Normalize automation ID (missing project name in actual output)
 		normalizeAutomationID(run)
 
-		// Normalize tool properties and rules (artifactsScanned missing, CVSS formatting, license wording)
+		// Normalize tool properties and rules (CVSS formatting, license wording)
 		normalizeToolProperties(run)
 
 		// Normalize result messages (license issue wording)
@@ -514,7 +517,6 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			if !assert.JSONEq(t, string(expectedJSON), string(actualJSON),
 				"SARIF output differs. Known gaps are normalized:\n"+
 					"- Automation ID: missing project name\n"+
-					"- Tool properties: missing artifactsScanned\n"+
 					"- Suppressions: not included in original SARIF\n"+
 					"- Fix packages: using vulnerable package instead of direct dependency\n"+
 					"- Package versions: may differ based on dependency path selection\n"+

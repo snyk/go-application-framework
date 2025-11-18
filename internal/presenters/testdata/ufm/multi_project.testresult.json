@@ -12,7 +12,8 @@
     "metadata": {
       "project-name": "tpwe",
       "display-target-file": "dotnet/obj/project.assets.json",
-      "target-directory": "multi-project"
+      "target-directory": "multi-project",
+      "dependency-count": 84
     },
     "createdAt": "2025-11-13T15:29:14.585711Z",
     "testSubject": {
@@ -824,7 +825,8 @@
     "metadata": {
       "project-name": "package.json",
       "display-target-file": "ghost/package.json",
-      "target-directory": "multi-project"
+      "target-directory": "multi-project",
+      "dependency-count": 23
     },
     "createdAt": "2025-11-13T15:29:14.491151Z",
     "testSubject": {
@@ -4388,7 +4390,8 @@
     "metadata": {
       "project-name": "golangproject",
       "display-target-file": "golang/go.mod",
-      "target-directory": "multi-project"
+      "target-directory": "multi-project",
+      "dependency-count": 29
     },
     "createdAt": "2025-11-13T15:29:14.506347Z",
     "testSubject": {
@@ -4543,7 +4546,8 @@
     "metadata": {
       "project-name": "demo:maven-demo",
       "display-target-file": "maven/pom.xml",
-      "target-directory": "multi-project"
+      "target-directory": "multi-project",
+      "dependency-count": 4
     },
     "createdAt": "2025-11-13T15:29:14.480432Z",
     "testSubject": {
@@ -4595,7 +4599,8 @@
     "metadata": {
       "project-name": "not-python",
       "display-target-file": "not-python/requirements.txt",
-      "target-directory": "multi-project"
+      "target-directory": "multi-project",
+      "dependency-count": 7
     },
     "createdAt": "2025-11-13T15:29:14.440374Z",
     "testSubject": {
@@ -6413,7 +6418,8 @@
     "metadata": {
       "project-name": "python",
       "display-target-file": "python/requirements.txt",
-      "target-directory": "multi-project"
+      "target-directory": "multi-project",
+      "dependency-count": 7
     },
     "createdAt": "2025-11-13T15:29:18.009229Z",
     "testSubject": {
@@ -8228,7 +8234,8 @@
     "metadata": {
       "project-name": "tsc",
       "display-target-file": "tsc/package.json",
-      "target-directory": "multi-project"
+      "target-directory": "multi-project",
+      "dependency-count": 23
     },
     "createdAt": "2025-11-13T15:29:19.594887Z",
     "testSubject": {

@@ -35,7 +35,8 @@
     "metadata": {
       "project-name": "snyk",
       "display-target-file": "package.json",
-      "target-directory": "test-project"
+      "target-directory": "test-project",
+      "dependency-count": 552
     },
     "createdAt": "2025-10-28T15:42:29.689452Z",
     "testSubject": {

@@ -9,6 +9,9 @@
           "semanticVersion": "1.1301.0",
           "version": "1.1301.0",
           "informationUri": "https://docs.snyk.io/",
+          "properties": {
+            "artifactsScanned": 163
+          },
           "rules": [
             {
               "id": "SNYK-JAVA-CHQOSLOGBACK-13169722",
@@ -6179,7 +6182,7 @@
         }
       ],
       "automationDetails": {
-        "id": "Snyk/Open Source/2025-11-12T17:36:30Z"
+        "id": "Snyk/Open Source/webgoat/2025-11-12T17:36:30Z"
       }
     }
   ]

@@ -9,6 +9,7 @@
 			{{- range $findingTypeIndex, $findingType := $findingTypes }}
 			{{- $issues := getIssuesFromTestResult $result $findingType }}
 			{{- $issuesSize := sub (len $issues) 1 }}
+			{{- $metadata := $result.GetMetadata }}
 			{
 				"tool": {
 					"driver" : {
@@ -16,35 +17,41 @@
 						"semanticVersion" : "{{- getRuntimeInfo "version" }}",
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",
-					"rules" : [
-						{{- range $index, $issue := $issues }}
-						{{- $tags := buildRuleTags $issue }}
-						{{- $cvssScore := getRuleCVSSScore $issue }}
-						{
-							"id": {{ getQuotedString $issue.GetID }},
-							"shortDescription": {
-								"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
-							},
-							"fullDescription": {
-								"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
-							},
-							"help": {
-								"text": "",
-								"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
-							},
-							"properties": {
-								"tags": [
-									{{- $tagsSize := sub (len $tags) 1 }}
-									{{- range $tagIndex, $tag := $tags }}
-									{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
-									{{- end }}
-								]{{if ge $cvssScore 0.0}},
-								"cvssv3_baseScore": {{ $cvssScore }},
-								"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
-							}
-						}{{if lt $index $issuesSize}},{{end}}
+						"rules" : [
+							{{- range $index, $issue := $issues }}
+							{{- $tags := buildRuleTags $issue }}
+							{{- $cvssScore := getRuleCVSSScore $issue }}
+							{
+								"id": {{ getQuotedString $issue.GetID }},
+								"shortDescription": {
+									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
+								},
+								"fullDescription": {
+									"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
+								},
+								"help": {
+									"text": "",
+									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
+								},
+								"properties": {
+									"tags": [
+										{{- $tagsSize := sub (len $tags) 1 }}
+										{{- range $tagIndex, $tag := $tags }}
+										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
+										{{- end }}
+									]{{if ge $cvssScore 0.0}},
+									"cvssv3_baseScore": {{ $cvssScore }},
+									"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
+								}
+							}{{if lt $index $issuesSize}},{{end}}
+							{{- end }}
+						]
+						{{- $dependencyCount := index $metadata "dependency-count" }}
+						{{- if $dependencyCount }},
+						"properties": {
+							"artifactsScanned": {{ $dependencyCount }}
+						}
 						{{- end }}
-					]
 					}
 				},
 			"results": [
@@ -200,8 +207,8 @@
 				},
 				*/ -}}
 				"automationDetails": {
-					{{- $projectName := index $result.GetMetadata "project-name" }}
-					"id": "{{- getAutomationDetailsId $projectName (printf "%s" $findingType) }}"
+					{{- $projectName := index $metadata "project-name" }}
+					"id": "{{- getAutomationDetailsId (printf "%s/%d" $projectName $resultIndex) (printf "%s" $findingType) }}"
 				}
 			}{{if or (lt $findingTypeIndex $findingTypesSize) (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}	
 		{{- end}}
