@@ -17,39 +17,41 @@
 						"semanticVersion" : "{{- getRuntimeInfo "version" }}",
 						"version" : "{{- getRuntimeInfo "version" }}",
 						"informationUri" : "https://docs.snyk.io/",
-					"rules" : [
-						{{- range $index, $issue := $issues }}
-						{{- $tags := buildRuleTags $issue }}
-						{{- $cvssScore := getRuleCVSSScore $issue }}
-						{
-							"id": {{ getQuotedString $issue.GetID }},
-							"shortDescription": {
-								"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
-							},
-							"fullDescription": {
-								"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
-							},
-							"help": {
-								"text": "",
-								"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
-							},
-							"properties": {
-								"tags": [
-									{{- $tagsSize := sub (len $tags) 1 }}
-									{{- range $tagIndex, $tag := $tags }}
-									{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
-									{{- end }}
-								]{{if ge $cvssScore 0.0}},
-								"cvssv3_baseScore": {{ $cvssScore }},
-								"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
-								{{- $dependencyCount := index $metadata "dependency-count" }}
-								{{- if $dependencyCount }},
-								"artifactsScanned": {{ $dependencyCount }}
-								{{- end }}
-							}
-						}{{if lt $index $issuesSize}},{{end}}
+						"rules" : [
+							{{- range $index, $issue := $issues }}
+							{{- $tags := buildRuleTags $issue }}
+							{{- $cvssScore := getRuleCVSSScore $issue }}
+							{
+								"id": {{ getQuotedString $issue.GetID }},
+								"shortDescription": {
+									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
+								},
+								"fullDescription": {
+									"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
+								},
+								"help": {
+									"text": "",
+									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
+								},
+								"properties": {
+									"tags": [
+										{{- $tagsSize := sub (len $tags) 1 }}
+										{{- range $tagIndex, $tag := $tags }}
+										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
+										{{- end }}
+									]{{if ge $cvssScore 0.0}},
+									"cvssv3_baseScore": {{ $cvssScore }},
+									"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
+								}
+							}{{if lt $index $issuesSize}},{{end}}
+							{{- end }}
+						]
+						{{- $dependencyCount := index $metadata "dependency-count" }}
+						{{- if $dependencyCount }},
+						"properties": {
+							"artifactsScanned": {{ $dependencyCount }}
+						}
 						{{- end }}
-					]
 					}
 				},
 			"results": [
