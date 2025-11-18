@@ -13,7 +13,7 @@ import (
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/filters"
+	"github.com/snyk/go-application-framework/internal/api/fileupload/filters"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )

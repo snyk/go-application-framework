@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/internal/api/fileupload/filters"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/filters"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
 )
 
@@ -591,7 +591,7 @@ func setupTest(
 	t *testing.T,
 	llcfg uploadrevision.FakeClientConfig,
 	files []uploadrevision.LoadedFile,
-	allowList filters.AllowList,
+	_ filters.AllowList,
 ) (context.Context, *uploadrevision.FakeSealableClient, *fileupload.HTTPClient, *os.File) {
 	t.Helper()
 
@@ -599,14 +599,12 @@ func setupTest(
 	orgID := uuid.New()
 
 	fakeSealeableClient := uploadrevision.NewFakeSealableClient(llcfg)
-	fakeFiltersClient := filters.NewFakeClient(allowList)
 	client := fileupload.NewClient(
 		nil,
 		fileupload.Config{
 			OrgID: orgID,
 		},
 		fileupload.WithUploadRevisionSealableClient(fakeSealeableClient),
-		fileupload.WithFiltersClient(fakeFiltersClient),
 	)
 
 	dir := createTmpFiles(t, files)

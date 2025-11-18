@@ -3,7 +3,6 @@ package fileupload
 import (
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/filters"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
 )
 
@@ -14,13 +13,6 @@ type Option func(*HTTPClient)
 func WithUploadRevisionSealableClient(client uploadrevision.SealableClient) Option {
 	return func(c *HTTPClient) {
 		c.uploadRevisionSealableClient = client
-	}
-}
-
-// WithFiltersClient allows injecting a custom low-level client (primarily for testing).
-func WithFiltersClient(client filters.Client) Option {
-	return func(c *HTTPClient) {
-		c.filtersClient = client
 	}
 }
 
