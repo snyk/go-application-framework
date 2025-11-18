@@ -208,7 +208,7 @@
 				*/ -}}
 				"automationDetails": {
 					{{- $projectName := index $metadata "project-name" }}
-					"id": "{{- getAutomationDetailsId $projectName (printf "%s" $findingType) }}"
+					"id": "{{- getAutomationDetailsId (printf "%s/%d" $projectName $resultIndex) (printf "%s" $findingType) }}"
 				}
 			}{{if or (lt $findingTypeIndex $findingTypesSize) (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}	
 		{{- end}}

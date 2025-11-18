@@ -55,8 +55,12 @@ func normalizeAutomationID(run map[string]interface{}) {
 	if automationDetails, ok := run["automationDetails"].(map[string]interface{}); ok {
 		if id, ok := automationDetails["id"].(string); ok {
 			parts := strings.Split(id, "/")
+			offset := 1
+			if len(parts) >= 5 {
+				offset = 2
+			}
 			if len(parts) >= 2 {
-				automationDetails["id"] = strings.Join(parts[:len(parts)-1], "/") + "/*"
+				automationDetails["id"] = strings.Join(parts[:len(parts)-offset], "/") + "/*"
 			}
 		}
 	}
