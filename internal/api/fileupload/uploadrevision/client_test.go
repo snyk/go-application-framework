@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 var (
@@ -42,27 +42,27 @@ func TestClient_CreateRevision(t *testing.T) {
 }
 
 func TestClient_CreateRevision_EmptyOrgID(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	resp, err := c.CreateRevision(context.Background(), uuid.Nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.ErrorIs(t, err, uploadrevision.ErrEmptyOrgID)
+	assert.ErrorIs(t, err, uploadrevision2.ErrEmptyOrgID)
 }
 
 func TestClient_CreateRevision_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
-	c := uploadrevision.NewClient(uploadrevision.Config{
+	c := uploadrevision2.NewClient(uploadrevision2.Config{
 		BaseURL: srv.URL,
 	})
 
 	resp, err := c.CreateRevision(context.Background(), orgID)
 
 	assert.Nil(t, resp)
-	var httpErr *uploadrevision.HTTPError
+	var httpErr *uploadrevision2.HTTPError
 	assert.ErrorAs(t, err, &httpErr)
 	assert.Equal(t, http.StatusInternalServerError, httpErr.StatusCode)
 	assert.Equal(t, "create upload revision", httpErr.Operation)
@@ -81,7 +81,7 @@ func TestClient_UploadFiles(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		orgID,
 		revID,
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: "foo/bar", File: fd},
 		})
 
@@ -105,7 +105,7 @@ func TestClient_UploadFiles_MultipleFiles(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		orgID,
 		revID,
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: "file1.txt", File: file1},
 			{Path: "file2.json", File: file2},
 		})
@@ -114,7 +114,7 @@ func TestClient_UploadFiles_MultipleFiles(t *testing.T) {
 }
 
 func TestClient_UploadFiles_EmptyOrgID(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	mockFS := fstest.MapFS{
 		"test.txt": {Data: []byte("content")},
@@ -125,16 +125,16 @@ func TestClient_UploadFiles_EmptyOrgID(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		uuid.Nil, // empty orgID
 		revID,
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: "test.txt", File: file},
 		})
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, uploadrevision.ErrEmptyOrgID)
+	assert.ErrorIs(t, err, uploadrevision2.ErrEmptyOrgID)
 }
 
 func TestClient_UploadFiles_EmptyRevisionID(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	mockFS := fstest.MapFS{
 		"test.txt": {Data: []byte("content")},
@@ -145,16 +145,16 @@ func TestClient_UploadFiles_EmptyRevisionID(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		orgID,
 		uuid.Nil, // empty revisionID
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: "test.txt", File: file},
 		})
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, uploadrevision.ErrEmptyRevisionID)
+	assert.ErrorIs(t, err, uploadrevision2.ErrEmptyRevisionID)
 }
 
 func TestClient_UploadFiles_FileSizeLimit(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	largeContent := make([]byte, c.GetLimits().FileSizeLimit+1)
 	mockFS := fstest.MapFS{
@@ -167,12 +167,12 @@ func TestClient_UploadFiles_FileSizeLimit(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		orgID,
 		revID,
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: "large_file.txt", File: file},
 		})
 
 	assert.Error(t, err)
-	var fileSizeErr *uploadrevision.FileSizeLimitError
+	var fileSizeErr *uploadrevision2.FileSizeLimitError
 	assert.ErrorAs(t, err, &fileSizeErr)
 	assert.Equal(t, "large_file.txt", fileSizeErr.FilePath)
 	assert.Equal(t, c.GetLimits().FileSizeLimit+1, fileSizeErr.FileSize)
@@ -180,9 +180,9 @@ func TestClient_UploadFiles_FileSizeLimit(t *testing.T) {
 }
 
 func TestClient_UploadFiles_FileCountLimit(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
-	files := make([]uploadrevision.UploadFile, c.GetLimits().FileCountLimit+1)
+	files := make([]uploadrevision2.UploadFile, c.GetLimits().FileCountLimit+1)
 	mockFS := fstest.MapFS{}
 
 	for i := range c.GetLimits().FileCountLimit + 1 {
@@ -192,7 +192,7 @@ func TestClient_UploadFiles_FileCountLimit(t *testing.T) {
 		file, err := mockFS.Open(filename)
 		require.NoError(t, err)
 
-		files[i] = uploadrevision.UploadFile{
+		files[i] = uploadrevision2.UploadFile{
 			Path: filename,
 			File: file,
 		}
@@ -201,14 +201,14 @@ func TestClient_UploadFiles_FileCountLimit(t *testing.T) {
 	err := c.UploadFiles(context.Background(), orgID, revID, files)
 
 	assert.Error(t, err)
-	var fileCountErr *uploadrevision.FileCountLimitError
+	var fileCountErr *uploadrevision2.FileCountLimitError
 	assert.ErrorAs(t, err, &fileCountErr)
 	assert.Equal(t, c.GetLimits().FileCountLimit+1, fileCountErr.Count)
 	assert.Equal(t, c.GetLimits().FileCountLimit, fileCountErr.Limit)
 }
 
 func TestClient_UploadFiles_FilePathLengthLimit(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	// Create a file path that exceeds the limit
 	longFilePath := strings.Repeat("a", c.GetLimits().FilePathLengthLimit+1)
@@ -223,12 +223,12 @@ func TestClient_UploadFiles_FilePathLengthLimit(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		orgID,
 		revID,
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: longFilePath, File: file},
 		})
 
 	assert.Error(t, err)
-	var filePathLengthErr *uploadrevision.FilePathLengthLimitError
+	var filePathLengthErr *uploadrevision2.FilePathLengthLimitError
 	assert.ErrorAs(t, err, &filePathLengthErr)
 	assert.Equal(t, longFilePath, filePathLengthErr.FilePath)
 	assert.Equal(t, c.GetLimits().FilePathLengthLimit+1, filePathLengthErr.Length)
@@ -253,7 +253,7 @@ func TestClient_UploadFiles_FilePathLengthExactlyAtLimit(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		orgID,
 		revID,
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: filePathAtLimit, File: file},
 		})
 
@@ -261,12 +261,12 @@ func TestClient_UploadFiles_FilePathLengthExactlyAtLimit(t *testing.T) {
 }
 
 func TestClient_UploadFiles_TotalPayloadSizeLimit(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	// Create multiple files that individually are under the size limit,
 	// but together exceed the total payload size limit
 	mockFS := fstest.MapFS{}
-	files := []uploadrevision.UploadFile{}
+	files := []uploadrevision2.UploadFile{}
 
 	// Use files that are 30MB each (under the 50MB individual limit)
 	// 8 files = 240MB > 200MB total limit
@@ -280,7 +280,7 @@ func TestClient_UploadFiles_TotalPayloadSizeLimit(t *testing.T) {
 		file, err := mockFS.Open(filename)
 		require.NoError(t, err)
 
-		files = append(files, uploadrevision.UploadFile{
+		files = append(files, uploadrevision2.UploadFile{
 			Path: filename,
 			File: file,
 		})
@@ -289,7 +289,7 @@ func TestClient_UploadFiles_TotalPayloadSizeLimit(t *testing.T) {
 	err := c.UploadFiles(context.Background(), orgID, revID, files)
 
 	assert.Error(t, err)
-	var totalSizeErr *uploadrevision.TotalPayloadSizeLimitError
+	var totalSizeErr *uploadrevision2.TotalPayloadSizeLimitError
 	assert.ErrorAs(t, err, &totalSizeErr)
 	assert.Equal(t, fileSize*int64(numFiles), totalSizeErr.TotalSize)
 	assert.Equal(t, c.GetLimits().TotalPayloadSizeLimit, totalSizeErr.Limit)
@@ -301,7 +301,7 @@ func TestClient_UploadFiles_TotalPayloadSizeExactlyAtLimit(t *testing.T) {
 
 	// Test boundary: exactly 200MB (should succeed)
 	mockFS := fstest.MapFS{}
-	files := []uploadrevision.UploadFile{}
+	files := []uploadrevision2.UploadFile{}
 
 	// Create files that sum exactly to 200MB
 	// 4 files of 50MB each = 200MB exactly
@@ -315,7 +315,7 @@ func TestClient_UploadFiles_TotalPayloadSizeExactlyAtLimit(t *testing.T) {
 		file, err := mockFS.Open(filename)
 		require.NoError(t, err)
 
-		files = append(files, uploadrevision.UploadFile{
+		files = append(files, uploadrevision2.UploadFile{
 			Path: filename,
 			File: file,
 		})
@@ -339,7 +339,7 @@ func TestClient_UploadFiles_IndividualFileSizeExactlyAtLimit(t *testing.T) {
 	file, err := mockFS.Open("exact_limit.bin")
 	require.NoError(t, err)
 
-	err = c.UploadFiles(context.Background(), orgID, revID, []uploadrevision.UploadFile{
+	err = c.UploadFiles(context.Background(), orgID, revID, []uploadrevision2.UploadFile{
 		{Path: "exact_limit.bin", File: file},
 	})
 
@@ -348,7 +348,7 @@ func TestClient_UploadFiles_IndividualFileSizeExactlyAtLimit(t *testing.T) {
 }
 
 func TestClient_UploadFiles_SpecialFileError(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	tests := []struct {
 		name          string
@@ -404,13 +404,13 @@ func TestClient_UploadFiles_SpecialFileError(t *testing.T) {
 			err = c.UploadFiles(context.Background(),
 				orgID,
 				revID,
-				[]uploadrevision.UploadFile{
+				[]uploadrevision2.UploadFile{
 					{Path: filePath, File: file},
 				})
 
 			assert.Error(t, err)
 
-			var sfe *uploadrevision.SpecialFileError
+			var sfe *uploadrevision2.SpecialFileError
 			assert.ErrorAs(t, err, &sfe)
 			assert.Equal(t, filePath, sfe.FilePath)
 		})
@@ -438,7 +438,7 @@ func TestClient_UploadFiles_Symlink(t *testing.T) {
 	err = c.UploadFiles(context.Background(),
 		orgID,
 		revID,
-		[]uploadrevision.UploadFile{
+		[]uploadrevision2.UploadFile{
 			{Path: tmpSlnPth, File: tmpSln},
 		})
 
@@ -446,12 +446,12 @@ func TestClient_UploadFiles_Symlink(t *testing.T) {
 }
 
 func TestClient_UploadFiles_EmptyFileList(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
-	err := c.UploadFiles(context.Background(), orgID, revID, []uploadrevision.UploadFile{})
+	err := c.UploadFiles(context.Background(), orgID, revID, []uploadrevision2.UploadFile{})
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, uploadrevision.ErrNoFilesProvided)
+	assert.ErrorIs(t, err, uploadrevision2.ErrNoFilesProvided)
 }
 
 func TestClient_SealRevision(t *testing.T) {
@@ -466,7 +466,7 @@ func TestClient_SealRevision(t *testing.T) {
 }
 
 func TestClient_SealRevision_EmptyOrgID(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	resp, err := c.SealRevision(context.Background(),
 		uuid.Nil, // empty orgID
@@ -474,12 +474,12 @@ func TestClient_SealRevision_EmptyOrgID(t *testing.T) {
 	)
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, uploadrevision.ErrEmptyOrgID)
+	assert.ErrorIs(t, err, uploadrevision2.ErrEmptyOrgID)
 	assert.Nil(t, resp)
 }
 
 func TestClient_SealRevision_EmptyRevisionID(t *testing.T) {
-	c := uploadrevision.NewClient(uploadrevision.Config{})
+	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	resp, err := c.SealRevision(context.Background(),
 		orgID,
@@ -487,11 +487,11 @@ func TestClient_SealRevision_EmptyRevisionID(t *testing.T) {
 	)
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, uploadrevision.ErrEmptyRevisionID)
+	assert.ErrorIs(t, err, uploadrevision2.ErrEmptyRevisionID)
 	assert.Nil(t, resp)
 }
 
-func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision.HTTPSealableClient) {
+func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision2.HTTPSealableClient) {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "2024-10-15", r.URL.Query().Get("version"))
@@ -568,7 +568,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, *uploadrevision.HTTPSealab
 		}
 	}))
 
-	client := uploadrevision.NewClient(uploadrevision.Config{
+	client := uploadrevision2.NewClient(uploadrevision2.Config{
 		BaseURL: srv.URL,
 	})
 

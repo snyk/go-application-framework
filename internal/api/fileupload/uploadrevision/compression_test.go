@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 func TestCompressionRoundTripper_RoundTrip(t *testing.T) {

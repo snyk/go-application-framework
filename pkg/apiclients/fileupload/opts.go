@@ -3,7 +3,7 @@ package fileupload
 import (
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 // Option allows customizing the Client during construction.

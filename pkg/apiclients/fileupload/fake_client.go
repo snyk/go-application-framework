@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 type FakeClient struct {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/puzpuzpuz/xsync"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 // OrgID represents an organization identifier.

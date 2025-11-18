@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/api/fileupload/filters"
+	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
 )
 
 var mainpath = filepath.Join("src", "main.go")
@@ -30,7 +30,7 @@ var nonexistpath = filepath.Join("nonexistent", "file.go")
 var missingpath = filepath.Join("another", "missing", "path.txt")
 
 // CreateTmpFiles is an utility function used to create temporary files in tests.
-func createTmpFiles(t *testing.T, files []uploadrevision.LoadedFile) (dir *os.File) {
+func createTmpFiles(t *testing.T, files []uploadrevision2.LoadedFile) (dir *os.File) {
 	t.Helper()
 
 	tempDir := t.TempDir()
@@ -69,8 +69,8 @@ func createTmpFiles(t *testing.T, files []uploadrevision.LoadedFile) (dir *os.Fi
 }
 
 func Test_CreateRevisionFromPaths(t *testing.T) {
-	llcfg := uploadrevision.FakeClientConfig{
-		Limits: uploadrevision.Limits{
+	llcfg := uploadrevision2.FakeClientConfig{
+		Limits: uploadrevision2.Limits{
 			FileCountLimit:        10,
 			FileSizeLimit:         100,
 			TotalPayloadSizeLimit: 10_000,
@@ -84,7 +84,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 	}
 
 	t.Run("mixed files and directories", func(t *testing.T) {
-		allFiles := []uploadrevision.LoadedFile{
+		allFiles := []uploadrevision2.LoadedFile{
 			{Path: mainpath, Content: "package main"},
 			{Path: utilspath, Content: "package utils"},
 			{Path: "config.yaml", Content: "version: 1"},
@@ -116,7 +116,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 	})
 
 	t.Run("error handling with better context", func(t *testing.T) {
-		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision.LoadedFile{}, allowList)
+		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
 
 		paths := []string{
 			nonexistpath,
@@ -125,15 +125,15 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 
 		_, err := client.CreateRevisionFromPaths(ctx, paths)
 		require.Error(t, err)
-		var fileAccessErr *uploadrevision.FileAccessError
+		var fileAccessErr *uploadrevision2.FileAccessError
 		assert.ErrorAs(t, err, &fileAccessErr)
 		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
 	})
 }
 
 func Test_CreateRevisionFromDir(t *testing.T) {
-	llcfg := uploadrevision.FakeClientConfig{
-		Limits: uploadrevision.Limits{
+	llcfg := uploadrevision2.FakeClientConfig{
+		Limits: uploadrevision2.Limits{
 			FileCountLimit:        2,
 			FileSizeLimit:         100,
 			TotalPayloadSizeLimit: 10_000,
@@ -147,7 +147,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	}
 
 	t.Run("uploading a shallow directory", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file1.txt",
 				Content: "content1",
@@ -169,7 +169,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	})
 
 	t.Run("uploading a directory with nested files", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    filepath.Join("src", "main.go"),
 				Content: "package main\n\nfunc main() {}",
@@ -191,7 +191,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	})
 
 	t.Run("uploading a directory exceeding the file count limit for a single upload", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file1.txt",
 				Content: "root level file",
@@ -225,24 +225,24 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	})
 
 	t.Run("uploading a directory with file exceeding the file size limit", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file2.txt",
 				Content: "foo",
 			},
 		}
-		additionalFiles := []uploadrevision.LoadedFile{
+		additionalFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file1.txt",
 				Content: "foo bar",
 			},
 		}
 
-		allFiles := make([]uploadrevision.LoadedFile, 0, 2)
+		allFiles := make([]uploadrevision2.LoadedFile, 0, 2)
 		allFiles = append(allFiles, expectedFiles...)
 		allFiles = append(allFiles, additionalFiles...)
-		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision.FakeClientConfig{
-			Limits: uploadrevision.Limits{
+		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision2.FakeClientConfig{
+			Limits: uploadrevision2.Limits{
 				FileCountLimit:        2,
 				FileSizeLimit:         6,
 				TotalPayloadSizeLimit: 100,
@@ -253,7 +253,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 		res, err := client.CreateRevisionFromDir(ctx, dir.Name())
 		require.NoError(t, err)
 
-		var fileSizeErr *uploadrevision.FileSizeLimitError
+		var fileSizeErr *uploadrevision2.FileSizeLimitError
 		assert.Len(t, res.FilteredFiles, 1)
 		ff := res.FilteredFiles[0]
 		assert.Contains(t, ff.Path, "file1.txt")
@@ -270,7 +270,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	t.Run("uploading a directory exceeding total payload size limit triggers batching", func(t *testing.T) {
 		// Create files that together exceed the payload size limit but not the count limit
 		// Each file is 30 bytes, limit is 70 bytes, so 3 files (90 bytes) should be split into 2 batches
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file1.txt",
 				Content: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // 30 bytes
@@ -284,8 +284,8 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				Content: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", // 30 bytes
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision.FakeClientConfig{
-			Limits: uploadrevision.Limits{
+		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision2.FakeClientConfig{
+			Limits: uploadrevision2.Limits{
 				FileCountLimit:        10, // High enough to not trigger count-based batching
 				FileSizeLimit:         50, // Each file is under this
 				TotalPayloadSizeLimit: 70, // 70 bytes - forces batching by size
@@ -308,7 +308,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 		// Tests edge case where individual files are large relative to the payload limit.
 		// File1: 150 bytes, File2: 80 bytes, File3: 60 bytes; Limit: 200 bytes
 		// Expected batches: [File1], [File2], [File3] - each file in its own batch
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "large1.txt",
 				Content: string(make([]byte, 150)),
@@ -322,8 +322,8 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				Content: string(make([]byte, 60)),
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision.FakeClientConfig{
-			Limits: uploadrevision.Limits{
+		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision2.FakeClientConfig{
+			Limits: uploadrevision2.Limits{
 				FileCountLimit:        10,
 				FileSizeLimit:         160,
 				TotalPayloadSizeLimit: 200,
@@ -344,7 +344,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 		// Tests realistic scenario with mixed file sizes.
 		// Files: 10, 60, 5, 70, 45 bytes; Limit: 100 bytes
 		// Expected batching: [10+60+5=75], [70], [45]
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "tiny.txt",
 				Content: string(make([]byte, 10)),
@@ -366,8 +366,8 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 				Content: string(make([]byte, 45)),
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision.FakeClientConfig{
-			Limits: uploadrevision.Limits{
+		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision2.FakeClientConfig{
+			Limits: uploadrevision2.Limits{
 				FileCountLimit:        10,
 				FileSizeLimit:         80,
 				TotalPayloadSizeLimit: 100,
@@ -389,15 +389,15 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 		// 8 files of 30 bytes each = 240 bytes total
 		// FileCountLimit: 10, TotalPayloadSizeLimit: 200 bytes
 		// Should batch by size first: [file1-6=180], [file7-8=60]
-		expectedFiles := make([]uploadrevision.LoadedFile, 8)
+		expectedFiles := make([]uploadrevision2.LoadedFile, 8)
 		for i := 0; i < 8; i++ {
-			expectedFiles[i] = uploadrevision.LoadedFile{
+			expectedFiles[i] = uploadrevision2.LoadedFile{
 				Path:    fmt.Sprintf("file%d.txt", i),
 				Content: string(make([]byte, 30)),
 			}
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision.FakeClientConfig{
-			Limits: uploadrevision.Limits{
+		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision2.FakeClientConfig{
+			Limits: uploadrevision2.Limits{
 				FileCountLimit:        10,
 				FileSizeLimit:         50,
 				TotalPayloadSizeLimit: 200,
@@ -415,7 +415,7 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 	})
 
 	t.Run("uploading a directory with filtering disabled", func(t *testing.T) {
-		allFiles := []uploadrevision.LoadedFile{
+		allFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    mainpath,
 				Content: "package main\n\nfunc main() {}",
@@ -451,8 +451,8 @@ func Test_CreateRevisionFromDir(t *testing.T) {
 }
 
 func Test_CreateRevisionFromFile(t *testing.T) {
-	llcfg := uploadrevision.FakeClientConfig{
-		Limits: uploadrevision.Limits{
+	llcfg := uploadrevision2.FakeClientConfig{
+		Limits: uploadrevision2.Limits{
 			FileCountLimit:        2,
 			FileSizeLimit:         100,
 			TotalPayloadSizeLimit: 10_000,
@@ -466,7 +466,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 	}
 
 	t.Run("uploading a file", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file1.txt",
 				Content: "content1",
@@ -484,14 +484,14 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 	})
 
 	t.Run("uploading a file exceeding the file size limit", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file1.txt",
 				Content: "foo bar",
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision.FakeClientConfig{
-			Limits: uploadrevision.Limits{
+		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision2.FakeClientConfig{
+			Limits: uploadrevision2.Limits{
 				FileCountLimit:        1,
 				FileSizeLimit:         6,
 				TotalPayloadSizeLimit: 10_000,
@@ -502,7 +502,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
 
-		var fileSizeErr *uploadrevision.FileSizeLimitError
+		var fileSizeErr *uploadrevision2.FileSizeLimitError
 		assert.Len(t, res.FilteredFiles, 1)
 		ff := res.FilteredFiles[0]
 		assert.Contains(t, ff.Path, "file1.txt")
@@ -517,14 +517,14 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 	})
 
 	t.Run("uploading a file exceeding the file path limit", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "file1.txt",
 				Content: "foo bar",
 			},
 		}
-		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision.FakeClientConfig{
-			Limits: uploadrevision.Limits{
+		ctx, fakeSealableClient, client, dir := setupTest(t, uploadrevision2.FakeClientConfig{
+			Limits: uploadrevision2.Limits{
 				FileCountLimit:        1,
 				FileSizeLimit:         10,
 				TotalPayloadSizeLimit: 10_000,
@@ -535,7 +535,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
 		require.NoError(t, err)
 
-		var filePathErr *uploadrevision.FilePathLengthLimitError
+		var filePathErr *uploadrevision2.FilePathLengthLimitError
 		assert.Len(t, res.FilteredFiles, 1)
 		ff := res.FilteredFiles[0]
 		assert.Contains(t, ff.Path, "file1.txt")
@@ -549,7 +549,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 	})
 
 	t.Run("uploading a file with filtering disabled", func(t *testing.T) {
-		expectedFiles := []uploadrevision.LoadedFile{
+		expectedFiles := []uploadrevision2.LoadedFile{
 			{
 				Path:    "script.js",
 				Content: "console.log('hi')",
@@ -568,16 +568,16 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 	})
 }
 
-func expectEqualFiles(t *testing.T, expectedFiles, uploadedFiles []uploadrevision.LoadedFile) {
+func expectEqualFiles(t *testing.T, expectedFiles, uploadedFiles []uploadrevision2.LoadedFile) {
 	t.Helper()
 
 	require.Equal(t, len(expectedFiles), len(uploadedFiles))
 
-	slices.SortFunc(expectedFiles, func(fileA, fileB uploadrevision.LoadedFile) int {
+	slices.SortFunc(expectedFiles, func(fileA, fileB uploadrevision2.LoadedFile) int {
 		return strings.Compare(fileA.Path, fileB.Path)
 	})
 
-	slices.SortFunc(uploadedFiles, func(fileA, fileB uploadrevision.LoadedFile) int {
+	slices.SortFunc(uploadedFiles, func(fileA, fileB uploadrevision2.LoadedFile) int {
 		return strings.Compare(fileA.Path, fileB.Path)
 	})
 
@@ -589,16 +589,16 @@ func expectEqualFiles(t *testing.T, expectedFiles, uploadedFiles []uploadrevisio
 
 func setupTest(
 	t *testing.T,
-	llcfg uploadrevision.FakeClientConfig,
-	files []uploadrevision.LoadedFile,
+	llcfg uploadrevision2.FakeClientConfig,
+	files []uploadrevision2.LoadedFile,
 	_ filters.AllowList,
-) (context.Context, *uploadrevision.FakeSealableClient, *fileupload.HTTPClient, *os.File) {
+) (context.Context, *uploadrevision2.FakeSealableClient, *fileupload.HTTPClient, *os.File) {
 	t.Helper()
 
 	ctx := context.Background()
 	orgID := uuid.New()
 
-	fakeSealeableClient := uploadrevision.NewFakeSealableClient(llcfg)
+	fakeSealeableClient := uploadrevision2.NewFakeSealableClient(llcfg)
 	client := fileupload.NewClient(
 		nil,
 		fileupload.Config{

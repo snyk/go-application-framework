@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 // uploadBatch manages a batch of files for upload.

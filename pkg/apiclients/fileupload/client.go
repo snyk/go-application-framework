@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api/fileupload/filters"
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
@@ -26,7 +26,7 @@ type Config struct {
 
 // HTTPClient provides high-level file upload functionality.
 type HTTPClient struct {
-	uploadRevisionSealableClient uploadrevision.SealableClient
+	uploadRevisionSealableClient uploadrevision2.SealableClient
 	filtersClient                filters.Client
 	cfg                          Config
 	filters                      Filters
@@ -61,9 +61,9 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) *HTTPClient 
 	}
 
 	if client.uploadRevisionSealableClient == nil {
-		client.uploadRevisionSealableClient = uploadrevision.NewClient(uploadrevision.Config{
+		client.uploadRevisionSealableClient = uploadrevision2.NewClient(uploadrevision2.Config{
 			BaseURL: cfg.BaseURL,
-		}, uploadrevision.WithHTTPClient(httpClient))
+		}, uploadrevision2.WithHTTPClient(httpClient))
 	}
 
 	if client.filtersClient == nil {
@@ -162,7 +162,7 @@ func (c *HTTPClient) addPathsToRevision(
 		if ff.Stat.Size() > fileSizeLimit {
 			return &FilteredFile{
 				Path:   ff.Path,
-				Reason: uploadrevision.NewFileSizeLimitError(ff.Stat.Name(), ff.Stat.Size(), fileSizeLimit),
+				Reason: uploadrevision2.NewFileSizeLimitError(ff.Stat.Name(), ff.Stat.Size(), fileSizeLimit),
 			}
 		}
 
@@ -174,7 +174,7 @@ func (c *HTTPClient) addPathsToRevision(
 		if len(ff.Path) > filePathLengthLimit {
 			return &FilteredFile{
 				Path:   ff.Path,
-				Reason: uploadrevision.NewFilePathLengthLimitError(ff.Path, len(ff.Path), filePathLengthLimit),
+				Reason: uploadrevision2.NewFilePathLengthLimitError(ff.Path, len(ff.Path), filePathLengthLimit),
 			}
 		}
 
@@ -270,7 +270,7 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 	for _, pth := range paths {
 		info, err := os.Stat(pth)
 		if err != nil {
-			return UploadResult{}, uploadrevision.NewFileAccessError(pth, err)
+			return UploadResult{}, uploadrevision2.NewFileAccessError(pth, err)
 		}
 
 		if info.IsDir() {
@@ -306,7 +306,7 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 func (c *HTTPClient) CreateRevisionFromDir(ctx context.Context, dirPath string) (UploadResult, error) {
 	info, err := os.Stat(dirPath)
 	if err != nil {
-		return UploadResult{}, uploadrevision.NewFileAccessError(dirPath, err)
+		return UploadResult{}, uploadrevision2.NewFileAccessError(dirPath, err)
 	}
 
 	if !info.IsDir() {
@@ -321,7 +321,7 @@ func (c *HTTPClient) CreateRevisionFromDir(ctx context.Context, dirPath string) 
 func (c *HTTPClient) CreateRevisionFromFile(ctx context.Context, filePath string) (UploadResult, error) {
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return UploadResult{}, uploadrevision.NewFileAccessError(filePath, err)
+		return UploadResult{}, uploadrevision2.NewFileAccessError(filePath, err)
 	}
 
 	if !info.Mode().IsRegular() {

@@ -1,6 +1,8 @@
 package fileupload
 
-import "github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+import (
+	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
+)
 
 // Aliasing uploadRevisionSealableClient errors so that they're scoped to the fileupload package as well.
 

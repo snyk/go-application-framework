@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
+	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 type CustomRoundTripper struct{}
@@ -26,7 +26,7 @@ func Test_WithHTTPClient(t *testing.T) {
 		fooValue := r.Header.Get("foo")
 		assert.Equal(t, "bar", fooValue)
 
-		resp, err := json.Marshal(uploadrevision.ResponseBody{})
+		resp, err := json.Marshal(uploadrevision2.ResponseBody{})
 		require.NoError(t, err)
 
 		w.WriteHeader(http.StatusCreated)
@@ -37,9 +37,9 @@ func Test_WithHTTPClient(t *testing.T) {
 	customClient := srv.Client()
 	customClient.Transport = &CustomRoundTripper{}
 
-	llc := uploadrevision.NewClient(uploadrevision.Config{
+	llc := uploadrevision2.NewClient(uploadrevision2.Config{
 		BaseURL: srv.URL,
-	}, uploadrevision.WithHTTPClient(customClient))
+	}, uploadrevision2.WithHTTPClient(customClient))
 
 	_, err := llc.CreateRevision(context.Background(), uuid.New())
 
