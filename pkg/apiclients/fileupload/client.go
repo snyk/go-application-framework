@@ -13,7 +13,6 @@ import (
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
 
-	listsources "github.com/snyk/go-application-framework/pkg/apiclients/fileupload/files"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/filters"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -233,7 +232,8 @@ func (c *HTTPClient) addFileToRevision(ctx context.Context, revisionID RevisionI
 
 // addDirToRevision adds a directory and all its contents to an existing revision.
 func (c *HTTPClient) addDirToRevision(ctx context.Context, revisionID RevisionID, dirPath string, opts uploadOptions) (UploadResult, error) {
-	sources, err := listsources.ForPath(dirPath, c.logger, runtime.NumCPU())
+	//nolint:contextcheck // will be considered later
+	sources, err := forPath(dirPath, c.logger, runtime.NumCPU())
 	if err != nil {
 		return UploadResult{}, fmt.Errorf("failed to list files in directory %s: %w", dirPath, err)
 	}

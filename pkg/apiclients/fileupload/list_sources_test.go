@@ -1,4 +1,4 @@
-package listsources_test
+package fileupload
 
 import (
 	"fmt"
@@ -9,8 +9,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	listsources "github.com/snyk/go-application-framework/pkg/apiclients/fileupload/files"
 )
 
 func Test_ListsSources_Simplest(t *testing.T) {
@@ -37,7 +35,7 @@ func Test_ListsSources_WithIgnores(t *testing.T) {
 
 func listSourcesForPath(sourcesDir string) ([]string, error) {
 	mockLogger := zerolog.New(io.Discard)
-	filesCh, err := listsources.ForPath(sourcesDir, &mockLogger, 2)
+	filesCh, err := forPath(sourcesDir, &mockLogger, 2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sources: %w", err)
 	}
