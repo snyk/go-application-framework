@@ -3,38 +3,14 @@ package output_workflow
 import (
 	"context"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/snyk/go-application-framework/internal/presenters"
-	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"golang.org/x/sync/semaphore"
 )
-
-func getDefaultWriterUfm(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
-	var writer *WriterEntry
-
-	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-		writer = &WriterEntry{
-			writer: &newLineCloser{
-				writer: outputDestination.GetWriter(),
-			},
-			mimeType:        SARIF_MIME_TYPE,
-			templates:       presenters.ApplicationSarifTemplatesUfm,
-			renderEmptyData: true,
-		}
-
-		writer.mimeType = SARIF_MIME_TYPE
-		writer.templates = presenters.ApplicationSarifTemplatesUfm
-	}
-
-	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
-		writer.templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
-	}
-
-	return writer
-}
 
 func getTotalNumberOfUnifiedFindings(results []testapi.TestResult) int {
 	if results == nil {
@@ -102,54 +78,8 @@ func getTestResultsFromWorkflowData(input []workflow.Data) ([]testapi.TestResult
 	return results, remainingData
 }
 
-func getWritersToUseUfm(config configuration.Configuration, outputDestination iUtils.OutputDestination) map[string]*WriterEntry {
-	// resulting map of writers and their templates
-	writerMap := map[string]*WriterEntry{}
-
-	// currently the only used default writer is sarif
-	if tmp := getDefaultWriterUfm(config, outputDestination); tmp != nil {
-		writerMap[DEFAULT_WRITER] = tmp
-	}
-
-	// default file writers
-	fileWriters := []FileWriter{
-		{
-			OUTPUT_CONFIG_KEY_SARIF_FILE,
-			SARIF_MIME_TYPE,
-			presenters.ApplicationSarifTemplatesUfm,
-			true,
-		},
-		/*
-			skipping support for json file output by default, since there is no supporting rendering yet.
-			{
-				OUTPUT_CONFIG_KEY_JSON_FILE,
-				SARIF_MIME_TYPE,
-				ApplicationSarifTemplates,
-				true,
-			},*/
-	}
-
-	// use configured file writers if available
-	if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
-		fileWriters = tmp
-	}
-
-	for _, fileWriter := range fileWriters {
-		if config.IsSet(fileWriter.NameConfigKey) {
-			writerMap[fileWriter.NameConfigKey] = &WriterEntry{
-				writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
-				mimeType:        fileWriter.MimeType,
-				templates:       fileWriter.TemplateFiles,
-				renderEmptyData: fileWriter.WriteEmptyContent,
-			}
-		}
-	}
-
-	return writerMap
-}
-
 // HandleContentTypeUnifiedModel handles the unified model content type.
-func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.InvocationContext, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
+func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.InvocationContext, writers WriterMap) ([]workflow.Data, error) {
 	var err error
 	debugLogger := invocation.GetEnhancedLogger()
 	config := invocation.GetConfiguration()
@@ -157,18 +87,21 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 	// Extract TestResults from workflow data
 	results, remainingData := getTestResultsFromWorkflowData(input)
 	if len(results) == 0 {
-		debugLogger.Info().Msg("No UFM data to process")
-		return remainingData, nil
-	}
-
-	writerMap := getWritersToUseUfm(config, outputDestination)
-	if len(writerMap) == 0 {
-		debugLogger.Info().Msg("No UFM writers to use")
+		debugLogger.Info().Msg("UFM - No data to process")
 		return remainingData, nil
 	}
 
 	threadCount := max(int64(config.GetInt(configuration.MAX_THREADS)), 1)
-	debugLogger.Info().Msgf("Thread count: %d", threadCount)
+	debugLogger.Info().Msgf("UFM - Thread count: %d", threadCount)
+	debugLogger.Info().Msgf("UFM - TestResults: %d", len(results))
+
+	supportedMimeTypes := []MimeType2Template{
+		{
+			mimetype:  SARIF_MIME_TYPE,
+			templates: presenters.ApplicationSarifTemplatesUfm,
+		},
+	}
+	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
 
 	// iterate over all writers and render for each of them
 	ctx := context.Background()
@@ -188,9 +121,9 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 
 	err = availableThreads.Acquire(ctx, threadCount)
 	if err != nil {
-		debugLogger.Err(err).Msg("Failed to wait for all threads")
+		debugLogger.Err(err).Msg("UFM - Failed to wait for all threads")
 	}
 
-	debugLogger.Info().Msgf("All Rendering done")
+	debugLogger.Info().Msgf("UFM - All Rendering done")
 	return remainingData, nil
 }

@@ -202,6 +202,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, payload, writer.String())
 	})
 
 	t.Run("should output to stdout by default for text/plain", func(t *testing.T) {
@@ -489,8 +490,10 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	randomData2 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), "plain", []byte{})
 	input := []workflow.Data{randomData1, findingData, randomData2}
 
+	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+
 	// invoking method under test
-	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, outputDestination)
+	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, writers)
 	assert.NoError(t, err)
 	assert.NotNil(t, actualRemainingData)
 
@@ -566,20 +569,4 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 			}
 		}
 	})
-}
-
-func TestJsonWriteToFile(t *testing.T) {
-	i := 0
-	logger := zerolog.Nop()
-	outputDi := utils.NewOutputDestination()
-	fileName := filepath.Join(t.TempDir(), "not-existing", "file.json")
-	rawData := []byte("hello world")
-	data := []workflow.Data{
-		workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output"), "content-type", rawData),
-	}
-
-	assert.NoFileExists(t, fileName)
-	err := jsonWriteToFile(&logger, data, i, rawData, fileName, outputDi)
-	assert.NoError(t, err)
-	assert.FileExists(t, fileName)
 }

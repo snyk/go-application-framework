@@ -1,0 +1,33 @@
+
+	{
+		"schemaVersion": "1.2.0",
+		"pkgManager": {
+			"name": "npm"
+		},
+		"pkgs": [
+			{
+				"id": "goof@1.0.1",
+				"info": {
+					"name": "goof",
+					"version": "1.0.1"
+				}
+			}
+		],
+		"graph": {
+			"rootNodeId": "root-node",
+			"nodes": [
+				{
+					"nodeId": "root-node",
+					"pkgId": "goof@1.0.1",
+					"deps": [
+						{
+							"nodeId": "adm-zip@0.4.7"
+						},
+						{
+							"nodeId": "body-parser@1.9.0"
+						}
+					]
+				}
+			]
+		}
+	}
