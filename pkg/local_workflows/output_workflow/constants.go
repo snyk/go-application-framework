@@ -12,6 +12,7 @@ const (
 	DEFAULT_WRITER                 = "default"
 	DEFAULT_MIME_TYPE              = presenters.DefaultMimeType
 	SARIF_MIME_TYPE                = presenters.ApplicationSarifMimeType
+	JSON_MIME_TYPE                 = presenters.ApplicationJSONMimeType
 )
 
 // DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.

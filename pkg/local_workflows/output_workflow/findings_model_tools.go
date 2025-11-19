@@ -4,35 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
-	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
-
-// WriterEntry is an internal structure to handle all template based writers
-type WriterEntry struct {
-	writer          io.WriteCloser
-	mimeType        string
-	templates       []string
-	renderEmptyData bool
-}
-
-// FileWriter is a public structure used to configure file based rendering
-type FileWriter struct {
-	NameConfigKey     string   // defines the configuration key to look up the filename under
-	MimeType          string   // defines the final mime type of the rendering
-	TemplateFiles     []string // defines the set of template files to use for rendering
-	WriteEmptyContent bool     // specifies if anything should be written at all if the input data is empty
-}
 
 func getListOfFindings(input []workflow.Data, debugLogger *zerolog.Logger) (findings []*local_models.LocalFinding, remainingData []workflow.Data) {
 	findings = []*local_models.LocalFinding{}
@@ -73,71 +55,6 @@ func getTotalNumberOfFindings(findings []*local_models.LocalFinding) uint32 {
 	return count
 }
 
-func getWritersToUse(config configuration.Configuration, outputDestination iUtils.OutputDestination) map[string]*WriterEntry {
-	// resulting map of writers and their templates
-	writerMap := map[string]*WriterEntry{
-		DEFAULT_WRITER: getDefaultWriter(config, outputDestination),
-	}
-
-	// default file writers
-	fileWriters := []FileWriter{
-		{
-			OUTPUT_CONFIG_KEY_SARIF_FILE,
-			SARIF_MIME_TYPE,
-			ApplicationSarifTemplates,
-			true,
-		},
-		/*
-			skipping support for json file output by default, since there is no supporting rendering yet.
-			{
-				OUTPUT_CONFIG_KEY_JSON_FILE,
-				SARIF_MIME_TYPE,
-				ApplicationSarifTemplates,
-				true,
-			},*/
-	}
-
-	// use configured file writers if available
-	if tmp, ok := config.Get(OUTPUT_CONFIG_KEY_FILE_WRITERS).([]FileWriter); ok {
-		fileWriters = tmp
-	}
-
-	for _, fileWriter := range fileWriters {
-		if config.IsSet(fileWriter.NameConfigKey) {
-			writerMap[fileWriter.NameConfigKey] = &WriterEntry{
-				writer:          &delayedFileOpenWriteCloser{Filename: config.GetString(fileWriter.NameConfigKey)},
-				mimeType:        fileWriter.MimeType,
-				templates:       fileWriter.TemplateFiles,
-				renderEmptyData: fileWriter.WriteEmptyContent,
-			}
-		}
-	}
-
-	return writerMap
-}
-
-func getDefaultWriter(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
-	writer := &WriterEntry{
-		writer: &newLineCloser{
-			writer: outputDestination.GetWriter(),
-		},
-		mimeType:        DEFAULT_MIME_TYPE,
-		templates:       DefaultTemplateFiles,
-		renderEmptyData: true,
-	}
-
-	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-		writer.mimeType = SARIF_MIME_TYPE
-		writer.templates = ApplicationSarifTemplates
-	}
-
-	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
-		writer.templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
-	}
-
-	return writer
-}
-
 func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.LocalFinding, invocation workflow.InvocationContext) {
 	debugLogger := invocation.GetEnhancedLogger()
 
@@ -173,7 +90,7 @@ func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.
 	debugLogger.Info().Msgf("[%s] Rendering done", name)
 }
 
-func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.InvocationContext, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
+func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.InvocationContext, writers WriterMap) ([]workflow.Data, error) {
 	var err error
 	debugLogger := invocation.GetEnhancedLogger()
 	config := invocation.GetConfiguration()
@@ -187,7 +104,17 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	threadCount := max(int64(config.GetInt(configuration.MAX_THREADS)), 1)
 	debugLogger.Info().Msgf("Thread count: %d", threadCount)
 
-	writerMap := getWritersToUse(config, outputDestination)
+	supportedMimeTypes := []MimeType2Template{
+		{
+			mimetype:  SARIF_MIME_TYPE,
+			templates: ApplicationSarifTemplates,
+		},
+		{
+			mimetype:  DEFAULT_MIME_TYPE,
+			templates: DefaultTemplateFiles,
+		},
+	}
+	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
 
 	// iterate over all writers and render for each of them
 	ctx := context.Background()
