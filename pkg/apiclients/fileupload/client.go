@@ -13,6 +13,7 @@ import (
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
 
+	fileuploadinternal "github.com/snyk/go-application-framework/internal/api/fileupload"
 	"github.com/snyk/go-application-framework/internal/api/fileupload/filters"
 	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -29,7 +30,7 @@ type HTTPClient struct {
 	uploadRevisionSealableClient uploadrevision2.SealableClient
 	filtersClient                filters.Client
 	cfg                          Config
-	filters                      Filters
+	filters                      fileuploadinternal.Filters
 	logger                       *zerolog.Logger
 }
 
@@ -46,9 +47,9 @@ var _ Client = (*HTTPClient)(nil)
 func NewClient(httpClient *http.Client, cfg Config, opts ...Option) *HTTPClient {
 	client := &HTTPClient{
 		cfg: cfg,
-		filters: Filters{
-			supportedExtensions:  xsync.NewMapOf[bool](),
-			supportedConfigFiles: xsync.NewMapOf[bool](),
+		filters: fileuploadinternal.Filters{
+			SupportedExtensions:  xsync.NewMapOf[bool](),
+			SupportedConfigFiles: xsync.NewMapOf[bool](),
 		},
 	}
 
@@ -77,15 +78,15 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) *HTTPClient 
 }
 
 func (c *HTTPClient) loadFilters(ctx context.Context) error {
-	c.filters.once.Do(func() {
+	c.filters.Once.Do(func() {
 		filtersResp, err := c.filtersClient.GetFilters(ctx, c.cfg.OrgID)
 		if err != nil {
-			c.filters.initErr = err
+			c.filters.InitErr = err
 			return
 		}
 
 		for _, ext := range filtersResp.Extensions {
-			c.filters.supportedExtensions.Store(ext, true)
+			c.filters.SupportedExtensions.Store(ext, true)
 		}
 		for _, configFile := range filtersResp.ConfigFiles {
 			// .gitignore and .dcignore should not be uploaded
@@ -93,10 +94,10 @@ func (c *HTTPClient) loadFilters(ctx context.Context) error {
 			if configFile == ".gitignore" || configFile == ".dcignore" {
 				continue
 			}
-			c.filters.supportedConfigFiles.Store(configFile, true)
+			c.filters.SupportedConfigFiles.Store(configFile, true)
 		}
 	})
-	return c.filters.initErr
+	return c.filters.InitErr
 }
 
 // createDeeproxyFilter creates a filter function based on the current deeproxy filtering configuration.
@@ -108,8 +109,8 @@ func (c *HTTPClient) createDeeproxyFilter(ctx context.Context) (filter, error) {
 	return func(ff fileToFilter) *FilteredFile {
 		fileExt := filepath.Ext(ff.Stat.Name())
 		fileName := filepath.Base(ff.Stat.Name())
-		_, isSupportedExtension := c.filters.supportedExtensions.Load(fileExt)
-		_, isSupportedConfigFile := c.filters.supportedConfigFiles.Load(fileName)
+		_, isSupportedExtension := c.filters.SupportedExtensions.Load(fileExt)
+		_, isSupportedConfigFile := c.filters.SupportedConfigFiles.Load(fileName)
 
 		if !isSupportedExtension && !isSupportedConfigFile {
 			var reason error
