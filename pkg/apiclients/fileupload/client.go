@@ -44,7 +44,7 @@ type Client interface {
 var _ Client = (*HTTPClient)(nil)
 
 // NewClient creates a new high-level file upload client.
-func NewClient(httpClient *http.Client, cfg Config, opts ...Option) *HTTPClient {
+func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 	client := &HTTPClient{
 		cfg: cfg,
 		filters: fileuploadinternal.Filters{

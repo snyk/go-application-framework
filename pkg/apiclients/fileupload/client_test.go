@@ -592,7 +592,7 @@ func setupTest(
 	llcfg uploadrevision2.FakeClientConfig,
 	files []uploadrevision2.LoadedFile,
 	_ filters.AllowList,
-) (context.Context, *uploadrevision2.FakeSealableClient, *fileupload.HTTPClient, *os.File) {
+) (context.Context, *uploadrevision2.FakeSealableClient, fileupload.Client, *os.File) {
 	t.Helper()
 
 	ctx := context.Background()
