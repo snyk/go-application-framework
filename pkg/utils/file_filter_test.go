@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -133,14 +134,13 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupTestFileSystem(t, testCase)
 
-			fileFilter := NewFileFilter(testCase.repoPath, &log.Logger)
+			globFileFilter, err := NewGlobFileFilter(testCase.repoPath, testCase.ruleFiles, &log.Logger)
+			require.NoError(t, err)
 
+			fileFilter := NewFileFilter(testCase.repoPath, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}))
 			files := fileFilter.GetAllFiles()
 
-			globs, err := fileFilter.GetRules(testCase.ruleFiles)
-			assert.NoError(t, err)
-
-			filteredFiles := fileFilter.GetFilteredFiles(files, globs)
+			filteredFiles := fileFilter.GetFilteredFiles(files)
 			expectedFilePaths := make([]string, 0)
 			for _, file := range testCase.expectedFiles {
 				expectedFilePaths = append(expectedFilePaths, filepath.Join(testCase.repoPath, file))
@@ -151,7 +151,7 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 			}
 
 			t.Run("2nd call should return the same filesToFilter", func(t *testing.T) {
-				filteredFiles := fileFilter.GetFilteredFiles(files, globs)
+				filteredFiles := fileFilter.GetFilteredFiles(files)
 				for filteredFile := range filteredFiles {
 					assert.Contains(t, expectedFilePaths, filteredFile)
 				}
@@ -184,12 +184,13 @@ func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		fileFilter := NewFileFilter(rootDir, &log.Logger, WithThreadNumber(runtime.NumCPU()))
+		globFileFilter, err := NewGlobFileFilter(rootDir, ruleFiles, &log.Logger)
+		assert.NoError(b, err)
+
+		fileFilter := NewFileFilter(rootDir, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}), WithThreadNumber(runtime.NumCPU()))
 
 		b.StartTimer()
-		globs, err := fileFilter.GetRules(ruleFiles)
-		assert.NoError(b, err)
-		filteredFiles := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs)
+		filteredFiles := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles())
 		b.StopTimer()
 
 		var actualFilteredFilesLen int
@@ -472,7 +473,10 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		createFileInPath(t, gitignorePath, []byte("/"))
 
 		// Test file filtering
-		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		globFileFilter, err := NewGlobFileFilter(tempDir, []string{".gitignore"}, &log.Logger)
+		assert.NoError(t, err)
+
+		fileFilter := NewFileFilter(tempDir, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}))
 		rules, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
@@ -481,7 +485,7 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 
 		// Get all files and filter them
 		allFiles := fileFilter.GetAllFiles()
-		filteredFiles := fileFilter.GetFilteredFiles(allFiles, rules)
+		filteredFiles := fileFilter.GetFilteredFiles(allFiles)
 
 		// Collect filtered files
 		var filteredFilesList []string
@@ -517,13 +521,14 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		createFileInPath(t, gitignorePath, []byte("/*"))
 
 		// Test file filtering
-		fileFilter := NewFileFilter(tempDir, &log.Logger)
-		rules, err := fileFilter.GetRules([]string{".gitignore"})
+		globFileFilter, err := NewGlobFileFilter(tempDir, []string{".gitignore"}, &log.Logger)
 		assert.NoError(t, err)
+
+		fileFilter := NewFileFilter(tempDir, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}))
 
 		// Get all files and filter them
 		allFiles := fileFilter.GetAllFiles()
-		filteredFiles := fileFilter.GetFilteredFiles(allFiles, rules)
+		filteredFiles := fileFilter.GetFilteredFiles(allFiles)
 
 		// Collect filtered files
 		var filteredFilesList []string
