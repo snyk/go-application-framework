@@ -30,8 +30,13 @@ type TestData struct {
 	PollCounter              *atomic.Int32
 	FindingsEndpointCalled   *atomic.Bool
 	FindingsPageCount        *atomic.Int32
+	
 	TestSubjectCreate        testapi.TestSubjectCreate
 	ExpectedTestSubject      testapi.TestSubject
+	// OR 
+	TestResourceCreateItems  []testapi.TestResourceCreateItem
+	ExpectedTestResources	 []testapi.TestResource	
+	
 	ExpectedSubjectLocators  *[]testapi.TestSubjectLocator
 	ExpectedTestConfig       *testapi.TestConfiguration
 	ExpectedCreatedAt        time.Time
@@ -39,7 +44,7 @@ type TestData struct {
 	ExpectedRawSummary       *testapi.FindingSummary
 }
 
-func setupTestScenario(t *testing.T) TestData {
+func setupTestScenarioWithSubject(t *testing.T) TestData {
 	t.Helper()
 	orgID := uuid.New()
 	jobID := uuid.New()
@@ -54,6 +59,7 @@ func setupTestScenario(t *testing.T) TestData {
 	var err error
 	depGraphSubjectCreate, err := testSubjectCreate.AsDepGraphSubjectCreate()
 	require.NoError(t, err)
+	
 	expectedTestSubject := testapi.TestSubject{} // Declare here
 	err = expectedTestSubject.FromDepGraphSubject(testapi.DepGraphSubject{
 		Locator: depGraphSubjectCreate.Locator,
@@ -92,6 +98,54 @@ func setupTestScenario(t *testing.T) TestData {
 	}
 }
 
+func setupTestScenarioWithResources(t *testing.T) TestData {
+	t.Helper()
+	orgID := uuid.New()
+	jobID := uuid.New()
+	testID := uuid.New()
+	pollCounter := &atomic.Int32{}
+	findingsEndpointCalled := &atomic.Bool{}
+	findingsPageCount := &atomic.Int32{}
+
+	//testSubjectCreate := newDepGraphTestSubject(t)
+	testResourceCreateItem := newUploadTestResource(t)
+
+	expectedTestResource := testapi.TestResource{}
+	err := expectedTestResource.FromBaseResource(testapi.BaseResource{
+		Resource: testapi.BaseResourceVariant(testResourceCreateItem),
+		Type: testapi.BaseResourceTypeBase })
+	require.NoError(t, err)
+
+	expectedTestConfig := &testapi.TestConfiguration{}
+	expectedCreatedAt := time.Now().Truncate(time.Second)
+	expectedSubjectLocators := &[]testapi.TestSubjectLocator{{}}
+	
+	err = (*expectedSubjectLocators)[0].FromLocalPathLocator(testapi.LocalPathLocator{
+		Paths: []string{"pkg:golang/github.com/snyk/go-application-framework@v0.0.0"},
+		Type:  testapi.LocalPath,
+	})
+	require.NoError(t, err)
+
+	expectedEffectiveSummary := &testapi.FindingSummary{Count: 0}
+	expectedRawSummary := &testapi.FindingSummary{Count: 0}
+
+	return TestData{
+		OrgID:                    orgID,
+		JobID:                    jobID,
+		TestID:                   testID,
+		PollCounter:              pollCounter,
+		FindingsEndpointCalled:   findingsEndpointCalled,
+		FindingsPageCount:        findingsPageCount,
+		TestResourceCreateItems:  []testapi.TestResourceCreateItem{testResourceCreateItem},
+		ExpectedTestResources:    []testapi.TestResource{expectedTestResource},
+	//	ExpectedSubjectLocators:  expectedSubjectLocators,
+		ExpectedTestConfig:       expectedTestConfig,
+		ExpectedCreatedAt:        expectedCreatedAt,
+		ExpectedEffectiveSummary: expectedEffectiveSummary,
+		ExpectedRawSummary:       expectedRawSummary,
+	}
+}
+
 // Basic test that underlying client throws no errors on creation
 func Test_CreateClient_Defaults(t *testing.T) {
 	// Arrange
@@ -116,7 +170,7 @@ func Test_StartTest_Success(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	// Define LocalPolicy
 	riskScoreThreshold := uint16(750)
@@ -160,6 +214,107 @@ func Test_StartTest_Success(t *testing.T) {
 			TestConfiguration: testData.ExpectedTestConfig,
 			CreatedAt:         &testData.ExpectedCreatedAt,
 			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+			BreachedPolicies:  nil,
+		},
+		FindingsConfig: &FindingsHandlerConfig{
+			APIVersion:         testapi.DefaultAPIVersion,
+			PageCounter:        testData.FindingsPageCount,
+			EndpointCalled:     testData.FindingsEndpointCalled,
+			TotalFindingsPages: 0, // Simulate 0 pages of findings
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	// Act
+
+	// Create our test client
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	assert.NoError(t, err)
+	assert.NotNil(t, handle)
+
+	// Verify metadata response is nil before Wait() is called
+	initialResult := handle.Result()
+	assert.Nil(t, initialResult)
+
+	// Now wait for test to complete and fetch the metadata
+	err = handle.Wait(ctx)
+	result := handle.Result()
+
+	// Assert final status after Wait()
+	assert.NoError(t, err)
+	require.NotNil(t, result, "Result should not be nil after successful Wait()")
+	assertTestOutcomePass(t, result, testData.TestID)
+	assertCommonTestResultFields(t, result, testData.TestID, testData.ExpectedTestConfig, testData.ExpectedTestSubject, testData.ExpectedSubjectLocators, testData.ExpectedEffectiveSummary, testData.ExpectedRawSummary)
+	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
+
+	// Fetch and check findings
+	findingsResult, complete, findingsErr := result.Findings(ctx)
+	assertTestNoFindings(t, findingsResult, complete, findingsErr, testData.FindingsEndpointCalled, testData.FindingsPageCount)
+}
+
+
+func Test_StartTestWithResources_Success(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithResources(t)
+
+	// Define LocalPolicy
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	params := testapi.StartTestParams{
+		OrgID:       testData.OrgID.String(),
+		Resources:   testData.TestResourceCreateItems,
+		LocalPolicy: localPolicy,
+	}
+
+	// Define expected request body that StartTest should generate
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Resources: &params.Resources,
+				Config: &testapi.TestConfiguration{
+					LocalPolicy: localPolicy,
+				},
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	// Mock server handler using newTestAPIMockHandler
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		PollCounter:            testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			//TestSubject:     testData.ExpectedTestSubject,
+			TestResources: 	   &testData.ExpectedTestResources,
 			SubjectLocators:   testData.ExpectedSubjectLocators,
 			EffectiveSummary:  testData.ExpectedEffectiveSummary,
 			RawSummary:        testData.ExpectedRawSummary,
@@ -312,7 +467,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	startParams := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
@@ -390,7 +545,7 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 	failReason := testapi.TestOutcomeReasonPolicyBreach
 
 	params := testapi.StartTestParams{
@@ -454,7 +609,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
@@ -544,7 +699,7 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
@@ -609,7 +764,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 	defer cancel()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
@@ -693,7 +848,7 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
@@ -762,7 +917,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	expectedAPIErrors := &[]testapi.IoSnykApiCommonError{
 		{Detail: "Test error 1", Status: "500", Code: utils.Ptr("SNYK-ERROR-4001")},
@@ -1078,7 +1233,7 @@ func Test_Wait_CallsJitter(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testData := setupTestScenario(t)
+	testData := setupTestScenarioWithSubject(t)
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
