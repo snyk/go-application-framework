@@ -1,15 +1,12 @@
 package localworkflows
 
 import (
-	"fmt"
-	"strings"
+	"errors"
 
-	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -39,83 +36,48 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
 	output := []workflow.Data{}
 
+	var finalError error
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
-	debugLogger.Info().Msgf("Available writers: %d", writers.Length())
+	debugLogger.Info().Msgf("Available writers:")
+	for _, t := range writers.AvailableMimetypes() {
+		debugLogger.Warn().Msgf(" - %s", t)
+	}
 
 	// Handle UFM models, if none found, continue with the rest
 	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, writers)
 	if err != nil {
-		return output, err
+		finalError = errors.Join(finalError, err)
 	}
 
 	// Handle findings models, if none found, continue with the rest
 	input, err = output_workflow.HandleContentTypeFindingsModel(input, invocation, writers)
 	if err != nil {
-		return output, err
+		finalError = errors.Join(finalError, err)
 	}
 
-	for i := range input {
-		mimeType := input[i].GetContentType()
+	// Handle remaining data
+	input, err = output_workflow.HandleContentTypeOther(input, invocation, writers)
+	if err != nil {
+		finalError = errors.Join(finalError, err)
+	}
 
-		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
-			// skip test summary output
-			continue
-		}
-
-		contentLocation := input[i].GetContentLocation()
-		if len(contentLocation) == 0 {
-			contentLocation = "unknown"
-		}
-
-		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'", input[i].GetIdentifier().String(), contentLocation, mimeType)
-
-		// handle text/plain and unknown the same way
-		otherHandlerMimetypes := []string{output_workflow.DEFAULT_MIME_TYPE}
-
-		if strings.Contains(mimeType, output_workflow.OUTPUT_CONFIG_KEY_JSON) { // handle application/json
-			otherHandlerMimetypes = []string{output_workflow.JSON_MIME_TYPE, output_workflow.SARIF_MIME_TYPE}
-		}
-
-		err = handleContentTypeOthers(debugLogger, input[i], mimeType, writers, otherHandlerMimetypes)
-		if err != nil {
-			return output, err
+	if writers.Length() > 0 {
+		debugLogger.Warn().Msg("Unused writers:")
+		for _, t := range writers.AvailableMimetypes() {
+			debugLogger.Warn().Msgf(" - %s", t)
 		}
 	}
 
-	return output, nil
-}
-
-func handleContentTypeOthers(debugLogger *zerolog.Logger, input workflow.Data, mimeType string, writers output_workflow.WriterMap, supportedMimeTypes []string) error {
-	// try to convert payload to a string
-	var singleDataAsString string
-	singleData, typeCastSuccessful := input.GetPayload().([]byte)
-	if !typeCastSuccessful {
-		singleDataAsString, typeCastSuccessful = input.GetPayload().(string)
-		if !typeCastSuccessful {
-			return fmt.Errorf("unsupported output type: %s", mimeType)
-		}
-	} else {
-		singleDataAsString = string(singleData)
-	}
-
-	for _, mimetype := range supportedMimeTypes {
-		writer := writers.PopWritersByMimetype(mimetype)
-		if len(writer) == 0 {
-			continue
-		}
-
-		debugLogger.Info().Msgf("Handle Other: Using Writer for: %s", mimetype)
-		for _, w := range writer {
-			_, err := fmt.Fprintln(w.GetWriter(), singleDataAsString)
-			if err != nil {
-				return err
-			}
+	if len(input) > 0 {
+		debugLogger.Warn().Msg("Unused input:")
+		for _, t := range input {
+			debugLogger.Warn().Msgf(" - %s", t.GetContentType())
 		}
 	}
 
-	return nil
+	return output, finalError
 }
 
 func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {

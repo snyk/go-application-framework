@@ -2,6 +2,8 @@ package output_workflow
 
 import (
 	"io"
+	"maps"
+	"slices"
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -27,6 +29,7 @@ type FileWriter struct {
 type WriterMap interface {
 	PopWritersByMimetype(mimeType string) []*WriterEntry
 	Length() int
+	AvailableMimetypes() []string
 }
 
 type writerMapImpl struct {
@@ -46,6 +49,10 @@ func (w *writerMapImpl) PopWritersByMimetype(mimeType string) []*WriterEntry {
 
 func (w *writerMapImpl) Length() int {
 	return len(w.writers)
+}
+
+func (w *writerMapImpl) AvailableMimetypes() []string {
+	return slices.Collect(maps.Keys(w.writers))
 }
 
 func (we *WriterEntry) GetWriter() io.WriteCloser {
