@@ -169,7 +169,7 @@ var (
 type StartTestParams struct {
 	OrgID       string
 	Subject     TestSubjectCreate
-	Resources 	[]TestResourceCreateItem 
+	Resources   []TestResourceCreateItem
 	LocalPolicy *LocalPolicy
 }
 
@@ -280,11 +280,11 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	}
 
 	for i, resource := range params.Resources {
-    if len(resource.union) == 0 {
-        return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
-    }
-}
-	
+		if len(resource.union) == 0 {
+			return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+		}
+	}
+
 	if params.OrgID == "" {
 		return nil, fmt.Errorf("OrgID is required")
 	}

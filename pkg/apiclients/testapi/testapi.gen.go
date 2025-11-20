@@ -1842,7 +1842,7 @@ type TestAttributesCreate struct {
 	// Config The test configuration. If not specified, caller accepts test configuration
 	// defaults within the calling scope (org, group or tenant settings, etc).
 	Config    *TestConfiguration        `json:"config,omitempty"`
-	Resources *[]TestResourceCreateItem `json:"resources,omitempty"`
+	Resources *[]TestResourceCreateItem `json:"resources"`
 
 	// Subject The subject of a test.
 	Subject TestSubjectCreate `json:"subject"`
