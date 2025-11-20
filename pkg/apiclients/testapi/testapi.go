@@ -172,6 +172,7 @@ var (
 type StartTestParams struct {
 	OrgID       string
 	Subject     TestSubjectCreate
+	Resources   []TestResourceCreateItem
 	LocalPolicy *LocalPolicy
 }
 
@@ -292,6 +293,13 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	if len(params.Subject.union) == 0 {
 		return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
 	}
+
+	for i, resource := range params.Resources {
+		if len(resource.union) == 0 {
+			return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+		}
+	}
+
 	if params.OrgID == "" {
 		return nil, fmt.Errorf("OrgID is required")
 	}
@@ -301,12 +309,14 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	}
 
 	// Create test body
-	testAttributes := TestAttributesCreate{Subject: params.Subject}
+	testAttributes := TestAttributesCreate{Subject: params.Subject, Resources: &params.Resources}
+
 	if params.LocalPolicy != nil {
 		testAttributes.Config = &TestConfiguration{
 			LocalPolicy: params.LocalPolicy,
 		}
 	}
+
 	requestBody := TestRequestBody{
 		Data: TestDataCreate{
 			Attributes: testAttributes,
@@ -316,6 +326,7 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 
 	// Call the low-level client
 	createTestParams := &CreateTestParams{Version: c.config.APIVersion}
+
 	resp, err := c.lowLevelClient.CreateTestWithApplicationVndAPIPlusJSONBodyWithResponse(
 		ctx,
 		orgUUID,
