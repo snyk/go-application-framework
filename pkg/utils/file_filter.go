@@ -15,11 +15,43 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type FileFilterStrategy interface {
+	FilterOut(path string) bool
+}
+
+type GlobFileFilter struct {
+	ignores *gitignore.GitIgnore
+}
+
+func NewGlobFileFilter(path string, ruleFiles []string, logger *zerolog.Logger) (FileFilterStrategy, error) {
+	ff := FileFilter{
+		path:         path,
+		defaultRules: []string{"**/.git/**"},
+		logger:       logger,
+		max_threads:  int64(runtime.NumCPU()),
+	}
+
+	rules, err := ff.GetRules(ruleFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GlobFileFilter{ignores: gitignore.CompileIgnoreLines(rules...)}, nil
+}
+
+func (ff *GlobFileFilter) FilterOut(path string) bool {
+	if ff.ignores == nil {
+		return false
+	}
+	return ff.ignores.MatchesPath(path)
+}
+
 type FileFilter struct {
-	path         string
-	defaultRules []string
-	logger       *zerolog.Logger
-	max_threads  int64
+	path             string
+	defaultRules     []string
+	logger           *zerolog.Logger
+	filterStrategies []FileFilterStrategy
+	max_threads      int64
 }
 
 type FileFilterOption func(*FileFilter) error
@@ -32,6 +64,26 @@ func WithThreadNumber(maxThreadCount int) FileFilterOption {
 		}
 
 		return fmt.Errorf("max thread count must be greater than 0")
+	}
+}
+
+func WithFileFilterStrategies(strategies []FileFilterStrategy) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.filterStrategies = append(filter.filterStrategies, strategies...)
+		return nil
+	}
+}
+
+func WithSecretsFileFilterStrategies(path string, ruleFiles []string, logger *zerolog.Logger) FileFilterOption {
+	globFilter, err := NewGlobFileFilter(path, ruleFiles, logger)
+	if err != nil {
+		return nil //TODO handle error
+
+	}
+
+	return func(filter *FileFilter) error {
+		filter.filterStrategies = append(filter.filterStrategies, globFilter) // TODO add other filters here such as null byte filter
+		return nil
 	}
 }
 
@@ -103,11 +155,9 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
-func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
+func (fw *FileFilter) GetFilteredFiles(filesCh chan string) chan string {
 	var filteredFilesCh = make(chan string)
 
-	// create pattern matcher used to match filesToFilter to glob patterns
-	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
@@ -122,8 +172,16 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			}
 			go func(f string) {
 				defer availableThreads.Release(1)
-				// filesToFilter that do not match the glob pattern are filtered
-				if !globPatternMatcher.MatchesPath(f) {
+				// filesToFilter that do not match the filter list are excluded
+				keepFile := true
+				for _, filter := range fw.filterStrategies {
+					if filter.FilterOut(f) {
+						keepFile = false
+						break
+					}
+				}
+
+				if keepFile {
 					filteredFilesCh <- f
 				}
 			}(file)
