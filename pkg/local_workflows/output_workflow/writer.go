@@ -60,6 +60,10 @@ func (we *WriterEntry) GetWriter() io.WriteCloser {
 }
 
 func getDefaultWriter(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
+	if config.GetBool(OUTPUT_CONFIG_KEY_NO_DEFAULT_WRITER) {
+		return nil
+	}
+
 	writer := &WriterEntry{
 		writer: &newLineCloser{
 			writer: outputDestination.GetWriter(),
