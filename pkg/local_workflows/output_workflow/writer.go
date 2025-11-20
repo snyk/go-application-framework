@@ -59,7 +59,7 @@ func (we *WriterEntry) GetWriter() io.WriteCloser {
 	return we.writer
 }
 
-func getDefaultWriterGeneral(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
+func getDefaultWriter(config configuration.Configuration, outputDestination iUtils.OutputDestination) *WriterEntry {
 	writer := &WriterEntry{
 		writer: &newLineCloser{
 			writer: outputDestination.GetWriter(),
@@ -81,6 +81,15 @@ func getDefaultWriterGeneral(config configuration.Configuration, outputDestinati
 		writer.templates = []string{config.GetString(OUTPUT_CONFIG_TEMPLATE_FILE)}
 	}
 
+	// if existing, use a mimetype lookup table to translate the mimetype of the default writer
+	if config.IsSet(OUTPUT_CONFIG_KEY_DEFAULT_WRITER_LUT) {
+		if lut, ok := config.Get(OUTPUT_CONFIG_KEY_DEFAULT_WRITER_LUT).(map[string]string); ok {
+			if translatedMimetype, ok := lut[writer.mimeType]; ok {
+				writer.mimeType = translatedMimetype
+			}
+		}
+	}
+
 	return writer
 }
 
@@ -91,7 +100,7 @@ func GetWritersFromConfiguration(config configuration.Configuration, outputDesti
 	}
 
 	// currently the only used default writer is sarif
-	if tmp := getDefaultWriterGeneral(config, outputDestination); tmp != nil {
+	if tmp := getDefaultWriter(config, outputDestination); tmp != nil {
 		writerMap.writers[tmp.mimeType] = []*WriterEntry{tmp}
 	}
 
