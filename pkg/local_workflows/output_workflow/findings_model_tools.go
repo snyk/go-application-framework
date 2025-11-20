@@ -25,7 +25,7 @@ func getListOfFindings(input []workflow.Data, debugLogger *zerolog.Logger) (find
 			remainingData = append(remainingData, input[i])
 			continue
 		}
-		debugLogger.Info().Msgf("[%s] Handling findings model", input[i].GetIdentifier().String())
+		debugLogger.Info().Msgf("LFM - [%s] Handling findings model", input[i].GetIdentifier().String())
 		var localFindingsModel local_models.LocalFinding
 		localFindingsBytes, ok := input[i].GetPayload().([]byte)
 		if !ok {
@@ -59,16 +59,16 @@ func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.
 	debugLogger := invocation.GetEnhancedLogger()
 
 	if !wEntry.renderEmptyData && getTotalNumberOfFindings(findings) == 0 {
-		debugLogger.Info().Msgf("[%s] The input is empty, skipping rendering!", name)
+		debugLogger.Info().Msgf("LFM - [%s] The input is empty, skipping rendering!", name)
 		return
 	}
 
-	debugLogger.Info().Msgf("[%s] Creating findings model renderer", name)
+	debugLogger.Info().Msgf("LFM - [%s] Creating findings model renderer", name)
 
 	defer func() {
 		closeErr := wEntry.writer.Close()
 		if closeErr != nil {
-			debugLogger.Err(closeErr).Msgf("[%s] Error while closing writer.", name)
+			debugLogger.Err(closeErr).Msgf("LFM - [%s] Error while closing writer.", name)
 		}
 	}()
 
@@ -83,11 +83,11 @@ func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.
 	debugLogger.Info().Msgf("[%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
 	err := renderer.RenderTemplate(wEntry.templates, wEntry.mimeType)
 	if err != nil {
-		debugLogger.Warn().Err(err).Msgf("[%s] Failed to render local finding", name)
+		debugLogger.Warn().Err(err).Msgf("LFM - [%s] Failed to render local finding", name)
 		return
 	}
 
-	debugLogger.Info().Msgf("[%s] Rendering done", name)
+	debugLogger.Info().Msgf("LFM - [%s] Rendering done", name)
 }
 
 func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.InvocationContext, writers WriterMap) ([]workflow.Data, error) {
@@ -97,12 +97,12 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 
 	findings, remainingData := getListOfFindings(input, debugLogger)
 	if len(findings) == 0 {
-		debugLogger.Info().Msg("No findings to process")
+		debugLogger.Info().Msg("LFM - No findings to process")
 		return input, nil
 	}
 
 	threadCount := max(int64(config.GetInt(configuration.MAX_THREADS)), 1)
-	debugLogger.Info().Msgf("Thread count: %d", threadCount)
+	debugLogger.Info().Msgf("LFM - Thread count: %d", threadCount)
 
 	supportedMimeTypes := []MimeType2Template{
 		{
@@ -122,7 +122,7 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	for k, v := range writerMap {
 		err = availableThreads.Acquire(ctx, 1)
 		if err != nil {
-			debugLogger.Err(err).Msgf("[%s] Failed to acquire threading lock. Cancel rendering.", k)
+			debugLogger.Err(err).Msgf("LFM - [%s] Failed to acquire threading lock. Cancel rendering.", k)
 			break
 		}
 
@@ -134,9 +134,9 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 
 	err = availableThreads.Acquire(ctx, threadCount)
 	if err != nil {
-		debugLogger.Err(err).Msg("Failed to wait for all threads")
+		debugLogger.Err(err).Msg("LFM - Failed to wait for all threads")
 	}
 
-	debugLogger.Info().Msgf("All Rendering done")
+	debugLogger.Info().Msgf("LFM - All Rendering done")
 	return remainingData, nil
 }
