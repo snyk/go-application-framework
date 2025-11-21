@@ -193,9 +193,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
-
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
@@ -208,9 +205,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	t.Run("should output to stdout by default for text/plain", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
-
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
@@ -227,10 +221,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
-
-		// mock assertions
-		outputDestination.EXPECT().Remove(expectedFileName).Return(nil).Times(1)
-		outputDestination.EXPECT().WriteFile(expectedFileName, []byte(payload), utils.FILEPERM_666).Return(nil).Times(1)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
@@ -265,9 +255,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "hammer/head", payload)
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
-
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
@@ -291,9 +278,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	t.Run("should not output anything for test summary mimeType", func(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(payload))
-
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(0)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
@@ -359,9 +343,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, versionedTestSummaryContentType, []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(0)
-
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
 
@@ -374,9 +355,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(payload))
 		textData := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
-
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
 
 		// execute
 		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{testSummaryData, textData}, outputDestination)
