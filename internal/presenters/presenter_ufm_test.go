@@ -252,6 +252,8 @@ func normalizeFixURIs(result map[string]interface{}) {
 }
 
 // normalizeSuppressions removes suppressions from results for consistent comparison
+//
+//nolint:gocyclo // to avoid repetition it's easier to read this way
 func normalizeSuppressions(run map[string]interface{}, ignoreSuppressions bool) {
 	results, ok := run["results"].([]interface{})
 	if !ok {
@@ -293,7 +295,11 @@ func normalizeSuppressions(run map[string]interface{}, ignoreSuppressions bool) 
 		}
 
 		if result["suppressions"] != nil {
-			suppressedResults = append(suppressedResults, result["ruleId"].(string))
+			ruleId, ok := result["ruleId"].(string)
+			if !ok {
+				continue
+			}
+			suppressedResults = append(suppressedResults, ruleId)
 			continue
 		}
 
@@ -302,7 +308,11 @@ func normalizeSuppressions(run map[string]interface{}, ignoreSuppressions bool) 
 
 	for _, rule := range rules {
 		if ruleAsMap, ok := rule.(map[string]interface{}); ok {
-			if slices.Contains(suppressedResults, ruleAsMap["id"].(string)) {
+			ruleId, ok := ruleAsMap["id"].(string)
+			if !ok {
+				continue
+			}
+			if slices.Contains(suppressedResults, ruleId) {
 				continue
 			}
 
