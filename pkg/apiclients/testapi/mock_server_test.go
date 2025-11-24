@@ -466,7 +466,7 @@ func mockTestResultResponse(
 	attributes := testapi.TestAttributes{
 		Config:           testConfig,
 		CreatedAt:        createdAt,
-		Subject:          testSubject,
+		Subject:          &testSubject,
 		SubjectLocators:  subjectLocators,
 		EffectiveSummary: effectiveSummary,
 		RawSummary:       rawSummary,
@@ -537,7 +537,7 @@ func mockListFindingsResponse(t *testing.T, nextLink *string, hasData bool) []by
 	err = location.FromSourceLocation(testapi.SourceLocation{
 		FilePath: filePath,
 		FromLine: lineNum,
-		Type:     testapi.Source,
+		Type:     testapi.SourceLocationTypeSource,
 	})
 	require.NoError(t, err)
 

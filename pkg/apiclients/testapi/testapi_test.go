@@ -134,7 +134,7 @@ func Test_StartTest_Success(t *testing.T) {
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Subject: params.Subject,
+				Subject: &params.Subject,
 				Config: &testapi.TestConfiguration{
 					LocalPolicy: localPolicy,
 				},
@@ -464,7 +464,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
-			Attributes: testapi.TestAttributesCreate{Subject: params.Subject},
+			Attributes: testapi.TestAttributesCreate{Subject: &params.Subject},
 			Type:       testapi.Tests,
 		},
 	}
@@ -1104,7 +1104,8 @@ func Test_Wait_CallsJitter(t *testing.T) {
 			{ShouldRedirect: true},                       // Second poll, redirects
 		},
 		FinalTestResult: FinalTestResultConfig{
-			Outcome: testapi.Pass,
+			Outcome:     testapi.Pass,
+			TestSubject: testData.ExpectedTestSubject,
 		},
 	}
 	handler := newTestAPIMockHandler(t, handlerConfig)

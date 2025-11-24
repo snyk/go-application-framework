@@ -301,7 +301,7 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	}
 
 	// Create test body
-	testAttributes := TestAttributesCreate{Subject: params.Subject}
+	testAttributes := TestAttributesCreate{Subject: &params.Subject}
 	if params.LocalPolicy != nil {
 		testAttributes.Config = &TestConfiguration{
 			LocalPolicy: params.LocalPolicy,
@@ -537,7 +537,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		TestID:            testData.Id,
 		TestConfiguration: attrs.Config,
 		CreatedAt:         attrs.CreatedAt,
-		TestSubject:       attrs.Subject,
+		TestSubject:       *attrs.Subject,
 		SubjectLocators:   attrs.SubjectLocators,
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
