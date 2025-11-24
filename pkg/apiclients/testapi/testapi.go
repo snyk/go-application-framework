@@ -172,6 +172,7 @@ var (
 type StartTestParams struct {
 	OrgID       string
 	Subject     TestSubjectCreate
+	Resources   []TestResourceCreateItem
 	LocalPolicy *LocalPolicy
 }
 
@@ -289,9 +290,18 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 
 // Create the initial test and return a handle to poll it
 func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
+	//TODO only one or the other must be set
+	//TODO do we have to check if Subject is there?
 	if len(params.Subject.union) == 0 {
 		return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
 	}
+
+	for i, resource := range params.Resources {
+		if len(resource.union) == 0 {
+			return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+		}
+	}
+
 	if params.OrgID == "" {
 		return nil, fmt.Errorf("OrgID is required")
 	}
@@ -301,7 +311,7 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	}
 
 	// Create test body
-	testAttributes := TestAttributesCreate{Subject: &params.Subject}
+	testAttributes := TestAttributesCreate{Subject: &params.Subject, Resources: &params.Resources}
 	if params.LocalPolicy != nil {
 		testAttributes.Config = &TestConfiguration{
 			LocalPolicy: params.LocalPolicy,

@@ -30,9 +30,11 @@ type TestData struct {
 	PollCounter              *atomic.Int32
 	FindingsEndpointCalled   *atomic.Bool
 	FindingsPageCount        *atomic.Int32
-	TestSubjectCreate        testapi.TestSubjectCreate
-	ExpectedTestSubject      testapi.TestSubject
+	TestSubjectCreate        *testapi.TestSubjectCreate
+	TestResourceCreateItems  *[]testapi.TestResourceCreateItem
+	ExpectedTestSubject      *testapi.TestSubject
 	ExpectedSubjectLocators  *[]testapi.TestSubjectLocator
+	ExpectedTestResources	 *[]testapi.TestResource	
 	ExpectedTestConfig       *testapi.TestConfiguration
 	ExpectedCreatedAt        time.Time
 	ExpectedEffectiveSummary *testapi.FindingSummary
@@ -82,8 +84,8 @@ func setupTestScenario(t *testing.T) TestData {
 		PollCounter:              pollCounter,
 		FindingsEndpointCalled:   findingsEndpointCalled,
 		FindingsPageCount:        findingsPageCount,
-		TestSubjectCreate:        testSubjectCreate,
-		ExpectedTestSubject:      expectedTestSubject,
+		TestSubjectCreate:        &testSubjectCreate,
+		ExpectedTestSubject:      &expectedTestSubject,
 		ExpectedSubjectLocators:  expectedSubjectLocators,
 		ExpectedTestConfig:       expectedTestConfig,
 		ExpectedCreatedAt:        expectedCreatedAt,
@@ -126,7 +128,7 @@ func Test_StartTest_Success(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:       testData.OrgID.String(),
-		Subject:     testData.TestSubjectCreate,
+		Subject:     *testData.TestSubjectCreate,
 		LocalPolicy: localPolicy,
 	}
 
@@ -316,7 +318,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 
 	startParams := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	testData.ExpectedEffectiveSummary.Count = 1
@@ -395,7 +397,7 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -458,7 +460,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	// Define expected request body that StartTest should generate
@@ -548,7 +550,7 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -613,7 +615,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -697,7 +699,7 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -780,7 +782,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	testData.ExpectedEffectiveSummary.Count = 5 // Example count
@@ -842,7 +844,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 }
 
 // Helper function to assert common fields of a TestResult.
-func assertCommonTestResultFields(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID, expectedConfig *testapi.TestConfiguration, expectedSubject testapi.TestSubject, expectedLocators *[]testapi.TestSubjectLocator, expectedEffectiveSummary *testapi.FindingSummary, expectedRawSummary *testapi.FindingSummary) {
+func assertCommonTestResultFields(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID, expectedConfig *testapi.TestConfiguration, expectedSubject *testapi.TestSubject, expectedLocators *[]testapi.TestSubjectLocator, expectedEffectiveSummary *testapi.FindingSummary, expectedRawSummary *testapi.FindingSummary) {
 	t.Helper()
 	require.NotNil(t, result.GetTestID())
 	assert.Equal(t, expectedTestID, *result.GetTestID())
@@ -1082,7 +1084,7 @@ func Test_Wait_CallsJitter(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
+		Subject: *testData.TestSubjectCreate,
 	}
 
 	// Mock Jitter

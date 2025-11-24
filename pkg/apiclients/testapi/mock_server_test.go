@@ -47,7 +47,8 @@ type FinalTestResultConfig struct {
 	ApiWarnings       *[]testapi.IoSnykApiCommonError
 	TestConfiguration *testapi.TestConfiguration
 	CreatedAt         *time.Time
-	TestSubject       testapi.TestSubject
+	TestSubject       *testapi.TestSubject
+	TestResources	  *[]testapi.TestResource
 	SubjectLocators   *[]testapi.TestSubjectLocator
 	BreachedPolicies  *testapi.PolicyRefSet
 	EffectiveSummary  *testapi.FindingSummary
@@ -301,6 +302,33 @@ func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 	return testSubject
 }
 
+func newUploadTestResource(t *testing.T) testapi.TestResourceCreateItem {
+	t.Helper()
+	
+	uploadResource := testapi.UploadResource{
+		ContentType:   testapi.UploadResourceContentTypeSource,
+		FilePatterns: []string{},  
+		RevisionId: string("fake-revision-id"), 
+		Type:         testapi.Upload,
+	}
+
+	var baseResourceVariant testapi.BaseResourceVariantCreateItem
+	err := baseResourceVariant.FromUploadResource(uploadResource);
+	require.NoError(t, err);
+
+	baseResource := testapi.BaseResourceCreateItem{
+		Resource: baseResourceVariant,
+		Type:     testapi.BaseResourceCreateItemTypeBase,
+	}
+
+	
+	var testResource testapi.TestResourceCreateItem
+	err = testResource.FromBaseResourceCreateItem(baseResource);
+	require.NoError(t, err);
+
+	return testResource;
+}
+
 // Sets up an httptest server. Returns the server and a cleanup function.
 func startMockServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, func()) {
 	t.Helper()
@@ -456,7 +484,7 @@ func mockTestResultResponse(
 	apiWarnings *[]testapi.IoSnykApiCommonError,
 	testConfig *testapi.TestConfiguration,
 	createdAt *time.Time,
-	testSubject testapi.TestSubject,
+	testSubject *testapi.TestSubject,
 	subjectLocators *[]testapi.TestSubjectLocator,
 	breachedPolicies *testapi.PolicyRefSet,
 	effectiveSummary *testapi.FindingSummary,
@@ -466,7 +494,7 @@ func mockTestResultResponse(
 	attributes := testapi.TestAttributes{
 		Config:           testConfig,
 		CreatedAt:        createdAt,
-		Subject:          &testSubject,
+		Subject:          testSubject,
 		SubjectLocators:  subjectLocators,
 		EffectiveSummary: effectiveSummary,
 		RawSummary:       rawSummary,
