@@ -64,12 +64,13 @@ func useWriterWithOther(debugLogger *zerolog.Logger, input workflow.Data, mimeTy
 	for _, mimetype := range supportedMimeTypes {
 		writer := writers.PopWritersByMimetype(mimetype)
 		if len(writer) == 0 {
+			debugLogger.Info().Msgf("Other - No writer found for: %s", mimetype)
 			continue
 		}
 
 		debugLogger.Info().Msgf("Other - Using Writer for: %s", mimetype)
 		for _, w := range writer {
-			_, err := fmt.Fprintln(w.GetWriter(), singleDataAsString)
+			_, err := fmt.Fprint(w.GetWriter(), singleDataAsString)
 			if err != nil {
 				finalError = errors.Join(finalError, err)
 			}
