@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/mattn/go-isatty"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/internal/presenters"
@@ -101,6 +102,43 @@ func (ui *consoleUi) Input(prompt string) (string, error) {
 
 	// Trim spaces and newline characters
 	return strings.TrimSpace(input), nil
+}
+
+func (ui *consoleUi) Selector(prompt string, options []string) (string, error) {
+	if len(options) == 0 {
+		return "", fmt.Errorf("no options provided")
+	}
+
+	renderedPrompt, err := renderHtml(prompt)
+	if err != nil {
+		return "", err
+	}
+
+	renderedOptions := make([]string, len(options))
+	var renderedOpt string
+	for i, opt := range options {
+		renderedOpt, err = renderHtml(opt)
+		if err != nil {
+			return "", err
+		}
+		renderedOptions[i] = renderedOpt
+	}
+
+	selector := promptui.Select{
+		Label: renderedPrompt,
+		Items: renderedOptions,
+	}
+
+	idx, _, err := selector.Run()
+	if err != nil {
+		return "", err
+	}
+
+	if idx < 0 || idx >= len(options) {
+		return "", fmt.Errorf("invalid selection index: %d", idx)
+	}
+
+	return options[idx], nil
 }
 
 func renderHtml(maybeHtml string) (string, error) {

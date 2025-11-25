@@ -95,3 +95,18 @@ func (mr *MockUserInterfaceMockRecorder) OutputError(err interface{}, opts ...in
 	varargs := append([]interface{}{err}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputError", reflect.TypeOf((*MockUserInterface)(nil).OutputError), varargs...)
 }
+
+// Selector mocks base method.
+func (m *MockUserInterface) Selector(prompt string, options []string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Selector", prompt, options)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Selector indicates an expected call of Selector.
+func (mr *MockUserInterfaceMockRecorder) Selector(prompt, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Selector", reflect.TypeOf((*MockUserInterface)(nil).Selector), prompt, options)
+}
