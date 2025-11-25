@@ -17,8 +17,9 @@ type jsonTestResult struct {
 	TestID            *uuid.UUID                      `json:"testId,omitempty"`
 	TestConfiguration *testapi.TestConfiguration      `json:"testConfiguration,omitempty"`
 	CreatedAt         *time.Time                      `json:"createdAt,omitempty"`
-	TestSubject       testapi.TestSubject             `json:"testSubject"`
+	TestSubject       *testapi.TestSubject            `json:"testSubject,omitempty"`
 	SubjectLocators   *[]testapi.TestSubjectLocator   `json:"subjectLocators,omitempty"`
+	TestResources	  *[]testapi.TestResource 		  `json:"testResources,omitempty"`
 	ExecutionState    testapi.TestExecutionStates     `json:"executionState"`
 	Errors            *[]testapi.IoSnykApiCommonError `json:"errors,omitempty"`
 	Warnings          *[]testapi.IoSnykApiCommonError `json:"warnings,omitempty"`
@@ -58,13 +59,18 @@ func (j *jsonTestResult) GetCreatedAt() *time.Time {
 }
 
 // GetTestSubject returns the test subject.
-func (j *jsonTestResult) GetTestSubject() testapi.TestSubject {
+func (j *jsonTestResult) GetTestSubject() *testapi.TestSubject {
 	return j.TestSubject
 }
 
 // GetSubjectLocators returns the subject locators.
 func (j *jsonTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
 	return j.SubjectLocators
+}
+
+// GetResources returns the test resources.
+func (j *jsonTestResult) GetTestResources() *[]testapi.TestResource {
+	return j.TestResources
 }
 
 // GetExecutionState returns the execution state.

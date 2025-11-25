@@ -48,7 +48,7 @@ type FinalTestResultConfig struct {
 	TestConfiguration *testapi.TestConfiguration
 	CreatedAt         *time.Time
 	TestSubject       *testapi.TestSubject
-	TestResources	  *[]testapi.TestResource
+	TestResources     *[]testapi.TestResource
 	SubjectLocators   *[]testapi.TestSubjectLocator
 	BreachedPolicies  *testapi.PolicyRefSet
 	EffectiveSummary  *testapi.FindingSummary
@@ -302,31 +302,31 @@ func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 	return testSubject
 }
 
+// Return a upload Resource to run a test on
 func newUploadTestResource(t *testing.T) testapi.TestResourceCreateItem {
 	t.Helper()
-	
+
 	uploadResource := testapi.UploadResource{
-		ContentType:   testapi.UploadResourceContentTypeSource,
-		FilePatterns: []string{},  
-		RevisionId: string("fake-revision-id"), 
+		ContentType:  testapi.UploadResourceContentTypeSource,
+		FilePatterns: []string{},
+		RevisionId:   string("my-revision-id"),
 		Type:         testapi.Upload,
 	}
 
 	var baseResourceVariant testapi.BaseResourceVariantCreateItem
-	err := baseResourceVariant.FromUploadResource(uploadResource);
-	require.NoError(t, err);
+	err := baseResourceVariant.FromUploadResource(uploadResource)
+	require.NoError(t, err)
 
 	baseResource := testapi.BaseResourceCreateItem{
 		Resource: baseResourceVariant,
 		Type:     testapi.BaseResourceCreateItemTypeBase,
 	}
 
-	
 	var testResource testapi.TestResourceCreateItem
-	err = testResource.FromBaseResourceCreateItem(baseResource);
-	require.NoError(t, err);
+	err = testResource.FromBaseResourceCreateItem(baseResource)
+	require.NoError(t, err)
 
-	return testResource;
+	return testResource
 }
 
 // Sets up an httptest server. Returns the server and a cleanup function.

@@ -106,8 +106,9 @@ type TestResult interface {
 	GetTestID() *uuid.UUID
 	GetTestConfiguration() *TestConfiguration
 	GetCreatedAt() *time.Time
-	GetTestSubject() TestSubject
+	GetTestSubject() *TestSubject
 	GetSubjectLocators() *[]TestSubjectLocator
+	GetTestResources() *[]TestResource
 
 	GetExecutionState() TestExecutionStates
 	GetErrors() *[]IoSnykApiCommonError
@@ -182,8 +183,9 @@ type testResult struct {
 	TestID            *uuid.UUID // The final Test ID (different from Job ID)
 	TestConfiguration *TestConfiguration
 	CreatedAt         *time.Time
-	TestSubject       TestSubject
+	TestSubject       *TestSubject
 	SubjectLocators   *[]TestSubjectLocator
+	TestResources	  *[]TestResource
 
 	ExecutionState TestExecutionStates // e.g., "finished", "errored"
 	Errors         *[]IoSnykApiCommonError
@@ -235,10 +237,13 @@ func (r *testResult) GetTestConfiguration() *TestConfiguration { return r.TestCo
 func (r *testResult) GetCreatedAt() *time.Time { return r.CreatedAt }
 
 // GetTestSubject returns the test subject.
-func (r *testResult) GetTestSubject() TestSubject { return r.TestSubject }
+func (r *testResult) GetTestSubject() *TestSubject { return r.TestSubject }
 
 // GetSubjectLocators returns the subject locators.
 func (r *testResult) GetSubjectLocators() *[]TestSubjectLocator { return r.SubjectLocators }
+
+// GetTestResources returns the test resources.
+func (r *testResult) GetTestResources() *[]TestResource { return r.TestResources }
 
 // GetEffectiveSummary returns the summary excluding suppressed findings.
 func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveSummary }
@@ -312,11 +317,13 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 
 	// Create test body
 	testAttributes := TestAttributesCreate{Subject: &params.Subject, Resources: &params.Resources}
+
 	if params.LocalPolicy != nil {
 		testAttributes.Config = &TestConfiguration{
 			LocalPolicy: params.LocalPolicy,
 		}
 	}
+
 	requestBody := TestRequestBody{
 		Data: TestDataCreate{
 			Attributes: testAttributes,
@@ -326,6 +333,7 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 
 	// Call the low-level client
 	createTestParams := &CreateTestParams{Version: c.config.APIVersion}
+
 	resp, err := c.lowLevelClient.CreateTestWithApplicationVndAPIPlusJSONBodyWithResponse(
 		ctx,
 		orgUUID,
@@ -547,8 +555,9 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		TestID:            testData.Id,
 		TestConfiguration: attrs.Config,
 		CreatedAt:         attrs.CreatedAt,
-		TestSubject:       *attrs.Subject,
+		TestSubject:       attrs.Subject,
 		SubjectLocators:   attrs.SubjectLocators,
+		TestResources: 	   attrs.Resources,	
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
 		handle:            h,

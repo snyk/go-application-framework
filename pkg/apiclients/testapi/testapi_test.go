@@ -34,7 +34,7 @@ type TestData struct {
 	TestResourceCreateItems  *[]testapi.TestResourceCreateItem
 	ExpectedTestSubject      *testapi.TestSubject
 	ExpectedSubjectLocators  *[]testapi.TestSubjectLocator
-	ExpectedTestResources	 *[]testapi.TestResource	
+	ExpectedTestResources    *[]testapi.TestResource
 	ExpectedTestConfig       *testapi.TestConfiguration
 	ExpectedCreatedAt        time.Time
 	ExpectedEffectiveSummary *testapi.FindingSummary
@@ -136,7 +136,8 @@ func Test_StartTest_Success(t *testing.T) {
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Subject: &params.Subject,
+				Subject:   &params.Subject,
+				Resources: &params.Resources,
 				Config: &testapi.TestConfiguration{
 					LocalPolicy: localPolicy,
 				},
@@ -466,8 +467,11 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
-			Attributes: testapi.TestAttributesCreate{Subject: &params.Subject},
-			Type:       testapi.Tests,
+			Attributes: testapi.TestAttributesCreate{
+				Subject:   &params.Subject,
+				Resources: &params.Resources,
+			},
+			Type: testapi.Tests,
 		},
 	}
 
