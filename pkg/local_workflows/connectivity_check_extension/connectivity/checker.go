@@ -154,6 +154,43 @@ func (c *Checker) CheckOrganizations(limit int) ([]Organization, error) {
 	return orgs, nil
 }
 
+// CheckTenants checks if authentication token is configured and fetches tenants
+func (c *Checker) CheckTenants(limit int) ([]Tenant, error) {
+	// Check if token is available
+	token := c.config.GetString(configuration.AUTHENTICATION_TOKEN)
+	if token == "" {
+		token = c.config.GetString(configuration.AUTHENTICATION_BEARER_TOKEN)
+	}
+	if token == "" {
+		oauthToken, err := auth.GetOAuthToken(c.config)
+		if err == nil && oauthToken != nil {
+			token = oauthToken.AccessToken
+		}
+	}
+
+	// If no token, return nil (no tenants to fetch)
+	if token == "" {
+		return nil, nil
+	}
+
+	response, err := c.apiClient.GetAvailableTenants()
+	if err != nil {
+		return nil, err
+	}
+
+	var tenants []Tenant
+	for _, tenant := range response.Data {
+		// Convert to our Tenant type
+		tenants = append(tenants, Tenant{
+			ID:   tenant.ID,
+			Name: tenant.Attributes.Name,
+			Slug: tenant.Attributes.Slug,
+		})
+	}
+
+	return tenants, nil
+}
+
 // updateProgress is a helper to update progress bar with error handling
 func (c *Checker) updateProgress(progressBar ui.ProgressBar, progress float64, title string) {
 	if progressBar == nil {
