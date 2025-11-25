@@ -205,7 +205,17 @@ func Test_StartTest_Success(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, result, "Result should not be nil after successful Wait()")
 	assertTestOutcomePass(t, result, testData.TestID)
-	assertCommonTestResultFields(t, result, testData.TestID, testData.ExpectedTestConfig, testData.ExpectedTestSubject, testData.ExpectedSubjectLocators, testData.ExpectedEffectiveSummary, testData.ExpectedRawSummary)
+	assertCommonTestResultFields(
+		t,
+		result,
+		testData.TestID,
+		testData.ExpectedTestConfig,
+		testData.ExpectedTestSubject,
+		testData.ExpectedSubjectLocators,
+		testData.ExpectedTestResources,
+		testData.ExpectedEffectiveSummary,
+		testData.ExpectedRawSummary,
+	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
 	// Fetch and check findings
@@ -379,7 +389,17 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, result, "Result should not be nil after successful Wait()")
 	assertTestOutcomePass(t, result, testData.TestID)
-	assertCommonTestResultFields(t, result, testData.TestID, testData.ExpectedTestConfig, testData.ExpectedTestSubject, testData.ExpectedSubjectLocators, testData.ExpectedEffectiveSummary, testData.ExpectedRawSummary)
+	assertCommonTestResultFields(
+		t,
+		result,
+		testData.TestID,
+		testData.ExpectedTestConfig,
+		testData.ExpectedTestSubject,
+		testData.ExpectedSubjectLocators,
+		testData.ExpectedTestResources,
+		testData.ExpectedEffectiveSummary,
+		testData.ExpectedRawSummary,
+	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
 	// Fetch and check findings. Ensure pagination is used.
@@ -447,7 +467,16 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, result, "Result should not be nil after successful Wait()")
 	assertTestOutcomeFail(t, result, testData.TestID, failReason)
-	assertCommonTestResultFields(t, result, testData.TestID, testData.ExpectedTestConfig, testData.ExpectedTestSubject, testData.ExpectedSubjectLocators, testData.ExpectedEffectiveSummary, testData.ExpectedRawSummary)
+	assertCommonTestResultFields(
+		t,
+		result,
+		testData.TestID,
+		testData.ExpectedTestConfig,
+		testData.ExpectedTestSubject,
+		testData.ExpectedSubjectLocators,
+		testData.ExpectedTestResources,
+		testData.ExpectedEffectiveSummary,
+		testData.ExpectedRawSummary)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 }
 
@@ -536,7 +565,17 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 	// Assert - state: Finished, outcome: Pass
 	require.NotNil(t, result, "Result should not be nil after successful Wait()/Done()")
 	assertTestOutcomePass(t, result, testData.TestID)
-	assertCommonTestResultFields(t, result, testData.TestID, testData.ExpectedTestConfig, testData.ExpectedTestSubject, testData.ExpectedSubjectLocators, testData.ExpectedEffectiveSummary, testData.ExpectedRawSummary)
+	assertCommonTestResultFields(
+		t,
+		result,
+		testData.TestID,
+		testData.ExpectedTestConfig,
+		testData.ExpectedTestSubject,
+		testData.ExpectedSubjectLocators,
+		testData.ExpectedTestResources,
+		testData.ExpectedEffectiveSummary,
+		testData.ExpectedRawSummary,
+	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
 	// Fetch and check findings
@@ -841,14 +880,32 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, result, "Result should not be nil after successful Wait()")
 	assertTestFinishedWithOutcomeErrorsAndWarnings(t, result, testData.TestID, testapi.Fail, &failReason, expectedAPIErrors, expectedAPIWarnings)
-	assertCommonTestResultFields(t, result, testData.TestID, testData.ExpectedTestConfig, testData.ExpectedTestSubject, testData.ExpectedSubjectLocators, testData.ExpectedEffectiveSummary, testData.ExpectedRawSummary)
+	assertCommonTestResultFields(
+		t,
+		result,
+		testData.TestID,
+		testData.ExpectedTestConfig,
+		testData.ExpectedTestSubject,
+		testData.ExpectedSubjectLocators,
+		testData.ExpectedTestResources,
+		testData.ExpectedEffectiveSummary,
+		testData.ExpectedRawSummary)
 	require.NotNil(t, result.GetBreachedPolicies())
 	assert.Equal(t, expectedBreachedPolicies, result.GetBreachedPolicies())
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
 }
 
 // Helper function to assert common fields of a TestResult.
-func assertCommonTestResultFields(t *testing.T, result testapi.TestResult, expectedTestID uuid.UUID, expectedConfig *testapi.TestConfiguration, expectedSubject *testapi.TestSubject, expectedLocators *[]testapi.TestSubjectLocator, expectedEffectiveSummary *testapi.FindingSummary, expectedRawSummary *testapi.FindingSummary) {
+func assertCommonTestResultFields(
+	t *testing.T,
+	result testapi.TestResult,
+	expectedTestID uuid.UUID,
+	expectedConfig *testapi.TestConfiguration,
+	expectedSubject *testapi.TestSubject,
+	expectedLocators *[]testapi.TestSubjectLocator,
+	expectedResources *[]testapi.TestResource,
+	expectedEffectiveSummary *testapi.FindingSummary,
+	expectedRawSummary *testapi.FindingSummary) {
 	t.Helper()
 	require.NotNil(t, result.GetTestID())
 	assert.Equal(t, expectedTestID, *result.GetTestID())
@@ -863,8 +920,15 @@ func assertCommonTestResultFields(t *testing.T, result testapi.TestResult, expec
 	require.NotNil(t, result.GetCreatedAt()) // Should always be set by the API
 	assert.False(t, result.GetCreatedAt().IsZero())
 
-	require.NotNil(t, result.GetTestSubject())
-	assert.Equal(t, expectedSubject, result.GetTestSubject())
+	if expectedSubject != nil {
+		require.NotNil(t, result.GetTestSubject())
+		assert.Equal(t, expectedSubject, result.GetTestSubject())
+	}
+
+	if expectedResources != nil {
+		require.NotNil(t, result.GetTestResources())
+		assert.Equal(t, expectedSubject, result.GetTestSubject())
+	}
 
 	if expectedLocators != nil {
 		require.NotNil(t, result.GetSubjectLocators())

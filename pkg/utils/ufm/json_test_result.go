@@ -19,7 +19,7 @@ type jsonTestResult struct {
 	CreatedAt         *time.Time                      `json:"createdAt,omitempty"`
 	TestSubject       *testapi.TestSubject            `json:"testSubject,omitempty"`
 	SubjectLocators   *[]testapi.TestSubjectLocator   `json:"subjectLocators,omitempty"`
-	TestResources	  *[]testapi.TestResource 		  `json:"testResources,omitempty"`
+	TestResources     *[]testapi.TestResource         `json:"testResources,omitempty"`
 	ExecutionState    testapi.TestExecutionStates     `json:"executionState"`
 	Errors            *[]testapi.IoSnykApiCommonError `json:"errors,omitempty"`
 	Warnings          *[]testapi.IoSnykApiCommonError `json:"warnings,omitempty"`

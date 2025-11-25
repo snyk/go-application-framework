@@ -185,7 +185,7 @@ type testResult struct {
 	CreatedAt         *time.Time
 	TestSubject       *TestSubject
 	SubjectLocators   *[]TestSubjectLocator
-	TestResources	  *[]TestResource
+	TestResources     *[]TestResource
 
 	ExecutionState TestExecutionStates // e.g., "finished", "errored"
 	Errors         *[]IoSnykApiCommonError
@@ -295,15 +295,15 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 
 // Create the initial test and return a handle to poll it
 func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
-	//TODO only one or the other must be set
-	//TODO do we have to check if Subject is there?
-	if len(params.Subject.union) == 0 {
-		return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
-	}
-
-	for i, resource := range params.Resources {
-		if len(resource.union) == 0 {
-			return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+	if len(params.Resources) > 0 {
+		for i, resource := range params.Resources {
+			if len(resource.union) == 0 {
+				return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+			}
+		}
+	} else {
+		if len(params.Subject.union) == 0 {
+			return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
 		}
 	}
 
@@ -557,7 +557,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		CreatedAt:         attrs.CreatedAt,
 		TestSubject:       attrs.Subject,
 		SubjectLocators:   attrs.SubjectLocators,
-		TestResources: 	   attrs.Resources,	
+		TestResources:     attrs.Resources,
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
 		handle:            h,
