@@ -79,6 +79,29 @@ func Test_GetOrganizations_ReturnsOrganizations(t *testing.T) {
 	assert.Equal(t, "default-org", response.Organizations[0].Attributes.Slug)
 }
 
+func Test_GetAvailableTenants_ReturnsTenants(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	tenantResponse := newMockAvailableTenantsResponse(t)
+	u := "/rest/tenants?version=2024-10-15"
+
+	server := setupSingleReponseServer(t, u, tenantResponse)
+	client := api.NewApi(server.URL, http.DefaultClient)
+
+	// Act
+	response, err := client.GetAvailableTenants()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Assert
+	assert.NotNil(t, response)
+	assert.Equal(t, 1, len(response.Data))
+	assert.Equal(t, "59d6d97e-3106-4ebb-b608-352fad9c5b34", response.Data[0].ID)
+	assert.Equal(t, "My Tenant", response.Data[0].Attributes.Name)
+	assert.Equal(t, "my-tenant", response.Data[0].Attributes.Slug)
+}
+
 func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 	// Arrange
 	t.Parallel()
@@ -170,6 +193,48 @@ func newMockOrgSlugResponse(t *testing.T) contract.GetOrganizationResponse {
 	err := json.Unmarshal([]byte(slugJson), &response)
 	if err != nil {
 		t.Fatal(errors.Wrap(err, "cannot create mock response"))
+	}
+	return response
+}
+
+func newMockAvailableTenantsResponse(t *testing.T) contract.AvailableTenantsResponse {
+	t.Helper()
+	tenantJson := `
+				{
+				  "data": [
+				    {
+				      "attributes": {
+				        "created_at": "2022-03-16T00:00:00Z",
+				        "name": "My Tenant",
+				        "slug": "my-tenant",
+				        "updated_at": "2022-03-16T00:00:00Z"
+				      },
+				      "id": "59d6d97e-3106-4ebb-b608-352fad9c5b34",
+				      "relationships": {
+				        "owner": {
+				          "data": {
+				            "id": "b667f176-df52-4b0a-9954-117af6b05ab7",
+				            "type": "user"
+				          }
+				        }
+				      },
+				      "type": "resource"
+				    }
+				  ],
+				  "jsonapi": {
+				    "version": "1.0"
+				  },
+				  "links": {
+				    "first": "https://example.com/api/resource?ending_before=v1.eyJpZCI6IjExIn0K",
+				    "last": "https://example.com/api/resource?starting_after=v1.eyJpZCI6IjMwIn0K",
+				    "next": "https://example.com/api/resource?starting_after=v1.eyJpZCI6IjEwIn0K"
+				  }
+				}
+				`
+	var response contract.AvailableTenantsResponse
+	err := json.Unmarshal([]byte(tenantJson), &response)
+	if err != nil {
+		t.Fatal(errors.Wrap(err, "cannot create mock tenants response"))
 	}
 	return response
 }

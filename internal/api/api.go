@@ -26,6 +26,7 @@ type ApiClient interface {
 	GetSelf() (contract.SelfResponse, error)
 	GetSastSettings(orgId string) (*sast_contract.SastResponse, error)
 	GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error)
+	GetAvailableTenants() (*contract.AvailableTenantsResponse, error)
 }
 
 var _ ApiClient = (*snykApiClient)(nil)
@@ -115,6 +116,29 @@ func (a *snykApiClient) GetOrganizations(limit int) (*contract.OrganizationsResp
 	var response contract.OrganizationsResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+// GetAvailableTenants retrieves tenants accessible to the authenticated user.
+//
+// Returns:
+//   - A pointer to AvailableTenantsResponse containing tenants.
+//   - An error object (if an error occurred during the API request or response parsing).
+
+func (a *snykApiClient) GetAvailableTenants() (*contract.AvailableTenantsResponse, error) {
+	endpoint := "/rest/tenants"
+	version := "2024-10-15"
+
+	body, err := clientGet(a, endpoint, &version)
+	if err != nil {
+		return nil, err
+	}
+
+	var response contract.AvailableTenantsResponse
+	if err = json.Unmarshal(body, &response); err != nil {
 		return nil, err
 	}
 
