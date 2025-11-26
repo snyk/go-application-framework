@@ -304,7 +304,7 @@ func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 }
 
 // Return a upload Resource to run a test on
-func newUploadResource(t *testing.T) testapi.UploadResource {
+/*func newUploadResource(t *testing.T) testapi.UploadResource {
 	t.Helper()
 
 	uploadResource := testapi.UploadResource{
@@ -315,10 +315,10 @@ func newUploadResource(t *testing.T) testapi.UploadResource {
 	}
 
 	return uploadResource
-}
+}*/
 
 // Return a upload Resource to run a test on
-func newUploadTestResourceCreateItem(t *testing.T, u *testapi.UploadResource) testapi.TestResourceCreateItem {
+/*func newUploadTestResourceCreateItem(t *testing.T, u *testapi.UploadResource) testapi.TestResourceCreateItem {
 	t.Helper()
 
 	var resourceVariantCreateItem testapi.BaseResourceVariantCreateItem
@@ -335,7 +335,7 @@ func newUploadTestResourceCreateItem(t *testing.T, u *testapi.UploadResource) te
 	require.NoError(t, err)
 
 	return testResource
-}
+}*/
 
 // Sets up an httptest server. Returns the server and a cleanup function.
 func startMockServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, func()) {
