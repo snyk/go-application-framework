@@ -15,6 +15,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// by default, all rules are valid
+var defaultInvalidRules = []string{}
+
 type FileFilter struct {
 	path         string
 	defaultRules []string
@@ -179,10 +182,10 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 
 	var globs []string
 	for _, codeRule := range rules.Exclude.Code {
-		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
+		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath, defaultInvalidRules)...)
 	}
 	for _, codeRule := range rules.Exclude.Global {
-		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath)...)
+		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath, defaultInvalidRules)...)
 	}
 
 	return globs
@@ -193,23 +196,52 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 	var ignores []string
 	lines := strings.Split(string(content), "\n")
 
+	// Invalid .gitignore style patterns
+	invalidRules := []string{"."}
+
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 			continue
 		}
-		globs := parseIgnoreRuleToGlobs(line, filePath)
+		globs := parseIgnoreRuleToGlobs(line, filePath, invalidRules)
 		ignores = append(ignores, globs...)
 	}
 	return ignores
 }
 
+// escapeSpecialGlobChars escapes special characters that should be treated literally in glob patterns.
+// Special Characters to escape: $
+func escapeSpecialGlobChars(rule string) string {
+	var result strings.Builder
+	for i := 0; i < len(rule); i++ {
+		ch := rule[i]
+		switch ch {
+		case '$':
+			result.WriteByte('\\')
+			result.WriteByte(ch)
+		default:
+			result.WriteByte(ch)
+		}
+	}
+	return result.String()
+}
+
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
-func parseIgnoreRuleToGlobs(rule string, filePath string) (globs []string) {
+// we try to implement the same logic as gitignore pattern format - https://git-scm.com/docs/gitignore#_pattern_format
+func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string) (globs []string) {
 	// Mappings from .gitignore format to glob format:
 	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
 	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
 	// `foo/` => `**/foo/**` (meaning: Ignore (root/sub) foo dirs and their paths underneath.)
 	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo filesToFilter and dirs and their paths underneath.)
+
+	// If a rule is invalid, we skip it
+	for _, invalidRule := range invalidRules {
+		if strings.TrimSpace(rule) == invalidRule {
+			return globs
+		}
+	}
+
 	prefix := ""
 	const negation = "!"
 	const slash = "/"
@@ -235,24 +267,28 @@ func parseIgnoreRuleToGlobs(rule string, filePath string) (globs []string) {
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, rule, all)))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule, all))
+			globs = append(globs, escapeSpecialGlobChars(glob))
 		}
 		// case `/foo` => `{baseDir}/foo`
 		// case `**/foo` => `{baseDir}/**/foo`
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, rule)))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule))
+			globs = append(globs, escapeSpecialGlobChars(glob))
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, all, rule, all)))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule, all))
+			globs = append(globs, escapeSpecialGlobChars(glob))
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			globs = append(globs, filepath.ToSlash(prefix+filepath.Join(baseDir, all, rule)))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule))
+			globs = append(globs, escapeSpecialGlobChars(glob))
 		}
 	}
 	return globs
