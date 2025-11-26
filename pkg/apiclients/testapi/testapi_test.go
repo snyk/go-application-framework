@@ -56,6 +56,7 @@ func setupTestScenario(t *testing.T) TestData {
 	var err error
 	depGraphSubjectCreate, err := testSubjectCreate.AsDepGraphSubjectCreate()
 	require.NoError(t, err)
+
 	expectedTestSubject := testapi.TestSubject{} // Declare here
 	err = expectedTestSubject.FromDepGraphSubject(testapi.DepGraphSubject{
 		Locator: depGraphSubjectCreate.Locator,
@@ -128,7 +129,7 @@ func Test_StartTest_Success(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:       testData.OrgID.String(),
-		Subject:     *testData.TestSubjectCreate,
+		Subject:     testData.TestSubjectCreate,
 		LocalPolicy: localPolicy,
 	}
 
@@ -136,8 +137,8 @@ func Test_StartTest_Success(t *testing.T) {
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Subject:   &params.Subject,
-				Resources: &params.Resources,
+				Subject:   params.Subject,
+				Resources: params.Resources,
 				Config: &testapi.TestConfiguration{
 					LocalPolicy: localPolicy,
 				},
@@ -232,7 +233,7 @@ func Test_StartTest_Error_InvalidOrgID(t *testing.T) {
 	testSubject := newDepGraphTestSubject(t)
 	params := testapi.StartTestParams{
 		OrgID:   "not-a-valid-uuid",
-		Subject: testSubject,
+		Subject: &testSubject,
 	}
 
 	// Act: OrgID error occurs before network setup so client can point anywhere
@@ -274,7 +275,7 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
+	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: &testSubject}
 
 	handle, err := testClient.StartTest(ctx, params)
 
@@ -305,7 +306,7 @@ func Test_StartTest_Error_Network(t *testing.T) {
 	require.NoError(t, err, "NewTestClient should not error for a non-listening port if HTTPClient is not immediately used")
 
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{OrgID: uuid.New().String(), Subject: testSubject}
+	params := testapi.StartTestParams{OrgID: uuid.New().String(), Subject: &testSubject}
 
 	handle, err := testClient.StartTest(ctx, params)
 
@@ -329,7 +330,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 
 	startParams := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	testData.ExpectedEffectiveSummary.Count = 1
@@ -418,7 +419,7 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -490,15 +491,15 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Subject:   &params.Subject,
-				Resources: &params.Resources,
+				Subject:   params.Subject,
+				Resources: params.Resources,
 			},
 			Type: testapi.Tests,
 		},
@@ -593,7 +594,7 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -658,7 +659,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -742,7 +743,7 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	// Mock server handler using newTestAPIMockHandler
@@ -825,7 +826,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	testData.ExpectedEffectiveSummary.Count = 5 // Example count
@@ -927,7 +928,7 @@ func assertCommonTestResultFields(
 
 	if expectedResources != nil {
 		require.NotNil(t, result.GetTestResources())
-		assert.Equal(t, expectedSubject, result.GetTestSubject())
+		assert.Equal(t, expectedResources, result.GetTestResources()) //test equals ignoring order
 	}
 
 	if expectedLocators != nil {
@@ -1015,7 +1016,7 @@ func Test_NewTestClient_CustomLogger(t *testing.T) {
 
 	// Start a test with a minimal subject.
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: testSubject}
+	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: &testSubject}
 
 	handle, err := testClient.StartTest(ctx, params)
 	require.NoError(t, err)
@@ -1152,7 +1153,7 @@ func Test_Wait_CallsJitter(t *testing.T) {
 
 	params := testapi.StartTestParams{
 		OrgID:   testData.OrgID.String(),
-		Subject: *testData.TestSubjectCreate,
+		Subject: testData.TestSubjectCreate,
 	}
 
 	// Mock Jitter

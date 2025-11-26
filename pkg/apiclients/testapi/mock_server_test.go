@@ -171,6 +171,7 @@ func handleTestResultRequest(t *testing.T, w http.ResponseWriter, r *http.Reques
 		config.FinalTestResult.CreatedAt,
 		config.FinalTestResult.TestSubject,
 		config.FinalTestResult.SubjectLocators,
+		config.FinalTestResult.TestResources,
 		config.FinalTestResult.BreachedPolicies,
 		config.FinalTestResult.EffectiveSummary,
 		config.FinalTestResult.RawSummary,
@@ -303,7 +304,7 @@ func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 }
 
 // Return a upload Resource to run a test on
-/*func newUploadTestResource(t *testing.T) testapi.TestResourceCreateItem {
+func newUploadResource(t *testing.T) testapi.UploadResource {
 	t.Helper()
 
 	uploadResource := testapi.UploadResource{
@@ -313,21 +314,28 @@ func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 		Type:         testapi.Upload,
 	}
 
-	var baseResourceVariant testapi.BaseResourceVariantCreateItem
-	err := baseResourceVariant.FromUploadResource(uploadResource)
+	return uploadResource
+}
+
+// Return a upload Resource to run a test on
+func newUploadTestResourceCreateItem(t *testing.T, u *testapi.UploadResource) testapi.TestResourceCreateItem {
+	t.Helper()
+
+	var resourceVariantCreateItem testapi.BaseResourceVariantCreateItem
+	err := resourceVariantCreateItem.FromUploadResource(*u)
 	require.NoError(t, err)
 
-	baseResource := testapi.BaseResourceCreateItem{
-		Resource: baseResourceVariant,
+	baseResourceCreateItem := testapi.BaseResourceCreateItem{
+		Resource: resourceVariantCreateItem,
 		Type:     testapi.BaseResourceCreateItemTypeBase,
 	}
 
 	var testResource testapi.TestResourceCreateItem
-	err = testResource.FromBaseResourceCreateItem(baseResource)
+	err = testResource.FromBaseResourceCreateItem(baseResourceCreateItem)
 	require.NoError(t, err)
 
 	return testResource
-}*/
+}
 
 // Sets up an httptest server. Returns the server and a cleanup function.
 func startMockServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, func()) {
@@ -486,6 +494,7 @@ func mockTestResultResponse(
 	createdAt *time.Time,
 	testSubject *testapi.TestSubject,
 	subjectLocators *[]testapi.TestSubjectLocator,
+	testResources *[]testapi.TestResource,
 	breachedPolicies *testapi.PolicyRefSet,
 	effectiveSummary *testapi.FindingSummary,
 	rawSummary *testapi.FindingSummary,
@@ -496,6 +505,7 @@ func mockTestResultResponse(
 		CreatedAt:        createdAt,
 		Subject:          testSubject,
 		SubjectLocators:  subjectLocators,
+		Resources:        testResources,
 		EffectiveSummary: effectiveSummary,
 		RawSummary:       rawSummary,
 		Outcome: &testapi.TestOutcome{
