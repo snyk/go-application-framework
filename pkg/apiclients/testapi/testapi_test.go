@@ -110,13 +110,14 @@ func setupTestScenarioWithResources(t *testing.T) TestData {
 	expectedTestResource := testapi.TestResource{}
 
 	baseResourceVar := testapi.BaseResourceVariant{}
-	baseResourceVar.FromUploadResource(uploadResource)
+	err := baseResourceVar.FromUploadResource(uploadResource)
+	require.NoError(t, err)
 
 	baseRes := testapi.BaseResource{
 		Resource: baseResourceVar,
 		Type:     testapi.BaseResourceTypeBase}
 
-	err := expectedTestResource.FromBaseResource(baseRes)
+	err = expectedTestResource.FromBaseResource(baseRes)
 	require.NoError(t, err)
 
 	expectedTestConfig := &testapi.TestConfiguration{}
