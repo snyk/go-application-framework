@@ -23,7 +23,7 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 
 	for i := range input {
 		mimeType := input[i].GetContentType()
-		if slices.Contains(ignoredMimetypes, mimeType) {
+		if slices.ContainsFunc(ignoredMimetypes, func(m string) bool { return strings.HasPrefix(mimeType, m) }) {
 			continue
 		}
 
