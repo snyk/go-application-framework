@@ -69,8 +69,8 @@ func useWriterWithOther(debugLogger *zerolog.Logger, input workflow.Data, mimeTy
 			continue
 		}
 
-		debugLogger.Info().Msgf("Other - Using Writer for: %s", mimetype)
 		for _, w := range writer {
+			debugLogger.Info().Msgf("Other - Using '%s' Writer for: %s", w.name, mimetype)
 			defer func() {
 				if err := w.GetWriter().Close(); err != nil {
 					debugLogger.Err(err).Msgf("Other - Failed to close writer for: %s", mimetype)
