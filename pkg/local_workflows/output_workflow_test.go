@@ -292,7 +292,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		fileContent, err := os.ReadFile(expectedFileName)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedOutput, string(fileContent))
+		assert.Equal(t, payload, string(fileContent))
 
 		// Second write should overwrite
 		output, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
@@ -301,7 +301,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		fileContent, err = os.ReadFile(expectedFileName)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedOutput, string(fileContent))
+		assert.Equal(t, payload, string(fileContent))
 	})
 
 	t.Run("should print unsupported mimeTypes that are string convertible", func(t *testing.T) {
@@ -338,7 +338,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(output))
 		assert.Empty(t, setup.writer.String())
-		
+
 	})
 
 	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
@@ -413,7 +413,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(output))
-		assert.Equal(t, payload, setup.writer.String())
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should print valid sarif json output", func(t *testing.T) {
