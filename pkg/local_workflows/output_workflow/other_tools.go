@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -70,6 +71,11 @@ func useWriterWithOther(debugLogger *zerolog.Logger, input workflow.Data, mimeTy
 
 		debugLogger.Info().Msgf("Other - Using Writer for: %s", mimetype)
 		for _, w := range writer {
+			defer func() {
+				if err := w.GetWriter().Close(); err != nil {
+					debugLogger.Err(err).Msgf("Other - Failed to close writer for: %s", mimetype)
+				}
+			}()
 			_, err := fmt.Fprint(w.GetWriter(), singleDataAsString)
 			if err != nil {
 				finalError = errors.Join(finalError, err)
