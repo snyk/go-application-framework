@@ -42,7 +42,7 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
 	debugLogger.Info().Msgf("Available writers:")
 	for _, t := range writers.AvailableMimetypes() {
-		debugLogger.Warn().Msgf(" - %s", t)
+		debugLogger.Info().Msgf(" - %s", t)
 	}
 
 	// Handle UFM models, if none found, continue with the rest
