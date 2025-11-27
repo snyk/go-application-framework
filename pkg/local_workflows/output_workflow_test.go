@@ -233,6 +233,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 			]
 		}
 	}`
+	expectedOutput := payload + "\n"
 
 	t.Run("should output to stdout by default for application/json", func(t *testing.T) {
 		setup := setupTest(t)
@@ -243,7 +244,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
-		assert.Equal(t, payload, setup.writer.String())
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should output to stdout by default for text/plain", func(t *testing.T) {
@@ -255,7 +256,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
-		assert.Equal(t, payload, setup.writer.String())
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
@@ -271,7 +272,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
-		assert.Equal(t, []byte(payload), setup.writer.Bytes())
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should output to (real) file when json-file-output is provided", func(t *testing.T) {
@@ -291,7 +292,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		fileContent, err := os.ReadFile(expectedFileName)
 		assert.NoError(t, err)
-		assert.Equal(t, []byte(payload), fileContent)
+		assert.Equal(t, expectedOutput, string(fileContent))
 
 		// Second write should overwrite
 		output, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
@@ -300,7 +301,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		fileContent, err = os.ReadFile(expectedFileName)
 		assert.NoError(t, err)
-		assert.Equal(t, []byte(payload), fileContent)
+		assert.Equal(t, expectedOutput, string(fileContent))
 	})
 
 	t.Run("should print unsupported mimeTypes that are string convertible", func(t *testing.T) {
@@ -312,7 +313,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
-		assert.Equal(t, payload, setup.writer.String())
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should reject unsupported mimeTypes", func(t *testing.T) {
@@ -324,6 +325,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Equal(t, []workflow.Data{}, output)
 		assert.Equal(t, "unsupported output type: hammer/head", err.Error())
+		assert.Equal(t, "", setup.writer.String())
 	})
 
 	t.Run("should not output anything for test summary mimeType", func(t *testing.T) {
@@ -336,6 +338,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(output))
 		assert.Empty(t, setup.writer.String())
+		
 	})
 
 	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
