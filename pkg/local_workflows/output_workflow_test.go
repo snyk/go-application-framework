@@ -143,8 +143,7 @@ type testOutputDestination struct {
 }
 
 func (t *testOutputDestination) Println(a ...any) (n int, err error) {
-	s := fmt.Sprint(a...)
-	return t.writer.WriteString(s)
+	return fmt.Fprintln(t.writer, a...)
 }
 
 func (t *testOutputDestination) Remove(name string) error {
@@ -261,7 +260,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
 		setup := setupTest(t)
-		expectedFileName := "test.json"
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
 		setup.config.Set("json-file-output", expectedFileName)
 		defer setup.config.Set("json-file-output", nil)
 
