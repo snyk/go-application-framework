@@ -42,8 +42,8 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 		if err != nil {
 			finalError = errors.Join(finalError, err)
 		}
-
 	}
+
 	return output, finalError
 }
 

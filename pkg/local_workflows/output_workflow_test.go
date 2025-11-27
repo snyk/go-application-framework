@@ -338,7 +338,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(output))
 		assert.Empty(t, setup.writer.String())
-
 	})
 
 	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
