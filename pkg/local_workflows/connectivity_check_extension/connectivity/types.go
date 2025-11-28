@@ -61,10 +61,13 @@ func (s ConnectionStatus) String() string {
 
 // ProxyConfig represents proxy configuration detected from environment
 type ProxyConfig struct {
-	Detected bool   `json:"detected"`
-	URL      string `json:"url,omitempty"`
-	Variable string `json:"variable,omitempty"`
-	NoProxy  string `json:"noProxy,omitempty"`
+	Detected         bool   `json:"detected"`
+	URL              string `json:"url,omitempty"`
+	Variable         string `json:"variable,omitempty"`
+	NoProxy          string `json:"noProxy,omitempty"`
+	NodeExtraCACerts string `json:"nodeExtraCACerts,omitempty"`
+	KRB5Config       string `json:"krb5Config,omitempty"`
+	KRB5CCName       string `json:"krb5CCName,omitempty"`
 }
 
 // TODO represents an actionable item from the connectivity check
@@ -97,14 +100,16 @@ func (l TodoLevel) String() string {
 
 // ConnectivityCheckResult represents the complete result of connectivity checks
 type ConnectivityCheckResult struct {
-	ProxyConfig   ProxyConfig    `json:"proxyConfig"`
-	HostResults   []HostResult   `json:"hostResults"`
-	TODOs         []TODO         `json:"todos"`
-	StartTime     time.Time      `json:"startTime"`
-	EndTime       time.Time      `json:"endTime"`
-	Organizations []Organization `json:"organizations"`
-	TokenPresent  bool           `json:"tokenPresent"`
-	OrgCheckError error          `json:"orgCheckError,omitempty"`
+	ProxyConfig      ProxyConfig            `json:"proxyConfig"`
+	HostResults      []HostResult           `json:"hostResults"`
+	DirectoryResults []DirectoryCheckResult `json:"directoryResults,omitempty"`
+	TODOs            []TODO                 `json:"todos"`
+	StartTime        time.Time              `json:"startTime"`
+	EndTime          time.Time              `json:"endTime"`
+	Organizations    []Organization         `json:"organizations"`
+	TokenPresent     bool                   `json:"tokenPresent"`
+	OrgCheckError    error                  `json:"orgCheckError,omitempty"`
+	CurrentUser      string                 `json:"currentUser"`
 }
 
 // AddTODO adds a new TODO item to the result
@@ -129,6 +134,31 @@ type Tenant struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Slug string `json:"slug"`
+}
+
+// BinaryInfo represents information about a CLI binary found in a directory
+type BinaryInfo struct {
+	Name        string `json:"name"`
+	Permissions string `json:"permissions"`
+}
+
+// UsedDirectory represents a directory used by Snyk (for CLI, config, cache, or temp files)
+type UsedDirectory struct {
+	PathWanted    string `json:"pathWanted"`
+	Purpose       string `json:"purpose"`
+	MayContainCLI bool   `json:"mayContainCLI"`
+}
+
+// DirectoryCheckResult represents the result of checking a CLI directory
+type DirectoryCheckResult struct {
+	PathWanted    string       `json:"pathWanted"`
+	Purpose       string       `json:"purpose"`
+	MayContainCLI bool         `json:"mayContainCLI"`
+	PathFound     string       `json:"pathFound"`
+	IsWritable    bool         `json:"isWritable"`
+	Permissions   string       `json:"permissions,omitempty"`
+	BinariesFound []BinaryInfo `json:"binariesFound,omitempty"`
+	Error         string       `json:"error,omitempty"`
 }
 
 // snykHostsMutex protects access to SnykHosts

@@ -34,7 +34,7 @@ func TestProxyDetectionWithNetworkAccess(t *testing.T) {
 
 	// Create checker
 	logger := zerolog.Nop()
-	checker := connectivity.NewChecker(networkAccess, &logger, config)
+	checker := connectivity.NewChecker(networkAccess, &logger, config, nil)
 
 	// Test proxy detection
 	proxyConfig := checker.DetectProxyConfig()
@@ -97,7 +97,7 @@ func TestJSONOutputWithOrganizations(t *testing.T) {
 	defer cleanup()
 
 	// Create checker
-	checker := connectivity.NewChecker(networkAccess, &logger, config)
+	checker := connectivity.NewChecker(networkAccess, &logger, config, nil)
 
 	// Run connectivity check
 	result, err := checker.CheckConnectivity()
