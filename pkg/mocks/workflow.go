@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	log "log"
 	reflect "reflect"
 
@@ -196,6 +197,20 @@ func NewMockInvocationContext(ctrl *gomock.Controller) *MockInvocationContext {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockInvocationContext) EXPECT() *MockInvocationContextMockRecorder {
 	return m.recorder
+}
+
+// Context mocks base method.
+func (m *MockInvocationContext) Context() context.Context {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Context")
+	ret0, _ := ret[0].(context.Context)
+	return ret0
+}
+
+// Context indicates an expected call of Context.
+func (mr *MockInvocationContextMockRecorder) Context() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*MockInvocationContext)(nil).Context))
 }
 
 // GetAnalytics mocks base method.

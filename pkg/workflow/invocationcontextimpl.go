@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"log"
 
 	"github.com/rs/zerolog"
@@ -44,6 +45,13 @@ type invocationContextImpl struct {
 }
 
 var _ InvocationContext = (*invocationContextImpl)(nil)
+
+// Context returns the context of the workflow that is being invoked.
+func (*invocationContextImpl) Context() context.Context {
+	// TODO: This is using context.Background() as a placeholder. Ideally this returns
+	// the context representing the lifecycle of the workflow that is being invoked.
+	return context.Background()
+}
 
 // GetWorkflowIdentifier returns the identifier of the workflow that is being invoked.
 func (ici *invocationContextImpl) GetWorkflowIdentifier() Identifier {
