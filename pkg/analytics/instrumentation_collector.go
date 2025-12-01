@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"os/user"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -38,6 +39,8 @@ type InstrumentationCollector interface {
 	SetStatus(s Status)
 	SetTestSummary(s json_schemas.TestSummary)
 	SetTargetId(t string) // maybe use package-url library and types
+	SetProjectIds(projectIds []string)
+	SetMonitorIds(monitorIds []string)
 	AddError(err error)
 	AddExtension(key string, value interface{})
 }
@@ -62,6 +65,8 @@ type instrumentationCollectorImpl struct {
 	status              Status
 	testSummary         json_schemas.TestSummary
 	targetId            string
+	projectIds          []string
+	monitorIds          []string
 	instrumentationErr  []error
 	extension           map[string]interface{}
 }
@@ -127,6 +132,14 @@ func (ic *instrumentationCollectorImpl) SetTestSummary(s json_schemas.TestSummar
 
 func (ic *instrumentationCollectorImpl) SetTargetId(t string) {
 	ic.targetId = t
+}
+
+func (ic *instrumentationCollectorImpl) SetProjectIds(ids []string) {
+	ic.projectIds = ids
+}
+
+func (ic *instrumentationCollectorImpl) SetMonitorIds(ids []string) {
+	ic.monitorIds = ids
 }
 
 func (ic *instrumentationCollectorImpl) AddError(err error) {
@@ -219,6 +232,21 @@ func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttribute
 
 func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	stage := toInteractionStage(ic.stage)
+
+	if len(ic.projectIds) > 0 {
+		if ic.extension == nil {
+			ic.extension = make(map[string]interface{})
+		}
+		ic.extension["project_ids"] = strings.Join(ic.projectIds, ",")
+	}
+
+	if len(ic.monitorIds) > 0 {
+		if ic.extension == nil {
+			ic.extension = make(map[string]interface{})
+		}
+		ic.extension["monitor_ids"] = strings.Join(ic.monitorIds, ",")
+	}
+
 	return api.Interaction{
 		Categories:  &ic.category,
 		Errors:      toInteractionErrors(ic.instrumentationErr),

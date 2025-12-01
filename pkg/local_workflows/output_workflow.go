@@ -9,6 +9,7 @@ import (
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -41,6 +42,44 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
+
+	for i := range input {
+		if input[i].GetContentType() != content_type.LOCAL_FINDING_MODEL && input[i].GetContentType() != "text/hidden" {
+			continue
+		}
+		outputText := string(input[i].GetPayload().([]byte))
+
+		analytics := invocation.GetAnalytics()
+		pairs, err := instrumentation.GetProjectIdAndMonitorIdFromText(outputText)
+		if err != nil {
+			debugLogger.Printf("Error parsing monitor URL: %v", err)
+			continue
+		}
+		if len(pairs) == 0 {
+			continue
+		}
+		projectIDs := make([]string, 0, len(pairs))
+		monitorIDs := make([]string, 0, len(pairs))
+		for _, p := range pairs {
+			if p[0] != "" {
+				projectIDs = append(projectIDs, p[0])
+			}
+			if p[1] != "" {
+				monitorIDs = append(monitorIDs, p[1])
+			}
+		}
+		if len(projectIDs) > 0 {
+			analytics.GetInstrumentation().SetProjectIds(projectIDs)
+		}
+		if len(monitorIDs) > 0 {
+			analytics.GetInstrumentation().SetMonitorIds(monitorIDs)
+		}
+
+		if input[i].GetContentType() == "text/hidden" {
+			input[i].SetPayload([]byte{})
+		}
+		break
+	}
 
 	// Handle UFM models, if none found, continue with the rest
 	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, outputDestination)
