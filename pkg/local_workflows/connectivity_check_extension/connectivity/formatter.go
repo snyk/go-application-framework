@@ -196,7 +196,8 @@ func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
 	if result.OrgCheckError != nil {
 		errMsg := fmt.Sprintf(`<span class="error">✗</span> Failed to fetch organizations: %v`, result.OrgCheckError)
 		f.output(f.renderHTML(errMsg))
-		return result.OrgCheckError
+		//nolint:nilerr // Organization fetch error is displayed to user; not a formatter error, continue formatting
+		return nil
 	}
 
 	if len(result.Organizations) == 0 {
