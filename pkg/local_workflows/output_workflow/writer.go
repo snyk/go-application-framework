@@ -1,9 +1,11 @@
 package output_workflow
 
 import (
+	"fmt"
 	"io"
 	"maps"
 	"slices"
+	"strings"
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -30,6 +32,7 @@ type WriterMap interface {
 	PopWritersByMimetype(mimeType string) []*WriterEntry
 	Length() int
 	AvailableMimetypes() []string
+	String() string
 }
 
 type writerMapImpl struct {
@@ -41,6 +44,17 @@ type MimeType2Template struct {
 	templates []string
 }
 
+func (w *writerMapImpl) String() string {
+	var sb strings.Builder
+	sb.WriteString("WriterMap: ")
+	for mimeType, writers := range w.writers {
+		for _, writer := range writers {
+			sb.WriteString(fmt.Sprintf("(%s -> %s) ", writer.name, mimeType))
+		}
+	}
+	return sb.String()
+}
+
 func (w *writerMapImpl) PopWritersByMimetype(mimeType string) []*WriterEntry {
 	writers := w.writers[mimeType]
 	delete(w.writers, mimeType)
@@ -48,7 +62,11 @@ func (w *writerMapImpl) PopWritersByMimetype(mimeType string) []*WriterEntry {
 }
 
 func (w *writerMapImpl) Length() int {
-	return len(w.writers)
+	count := 0
+	for _, writers := range w.writers {
+		count += len(writers)
+	}
+	return count
 }
 
 func (w *writerMapImpl) AvailableMimetypes() []string {

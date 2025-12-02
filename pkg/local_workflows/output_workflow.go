@@ -40,10 +40,8 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
 	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
-	debugLogger.Info().Msgf("Available writers:")
-	for _, t := range writers.AvailableMimetypes() {
-		debugLogger.Info().Msgf(" - %s", t)
-	}
+	debugLogger.Info().Msgf("Available writers (count: %d):", writers.Length())
+	debugLogger.Info().Msg(writers.String())
 
 	// Handle UFM models, if none found, continue with the rest
 	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, writers)
