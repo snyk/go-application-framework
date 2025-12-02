@@ -113,10 +113,10 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 			break
 		}
 
-		go func(name string, writer *WriterEntry) {
+		go func(name string, writer *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) {
 			defer availableThreads.Release(1)
 			useRendererWithUnifiedModel(name, writer, results, invocation)
-		}(k, v)
+		}(k, v, results, invocation)
 	}
 
 	err = availableThreads.Acquire(ctx, threadCount)
