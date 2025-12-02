@@ -18,25 +18,25 @@ var ignoredMimetypes = []string{
 
 func HandleContentTypeOther(input []workflow.Data, invocation workflow.InvocationContext, writers WriterMap) ([]workflow.Data, error) {
 	var finalError error
-	output := []workflow.Data{}
 	debugLogger := invocation.GetEnhancedLogger()
 	otherHandlerMimetypes := []string{DEFAULT_MIME_TYPE, JSON_MIME_TYPE, SARIF_MIME_TYPE}
 
-	for i := range input {
-		mimeType := input[i].GetContentType()
-		if slices.ContainsFunc(ignoredMimetypes, func(m string) bool { return strings.HasPrefix(mimeType, m) }) {
-			continue
-		}
+	otherData, output := getOtherResultsFromWorkflowData(input)
+	if len(otherData) == 0 {
+		debugLogger.Info().Msg("Other - No data to process")
+		return output, nil
+	}
 
-		contentLocation := input[i].GetContentLocation()
+	for _, data := range otherData {
+		contentLocation := data.GetContentLocation()
 		if len(contentLocation) == 0 {
 			contentLocation = "unknown"
 		}
 
-		debugLogger.Printf("Other - Processing '%s' based on '%s' of type '%s'", input[i].GetIdentifier().String(), contentLocation, mimeType)
-		dataWasWritten, err := useWriterWithOther(debugLogger, input[i], mimeType, writers, otherHandlerMimetypes)
+		debugLogger.Printf("Other - Processing '%s' based on '%s' of type '%s'", data.GetIdentifier().String(), contentLocation, data.GetContentType())
+		dataWasWritten, err := useWriterWithOther(debugLogger, data, data.GetContentType(), writers, otherHandlerMimetypes)
 		if !dataWasWritten {
-			output = append(output, input[i])
+			output = append(output, data)
 		}
 
 		if err != nil {
@@ -44,7 +44,24 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 		}
 	}
 
+	debugLogger.Info().Msgf("Other - All Rendering done")
 	return output, finalError
+}
+
+func getOtherResultsFromWorkflowData(input []workflow.Data) ([]workflow.Data, []workflow.Data) {
+	var otherData []workflow.Data
+	var remainingData []workflow.Data
+
+	for _, data := range input {
+		mimeType := data.GetContentType()
+		if slices.ContainsFunc(ignoredMimetypes, func(m string) bool { return strings.HasPrefix(mimeType, m) }) {
+			remainingData = append(remainingData, data)
+			continue
+		}
+		otherData = append(otherData, data)
+	}
+
+	return otherData, remainingData
 }
 
 func useWriterWithOther(debugLogger *zerolog.Logger, input workflow.Data, mimeType string, writers WriterMap, supportedMimeTypes []string) (bool, error) {
@@ -70,17 +87,19 @@ func useWriterWithOther(debugLogger *zerolog.Logger, input workflow.Data, mimeTy
 		}
 
 		for _, w := range writer {
-			debugLogger.Info().Msgf("Other - Using '%s' Writer for: %s", w.name, mimetype)
+			debugLogger.Info().Msgf("Other - Using '%s' writer for: %s", w.name, mimetype)
 			defer func() {
 				if err := w.GetWriter().Close(); err != nil {
-					debugLogger.Err(err).Msgf("Other - Failed to close writer for: %s", mimetype)
+					debugLogger.Err(err).Msgf("Other - [%s] Failed to close writer for: %s", w.name, mimetype)
 				}
 			}()
+			debugLogger.Info().Msgf("Other -[%s] Rendering %s", w.name, w.mimeType)
 			_, err := fmt.Fprint(w.GetWriter(), singleDataAsString)
 			if err != nil {
 				finalError = errors.Join(finalError, err)
 			}
 			dataWasWritten = true
+			debugLogger.Info().Msgf("Other - [%s] Rendering done", w.name)
 		}
 	}
 
