@@ -35,7 +35,7 @@ func getListOfFindings(input []workflow.Data, debugLogger *zerolog.Logger) (find
 
 		err := json.Unmarshal(localFindingsBytes, &localFindingsModel)
 		if err != nil {
-			debugLogger.Warn().Err(err).Msg("Failed to unmarshal local finding")
+			debugLogger.Warn().Err(err).Msg("LFM - Failed to unmarshal local finding")
 			continue
 		}
 		findings = append(findings, &localFindingsModel)
@@ -80,7 +80,7 @@ func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.
 		presenters.WithRuntimeInfo(invocation.GetRuntimeInfo()),
 	)
 
-	debugLogger.Info().Msgf("[%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
+	debugLogger.Info().Msgf("LFM - [%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
 	err := renderer.RenderTemplate(wEntry.templates, wEntry.mimeType)
 	if err != nil {
 		debugLogger.Warn().Err(err).Msgf("LFM - [%s] Failed to render local finding", name)
