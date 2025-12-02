@@ -31,16 +31,16 @@ func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []tes
 	debugLogger := invocation.GetEnhancedLogger()
 
 	if !wEntry.renderEmptyData && getTotalNumberOfUnifiedFindings(results) == 0 {
-		debugLogger.Info().Msgf("[%s] The input is empty, skipping rendering!", name)
+		debugLogger.Info().Msgf("UFM - [%s] The input is empty, skipping rendering!", name)
 		return
 	}
 
-	debugLogger.Info().Msgf("[%s] Creating UFM renderer", name)
+	debugLogger.Info().Msgf("UFM - [%s] Creating UFM renderer", name)
 
 	defer func() {
 		closeErr := wEntry.writer.Close()
 		if closeErr != nil {
-			debugLogger.Err(closeErr).Msgf("[%s] Error while closing writer.", name)
+			debugLogger.Err(closeErr).Msgf("UFM - [%s] Error while closing writer.", name)
 		}
 	}()
 
@@ -52,14 +52,14 @@ func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []tes
 		presenters.UfmWithRuntimeInfo(invocation.GetRuntimeInfo()),
 	)
 
-	debugLogger.Info().Msgf("[%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
+	debugLogger.Info().Msgf("UFM - [%s] Rendering %s with %s", name, wEntry.mimeType, wEntry.templates)
 	err := renderer.RenderTemplate(wEntry.templates, wEntry.mimeType)
 	if err != nil {
-		debugLogger.Warn().Err(err).Msgf("[%s] Failed to render local finding", name)
+		debugLogger.Warn().Err(err).Msgf("UFM - [%s] Failed to render local finding", name)
 		return
 	}
 
-	debugLogger.Info().Msgf("[%s] Rendering done", name)
+	debugLogger.Info().Msgf("UFM - [%s] Rendering done", name)
 }
 
 func getTestResultsFromWorkflowData(input []workflow.Data) ([]testapi.TestResult, []workflow.Data) {
@@ -109,7 +109,7 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 	for k, v := range writerMap {
 		err = availableThreads.Acquire(ctx, 1)
 		if err != nil {
-			debugLogger.Err(err).Msgf("[%s] Failed to acquire threading lock. Cancel rendering.", k)
+			debugLogger.Err(err).Msgf("UFM - [%s] Failed to acquire threading lock. Cancel rendering.", k)
 			break
 		}
 
