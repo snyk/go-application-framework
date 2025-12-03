@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +19,8 @@ import (
 	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
+
+var batchMaxCount int64 = 0
 
 // Config contains configuration for the file upload client.
 type Config struct {
@@ -137,10 +140,19 @@ func (c *HTTPClient) uploadBatch(ctx context.Context, revID RevisionID, batch *u
 		return nil
 	}
 
+	tempLength := len(batch.files)
+	log.Printf("Uploading batch '%d", tempLength)
+
+	if batchMaxCount > 45 {
+		log.Printf("MAX BATCH COUNT '%d", batchMaxCount)
+	}
+
 	err := c.uploadRevisionSealableClient.UploadFiles(ctx, c.cfg.OrgID, revID, batch.files)
 	if err != nil {
 		return fmt.Errorf("failed to upload files: %w", err)
 	}
+
+	batchMaxCount += 1
 
 	return nil
 }
@@ -267,6 +279,7 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 		return res, err
 	}
 	res.RevisionID = revisionID
+	filesToUpload := make(chan string, len(paths))
 
 	for _, pth := range paths {
 		info, err := os.Stat(pth)
@@ -281,15 +294,17 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 			}
 			res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
 			res.UploadedFilesCount += dirUploadRes.UploadedFilesCount
-		} else {
-			fileUploadRes, err := c.addFileToRevision(ctx, revisionID, pth, opts)
-			if err != nil {
-				return res, fmt.Errorf("failed to add file %s: %w", pth, err)
-			}
-			res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
-			res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
+			continue
 		}
+		filesToUpload <- pth
 	}
+	close(filesToUpload)
+	fileUploadRes, err := c.addPathsToRevision(ctx, revisionID, filepath.Dir(paths[0]), filesToUpload, opts)
+	if err != nil {
+		return res, fmt.Errorf("failed to add files %w", err)
+	}
+	res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
+	res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
 
 	if res.UploadedFilesCount == 0 && len(res.FilteredFiles) == 0 {
 		return res, ErrNoFilesProvided
