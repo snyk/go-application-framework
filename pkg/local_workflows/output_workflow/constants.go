@@ -3,15 +3,18 @@ package output_workflow
 import "github.com/snyk/go-application-framework/internal/presenters"
 
 const (
-	OUTPUT_CONFIG_KEY_JSON         = "json"
-	OUTPUT_CONFIG_KEY_JSON_FILE    = "json-file-output"
-	OUTPUT_CONFIG_KEY_SARIF        = "sarif"
-	OUTPUT_CONFIG_KEY_SARIF_FILE   = "sarif-file-output"
-	OUTPUT_CONFIG_TEMPLATE_FILE    = "internal_template_file"
-	OUTPUT_CONFIG_KEY_FILE_WRITERS = "internal_output_file_writers"
-	DEFAULT_WRITER                 = "default"
-	DEFAULT_MIME_TYPE              = presenters.DefaultMimeType
-	SARIF_MIME_TYPE                = presenters.ApplicationSarifMimeType
+	OUTPUT_CONFIG_KEY_JSON               = "json"
+	OUTPUT_CONFIG_KEY_JSON_FILE          = "json-file-output"
+	OUTPUT_CONFIG_KEY_SARIF              = "sarif"
+	OUTPUT_CONFIG_KEY_SARIF_FILE         = "sarif-file-output"
+	OUTPUT_CONFIG_TEMPLATE_FILE          = "internal_template_file"
+	OUTPUT_CONFIG_KEY_FILE_WRITERS       = "internal_output_file_writers"
+	OUTPUT_CONFIG_KEY_DEFAULT_WRITER_LUT = "internal_default_writer_mimetype_lut"
+	OUTPUT_CONFIG_KEY_NO_DEFAULT_WRITER  = "internal_no_default_writer"
+	DEFAULT_WRITER                       = "default"
+	DEFAULT_MIME_TYPE                    = presenters.DefaultMimeType
+	SARIF_MIME_TYPE                      = presenters.ApplicationSarifMimeType
+	JSON_MIME_TYPE                       = presenters.ApplicationJSONMimeType
 )
 
 // DefaultTemplateFiles is an instance of TemplatePathsStruct with the template paths.

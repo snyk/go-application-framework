@@ -3,6 +3,9 @@ package ufm
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -435,4 +438,29 @@ func TestOptimizedWireFormat_MemoryCleanup(t *testing.T) {
 	require.Len(t, decodedFindings, 1)
 	assert.Len(t, decodedFindings[0].Attributes.Problems, 1)
 	assert.Equal(t, "SNYK-JS-LODASH-590103", decodedFindings[0].Attributes.Problems[0].GetID())
+}
+
+func Test_Findings_ConcurrentAccess(t *testing.T) {
+	ctx := context.Background()
+	testResultsPath, err := filepath.Abs("../../../internal/presenters/testdata/ufm/webgoat.ignore.testresult.json")
+	require.NoError(t, err)
+	testResultsData, err := os.ReadFile(testResultsPath)
+	require.NoError(t, err)
+
+	testResults, err := NewSerializableTestResultFromBytes(testResultsData)
+	require.NoError(t, err)
+	require.Len(t, testResults, 1)
+
+	var wg sync.WaitGroup
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			findings, complete, err := testResults[0].Findings(ctx)
+			require.NoError(t, err)
+			require.True(t, complete)
+			require.Len(t, findings, 91)
+		}()
+	}
+	wg.Wait()
 }

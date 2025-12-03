@@ -1,15 +1,12 @@
 package localworkflows
 
 import (
-	"fmt"
-	"strings"
+	"errors"
 
-	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -39,116 +36,46 @@ func InitOutputWorkflow(engine workflow.Engine) error {
 func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []workflow.Data, outputDestination iUtils.OutputDestination) ([]workflow.Data, error) {
 	output := []workflow.Data{}
 
+	var finalError error
 	config := invocation.GetConfiguration()
 	debugLogger := invocation.GetEnhancedLogger()
+	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+	debugLogger.Info().Msgf("Available writers (count: %d):", writers.Length())
+	debugLogger.Info().Msg(writers.String())
 
 	// Handle UFM models, if none found, continue with the rest
-	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, outputDestination)
+	input, err := output_workflow.HandleContentTypeUnifiedModel(input, invocation, writers)
 	if err != nil {
-		return output, err
+		finalError = errors.Join(finalError, err)
 	}
 
 	// Handle findings models, if none found, continue with the rest
-	input, err = output_workflow.HandleContentTypeFindingsModel(input, invocation, outputDestination)
+	input, err = output_workflow.HandleContentTypeFindingsModel(input, invocation, writers)
 	if err != nil {
-		return output, err
+		finalError = errors.Join(finalError, err)
 	}
 
-	for i := range input {
-		mimeType := input[i].GetContentType()
+	// Handle remaining data
+	input, err = output_workflow.HandleContentTypeOther(input, invocation, writers)
+	if err != nil {
+		finalError = errors.Join(finalError, err)
+	}
 
-		if strings.HasPrefix(mimeType, content_type.TEST_SUMMARY) {
-			// skip test summary output
-			continue
-		}
-
-		contentLocation := input[i].GetContentLocation()
-		if len(contentLocation) == 0 {
-			contentLocation = "unknown"
-		}
-
-		debugLogger.Printf("Processing '%s' based on '%s' of type '%s'", input[i].GetIdentifier().String(), contentLocation, mimeType)
-
-		if strings.Contains(mimeType, output_workflow.OUTPUT_CONFIG_KEY_JSON) { // handle application/json
-			err := handleContentTypeJson(config, input, i, outputDestination, debugLogger)
-			if err != nil {
-				return output, err
-			}
-		} else { // handle text/plain and unknown the same way
-			err := handleContentTypeOthers(input, i, mimeType, outputDestination)
-			if err != nil {
-				return output, err
-			}
+	if writers.Length() > 0 {
+		debugLogger.Warn().Msg("Unused writers:")
+		for _, t := range writers.AvailableMimetypes() {
+			debugLogger.Warn().Msgf(" - %s", t)
 		}
 	}
 
-	return output, nil
-}
-
-func handleContentTypeOthers(input []workflow.Data, i int, mimeType string, outputDestination iUtils.OutputDestination) error {
-	// try to convert payload to a string
-	var singleDataAsString string
-	singleData, typeCastSuccessful := input[i].GetPayload().([]byte)
-	if !typeCastSuccessful {
-		singleDataAsString, typeCastSuccessful = input[i].GetPayload().(string)
-		if !typeCastSuccessful {
-			return fmt.Errorf("unsupported output type: %s", mimeType)
-		}
-	} else {
-		singleDataAsString = string(singleData)
-	}
-
-	outputDestination.Println(singleDataAsString)
-	return nil
-}
-
-func handleContentTypeJson(config configuration.Configuration, input []workflow.Data, i int, outputDestination iUtils.OutputDestination, debugLogger *zerolog.Logger) error {
-	printJsonToCmd := config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_JSON) || config.GetBool(output_workflow.OUTPUT_CONFIG_KEY_SARIF)
-
-	jsonFileName := config.GetString(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE)
-	if len(jsonFileName) == 0 {
-		jsonFileName = config.GetString(output_workflow.OUTPUT_CONFIG_KEY_SARIF_FILE)
-	}
-	writeToFile := len(jsonFileName) > 0
-
-	singleData, ok := input[i].GetPayload().([]byte)
-	if !ok {
-		return fmt.Errorf("invalid payload type: %T", input[i].GetPayload())
-	}
-
-	// if json data is processed but non of the json related output configuration is specified, default printJsonToCmd is enabled
-	if !printJsonToCmd && !writeToFile {
-		printJsonToCmd = true
-	}
-
-	if printJsonToCmd {
-		outputDestination.Println(string(singleData))
-	}
-
-	if writeToFile {
-		err := jsonWriteToFile(debugLogger, input, i, singleData, jsonFileName, outputDestination)
-		if err != nil {
-			return err
+	if len(input) > 0 {
+		debugLogger.Warn().Msg("Unused input:")
+		for _, t := range input {
+			debugLogger.Warn().Msgf(" - %s", t.GetContentType())
 		}
 	}
-	return nil
-}
 
-func jsonWriteToFile(debugLogger *zerolog.Logger, input []workflow.Data, i int, singleData []byte, jsonFileName string, outputDestination iUtils.OutputDestination) error {
-	debugLogger.Printf("Writing '%s' JSON of length %d to '%s'", input[i].GetIdentifier().String(), len(singleData), jsonFileName)
-
-	if err := outputDestination.Remove(jsonFileName); err != nil {
-		return fmt.Errorf("failed to remove existing output file: %w", err)
-	}
-
-	if err := iUtils.CreateFilePath(jsonFileName); err != nil {
-		return fmt.Errorf("failed to create output folder: %w", err)
-	}
-
-	if err := outputDestination.WriteFile(jsonFileName, singleData, iUtils.FILEPERM_666); err != nil {
-		return fmt.Errorf("failed to write json output: %w", err)
-	}
-	return nil
+	return output, finalError
 }
 
 func outputWorkflowEntryPointImpl(invocation workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {

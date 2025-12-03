@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +38,8 @@ type jsonTestResult struct {
 
 	// In-memory cache of full findings (not serialized, used after deserialization)
 	fullFindings []testapi.FindingData `json:"-"`
+
+	mutex sync.Mutex
 }
 
 // GetTestID returns the test ID.
@@ -117,6 +120,9 @@ func (j *jsonTestResult) GetMetadata() map[string]interface{} {
 // Findings returns the stored findings without making any API calls.
 // The complete parameter indicates whether all findings were successfully fetched.
 func (j *jsonTestResult) Findings(ctx context.Context) (resultFindings []testapi.FindingData, complete bool, err error) {
+	j.mutex.Lock()
+	defer j.mutex.Unlock()
+
 	// Return fullFindings if available (reconstructed from optimized format)
 	if j.fullFindings != nil {
 		return j.fullFindings, j.FindingsComplete, nil
