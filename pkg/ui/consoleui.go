@@ -104,14 +104,14 @@ func (ui *consoleUi) Input(prompt string) (string, error) {
 	return strings.TrimSpace(input), nil
 }
 
-func (ui *consoleUi) Selector(prompt string, options []string) (string, error) {
+func (ui *consoleUi) SelectOptions(prompt string, options []string) (int, string, error) {
 	if len(options) == 0 {
-		return "", fmt.Errorf("no options provided")
+		return -1, "", fmt.Errorf("no options provided")
 	}
 
 	renderedPrompt, err := renderHtml(prompt)
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
 	renderedOptions := make([]string, len(options))
@@ -119,7 +119,7 @@ func (ui *consoleUi) Selector(prompt string, options []string) (string, error) {
 	for i, opt := range options {
 		renderedOpt, err = renderHtml(opt)
 		if err != nil {
-			return "", err
+			return -1, "", err
 		}
 		renderedOptions[i] = renderedOpt
 	}
@@ -131,14 +131,14 @@ func (ui *consoleUi) Selector(prompt string, options []string) (string, error) {
 
 	idx, _, err := selector.Run()
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
 	if idx < 0 || idx >= len(options) {
-		return "", fmt.Errorf("invalid selection index: %d", idx)
+		return -1, "", fmt.Errorf("invalid selection index: %d", idx)
 	}
 
-	return options[idx], nil
+	return idx, options[idx], nil
 }
 
 func renderHtml(maybeHtml string) (string, error) {
