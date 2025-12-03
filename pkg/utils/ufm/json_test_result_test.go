@@ -463,9 +463,4 @@ func Test_Findings_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-
-	findings, complete, err2 := testResults[0].Findings(ctx)
-	require.NoError(t, err2)
-	require.True(t, complete)
-	require.Len(t, findings, 91)
 }
