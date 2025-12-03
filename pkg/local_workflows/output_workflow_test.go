@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -358,6 +359,46 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		content := setup.writer.String()
 		assert.Contains(t, content, "Total issues:   11")
 		assert.Contains(t, content, "Project path:      /mypath")
+	})
+
+	t.Run("should use the default UFM SARIF template files for the default writer", func(t *testing.T) {
+		setup := setupTest(t)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+
+		testResultBytes, err := os.ReadFile("../../internal/presenters/testdata/ufm/testresult_cli.json")
+		assert.NoError(t, err)
+
+		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+		assert.NoError(t, err)
+		testResultData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), testResult)
+		setup.writer.Reset()
+
+		_, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{testResultData}, setup.outputDestination)
+		assert.Nil(t, err)
+
+		content := setup.writer.Bytes()
+		validateSarifData(t, content)
+	})
+
+	t.Run("should use the configured template files for the default writer", func(t *testing.T) {
+		setup := setupTest(t)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_TEMPLATE_FILE, "testdata/constant.template")
+		defer setup.config.Set(output_workflow.OUTPUT_CONFIG_TEMPLATE_FILE, nil)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+
+		testResultBytes, err := os.ReadFile("../../internal/presenters/testdata/ufm/testresult_cli.json")
+		assert.NoError(t, err)
+
+		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+		assert.NoError(t, err)
+		testResultData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), testResult)
+		setup.writer.Reset()
+
+		_, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{testResultData}, setup.outputDestination)
+		assert.Nil(t, err)
+
+		content := setup.writer.String()
+		assert.Contains(t, content, "Hello world")
 	})
 
 	t.Run("should output multiple results when there are multiple local findings models", func(t *testing.T) {

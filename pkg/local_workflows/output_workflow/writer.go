@@ -179,7 +179,9 @@ func applyTemplatesToWriters(supportedMimeTypes []MimeType2Template, writers Wri
 
 		// add template to writer
 		for _, writer := range mimetypeWriter {
-			writer.templates = supported.templates
+			if len(writer.templates) == 0 {
+				writer.templates = supported.templates
+			}
 			writerMap[writer.name] = writer
 		}
 	}
