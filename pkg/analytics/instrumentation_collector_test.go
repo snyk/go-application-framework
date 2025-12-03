@@ -256,6 +256,36 @@ func Test_InstrumentationCollector(t *testing.T) {
 		actualCategory := ic.GetCategory()
 		assert.Equal(t, mockCategory, actualCategory)
 	})
+
+	t.Run("it should add project id to extension", func(t *testing.T) {
+		ic := setupBaseCollector(t)
+		expectedV2InstrumentationObject := buildExpectedBaseObject(t)
+
+		mockProjectId := "123e4567-e89b-12d3-a456-426614174000"
+		mockMonitorId := "89674498-4fcc-4af3-9a80-0582a74614d5"
+		mockProjectIds := []string{mockProjectId}
+		mockMonitorIds := []string{mockMonitorId}
+		ic.SetProjectIds(mockProjectIds)
+		ic.SetMonitorIds(mockMonitorIds)
+
+		mockExtension := map[string]interface{}{
+			"strings":     "hello world",
+			"project_ids": mockProjectId,
+			"monitor_ids": mockMonitorId,
+		}
+
+		expectedV2InstrumentationObject.Data.Attributes.Interaction.Extension = &mockExtension
+
+		actualV2InstrumentationObject, err := GetV2InstrumentationObject(ic)
+		assert.NoError(t, err)
+
+		expectedV2InstrumentationJson, err := json.Marshal(expectedV2InstrumentationObject)
+		assert.NoError(t, err)
+		actualV2InstrumentationJson, err := json.Marshal(actualV2InstrumentationObject)
+		assert.NoError(t, err)
+
+		assert.JSONEq(t, string(expectedV2InstrumentationJson), string(actualV2InstrumentationJson))
+	})
 }
 
 func setupBaseCollector(t *testing.T) InstrumentationCollector {
