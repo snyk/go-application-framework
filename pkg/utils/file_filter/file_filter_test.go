@@ -1,7 +1,8 @@
-package utils
+package file_filter
 
 import (
 	"fmt"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
@@ -134,10 +135,10 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			setupTestFileSystem(t, testCase)
 
-			globFileFilter, err := NewGlobFileFilter(testCase.repoPath, testCase.ruleFiles, &log.Logger)
+			globFileFilter, err := NewIgnoresFileFilter(testCase.repoPath, testCase.ruleFiles, &log.Logger)
 			require.NoError(t, err)
 
-			fileFilter := NewFileFilter(testCase.repoPath, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}))
+			fileFilter := NewFileFilter(testCase.repoPath, &log.Logger, WithFileFilterStrategies([]Filterable{globFileFilter}))
 			files := fileFilter.GetAllFiles()
 
 			filteredFiles := fileFilter.GetFilteredFiles(files)
@@ -184,10 +185,10 @@ func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		globFileFilter, err := NewGlobFileFilter(rootDir, ruleFiles, &log.Logger)
+		globFileFilter, err := NewIgnoresFileFilter(rootDir, ruleFiles, &log.Logger)
 		assert.NoError(b, err)
 
-		fileFilter := NewFileFilter(rootDir, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}), WithThreadNumber(runtime.NumCPU()))
+		fileFilter := NewFileFilter(rootDir, &log.Logger, WithFileFilterStrategies([]Filterable{globFileFilter}), WithThreadNumber(runtime.NumCPU()))
 
 		b.StartTimer()
 		filteredFiles := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles())
@@ -444,7 +445,7 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir)
+			globs := utils.parseIgnoreRuleToGlobs(tc.rule, tc.baseDir)
 			assert.ElementsMatch(t, tc.expectedGlobs, globs,
 				"Rule: %q, Expected: %v, Got: %v", tc.rule, tc.expectedGlobs, globs)
 		})
@@ -473,10 +474,10 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		createFileInPath(t, gitignorePath, []byte("/"))
 
 		// Test file filtering
-		globFileFilter, err := NewGlobFileFilter(tempDir, []string{".gitignore"}, &log.Logger)
+		globFileFilter, err := NewIgnoresFileFilter(tempDir, []string{".gitignore"}, &log.Logger)
 		assert.NoError(t, err)
 
-		fileFilter := NewFileFilter(tempDir, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}))
+		fileFilter := NewFileFilter(tempDir, &log.Logger, WithFileFilterStrategies([]Filterable{globFileFilter}))
 		rules, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
@@ -521,10 +522,10 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		createFileInPath(t, gitignorePath, []byte("/*"))
 
 		// Test file filtering
-		globFileFilter, err := NewGlobFileFilter(tempDir, []string{".gitignore"}, &log.Logger)
+		globFileFilter, err := NewIgnoresFileFilter(tempDir, []string{".gitignore"}, &log.Logger)
 		assert.NoError(t, err)
 
-		fileFilter := NewFileFilter(tempDir, &log.Logger, WithFileFilterStrategies([]FileFilterStrategy{globFileFilter}))
+		fileFilter := NewFileFilter(tempDir, &log.Logger, WithFileFilterStrategies([]Filterable{globFileFilter}))
 
 		// Get all files and filter them
 		allFiles := fileFilter.GetAllFiles()
