@@ -221,11 +221,25 @@ func (mr *MockTestResultMockRecorder) GetTestID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestID", reflect.TypeOf((*MockTestResult)(nil).GetTestID))
 }
 
+// GetTestResources mocks base method.
+func (m *MockTestResult) GetTestResources() *[]testapi.TestResource {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTestResources")
+	ret0, _ := ret[0].(*[]testapi.TestResource)
+	return ret0
+}
+
+// GetTestResources indicates an expected call of GetTestResources.
+func (mr *MockTestResultMockRecorder) GetTestResources() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestResources", reflect.TypeOf((*MockTestResult)(nil).GetTestResources))
+}
+
 // GetTestSubject mocks base method.
-func (m *MockTestResult) GetTestSubject() testapi.TestSubject {
+func (m *MockTestResult) GetTestSubject() *testapi.TestSubject {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTestSubject")
-	ret0, _ := ret[0].(testapi.TestSubject)
+	ret0, _ := ret[0].(*testapi.TestSubject)
 	return ret0
 }
 

@@ -47,7 +47,8 @@ type FinalTestResultConfig struct {
 	ApiWarnings       *[]testapi.IoSnykApiCommonError
 	TestConfiguration *testapi.TestConfiguration
 	CreatedAt         *time.Time
-	TestSubject       testapi.TestSubject
+	TestSubject       *testapi.TestSubject
+	TestResources     *[]testapi.TestResource
 	SubjectLocators   *[]testapi.TestSubjectLocator
 	BreachedPolicies  *testapi.PolicyRefSet
 	EffectiveSummary  *testapi.FindingSummary
@@ -170,6 +171,7 @@ func handleTestResultRequest(t *testing.T, w http.ResponseWriter, r *http.Reques
 		config.FinalTestResult.CreatedAt,
 		config.FinalTestResult.TestSubject,
 		config.FinalTestResult.SubjectLocators,
+		config.FinalTestResult.TestResources,
 		config.FinalTestResult.BreachedPolicies,
 		config.FinalTestResult.EffectiveSummary,
 		config.FinalTestResult.RawSummary,
@@ -299,6 +301,40 @@ func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 	})
 	require.NoError(t, err)
 	return testSubject
+}
+
+// Return a upload Resource to run a test on
+func newUploadResource(t *testing.T) testapi.UploadResource {
+	t.Helper()
+
+	uploadResource := testapi.UploadResource{
+		ContentType:  testapi.UploadResourceContentTypeSource,
+		FilePatterns: []string{},
+		RevisionId:   string("my-revision-id"),
+		Type:         testapi.Upload,
+	}
+
+	return uploadResource
+}
+
+// Return a upload Resource to run a test on
+func newUploadTestResourceCreateItem(t *testing.T, u *testapi.UploadResource) testapi.TestResourceCreateItem {
+	t.Helper()
+
+	var resourceVariantCreateItem testapi.BaseResourceVariantCreateItem
+	err := resourceVariantCreateItem.FromUploadResource(*u)
+	require.NoError(t, err)
+
+	baseResourceCreateItem := testapi.BaseResourceCreateItem{
+		Resource: resourceVariantCreateItem,
+		Type:     testapi.BaseResourceCreateItemTypeBase,
+	}
+
+	var testResource testapi.TestResourceCreateItem
+	err = testResource.FromBaseResourceCreateItem(baseResourceCreateItem)
+	require.NoError(t, err)
+
+	return testResource
 }
 
 // Sets up an httptest server. Returns the server and a cleanup function.
@@ -456,8 +492,9 @@ func mockTestResultResponse(
 	apiWarnings *[]testapi.IoSnykApiCommonError,
 	testConfig *testapi.TestConfiguration,
 	createdAt *time.Time,
-	testSubject testapi.TestSubject,
+	testSubject *testapi.TestSubject,
 	subjectLocators *[]testapi.TestSubjectLocator,
+	testResources *[]testapi.TestResource,
 	breachedPolicies *testapi.PolicyRefSet,
 	effectiveSummary *testapi.FindingSummary,
 	rawSummary *testapi.FindingSummary,
@@ -468,6 +505,7 @@ func mockTestResultResponse(
 		CreatedAt:        createdAt,
 		Subject:          testSubject,
 		SubjectLocators:  subjectLocators,
+		Resources:        testResources,
 		EffectiveSummary: effectiveSummary,
 		RawSummary:       rawSummary,
 		Outcome: &testapi.TestOutcome{
@@ -537,7 +575,7 @@ func mockListFindingsResponse(t *testing.T, nextLink *string, hasData bool) []by
 	err = location.FromSourceLocation(testapi.SourceLocation{
 		FilePath: filePath,
 		FromLine: lineNum,
-		Type:     testapi.Source,
+		Type:     testapi.SourceLocationTypeSource,
 	})
 	require.NoError(t, err)
 

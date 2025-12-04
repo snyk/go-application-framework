@@ -267,7 +267,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		location := testapi.SourceLocation{
 			FilePath: "src/main.go",
 			FromLine: 10,
-			Type:     testapi.Source,
+			Type:     testapi.SourceLocationTypeSource,
 		}
 		var locationUnion testapi.FindingLocation
 		err := locationUnion.MergeSourceLocation(location)
