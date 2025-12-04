@@ -265,8 +265,8 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 	var commonFilesRoot string
 
 	for _, pth := range paths {
-		info, err := os.Stat(pth)
-		if err != nil {
+		info, statErr := os.Stat(pth)
+		if statErr != nil {
 			return UploadResult{}, uploadrevision2.NewFileAccessError(pth, err)
 		}
 
