@@ -115,6 +115,49 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		assert.Contains(t, uploadedPaths, "README.md")
 	})
 
+	t.Run("batch processing of multiple individual files", func(t *testing.T) {
+		// This specific test targets the new logic branch:
+		// verifying that multiple files are collected and uploaded in the final batch step.
+		allFiles := []uploadrevision2.LoadedFile{
+			{Path: "file1.txt", Content: "content1"},
+			{Path: "file2.txt", Content: "content2"},
+			{Path: "sub/file3.txt", Content: "content3"},
+		}
+
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList)
+
+		// We pass the files individually to force them into the 'filesToBatch' slice
+		paths := []string{
+			filepath.Join(dir.Name(), "file1.txt"),
+			filepath.Join(dir.Name(), "file2.txt"),
+			filepath.Join(dir.Name(), "sub", "file3.txt"),
+		}
+
+		res, err := client.CreateRevisionFromPaths(ctx, paths)
+		require.NoError(t, err)
+
+		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
+		require.NoError(t, err)
+		require.Len(t, uploadedFiles, 3)
+
+		uploadedPaths := make(map[string]bool)
+		for _, f := range uploadedFiles {
+			uploadedPaths[f.Path] = true
+		}
+
+		// The implementation uses filepath.Dir(paths[0]) as baseDir.
+		// Since paths[0] is in the root of 'dir', baseDir is 'dir'.
+		// file1.txt -> relative "file1.txt"
+		// file2.txt -> relative "file2.txt"
+		// sub/file3.txt -> relative "sub/file3.txt"
+		assert.True(t, uploadedPaths["file1.txt"])
+		assert.True(t, uploadedPaths["file2.txt"])
+
+		// This assertion checks if 'addPathsToRevision' correctly handled the relative path
+		// calculation based on the calculated baseDir
+		assert.True(t, uploadedPaths["sub/file3.txt"] || uploadedPaths[filepath.Join("sub", "file3.txt")])
+	})
+
 	t.Run("error handling with better context", func(t *testing.T) {
 		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
 
