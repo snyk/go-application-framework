@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync"
@@ -19,8 +19,6 @@ import (
 	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
-
-var batchMaxCount int64 = 0
 
 // Config contains configuration for the file upload client.
 type Config struct {
@@ -140,19 +138,10 @@ func (c *HTTPClient) uploadBatch(ctx context.Context, revID RevisionID, batch *u
 		return nil
 	}
 
-	tempLength := len(batch.files)
-	log.Printf("Uploading batch '%d", tempLength)
-
-	if batchMaxCount > 45 {
-		log.Printf("MAX BATCH COUNT '%d", batchMaxCount)
-	}
-
 	err := c.uploadRevisionSealableClient.UploadFiles(ctx, c.cfg.OrgID, revID, batch.files)
 	if err != nil {
 		return fmt.Errorf("failed to upload files: %w", err)
 	}
-
-	batchMaxCount += 1
 
 	return nil
 }
@@ -234,15 +223,6 @@ func (c *HTTPClient) createRevision(ctx context.Context) (RevisionID, error) {
 	return revision.Data.ID, nil
 }
 
-// addFileToRevision adds a single file to an existing revision.
-func (c *HTTPClient) addFileToRevision(ctx context.Context, revisionID RevisionID, filePath string, opts uploadOptions) (UploadResult, error) {
-	writableChan := make(chan string, 1)
-	writableChan <- filePath
-	close(writableChan)
-
-	return c.addPathsToRevision(ctx, revisionID, filepath.Dir(filePath), writableChan, opts)
-}
-
 // addDirToRevision adds a directory and all its contents to an existing revision.
 func (c *HTTPClient) addDirToRevision(ctx context.Context, revisionID RevisionID, dirPath string, opts uploadOptions) (UploadResult, error) {
 	//nolint:contextcheck // will be considered later
@@ -280,7 +260,10 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 	}
 	res.RevisionID = revisionID
 
-	filesToBatch := make([]string, 0)
+	// Create a buffered channel large enough for all files
+	filesChan := make(chan string, len(paths))
+	var commonFilesRoot string
+
 	for _, pth := range paths {
 		info, err := os.Stat(pth)
 		if err != nil {
@@ -295,32 +278,20 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 			res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
 			res.UploadedFilesCount += dirUploadRes.UploadedFilesCount
 			continue
+		} else {
+			filesChan <- pth
+			commonFilesRoot = updateCommonRoot(commonFilesRoot, pth)
 		}
-		// Collect the file path.
-		filesToBatch = append(filesToBatch, pth)
+	}
+	close(filesChan)
+
+	fileUploadRes, err := c.addPathsToRevision(ctx, revisionID, commonFilesRoot, filesChan, opts)
+	if err != nil {
+		return res, fmt.Errorf("failed to batch upload files: %w", err)
 	}
 
-	// Batch files efficiently
-	if len(filesToBatch) > 0 {
-		// Create a buffered channel large enough for all files
-		filesChan := make(chan string, len(filesToBatch))
-
-		for _, f := range filesToBatch {
-			filesChan <- f
-		}
-		close(filesChan)
-
-		// We need a baseDir context for this batch.
-		baseDir := filepath.Dir(filesToBatch[0])
-
-		fileUploadRes, err := c.addPathsToRevision(ctx, revisionID, baseDir, filesChan, opts)
-		if err != nil {
-			return res, fmt.Errorf("failed to batch upload files: %w", err)
-		}
-
-		res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
-		res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
-	}
+	res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
+	res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
 
 	if res.UploadedFilesCount == 0 && len(res.FilteredFiles) == 0 {
 		return res, ErrNoFilesProvided
@@ -361,4 +332,41 @@ func (c *HTTPClient) CreateRevisionFromFile(ctx context.Context, filePath string
 	}
 
 	return c.CreateRevisionFromPaths(ctx, []string{filePath})
+}
+
+// updateCommonRoot calculates the lowest common ancestor between the
+// current common directory and the new file's directory.
+func updateCommonRoot(commonRoot, newFilePath string) string {
+	// Get the directory of the new file
+	nextDir := filepath.Dir(newFilePath)
+
+	// If this is the first file, return its dir
+	if commonRoot == "" {
+		return nextDir
+	}
+
+	// If they are already the same, no change needed
+	if commonRoot == nextDir {
+		return commonRoot
+	}
+
+	// Shrink commonRoot until it is a prefix of nextDir
+	// We check specifically for the separator to avoid partial matches
+	for {
+		// Calculate the relative path from common to next
+		rel, err := filepath.Rel(commonRoot, nextDir)
+
+		// If no error and rel doesn't start with "..", commonRoot is a parent
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return commonRoot
+		}
+
+		// Otherwise, move commonRoot up one level
+		parent := filepath.Dir(commonRoot)
+		// Safety check: if we hit the root ("/" or "."), stop there
+		if parent == commonRoot {
+			return parent
+		}
+		commonRoot = parent
+	}
 }
