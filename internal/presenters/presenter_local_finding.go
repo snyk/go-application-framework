@@ -45,10 +45,6 @@ var ApplicationSarifTemplates = []string{
 	"templates/local_finding.sarif.tmpl",
 }
 
-var ApplicationSarifTemplatesUfm = []string{
-	"templates/ufm.sarif.tmpl",
-}
-
 type LocalFindingPresenterOptions func(presentation *LocalFindingPresenter)
 
 func WithRuntimeInfo(ri runtimeinfo.RuntimeInfo) LocalFindingPresenterOptions {

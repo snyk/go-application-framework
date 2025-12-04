@@ -21,6 +21,14 @@ type UfmPresenter struct {
 	templateImpl map[string]TemplateImplFunction
 }
 
+var ApplicationSarifTemplatesUfm = []string{
+	"templates/ufm.sarif.tmpl",
+}
+
+var DefaultTemplateFilesUfm = []string{
+	"templates/ufm.human.tmpl",
+}
+
 type UfmPresenterOptions func(presentation *UfmPresenter)
 
 func UfmWithRuntimeInfo(ri runtimeinfo.RuntimeInfo) UfmPresenterOptions {
