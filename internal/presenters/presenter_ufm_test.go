@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/xeipuuv/gojsonschema"
 
@@ -1083,4 +1085,48 @@ func createDependencyPathEvidence(tb testing.TB, packageName, packageVersion str
 		tb.Fatalf("Failed to create dependency path evidence: %v", err)
 	}
 	return depPathEvidence
+}
+
+func Test_UfmPresenter_HumanReadable(t *testing.T) {
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
+
+	testCases := []struct {
+		name               string
+		expectedPath       string
+		testResultPath     string
+		ignoreSuppressions bool
+	}{
+		{
+			name:               "cli",
+			expectedPath:       "testdata/ufm/webgoat.ignore.human.readable",
+			testResultPath:     "testdata/ufm/webgoat.ignore.testresult.json",
+			ignoreSuppressions: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			lipgloss.SetColorProfile(termenv.TrueColor)
+			expectedBytes, err := os.ReadFile(tc.expectedPath)
+			assert.NoError(t, err)
+
+			testResultBytes, err := os.ReadFile(tc.testResultPath)
+			assert.NoError(t, err)
+
+			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+			assert.NoError(t, err)
+
+			config := configuration.NewWithOpts()
+
+			writer := &bytes.Buffer{}
+
+			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+			err = presenter.RenderTemplate(presenters.DefaultTemplateFilesUfm, presenters.DefaultMimeType)
+			assert.NoError(t, err)
+
+			assert.Equal(t, string(expectedBytes), writer.String())
+		})
+	}
+
+	lipgloss.SetColorProfile(termenv.Ascii)
 }
