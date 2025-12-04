@@ -1,0 +1,41 @@
+{{- define "issueHeader"}}
+{{- (renderToString "issueHeaderSeverity" . | toUpperCase | renderInSeverityColor )}} {{print .GetTitle | bold}}
+ {{- $ignoreDetails := .GetIgnoreDetails }}
+    {{- if $ignoreDetails }}
+        {{- $ignoreStatus := $ignoreDetails.GetStatus }}
+        {{- if eq $ignoreStatus "ignored" }} [ IGNORED ]
+        {{- else if eq $ignoreStatus "pending_ignore_approval" }} [ PENDING IGNORE... ]
+        {{- else -}}
+        {{- end -}}
+    {{- end -}}
+{{- end}} {{/* end issueHeader */}}
+
+{{- define "issueHeaderSeverity"}}
+    {{- $ignoreDetails := .GetIgnoreDetails }}
+    {{- if $ignoreDetails }}
+{{- if $ignoreDetails.IsActive }} ✗ {{ else }} ! {{ end -}}
+    {{- end -}}
+  [{{.GetEffectiveSeverity}}]
+{{- end}} {{/* end issueHeaderSeverity */}}
+
+{{define "issueDetails" }}
+    {{- template "issueHeader" . }}
+{{end }} {{/* end issueDetails */}}
+
+
+{{define "main" }}
+		{{- range $resultIndex, $result := $.TestResults}}
+			{{- $findingTypes := getFindingTypesFromTestResult $result }}
+			{{- $findingTypesSize := sub (len $findingTypes) 1 }}
+			{{- range $findingTypeIndex, $findingType := $findingTypes }}
+                {{- $issues := getIssuesFromTestResult $result $findingType }}
+                {{- $issuesSize := sub (len $issues) 1 }}
+                {{- $metadata := $result.GetMetadata }}
+                {{- range $index, $issue := $issues }}
+                    {{- template "issueDetails" $issue }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+{{end }} {{/* end main */}}
+
+{{template "main" . }}
