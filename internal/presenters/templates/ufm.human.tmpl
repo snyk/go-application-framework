@@ -1,25 +1,28 @@
 {{- define "issueHeader"}}
-{{- (renderToString "issueHeaderSeverity" . | toUpperCase | renderInSeverityColor )}} {{print .GetTitle | bold}}
+ {{- $severity := .GetEffectiveSeverity }}
+ {{- $title := .GetTitle }}
+ {{- $prefix := "✗" }}
  {{- $ignoreDetails := .GetIgnoreDetails }}
     {{- if $ignoreDetails }}
         {{- $ignoreStatus := $ignoreDetails.GetStatus }}
-        {{- if eq $ignoreStatus "ignored" }} [ IGNORED ]
-        {{- else if eq $ignoreStatus "pending_ignore_approval" }} [ PENDING IGNORE... ]
+        {{- if eq $ignoreStatus "ignored" }}  {{- $prefix = "! [ IGNORED ]" }}
+        {{- else if eq $ignoreStatus "pending_ignore_approval" }} {{- $prefix = "! [ PENDING IGNORE... ]" }}
         {{- else -}}
         {{- end -}}
     {{- end -}}
+{{- printf " %s %s %s" $prefix (printf "[%s]" ($severity | toUpperCase) | renderInSeverityColor) ($title | bold) -}}
 {{- end}} {{/* end issueHeader */}}
 
-{{- define "issueHeaderSeverity"}}
-    {{- $ignoreDetails := .GetIgnoreDetails }}
-    {{- if $ignoreDetails }}
-{{- if $ignoreDetails.IsActive }} ✗ {{ else }} ! {{ end -}}
-    {{- end -}}
-  [{{.GetEffectiveSeverity}}]
-{{- end}} {{/* end issueHeaderSeverity */}}
+{{define "issueBody" }}
+   Finding ID: {{ .GetID }}
+   Info: https://snyk.io/vuln/{{ .GetID }}
+{{- end}} {{/* end issueBody */}}
+
 
 {{define "issueDetails" }}
     {{- template "issueHeader" . }}
+    {{- template "issueBody" . }}
+    
 {{end }} {{/* end issueDetails */}}
 
 
