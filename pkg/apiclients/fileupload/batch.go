@@ -9,8 +9,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
-const MAX_FORM_PARTS = 6000
-
 // uploadBatch manages a batch of files for upload.
 type uploadBatch struct {
 	files       []uploadrevision.UploadFile
