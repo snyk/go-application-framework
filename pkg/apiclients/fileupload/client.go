@@ -374,6 +374,7 @@ func (c *HTTPClient) CreateRevisionFromFile(ctx context.Context, filePath string
 }
 
 // TODO move this to utils and test it individually
+// TODO test how this would behave for Windows paths + how to treat it
 // updateCommonRoot calculates the lowest common ancestor between the
 // current common directory and the new file's directory.
 func updateCommonRoot(commonRoot, newFilePath string) string {
