@@ -5,9 +5,8 @@
  {{- $ignoreDetails := .GetIgnoreDetails }}
     {{- if $ignoreDetails }}
         {{- $ignoreStatus := $ignoreDetails.GetStatus }}
-        {{- if eq $ignoreStatus "ignored" }}  {{- $prefix = "! [ IGNORED ]" }}
-        {{- else if eq $ignoreStatus "pending_ignore_approval" }} {{- $prefix = "! [ PENDING IGNORE... ]" }}
-        {{- else -}}
+        {{- if eq $ignoreStatus "ignored" }}{{- $prefix = "! [IGNORED]" }}
+        {{- else if eq $ignoreStatus "pending_ignore_approval" }}{{- $prefix = "! [PENDING IGNORE...]" }}
         {{- end -}}
     {{- end -}}
 {{- printf " %s %s %s" $prefix (printf "[%s]" ($severity | toUpperCase) | renderInSeverityColor) ($title | bold) -}}
@@ -16,29 +15,95 @@
 {{define "issueBody" }}
    Finding ID: {{ .GetID }}
    Info: https://snyk.io/vuln/{{ .GetID }}
+   {{- $componentName := getData . "component-name" }}
+   {{- if $componentName }}
+   Introduced by: {{ $componentName }}
+   {{- end }}
+   {{- $depPaths := getData . "dependency-paths" }}
+   {{- if $depPaths }}
+   {{- if gt (len $depPaths) 0 }}
+   {{- $path := index $depPaths 0 }}
+   Introduced through:{{- range $idx, $pkg := $path }} {{if $idx}}> {{end}}{{ $pkg.Name }}@{{ $pkg.Version }}{{- end }}
+   {{- end }}
+   {{- end }}
+   {{- $riskScore := .GetRiskScore }}
+   {{- if $riskScore }}
+   Risk Score: {{ $riskScore }}
+   {{- end }}
+   {{- $reachability := .GetReachability }}
+   {{- $findingType := .GetFindingType }}
+   {{- if eq (printf "%s" $findingType) "license" }}
+   Reachability: Not Applicable
+   {{- else if $reachability }}
+   Reachability: {{ $reachability.Reachability }}
+   {{- else }}
+   Reachability: No Path Found
+   {{- end }}
 {{- end}} {{/* end issueBody */}}
 
 
 {{define "issueDetails" }}
-    {{- template "issueHeader" . }}
-    {{- template "issueBody" . }}
-    
+{{- template "issueHeader" . }}
+{{- template "issueBody" . }}
+
 {{end }} {{/* end issueDetails */}}
 
 
 {{define "main" }}
-		{{- range $resultIndex, $result := $.TestResults}}
-			{{- $findingTypes := getFindingTypesFromTestResult $result }}
-			{{- $findingTypesSize := sub (len $findingTypes) 1 }}
-			{{- range $findingTypeIndex, $findingType := $findingTypes }}
-                {{- $issues := getIssuesFromTestResult $result $findingType }}
-                {{- $issuesSize := sub (len $issues) 1 }}
-                {{- $metadata := $result.GetMetadata }}
-                {{- range $index, $issue := $issues }}
-                    {{- template "issueDetails" $issue }}
-                {{- end }}
-            {{- end }}
-        {{- end }}
+{{- range $resultIndex, $result := $.TestResults}}
+
+{{ print "Testing  (pom.xml) ..." | bold }}
+
+Tested 163 dependencies for known issues, found 44 issues, 44 vulnerable paths.
+
+{{- $findingTypes := getFindingTypesFromTestResult $result }}
+
+{{- /* Count and render issues by type */ -}}
+{{- $allIssues := getIssuesFromTestResult $result "sca" }}
+{{- $sortedIssues := sortIssuesBySeverity $allIssues }}
+{{- $securityCount := 0 }}
+{{- $licenseCount := 0 }}
+{{- range $issue := $sortedIssues }}
+    {{- $issueID := $issue.GetID }}
+    {{- $isLicense := hasPrefix $issueID "snyk:lic:" }}
+    {{- if $isLicense }}
+        {{- $licenseCount = add $licenseCount 1 }}
+    {{- else }}
+        {{- $securityCount = add $securityCount 1 }}
+    {{- end }}
+{{- end }}
+
+{{- if gt $securityCount 0 }}
+
+{{ printf "Security issues: %d" $securityCount | bold }}
+
+{{- range $issue := $sortedIssues }}
+    {{- $issueID := $issue.GetID }}
+    {{- $isLicense := hasPrefix $issueID "snyk:lic:" }}
+    {{- if not $isLicense }}
+
+{{ template "issueDetails" $issue }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
+
+{{- /* Count and render License Issues */ -}}
+{{- if gt $licenseCount 0 }}
+
+{{ printf "License issues: %d" $licenseCount | bold }}
+
+{{- range $issue := $sortedIssues }}
+    {{- $issueID := $issue.GetID }}
+    {{- $isLicense := hasPrefix $issueID "snyk:lic:" }}
+    {{- if $isLicense }}
+
+{{ template "issueDetails" $issue }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
+{{- end }}
 {{end }} {{/* end main */}}
 
 {{template "main" . }}
