@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync"
@@ -222,15 +223,6 @@ func (c *HTTPClient) createRevision(ctx context.Context) (RevisionID, error) {
 	return revision.Data.ID, nil
 }
 
-// addFileToRevision adds a single file to an existing revision.
-func (c *HTTPClient) addFileToRevision(ctx context.Context, revisionID RevisionID, filePath string, opts uploadOptions) (UploadResult, error) {
-	writableChan := make(chan string, 1)
-	writableChan <- filePath
-	close(writableChan)
-
-	return c.addPathsToRevision(ctx, revisionID, filepath.Dir(filePath), writableChan, opts)
-}
-
 // addDirToRevision adds a directory and all its contents to an existing revision.
 func (c *HTTPClient) addDirToRevision(ctx context.Context, revisionID RevisionID, dirPath string, opts uploadOptions) (UploadResult, error) {
 	//nolint:contextcheck // will be considered later
@@ -268,28 +260,36 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 	}
 	res.RevisionID = revisionID
 
+	filesToUpload, dirsToUpload := make([]string, 0), make([]string, 0)
 	for _, pth := range paths {
-		info, err := os.Stat(pth)
-		if err != nil {
+		info, statErr := os.Stat(pth)
+		if statErr != nil {
 			return UploadResult{}, uploadrevision2.NewFileAccessError(pth, err)
 		}
 
 		if info.IsDir() {
-			dirUploadRes, err := c.addDirToRevision(ctx, revisionID, pth, opts)
-			if err != nil {
-				return res, fmt.Errorf("failed to add directory %s: %w", pth, err)
-			}
-			res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
-			res.UploadedFilesCount += dirUploadRes.UploadedFilesCount
+			dirsToUpload = append(dirsToUpload, pth)
 		} else {
-			fileUploadRes, err := c.addFileToRevision(ctx, revisionID, pth, opts)
-			if err != nil {
-				return res, fmt.Errorf("failed to add file %s: %w", pth, err)
-			}
-			res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
-			res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
+			filesToUpload = append(filesToUpload, pth)
 		}
 	}
+
+	// Upload dirs
+	dirUploadRes, err := c.uploadDirs(ctx, revisionID, dirsToUpload, opts)
+	if err != nil {
+		return res, fmt.Errorf("failed to upload directories: %w", err)
+	}
+
+	// Upload files
+	filesUploadRes, err := c.uploadFiles(ctx, revisionID, filesToUpload, opts)
+	if err != nil {
+		return res, fmt.Errorf("failed to upload directories: %w", err)
+	}
+
+	// Collect results
+	res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
+	res.FilteredFiles = append(res.FilteredFiles, filesUploadRes.FilteredFiles...)
+	res.UploadedFilesCount = filesUploadRes.UploadedFilesCount + dirUploadRes.UploadedFilesCount
 
 	if res.UploadedFilesCount == 0 && len(res.FilteredFiles) == 0 {
 		return res, ErrNoFilesProvided
@@ -298,6 +298,47 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 	if err := c.sealRevision(ctx, revisionID); err != nil {
 		return res, err
 	}
+
+	return res, nil
+}
+
+func (c *HTTPClient) uploadDirs(ctx context.Context, revisionID RevisionID, dirPaths []string, opts uploadOptions) (UploadResult, error) {
+	res := UploadResult{}
+
+	for i := range dirPaths {
+		pth := dirPaths[i]
+		dirUploadRes, err := c.addDirToRevision(ctx, revisionID, pth, opts)
+		if err != nil {
+			return res, fmt.Errorf("failed to add directory %s: %w", pth, err)
+		}
+		res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
+		res.UploadedFilesCount += dirUploadRes.UploadedFilesCount
+	}
+
+	return res, nil
+}
+
+func (c *HTTPClient) uploadFiles(ctx context.Context, revisionID RevisionID, filePaths []string, opts uploadOptions) (UploadResult, error) {
+	res := UploadResult{}
+
+	// Create a buffered channel large enough for all filePaths
+	filesChan := make(chan string, len(filePaths))
+	var commonFilesRoot string
+
+	for i := range filePaths {
+		pth := filePaths[i]
+		filesChan <- pth
+		commonFilesRoot = updateCommonRoot(commonFilesRoot, pth)
+	}
+	close(filesChan)
+
+	fileUploadRes, err := c.addPathsToRevision(ctx, revisionID, commonFilesRoot, filesChan, opts)
+	if err != nil {
+		return res, fmt.Errorf("failed to batch upload filePaths: %w", err)
+	}
+
+	res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
+	res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
 
 	return res, nil
 }
@@ -330,4 +371,43 @@ func (c *HTTPClient) CreateRevisionFromFile(ctx context.Context, filePath string
 	}
 
 	return c.CreateRevisionFromPaths(ctx, []string{filePath})
+}
+
+// TODO move this to utils and test it individually
+// TODO test how this would behave for Windows paths + how to treat it
+// updateCommonRoot calculates the lowest common ancestor between the
+// current common directory and the new file's directory.
+func updateCommonRoot(commonRoot, newFilePath string) string {
+	// Get the directory of the new file
+	nextDir := filepath.Dir(newFilePath)
+
+	// If this is the first file, return its dir
+	if commonRoot == "" {
+		return nextDir
+	}
+
+	// If they are already the same, no change needed
+	if commonRoot == nextDir {
+		return commonRoot
+	}
+
+	// Shrink commonRoot until it is a prefix of nextDir
+	// We check specifically for the separator to avoid partial matches
+	for {
+		// Calculate the relative path from common to next
+		rel, err := filepath.Rel(commonRoot, nextDir)
+
+		// If no error and rel doesn't start with "..", commonRoot is a parent
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return commonRoot
+		}
+
+		// Otherwise, move commonRoot up one level
+		parent := filepath.Dir(commonRoot)
+		// Safety check: if we hit the root ("/" or "."), stop there
+		if parent == commonRoot {
+			return parent
+		}
+		commonRoot = parent
+	}
 }
