@@ -260,10 +260,7 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 	}
 	res.RevisionID = revisionID
 
-	// Create a buffered channel large enough for all files
-	filesChan := make(chan string, len(paths))
-	var commonFilesRoot string
-
+	filesToUpload, dirsToUpload := make([]string, 0), make([]string, 0)
 	for _, pth := range paths {
 		info, statErr := os.Stat(pth)
 		if statErr != nil {
@@ -271,27 +268,28 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 		}
 
 		if info.IsDir() {
-			dirUploadRes, addErr := c.addDirToRevision(ctx, revisionID, pth, opts)
-			if addErr != nil {
-				return res, fmt.Errorf("failed to add directory %s: %w", pth, err)
-			}
-			res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
-			res.UploadedFilesCount += dirUploadRes.UploadedFilesCount
-			continue
+			dirsToUpload = append(dirsToUpload, pth)
 		} else {
-			filesChan <- pth
-			commonFilesRoot = updateCommonRoot(commonFilesRoot, pth)
+			filesToUpload = append(filesToUpload, pth)
 		}
 	}
-	close(filesChan)
 
-	fileUploadRes, err := c.addPathsToRevision(ctx, revisionID, commonFilesRoot, filesChan, opts)
+	// Upload dirs
+	dirUploadRes, err := c.uploadDirs(ctx, revisionID, dirsToUpload, opts)
 	if err != nil {
-		return res, fmt.Errorf("failed to batch upload files: %w", err)
+		return res, fmt.Errorf("failed to upload directories: %w", err)
 	}
 
-	res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
-	res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
+	// Upload files
+	filesUploadRes, err := c.uploadFiles(ctx, revisionID, filesToUpload, opts)
+	if err != nil {
+		return res, fmt.Errorf("failed to upload directories: %w", err)
+	}
+
+	// Collect results
+	res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
+	res.FilteredFiles = append(res.FilteredFiles, filesUploadRes.FilteredFiles...)
+	res.UploadedFilesCount = filesUploadRes.UploadedFilesCount + dirUploadRes.UploadedFilesCount
 
 	if res.UploadedFilesCount == 0 && len(res.FilteredFiles) == 0 {
 		return res, ErrNoFilesProvided
@@ -300,6 +298,47 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 	if err := c.sealRevision(ctx, revisionID); err != nil {
 		return res, err
 	}
+
+	return res, nil
+}
+
+func (c *HTTPClient) uploadDirs(ctx context.Context, revisionID RevisionID, dirPaths []string, opts uploadOptions) (UploadResult, error) {
+	res := UploadResult{}
+
+	for i := range dirPaths {
+		pth := dirPaths[i]
+		dirUploadRes, err := c.addDirToRevision(ctx, revisionID, pth, opts)
+		if err != nil {
+			return res, fmt.Errorf("failed to add directory %s: %w", pth, err)
+		}
+		res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
+		res.UploadedFilesCount += dirUploadRes.UploadedFilesCount
+	}
+
+	return res, nil
+}
+
+func (c *HTTPClient) uploadFiles(ctx context.Context, revisionID RevisionID, filePaths []string, opts uploadOptions) (UploadResult, error) {
+	res := UploadResult{}
+
+	// Create a buffered channel large enough for all filePaths
+	filesChan := make(chan string, len(filePaths))
+	var commonFilesRoot string
+
+	for i := range filePaths {
+		pth := filePaths[i]
+		filesChan <- pth
+		commonFilesRoot = updateCommonRoot(commonFilesRoot, pth)
+	}
+	close(filesChan)
+
+	fileUploadRes, err := c.addPathsToRevision(ctx, revisionID, commonFilesRoot, filesChan, opts)
+	if err != nil {
+		return res, fmt.Errorf("failed to batch upload filePaths: %w", err)
+	}
+
+	res.FilteredFiles = append(res.FilteredFiles, fileUploadRes.FilteredFiles...)
+	res.UploadedFilesCount += fileUploadRes.UploadedFilesCount
 
 	return res, nil
 }
