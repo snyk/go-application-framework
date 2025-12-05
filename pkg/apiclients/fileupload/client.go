@@ -271,8 +271,8 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 		}
 
 		if info.IsDir() {
-			dirUploadRes, err := c.addDirToRevision(ctx, revisionID, pth, opts)
-			if err != nil {
+			dirUploadRes, addErr := c.addDirToRevision(ctx, revisionID, pth, opts)
+			if addErr != nil {
 				return res, fmt.Errorf("failed to add directory %s: %w", pth, err)
 			}
 			res.FilteredFiles = append(res.FilteredFiles, dirUploadRes.FilteredFiles...)
