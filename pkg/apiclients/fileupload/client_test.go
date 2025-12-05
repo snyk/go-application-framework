@@ -115,6 +115,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		assert.Contains(t, uploadedPaths, "README.md")
 	})
 
+	// TODO add more test cases here
 	t.Run("batch processing of multiple individual files", func(t *testing.T) {
 		// This specific test targets the new logic branch:
 		// verifying that multiple files are collected and uploaded in the final batch step.
