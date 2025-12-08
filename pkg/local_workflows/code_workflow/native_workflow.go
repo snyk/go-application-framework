@@ -311,7 +311,7 @@ func getFilesForPath(path string, logger *zerolog.Logger, max_threads int) (<-ch
 	}
 
 	filter := utils.NewFileFilter(path, logger, utils.WithFileFilterStrategies([]utils.Filterable{f}), utils.WithThreadNumber(max_threads))
-	results := filter.GetFilteredFiles(filter.GetAllFiles())
+	results := filter.GetFilteredFiles()
 	return results, nil
 }
 
