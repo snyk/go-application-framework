@@ -305,13 +305,13 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 
 // Return a channel that notifies each file in the path that doesn't match the filter rules
 func getFilesForPath(path string, logger *zerolog.Logger, max_threads int) (<-chan string, error) {
-	filter := utils.NewFileFilter(path, logger, utils.WithThreadNumber(max_threads))
-	rules, err := filter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
+	f, err := utils.NewIgnoresFileFilterFromIgnoreFiles(path, []string{".gitignore", ".dcignore", ".snyk"}, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	results := filter.GetFilteredFiles(filter.GetAllFiles(), rules)
+	filter := utils.NewFileFilter(path, logger, utils.WithFileFilterStrategies([]utils.Filterable{f}), utils.WithThreadNumber(max_threads))
+	results := filter.GetFilteredFiles(filter.GetAllFiles())
 	return results, nil
 }
 

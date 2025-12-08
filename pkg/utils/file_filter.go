@@ -1,14 +1,125 @@
-package file_filter
+package utils
 
 import (
+	"context"
+	"fmt"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
+	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 )
+
+type Filterable interface {
+	Filter(path string) bool
+}
+
+type FileFilter struct {
+	path             string
+	logger           *zerolog.Logger
+	FilterStrategies []Filterable
+	max_threads      int64
+}
+
+type FileFilterOption func(*FileFilter) error
+
+func WithThreadNumber(maxThreadCount int) FileFilterOption {
+	return func(filter *FileFilter) error {
+		if maxThreadCount > 0 {
+			filter.max_threads = int64(maxThreadCount)
+			return nil
+		}
+
+		return fmt.Errorf("max thread count must be greater than 0")
+	}
+}
+
+func WithFileFilterStrategies(strategies []Filterable) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.FilterStrategies = append(filter.FilterStrategies, strategies...)
+		return nil
+	}
+}
+
+func WithDefaultRulesFilter() FileFilterOption {
+	return func(filter *FileFilter) error {
+		defaultFilter, err := NewIgnoresFileFilterFromGlobs([]string{"**/.git/**"})
+		if err != nil {
+			return fmt.Errorf("error creating default filter: %w", err)
+
+		}
+
+		filter.FilterStrategies = append(filter.FilterStrategies, defaultFilter)
+		return nil
+	}
+}
+
+func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
+	filter := &FileFilter{
+		path:        path,
+		logger:      logger,
+		max_threads: int64(runtime.NumCPU()),
+	}
+
+	for _, option := range options {
+		err := option(filter)
+		if err != nil {
+			logger.Err(err).Msg("failed to apply option for FileFilter")
+		}
+	}
+
+	return filter
+}
+
+// GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
+func (fw *FileFilter) GetFilteredFiles() chan string {
+	filesCh := getAllFiles(fw.path, fw.logger)
+	
+	var filteredFilesCh = make(chan string)
+	go func() {
+		ctx := context.Background()
+		availableThreads := semaphore.NewWeighted(fw.max_threads)
+
+		defer close(filteredFilesCh)
+
+		// iterate the filesToFilter channel
+		for file := range filesCh {
+			err := availableThreads.Acquire(ctx, 1)
+			if err != nil {
+				fw.logger.Err(err).Msg("failed to limit threads")
+			}
+			go func(f string) {
+				defer availableThreads.Release(1)
+				// filesToFilter that do not match the filter list are excluded
+				keepFile := true
+				for _, filter := range fw.FilterStrategies {
+					if filter.Filter(f) {
+						keepFile = false
+						break
+					}
+				}
+
+				if keepFile {
+					filteredFilesCh <- f
+				}
+			}(file)
+		}
+
+		// wait until the last thread is done
+		err := availableThreads.Acquire(ctx, fw.max_threads)
+		if err != nil {
+			fw.logger.Err(err).Msg("failed to wait for all threads")
+		}
+	}()
+
+	return filteredFilesCh
+}
+
+// Default file filter for gitignore like filters -> refactored implementation
 
 // For .gitignore, .snyk etc
 type IgnoresFileFilter struct {
@@ -16,13 +127,7 @@ type IgnoresFileFilter struct {
 }
 
 func NewIgnoresFileFilterFromIgnoreFiles(path string, ignoresFiles []string, logger *zerolog.Logger) (*IgnoresFileFilter, error) {
-	ff := FileFilter{
-		path:        path,
-		logger:      logger,
-		max_threads: int64(runtime.NumCPU()),
-	}
-
-	files := ff.GetAllFiles()
+	files := getAllFiles(path, logger)
 	rules, err := getRules(files, ignoresFiles, logger)
 	if err != nil {
 		return nil, err
@@ -64,6 +169,31 @@ func getRules(files chan string, ruleFiles []string, logger *zerolog.Logger) ([]
 	}
 
 	return append(defaultRules, globs...), nil
+}
+
+// GetAllFiles traverses a given dir path and fetches all filesToFilter in the directory
+func getAllFiles(path string, logger *zerolog.Logger) chan string {
+	var filesCh = make(chan string)
+	go func() {
+		defer close(filesCh)
+
+		err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if !d.IsDir() {
+				filesCh <- path
+			}
+
+			return err
+		})
+		if err != nil {
+			logger.Error().Msgf("walk dir failed: %v", err)
+		}
+	}()
+
+	return filesCh
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
