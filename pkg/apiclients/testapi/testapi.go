@@ -106,8 +106,9 @@ type TestResult interface {
 	GetTestID() *uuid.UUID
 	GetTestConfiguration() *TestConfiguration
 	GetCreatedAt() *time.Time
-	GetTestSubject() TestSubject
+	GetTestSubject() *TestSubject
 	GetSubjectLocators() *[]TestSubjectLocator
+	GetTestResources() *[]TestResource
 
 	GetExecutionState() TestExecutionStates
 	GetErrors() *[]IoSnykApiCommonError
@@ -171,7 +172,8 @@ var (
 // StartTestParams defines parameters for the high-level StartTest function.
 type StartTestParams struct {
 	OrgID       string
-	Subject     TestSubjectCreate
+	Subject     *TestSubjectCreate
+	Resources   *[]TestResourceCreateItem
 	LocalPolicy *LocalPolicy
 }
 
@@ -181,8 +183,9 @@ type testResult struct {
 	TestID            *uuid.UUID // The final Test ID (different from Job ID)
 	TestConfiguration *TestConfiguration
 	CreatedAt         *time.Time
-	TestSubject       TestSubject
+	TestSubject       *TestSubject
 	SubjectLocators   *[]TestSubjectLocator
+	TestResources     *[]TestResource
 
 	ExecutionState TestExecutionStates // e.g., "finished", "errored"
 	Errors         *[]IoSnykApiCommonError
@@ -234,10 +237,13 @@ func (r *testResult) GetTestConfiguration() *TestConfiguration { return r.TestCo
 func (r *testResult) GetCreatedAt() *time.Time { return r.CreatedAt }
 
 // GetTestSubject returns the test subject.
-func (r *testResult) GetTestSubject() TestSubject { return r.TestSubject }
+func (r *testResult) GetTestSubject() *TestSubject { return r.TestSubject }
 
 // GetSubjectLocators returns the subject locators.
 func (r *testResult) GetSubjectLocators() *[]TestSubjectLocator { return r.SubjectLocators }
+
+// GetTestResources returns the test resources.
+func (r *testResult) GetTestResources() *[]TestResource { return r.TestResources }
 
 // GetEffectiveSummary returns the summary excluding suppressed findings.
 func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveSummary }
@@ -289,9 +295,24 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 
 // Create the initial test and return a handle to poll it
 func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
-	if len(params.Subject.union) == 0 {
-		return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
+	if params.Resources != nil {
+		if len(*params.Resources) > 0 {
+			for i, resource := range *params.Resources {
+				if len(resource.union) == 0 {
+					return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+				}
+			}
+		} else {
+			return nil, fmt.Errorf("resources do not contain any items in StartTestParams")
+		}
+	} else if params.Subject != nil {
+		if len(params.Subject.union) == 0 {
+			return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
+		}
+	} else {
+		return nil, fmt.Errorf("either resources or subject are required in StartTestParams and must be populated")
 	}
+
 	if params.OrgID == "" {
 		return nil, fmt.Errorf("OrgID is required")
 	}
@@ -301,12 +322,14 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	}
 
 	// Create test body
-	testAttributes := TestAttributesCreate{Subject: params.Subject}
+	testAttributes := TestAttributesCreate{Subject: params.Subject, Resources: params.Resources}
+
 	if params.LocalPolicy != nil {
 		testAttributes.Config = &TestConfiguration{
 			LocalPolicy: params.LocalPolicy,
 		}
 	}
+
 	requestBody := TestRequestBody{
 		Data: TestDataCreate{
 			Attributes: testAttributes,
@@ -316,6 +339,7 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 
 	// Call the low-level client
 	createTestParams := &CreateTestParams{Version: c.config.APIVersion}
+
 	resp, err := c.lowLevelClient.CreateTestWithApplicationVndAPIPlusJSONBodyWithResponse(
 		ctx,
 		orgUUID,
@@ -539,6 +563,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		CreatedAt:         attrs.CreatedAt,
 		TestSubject:       attrs.Subject,
 		SubjectLocators:   attrs.SubjectLocators,
+		TestResources:     attrs.Resources,
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
 		handle:            h,
