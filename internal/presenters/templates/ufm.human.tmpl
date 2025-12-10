@@ -67,7 +67,18 @@ Tested 163 dependencies for known issues, found 44 issues, 44 vulnerable paths.
             {{ print "" }}
         {{- end }}
 
-        {{- $suppressedIssues := filterIssuesBySuppressionStatus $allIssues true }}
+        {{/* Render suppressed issues if any exist */ -}}
+        {{- if eq (getValueFromConfig "include-ignores") "true" }}
+            {{- $suppressedIssues := filterIssuesBySuppressionStatus $allIssues true }}
+            {{- if gt ($suppressedIssues | len) 0 }}
+{{ printf "Ignored %s issues: %d\n" (convertTypeToIssueName $findingType) (len $suppressedIssues) | bold }}
+
+                {{- range $issue := $suppressedIssues }}
+{{ template "issueDetails" $issue }}
+                    {{ print "" }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
     {{- end }}
 {{- end }}
 {{end }} {{/* end main */}}
