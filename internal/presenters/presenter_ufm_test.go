@@ -1124,7 +1124,8 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			err = presenter.RenderTemplate(presenters.DefaultTemplateFilesUfm, presenters.DefaultMimeType)
 			assert.NoError(t, err)
 
-			assert.Equal(t, string(expectedBytes), writer.String())
+			actualString := writer.String()
+			assert.Equal(t, string(expectedBytes), actualString)
 		})
 	}
 

@@ -339,6 +339,35 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 		return value
 	}
+	defaultMap["convertTypeToIssueName"] = func(findingType testapi.FindingType) string {
+		// Map backend finding types to human-friendly issue group names
+		switch findingType {
+		case testapi.FindingTypeSca:
+			return "Security"
+		case testapi.FindingTypeLicense:
+			return "License"
+		case testapi.FindingTypeSast:
+			return "Code"
+		case testapi.FindingTypeDast:
+			return "DAST"
+		case testapi.FindingTypeSecret:
+			return "Secrets"
+		default:
+			return string(findingType)
+		}
+	}
+	defaultMap["filterIssuesBySuppressionStatus"] = func(issues []testapi.Issue, isActive bool) []testapi.Issue {
+		var filteredIssues []testapi.Issue
+		for _, issue := range issues {
+			ignoreDetails := issue.GetIgnoreDetails()
+			hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
+			
+			if hasActiveIgnore == isActive {
+				filteredIssues = append(filteredIssues, issue)
+			}
+		}
+		return filteredIssues
+	}
 
 	return defaultMap
 }
@@ -397,16 +426,19 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 
 func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
 	findingTypes := map[testapi.FindingType]bool{}
-	findings, _, err := testResults.Findings(context.Background())
+
+	// todo: this is potentially an expensive intermediate conversion to issues, which we could cache or optimize differently.
+	issues, err := testapi.NewIssuesFromTestResult(context.Background(), testResults)
 	if err != nil {
 		return []testapi.FindingType{}
 	}
 
-	for _, findings := range findings {
-		if _, ok := findingTypes[findings.Attributes.FindingType]; ok {
+	for _, i := range issues {
+		t := i.GetFindingType()
+		if _, ok := findingTypes[t]; ok {
 			continue
 		}
-		findingTypes[findings.Attributes.FindingType] = true
+		findingTypes[t] = true
 	}
 
 	findingTypesList := slices.Collect(maps.Keys(findingTypes))

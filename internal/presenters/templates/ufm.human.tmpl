@@ -49,59 +49,26 @@
 
 {{define "main" }}
 {{- range $resultIndex, $result := $.TestResults}}
-{{- $targetFile := index $result.GetMetadata "display-target-file" }}
-
-{{ printf "Testing  (%s) ..." $targetFile | bold }}
+    {{- $targetFile := index $result.GetMetadata "display-target-file" }}
+    {{- printf "Testing  (%s) ..." $targetFile | bold }}
 
 Tested 163 dependencies for known issues, found 44 issues, 44 vulnerable paths.
 
-{{- $findingTypes := getFindingTypesFromTestResult $result }}
+    {{- $findingTypes := getFindingTypesFromTestResult $result }}
+    {{- range $findingType := $findingTypes }}
+        {{- $allIssues := getIssuesFromTestResult $result $findingType }}
+        {{- $openIssues := filterIssuesBySuppressionStatus $allIssues false }}
 
-{{- /* Count and render issues by type */ -}}
-{{- $allIssues := getIssuesFromTestResult $result "sca" }}
-{{- $sortedIssues := $allIssues }}
-{{- $securityCount := 0 }}
-{{- $licenseCount := 0 }}
-{{- range $issue := $sortedIssues }}
-    {{- $issueID := $issue.GetID }}
-    {{- $isLicense := hasPrefix $issueID "snyk:lic:" }}
-    {{- if $isLicense }}
-        {{- $licenseCount = add $licenseCount 1 }}
-    {{- else }}
-        {{- $securityCount = add $securityCount 1 }}
-    {{- end }}
-{{- end }}
+{{ printf "%s issues: %d\n" (convertTypeToIssueName $findingType) (len $openIssues) | bold }}
 
-{{- if gt $securityCount 0 }}
-
-{{ printf "Security issues: %d" $securityCount | bold }}
-
-{{- range $issue := $sortedIssues }}
-    {{- $issueID := $issue.GetID }}
-    {{- $isLicense := hasPrefix $issueID "snyk:lic:" }}
-    {{- if not $isLicense }}
-
+        {{- /* Render open issues */ -}}
+        {{- range $issue := $openIssues }}
 {{ template "issueDetails" $issue }}
+            {{ print "" }}
+        {{- end }}
+
+        {{- $suppressedIssues := filterIssuesBySuppressionStatus $allIssues true }}
     {{- end }}
-{{- end }}
-{{- end }}
-
-
-{{- /* Count and render License Issues */ -}}
-{{- if gt $licenseCount 0 }}
-
-{{ printf "License issues: %d" $licenseCount | bold }}
-
-{{- range $issue := $sortedIssues }}
-    {{- $issueID := $issue.GetID }}
-    {{- $isLicense := hasPrefix $issueID "snyk:lic:" }}
-    {{- if $isLicense }}
-
-{{ template "issueDetails" $issue }}
-    {{- end }}
-{{- end }}
-{{- end }}
-
 {{- end }}
 {{end }} {{/* end main */}}
 
