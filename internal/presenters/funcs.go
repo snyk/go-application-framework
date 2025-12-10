@@ -270,6 +270,7 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
 	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
 	fnMap["bold"] = renderBold
 	fnMap["tip"] = func(s string) string {
@@ -328,7 +329,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType []testapi.FindingType) []testapi.Issue {
+	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
 	}
 	defaultMap["getData"] = func(issue testapi.Issue, key string) interface{} {

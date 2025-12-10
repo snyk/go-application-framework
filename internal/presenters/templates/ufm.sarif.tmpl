@@ -6,7 +6,7 @@
 		{{- range $resultIndex, $result := $.TestResults}}
 			{{- $findingTypes := getFindingTypesFromTestResult $result }}
 			{{- $findingType := index $findingTypes 0 }}
-			{{- $issues := getIssuesFromTestResult $result nil }}
+			{{- $issues := getIssuesFromTestResult $result }}
 			{{- $issuesSize := sub (len $issues) 1 }}
 			{{- $metadata := $result.GetMetadata }}
 			{
