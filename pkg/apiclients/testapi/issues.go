@@ -42,6 +42,8 @@ const (
 	// DataKeyDependencyPaths is the key for dependency paths (SCA findings)
 	// Value type: [][]Package
 	DataKeyDependencyPaths = "dependency-paths"
+
+	FindingTypeLicense = "license"
 )
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
@@ -345,6 +347,10 @@ func (i *issue) GetFindings() []*FindingData {
 
 // GetFindingType returns the finding type of this issue.
 func (i *issue) GetFindingType() FindingType {
+	issueID := i.GetID()
+	if len(issueID) >= 9 && issueID[:9] == "snyk:lic:" {
+		return FindingTypeLicense
+	}
 	return i.findingType
 }
 
@@ -900,17 +906,21 @@ func (e *IssueError) Unwrap() error {
 }
 
 // GetIssuesFromTestResult converts test results to Issues and filters by finding type
-func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) ([]Issue, error) {
+func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) ([]Issue, error) {
 	ctx := context.Background()
 	issuesList, err := NewIssuesFromTestResult(ctx, testResults)
 	if err != nil {
 		return []Issue{}, err
 	}
 
+	if len(findingType) == 0 {
+		return issuesList, nil
+	}
+
 	// Filter issues by finding type
 	var filteredIssues []Issue
 	for _, issue := range issuesList {
-		if issue.GetFindingType() == findingType {
+		if slices.Contains(findingType, issue.GetFindingType()) {
 			filteredIssues = append(filteredIssues, issue)
 		}
 	}

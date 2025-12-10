@@ -5,9 +5,8 @@
 		"runs": [
 		{{- range $resultIndex, $result := $.TestResults}}
 			{{- $findingTypes := getFindingTypesFromTestResult $result }}
-			{{- $findingTypesSize := sub (len $findingTypes) 1 }}
-			{{- range $findingTypeIndex, $findingType := $findingTypes }}
-			{{- $issues := getIssuesFromTestResult $result $findingType }}
+			{{- $findingType := index $findingTypes 0 }}
+			{{- $issues := getIssuesFromTestResult $result nil }}
 			{{- $issuesSize := sub (len $issues) 1 }}
 			{{- $metadata := $result.GetMetadata }}
 			{
@@ -31,7 +30,7 @@
 								},
 								"help": {
 									"text": "",
-									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
+									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $issue.GetFindingType) }}
 								},
 								"properties": {
 									"tags": [
@@ -210,8 +209,7 @@
 					{{- $projectName := index $metadata "project-name" }}
 					"id": "{{- getAutomationDetailsId (printf "%s/%d" $projectName $resultIndex) (printf "%s" $findingType) }}"
 				}
-			}{{if or (lt $findingTypeIndex $findingTypesSize) (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}	
-		{{- end}}
+			}{{if (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}
 		]
 	}
 {{end }} {{/* end main */}}

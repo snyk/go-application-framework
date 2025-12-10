@@ -269,7 +269,7 @@ func appendTechnologySection(sb *strings.Builder, issue testapi.Issue, findingTy
 		}
 	}
 	if technology != "" {
-		if findingType == testapi.FindingTypeSca {
+		if findingType == testapi.FindingTypeSca || findingType == testapi.FindingTypeLicense {
 			sb.WriteString(fmt.Sprintf("* Package Manager: %s\n", technology))
 		} else {
 			sb.WriteString(fmt.Sprintf("* Technology: %s\n", technology))
@@ -287,13 +287,9 @@ func appendComponentSection(sb *strings.Builder, issue testapi.Issue, findingTyp
 	}
 	if componentName != "" {
 		if findingType == testapi.FindingTypeSca {
-			// Check if this is a license issue (ID starts with "snyk:lic:")
-			issueID := issue.GetID()
-			if len(issueID) >= 9 && issueID[:9] == "snyk:lic:" {
-				sb.WriteString(fmt.Sprintf("* Module: %s\n", componentName))
-			} else {
-				sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", componentName))
-			}
+			sb.WriteString(fmt.Sprintf("* Vulnerable module: %s\n", componentName))
+		} else if findingType == testapi.FindingTypeLicense {
+			sb.WriteString(fmt.Sprintf("* Module: %s\n", componentName))
 		} else {
 			sb.WriteString(fmt.Sprintf("* Affected component: %s\n", componentName))
 		}
