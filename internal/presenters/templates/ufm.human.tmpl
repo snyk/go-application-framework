@@ -49,8 +49,9 @@
 
 {{define "main" }}
 {{- range $resultIndex, $result := $.TestResults}}
+{{- $targetFile := index $result.GetMetadata "display-target-file" }}
 
-{{ print "Testing  (pom.xml) ..." | bold }}
+{{ printf "Testing  (%s) ..." $targetFile | bold }}
 
 Tested 163 dependencies for known issues, found 44 issues, 44 vulnerable paths.
 
@@ -58,7 +59,7 @@ Tested 163 dependencies for known issues, found 44 issues, 44 vulnerable paths.
 
 {{- /* Count and render issues by type */ -}}
 {{- $allIssues := getIssuesFromTestResult $result "sca" }}
-{{- $sortedIssues := sortIssuesBySeverity $allIssues }}
+{{- $sortedIssues := $allIssues }}
 {{- $securityCount := 0 }}
 {{- $licenseCount := 0 }}
 {{- range $issue := $sortedIssues }}

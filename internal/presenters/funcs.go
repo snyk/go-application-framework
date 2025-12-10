@@ -338,41 +338,8 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 		return value
 	}
-	defaultMap["sortIssuesBySeverity"] = sortIssuesBySeverity
 
 	return defaultMap
-}
-
-func sortIssuesBySeverity(issues []testapi.Issue) []testapi.Issue {
-	// Severity order: low, medium, high, critical
-	severityOrder := map[string]int{
-		"low":      0,
-		"medium":   1,
-		"high":     2,
-		"critical": 3,
-	}
-
-	result := make([]testapi.Issue, len(issues))
-	copy(result, issues)
-
-	slices.SortFunc(result, func(a, b testapi.Issue) int {
-		aSev := strings.ToLower(a.GetEffectiveSeverity())
-		bSev := strings.ToLower(b.GetEffectiveSeverity())
-
-		aOrder, aExists := severityOrder[aSev]
-		bOrder, bExists := severityOrder[bSev]
-
-		if !aExists {
-			aOrder = -1
-		}
-		if !bExists {
-			bOrder = -1
-		}
-
-		return aOrder - bOrder
-	})
-
-	return result
 }
 
 func reverse(v interface{}) []interface{} {
