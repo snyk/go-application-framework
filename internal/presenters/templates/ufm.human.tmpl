@@ -45,9 +45,7 @@
 {{define "issueDetails" }}
 {{- template "issueHeader" . }}
 {{- template "issueBody" . }}
-
-{{end }} {{/* end issueDetails */}}
-
+{{- end }} {{/* end issueDetails */}}
 
 {{define "main" }}
 {{- range $resultIndex, $result := $.TestResults}}
