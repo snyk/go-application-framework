@@ -1,12 +1,10 @@
 package fileupload
 
 import (
-	"fmt"
-	"io"
+	"golang.org/x/net/context"
 	"path/filepath"
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +12,7 @@ import (
 func Test_ListsSources_Simplest(t *testing.T) {
 	sourcesDir := filepath.Join("testdata", "simplest")
 
-	files, err := listSourcesForPath(sourcesDir)
+	files, err := walkDirForPath(sourcesDir)
 	require.NoError(t, err)
 	assert.Len(t, files, 2, "Expecting 2 files")
 	assert.Contains(t, files, filepath.Join(sourcesDir, "package.json"))
@@ -24,7 +22,7 @@ func Test_ListsSources_Simplest(t *testing.T) {
 func Test_ListsSources_WithIgnores(t *testing.T) {
 	sourcesDir := filepath.Join("testdata", "with-ignores")
 
-	files, err := listSourcesForPath(sourcesDir)
+	files, err := walkDirForPath(sourcesDir)
 	require.NoError(t, err)
 
 	assert.Len(t, files, 3, "Expecting 3 files")
@@ -33,17 +31,27 @@ func Test_ListsSources_WithIgnores(t *testing.T) {
 	assert.Contains(t, files, filepath.Join(sourcesDir, "src", "with-ignores.js"))
 }
 
-func listSourcesForPath(sourcesDir string) ([]string, error) {
-	mockLogger := zerolog.New(io.Discard)
-	filesCh, err := forPath(sourcesDir, &mockLogger, 2)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list sources: %w", err)
-	}
+func walkDirForPath(sourcesDir string) ([]string, error) {
+	filesCh := make(chan string, 10)
+	errCh := make(chan error, 1)
+
+	go func() {
+		defer close(filesCh)
+		errCh <- listSources(context.TODO(), sourcesDir, filesCh)
+	}()
 
 	files := []string{}
-	for file := range filesCh {
-		files = append(files, file)
+	for {
+		select {
+		case file, ok := <-filesCh:
+			if !ok {
+				return files, nil
+			}
+			files = append(files, file)
+		case err := <-errCh:
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
-
-	return files, nil
 }

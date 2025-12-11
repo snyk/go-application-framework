@@ -98,7 +98,7 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 			filepath.Join(dir.Name(), "README.md"), // Individual file
 		}
 
-		res, err := client.CreateRevisionFromPaths(ctx, paths)
+		res, err := client.CreateRevisionFromPaths(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -110,21 +110,87 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		for i, f := range uploadedFiles {
 			uploadedPaths[i] = f.Path
 		}
-		assert.Contains(t, uploadedPaths, "main.go")
-		assert.Contains(t, uploadedPaths, "utils.go")
+		assert.Contains(t, uploadedPaths, filepath.Join("src", "main.go"))
+		assert.Contains(t, uploadedPaths, filepath.Join("src", "utils.go"))
 		assert.Contains(t, uploadedPaths, "README.md")
 	})
 
+	t.Run("mixed files and directories - nested dirs", func(t *testing.T) {
+		allFiles := []uploadrevision2.LoadedFile{
+			{Path: helperpath, Content: "helper"},
+			{Path: mainpath, Content: "package main"},
+			{Path: utilspath, Content: "package utils"},
+			{Path: "config.yaml", Content: "version: 1"},
+			{Path: "README.md", Content: "# Project"},
+		}
+
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList)
+
+		paths := []string{
+			filepath.Join(dir.Name(), "src"),       // Directory
+			filepath.Join(dir.Name(), "README.md"), // Individual file
+		}
+
+		res, err := client.CreateRevisionFromPaths(ctx, paths, dir.Name())
+		require.NoError(t, err)
+
+		assert.Empty(t, res.FilteredFiles)
+		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
+		require.NoError(t, err)
+		require.Len(t, uploadedFiles, 4) // 3 from src/ + 1 README.md
+
+		uploadedPaths := make([]string, len(uploadedFiles))
+		for i, f := range uploadedFiles {
+			uploadedPaths[i] = f.Path
+		}
+		assert.Contains(t, uploadedPaths, filepath.Join("src", "main.go"))
+		assert.Contains(t, uploadedPaths, filepath.Join("src", "utils.go"))
+		assert.Contains(t, uploadedPaths, filepath.Join("src", filepath.Join("utils", "helper.go")))
+		assert.Contains(t, uploadedPaths, "README.md")
+	})
+
+	t.Run("mixed files and directories - rootPath is nested dir", func(t *testing.T) {
+		allFiles := []uploadrevision2.LoadedFile{
+			{Path: helperpath, Content: "helper"},
+			{Path: mainpath, Content: "package main"},
+			{Path: utilspath, Content: "package utils"},
+			{Path: "config.yaml", Content: "version: 1"},
+			{Path: "README.md", Content: "# Project"},
+		}
+
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList)
+
+		paths := []string{
+			filepath.Join(dir.Name(), "src"),
+		}
+
+		res, err := client.CreateRevisionFromPaths(ctx, paths, filepath.Join(dir.Name(), "src"))
+		require.NoError(t, err)
+
+		assert.Empty(t, res.FilteredFiles)
+		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
+		require.NoError(t, err)
+		require.Len(t, uploadedFiles, 3) // 3 from src/
+
+		uploadedPaths := make([]string, len(uploadedFiles))
+		for i, f := range uploadedFiles {
+			uploadedPaths[i] = f.Path
+		}
+		assert.Contains(t, uploadedPaths, "main.go")
+		assert.Contains(t, uploadedPaths, "utils.go")
+		assert.Contains(t, uploadedPaths, filepath.Join("utils", "helper.go"))
+	})
+
 	t.Run("error handling with better context", func(t *testing.T) {
-		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
+		ctx, _, client, dir := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
 
 		paths := []string{
 			nonexistpath,
 			missingpath,
 		}
-
-		_, err := client.CreateRevisionFromPaths(ctx, paths)
+		_, err := client.CreateRevisionFromPaths(ctx, paths, dir.Name())
 		require.Error(t, err)
+
 		var fileAccessErr *uploadrevision2.FileAccessError
 		assert.ErrorAs(t, err, &fileAccessErr)
 		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
@@ -474,7 +540,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 		}
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
@@ -499,7 +565,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 			},
 		}, expectedFiles, allowList)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), dir.Name())
 		require.NoError(t, err)
 
 		var fileSizeErr *uploadrevision2.FileSizeLimitError
@@ -532,7 +598,7 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 			},
 		}, expectedFiles, allowList)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"))
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "file1.txt"), dir.Name())
 		require.NoError(t, err)
 
 		var filePathErr *uploadrevision2.FilePathLengthLimitError
@@ -558,13 +624,85 @@ func Test_CreateRevisionFromFile(t *testing.T) {
 
 		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, expectedFiles, allowList)
 
-		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"))
+		res, err := client.CreateRevisionFromFile(ctx, path.Join(dir.Name(), "script.js"), dir.Name())
 		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
 		require.NoError(t, err)
 		expectEqualFiles(t, expectedFiles, uploadedFiles)
+	})
+}
+
+func Test_CreateRevisionFromChan(t *testing.T) {
+	llcfg := uploadrevision2.FakeClientConfig{
+		Limits: uploadrevision2.Limits{
+			FileCountLimit:        10,
+			FileSizeLimit:         100,
+			TotalPayloadSizeLimit: 10_000,
+			FilePathLengthLimit:   20,
+		},
+	}
+
+	allowList := filters.AllowList{
+		ConfigFiles: []string{"go.mod"},
+		Extensions:  []string{".txt", ".go", ".md"},
+	}
+
+	t.Run("mixed files in paths chan", func(t *testing.T) {
+		allFiles := []uploadrevision2.LoadedFile{
+			{Path: mainpath, Content: "package main"},
+			{Path: utilspath, Content: "package utils"},
+			{Path: "config.yaml", Content: "version: 1"},
+			{Path: "README.md", Content: "# Project"},
+		}
+
+		ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, allFiles, allowList)
+
+		paths := make(chan string)
+		go func() {
+			defer close(paths)
+			paths <- filepath.Join(dir.Name(), filepath.Join("src", "main.go"))
+			paths <- filepath.Join(dir.Name(), filepath.Join("src", "utils.go"))
+			paths <- filepath.Join(dir.Name(), "README.md")
+		}()
+
+		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.NoError(t, err)
+
+		assert.Empty(t, res.FilteredFiles)
+		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
+		require.NoError(t, err)
+		require.Len(t, uploadedFiles, 3) // 2 from src/ + 1 README.md
+
+		uploadedPaths := make([]string, len(uploadedFiles))
+		for i, f := range uploadedFiles {
+			uploadedPaths[i] = f.Path
+		}
+		assert.Contains(t, uploadedPaths, filepath.Join("src", "main.go"))
+		assert.Contains(t, uploadedPaths, filepath.Join("src", "utils.go"))
+		assert.Contains(t, uploadedPaths, "README.md")
+	})
+
+	t.Run("error handling with better context", func(t *testing.T) {
+		allFiles := []uploadrevision2.LoadedFile{
+			{Path: "README.md", Content: "# Project"},
+		}
+
+		ctx, _, client, dir := setupTest(t, llcfg, allFiles, allowList)
+
+		paths := make(chan string)
+		go func() {
+			defer close(paths)
+			paths <- filepath.Join(dir.Name(), "README.md")
+			paths <- nonexistpath
+		}()
+
+		_, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.Error(t, err)
+		var fileAccessErr *uploadrevision2.FileAccessError
+		assert.ErrorAs(t, err, &fileAccessErr)
+		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
 	})
 }
 
