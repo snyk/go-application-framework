@@ -1118,6 +1118,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 			config := configuration.NewWithOpts()
 			config.Set(configuration.ORGANIZATION_SLUG, "My Org")
+			config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "medium")
 
 			writer := &bytes.Buffer{}
 

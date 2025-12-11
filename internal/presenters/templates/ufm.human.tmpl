@@ -14,7 +14,12 @@
 
 {{- define "issueBody" }}
    Finding ID: {{ .GetID }}
+    {{- $findingType := .GetFindingType }}
+    {{- if or (eq $findingType "license") (eq $findingType "sca") }}
    Info: https://snyk.io/vuln/{{ .GetID }}
+    {{- else }}
+   Info: {{ .GetDescription }}
+	{{- end }}
    {{- $componentName := getData . "component-name" }}
    {{- if $componentName }}
    Introduced by: {{ $componentName }}
