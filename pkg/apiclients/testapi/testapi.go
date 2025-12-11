@@ -120,6 +120,7 @@ type TestResult interface {
 
 	GetEffectiveSummary() *FindingSummary
 	GetRawSummary() *FindingSummary
+	GetTestFacts() *[]TestFact
 
 	SetMetadata(key string, value interface{})
 	GetMetadata() map[string]interface{}
@@ -197,6 +198,7 @@ type testResult struct {
 
 	EffectiveSummary *FindingSummary // Summary excluding suppressed findings
 	RawSummary       *FindingSummary // Summary including suppressed findings
+	TestFacts        *[]TestFact     // Facts computed during test execution
 
 	findings         []FindingData // Stores the actual findings
 	findingsComplete bool          // True if all findings pages were fetched
@@ -250,6 +252,9 @@ func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveS
 
 // GetRawSummary returns the summary including suppressed findings.
 func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
+
+// GetTestFacts returns the facts computed during test execution.
+func (r *testResult) GetTestFacts() *[]TestFact { return r.TestFacts }
 
 // SetMetadata sets the metadata for the given key.
 func (r *testResult) SetMetadata(key string, value interface{}) {
@@ -566,6 +571,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		TestResources:     attrs.Resources,
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
+		TestFacts:         attrs.TestFacts,
 		handle:            h,
 		metadata:          make(map[string]interface{}),
 	}

@@ -207,6 +207,20 @@ func (mr *MockTestResultMockRecorder) GetTestConfiguration() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestConfiguration", reflect.TypeOf((*MockTestResult)(nil).GetTestConfiguration))
 }
 
+// GetTestFacts mocks base method.
+func (m *MockTestResult) GetTestFacts() *[]testapi.TestFact {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTestFacts")
+	ret0, _ := ret[0].(*[]testapi.TestFact)
+	return ret0
+}
+
+// GetTestFacts indicates an expected call of GetTestFacts.
+func (mr *MockTestResultMockRecorder) GetTestFacts() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestFacts", reflect.TypeOf((*MockTestResult)(nil).GetTestFacts))
+}
+
 // GetTestID mocks base method.
 func (m *MockTestResult) GetTestID() *uuid.UUID {
 	m.ctrl.T.Helper()

@@ -28,6 +28,7 @@ type jsonTestResult struct {
 	BreachedPolicies  *testapi.PolicyRefSet           `json:"breachedPolicies,omitempty"`
 	EffectiveSummary  *testapi.FindingSummary         `json:"effectiveSummary,omitempty"`
 	RawSummary        *testapi.FindingSummary         `json:"rawSummary,omitempty"`
+	TestFacts         *[]testapi.TestFact             `json:"testFacts,omitempty"`
 	FindingsComplete  bool                            `json:"findingsComplete"`
 	Metadata          map[string]interface{}          `json:"metadata,omitempty"`
 	// Optimized wire format: central problem store (optional, for serialization)
@@ -113,6 +114,11 @@ func (j *jsonTestResult) GetRawSummary() *testapi.FindingSummary {
 	return j.RawSummary
 }
 
+// GetTestFacts returns the facts computed during test execution.
+func (j *jsonTestResult) GetTestFacts() *[]testapi.TestFact {
+	return j.TestFacts
+}
+
 // SetMetadata sets the metadata for the given key.
 func (j *jsonTestResult) SetMetadata(key string, value interface{}) {
 	j.Metadata[key] = value
@@ -180,6 +186,7 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 		BreachedPolicies:  tr.GetBreachedPolicies(),
 		EffectiveSummary:  tr.GetEffectiveSummary(),
 		RawSummary:        tr.GetRawSummary(),
+		TestFacts:         tr.GetTestFacts(),
 		FindingsComplete:  complete,
 		ProblemStore:      problemStore,
 		ProblemRefs:       problemRefs,

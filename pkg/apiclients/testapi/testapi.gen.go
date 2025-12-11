@@ -70,6 +70,11 @@ const (
 	DepGraphSubjectCreateTypeDepGraph DepGraphSubjectCreateType = "dep_graph"
 )
 
+// Defines values for DependencyCountFactType.
+const (
+	DependencyCountFactTypeDependencyCountFact DependencyCountFactType = "dependency_count_fact"
+)
+
 // Defines values for DependencyPathEvidenceSource.
 const (
 	DependencyPath DependencyPathEvidenceSource = "dependency_path"
@@ -141,12 +146,7 @@ const (
 
 // Defines values for InlineContentType.
 const (
-	InlineContentTypeDepGraph InlineContentType = "dep_graph"
-)
-
-// Defines values for InlineContentCreateItemType.
-const (
-	InlineContentCreateItemTypeDepGraph InlineContentCreateItemType = "dep_graph"
+	DepGraph InlineContentType = "dep_graph"
 )
 
 // Defines values for InlineResourceType.
@@ -554,6 +554,15 @@ type DepGraphSubjectCreate struct {
 
 // DepGraphSubjectCreateType defines model for DepGraphSubjectCreate.Type.
 type DepGraphSubjectCreateType string
+
+// DependencyCountFact DependencyCountFact represents a dependency count fact.
+type DependencyCountFact struct {
+	TotalDependencyCount int64                   `json:"total_dependency_count"`
+	Type                 DependencyCountFactType `json:"type"`
+}
+
+// DependencyCountFactType defines model for DependencyCountFact.Type.
+type DependencyCountFactType string
 
 // DependencyPathEvidence Dependency path to a software component within an SBOM dependency graph.
 //
@@ -963,26 +972,17 @@ type IgnoredBy struct {
 
 // InlineContent defines model for InlineContent.
 type InlineContent struct {
-	Type InlineContentType `json:"type"`
+	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
+	Type     InlineContentType                      `json:"type"`
 }
 
 // InlineContentType defines model for InlineContent.Type.
 type InlineContentType string
 
-// InlineContentCreateItem defines model for InlineContentCreateItem.
-type InlineContentCreateItem struct {
-	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
-	Type     InlineContentCreateItemType            `json:"type"`
-}
-
-// InlineContentCreateItemType defines model for InlineContentCreateItem.Type.
-type InlineContentCreateItemType string
-
 // InlineResource defines model for InlineResource.
 type InlineResource struct {
-	Content InlineContent      `json:"content"`
-	Name    string             `json:"name"`
-	Type    InlineResourceType `json:"type"`
+	Name string             `json:"name"`
+	Type InlineResourceType `json:"type"`
 }
 
 // InlineResourceType defines model for InlineResource.Type.
@@ -990,7 +990,7 @@ type InlineResourceType string
 
 // InlineResourceCreateItem defines model for InlineResourceCreateItem.
 type InlineResourceCreateItem struct {
-	Content InlineContentCreateItem      `json:"content"`
+	Content InlineContent                `json:"content"`
 	Name    string                       `json:"name"`
 	Type    InlineResourceCreateItemType `json:"type"`
 }
@@ -1835,6 +1835,9 @@ type TestAttributes struct {
 	// may be provided to help link the test to existing projects and/or assets in
 	// the Snyk platform.
 	SubjectLocators *[]TestSubjectLocator `json:"subject_locators,omitempty"`
+
+	// TestFacts Facts about the test that were computed during test execution.
+	TestFacts *[]TestFact `json:"test_facts,omitempty"`
 }
 
 // TestAttributesCreate TestAttributes represents the attributes of a Test resource.
@@ -1908,6 +1911,9 @@ type TestDataCreateType string
 
 // TestExecutionStates defines model for TestExecutionStates.
 type TestExecutionStates string
+
+// TestFact DependencyCountFact represents a dependency count fact.
+type TestFact = DependencyCountFact
 
 // TestOutcome Outcome of a test; pass or fail.
 type TestOutcome struct {
