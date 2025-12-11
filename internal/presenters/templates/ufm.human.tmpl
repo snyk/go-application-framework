@@ -49,8 +49,9 @@
 {{- define "testSummary"}}{{ "Test Summary" | bold }}
 {{- $metadata := .GetMetadata }}
 {{- $targetDirectory := index $metadata "target-directory" }}
+{{- $findingTypes := getFindingTypesFromTestResult . }}
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
-  Test type:
+  Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
   Project path:      {{ $targetDirectory }}
 {{- end }} {{/* end testSummary */}}
 
@@ -119,6 +120,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 
 {{- /* Main template */}}
 {{- define "main" }}
+    {{- /* Render each result */}}
     {{- range $resultIndex, $result := $.TestResults}}
         {{- template "resultHeader" $result}}
         {{- template "resultBody" $result}}

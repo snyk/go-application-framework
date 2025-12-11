@@ -361,7 +361,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		for _, issue := range issues {
 			ignoreDetails := issue.GetIgnoreDetails()
 			hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
-			
+
 			if hasActiveIgnore == isActive {
 				filteredIssues = append(filteredIssues, issue)
 			}
@@ -385,6 +385,25 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 			}
 		}
 		return 0
+	}
+	defaultMap["determineProductNameFromFindingTypes"] = func(findingTypes []testapi.FindingType) string {
+		if slices.Contains(findingTypes, testapi.FindingTypeSca) || slices.Contains(findingTypes, testapi.FindingTypeLicense) {
+			return "Software Composition Analysis"
+		}
+
+		if slices.Contains(findingTypes, testapi.FindingTypeSast) {
+			return "Static code analysis"
+		}
+
+		if slices.Contains(findingTypes, testapi.FindingTypeSecret) {
+			return "Secret Detection"
+		}
+
+		if slices.Contains(findingTypes, testapi.FindingTypeDast) {
+			return "Dynamic Application Security Testing"
+		}
+
+		return "Other"
 	}
 
 	return defaultMap
