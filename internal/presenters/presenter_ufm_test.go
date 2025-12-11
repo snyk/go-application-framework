@@ -1117,6 +1117,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			assert.NoError(t, err)
 
 			config := configuration.NewWithOpts()
+			config.Set(configuration.ORGANIZATION_SLUG, "My Org")
 
 			writer := &bytes.Buffer{}
 

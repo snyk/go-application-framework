@@ -10,9 +10,9 @@
         {{- end -}}
     {{- end -}}
 {{- printf " %s %s %s" $prefix (printf "[%s]" ($severity | toUpperCase) | renderInSeverityColor) ($title | bold) -}}
-{{- end}} {{/* end issueHeader */}}
+{{- end }} {{/* end issueHeader */}}
 
-{{define "issueBody" }}
+{{- define "issueBody" }}
    Finding ID: {{ .GetID }}
    Info: https://snyk.io/vuln/{{ .GetID }}
    {{- $componentName := getData . "component-name" }}
@@ -41,46 +41,85 @@
    {{- end }}
 {{- end}} {{/* end issueBody */}}
 
-
-{{define "issueDetails" }}
+{{- define "issueDetails" }}
 {{- template "issueHeader" . }}
 {{- template "issueBody" . }}
 {{- end }} {{/* end issueDetails */}}
 
-{{define "main" }}
+{{- define "testSummary"}}{{ "Test Summary" | bold }}
+{{- $metadata := .GetMetadata }}
+{{- $targetDirectory := index $metadata "target-directory" }}
+  Organization:      {{ getValueFromConfig "internal_org_slug" }}
+  Test type:
+  Project path:      {{ $targetDirectory }}
+{{- end }} {{/* end testSummary */}}
+
+{{- define "main" }}
 {{- range $resultIndex, $result := $.TestResults}}
-    {{- $targetFile := index $result.GetMetadata "display-target-file" }}
-    {{- printf "Testing  (%s) ..." $targetFile | bold }}
+    {{- $metadata := $result.GetMetadata }}
+    {{- $targetFile := index $metadata "display-target-file" }}
+    {{- $dependencyCount := index $metadata "dependency-count" }}
+    {{- /* Get all open issues, no matter what type */}}
+    {{- $issues := getIssuesFromTestResult $result }}
+    {{- $openIssues := filterIssuesBySuppressionStatus $issues false }}
+    {{- /* Count vulnerable paths */}}
+    {{- $vulnerablePaths := 0 }}
+    {{- range $issue := $openIssues }}
+        {{- $depPaths := getData $issue "dependency-paths" }}
+        {{- $vulnerablePaths = add (len $depPaths) $vulnerablePaths }}
+    {{- end }}
+{{- printf "Testing  (%s) ..." $targetFile | bold }}
+{{- "\n" }}
 
-Tested 163 dependencies for known issues, found 44 issues, 44 vulnerable paths.
+{{- if gt (int $dependencyCount) 0 }}
+Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $openIssues }} issues, {{ $vulnerablePaths }} vulnerable paths.
+{{- "\n" }}
+{{- end }}
 
+    {{- /* Render Issue details per finding type */}}
     {{- $findingTypes := getFindingTypesFromTestResult $result }}
     {{- range $findingType := $findingTypes }}
         {{- $allIssues := getIssuesFromTestResult $result $findingType }}
         {{- $openIssues := filterIssuesBySuppressionStatus $allIssues false }}
 
-{{ printf "%s issues: %d\n" (convertTypeToIssueName $findingType) (len $openIssues) | bold }}
+        {{- "\n" }}
+        {{- printf "Open %s issues: %d" (convertTypeToIssueName $findingType) (len $openIssues) | bold }}
+        {{- "\n" }}
 
-        {{- /* Render open issues */ -}}
+        {{- /* Render open issues */}}
         {{- range $issue := $openIssues }}
-{{ template "issueDetails" $issue }}
-            {{ print "" }}
+            {{- "\n" }}
+            {{- template "issueDetails" $issue }}
+            {{- "\n" }}
         {{- end }}
 
-        {{/* Render suppressed issues if any exist */ -}}
+        {{- /* Render suppressed issues if any exist */}}
         {{- if eq (getValueFromConfig "include-ignores") "true" }}
             {{- $suppressedIssues := filterIssuesBySuppressionStatus $allIssues true }}
             {{- if gt ($suppressedIssues | len) 0 }}
 {{ printf "Ignored %s issues: %d\n" (convertTypeToIssueName $findingType) (len $suppressedIssues) | bold }}
 
                 {{- range $issue := $suppressedIssues }}
-{{ template "issueDetails" $issue }}
-                    {{ print "" }}
+                    {{- "\n" }}
+                    {{- template "issueDetails" $issue }}
+                    {{- "\n" }}
                 {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}
-{{- end }}
-{{end }} {{/* end main */}}
 
-{{template "main" . }}
+    {{- /* Render test summary */}}
+    {{- "\n" }}
+    {{- box (renderToString "testSummary" $result) }}
+{{- end }}
+
+{{- if ne (getValueFromConfig "include-ignores") "true" }}
+{{- "\n" }}
+{{- tip "To view ignored issues, use the --include-ignores option."}}
+{{- "\n" }}
+{{- end }}
+
+
+{{- end }} {{/* end main */}}
+
+{{- template "main" . }}

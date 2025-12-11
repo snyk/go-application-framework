@@ -368,6 +368,24 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 		return filteredIssues
 	}
+	defaultMap["int"] = func(v interface{}) int {
+		switch val := v.(type) {
+		case int:
+			return val
+		case int64:
+			return int(val)
+		case float64:
+			return int(val)
+		case float32:
+			return int(val)
+		case string:
+			// Try to parse string as int
+			if i, err := strconv.Atoi(val); err == nil {
+				return i
+			}
+		}
+		return 0
+	}
 
 	return defaultMap
 }
