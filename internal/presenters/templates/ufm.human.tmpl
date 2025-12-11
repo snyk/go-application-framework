@@ -61,7 +61,7 @@
    {{- $dependencyCount := index $metadata "dependency-count" }}
    {{- /* Get all open issues, no matter what type */}}
    {{- $issues := getIssuesFromTestResult . }}
-   {{- $openIssues := filterIssuesBySuppressionStatus $issues false }}
+   {{- $openIssues := sortAndFilterIssues $issues false }}
    {{- /* Count vulnerable paths */}}
    {{- $vulnerablePaths := 0 }}
    {{- range $issue := $openIssues }}
@@ -82,7 +82,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- $findingTypes := getFindingTypesFromTestResult . }}
     {{- range $findingType := $findingTypes }}
         {{- $allIssues := getIssuesFromTestResult $ $findingType }}
-        {{- $openIssues := filterIssuesBySuppressionStatus $allIssues false }}
+        {{- $openIssues := sortAndFilterIssues $allIssues false }}
 
         {{- "\n" }}
         {{- printf "Open %s issues: %d" (convertTypeToIssueName $findingType) (len $openIssues) | bold }}
@@ -97,7 +97,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 
             {{- /* Render suppressed issues if any exist */}}
             {{- if eq (getValueFromConfig "include-ignores") "true" }}
-                {{- $suppressedIssues := filterIssuesBySuppressionStatus $allIssues true }}
+                {{- $suppressedIssues := sortAndFilterIssues $allIssues true }}
                 {{- if gt ($suppressedIssues | len) 0 }}
                     {{- "\n" }}
                     {{- printf "Ignored %s issues: %d\n" (convertTypeToIssueName $findingType) (len $suppressedIssues) | bold }}

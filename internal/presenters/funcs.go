@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -356,14 +357,18 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 			return string(findingType)
 		}
 	}
-	defaultMap["filterIssuesBySuppressionStatus"] = func(issues []testapi.Issue, isActive bool) []testapi.Issue {
-		var filteredIssues []testapi.Issue
-		for _, issue := range issues {
-			ignoreDetails := issue.GetIgnoreDetails()
-			hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
+	defaultMap["sortAndFilterIssues"] = func(issues []testapi.Issue, isActive bool) []testapi.Issue {
+		sorting := FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, config.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
 
-			if hasActiveIgnore == isActive {
-				filteredIssues = append(filteredIssues, issue)
+		var filteredIssues []testapi.Issue
+		for _, severity := range sorting {
+			for _, issue := range issues {
+				ignoreDetails := issue.GetIgnoreDetails()
+				hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
+
+				if hasActiveIgnore == isActive && issue.GetEffectiveSeverity() == severity {
+					filteredIssues = append(filteredIssues, issue)
+				}
 			}
 		}
 		return filteredIssues
