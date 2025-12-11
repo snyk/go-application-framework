@@ -952,25 +952,25 @@ func (s *IssueSummary) GetSortedIssues(severityOrder []string) []Issue {
 	if s == nil || len(s.Issues) == 0 {
 		return []Issue{}
 	}
-	
+
 	sorted := make([]Issue, len(s.Issues))
 	copy(sorted, s.Issues)
-	
+
 	slices.SortFunc(sorted, func(a, b Issue) int {
 		// Sort by severity first
 		aSeverity := strings.ToLower(a.GetSeverity())
 		bSeverity := strings.ToLower(b.GetSeverity())
 		aIdx := slices.Index(severityOrder, aSeverity)
 		bIdx := slices.Index(severityOrder, bSeverity)
-		
+
 		if aIdx != bIdx {
 			return aIdx - bIdx
 		}
-		
+
 		// Then by ID for deterministic output
 		return strings.Compare(a.GetID(), b.GetID())
 	})
-	
+
 	return sorted
 }
 
@@ -1011,7 +1011,7 @@ func GetSummariesFromIssues(issues []Issue) map[string]*IssueSummary {
 		raw.Count++
 		raw.Issues = append(raw.Issues, issue)
 		rawSeverityCount["severity"][severity]++
-		
+
 		if ignore == nil || !ignore.IsActive() {
 			effective.Count++
 			effective.Issues = append(effective.Issues, issue)
