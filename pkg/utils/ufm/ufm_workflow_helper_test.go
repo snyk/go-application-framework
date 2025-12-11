@@ -41,6 +41,7 @@ func Test_CreateAndRetrieveDataFromUFM(t *testing.T) {
 	singleResult.EXPECT().GetBreachedPolicies().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetEffectiveSummary().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetRawSummary().Return(nil).AnyTimes()
+	singleResult.EXPECT().GetTestFacts().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetMetadata().Return(nil).AnyTimes()
 	singleResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
 

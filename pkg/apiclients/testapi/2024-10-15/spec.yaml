@@ -442,6 +442,20 @@ components:
       - dep_graph
       - locator
       type: object
+    DependencyCountFact:
+      description: DependencyCountFact represents a dependency count fact.
+      properties:
+        total_dependency_count:
+          format: int64
+          type: integer
+        type:
+          enum:
+          - dependency_count_fact
+          type: string
+      required:
+      - type
+      - total_dependency_count
+      type: object
     DependencyPathEvidence:
       description: |-
         Dependency path to a software component within an SBOM dependency graph.
@@ -1193,15 +1207,6 @@ components:
       type: object
     InlineContent:
       properties:
-        type:
-          enum:
-          - dep_graph
-          type: string
-      required:
-      - type
-      type: object
-    InlineContentCreateItem:
-      properties:
         dep_graph:
           $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.DepGraph'
         type:
@@ -1214,8 +1219,6 @@ components:
       type: object
     InlineResource:
       properties:
-        content:
-          $ref: '#/components/schemas/InlineContent'
         name:
           maxLength: 256
           type: string
@@ -1226,12 +1229,11 @@ components:
       required:
       - type
       - name
-      - content
       type: object
     InlineResourceCreateItem:
       properties:
         content:
-          $ref: '#/components/schemas/InlineContentCreateItem'
+          $ref: '#/components/schemas/InlineContent'
         name:
           maxLength: 256
           type: string
@@ -2602,6 +2604,12 @@ components:
           items:
             $ref: '#/components/schemas/TestSubjectLocator'
           type: array
+        test_facts:
+          description: Facts about the test that were computed during test execution.
+          items:
+            $ref: '#/components/schemas/TestFact'
+          readOnly: true
+          type: array
       required:
       - created_at
       - state
@@ -2747,6 +2755,11 @@ components:
       - finished
       - errored
       type: string
+    TestFact:
+      allOf:
+      - $ref: '#/components/schemas/DependencyCountFact'
+      description: TestFact represents a test fact union.
+      type: object
     TestOutcome:
       description: Outcome of a test; pass or fail.
       properties:
