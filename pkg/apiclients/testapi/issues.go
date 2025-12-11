@@ -949,10 +949,10 @@ func createNewSummary(severities []string) *FindingSummary {
 	}
 }
 
-func GetSummariesFromIssues(issues []Issue) (effective *FindingSummary, raw *FindingSummary, ignored *FindingSummary, err error) {
-	effective = createNewSummary(json_schemas.DEFAULT_SEVERITIES)
-	raw = createNewSummary(json_schemas.DEFAULT_SEVERITIES)
-	ignored = createNewSummary(json_schemas.DEFAULT_SEVERITIES)
+func GetSummariesFromIssues(issues []Issue) map[string]*FindingSummary {
+	effective := createNewSummary(json_schemas.DEFAULT_SEVERITIES)
+	raw := createNewSummary(json_schemas.DEFAULT_SEVERITIES)
+	ignored := createNewSummary(json_schemas.DEFAULT_SEVERITIES)
 
 	effectiveSeverityCount := (*effective.CountBy)
 	rawSeverityCount := (*raw.CountBy)
@@ -977,5 +977,9 @@ func GetSummariesFromIssues(issues []Issue) (effective *FindingSummary, raw *Fin
 	raw.CountBy = &rawSeverityCount
 	ignored.CountBy = &ignoredSeverityCount
 
-	return effective, raw, ignored, nil
+	return map[string]*FindingSummary{
+		"effective": effective,
+		"raw":       raw,
+		"ignored":   ignored,
+	}
 }

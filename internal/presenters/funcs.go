@@ -348,21 +348,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getSeverities"] = func() []string {
 		return json_schemas.DEFAULT_SEVERITIES
 	}
-	defaultMap["getSummariesFromIssues"] = func(issues []testapi.Issue) map[string]*testapi.FindingSummary {
-		effective, raw, ignored, err := testapi.GetSummariesFromIssues(issues)
-		if err != nil {
-			return map[string]*testapi.FindingSummary{
-				"effective": {Count: 0, CountBy: &map[string]map[string]uint32{"severity": {}}},
-				"raw":       {Count: 0, CountBy: &map[string]map[string]uint32{"severity": {}}},
-				"ignored":   {Count: 0, CountBy: &map[string]map[string]uint32{"severity": {}}},
-			}
-		}
-		return map[string]*testapi.FindingSummary{
-			"effective": effective,
-			"raw":       raw,
-			"ignored":   ignored,
-		}
-	}
+	defaultMap["getSummariesFromIssues"] = testapi.GetSummariesFromIssues
 
 	return defaultMap
 }
