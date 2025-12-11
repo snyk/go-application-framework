@@ -54,32 +54,33 @@
   Project path:      {{ $targetDirectory }}
 {{- end }} {{/* end testSummary */}}
 
-{{- define "main" }}
-{{- range $resultIndex, $result := $.TestResults}}
-    {{- $metadata := $result.GetMetadata }}
-    {{- $targetFile := index $metadata "display-target-file" }}
-    {{- $dependencyCount := index $metadata "dependency-count" }}
-    {{- /* Get all open issues, no matter what type */}}
-    {{- $issues := getIssuesFromTestResult $result }}
-    {{- $openIssues := filterIssuesBySuppressionStatus $issues false }}
-    {{- /* Count vulnerable paths */}}
-    {{- $vulnerablePaths := 0 }}
-    {{- range $issue := $openIssues }}
-        {{- $depPaths := getData $issue "dependency-paths" }}
-        {{- $vulnerablePaths = add (len $depPaths) $vulnerablePaths }}
-    {{- end }}
-{{- printf "Testing  (%s) ..." $targetFile | bold }}
-{{- "\n" }}
+{{- define "resultHeader" }}
+   {{- $metadata := .GetMetadata }}
+   {{- $targetFile := index $metadata "display-target-file" }}
+   {{- $dependencyCount := index $metadata "dependency-count" }}
+   {{- /* Get all open issues, no matter what type */}}
+   {{- $issues := getIssuesFromTestResult . }}
+   {{- $openIssues := filterIssuesBySuppressionStatus $issues false }}
+   {{- /* Count vulnerable paths */}}
+   {{- $vulnerablePaths := 0 }}
+   {{- range $issue := $openIssues }}
+   {{- $depPaths := getData $issue "dependency-paths" }}
+   {{- $vulnerablePaths = add (len $depPaths) $vulnerablePaths }}
+   {{- end }}
+   {{- printf "Testing  (%s) ..." $targetFile | bold }}
+   {{- "\n" }}
 
-{{- if gt (int $dependencyCount) 0 }}
+   {{- if gt (int $dependencyCount) 0 }}
 Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $openIssues }} issues, {{ $vulnerablePaths }} vulnerable paths.
 {{- "\n" }}
 {{- end }}
+{{- end }}
 
+{{- define "resultBody" }}
     {{- /* Render Issue details per finding type */}}
-    {{- $findingTypes := getFindingTypesFromTestResult $result }}
+    {{- $findingTypes := getFindingTypesFromTestResult . }}
     {{- range $findingType := $findingTypes }}
-        {{- $allIssues := getIssuesFromTestResult $result $findingType }}
+        {{- $allIssues := getIssuesFromTestResult $ $findingType }}
         {{- $openIssues := filterIssuesBySuppressionStatus $allIssues false }}
 
         {{- "\n" }}
@@ -91,41 +92,51 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
             {{- "\n" }}
             {{- template "issueDetails" $issue }}
             {{- "\n" }}
-        {{- end }}
+            {{- end }}
 
-        {{- /* Render suppressed issues if any exist */}}
-        {{- if eq (getValueFromConfig "include-ignores") "true" }}
-            {{- $suppressedIssues := filterIssuesBySuppressionStatus $allIssues true }}
-            {{- if gt ($suppressedIssues | len) 0 }}
-{{ printf "Ignored %s issues: %d\n" (convertTypeToIssueName $findingType) (len $suppressedIssues) | bold }}
+            {{- /* Render suppressed issues if any exist */}}
+            {{- if eq (getValueFromConfig "include-ignores") "true" }}
+                {{- $suppressedIssues := filterIssuesBySuppressionStatus $allIssues true }}
+                {{- if gt ($suppressedIssues | len) 0 }}
+                    {{- "\n" }}
+                    {{- printf "Ignored %s issues: %d\n" (convertTypeToIssueName $findingType) (len $suppressedIssues) | bold }}
 
-                {{- range $issue := $suppressedIssues }}
-                    {{- "\n" }}
-                    {{- template "issueDetails" $issue }}
-                    {{- "\n" }}
-                {{- end }}
+                    {{- range $issue := $suppressedIssues }}
+                        {{- "\n" }}
+                        {{- template "issueDetails" $issue }}
+                        {{- "\n" }}
+                    {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}
+{{- end }}
+
+{{- define "resultFooter" }}
+    {{- "\n" }}
+    {{- /* Render test summary */}}
+    {{- box (renderToString "testSummary" $) }}
+{{- end }}
+
+{{- /* Main template */}}
+{{- define "main" }}
+    {{- range $resultIndex, $result := $.TestResults}}
+        {{- template "resultHeader" $result}}
+        {{- template "resultBody" $result}}
+        {{- template "resultFooter" $result}}
+    {{- end }}
 
     {{- /* Show hint if results are filtered */}}
-	{{- $severityThresholdKey := "severity-threshold"}}
-    {{- if not (eq (getValueFromConfig $severityThresholdKey) "") }}
-    {{ printf "You are currently viewing results with --%s applied.\nTo view all issues, remove the --%s flag" $severityThresholdKey $severityThresholdKey | tip}}
+    {{- $severityThresholdKey := "severity-threshold"}}
+        {{- if not (eq (getValueFromConfig $severityThresholdKey) "") }}
+        {{- "\n" }}
+        {{- printf "You are currently viewing results with --%s applied.\nTo view all issues, remove the --%s flag" $severityThresholdKey $severityThresholdKey | tip}}
     {{- end }}
-    {{- "\n\n" }}
 
-    {{- /* Render test summary */}}
-    {{- box (renderToString "testSummary" $result) }}
-{{- end }}
-
-{{- if ne (getValueFromConfig "include-ignores") "true" }}
-{{- "\n" }}
-{{- tip "To view ignored issues, use the --include-ignores option."}}
-{{- "\n" }}
-{{- end }}
-
-
+    {{- if ne (getValueFromConfig "include-ignores") "true" }}
+        {{- "\n" }}
+        {{- tip "To view ignored issues, use the --include-ignores option."}}
+    {{- end }}
+    {{- "\n" }}
 {{- end }} {{/* end main */}}
 
 {{- template "main" . }}
