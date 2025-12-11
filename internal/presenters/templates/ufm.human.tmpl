@@ -108,8 +108,14 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
         {{- end }}
     {{- end }}
 
+    {{- /* Show hint if results are filtered */}}
+	{{- $severityThresholdKey := "severity-threshold"}}
+    {{- if not (eq (getValueFromConfig $severityThresholdKey) "") }}
+    {{ printf "You are currently viewing results with --%s applied.\nTo view all issues, remove the --%s flag" $severityThresholdKey $severityThresholdKey | tip}}
+    {{- end }}
+    {{- "\n\n" }}
+
     {{- /* Render test summary */}}
-    {{- "\n" }}
     {{- box (renderToString "testSummary" $result) }}
 {{- end }}
 
