@@ -318,6 +318,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	}
 	defaultMap["add"] = add
 	defaultMap["sub"] = sub
+	defaultMap["int"] = toInt
 	defaultMap["reverse"] = reverse
 	defaultMap["join"] = strings.Join
 	defaultMap["formatDatetime"] = formatDatetime
@@ -340,24 +341,33 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 		return value
 	}
-	defaultMap["convertTypeToIssueName"] = func(findingType testapi.FindingType) string {
-		// Map backend finding types to human-friendly issue group names
-		switch findingType {
-		case testapi.FindingTypeSca:
-			return "Security"
-		case testapi.FindingTypeLicense:
-			return "License"
-		case testapi.FindingTypeSast:
-			return "Code"
-		case testapi.FindingTypeDast:
-			return "DAST"
-		case testapi.FindingTypeSecret:
-			return "Secrets"
-		default:
-			return string(findingType)
-		}
+	defaultMap["convertTypeToIssueName"] = convertTypeToIssueName
+	defaultMap["sortAndFilterIssues"] = sortAndFilterIssues(config)
+	defaultMap["determineProductNameFromFindingTypes"] = determineProductNameFromFindingTypes
+
+	return defaultMap
+}
+
+func convertTypeToIssueName(findingType testapi.FindingType) string {
+	// Map backend finding types to human-friendly issue group names
+	switch findingType {
+	case testapi.FindingTypeSca:
+		return "Security"
+	case testapi.FindingTypeLicense:
+		return "License"
+	case testapi.FindingTypeSast:
+		return "Code"
+	case testapi.FindingTypeDast:
+		return "DAST"
+	case testapi.FindingTypeSecret:
+		return "Secrets"
+	default:
+		return string(findingType)
 	}
-	defaultMap["sortAndFilterIssues"] = func(issues []testapi.Issue, isActive bool) []testapi.Issue {
+}
+
+func sortAndFilterIssues(config configuration.Configuration) func(issues []testapi.Issue, isActive bool) []testapi.Issue {
+	return func(issues []testapi.Issue, isActive bool) []testapi.Issue {
 		sorting := FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, config.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
 
 		var filteredIssues []testapi.Issue
@@ -373,45 +383,45 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 		return filteredIssues
 	}
-	defaultMap["int"] = func(v interface{}) int {
-		switch val := v.(type) {
-		case int:
-			return val
-		case int64:
-			return int(val)
-		case float64:
-			return int(val)
-		case float32:
-			return int(val)
-		case string:
-			// Try to parse string as int
-			if i, err := strconv.Atoi(val); err == nil {
-				return i
-			}
+}
+
+func toInt(v interface{}) int {
+	switch val := v.(type) {
+	case int:
+		return val
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	case float32:
+		return int(val)
+	case string:
+		// Try to parse string as int
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
 		}
-		return 0
 	}
-	defaultMap["determineProductNameFromFindingTypes"] = func(findingTypes []testapi.FindingType) string {
-		if slices.Contains(findingTypes, testapi.FindingTypeSca) || slices.Contains(findingTypes, testapi.FindingTypeLicense) {
-			return "Software Composition Analysis"
-		}
+	return 0
+}
 
-		if slices.Contains(findingTypes, testapi.FindingTypeSast) {
-			return "Static code analysis"
-		}
-
-		if slices.Contains(findingTypes, testapi.FindingTypeSecret) {
-			return "Secret Detection"
-		}
-
-		if slices.Contains(findingTypes, testapi.FindingTypeDast) {
-			return "Dynamic Application Security Testing"
-		}
-
-		return "Other"
+func determineProductNameFromFindingTypes(findingTypes []testapi.FindingType) string {
+	if slices.Contains(findingTypes, testapi.FindingTypeSca) || slices.Contains(findingTypes, testapi.FindingTypeLicense) {
+		return "Software Composition Analysis"
 	}
 
-	return defaultMap
+	if slices.Contains(findingTypes, testapi.FindingTypeSast) {
+		return "Static code analysis"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeSecret) {
+		return "Secret Detection"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeDast) {
+		return "Dynamic Application Security Testing"
+	}
+
+	return "Other"
 }
 
 func reverse(v interface{}) []interface{} {
