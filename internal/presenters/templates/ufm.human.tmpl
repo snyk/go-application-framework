@@ -111,7 +111,10 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- $findingTypes := getFindingTypesFromTestResult . }}
     {{- range $findingType := $findingTypes }}
         {{- $allIssues := getIssuesFromTestResult $ $findingType }}
-        {{- $openIssues := sortAndFilterIssues $allIssues false }}
+        {{- $summaries := getSummariesFromIssues $allIssues }}
+        {{- $effectiveSummary := index $summaries "effective" }}
+        {{- $ignoredSummary := index $summaries "ignored" }}
+        {{- $openIssues := getSortedIssuesFromSummary $effectiveSummary }}
 
         {{- "\n" }}
         {{- printf "Open %s issues: %d" (convertTypeToIssueName $findingType) (len $openIssues) | bold }}
@@ -126,7 +129,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 
             {{- /* Render suppressed issues if any exist */}}
             {{- if eq (getValueFromConfig "include-ignores") "true" }}
-                {{- $suppressedIssues := sortAndFilterIssues $allIssues true }}
+                {{- $suppressedIssues := getSortedIssuesFromSummary $ignoredSummary }}
                 {{- if gt ($suppressedIssues | len) 0 }}
                     {{- "\n" }}
                     {{- printf "Ignored %s issues: %d\n" (convertTypeToIssueName $findingType) (len $suppressedIssues) | bold }}

@@ -935,6 +935,45 @@ func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) 
 	return filteredIssues, nil
 }
 
+// IssueSummary extends FindingSummary with the actual issues for better performance.
+// This allows callers to:
+// - Get issues from test results once
+// - Calculate counts once
+// - Sort issues once
+// - Reuse the same data structure across multiple template sections
+// Instead of repeatedly calling conversion and sorting functions.
+type IssueSummary struct {
+	FindingSummary
+	Issues []Issue
+}
+
+// GetSortedIssues returns issues sorted by severity (high to low) and ID
+func (s *IssueSummary) GetSortedIssues(severityOrder []string) []Issue {
+	if s == nil || len(s.Issues) == 0 {
+		return []Issue{}
+	}
+	
+	sorted := make([]Issue, len(s.Issues))
+	copy(sorted, s.Issues)
+	
+	slices.SortFunc(sorted, func(a, b Issue) int {
+		// Sort by severity first
+		aSeverity := strings.ToLower(a.GetSeverity())
+		bSeverity := strings.ToLower(b.GetSeverity())
+		aIdx := slices.Index(severityOrder, aSeverity)
+		bIdx := slices.Index(severityOrder, bSeverity)
+		
+		if aIdx != bIdx {
+			return aIdx - bIdx
+		}
+		
+		// Then by ID for deterministic output
+		return strings.Compare(a.GetID(), b.GetID())
+	})
+	
+	return sorted
+}
+
 func createNewSummary(severities []string) *FindingSummary {
 	initialSeverityCount := map[string]uint32{}
 	for _, severity := range severities {
@@ -949,10 +988,17 @@ func createNewSummary(severities []string) *FindingSummary {
 	}
 }
 
-func GetSummariesFromIssues(issues []Issue) map[string]*FindingSummary {
-	effective := createNewSummary(json_schemas.DEFAULT_SEVERITIES)
-	raw := createNewSummary(json_schemas.DEFAULT_SEVERITIES)
-	ignored := createNewSummary(json_schemas.DEFAULT_SEVERITIES)
+func createNewIssueSummary(severities []string) *IssueSummary {
+	return &IssueSummary{
+		FindingSummary: *createNewSummary(severities),
+		Issues:         []Issue{},
+	}
+}
+
+func GetSummariesFromIssues(issues []Issue) map[string]*IssueSummary {
+	effective := createNewIssueSummary(json_schemas.DEFAULT_SEVERITIES)
+	raw := createNewIssueSummary(json_schemas.DEFAULT_SEVERITIES)
+	ignored := createNewIssueSummary(json_schemas.DEFAULT_SEVERITIES)
 
 	effectiveSeverityCount := (*effective.CountBy)
 	rawSeverityCount := (*raw.CountBy)
@@ -963,12 +1009,16 @@ func GetSummariesFromIssues(issues []Issue) map[string]*FindingSummary {
 		severity := strings.ToLower(issue.GetSeverity())
 
 		raw.Count++
+		raw.Issues = append(raw.Issues, issue)
 		rawSeverityCount["severity"][severity]++
+		
 		if ignore == nil || !ignore.IsActive() {
 			effective.Count++
+			effective.Issues = append(effective.Issues, issue)
 			effectiveSeverityCount["severity"][severity]++
 		} else {
 			ignored.Count++
+			ignored.Issues = append(ignored.Issues, issue)
 			ignoredSeverityCount["severity"][severity]++
 		}
 	}
@@ -977,7 +1027,7 @@ func GetSummariesFromIssues(issues []Issue) map[string]*FindingSummary {
 	raw.CountBy = &rawSeverityCount
 	ignored.CountBy = &ignoredSeverityCount
 
-	return map[string]*FindingSummary{
+	return map[string]*IssueSummary{
 		"effective": effective,
 		"raw":       raw,
 		"ignored":   ignored,

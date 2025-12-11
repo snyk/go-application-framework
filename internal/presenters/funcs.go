@@ -349,6 +349,13 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return json_schemas.DEFAULT_SEVERITIES
 	}
 	defaultMap["getSummariesFromIssues"] = testapi.GetSummariesFromIssues
+	defaultMap["getSortedIssuesFromSummary"] = func(summary *testapi.IssueSummary) []testapi.Issue {
+		if summary == nil {
+			return []testapi.Issue{}
+		}
+		sorting := FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, config.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
+		return summary.GetSortedIssues(sorting)
+	}
 
 	return defaultMap
 }
