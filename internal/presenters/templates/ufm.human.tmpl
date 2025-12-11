@@ -64,6 +64,24 @@
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
   Project path:      {{ $targetDirectory }}
+
+{{- range $findingType := $findingTypes }}
+  {{- $issuesForType := getIssuesFromTestResult $ $findingType }}
+  {{- $summaries := getSummariesFromIssues $issuesForType }}
+  {{- $effectiveSummary := index $summaries "effective" }}
+  {{- $rawSummary := index $summaries "raw" }}
+  {{- $ignoredSummary := index $summaries "ignored" }}
+  {{- $effectiveSeverities := index $effectiveSummary.CountBy "severity" }}
+  {{- $ignoredSeverities := index $ignoredSummary.CountBy "severity" }}
+  {{- $totalIssueCount := $rawSummary.Count }}
+  {{- $openIssueCount := $effectiveSummary.Count }}
+  {{- $ignoredIssueCount := $ignoredSummary.Count }}
+
+  Total {{ convertTypeToIssueName $findingType | toLowerCase }} issues: {{ $totalIssueCount }}
+  {{- if gt $totalIssueCount 0}}
+  Ignored: {{ print $ignoredIssueCount | bold }} [{{- range $severity := getSeverities | reverse }}{{- $ignoredCount := index $ignoredSeverities $severity }}{{- print " " $ignoredCount " " $severity " " | toUpperCase | renderInSeverityColor }}{{- end}}]
+  Open   : {{ print $openIssueCount | bold }} [{{- range $severity := getSeverities | reverse }}{{- $countFound := index $effectiveSeverities $severity }}{{- print " " $countFound " " $severity " " | toUpperCase | renderInSeverityColor }}{{- end}}]{{- end}}
+{{- end}}
 {{- end }} {{/* end testSummary */}}
 
 {{- define "resultHeader" }}

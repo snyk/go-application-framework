@@ -271,6 +271,7 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
 	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
 	fnMap["bold"] = renderBold
@@ -344,6 +345,24 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["convertTypeToIssueName"] = convertTypeToIssueName
 	defaultMap["sortAndFilterIssues"] = sortAndFilterIssues(config)
 	defaultMap["determineProductNameFromFindingTypes"] = determineProductNameFromFindingTypes
+	defaultMap["getSeverities"] = func() []string {
+		return json_schemas.DEFAULT_SEVERITIES
+	}
+	defaultMap["getSummariesFromIssues"] = func(issues []testapi.Issue) map[string]*testapi.FindingSummary {
+		effective, raw, ignored, err := testapi.GetSummariesFromIssues(issues)
+		if err != nil {
+			return map[string]*testapi.FindingSummary{
+				"effective": {Count: 0, CountBy: &map[string]map[string]uint32{"severity": {}}},
+				"raw":       {Count: 0, CountBy: &map[string]map[string]uint32{"severity": {}}},
+				"ignored":   {Count: 0, CountBy: &map[string]map[string]uint32{"severity": {}}},
+			}
+		}
+		return map[string]*testapi.FindingSummary{
+			"effective": effective,
+			"raw":       raw,
+			"ignored":   ignored,
+		}
+	}
 
 	return defaultMap
 }

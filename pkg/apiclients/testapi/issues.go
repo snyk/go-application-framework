@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
 // Data keys for common issue properties (case-insensitive)
@@ -931,4 +933,49 @@ func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) 
 	})
 
 	return filteredIssues, nil
+}
+
+func createNewSummary(severities []string) *FindingSummary {
+	initialSeverityCount := map[string]uint32{}
+	for _, severity := range severities {
+		initialSeverityCount[severity] = 0
+	}
+
+	return &FindingSummary{
+		Count: 0,
+		CountBy: &map[string]map[string]uint32{
+			"severity": initialSeverityCount,
+		},
+	}
+}
+
+func GetSummariesFromIssues(issues []Issue) (effective *FindingSummary, raw *FindingSummary, ignored *FindingSummary, err error) {
+	effective = createNewSummary(json_schemas.DEFAULT_SEVERITIES)
+	raw = createNewSummary(json_schemas.DEFAULT_SEVERITIES)
+	ignored = createNewSummary(json_schemas.DEFAULT_SEVERITIES)
+
+	effectiveSeverityCount := (*effective.CountBy)
+	rawSeverityCount := (*raw.CountBy)
+	ignoredSeverityCount := (*ignored.CountBy)
+
+	for _, issue := range issues {
+		ignore := issue.GetIgnoreDetails()
+		severity := strings.ToLower(issue.GetSeverity())
+
+		raw.Count++
+		rawSeverityCount["severity"][severity]++
+		if ignore == nil || !ignore.IsActive() {
+			effective.Count++
+			effectiveSeverityCount["severity"][severity]++
+		} else {
+			ignored.Count++
+			ignoredSeverityCount["severity"][severity]++
+		}
+	}
+
+	effective.CountBy = &effectiveSeverityCount
+	raw.CountBy = &rawSeverityCount
+	ignored.CountBy = &ignoredSeverityCount
+
+	return effective, raw, ignored, nil
 }
