@@ -32,12 +32,18 @@
    {{- end }}
    {{- $reachability := .GetReachability }}
    {{- $findingType := .GetFindingType }}
-   {{- if eq (printf "%s" $findingType) "license" }}
-   Reachability: Not Applicable
-   {{- else if $reachability }}
-   Reachability: {{ $reachability.Reachability }}
+   {{- if $reachability }}
+    {{- $reachabilityString := "" }}
+    {{- if eq $reachability.Reachability "function" }}
+        {{- $reachabilityString = "Reachable" }}
+    {{- else if eq $reachability.Reachability "no_info" }}
+        {{- $reachabilityString = "No Path Found" }}
+    {{- else }}
+        {{- $reachabilityString = "Not Applicable" }}
+    {{- end }}
+   Reachability: {{ $reachabilityString }}
    {{- else }}
-   Reachability: No Path Found
+   Reachability: Not Applicable
    {{- end }}
 {{- end}} {{/* end issueBody */}}
 
