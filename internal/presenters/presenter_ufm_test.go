@@ -1129,7 +1129,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			actualString := writer.String()
 			assert.NotEmpty(t, actualString)
 			assert.NotEmpty(t, expectedBytes)
-			//assert.Equal(t, string(expectedBytes), actualString)
+			assert.Equal(t, string(expectedBytes), actualString)
 		})
 	}
 

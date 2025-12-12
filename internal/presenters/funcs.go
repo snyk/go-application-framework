@@ -518,5 +518,8 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 		return []testapi.FindingType{"no findings type found"}
 	}
 
+	slices.Sort(findingTypesList)
+	slices.Reverse(findingTypesList)
+
 	return findingTypesList
 }
