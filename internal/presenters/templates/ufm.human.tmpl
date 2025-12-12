@@ -58,6 +58,7 @@
 {{- end }} {{/* end issueDetails */}}
 
 {{- define "testSummary"}}{{ "Test Summary" | bold }}
+{{- "\n" }}
 {{- $metadata := .GetMetadata }}
 {{- $targetDirectory := index $metadata "target-directory" }}
 {{- $findingTypes := getFindingTypesFromTestResult . }}

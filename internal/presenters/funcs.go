@@ -115,16 +115,24 @@ func renderTemplateToString(tmpl *template.Template) func(name string, data inte
 	}
 }
 
-func renderSeverityColor(severity string) string {
-	var style lipgloss.TerminalColor = lipgloss.NoColor{}
-	if strings.Contains(severity, "MEDIUM") {
-		style = lipgloss.AdaptiveColor{Light: "11", Dark: "3"}
-	}
-	if strings.Contains(severity, "HIGH") {
+func renderSeverityColor(input string) string {
+	upperInput := strings.ToUpper(input)
+	var style lipgloss.TerminalColor
+	switch {
+	case strings.Contains(upperInput, "CRITICAL"):
+		// Purple
+		style = lipgloss.AdaptiveColor{Light: "13", Dark: "5"}
+	case strings.Contains(upperInput, "HIGH"):
+		// Red
 		style = lipgloss.AdaptiveColor{Light: "9", Dark: "1"}
+	case strings.Contains(upperInput, "MEDIUM"):
+		// Yellow/Orange
+		style = lipgloss.AdaptiveColor{Light: "11", Dark: "3"}
+	default:
+		style = lipgloss.NoColor{}
 	}
 	severityStyle := lipgloss.NewStyle().Foreground(style)
-	return severityStyle.Render(severity)
+	return severityStyle.Render(input)
 }
 
 func sortFindingBy(path string, order []string, findings []local_models.FindingResource) []local_models.FindingResource {
