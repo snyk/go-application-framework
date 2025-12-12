@@ -430,7 +430,7 @@ func determineProductNameFromFindingTypes(findingTypes []testapi.FindingType) st
 	}
 
 	if slices.Contains(findingTypes, testapi.FindingTypeSast) {
-		return "Static code analysis"
+		return "Static Code Analysis"
 	}
 
 	if slices.Contains(findingTypes, testapi.FindingTypeSecret) {
