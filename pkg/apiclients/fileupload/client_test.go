@@ -182,9 +182,14 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 	})
 
 	t.Run("error handling with better context", func(t *testing.T) {
-		ctx, _, client, dir := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
+		allFiles := []uploadrevision2.LoadedFile{
+			{Path: "README.md", Content: "# Project"},
+		}
+
+		ctx, _, client, dir := setupTest(t, llcfg, allFiles, allowList)
 
 		paths := []string{
+			filepath.Join(dir.Name(), "README.md"),
 			nonexistpath,
 			missingpath,
 		}
