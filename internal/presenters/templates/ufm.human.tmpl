@@ -61,6 +61,9 @@
 {{- "\n" }}
 {{- $metadata := .GetMetadata }}
 {{- $targetDirectory := index $metadata "target-directory" }}
+{{- if not $targetDirectory }}
+{{- $targetDirectory = getValueFromConfig "targetDirectory" }}
+{{- end }}
 {{- $findingTypes := getFindingTypesFromTestResult . }}
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
@@ -87,7 +90,9 @@
 
 {{- define "resultHeader" }}
    {{- $metadata := .GetMetadata }}
+   {{- $testingSubject := getValueFromConfig "targetDirectory" }}
    {{- $targetFile := index $metadata "display-target-file" }}
+   {{- if $targetFile }} {{- $testingSubject = $targetFile }} {{- end }}
    {{- $dependencyCount := index $metadata "dependency-count" }}
    {{- /* Get all open issues, no matter what type */}}
    {{- $issues := getIssuesFromTestResult . }}
@@ -98,7 +103,7 @@
    {{- $depPaths := getData $issue "dependency-paths" }}
    {{- if $depPaths }}{{- $vulnerablePaths = add (len $depPaths) $vulnerablePaths }}{{- end }}
    {{- end }}
-   {{- printf "Testing  (%s) ..." $targetFile | bold }}
+   {{- printf "Testing  (%s) ..." $testingSubject | bold }}
    {{- "\n" }}
 
    {{- if gt (int $dependencyCount) 0 }}
