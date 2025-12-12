@@ -47,7 +47,17 @@ func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input
 	networkAccess := invocationCtx.GetNetworkAccess()
 	ui := invocationCtx.GetUserInterface()
 
-	checker := connectivity.NewChecker(networkAccess, logger, config, ui)
+	// Get additional directories to check from the config
+	var additionalDirs []connectivity.UsedDirectory
+	additionalDirsConfigVal := config.Get("additional-check-dirs")
+	if additionalDirsConfigVal != nil {
+		additionalDirsVal, ok := additionalDirsConfigVal.([]connectivity.UsedDirectory)
+		if ok {
+			additionalDirs = additionalDirsVal
+		}
+	}
+
+	checker := connectivity.NewChecker(networkAccess, logger, config, additionalDirs, ui)
 
 	logger.Info().Msg("Starting Snyk connectivity check")
 
