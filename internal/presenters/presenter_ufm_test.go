@@ -1107,6 +1107,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			lipgloss.SetColorProfile(termenv.TrueColor)
+			t.Log(lipgloss.ColorProfile())
 			expectedBytes, err := os.ReadFile(tc.expectedPath)
 			assert.NoError(t, err)
 
