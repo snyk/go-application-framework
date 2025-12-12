@@ -46,10 +46,10 @@ func (f *FakeClient) CreateRevisionFromDir(ctx context.Context, dirPath string) 
 		return UploadResult{}, fmt.Errorf("the provided path is not a directory: %s", dirPath)
 	}
 
-	return f.CreateRevisionFromPaths(ctx, []string{dirPath})
+	return f.CreateRevisionFromPaths(ctx, []string{dirPath}, dirPath)
 }
 
-func (f *FakeClient) CreateRevisionFromFile(ctx context.Context, filePath string) (UploadResult, error) {
+func (f *FakeClient) CreateRevisionFromFile(ctx context.Context, filePath string, rootDir string) (UploadResult, error) {
 	if f.err != nil {
 		return UploadResult{}, f.err
 	}
@@ -63,16 +63,34 @@ func (f *FakeClient) CreateRevisionFromFile(ctx context.Context, filePath string
 		return UploadResult{}, fmt.Errorf("the provided path is not a regular file: %s", filePath)
 	}
 
-	return f.CreateRevisionFromPaths(ctx, []string{filePath})
+	return f.CreateRevisionFromPaths(ctx, []string{filePath}, rootDir)
 }
 
-func (f *FakeClient) CreateRevisionFromPaths(ctx context.Context, paths []string) (UploadResult, error) {
+func (f *FakeClient) CreateRevisionFromPaths(ctx context.Context, paths []string, rootDir string) (UploadResult, error) {
 	if f.err != nil {
 		return UploadResult{}, f.err
 	}
 
 	revID := uuid.New()
 	f.revisions[revID] = append([]string(nil), paths...)
+	f.uploadCount++
+	f.lastRevision = revID
+
+	return UploadResult{RevisionID: revID, UploadedFilesCount: len(paths)}, nil
+}
+
+func (f *FakeClient) CreateRevisionFromChan(ctx context.Context, paths <-chan string, rootDir string) (UploadResult, error) {
+	if f.err != nil {
+		return UploadResult{}, f.err
+	}
+
+	files := []string{}
+	for p := range paths {
+		files = append(files, p)
+	}
+
+	revID := uuid.New()
+	f.revisions[revID] = files
 	f.uploadCount++
 	f.lastRevision = revID
 
