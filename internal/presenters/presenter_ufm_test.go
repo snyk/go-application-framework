@@ -1109,7 +1109,6 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			expectedBytes, err := os.ReadFile(tc.expectedPath)
 			assert.NoError(t, err)
 
