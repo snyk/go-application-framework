@@ -1,0 +1,204 @@
+{{- define "issueHeader"}}
+ {{- $severity := .GetEffectiveSeverity }}
+ {{- $title := .GetTitle }}
+ {{- $prefix := "✗" }}
+ {{- $ignoreDetails := .GetIgnoreDetails }}
+    {{- if $ignoreDetails }}
+        {{- $ignoreStatus := $ignoreDetails.GetStatus }}
+        {{- if eq $ignoreStatus "ignored" }}{{- $prefix = "! [IGNORED]" }}
+        {{- else if eq $ignoreStatus "pending_ignore_approval" }}{{- $prefix = "! [PENDING IGNORE...]" }}
+        {{- end -}}
+    {{- end -}}
+{{- printf " %s %s %s" $prefix (printf "[%s]" $severity | renderInSeverityColor) ($title | bold) -}}
+{{- end }} {{/* end issueHeader */}}
+
+{{- define "issueBody" }}
+   Finding ID: {{ .GetID }}
+    {{- $findingType := .GetFindingType }}
+    {{- if or (eq $findingType "license") (eq $findingType "sca") }}
+   Info: https://snyk.io/vuln/{{ .GetID }}
+    {{- else }}
+   Info: {{ .GetDescription }}
+	{{- end }}
+   {{- $componentName := getIssueMetadata . "component-name" }}
+   {{- if $componentName }}
+   Introduced by: {{ $componentName }}
+   {{- end }}
+   {{- $depPaths := getIssueMetadata . "dependency-paths" }}
+   {{- if $depPaths }}
+   {{- if gt (len $depPaths) 0 }}
+   {{- $path := index $depPaths 0 }}
+   Introduced through:{{- range $idx, $pkg := $path }} {{if $idx}}> {{end}}{{ $pkg.Name }}@{{ $pkg.Version }}{{- end }}
+   {{- end }}
+   {{- end }}
+   {{- range $location := .GetSourceLocations}}
+        {{- if $location}}
+   Path: {{$location.FilePath}}, line {{$location.FromLine}}{{- if $location.ToLine}} to {{$location.ToLine}}{{- end}}
+        {{- end }}
+   {{- end }}
+   {{- $riskScore := .GetRiskScore }}
+   {{- if $riskScore }}
+   Risk Score: {{ $riskScore }}
+   {{- end }}
+   {{- $reachability := .GetReachability }}
+   {{- $findingType := .GetFindingType }}
+   {{- if $reachability }}
+    {{- $reachabilityString := "" }}
+    {{- if eq $reachability.Reachability "function" }}
+        {{- $reachabilityString = "Reachable" }}
+    {{- else if eq $reachability.Reachability "no_info" }}
+        {{- $reachabilityString = "No Path Found" }}
+    {{- else }}
+        {{- $reachabilityString = "Not Applicable" }}
+    {{- end }}
+   Reachability: {{ $reachabilityString }}
+   {{- else }}
+   Reachability: Not Applicable
+   {{- end }}
+
+    {{- $ignoreDetails := .GetIgnoreDetails}}
+    {{- if $ignoreDetails }}
+        {{- $ignoreStatus := $ignoreDetails.GetStatus }}
+        {{- if or (eq $ignoreStatus "ignored") (eq $ignoreStatus "pending_ignore_approval") }}
+
+   Expiration: {{- if $ignoreDetails.GetExpiresAt }} {{ $ignoreDetails.GetExpiresAt.Format "January 02, 2006" }} {{- else }} never {{- end }}
+   Category:   {{ $ignoreDetails.GetIgnoreReasonType }}
+   Ignored on: {{ $ignoreDetails.GetCreatedAt.Format "January 02, 2006" }}
+{{- if $ignoreDetails.GetIgnoredBy }}
+   Ignored by: {{ $ignoreDetails.GetIgnoredBy.Name }}
+{{- end }}
+{{- if $ignoreDetails.GetJustification }}
+   Reason:     {{ $ignoreDetails.GetJustification }}
+{{- end }}
+    {{- end}}
+    {{- end}}
+{{- end}} {{/* end issueBody */}}
+
+{{- define "issueDetails" }}
+{{- template "issueHeader" . }}
+{{- template "issueBody" . }}
+{{- end }} {{/* end issueDetails */}}
+
+{{- define "testSummary"}}{{ "Test Summary" | bold }}
+{{- "\n" }}
+{{- $metadata := .GetMetadata }}
+{{- $targetDirectory := index $metadata "target-directory" }}
+{{- if not $targetDirectory }}
+{{- $targetDirectory = getValueFromConfig "targetDirectory" }}
+{{- end }}
+{{- $findingTypes := getFindingTypesFromTestResult . }}
+  Organization:      {{ getValueFromConfig "internal_org_slug" }}
+  Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
+  Project path:      {{ $targetDirectory }}
+
+{{- range $findingType := $findingTypes }}
+  {{- $issuesForType := getIssuesFromTestResult $ $findingType }}
+  {{- $summaries := getSummariesFromIssues $issuesForType }}
+  {{- $effectiveSummary := index $summaries "effective" }}
+  {{- $rawSummary := index $summaries "raw" }}
+  {{- $ignoredSummary := index $summaries "ignored" }}
+  {{- $effectiveSeverities := index $effectiveSummary.CountBy "severity" }}
+  {{- $ignoredSeverities := index $ignoredSummary.CountBy "severity" }}
+  {{- $totalIssueCount := $rawSummary.Count }}
+  {{- $openIssueCount := $effectiveSummary.Count }}
+  {{- $ignoredIssueCount := $ignoredSummary.Count }}
+
+  Total {{ convertTypeToIssueName $findingType | toLowerCase }} issues: {{ $totalIssueCount }}
+  {{- if gt $totalIssueCount 0}}
+  Ignored: {{ print $ignoredIssueCount | bold }} [{{- range $severity := getSeverities | reverse }}{{- $ignoredCount := index $ignoredSeverities $severity }}{{- print " " $ignoredCount " " $severity " " | renderInSeverityColor }}{{- end}}]
+  Open   : {{ print $openIssueCount | bold }} [{{- range $severity := getSeverities | reverse }}{{- $countFound := index $effectiveSeverities $severity }}{{- print " " $countFound " " $severity " " | renderInSeverityColor }}{{- end}}]{{- end}}
+{{- end}}
+{{- end }} {{/* end testSummary */}}
+
+{{- define "resultHeader" }}
+   {{- $metadata := .GetMetadata }}
+   {{- $testingSubject := getValueFromConfig "targetDirectory" }}
+   {{- $targetFile := index $metadata "display-target-file" }}
+   {{- if $targetFile }} {{- $testingSubject = $targetFile }} {{- end }}
+   {{- $dependencyCount := index $metadata "dependency-count" }}
+   {{- /* Get all open issues, no matter what type */}}
+   {{- $issues := getIssuesFromTestResult . }}
+   {{- $openIssues := sortAndFilterIssues $issues false }}
+   {{- /* Count vulnerable paths */}}
+   {{- $vulnerablePaths := 0 }}
+   {{- range $issue := $openIssues }}
+   {{- $depPaths := getIssueMetadata $issue "dependency-paths" }}
+   {{- if $depPaths }}{{- $vulnerablePaths = add (len $depPaths) $vulnerablePaths }}{{- end }}
+   {{- end }}
+   {{- printf "Testing  (%s) ..." $testingSubject | bold }}
+   {{- "\n" }}
+
+   {{- if gt (int $dependencyCount) 0 }}
+Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $openIssues }} issues, {{ $vulnerablePaths }} vulnerable paths.
+{{- "\n" }}
+{{- end }}
+{{- end }}
+
+{{- define "resultBody" }}
+    {{- /* Render Issue details per finding type */}}
+    {{- $findingTypes := getFindingTypesFromTestResult . }}
+    {{- range $findingType := $findingTypes }}
+        {{- $allIssues := getIssuesFromTestResult $ $findingType }}
+        {{- $summaries := getSummariesFromIssues $allIssues }}
+        {{- $effectiveSummary := index $summaries "effective" }}
+        {{- $ignoredSummary := index $summaries "ignored" }}
+        {{- $openIssues := getSortedIssuesFromSummary $effectiveSummary }}
+
+        {{- "\n" }}
+        {{- printf "Open %s issues: %d" (convertTypeToIssueName $findingType) (len $openIssues) | bold }}
+        {{- "\n" }}
+
+        {{- /* Render open issues */}}
+        {{- range $issue := $openIssues }}
+            {{- "\n" }}
+            {{- template "issueDetails" $issue }}
+            {{- "\n" }}
+            {{- end }}
+
+            {{- /* Render suppressed issues if any exist */}}
+            {{- if eq (getValueFromConfig "include-ignores") "true" }}
+                {{- $suppressedIssues := getSortedIssuesFromSummary $ignoredSummary }}
+                {{- if gt ($suppressedIssues | len) 0 }}
+                    {{- "\n" }}
+                    {{- printf "Ignored %s issues: %d\n" (convertTypeToIssueName $findingType) (len $suppressedIssues) | bold }}
+
+                    {{- range $issue := $suppressedIssues }}
+                        {{- "\n" }}
+                        {{- template "issueDetails" $issue }}
+                        {{- "\n" }}
+                    {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "resultFooter" }}
+    {{- "\n" }}
+    {{- /* Render test summary */}}
+    {{- box (renderToString "testSummary" $) }}
+{{- end }}
+
+{{- /* Main template */}}
+{{- define "main" }}
+    {{- /* Render each result */}}
+    {{- range $resultIndex, $result := $.TestResults}}
+        {{- template "resultHeader" $result}}
+        {{- template "resultBody" $result}}
+        {{- template "resultFooter" $result}}
+    {{- end }}
+
+    {{- /* Show hint if results are filtered */}}
+    {{- $severityThresholdKey := "severity-threshold"}}
+        {{- if not (eq (getValueFromConfig $severityThresholdKey) "") }}
+        {{- "\n" }}
+        {{- printf "You are currently viewing results with --%s applied.\nTo view all issues, remove the --%s flag" $severityThresholdKey $severityThresholdKey | tip}}
+    {{- end }}
+
+    {{- if ne (getValueFromConfig "include-ignores") "true" }}
+        {{- "\n" }}
+        {{- tip "To view ignored issues, use the --include-ignores option."}}
+    {{- end }}
+    {{- "\n" }}
+{{- end }} {{/* end main */}}
+
+{{- template "main" . }}

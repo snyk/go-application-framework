@@ -16,6 +16,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils"
@@ -114,16 +115,24 @@ func renderTemplateToString(tmpl *template.Template) func(name string, data inte
 	}
 }
 
-func renderSeverityColor(severity string) string {
-	var style lipgloss.TerminalColor = lipgloss.NoColor{}
-	if strings.Contains(severity, "MEDIUM") {
-		style = lipgloss.AdaptiveColor{Light: "11", Dark: "3"}
-	}
-	if strings.Contains(severity, "HIGH") {
+func renderSeverityColor(input string) string {
+	upperInput := strings.ToUpper(input)
+	var style lipgloss.TerminalColor
+	switch {
+	case strings.Contains(upperInput, "CRITICAL"):
+		// Purple
+		style = lipgloss.AdaptiveColor{Light: "13", Dark: "5"}
+	case strings.Contains(upperInput, "HIGH"):
+		// Red
 		style = lipgloss.AdaptiveColor{Light: "9", Dark: "1"}
+	case strings.Contains(upperInput, "MEDIUM"):
+		// Yellow/Orange
+		style = lipgloss.AdaptiveColor{Light: "11", Dark: "3"}
+	default:
+		style = lipgloss.NoColor{}
 	}
 	severityStyle := lipgloss.NewStyle().Foreground(style)
-	return severityStyle.Render(severity)
+	return severityStyle.Render(upperInput)
 }
 
 func sortFindingBy(path string, order []string, findings []local_models.FindingResource) []local_models.FindingResource {
@@ -270,6 +279,8 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap := template.FuncMap{}
 	fnMap["box"] = func(s string) string { return boxStyle.Render(s) }
 	fnMap["toUpperCase"] = strings.ToUpper
+	fnMap["toLowerCase"] = strings.ToLower
+	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
 	fnMap["bold"] = renderBold
 	fnMap["tip"] = func(s string) string {
@@ -316,6 +327,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	}
 	defaultMap["add"] = add
 	defaultMap["sub"] = sub
+	defaultMap["int"] = toInt
 	defaultMap["reverse"] = reverse
 	defaultMap["join"] = strings.Join
 	defaultMap["formatDatetime"] = formatDatetime
@@ -328,11 +340,108 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType testapi.FindingType) []testapi.Issue {
+	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
+	}
+	defaultMap["getIssueMetadata"] = func(issue testapi.Issue, key string) interface{} {
+		value, found := issue.GetData(key)
+		if !found {
+			return nil
+		}
+		return value
+	}
+	defaultMap["convertTypeToIssueName"] = convertTypeToIssueName
+	defaultMap["sortAndFilterIssues"] = sortAndFilterIssues(config)
+	defaultMap["determineProductNameFromFindingTypes"] = determineProductNameFromFindingTypes
+	defaultMap["getSeverities"] = func() []string {
+		return json_schemas.DEFAULT_SEVERITIES
+	}
+	defaultMap["getSummariesFromIssues"] = testapi.GetSummariesFromIssues
+	defaultMap["getSortedIssuesFromSummary"] = func(summary *testapi.IssueSummary) []testapi.Issue {
+		if summary == nil {
+			return []testapi.Issue{}
+		}
+		sorting := FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, config.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
+		return summary.GetSortedIssues(sorting)
 	}
 
 	return defaultMap
+}
+
+func convertTypeToIssueName(findingType testapi.FindingType) string {
+	// Map backend finding types to human-friendly issue group names
+	switch findingType {
+	case testapi.FindingTypeSca:
+		return "Security"
+	case testapi.FindingTypeLicense:
+		return "License"
+	case testapi.FindingTypeSast:
+		return "Code"
+	case testapi.FindingTypeDast:
+		return "DAST"
+	case testapi.FindingTypeSecret:
+		return "Secrets"
+	default:
+		return string(findingType)
+	}
+}
+
+func sortAndFilterIssues(config configuration.Configuration) func(issues []testapi.Issue, isActive bool) []testapi.Issue {
+	return func(issues []testapi.Issue, isActive bool) []testapi.Issue {
+		sorting := FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, config.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
+
+		var filteredIssues []testapi.Issue
+		for _, severity := range sorting {
+			for _, issue := range issues {
+				ignoreDetails := issue.GetIgnoreDetails()
+				hasActiveIgnore := ignoreDetails != nil && ignoreDetails.IsActive()
+
+				if hasActiveIgnore == isActive && issue.GetEffectiveSeverity() == severity {
+					filteredIssues = append(filteredIssues, issue)
+				}
+			}
+		}
+		return filteredIssues
+	}
+}
+
+func toInt(v interface{}) int {
+	switch val := v.(type) {
+	case int:
+		return val
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	case float32:
+		return int(val)
+	case string:
+		// Try to parse string as int
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return 0
+}
+
+func determineProductNameFromFindingTypes(findingTypes []testapi.FindingType) string {
+	if slices.Contains(findingTypes, testapi.FindingTypeSca) || slices.Contains(findingTypes, testapi.FindingTypeLicense) {
+		return "Software Composition Analysis"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeSast) {
+		return "Static Code Analysis"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeSecret) {
+		return "Secret Detection"
+	}
+
+	if slices.Contains(findingTypes, testapi.FindingTypeDast) {
+		return "Dynamic Application Security Testing"
+	}
+
+	return "Other"
 }
 
 func reverse(v interface{}) []interface{} {
@@ -389,22 +498,28 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 
 func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
 	findingTypes := map[testapi.FindingType]bool{}
-	findings, _, err := testResults.Findings(context.Background())
+
+	// todo: this is potentially an expensive intermediate conversion to issues, which we could cache or optimize differently.
+	issues, err := testapi.NewIssuesFromTestResult(context.Background(), testResults)
 	if err != nil {
 		return []testapi.FindingType{}
 	}
 
-	for _, findings := range findings {
-		if _, ok := findingTypes[findings.Attributes.FindingType]; ok {
+	for _, i := range issues {
+		t := i.GetFindingType()
+		if _, ok := findingTypes[t]; ok {
 			continue
 		}
-		findingTypes[findings.Attributes.FindingType] = true
+		findingTypes[t] = true
 	}
 
 	findingTypesList := slices.Collect(maps.Keys(findingTypes))
 	if len(findingTypesList) == 0 {
 		return []testapi.FindingType{"no findings type found"}
 	}
+
+	slices.Sort(findingTypesList)
+	slices.Reverse(findingTypesList)
 
 	return findingTypesList
 }
