@@ -96,7 +96,7 @@
    {{- $vulnerablePaths := 0 }}
    {{- range $issue := $openIssues }}
    {{- $depPaths := getData $issue "dependency-paths" }}
-   {{- $vulnerablePaths = add (len $depPaths) $vulnerablePaths }}
+   {{- if $depPaths }}{{- $vulnerablePaths = add (len $depPaths) $vulnerablePaths }}{{- end }}
    {{- end }}
    {{- printf "Testing  (%s) ..." $targetFile | bold }}
    {{- "\n" }}
