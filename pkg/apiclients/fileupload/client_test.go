@@ -200,6 +200,21 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		assert.ErrorAs(t, err, &fileAccessErr)
 		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
 	})
+
+	t.Run("non-existent paths only", func(t *testing.T) {
+		ctx, _, client, dir := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
+
+		paths := []string{
+			nonexistpath,
+			missingpath,
+		}
+		_, err := client.CreateRevisionFromPaths(ctx, paths, dir.Name())
+		require.Error(t, err)
+
+		var fileAccessErr *uploadrevision2.FileAccessError
+		assert.ErrorAs(t, err, &fileAccessErr)
+		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
+	})
 }
 
 func Test_CreateRevisionFromDir(t *testing.T) {
@@ -708,6 +723,23 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		var fileAccessErr *uploadrevision2.FileAccessError
 		assert.ErrorAs(t, err, &fileAccessErr)
 		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
+	})
+
+	t.Run("only non-existent files", func(t *testing.T) {
+		ctx, _, client, dir := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
+
+		paths := make(chan string)
+		go func() {
+			defer close(paths)
+			paths <- missingpath
+			paths <- nonexistpath
+		}()
+
+		_, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.Error(t, err)
+		var fileAccessErr *uploadrevision2.FileAccessError
+		assert.ErrorAs(t, err, &fileAccessErr)
+		assert.Equal(t, missingpath, fileAccessErr.FilePath)
 	})
 }
 
