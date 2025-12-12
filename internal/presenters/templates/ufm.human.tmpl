@@ -55,6 +55,23 @@
    {{- else }}
    Reachability: Not Applicable
    {{- end }}
+
+    {{- $ignoreDetails := .GetIgnoreDetails}}
+    {{- if $ignoreDetails }}
+        {{- $ignoreStatus := $ignoreDetails.GetStatus }}
+        {{- if or (eq $ignoreStatus "ignored") (eq $ignoreStatus "pending_ignore_approval") }}
+
+   Expiration: {{- if $ignoreDetails.GetExpiresAt }} {{ $ignoreDetails.GetExpiresAt.Format "January 02, 2006" }} {{- else }} never {{- end }}
+   Category:   {{ $ignoreDetails.GetIgnoreReasonType }}
+   Ignored on: {{ $ignoreDetails.GetCreatedAt.Format "January 02, 2006" }}
+{{- if $ignoreDetails.GetIgnoredBy }}
+   Ignored by: {{ $ignoreDetails.GetIgnoredBy.Name }}
+{{- end }}
+{{- if $ignoreDetails.GetJustification }}
+   Reason:     {{ $ignoreDetails.GetJustification }}
+{{- end }}
+    {{- end}}
+    {{- end}}
 {{- end}} {{/* end issueBody */}}
 
 {{- define "issueDetails" }}
