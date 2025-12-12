@@ -197,6 +197,10 @@ func (c *HTTPClient) addPathsToRevision(
 
 	for batchResult, err := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), filters...) {
 		if err != nil {
+			// make sure to close all previously open files if an error occurs
+			if batchResult != nil && batchResult.batch != nil {
+				batchResult.batch.closeRemainingFiles()
+			}
 			return res, fmt.Errorf("failed to batch files: %w", err)
 		}
 
