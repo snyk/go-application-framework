@@ -115,6 +115,114 @@ func Test_CreateRevisionFromPaths(t *testing.T) {
 		assert.Contains(t, uploadedPaths, "README.md")
 	})
 
+	t.Run("batch processing of multiple files", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			files         []uploadrevision2.LoadedFile
+			inputPaths    []string // Relative to the temp dir created in setup
+			expectedPaths []string // The paths expected in the sealed revision
+		}{
+			{
+				name: "Deeply nested common root",
+				// All files are in a/b/c/. The root should be a/b/c,
+				// resulting in a flat upload relative to that deep directory.
+				files: []uploadrevision2.LoadedFile{
+					{Path: "a/b/c/file1.txt", Content: "1"},
+					{Path: "a/b/c/file2.txt", Content: "2"},
+				},
+				inputPaths: []string{
+					"a/b/c/file1.txt",
+					"a/b/c/file2.txt",
+				},
+				expectedPaths: []string{
+					"file1.txt",
+					"file2.txt",
+				},
+			},
+			{
+				name: "Divergent subdirectories (The 'Y' shape)",
+				// Files are in different subfolders.
+				// The common root moves up to the parent and structure must be preserved.
+				files: []uploadrevision2.LoadedFile{
+					{Path: "frontend/ui.js", Content: "js"},
+					{Path: "backend/api.go", Content: "go"},
+				},
+				inputPaths: []string{
+					"frontend/ui.js",
+					"backend/api.go",
+				},
+				expectedPaths: []string{
+					"frontend/ui.js",
+					"backend/api.go",
+				},
+			},
+			{
+				name: "Name collision in different folders",
+				// Verifies we don't accidentally overwrite files with the same name.
+				files: []uploadrevision2.LoadedFile{
+					{Path: "v1/config.yaml", Content: "v1"},
+					{Path: "v2/config.yaml", Content: "v2"},
+				},
+				inputPaths: []string{
+					"v1/config.yaml",
+					"v2/config.yaml",
+				},
+				expectedPaths: []string{
+					"v1/config.yaml",
+					"v2/config.yaml",
+				},
+			},
+			{
+				name: "Accordion depth (Shallow and Deep mixed)",
+				// One file is shallow, one is deep. Common root is the shallow parent.
+				files: []uploadrevision2.LoadedFile{
+					{Path: "root.txt", Content: "root"},
+					{Path: "deep/dir/nested.txt", Content: "nested"},
+				},
+				inputPaths: []string{
+					"root.txt",
+					"deep/dir/nested.txt",
+				},
+				expectedPaths: []string{
+					"root.txt",
+					"deep/dir/nested.txt",
+				},
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				ctx, fakeSealableClient, client, dir := setupTest(t, llcfg, tc.files, allowList)
+
+				// Construct absolute paths from the relative input paths
+				absPaths := make([]string, len(tc.inputPaths))
+				for i, p := range tc.inputPaths {
+					absPaths[i] = filepath.Join(dir.Name(), p)
+				}
+
+				res, err := client.CreateRevisionFromPaths(ctx, absPaths)
+				require.NoError(t, err)
+
+				uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
+				require.NoError(t, err)
+				require.Len(t, uploadedFiles, len(tc.expectedPaths))
+
+				// Normalize paths to forward slashes for consistent assertion map
+				uploadedSet := make(map[string]bool)
+				for _, f := range uploadedFiles {
+					uploadedSet[filepath.ToSlash(f.Path)] = true
+				}
+
+				for _, want := range tc.expectedPaths {
+					// Ensure the test expectation itself is normalized
+					normalizedWant := filepath.ToSlash(want)
+					assert.Truef(t, uploadedSet[normalizedWant],
+						"Expected path '%s' not found in revision. Got: %v", normalizedWant, uploadedSet)
+				}
+			})
+		}
+	})
+
 	t.Run("error handling with better context", func(t *testing.T) {
 		ctx, _, client, _ := setupTest(t, llcfg, []uploadrevision2.LoadedFile{}, allowList)
 
