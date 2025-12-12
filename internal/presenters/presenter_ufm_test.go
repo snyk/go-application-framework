@@ -1090,6 +1090,9 @@ func createDependencyPathEvidence(tb testing.TB, packageName, packageVersion str
 func Test_UfmPresenter_HumanReadable(t *testing.T) {
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 
+	lipgloss.SetHasDarkBackground(true)
+	lipgloss.SetColorProfile(termenv.TrueColor)
+
 	testCases := []struct {
 		name               string
 		expectedPath       string
@@ -1106,8 +1109,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			lipgloss.SetHasDarkBackground(true)
-			lipgloss.SetColorProfile(termenv.TrueColor)
+
 			expectedBytes, err := os.ReadFile(tc.expectedPath)
 			assert.NoError(t, err)
 
