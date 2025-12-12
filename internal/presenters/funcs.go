@@ -132,7 +132,7 @@ func renderSeverityColor(input string) string {
 		style = lipgloss.NoColor{}
 	}
 	severityStyle := lipgloss.NewStyle().Foreground(style)
-	return severityStyle.Render(input)
+	return severityStyle.Render(upperInput)
 }
 
 func sortFindingBy(path string, order []string, findings []local_models.FindingResource) []local_models.FindingResource {
