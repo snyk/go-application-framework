@@ -31,6 +31,11 @@
    Introduced through:{{- range $idx, $pkg := $path }} {{if $idx}}> {{end}}{{ $pkg.Name }}@{{ $pkg.Version }}{{- end }}
    {{- end }}
    {{- end }}
+   {{- range $location := .GetSourceLocations}}
+        {{- if $location}}
+   Path: {{$location.FilePath}}, line {{$location.FromLine}}{{- if $location.ToLine}} to {{$location.ToLine}}{{- end}}
+        {{- end }}
+   {{- end }}
    {{- $riskScore := .GetRiskScore }}
    {{- if $riskScore }}
    Risk Score: {{ $riskScore }}
