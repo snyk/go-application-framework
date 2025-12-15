@@ -54,7 +54,9 @@
 					}
 				},
 			"results": [
-				{{- $targetFile := index $result.GetMetadata "display-target-file" }}
+				{{- $displayTargetFile := index $result.GetMetadata "display-target-file" }}
+				{{- $targetFile := "" }}
+				{{- if $displayTargetFile }} {{- $targetFile = $displayTargetFile }} {{- end }}
 				{{- range $index, $issue := $issues }}
 				{{- $location := buildLocationFromIssue $issue $targetFile }}
 				{{- $physicalLoc := index $location "physicalLocation" }}
