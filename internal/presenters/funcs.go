@@ -251,13 +251,14 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["SeverityToSarifLevel"] = func(s local_models.TypesFindingRatingSeverityValue) string {
 		return sarif.SeverityToSarifLevel(string(s))
 	}
-	fnMap["getAutomationDetailsId"] = func(projectName string, testType string) string {
+	fnMap["getAutomationDetailsId"] = func(projectName string, index int, testType string) string {
 		driverName := sarif.ConvertTypeToDriverName(testType)
 		driverName = strings.TrimSpace(strings.Replace(driverName, "Snyk", "", 1))
 
 		if projectName != "" {
 			projectName = projectName + "/"
 		}
+		projectName = projectName + strconv.Itoa(index) + "/"
 		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
 	fnMap["convertTypeToDriverName"] = sarif.ConvertTypeToDriverName

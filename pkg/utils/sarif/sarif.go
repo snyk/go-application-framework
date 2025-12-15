@@ -134,6 +134,8 @@ func ConvertTypeToDriverName(s string) string {
 		return "Snyk Container"
 	case "iac":
 		return "Snyk IaC"
+	case "secret":
+		return "Snyk Secret"
 	default:
 		return "Snyk Open Source"
 	}
