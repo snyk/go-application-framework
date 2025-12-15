@@ -502,17 +502,7 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		"startLine": 1,
 	}
 
-	var packageName, packageVersion string
-	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
-		if str, ok := val.(string); ok {
-			packageName = str
-		}
-	}
-	if val, ok := issue.GetData(testapi.DataKeyComponentVersion); ok {
-		if str, ok := val.(string); ok {
-			packageVersion = str
-		}
-	}
+	packageName, packageVersion := getPackageNameAndVersionFromIssue(issue)
 
 	// Try to extract actual file path and package version from locations
 	if finding.Attributes != nil && len(finding.Attributes.Locations) > 0 && uri == "" {
@@ -536,12 +526,7 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 
 		pkgLoc, err := loc.AsPackageLocation()
 		if err == nil {
-			if pkgLoc.Package.Name != "" {
-				packageName = pkgLoc.Package.Name
-			}
-			if pkgLoc.Package.Version != "" {
-				packageVersion = pkgLoc.Package.Version
-			}
+			packageName, packageVersion = getPackageNameAndVersionFromPackageLocation(pkgLoc)
 		}
 	}
 
@@ -563,6 +548,30 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 	}
 
 	return location
+}
+
+func getPackageNameAndVersionFromIssue(issue testapi.Issue) (packageName, packageVersion string) {
+	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
+		if str, ok := val.(string); ok {
+			packageName = str
+		}
+	}
+	if val, ok := issue.GetData(testapi.DataKeyComponentVersion); ok {
+		if str, ok := val.(string); ok {
+			packageVersion = str
+		}
+	}
+	return packageName, packageVersion
+}
+
+func getPackageNameAndVersionFromPackageLocation(pkgLoc testapi.PackageLocation) (packageName, packageVersion string) {
+	if pkgLoc.Package.Name != "" {
+		packageName = pkgLoc.Package.Name
+	}
+	if pkgLoc.Package.Version != "" {
+		packageVersion = pkgLoc.Package.Version
+	}
+	return packageName, packageVersion
 }
 
 // BuildFixes extracts fix information from a finding's relationship data
