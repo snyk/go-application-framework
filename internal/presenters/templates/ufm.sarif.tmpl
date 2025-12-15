@@ -82,9 +82,18 @@
 									"uri": {{ getQuotedString (index $artifactLocation "uri") }}
 								},
 								"region": {
-									"startLine": {{ index $region "startLine" }}
+									"startLine": {{ index $region "startLine" }}{{if index $region "startColumn"}},{{end}}
+									{{- if index $region "startColumn" }}
+									"startColumn": {{ index $region "startColumn" }}{{if index $region "endLine"}},{{end}}
+									{{- end }}
+									{{- if index $region "endLine" }}
+									"endLine": {{ index $region "endLine" }}{{if index $region "endColumn"}},{{end}}
+									{{- end }}
+									{{- if index $region "endColumn" }}
+									"endColumn": {{ index $region "endColumn" }}
+									{{- end }}
 								}
-							},
+							}{{if $logicalLocs}},
 							"logicalLocations": [
 								{{- range $logLoc := $logicalLocs }}
 								{
@@ -92,6 +101,7 @@
 								}
 								{{- end }}
 							]
+							{{- end }}
 						}
 						{{- end }}
 					]

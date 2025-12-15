@@ -498,7 +498,10 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 
 	// Default to line 1 for manifest files
 	uri := targetFile
-	startLine := 1
+	region := map[string]interface{}{
+		"startLine": 1,
+	}
+
 	var packageName, packageVersion string
 	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
 		if str, ok := val.(string); ok {
@@ -519,10 +522,18 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		sourceLoc, err := loc.AsSourceLocation()
 		if err == nil && sourceLoc.FilePath != "" {
 			uri = sourceLoc.FilePath
-			startLine = sourceLoc.FromLine
+			region["startLine"] = sourceLoc.FromLine
+			if sourceLoc.FromColumn != nil {
+				region["startColumn"] = *sourceLoc.FromColumn
+			}
+			if sourceLoc.ToLine != nil {
+				region["endLine"] = *sourceLoc.ToLine
+			}
+			if sourceLoc.ToColumn != nil {
+				region["endColumn"] = *sourceLoc.ToColumn
+			}
 		}
 
-		// Extract package info from PackageLocation if available
 		pkgLoc, err := loc.AsPackageLocation()
 		if err == nil {
 			if pkgLoc.Package.Name != "" {
@@ -534,21 +545,24 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		}
 	}
 
-	return map[string]interface{}{
+	location := map[string]interface{}{
 		"physicalLocation": map[string]interface{}{
 			"artifactLocation": map[string]interface{}{
 				"uri": uri,
 			},
-			"region": map[string]interface{}{
-				"startLine": startLine,
-			},
+			"region": region,
 		},
-		"logicalLocations": []interface{}{
+	}
+
+	if packageName != "" || packageVersion != "" {
+		location["logicalLocations"] = []interface{}{
 			map[string]interface{}{
 				"fullyQualifiedName": fmt.Sprintf("%s@%s", packageName, packageVersion),
 			},
-		},
+		}
 	}
+
+	return location
 }
 
 // BuildFixes extracts fix information from a finding's relationship data
