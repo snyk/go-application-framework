@@ -25,9 +25,11 @@
 								"shortDescription": {
 									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
 								},
+								{{- with buildRuleFullDescription $issue }}
 								"fullDescription": {
-									"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
+									"text": {{ getQuotedString . }}
 								},
+								{{- end }}
 								"help": {
 									"text": "",
 									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $issue.GetFindingType) }}

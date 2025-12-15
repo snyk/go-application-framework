@@ -176,6 +176,10 @@ func BuildRuleFullDescription(issue testapi.Issue) string {
 	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
 	componentVersion, _ := issue.GetData(testapi.DataKeyComponentVersion)
 
+	if componentName == nil || componentVersion == nil {
+		return ""
+	}
+
 	componentNameStr := fmt.Sprintf("%v", componentName)
 	componentVersionStr := fmt.Sprintf("%v", componentVersion)
 
