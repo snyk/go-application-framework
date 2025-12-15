@@ -38,7 +38,6 @@ const (
 	MAX_THREADS                    string = "internal_max_thread_count"
 	CONFIG_CACHE_TTL               string = "internal_config_cache_ttl"
 	CONFIG_CACHE_DISABLED          string = "internal_config_cache_disabled"
-	WORKING_DIRECTORY              string = "internal_working_dir"
 	IS_FEDRAMP                     string = "internal_is_fedramp"
 	ORGANIZATION_SLUG              string = "internal_org_slug"
 	AUTHENTICATION_SUBDOMAINS      string = "internal_auth_subdomain"             // array of additional subdomains to add authentication for
@@ -47,6 +46,10 @@ const (
 	PREVIEW_FEATURES_ENABLED       string = "internal_preview_features_enabled"   // boolean indicates if preview features shall be enabled
 	UNKNOWN_ARGS                   string = "internal_unknown_arguments"          // arguments unknown to the current application but maybe relevant for delegated application calls
 	IN_MEMORY_THRESHOLD_BYTES      string = "internal_in_memory_threshold_bytes"  // threshold to determine where to store workflow.Data
+
+	// subprocess environment
+	SUBPROCESS_ENVIRONMENT string = "internal_subprocess_environment" // environment variables to be passed to subprocesses
+	WORKING_DIRECTORY      string = "internal_working_dir"
 
 	// feature flags
 	FF_OAUTH_AUTH_FLOW_ENABLED    string = "internal_snyk_oauth_enabled"
