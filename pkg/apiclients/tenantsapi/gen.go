@@ -1,0 +1,3 @@
+package tenantsapi
+
+//go:generate go tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen -config oapi.config.yaml 2024-10-15/spec.yaml
