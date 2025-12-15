@@ -544,7 +544,7 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 		},
 		{
 			name:               "secrets",
-			expectedSarifPath:  "testdata/ufm/multi_project.sarif.json",
+			expectedSarifPath:  "testdata/ufm/secrets.sarif.json",
 			testResultPath:     "testdata/ufm/secrets.testresult.json",
 			ignoreSuppressions: true,
 		},
