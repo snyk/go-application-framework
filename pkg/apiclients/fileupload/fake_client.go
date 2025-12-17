@@ -2,12 +2,7 @@ package fileupload
 
 import (
 	"context"
-	"fmt"
-	"os"
-
 	"github.com/google/uuid"
-
-	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
 type FakeClient struct {
@@ -30,53 +25,6 @@ func NewFakeClient() *FakeClient {
 func (f *FakeClient) WithError(err error) *FakeClient {
 	f.err = err
 	return f
-}
-
-func (f *FakeClient) CreateRevisionFromDir(ctx context.Context, dirPath string) (UploadResult, error) {
-	if f.err != nil {
-		return UploadResult{}, f.err
-	}
-
-	info, err := os.Stat(dirPath)
-	if err != nil {
-		return UploadResult{}, uploadrevision.NewFileAccessError(dirPath, err)
-	}
-
-	if !info.IsDir() {
-		return UploadResult{}, fmt.Errorf("the provided path is not a directory: %s", dirPath)
-	}
-
-	return f.CreateRevisionFromPaths(ctx, []string{dirPath}, dirPath)
-}
-
-func (f *FakeClient) CreateRevisionFromFile(ctx context.Context, filePath string, rootDir string) (UploadResult, error) {
-	if f.err != nil {
-		return UploadResult{}, f.err
-	}
-
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return UploadResult{}, uploadrevision.NewFileAccessError(filePath, err)
-	}
-
-	if !info.Mode().IsRegular() {
-		return UploadResult{}, fmt.Errorf("the provided path is not a regular file: %s", filePath)
-	}
-
-	return f.CreateRevisionFromPaths(ctx, []string{filePath}, rootDir)
-}
-
-func (f *FakeClient) CreateRevisionFromPaths(ctx context.Context, paths []string, rootDir string) (UploadResult, error) {
-	if f.err != nil {
-		return UploadResult{}, f.err
-	}
-
-	revID := uuid.New()
-	f.revisions[revID] = append([]string(nil), paths...)
-	f.uploadCount++
-	f.lastRevision = revID
-
-	return UploadResult{RevisionID: revID, UploadedFilesCount: len(paths)}, nil
 }
 
 func (f *FakeClient) CreateRevisionFromChan(ctx context.Context, paths <-chan string, rootDir string) (UploadResult, error) {

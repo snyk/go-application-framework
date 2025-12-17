@@ -7,9 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
-	"golang.org/x/sync/errgroup"
 	"net/http"
-	"os"
 	"path/filepath"
 
 	fileuploadinternal "github.com/snyk/go-application-framework/internal/api/fileupload"
@@ -35,10 +33,7 @@ type HTTPClient struct {
 
 // Client defines the interface for the high level file upload client.
 type Client interface {
-	CreateRevisionFromPaths(ctx context.Context, paths []string, rootPath string) (UploadResult, error)
 	CreateRevisionFromChan(ctx context.Context, paths <-chan string, rootPath string) (UploadResult, error)
-	CreateRevisionFromFile(ctx context.Context, filePath string, rootPath string) (UploadResult, error)
-	CreateRevisionFromDir(ctx context.Context, dirPath string) (UploadResult, error)
 }
 
 var _ Client = (*HTTPClient)(nil)
@@ -235,95 +230,7 @@ func (c *HTTPClient) sealRevision(ctx context.Context, revisionID RevisionID) er
 	return nil
 }
 
-// CreateRevisionFromPaths uploads multiple paths (files or directories, file paths are uploaded relative to rootPath), returning a revision ID.
-// This is a convenience method that creates, uploads, and seals a revision.
-func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string, rootPath string) (UploadResult, error) {
-	g, gCtx := errgroup.WithContext(ctx)
-	pathsChan := make(chan string)
-
-	// setup producer -> collects files and pushes them to pathsChan
-	g.Go(func() error {
-		defer close(pathsChan)
-
-		for _, pth := range paths {
-			if gErr := gCtx.Err(); gErr != nil {
-				return gErr
-			}
-
-			info, statErr := os.Stat(pth)
-			if statErr != nil {
-				c.logger.Error().Err(statErr).Str("path", pth).Msg("failed to stat path")
-				return uploadrevision2.NewFileAccessError(pth, statErr)
-			}
-
-			if info.IsDir() {
-				if readErr := listSources(gCtx, pth, pathsChan); readErr != nil {
-					c.logger.Error().Err(readErr).Str("path", pth).Msg("failed to read directory")
-					return uploadrevision2.NewFileAccessError(pth, readErr)
-				}
-			} else {
-				select {
-				case <-gCtx.Done():
-					return gCtx.Err()
-				default:
-					pathsChan <- pth
-				}
-			}
-		}
-		return nil
-	})
-
-	res := UploadResult{
-		FilteredFiles: make([]FilteredFile, 0),
-	}
-	// setup consumer -> reads files from pathsChan and batches them to be uploaded
-	g.Go(func() error {
-		var err error
-		res, err = c.CreateRevisionFromChan(gCtx, pathsChan, rootPath)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	if gErr := g.Wait(); gErr != nil {
-		return UploadResult{}, gErr
-	}
-
-	return res, nil
-}
-
-// CreateRevisionFromDir uploads a directory and all its contents (file paths are uploaded relative to rootPath), returning a revision ID.
-// This is a convenience method for validating the directory path and calling CreateRevisionFromPaths with a single directory path.
-func (c *HTTPClient) CreateRevisionFromDir(ctx context.Context, dirPath string) (UploadResult, error) {
-	info, err := os.Stat(dirPath)
-	if err != nil {
-		return UploadResult{}, uploadrevision2.NewFileAccessError(dirPath, err)
-	}
-
-	if !info.IsDir() {
-		return UploadResult{}, fmt.Errorf("the provided path is not a directory: %s", dirPath)
-	}
-
-	return c.CreateRevisionFromPaths(ctx, []string{dirPath}, dirPath)
-}
-
-// CreateRevisionFromFile uploads a single file (file path is uploaded relative to rootPath), returning a revision ID.
-// This is a convenience method for validating the file path and calling CreateRevisionFromPaths with a single file path.
-func (c *HTTPClient) CreateRevisionFromFile(ctx context.Context, filePath, rootPath string) (UploadResult, error) {
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return UploadResult{}, uploadrevision2.NewFileAccessError(filePath, err)
-	}
-
-	if !info.Mode().IsRegular() {
-		return UploadResult{}, fmt.Errorf("the provided path is not a regular file: %s", filePath)
-	}
-
-	return c.CreateRevisionFromPaths(ctx, []string{filePath}, rootPath)
-}
-
-// CreateRevisionFromChan uploads multiple paths from a channel (files or directories, file paths are uploaded relative to rootPath), returning a revision ID.
+// CreateRevisionFromChan uploads multiple paths from a channel (files paths only, file paths are uploaded relative to rootPath), returning a revision ID.
 // This is a convenience method that creates, uploads, and seals a revision.
 func (c *HTTPClient) CreateRevisionFromChan(ctx context.Context, paths <-chan string, rootPath string) (UploadResult, error) {
 	res := UploadResult{
