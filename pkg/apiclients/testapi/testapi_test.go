@@ -2145,3 +2145,301 @@ func Test_Wait_WithResources_CallsJitter(t *testing.T) {
 	// Assert
 	assert.True(t, jitterCalled)
 }
+
+// Test factory function for creating params from subject
+func Test_NewStartTestParamsFromSubject(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	orgID := "test-org-id"
+	testSubject := newDepGraphTestSubject(t)
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	// Act
+	params := testapi.NewStartTestParamsFromSubject(orgID, &testSubject, localPolicy)
+
+	// Assert
+	assert.Equal(t, orgID, params.OrgID)
+	assert.Equal(t, &testSubject, params.Subject)
+	assert.Nil(t, params.Resources)
+	assert.Equal(t, localPolicy, params.LocalPolicy)
+	assert.Nil(t, params.ScanConfig)
+}
+
+// Test factory function for creating params from resources with ScanConfig
+func Test_NewStartTestParamsFromResources(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	orgID := "test-org-id"
+	uploadResource := newUploadResource(t)
+	testResourceCreateItem := newUploadTestResourceCreateItem(t, &uploadResource)
+	resources := &[]testapi.TestResourceCreateItem{testResourceCreateItem}
+
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	// Act
+	params := testapi.NewStartTestParamsFromResources(orgID, resources, localPolicy, scanConfig)
+
+	// Assert
+	assert.Equal(t, orgID, params.OrgID)
+	assert.Nil(t, params.Subject)
+	assert.Equal(t, resources, params.Resources)
+	assert.Equal(t, localPolicy, params.LocalPolicy)
+	assert.Equal(t, scanConfig, params.ScanConfig)
+}
+
+// Test factory function for creating params from resources without ScanConfig
+func Test_NewStartTestParamsFromResources_NilScanConfig(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	orgID := "test-org-id"
+	uploadResource := newUploadResource(t)
+	testResourceCreateItem := newUploadTestResourceCreateItem(t, &uploadResource)
+	resources := &[]testapi.TestResourceCreateItem{testResourceCreateItem}
+
+	// Act
+	params := testapi.NewStartTestParamsFromResources(orgID, resources, nil, nil)
+
+	// Assert
+	assert.Equal(t, orgID, params.OrgID)
+	assert.Nil(t, params.Subject)
+	assert.Equal(t, resources, params.Resources)
+	assert.Nil(t, params.LocalPolicy)
+	assert.Nil(t, params.ScanConfig)
+}
+
+// Test that StartTest rejects ScanConfig when used with Subject
+func Test_StartTest_Error_ScanConfigWithSubject(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// Arrange
+	testSubject := newDepGraphTestSubject(t)
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	params := testapi.StartTestParams{
+		OrgID:      uuid.New().String(),
+		Subject:    &testSubject,
+		ScanConfig: scanConfig,
+	}
+
+	// Act
+	testClient, err := testapi.NewTestClient("http://localhost:12345")
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, handle)
+	assert.Contains(t, err.Error(), "ScanConfig is only supported with Resources, not Subject")
+}
+
+// Test StartTest with Resources and ScanConfig succeeds
+func Test_StartTestWithResources_WithScanConfig_Success(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithResources(t)
+
+	// Define ScanConfig
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	params := testapi.NewStartTestParamsFromResources(
+		testData.OrgID.String(),
+		testData.TestResourceCreateItems,
+		nil,
+		scanConfig,
+	)
+
+	// Define expected request body that StartTest should generate
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Resources: params.Resources,
+				Config: &testapi.TestConfiguration{
+					ScanConfig: scanConfig,
+				},
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	// Mock server handler using newTestAPIMockHandler
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		PollCounter:            testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestResources:     testData.ExpectedTestResources,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+			BreachedPolicies:  nil,
+		},
+		FindingsConfig: &FindingsHandlerConfig{
+			APIVersion:         testapi.DefaultAPIVersion,
+			PageCounter:        testData.FindingsPageCount,
+			EndpointCalled:     testData.FindingsEndpointCalled,
+			TotalFindingsPages: 0,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	// Act
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	assert.NoError(t, err)
+	assert.NotNil(t, handle)
+
+	// Now wait for test to complete
+	err = handle.Wait(ctx)
+	result := handle.Result()
+
+	// Assert
+	assert.NoError(t, err)
+	require.NotNil(t, result, "Result should not be nil after successful Wait()")
+	assertTestOutcomePass(t, result, testData.TestID)
+	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
+}
+
+// Test StartTest with Resources, LocalPolicy, and ScanConfig succeeds
+func Test_StartTestWithResources_WithLocalPolicyAndScanConfig_Success(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithResources(t)
+
+	// Define LocalPolicy
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	// Define ScanConfig
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	params := testapi.NewStartTestParamsFromResources(
+		testData.OrgID.String(),
+		testData.TestResourceCreateItems,
+		localPolicy,
+		scanConfig,
+	)
+
+	// Define expected request body that StartTest should generate
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Resources: params.Resources,
+				Config: &testapi.TestConfiguration{
+					LocalPolicy: localPolicy,
+					ScanConfig:  scanConfig,
+				},
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	// Mock server handler using newTestAPIMockHandler
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		PollCounter:            testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestResources:     testData.ExpectedTestResources,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+			BreachedPolicies:  nil,
+		},
+		FindingsConfig: &FindingsHandlerConfig{
+			APIVersion:         testapi.DefaultAPIVersion,
+			PageCounter:        testData.FindingsPageCount,
+			EndpointCalled:     testData.FindingsEndpointCalled,
+			TotalFindingsPages: 0,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	// Act
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	assert.NoError(t, err)
+	assert.NotNil(t, handle)
+
+	// Now wait for test to complete
+	err = handle.Wait(ctx)
+	result := handle.Result()
+
+	// Assert
+	assert.NoError(t, err)
+	require.NotNil(t, result, "Result should not be nil after successful Wait()")
+	assertTestOutcomePass(t, result, testData.TestID)
+	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
+}
