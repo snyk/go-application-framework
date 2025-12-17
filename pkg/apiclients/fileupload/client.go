@@ -238,17 +238,6 @@ func (c *HTTPClient) sealRevision(ctx context.Context, revisionID RevisionID) er
 // CreateRevisionFromPaths uploads multiple paths (files or directories, file paths are uploaded relative to rootPath), returning a revision ID.
 // This is a convenience method that creates, uploads, and seals a revision.
 func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string, rootPath string) (UploadResult, error) {
-	res := UploadResult{
-		FilteredFiles: make([]FilteredFile, 0),
-	}
-
-	revisionID, err := c.createRevision(ctx)
-	if err != nil {
-		return UploadResult{}, err
-	}
-
-	res.RevisionID = revisionID
-
 	g, gCtx := errgroup.WithContext(ctx)
 	pathsChan := make(chan string)
 
@@ -284,26 +273,21 @@ func (c *HTTPClient) CreateRevisionFromPaths(ctx context.Context, paths []string
 		return nil
 	})
 
+	res := UploadResult{
+		FilteredFiles: make([]FilteredFile, 0),
+	}
 	// setup consumer -> reads files from pathsChan and batches them to be uploaded
 	g.Go(func() error {
-		opts := uploadOptions{SkipDeeproxyFiltering: true}
-		res, err = c.addPathsToRevision(gCtx, revisionID, rootPath, pathsChan, opts)
+		var err error
+		res, err = c.CreateRevisionFromChan(gCtx, pathsChan, rootPath)
 		if err != nil {
-			return fmt.Errorf("failed to add paths to revision %s: %w", revisionID, err)
+			return err
 		}
 		return nil
 	})
 
 	if gErr := g.Wait(); gErr != nil {
 		return UploadResult{}, gErr
-	}
-
-	if res.UploadedFilesCount == 0 && len(res.FilteredFiles) == 0 {
-		return res, ErrNoFilesProvided
-	}
-
-	if err := c.sealRevision(ctx, revisionID); err != nil {
-		return res, err
 	}
 
 	return res, nil
