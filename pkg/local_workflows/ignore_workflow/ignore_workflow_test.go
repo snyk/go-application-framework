@@ -53,7 +53,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
-	config.Set(ConfigIgnoreApprovalEnabled, true)
+
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
@@ -301,6 +301,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.Error(t, err, "Should return an error")
 		assert.Nil(t, result, "payload be nil")
 	})
+
 	t.Run("IAW FF is disabled", func(t *testing.T) {
 		expectedFindingsId := uuid.New().String()
 		expectedIgnoreType := string(policyApi.WontFix)

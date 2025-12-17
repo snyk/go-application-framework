@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
