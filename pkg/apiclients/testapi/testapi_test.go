@@ -1215,11 +1215,12 @@ func Test_Wait_WithResources_Synchronous_JobErrored(t *testing.T) {
 }
 
 // Test asynchronous Wait() when polling times out due to context cancellation.
-// Polling is every 1 sec. The Wait context times out at 1.2 sec, before it gets a response.
+// Polling is every 500ms. The Wait context times out at 1.2 sec, after the first poll starts
+// but before the server responds (server delays 1.5s).
 func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	// Arrange
 	t.Parallel()
-	// Short context timeout -- allows for at least one GET job poll
+	// Context timeout allows first poll to start, but expires before server responds
 	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 	defer cancel()
 
@@ -1264,10 +1265,10 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	server, cleanup := startMockServer(t, handler)
 	defer cleanup()
 
-	// Act - start a test client with short poll interval
+	// Act - start a test client with short poll interval (500ms gives 700ms margin before ctx timeout)
 	testHTTPClient := newTestHTTPClient(t, server)
 	testClient, err := testapi.NewTestClient(server.URL,
-		testapi.WithPollInterval(1*time.Second),
+		testapi.WithPollInterval(500*time.Millisecond),
 		testapi.WithCustomHTTPClient(testHTTPClient),
 	)
 	require.NoError(t, err)
@@ -1288,7 +1289,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	select {
 	case <-handle.Done():
 		result = handle.Result()
-	case <-time.After(2000 * time.Millisecond): // timeout for entire test; should not be reached
+	case <-time.After(3000 * time.Millisecond): // timeout for entire test; should not be reached
 		t.Fatal("Unexpected timeout waiting for handle.Done()")
 	}
 
@@ -1304,7 +1305,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 func Test_Wait_WithResources_Asynchronous_PollingTimeout(t *testing.T) {
 	// Arrange
 	t.Parallel()
-	// Short context timeout -- allows for at least one GET job poll
+	// Context timeout allows first poll to start, but expires before server responds
 	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 	defer cancel()
 
@@ -1348,10 +1349,10 @@ func Test_Wait_WithResources_Asynchronous_PollingTimeout(t *testing.T) {
 	server, cleanup := startMockServer(t, handler)
 	defer cleanup()
 
-	// Act - start a test client with short poll interval
+	// Act - start a test client with short poll interval (500ms gives 700ms margin before ctx timeout)
 	testHTTPClient := newTestHTTPClient(t, server)
 	testClient, err := testapi.NewTestClient(server.URL,
-		testapi.WithPollInterval(1*time.Second),
+		testapi.WithPollInterval(500*time.Millisecond),
 		testapi.WithCustomHTTPClient(testHTTPClient),
 	)
 	require.NoError(t, err)
@@ -1372,7 +1373,7 @@ func Test_Wait_WithResources_Asynchronous_PollingTimeout(t *testing.T) {
 	select {
 	case <-handle.Done():
 		result = handle.Result()
-	case <-time.After(2000 * time.Millisecond): // timeout for entire test; should not be reached
+	case <-time.After(3000 * time.Millisecond): // timeout for entire test; should not be reached
 		t.Fatal("Unexpected timeout waiting for handle.Done()")
 	}
 
