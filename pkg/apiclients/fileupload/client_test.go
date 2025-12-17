@@ -90,7 +90,6 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 			defer close(paths)
 			for _, f := range expectedFiles {
 				paths <- path.Join(dir.Name(), f.Path)
-
 			}
 		}()
 
@@ -349,7 +348,6 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 			defer close(paths)
 			for _, f := range expectedFiles {
 				paths <- path.Join(dir.Name(), f.Path)
-
 			}
 		}()
 
@@ -396,11 +394,11 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 			defer close(paths)
 			for _, f := range expectedFiles {
 				paths <- path.Join(dir.Name(), f.Path)
-
 			}
 		}()
 
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.NoError(t, err)
 
 		assert.Empty(t, res.FilteredFiles)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
@@ -448,7 +446,6 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 			defer close(paths)
 			for _, f := range expectedFiles {
 				paths <- path.Join(dir.Name(), f.Path)
-
 			}
 		}()
 
@@ -487,7 +484,6 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 			defer close(paths)
 			for _, f := range expectedFiles {
 				paths <- path.Join(dir.Name(), f.Path)
-
 			}
 		}()
 
