@@ -1,7 +1,6 @@
 package fileupload
 
 import (
-	"fmt"
 	"iter"
 	"os"
 	"path/filepath"
@@ -56,7 +55,7 @@ func batchPaths(rootPath string, paths <-chan string, limits uploadrevision.Limi
 		for path := range paths {
 			relPath, err := filepath.Rel(rootPath, path)
 			if err != nil {
-				if !yield(nil, fmt.Errorf("failed to get relative path of file %s: %w", path, err)) {
+				if !yield(&batchingResult{batch: batch, filteredFiles: filtered}, uploadrevision.NewFileAccessError(path, err)) {
 					return
 				}
 			}
@@ -64,7 +63,7 @@ func batchPaths(rootPath string, paths <-chan string, limits uploadrevision.Limi
 			f, err := os.Open(path)
 			if err != nil {
 				f.Close()
-				if !yield(nil, fmt.Errorf("failed to open file %s: %w", path, err)) {
+				if !yield(&batchingResult{batch: batch, filteredFiles: filtered}, uploadrevision.NewFileAccessError(path, err)) {
 					return
 				}
 			}
@@ -72,7 +71,7 @@ func batchPaths(rootPath string, paths <-chan string, limits uploadrevision.Limi
 			fstat, err := f.Stat()
 			if err != nil {
 				f.Close()
-				if !yield(nil, fmt.Errorf("failed to stat file %s: %w", path, err)) {
+				if !yield(&batchingResult{batch: batch, filteredFiles: filtered}, uploadrevision.NewFileAccessError(path, err)) {
 					return
 				}
 			}
