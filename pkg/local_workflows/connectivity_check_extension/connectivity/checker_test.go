@@ -765,20 +765,6 @@ func createTestOrgResponse() *contract.OrganizationsResponse {
 	}
 }
 
-func createTestTenantsResponse() *contract.AvailableTenantsResponse {
-	return &contract.AvailableTenantsResponse{
-		Data: []contract.TenantResource{
-			{
-				ID: "tenant-1",
-				Attributes: contract.TenantAttributes{
-					Name: "Tenant 1",
-					Slug: "tenant-1",
-				},
-			},
-		},
-	}
-}
-
 // Helper function to verify organizations
 func verifyOrganizations(t *testing.T, orgs []Organization, expectedCount int, expectDefault bool) {
 	t.Helper()
@@ -962,87 +948,6 @@ func TestCheckOrganizations(t *testing.T) {
 					t.Errorf("Expected 2 organizations, got %d", len(orgs))
 				}
 			})
-		}
-	})
-}
-
-func TestCheckTenants(t *testing.T) {
-	t.Run("with token", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		logger := zerolog.Nop()
-		mockNA := mocks.NewMockNetworkAccess(ctrl)
-		mockApiClient := internalmocks.NewMockApiClient(ctrl)
-		config := configuration.New()
-		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
-
-		mockApiClient.EXPECT().GetAvailableTenants().Return(createTestTenantsResponse(), nil)
-
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
-
-		tenants, err := checker.CheckTenants(100)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
-
-		if len(tenants) != 1 {
-			t.Fatalf("Expected 1 tenant, got %d", len(tenants))
-		}
-		if tenants[0].ID != "tenant-1" {
-			t.Errorf("Expected tenant ID 'tenant-1', got '%s'", tenants[0].ID)
-		}
-		if tenants[0].Name != "Tenant 1" {
-			t.Errorf("Expected tenant name 'Tenant 1', got '%s'", tenants[0].Name)
-		}
-		if tenants[0].Slug != "tenant-1" {
-			t.Errorf("Expected tenant slug 'tenant-1', got '%s'", tenants[0].Slug)
-		}
-	})
-
-	t.Run("without token", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		logger := zerolog.Nop()
-		mockNA := mocks.NewMockNetworkAccess(ctrl)
-		mockApiClient := internalmocks.NewMockApiClient(ctrl)
-
-		configNoToken := configuration.New()
-		// Ensure OAuth token is effectively disabled
-		configNoToken.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
-
-		checkerNoToken := NewCheckerWithApiClient(mockNA, &logger, configNoToken, mockApiClient)
-
-		tenants, err := checkerNoToken.CheckTenants(100)
-		if err != nil {
-			t.Errorf("Expected no error when no token configured, got: %v", err)
-		}
-		if tenants != nil {
-			t.Errorf("Expected nil tenants when no token configured, got %v", tenants)
-		}
-	})
-
-	t.Run("with API error", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		logger := zerolog.Nop()
-		mockNA := mocks.NewMockNetworkAccess(ctrl)
-		mockApiClient := internalmocks.NewMockApiClient(ctrl)
-		config := configuration.New()
-		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
-
-		mockApiClient.EXPECT().GetAvailableTenants().Return(nil, errors.New("API error"))
-
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
-
-		_, err := checker.CheckTenants(100)
-		if err == nil {
-			t.Fatalf("Expected error, got nil")
-		}
-		if err.Error() != "API error" {
-			t.Errorf("Expected 'API error', got: %v", err)
 		}
 	})
 }

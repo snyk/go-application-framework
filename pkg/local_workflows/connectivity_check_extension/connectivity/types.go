@@ -125,12 +125,6 @@ type Organization struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
-type Tenant struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-}
-
 // snykHostsMutex protects access to SnykHosts
 var snykHostsMutex sync.RWMutex
 

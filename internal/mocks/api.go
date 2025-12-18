@@ -36,21 +36,6 @@ func (m *MockApiClient) EXPECT() *MockApiClientMockRecorder {
 	return m.recorder
 }
 
-// GetAvailableTenants mocks base method.
-func (m *MockApiClient) GetAvailableTenants() (*contract.AvailableTenantsResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAvailableTenants")
-	ret0, _ := ret[0].(*contract.AvailableTenantsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAvailableTenants indicates an expected call of GetAvailableTenants.
-func (mr *MockApiClientMockRecorder) GetAvailableTenants() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAvailableTenants", reflect.TypeOf((*MockApiClient)(nil).GetAvailableTenants))
-}
-
 // GetDefaultOrgId mocks base method.
 func (m *MockApiClient) GetDefaultOrgId() (string, error) {
 	m.ctrl.T.Helper()
