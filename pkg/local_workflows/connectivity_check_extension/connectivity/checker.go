@@ -20,16 +20,17 @@ import (
 
 // Checker performs connectivity checks to Snyk endpoints
 type Checker struct {
-	networkAccess networking.NetworkAccess
-	logger        *zerolog.Logger
-	config        configuration.Configuration
-	timeout       time.Duration
-	apiClient     api.ApiClient
-	ui            ui.UserInterface
+	networkAccess  networking.NetworkAccess
+	logger         *zerolog.Logger
+	config         configuration.Configuration
+	timeout        time.Duration
+	apiClient      api.ApiClient
+	ui             ui.UserInterface
+	additionalDirs []UsedDirectory
 }
 
-// NewChecker creates a new connectivity checker
-func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, ui ...ui.UserInterface) *Checker {
+// NewChecker creates a new connectivity checker with optional additional directories
+func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, additionalDirs []UsedDirectory, ui ...ui.UserInterface) *Checker {
 	timeout := time.Duration(config.GetInt("timeout")) * time.Second
 	if timeout == 0 {
 		timeout = 10 * time.Second
@@ -44,11 +45,12 @@ func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, 
 	apiClient := api.NewApi(apiUrl, httpClient)
 
 	checker := &Checker{
-		networkAccess: networkAccess,
-		logger:        logger,
-		config:        config,
-		timeout:       timeout,
-		apiClient:     apiClient,
+		networkAccess:  networkAccess,
+		logger:         logger,
+		config:         config,
+		timeout:        timeout,
+		apiClient:      apiClient,
+		additionalDirs: additionalDirs,
 	}
 
 	// Set UI if provided
@@ -60,18 +62,19 @@ func NewChecker(networkAccess networking.NetworkAccess, logger *zerolog.Logger, 
 }
 
 // NewCheckerWithApiClient creates a new connectivity checker with a custom API client (mainly for testing)
-func NewCheckerWithApiClient(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, apiClient api.ApiClient, ui ...ui.UserInterface) *Checker {
+func NewCheckerWithApiClient(networkAccess networking.NetworkAccess, logger *zerolog.Logger, config configuration.Configuration, additionalDirs []UsedDirectory, apiClient api.ApiClient, ui ...ui.UserInterface) *Checker {
 	timeout := time.Duration(config.GetInt("timeout")) * time.Second
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
 
 	checker := &Checker{
-		networkAccess: networkAccess,
-		logger:        logger,
-		config:        config,
-		timeout:       timeout,
-		apiClient:     apiClient,
+		networkAccess:  networkAccess,
+		logger:         logger,
+		config:         config,
+		timeout:        timeout,
+		apiClient:      apiClient,
+		additionalDirs: additionalDirs,
 	}
 
 	// Set UI if provided
@@ -103,6 +106,19 @@ func (c *Checker) DetectProxyConfig() ProxyConfig {
 		config.NoProxy = noProxy
 	} else if noProxy := os.Getenv("no_proxy"); noProxy != "" {
 		config.NoProxy = noProxy
+	}
+
+	// Check NODE_EXTRA_CA_CERTS
+	if nodeExtraCACerts := os.Getenv("NODE_EXTRA_CA_CERTS"); nodeExtraCACerts != "" {
+		config.NodeExtraCACerts = nodeExtraCACerts
+	}
+
+	// Check Kerberos environment variables
+	if krb5Config := os.Getenv("KRB5_CONFIG"); krb5Config != "" {
+		config.KRB5Config = krb5Config
+	}
+	if krb5CCName := os.Getenv("KRB5CCNAME"); krb5CCName != "" {
+		config.KRB5CCName = krb5CCName
 	}
 
 	return config
@@ -244,15 +260,37 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 		}()
 	}
 
-	// Step 1: Detect proxy configuration
-	c.updateProgress(progressBar, 0.1, "Detecting proxy configuration...")
+	// Initial step 1: Detect current user
+	c.updateProgress(progressBar, 0.01, "Detecting current user...")
+	result.CurrentUser = GetCurrentUser()
+
+	// Initial step 2: Detect proxy configuration
+	c.updateProgress(progressBar, 0.02, "Detecting proxy configuration...")
 	result.ProxyConfig = c.DetectProxyConfig()
 
-	// Step 2: Check connectivity to hosts
-	hosts := GetSnykHosts()
-	totalSteps := float64(len(hosts) + 3) // hosts + proxy + auth + orgs
-	currentStep := 1.0
+	// Initial step 3: Get directories to check for progress calculation
+	c.updateProgress(progressBar, 0.03, "Determining potential configuration and CLI download directories to check...")
+	usedDirectories := GetDefaultUsedDirectories(c.logger)
+	// Append additional directories if provided
+	usedDirectories = append(usedDirectories, c.additionalDirs...)
+	// Deduplicate all directories (combines purposes for duplicates)
+	usedDirectories = DedupeDirectories(usedDirectories)
 
+	// Initial step 4: Get Snyk hosts to check
+	c.updateProgress(progressBar, 0.04, "Determining Snyk hosts to check...")
+	hosts := GetSnykHosts()
+
+	// Determine total steps for progress calculation
+	currentStep := 1.0 // initial quick steps combined count as 1 step
+	totalSteps := float64(
+		int(currentStep) +
+			len(hosts) +
+			1 /* auth */ +
+			1 /* orgs */ +
+			len(usedDirectories),
+	)
+
+	// Step 1: Check connectivity to hosts
 	for i, host := range hosts {
 		progress := (currentStep + float64(i)) / totalSteps
 		c.updateProgress(progressBar, progress, fmt.Sprintf("Checking connectivity to %s...", host))
@@ -263,14 +301,13 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 	}
 	currentStep += float64(len(hosts))
 
-	// Step 3: Check authentication
+	// Step 2: Check authentication
 	c.updateProgress(progressBar, currentStep/totalSteps, "Checking authentication...")
-	currentStep++
-
 	token := c.checkAuthentication()
 	result.TokenPresent = token != ""
+	currentStep++
 
-	// Step 4: Check organizations (if authenticated)
+	// Step 3: Check organizations (if authenticated)
 	if result.TokenPresent {
 		c.updateProgress(progressBar, currentStep/totalSteps, "Fetching organizations...")
 
@@ -288,6 +325,17 @@ func (c *Checker) CheckConnectivity() (*ConnectivityCheckResult, error) {
 			result.Organizations = orgs
 		}
 	}
+	currentStep++
+
+	// Step 4: Check Snyk used directory permissions (CLI, config, cache, temp)
+	for i, dir := range usedDirectories {
+		progress := (currentStep + float64(i)) / totalSteps
+		c.updateProgress(progressBar, progress, fmt.Sprintf("Checking potential Snyk used directory: %s (Purpose: %s)", dir.PathWanted, dir.Purpose))
+
+		dirResult := CheckDirectory(dir)
+		result.DirectoryResults = append(result.DirectoryResults, dirResult)
+	}
+	//currentStep += float64(len(usedDirectories))
 
 	// Complete progress
 	c.updateProgress(progressBar, 1.0, "")
