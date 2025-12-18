@@ -1215,11 +1215,12 @@ func Test_Wait_WithResources_Synchronous_JobErrored(t *testing.T) {
 }
 
 // Test asynchronous Wait() when polling times out due to context cancellation.
-// Polling is every 1 sec. The Wait context times out at 1.2 sec, before it gets a response.
+// Polling is every 500ms. The Wait context times out at 1.2 sec, after the first poll starts
+// but before the server responds (server delays 1.5s).
 func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	// Arrange
 	t.Parallel()
-	// Short context timeout -- allows for at least one GET job poll
+	// Context timeout allows first poll to start, but expires before server responds
 	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 	defer cancel()
 
@@ -1264,10 +1265,10 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	server, cleanup := startMockServer(t, handler)
 	defer cleanup()
 
-	// Act - start a test client with short poll interval
+	// Act - start a test client with short poll interval (500ms gives 700ms margin before ctx timeout)
 	testHTTPClient := newTestHTTPClient(t, server)
 	testClient, err := testapi.NewTestClient(server.URL,
-		testapi.WithPollInterval(1*time.Second),
+		testapi.WithPollInterval(500*time.Millisecond),
 		testapi.WithCustomHTTPClient(testHTTPClient),
 	)
 	require.NoError(t, err)
@@ -1288,7 +1289,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 	select {
 	case <-handle.Done():
 		result = handle.Result()
-	case <-time.After(2000 * time.Millisecond): // timeout for entire test; should not be reached
+	case <-time.After(3000 * time.Millisecond): // timeout for entire test; should not be reached
 		t.Fatal("Unexpected timeout waiting for handle.Done()")
 	}
 
@@ -1304,7 +1305,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 func Test_Wait_WithResources_Asynchronous_PollingTimeout(t *testing.T) {
 	// Arrange
 	t.Parallel()
-	// Short context timeout -- allows for at least one GET job poll
+	// Context timeout allows first poll to start, but expires before server responds
 	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 	defer cancel()
 
@@ -1348,10 +1349,10 @@ func Test_Wait_WithResources_Asynchronous_PollingTimeout(t *testing.T) {
 	server, cleanup := startMockServer(t, handler)
 	defer cleanup()
 
-	// Act - start a test client with short poll interval
+	// Act - start a test client with short poll interval (500ms gives 700ms margin before ctx timeout)
 	testHTTPClient := newTestHTTPClient(t, server)
 	testClient, err := testapi.NewTestClient(server.URL,
-		testapi.WithPollInterval(1*time.Second),
+		testapi.WithPollInterval(500*time.Millisecond),
 		testapi.WithCustomHTTPClient(testHTTPClient),
 	)
 	require.NoError(t, err)
@@ -1372,7 +1373,7 @@ func Test_Wait_WithResources_Asynchronous_PollingTimeout(t *testing.T) {
 	select {
 	case <-handle.Done():
 		result = handle.Result()
-	case <-time.After(2000 * time.Millisecond): // timeout for entire test; should not be reached
+	case <-time.After(3000 * time.Millisecond): // timeout for entire test; should not be reached
 		t.Fatal("Unexpected timeout waiting for handle.Done()")
 	}
 
@@ -2144,4 +2145,302 @@ func Test_Wait_WithResources_CallsJitter(t *testing.T) {
 
 	// Assert
 	assert.True(t, jitterCalled)
+}
+
+// Test factory function for creating params from subject
+func Test_NewStartTestParamsFromSubject(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	orgID := "test-org-id"
+	testSubject := newDepGraphTestSubject(t)
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	// Act
+	params := testapi.NewStartTestParamsFromSubject(orgID, &testSubject, localPolicy)
+
+	// Assert
+	assert.Equal(t, orgID, params.OrgID)
+	assert.Equal(t, &testSubject, params.Subject)
+	assert.Nil(t, params.Resources)
+	assert.Equal(t, localPolicy, params.LocalPolicy)
+	assert.Nil(t, params.ScanConfig)
+}
+
+// Test factory function for creating params from resources with ScanConfig
+func Test_NewStartTestParamsFromResources(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	orgID := "test-org-id"
+	uploadResource := newUploadResource(t)
+	testResourceCreateItem := newUploadTestResourceCreateItem(t, &uploadResource)
+	resources := &[]testapi.TestResourceCreateItem{testResourceCreateItem}
+
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	// Act
+	params := testapi.NewStartTestParamsFromResources(orgID, resources, localPolicy, scanConfig)
+
+	// Assert
+	assert.Equal(t, orgID, params.OrgID)
+	assert.Nil(t, params.Subject)
+	assert.Equal(t, resources, params.Resources)
+	assert.Equal(t, localPolicy, params.LocalPolicy)
+	assert.Equal(t, scanConfig, params.ScanConfig)
+}
+
+// Test factory function for creating params from resources without ScanConfig
+func Test_NewStartTestParamsFromResources_NilScanConfig(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	orgID := "test-org-id"
+	uploadResource := newUploadResource(t)
+	testResourceCreateItem := newUploadTestResourceCreateItem(t, &uploadResource)
+	resources := &[]testapi.TestResourceCreateItem{testResourceCreateItem}
+
+	// Act
+	params := testapi.NewStartTestParamsFromResources(orgID, resources, nil, nil)
+
+	// Assert
+	assert.Equal(t, orgID, params.OrgID)
+	assert.Nil(t, params.Subject)
+	assert.Equal(t, resources, params.Resources)
+	assert.Nil(t, params.LocalPolicy)
+	assert.Nil(t, params.ScanConfig)
+}
+
+// Test that StartTest rejects ScanConfig when used with Subject
+func Test_StartTest_Error_ScanConfigWithSubject(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// Arrange
+	testSubject := newDepGraphTestSubject(t)
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	params := testapi.StartTestParams{
+		OrgID:      uuid.New().String(),
+		Subject:    &testSubject,
+		ScanConfig: scanConfig,
+	}
+
+	// Act
+	testClient, err := testapi.NewTestClient("http://localhost:12345")
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, handle)
+	assert.Contains(t, err.Error(), "ScanConfig is only supported with Resources, not Subject")
+}
+
+// Test StartTest with Resources and ScanConfig succeeds
+func Test_StartTestWithResources_WithScanConfig_Success(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithResources(t)
+
+	// Define ScanConfig
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	params := testapi.NewStartTestParamsFromResources(
+		testData.OrgID.String(),
+		testData.TestResourceCreateItems,
+		nil,
+		scanConfig,
+	)
+
+	// Define expected request body that StartTest should generate
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Resources: params.Resources,
+				Config: &testapi.TestConfiguration{
+					ScanConfig: scanConfig,
+				},
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	// Mock server handler using newTestAPIMockHandler
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		PollCounter:            testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestResources:     testData.ExpectedTestResources,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+			BreachedPolicies:  nil,
+		},
+		FindingsConfig: &FindingsHandlerConfig{
+			APIVersion:         testapi.DefaultAPIVersion,
+			PageCounter:        testData.FindingsPageCount,
+			EndpointCalled:     testData.FindingsEndpointCalled,
+			TotalFindingsPages: 0,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	// Act
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	assert.NoError(t, err)
+	assert.NotNil(t, handle)
+
+	// Now wait for test to complete
+	err = handle.Wait(ctx)
+	result := handle.Result()
+
+	// Assert
+	assert.NoError(t, err)
+	require.NotNil(t, result, "Result should not be nil after successful Wait()")
+	assertTestOutcomePass(t, result, testData.TestID)
+	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
+}
+
+// Test StartTest with Resources, LocalPolicy, and ScanConfig succeeds
+func Test_StartTestWithResources_WithLocalPolicyAndScanConfig_Success(t *testing.T) {
+	// Arrange
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithResources(t)
+
+	// Define LocalPolicy
+	riskScoreThreshold := uint16(750)
+	localPolicy := &testapi.LocalPolicy{
+		RiskScoreThreshold: &riskScoreThreshold,
+	}
+
+	// Define ScanConfig
+	scaScanConfig := testapi.ScaScanConfiguration{
+		"package_manifests": []string{"package.json"},
+	}
+	scanConfig := &testapi.ScanConfiguration{
+		Sca: &scaScanConfig,
+	}
+
+	params := testapi.NewStartTestParamsFromResources(
+		testData.OrgID.String(),
+		testData.TestResourceCreateItems,
+		localPolicy,
+		scanConfig,
+	)
+
+	// Define expected request body that StartTest should generate
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Resources: params.Resources,
+				Config: &testapi.TestConfiguration{
+					LocalPolicy: localPolicy,
+					ScanConfig:  scanConfig,
+				},
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	// Mock server handler using newTestAPIMockHandler
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		PollCounter:            testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.TestExecutionStatesPending}, // First poll
+			{ShouldRedirect: true},                       // Second poll, redirects
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestResources:     testData.ExpectedTestResources,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+			BreachedPolicies:  nil,
+		},
+		FindingsConfig: &FindingsHandlerConfig{
+			APIVersion:         testapi.DefaultAPIVersion,
+			PageCounter:        testData.FindingsPageCount,
+			EndpointCalled:     testData.FindingsEndpointCalled,
+			TotalFindingsPages: 0,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	// Act
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	assert.NoError(t, err)
+	assert.NotNil(t, handle)
+
+	// Now wait for test to complete
+	err = handle.Wait(ctx)
+	result := handle.Result()
+
+	// Assert
+	assert.NoError(t, err)
+	require.NotNil(t, result, "Result should not be nil after successful Wait()")
+	assertTestOutcomePass(t, result, testData.TestID)
+	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 }

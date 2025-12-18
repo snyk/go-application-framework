@@ -176,6 +176,28 @@ type StartTestParams struct {
 	Subject     *TestSubjectCreate
 	Resources   *[]TestResourceCreateItem
 	LocalPolicy *LocalPolicy
+	ScanConfig  *ScanConfiguration // Only valid when Resources is set, not Subject
+}
+
+// NewStartTestParamsFromSubject creates params for a subject-based test.
+// ScanConfig is not supported for subject-based tests.
+func NewStartTestParamsFromSubject(orgID string, subject *TestSubjectCreate, localPolicy *LocalPolicy) StartTestParams {
+	return StartTestParams{
+		OrgID:       orgID,
+		Subject:     subject,
+		LocalPolicy: localPolicy,
+	}
+}
+
+// NewStartTestParamsFromResources creates params for a resources-based test.
+// ScanConfig is optional and only valid for resource-based tests.
+func NewStartTestParamsFromResources(orgID string, resources *[]TestResourceCreateItem, localPolicy *LocalPolicy, scanConfig *ScanConfiguration) StartTestParams {
+	return StartTestParams{
+		OrgID:       orgID,
+		Resources:   resources,
+		LocalPolicy: localPolicy,
+		ScanConfig:  scanConfig,
+	}
 }
 
 // testResult is the concrete implementation of the TestResult interface for
@@ -298,40 +320,54 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 	}, nil
 }
 
-// Create the initial test and return a handle to poll it
-func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
+// validateStartTestParams validates the StartTestParams and returns the parsed OrgID UUID.
+func validateStartTestParams(params StartTestParams) (uuid.UUID, error) {
 	if params.Resources != nil {
 		if len(*params.Resources) > 0 {
 			for i, resource := range *params.Resources {
 				if len(resource.union) == 0 {
-					return nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+					return uuid.Nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
 				}
 			}
 		} else {
-			return nil, fmt.Errorf("resources do not contain any items in StartTestParams")
+			return uuid.Nil, fmt.Errorf("resources do not contain any items in StartTestParams")
 		}
 	} else if params.Subject != nil {
 		if len(params.Subject.union) == 0 {
-			return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
+			return uuid.Nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
 		}
 	} else {
-		return nil, fmt.Errorf("either resources or subject are required in StartTestParams and must be populated")
+		return uuid.Nil, fmt.Errorf("either resources or subject are required in StartTestParams and must be populated")
+	}
+
+	if params.ScanConfig != nil && params.Subject != nil {
+		return uuid.Nil, fmt.Errorf("ScanConfig is only supported with Resources, not Subject")
 	}
 
 	if params.OrgID == "" {
-		return nil, fmt.Errorf("OrgID is required")
+		return uuid.Nil, fmt.Errorf("OrgID is required")
 	}
 	orgUUID, err := uuid.Parse(params.OrgID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid OrgID format: %w", err)
+		return uuid.Nil, fmt.Errorf("invalid OrgID format: %w", err)
+	}
+	return orgUUID, nil
+}
+
+// Create the initial test and return a handle to poll it
+func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
+	orgUUID, err := validateStartTestParams(params)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create test body
 	testAttributes := TestAttributesCreate{Subject: params.Subject, Resources: params.Resources}
 
-	if params.LocalPolicy != nil {
+	if params.LocalPolicy != nil || params.ScanConfig != nil {
 		testAttributes.Config = &TestConfiguration{
 			LocalPolicy: params.LocalPolicy,
+			ScanConfig:  params.ScanConfig,
 		}
 	}
 
