@@ -134,6 +134,8 @@ func ConvertTypeToDriverName(s string) string {
 		return "Snyk Container"
 	case "iac":
 		return "Snyk IaC"
+	case "secret":
+		return "Snyk Secret"
 	default:
 		return "Snyk Open Source"
 	}
@@ -153,11 +155,13 @@ func BuildHelpMarkdown(issue testapi.Issue, findingType testapi.FindingType) str
 
 // BuildRuleShortDescription creates the short description for a SARIF rule
 func BuildRuleShortDescription(issue testapi.Issue) string {
-	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
-	componentNameStr := fmt.Sprintf("%v", componentName)
-	if componentNameStr == "" || componentNameStr == "<nil>" {
-		componentNameStr = "package"
+	shortDescription, _ := issue.GetData(testapi.DataKeyRuleShortDescription)
+	strShortDescription, ok := shortDescription.(string)
+	if ok && strShortDescription != "" {
+		return strShortDescription
 	}
+
+	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
 	severity := issue.GetSeverity()
 	title := issue.GetTitle()
 
@@ -166,13 +170,22 @@ func BuildRuleShortDescription(issue testapi.Issue) string {
 		severity = strings.ToUpper(severity[:1]) + severity[1:]
 	}
 
-	return fmt.Sprintf("%s severity - %s vulnerability in %s", severity, title, componentNameStr)
+	packageDetails := ""
+	if strComponentName, ok := componentName.(string); ok && strComponentName != "" {
+		packageDetails = " vulnerability in " + strComponentName
+	}
+
+	return fmt.Sprintf("%s severity - %s%s", severity, title, packageDetails)
 }
 
 // BuildRuleFullDescription creates the full description for a SARIF rule
 func BuildRuleFullDescription(issue testapi.Issue) string {
 	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
 	componentVersion, _ := issue.GetData(testapi.DataKeyComponentVersion)
+
+	if componentName == nil || componentVersion == nil {
+		return ""
+	}
 
 	componentNameStr := fmt.Sprintf("%v", componentName)
 	componentVersionStr := fmt.Sprintf("%v", componentVersion)
@@ -220,13 +233,14 @@ func GetRuleCVSSScore(issue testapi.Issue) float32 {
 // FormatIssueMessage creates the SARIF message text for an issue
 func FormatIssueMessage(issue testapi.Issue) string {
 	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
-	componentNameStr := fmt.Sprintf("%v", componentName)
-	if componentNameStr == "" || componentNameStr == "<nil>" {
-		componentNameStr = "package"
+	if componentName != nil {
+		componentNameStr := fmt.Sprintf("%v", componentName)
+		return fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
+			componentNameStr, issue.GetSeverity())
 	}
 
-	return fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
-		componentNameStr, issue.GetSeverity())
+	title := issue.GetTitle()
+	return fmt.Sprintf("This file contains a %s severity %s vulnerability.", issue.GetSeverity(), title)
 }
 
 // BuildFixesFromIssue builds SARIF fixes array from issue
@@ -482,6 +496,8 @@ func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 }
 
 // BuildLocation constructs a SARIF location object from issue data
+//
+//nolint:gocyclo // needs the global state for package name and version
 func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{} {
 	// Extract first finding from issue
 	findings := issue.GetFindings()
@@ -492,18 +508,11 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 
 	// Default to line 1 for manifest files
 	uri := targetFile
-	startLine := 1
-	var packageName, packageVersion string
-	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
-		if str, ok := val.(string); ok {
-			packageName = str
-		}
+	region := map[string]interface{}{
+		"startLine": 1,
 	}
-	if val, ok := issue.GetData(testapi.DataKeyComponentVersion); ok {
-		if str, ok := val.(string); ok {
-			packageVersion = str
-		}
-	}
+
+	packageName, packageVersion := getPackageNameAndVersionFromIssue(issue)
 
 	// Try to extract actual file path and package version from locations
 	if finding.Attributes != nil && len(finding.Attributes.Locations) > 0 && uri == "" {
@@ -513,10 +522,18 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		sourceLoc, err := loc.AsSourceLocation()
 		if err == nil && sourceLoc.FilePath != "" {
 			uri = sourceLoc.FilePath
-			startLine = sourceLoc.FromLine
+			region["startLine"] = sourceLoc.FromLine
+			if sourceLoc.FromColumn != nil {
+				region["startColumn"] = *sourceLoc.FromColumn
+			}
+			if sourceLoc.ToLine != nil {
+				region["endLine"] = *sourceLoc.ToLine
+			}
+			if sourceLoc.ToColumn != nil {
+				region["endColumn"] = *sourceLoc.ToColumn
+			}
 		}
 
-		// Extract package info from PackageLocation if available
 		pkgLoc, err := loc.AsPackageLocation()
 		if err == nil {
 			if pkgLoc.Package.Name != "" {
@@ -528,21 +545,44 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		}
 	}
 
-	return map[string]interface{}{
-		"physicalLocation": map[string]interface{}{
+	location := map[string]interface{}{}
+
+	if len(uri) > 0 {
+		location["physicalLocation"] = map[string]interface{}{
 			"artifactLocation": map[string]interface{}{
 				"uri": uri,
 			},
-			"region": map[string]interface{}{
-				"startLine": startLine,
-			},
-		},
-		"logicalLocations": []interface{}{
+			"region": region,
+		}
+	}
+
+	if packageName != "" || packageVersion != "" {
+		location["logicalLocations"] = []interface{}{
 			map[string]interface{}{
 				"fullyQualifiedName": fmt.Sprintf("%s@%s", packageName, packageVersion),
 			},
-		},
+		}
 	}
+
+	if len(location) > 0 {
+		return location
+	}
+
+	return nil
+}
+
+func getPackageNameAndVersionFromIssue(issue testapi.Issue) (packageName, packageVersion string) {
+	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
+		if str, ok := val.(string); ok {
+			packageName = str
+		}
+	}
+	if val, ok := issue.GetData(testapi.DataKeyComponentVersion); ok {
+		if str, ok := val.(string); ok {
+			packageVersion = str
+		}
+	}
+	return packageName, packageVersion
 }
 
 // BuildFixes extracts fix information from a finding's relationship data
