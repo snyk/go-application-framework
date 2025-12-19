@@ -534,7 +534,8 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 
 		pkgLoc, err := loc.AsPackageLocation()
 		if err == nil {
-			packageName, packageVersion = getPackageNameAndVersionFromPackageLocation(pkgLoc)
+			packageName = pkgLoc.Package.Name
+			packageVersion = pkgLoc.Package.Version
 		}
 	}
 
@@ -574,16 +575,6 @@ func getPackageNameAndVersionFromIssue(issue testapi.Issue) (packageName, packag
 		if str, ok := val.(string); ok {
 			packageVersion = str
 		}
-	}
-	return packageName, packageVersion
-}
-
-func getPackageNameAndVersionFromPackageLocation(pkgLoc testapi.PackageLocation) (packageName, packageVersion string) {
-	if pkgLoc.Package.Name != "" {
-		packageName = pkgLoc.Package.Name
-	}
-	if pkgLoc.Package.Version != "" {
-		packageVersion = pkgLoc.Package.Version
 	}
 	return packageName, packageVersion
 }
