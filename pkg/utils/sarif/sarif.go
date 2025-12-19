@@ -496,6 +496,8 @@ func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 }
 
 // BuildLocation constructs a SARIF location object from issue data
+//
+//nolint:gocyclo // needs the global state for package name and version
 func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{} {
 	// Extract first finding from issue
 	findings := issue.GetFindings()
@@ -534,8 +536,12 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 
 		pkgLoc, err := loc.AsPackageLocation()
 		if err == nil {
-			packageName = pkgLoc.Package.Name
-			packageVersion = pkgLoc.Package.Version
+			if pkgLoc.Package.Name != "" {
+				packageName = pkgLoc.Package.Name
+			}
+			if pkgLoc.Package.Version != "" {
+				packageVersion = pkgLoc.Package.Version
+			}
 		}
 	}
 
