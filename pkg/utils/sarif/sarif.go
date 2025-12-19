@@ -156,15 +156,12 @@ func BuildHelpMarkdown(issue testapi.Issue, findingType testapi.FindingType) str
 // BuildRuleShortDescription creates the short description for a SARIF rule
 func BuildRuleShortDescription(issue testapi.Issue) string {
 	shortDescription, _ := issue.GetData(testapi.DataKeyRuleShortDescription)
-	if shortDescription != nil && shortDescription != "" {
-		return fmt.Sprintf("%v", shortDescription)
+	strShortDescription, ok := shortDescription.(string)
+	if ok && strShortDescription != "" {
+		return strShortDescription
 	}
 
 	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
-	componentNameStr := ""
-	if componentName != nil {
-		componentNameStr = fmt.Sprintf("%v", componentName)
-	}
 	severity := issue.GetSeverity()
 	title := issue.GetTitle()
 
@@ -174,8 +171,8 @@ func BuildRuleShortDescription(issue testapi.Issue) string {
 	}
 
 	packageDetails := ""
-	if len(componentNameStr) > 0 {
-		packageDetails = " vulnerability in " + componentNameStr
+	if strComponentName, ok := componentName.(string); ok && strComponentName != "" {
+		packageDetails = " vulnerability in " + strComponentName
 	}
 
 	return fmt.Sprintf("%s severity - %s%s", severity, title, packageDetails)
@@ -560,7 +557,11 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		}
 	}
 
-	return location
+	if len(location) > 0 {
+		return location
+	}
+
+	return nil
 }
 
 func getPackageNameAndVersionFromIssue(issue testapi.Issue) (packageName, packageVersion string) {
