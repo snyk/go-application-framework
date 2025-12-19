@@ -155,7 +155,7 @@ func BuildHelpMarkdown(issue testapi.Issue, findingType testapi.FindingType) str
 
 // BuildRuleShortDescription creates the short description for a SARIF rule
 func BuildRuleShortDescription(issue testapi.Issue) string {
-	shortDescription, _ := issue.GetData(testapi.DataKeyShortDescription)
+	shortDescription, _ := issue.GetData(testapi.DataKeyRuleShortDescription)
 	if shortDescription != nil && shortDescription != "" {
 		return fmt.Sprintf("%v", shortDescription)
 	}
