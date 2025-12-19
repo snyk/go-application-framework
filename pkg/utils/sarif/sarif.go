@@ -541,13 +541,15 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		}
 	}
 
-	location := map[string]interface{}{
-		"physicalLocation": map[string]interface{}{
+	location := map[string]interface{}{}
+
+	if len(uri) > 0 {
+		location["physicalLocation"] = map[string]interface{}{
 			"artifactLocation": map[string]interface{}{
 				"uri": uri,
 			},
 			"region": region,
-		},
+		}
 	}
 
 	if packageName != "" || packageVersion != "" {
