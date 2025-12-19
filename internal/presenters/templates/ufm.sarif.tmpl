@@ -62,6 +62,7 @@
 				{{- range $index, $issue := $issues }}
 				{{- $location := buildLocationFromIssue $issue $targetFile }}
 				{{- $physicalLoc := index $location "physicalLocation" }}
+				{{- $logicalLocs := index $location "logicalLocations" }}
 				{{- $region := index $physicalLoc "region" }}
 				{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
 				{{- $fixes := buildFixesFromIssue $issue }}
@@ -74,9 +75,8 @@
 					},
 					"locations": [
 						{{- if $location }}
-					
-						{{- $logicalLocs := index $location "logicalLocations" }}
 						{
+							{{- if $physicalLoc }}
 							"physicalLocation": {
 								"artifactLocation": {
 									"uri": {{ getQuotedString (index $artifactLocation "uri") }}
@@ -93,7 +93,10 @@
 									"endColumn": {{ index $region "endColumn" }}
 									{{- end }}
 								}
-							}{{if $logicalLocs}},
+							}
+							{{- end }}
+							{{- if and $physicalLoc $logicalLocs}} , {{end}}
+							{{- if $logicalLocs }}
 							"logicalLocations": [
 								{{- range $logLoc := $logicalLocs }}
 								{
