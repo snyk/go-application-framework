@@ -45,6 +45,10 @@ const (
 	// Value type: [][]Package
 	DataKeyDependencyPaths = "dependency-paths"
 
+	// DataKeyShortDescription is the key for the rule short description (SAST or Secret findings)
+	// Value type: string
+	DataKeyShortDescription = "short-description"
+
 	FindingTypeLicense = "license"
 )
 
@@ -466,6 +470,7 @@ type issueBuilder struct {
 	ecosystem         string
 	title             string
 	description       string
+	shortDescription  string
 	packageName       string
 	packageVersion    string
 	cvssScore         float32
@@ -638,6 +643,8 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 			b.processCveProblem(&problem)
 		case "cwe":
 			b.processCweProblem(&problem)
+		case "secret":
+			b.processSecretsRuleProblem(&problem)
 		}
 
 		// Fallback to first problem if no snyk_vuln or snyk_license found
@@ -748,6 +755,20 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 	}
 }
 
+// processSecretsRuleProblem extracts data from a secrets rule problem
+func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
+	if id := problem.GetID(); id != "" {
+		b.id = id
+	}
+
+	secretsProblem, err := problem.AsSecretsRuleProblem()
+	if err != nil {
+		return
+	}
+
+	b.shortDescription = secretsProblem.ShortDescription
+}
+
 // determineFallbackID sets ID from finding key or ID if not already set
 func (b *issueBuilder) determineFallbackID() {
 	if b.id == "" && b.firstFinding != nil {
@@ -845,6 +866,11 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 	// Add dependency paths
 	if len(b.dependencyPaths) > 0 {
 		metadata[DataKeyDependencyPaths] = b.dependencyPaths
+	}
+
+	// Add short description
+	if b.shortDescription != "" {
+		metadata[DataKeyShortDescription] = b.shortDescription
 	}
 
 	return metadata

@@ -155,6 +155,11 @@ func BuildHelpMarkdown(issue testapi.Issue, findingType testapi.FindingType) str
 
 // BuildRuleShortDescription creates the short description for a SARIF rule
 func BuildRuleShortDescription(issue testapi.Issue) string {
+	shortDescription, _ := issue.GetData(testapi.DataKeyShortDescription)
+	if shortDescription != nil && shortDescription != "" {
+		return fmt.Sprintf("%v", shortDescription)
+	}
+
 	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
 	componentNameStr := ""
 	if componentName != nil {
@@ -231,13 +236,14 @@ func GetRuleCVSSScore(issue testapi.Issue) float32 {
 // FormatIssueMessage creates the SARIF message text for an issue
 func FormatIssueMessage(issue testapi.Issue) string {
 	componentName, _ := issue.GetData(testapi.DataKeyComponentName)
-	componentNameStr := fmt.Sprintf("%v", componentName)
-	if componentNameStr == "" || componentNameStr == "<nil>" {
-		componentNameStr = "package"
+	if componentName != nil {
+		componentNameStr := fmt.Sprintf("%v", componentName)
+		return fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
+			componentNameStr, issue.GetSeverity())
 	}
 
-	return fmt.Sprintf("This file introduces a vulnerable %s package with a %s severity vulnerability.",
-		componentNameStr, issue.GetSeverity())
+	title := issue.GetTitle()
+	return fmt.Sprintf("This file contains a %s severity %s vulnerability", issue.GetSeverity(), title)
 }
 
 // BuildFixesFromIssue builds SARIF fixes array from issue
