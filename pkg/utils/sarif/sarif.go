@@ -243,7 +243,7 @@ func FormatIssueMessage(issue testapi.Issue) string {
 	}
 
 	title := issue.GetTitle()
-	return fmt.Sprintf("This file contains a %s severity %s vulnerability", issue.GetSeverity(), title)
+	return fmt.Sprintf("This file contains a %s severity %s vulnerability.", issue.GetSeverity(), title)
 }
 
 // BuildFixesFromIssue builds SARIF fixes array from issue
