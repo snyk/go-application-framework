@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
@@ -123,6 +124,7 @@ type TestResult interface {
 	GetTestFacts() *[]TestFact
 
 	SetMetadata(key string, value interface{})
+	GetMetadataValue(key string) interface{}
 	GetMetadata() map[string]interface{}
 
 	Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error)
@@ -286,6 +288,11 @@ func (r *testResult) SetMetadata(key string, value interface{}) {
 // GetMetadata returns the metadata for the given key.
 func (r *testResult) GetMetadata() map[string]interface{} {
 	return r.metadata
+}
+
+// GetMetadataValue returns the metadata value for the given key.
+func (r *testResult) GetMetadataValue(key string) interface{} {
+	return r.metadata[key]
 }
 
 // NewTestClient returns a new instance of the test client, configured with the provided options.
