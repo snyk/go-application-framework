@@ -21,6 +21,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/utils/target"
 )
 
 func add(a, b int) int {
@@ -363,6 +364,9 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		}
 		sorting := FilterSeverityASC(json_schemas.DEFAULT_SEVERITIES, config.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
 		return summary.GetSortedIssues(sorting)
+	}
+	defaultMap["getTargetId"] = func(path string) (string, error) {
+		return target.GetTargetId(path, target.AutoDetectedTargetId, target.WithConfiguredRepository(config))
 	}
 
 	return defaultMap
