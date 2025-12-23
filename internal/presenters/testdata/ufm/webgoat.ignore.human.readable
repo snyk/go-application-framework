@@ -356,6 +356,11 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
 
 💡 Tip
 
+   Some capabilities, including the ability to apply ignores, are unavailable. Retest the project with the --remote-repo-url parameter or from within a repository to enable full functionality.
+                                                                                                                                                                                                
+
+💡 Tip
+
    You are currently viewing results with --severity-threshold applied.
    To view all issues, remove the --severity-threshold flag            
                                                                        

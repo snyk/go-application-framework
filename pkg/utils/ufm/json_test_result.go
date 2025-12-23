@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
@@ -121,12 +122,21 @@ func (j *jsonTestResult) GetTestFacts() *[]testapi.TestFact {
 
 // SetMetadata sets the metadata for the given key.
 func (j *jsonTestResult) SetMetadata(key string, value interface{}) {
+	if j.Metadata == nil {
+		j.Metadata = make(map[string]interface{})
+	}
+
 	j.Metadata[key] = value
 }
 
 // GetMetadata returns the metadata for the given key.
 func (j *jsonTestResult) GetMetadata() map[string]interface{} {
 	return j.Metadata
+}
+
+// GetMetadataValue returns the metadata value for the given key.
+func (j *jsonTestResult) GetMetadataValue(key string) interface{} {
+	return j.Metadata[key]
 }
 
 // Findings returns the stored findings without making any API calls.

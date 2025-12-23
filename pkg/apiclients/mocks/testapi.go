@@ -137,6 +137,20 @@ func (mr *MockTestResultMockRecorder) GetMetadata() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetadata", reflect.TypeOf((*MockTestResult)(nil).GetMetadata))
 }
 
+// GetMetadataValue mocks base method.
+func (m *MockTestResult) GetMetadataValue(key string) interface{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMetadataValue", key)
+	ret0, _ := ret[0].(interface{})
+	return ret0
+}
+
+// GetMetadataValue indicates an expected call of GetMetadataValue.
+func (mr *MockTestResultMockRecorder) GetMetadataValue(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetadataValue", reflect.TypeOf((*MockTestResult)(nil).GetMetadataValue), key)
+}
+
 // GetOutcomeReason mocks base method.
 func (m *MockTestResult) GetOutcomeReason() *testapi.TestOutcomeReason {
 	m.ctrl.T.Helper()
