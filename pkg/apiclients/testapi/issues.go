@@ -45,6 +45,10 @@ const (
 	// Value type: [][]Package
 	DataKeyDependencyPaths = "dependency-paths"
 
+	// DataKeyRuleShortDescription is the key for the rule short description (SAST or Secret findings)
+	// Value type: string
+	DataKeyRuleShortDescription = "rule-short-description"
+
 	FindingTypeLicense = "license"
 )
 
@@ -454,30 +458,31 @@ func newIssue(findings []*FindingData) (Issue, error) {
 
 // issueBuilder helps construct an Issue from FindingData
 type issueBuilder struct {
-	findingType       FindingType
-	allProblems       []*Problem
-	primaryProblem    *Problem
-	firstFinding      *FindingData
-	cwes              []string
-	cves              []string
-	id                string
-	severity          string
-	effectiveSeverity string
-	ecosystem         string
-	title             string
-	description       string
-	packageName       string
-	packageVersion    string
-	cvssScore         float32
-	isFixable         bool
-	fixedInVersions   []string
-	dependencyPaths   [][]Package // Each element is a path (array of packages with name and version)
-	snykVulnProblem   *SnykVulnProblem
-	sourceLocations   []SourceLocation
-	riskScore         uint16
-	reachability      *ReachabilityEvidence
-	findings          []*FindingData
-	ignoreDetails     []IssueIgnoreDetails
+	findingType          FindingType
+	allProblems          []*Problem
+	primaryProblem       *Problem
+	firstFinding         *FindingData
+	cwes                 []string
+	cves                 []string
+	id                   string
+	severity             string
+	effectiveSeverity    string
+	ecosystem            string
+	title                string
+	description          string
+	ruleShortDescription string
+	packageName          string
+	packageVersion       string
+	cvssScore            float32
+	isFixable            bool
+	fixedInVersions      []string
+	dependencyPaths      [][]Package // Each element is a path (array of packages with name and version)
+	snykVulnProblem      *SnykVulnProblem
+	sourceLocations      []SourceLocation
+	riskScore            uint16
+	reachability         *ReachabilityEvidence
+	findings             []*FindingData
+	ignoreDetails        []IssueIgnoreDetails
 }
 
 // processFindings extracts data from all findings
@@ -638,6 +643,8 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 			b.processCveProblem(&problem)
 		case "cwe":
 			b.processCweProblem(&problem)
+		case "secret":
+			b.processSecretsRuleProblem(&problem)
 		}
 
 		// Fallback to first problem if no snyk_vuln or snyk_license found
@@ -748,6 +755,20 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 	}
 }
 
+// processSecretsRuleProblem extracts data from a secrets rule problem
+func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
+	if id := problem.GetID(); id != "" {
+		b.id = id
+	}
+
+	secretsProblem, err := problem.AsSecretsRuleProblem()
+	if err != nil {
+		return
+	}
+
+	b.ruleShortDescription = secretsProblem.ShortDescription
+}
+
 // determineFallbackID sets ID from finding key or ID if not already set
 func (b *issueBuilder) determineFallbackID() {
 	if b.id == "" && b.firstFinding != nil {
@@ -845,6 +866,11 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 	// Add dependency paths
 	if len(b.dependencyPaths) > 0 {
 		metadata[DataKeyDependencyPaths] = b.dependencyPaths
+	}
+
+	// Add short description
+	if b.ruleShortDescription != "" {
+		metadata[DataKeyRuleShortDescription] = b.ruleShortDescription
 	}
 
 	return metadata
