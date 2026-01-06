@@ -65,6 +65,8 @@ func AssembleUrnFromUUID(uuid string) string {
 	return fmt.Sprintf("%s:%s", urnPrefix, uuid)
 }
 
+// GetTargetId returns the target ID for the given path
+// Deprecated: Use target.GetTargetId instead.
 func GetTargetId(path string, idType TargetIdType, options ...TargetIdOptions) (string, error) {
 	return target.GetTargetId(path, idType, options...)
 }
