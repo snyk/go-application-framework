@@ -17,7 +17,6 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/internal/api/contract"
 	policyApi "github.com/snyk/go-application-framework/internal/api/policy/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
@@ -53,7 +52,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
-	config.Set(ConfigIgnoreApprovalEnabled, true)
+
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
@@ -301,28 +300,6 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.Error(t, err, "Should return an error")
 		assert.Nil(t, result, "payload be nil")
 	})
-	t.Run("IAW FF is disabled", func(t *testing.T) {
-		expectedFindingsId := uuid.New().String()
-		expectedIgnoreType := string(policyApi.WontFix)
-		expectedReason := "Test reason"
-
-		invocationContext := setupMockIgnoreContext(t, "{}", http.StatusCreated)
-		config := invocationContext.GetConfiguration()
-		config.Set(ConfigIgnoreApprovalEnabled, false)
-
-		config.Set(InteractiveKey, false)
-
-		config.Set(FindingsIdKey, expectedFindingsId)
-		config.Set(IgnoreTypeKey, expectedIgnoreType)
-		config.Set(ReasonKey, expectedReason)
-		config.Set(RemoteRepoUrlKey, testRepoUrl)
-		config.Set(configuration.API_URL, "https://api.snyk.io")
-		config.Set(EnrichResponseKey, true)
-
-		result, err := ignoreCreateWorkflowEntryPoint(invocationContext, nil)
-		assert.NotNil(t, err, "Should return an error when IAW FF is disabled")
-		assert.Nil(t, result, "result should be nil when IAW FF is disabled")
-	})
 }
 
 func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiStatusCode int) (*mocks.MockInvocationContext, *mocks.MockUserInterface) {
@@ -332,7 +309,6 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
-	config.Set(ConfigIgnoreApprovalEnabled, true)
 	config.Set(InteractiveKey, true) // Always interactive
 	config.Set(EnrichResponseKey, true)
 	config.Set(configuration.ORGANIZATION_SLUG, "some-org")
@@ -706,148 +682,4 @@ func Test_getExpireValue(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, result)
 	})
-}
-
-func Test_getOrgIgnoreApprovalEnabled(t *testing.T) {
-	t.Run("returns existing value when not nil", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockEngine := mocks.NewMockEngine(ctrl)
-		mockConfig := mocks.NewMockConfiguration(ctrl)
-
-		// Expect the calls made during getOrgIgnoreApprovalEnabled function creation
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
-		mockConfig.EXPECT().AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION).Return(nil)
-
-		defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
-
-		result, err := defaultValueFunc(nil, true)
-		assert.NoError(t, err)
-		assert.Equal(t, true, result)
-
-		result, err = defaultValueFunc(nil, false)
-		assert.NoError(t, err)
-		assert.Equal(t, false, result)
-	})
-
-	t.Run("approval workflow enabled", func(t *testing.T) {
-		result, err := setupMockEngineForOrgSettings(t, &contract.OrgSettingsResponse{
-			Ignores: &contract.OrgIgnoreSettings{ApprovalWorkflowEnabled: true},
-		})
-
-		assert.NoError(t, err)
-		assert.Equal(t, true, result)
-	})
-
-	t.Run("approval workflow disabled", func(t *testing.T) {
-		result, err := setupMockEngineForOrgSettings(t, &contract.OrgSettingsResponse{
-			Ignores: &contract.OrgIgnoreSettings{ApprovalWorkflowEnabled: false},
-		})
-
-		assert.NoError(t, err)
-		assert.Equal(t, false, result)
-	})
-
-	t.Run("ignores field is nil", func(t *testing.T) {
-		result, err := setupMockEngineForOrgSettings(t, &contract.OrgSettingsResponse{
-			Ignores: nil,
-		})
-
-		assert.NoError(t, err)
-		assert.Equal(t, false, result)
-	})
-
-	t.Run("API call fails", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		logger := zerolog.Logger{}
-		orgId := uuid.New().String()
-		apiUrl := "https://api.snyk.io"
-
-		mockEngine := mocks.NewMockEngine(ctrl)
-		mockConfig := mocks.NewMockConfiguration(ctrl)
-		mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
-
-		httpClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
-			return &http.Response{
-				StatusCode: http.StatusInternalServerError,
-				Body:       io.NopCloser(bytes.NewBufferString("Internal Server Error")),
-			}
-		})
-
-		// Expect the calls made during getOrgIgnoreApprovalEnabled function creation
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
-		mockConfig.EXPECT().AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION).Return(nil)
-
-		// Expect the calls made during the actual default value function execution
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
-		mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
-		mockEngine.EXPECT().GetLogger().Return(&logger)
-		mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
-		mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
-		mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
-
-		defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
-		result, err := defaultValueFunc(nil, nil)
-
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "unable to retrieve org settings")
-	})
-}
-
-func setupMockEngineForOrgSettings(t *testing.T, response *contract.OrgSettingsResponse) (interface{}, error) {
-	t.Helper()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	orgId := uuid.New().String()
-	apiUrl := "https://api.snyk.io"
-
-	responseJSON, err := json.Marshal(response)
-	assert.NoError(t, err)
-
-	mockEngine := mocks.NewMockEngine(ctrl)
-	mockConfig := mocks.NewMockConfiguration(ctrl)
-	mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
-
-	httpClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBuffer(responseJSON)),
-		}
-	})
-
-	// Expect the calls made during getOrgIgnoreApprovalEnabled function creation
-	mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
-	mockConfig.EXPECT().AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION).Return(nil)
-
-	// Expect the calls made during the actual default value function execution
-	mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
-	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
-	mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
-	mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
-	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
-
-	defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
-	return defaultValueFunc(nil, nil)
-}
-
-func Test_getOrgIgnoreApprovalEnabled_CacheDependentOnOrg(t *testing.T) {
-	testutils.CheckCacheRespectOrgDependency(
-		t,
-		ConfigIgnoreApprovalEnabled,
-		func(isFirstCall bool) any {
-			return &contract.OrgSettingsResponse{
-				Ignores: &contract.OrgIgnoreSettings{
-					ApprovalWorkflowEnabled: isFirstCall,
-				},
-			}
-		},
-		InitIgnoreWorkflows,
-		true,
-		false,
-	)
 }
