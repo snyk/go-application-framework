@@ -150,6 +150,16 @@ func getMaxRetryAttempts(response *http.Response, maxAttempts uint) uint {
 }
 
 func shouldRetry(response *http.Response, attempts uint, maxAttempts uint) error {
+	// if the Snyk API is in maintenance mode, we should not retry
+	if response.StatusCode == http.StatusServiceUnavailable {
+		errorList := getErrorList(response)
+		for _, actualError := range errorList {
+			if actualError.ErrorCode == "SNYK-0099" {
+				return backoff.Permanent(errRetryNecessary)
+			}
+		}
+	}
+
 	if statusCodesToRetryLUT[response.StatusCode].shouldRetry {
 		// if we have reached the maximum number of permitted attempts, stop retrying
 		if attempts >= maxAttempts {
