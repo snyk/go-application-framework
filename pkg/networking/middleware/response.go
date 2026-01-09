@@ -69,6 +69,9 @@ func HandleResponse(res *http.Response, config configuration.Configuration) erro
 }
 
 func getErrorList(res *http.Response) []snyk_errors.Error {
+	if res.Body == nil {
+		return []snyk_errors.Error{}
+	}
 	// get JSONApiErrors from body
 	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
