@@ -32,8 +32,9 @@ const (
 	// Org related configuration
 	// ---------
 
-	ORGANIZATION      string = "org"               // ORGANIZATION (string) sets/returns the Organization ID
-	ORGANIZATION_SLUG string = "internal_org_slug" // ORGANIZATION_SLUG (string) returns the slug of the organization and correlates to the ORGANIZATION ID.
+	ORGANIZATION         string = "org"               // ORGANIZATION (string) sets/returns the Organization ID
+	ORGANIZATION_SLUG    string = "internal_org_slug" // ORGANIZATION_SLUG (string) returns the slug of the organization and correlates to the ORGANIZATION ID.
+	DEFAULT_ORGANIZATION string = "default_org"       // DEFAULT_ORGANIZATION (string) returns the default Organization ID, as specified for the user in the web UI.
 
 	// ---------
 	// URL configuration
