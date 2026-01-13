@@ -100,3 +100,55 @@ func Test_isImmutableHost(t *testing.T) {
 		assert.False(t, isImmutableHost(host), host)
 	}
 }
+
+func Test_IsSnykHostname(t *testing.T) {
+	cases := []struct {
+		hostname string
+		expected bool
+	}{
+		// Valid hostnames
+		{"snyk.io", true},
+		{"snykgov.io", true},
+		{"api.snyk.io", true},
+		{"api.snykgov.io", true},
+		{"app.au.snyk.io", true},
+		{"deeproxy.eu.snyk.io", true},
+		{"foobar.my.snyk.io", true},
+		{"deeproxy.snykgov.io", true},
+
+		// Invalid hostnames
+		{"api-snyk.io", false},
+		{"staging-snyk.io", false},
+		{"eu-snyk.io", false},
+		{"example.com", false},
+		{"snyk.io.evil.com", false},
+		{"fakesnyk.io", false},
+		{"notsnykgov.io", false},
+		{"snykgov.io.attacker.com", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.hostname, func(t *testing.T) {
+			actual := IsSnykHostname(tc.hostname)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func Test_GetCanonicalApiAsUrl_InvalidHostname(t *testing.T) {
+	invalidUrls := []string{
+		"https://api-snyk.io",
+		"https://api.staging-snyk.io",
+		"https://api.eu-snyk.io",
+		"https://example.com",
+		"https://snyk.io.evil.com",
+	}
+
+	for _, u := range invalidUrls {
+		t.Run(u, func(t *testing.T) {
+			_, err := GetCanonicalApiUrlFromString(u)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "host name is invalid")
+		})
+	}
+}
