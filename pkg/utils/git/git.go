@@ -2,10 +2,15 @@ package git
 
 import (
 	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 )
+
+var originRegex = regexp.MustCompile(`(.+@)?(.+):(.+$)`)
 
 func RepoUrlFromDir(inputDir string) (string, error) {
 	_, remoteConfig, err := RepoFromDir(inputDir)
@@ -136,4 +141,28 @@ func GetFirstRemote(inputDir string) (string, error) {
 	}
 
 	return remoteConfig.URLs[0], nil
+}
+
+func NormalizeRemoteURL(remoteUrl string) string {
+	if remoteUrl == "" {
+		return remoteUrl
+	}
+
+	// for scp-like syntax [user@]server:project.git
+	u, err := url.Parse(remoteUrl)
+	if err == nil && u.Host != "" && u.Scheme != "" {
+		scheme := strings.ToLower(u.Scheme)
+		if scheme == "ssh" || scheme == "http" || scheme == "https" {
+			return fmt.Sprintf("http://%s%s", u.Host, u.Path)
+		}
+	}
+
+	matches := originRegex.FindStringSubmatch(remoteUrl)
+	if len(matches) == 4 {
+		if matches[2] != "" && matches[3] != "" {
+			return fmt.Sprintf("http://%s/%s", matches[2], matches[3])
+		}
+	}
+
+	return remoteUrl
 }

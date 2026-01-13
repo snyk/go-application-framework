@@ -134,3 +134,59 @@ func TestGetRemoteUrl_Priority(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/origin/repo.git", remoteUrl)
 }
+
+func TestGetSanitizedRemoteUrl(t *testing.T) {
+	tests := []struct {
+		name      string
+		remoteUrl string
+		expected  string
+	}{
+		{
+			name:      "https url",
+			remoteUrl: "https://github.com/snyk/go-application-framework.git",
+			expected:  "http://github.com/snyk/go-application-framework.git",
+		},
+		{
+			name:      "http url",
+			remoteUrl: "http://github.com/snyk/go-application-framework.git",
+			expected:  "http://github.com/snyk/go-application-framework.git",
+		},
+		{
+			name:      "ssh url with protocol",
+			remoteUrl: "ssh://git@github.com/snyk/go-application-framework.git",
+			expected:  "http://github.com/snyk/go-application-framework.git",
+		},
+		{
+			name:      "scp-like syntax",
+			remoteUrl: "git@github.com:snyk/go-application-framework.git",
+			expected:  "http://github.com/snyk/go-application-framework.git",
+		},
+		{
+			name:      "scp-like syntax no user",
+			remoteUrl: "github.com:snyk/go-application-framework.git",
+			expected:  "http://github.com/snyk/go-application-framework.git",
+		},
+		{
+			name:      "empty url",
+			remoteUrl: "",
+			expected:  "",
+		},
+		{
+			name:      "invalid url no change",
+			remoteUrl: "not-a-valid-url",
+			expected:  "not-a-valid-url",
+		},
+		{
+			name:      "ftp url fallback to regex (weird behavior matching nodejs)",
+			remoteUrl: "ftp://github.com/snyk/go.git",
+			expected:  "http://ftp///github.com/snyk/go.git",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := NormalizeRemoteURL(tt.remoteUrl)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
