@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/fips140"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -136,6 +137,11 @@ func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog
 		apiString, err := api.GetCanonicalApiUrlFromString(urlString)
 		if err != nil {
 			logger.Warn().Err(err).Str(configuration.API_URL, urlString).Msg("failed to get api url")
+		}
+		if !api.IsSnykHostname(apiString) {
+			hostNameErr := fmt.Errorf("host name is not snyk.io or snykgov.io")
+			logger.Err(hostNameErr).Msg("host name is not snyk.io or snykgov.io")
+			return nil, fmt.Errorf("host name is not snyk.io or snykgov.io")
 		}
 		return apiString, nil
 	}

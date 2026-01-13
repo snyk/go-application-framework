@@ -45,6 +45,11 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	return n.next.RoundTrip(newRequest)
 }
 
+// ShouldRequireAuthentication checks if a request requires authentication.
+// apiUrl is the configured API URL.
+// url is the URL of the request.
+// additionalSubdomains is a list of additional subdomains to check.
+// additionalUrls is a list of additional URLs to check.
 func ShouldRequireAuthentication(
 	apiUrl string,
 	url *url.URL,
