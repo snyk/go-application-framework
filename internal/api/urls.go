@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"regexp"
@@ -52,10 +53,17 @@ func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 	return GetCanonicalApiUrl(*url)
 }
 
+func IsSnykHostname(hostname string) bool {
+	return hostname == "snyk.io" || hostname == "snykgov.io" ||
+		strings.HasSuffix(hostname, ".snyk.io") || strings.HasSuffix(hostname, ".snykgov.io")
+}
+
 func GetCanonicalApiAsUrl(url url.URL) (url.URL, error) {
 	// for localhost we don't change the host, since there are no subdomains
 	if isImmutableHost(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
+	} else if !IsSnykHostname(url.Hostname()) {
+		return url, fmt.Errorf("host name is invalid")
 	} else {
 		url.Host = appRegexp.ReplaceAllString(url.Host, apiPrefixDot)
 

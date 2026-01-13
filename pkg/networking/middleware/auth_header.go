@@ -51,6 +51,10 @@ func ShouldRequireAuthentication(
 	additionalSubdomains []string,
 	additionalUrls []string,
 ) (matchesPattern bool, err error) {
+	if !api.IsSnykHostname(url.Hostname()) {
+		return false, fmt.Errorf("host name is invalid")
+	}
+
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
 		var matchesPattern bool
