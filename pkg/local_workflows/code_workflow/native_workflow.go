@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	sarif2 "github.com/snyk/go-application-framework/pkg/utils/sarif"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -273,8 +274,10 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 		pathIsDirectory = true
 	}
 
+	remoteUrl := git.GetSanitizedRemoteUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL))
+
 	if !pathIsDirectory {
-		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)), scan.WithCommitId(config.GetString(ConfigurationCommitId)))
+		target, err := scan.NewRepositoryTarget(filepath.Dir(path), scan.WithRepositoryUrl(remoteUrl), scan.WithCommitId(config.GetString(ConfigurationCommitId)))
 		if err != nil {
 			logger.Warn().Err(err)
 		}
@@ -290,7 +293,7 @@ func determineAnalyzeInput(path string, config configuration.Configuration, logg
 		return target, files, nil
 	}
 
-	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(config.GetString(configuration.FLAG_REMOTE_REPO_URL)), scan.WithCommitId(config.GetString(ConfigurationCommitId)))
+	target, err := scan.NewRepositoryTarget(path, scan.WithRepositoryUrl(remoteUrl), scan.WithCommitId(config.GetString(ConfigurationCommitId)))
 	if err != nil {
 		logger.Warn().Err(err)
 	}

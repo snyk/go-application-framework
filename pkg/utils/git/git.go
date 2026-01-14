@@ -2,6 +2,8 @@ package git
 
 import (
 	"fmt"
+	"net/url"
+	"regexp"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -136,4 +138,44 @@ func GetFirstRemote(inputDir string) (string, error) {
 	}
 
 	return remoteConfig.URLs[0], nil
+}
+
+// scpLikeRegex matches SCP-like git URLs: [user@]host:path
+// The path must not start with / to avoid matching protocol URLs like ssh://
+var scpLikeRegex = regexp.MustCompile(`^(.+@)?([^:]+):([^/].*)$`)
+
+// GetSanitizedRemoteUrl normalizes a git remote URL to a consistent HTTP format.
+// It handles standard URLs (ssh:, http:, https:) and SCP-like syntax (git@host:path).
+//
+// Parameters:
+//   - remoteUrl (string): The git remote URL to sanitize
+//
+// Returns:
+//   - The sanitized URL in http://{host}/{path} format, or the original URL if parsing fails
+func GetSanitizedRemoteUrl(remoteUrl string) string {
+	if remoteUrl == "" {
+		return remoteUrl
+	}
+
+	// Try to parse as a standard URL
+	parsed, err := url.Parse(remoteUrl)
+	if err == nil && parsed.Host != "" && parsed.Scheme != "" {
+		// Check if it's a supported protocol
+		switch parsed.Scheme {
+		case "ssh", "http", "https":
+			return fmt.Sprintf("http://%s%s", parsed.Host, parsed.Path)
+		}
+		// Unsupported protocol, return as-is
+		return remoteUrl
+	}
+
+	// Try to parse as SCP-like syntax: [user@]host:path
+	matches := scpLikeRegex.FindStringSubmatch(remoteUrl)
+	if len(matches) == 4 && matches[2] != "" && matches[3] != "" {
+		host := matches[2]
+		path := matches[3]
+		return fmt.Sprintf("http://%s/%s", host, path)
+	}
+
+	return remoteUrl
 }

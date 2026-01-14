@@ -92,3 +92,48 @@ func Test_TrackUsage(t *testing.T) {
 
 	assert.True(t, trackUsageCalled)
 }
+
+func Test_determineAnalyzeInput_NormalizesRemoteUrl(t *testing.T) {
+	logger := zerolog.Nop()
+	path := t.TempDir()
+	writeFile(t, filepath.Join(path, "test.txt"))
+
+	testCases := []struct {
+		name      string
+		remoteUrl string
+	}{
+		{"SSH SCP-like URL", "git@github.com:org/repo.git"},
+		{"HTTPS URL", "https://github.com/org/repo.git"},
+		{"SSH protocol URL", "ssh://git@github.com/org/repo.git"},
+		{"empty URL", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name+" with directory", func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(configuration.FLAG_REMOTE_REPO_URL, tc.remoteUrl)
+			config.Set(configuration.MAX_THREADS, 1)
+
+			target, files, err := determineAnalyzeInput(path, config, &logger)
+			assert.NoError(t, err)
+			assert.NotNil(t, target)
+			// drain channel
+			for range files {
+			}
+		})
+
+		t.Run(tc.name+" with file", func(t *testing.T) {
+			config := configuration.NewWithOpts()
+			config.Set(configuration.FLAG_REMOTE_REPO_URL, tc.remoteUrl)
+			config.Set(configuration.MAX_THREADS, 1)
+
+			filePath := filepath.Join(path, "test.txt")
+			target, files, err := determineAnalyzeInput(filePath, config, &logger)
+			assert.NoError(t, err)
+			assert.NotNil(t, target)
+			// drain channel
+			for range files {
+			}
+		})
+	}
+}
