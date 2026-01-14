@@ -32,7 +32,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/puzpuzpuz/xsync v1.5.2
-	github.com/snyk/error-catalog-golang-public v0.0.0-20251008132755-b542bb643649
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14
 	github.com/subosito/gotenv v1.6.0
 	golang.org/x/net v0.48.0
 	golang.org/x/sync v0.19.0
