@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -115,14 +116,21 @@ func CheckCacheRespectOrgDependency(
 	initFunc func(engine workflow.Engine) error,
 	expectedValueBeforeOrgChange any,
 	expectedValueAfterOrgChange any,
+	contentType ...string,
 ) {
 	t.Helper()
 
 	require.NotEqual(t, expectedValueBeforeOrgChange, expectedValueAfterOrgChange, "expected response before and after org change should be different")
 
+	// Default content type is JSON
+	ct := "application/json"
+	if len(contentType) > 0 && contentType[0] != "" {
+		ct = contentType[0]
+	}
+
 	// Setup config with caching enabled
 	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Minute))
-	config.Set(configuration.ORGANIZATION, "org-1")
+	config.Set(configuration.ORGANIZATION, uuid.NewString())
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 
 	// Mock the API and track the call count
@@ -139,6 +147,7 @@ func CheckCacheRespectOrgDependency(
 		require.NoError(t, err)
 		return &http.Response{
 			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{ct}},
 			Body:       io.NopCloser(bytes.NewBuffer(responseJSON)),
 		}
 	})
@@ -178,7 +187,7 @@ func CheckCacheRespectOrgDependency(
 	assert.Equal(t, 1, apiCallCount, "API should not be called on second read (cached)")
 
 	// Change the organization - this should clear the cache
-	config.Set(configuration.ORGANIZATION, "org-2")
+	config.Set(configuration.ORGANIZATION, uuid.NewString())
 
 	// Third call - cache should be invalidated, API called again
 	result3, err := config.GetWithError(configKey)
