@@ -16,17 +16,15 @@ func AddFeatureFlagGatewayToConfig(engine workflow.Engine, configKey string, fea
 	if err != nil {
 		engine.GetLogger().Err(err).Msgf("Failed to add dependency for %s", configKey)
 	}
-	orgID := config.GetString(configuration.ORGANIZATION)
 
 	callback := func(c configuration.Configuration, existingValue any) (any, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
-
 		enabled := isFeatureEnabled(
 			c,
 			engine,
-			orgID,
+			config.GetString(configuration.ORGANIZATION),
 			featureFlagName,
 		)
 		return enabled, nil
