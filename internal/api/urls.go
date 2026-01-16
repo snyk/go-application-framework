@@ -23,6 +23,7 @@ var (
 func isImmutableHost(host string) bool {
 	knownHostNames := map[string]bool{
 		"localhost": true,
+		"127.0.0.1": true,
 		"stella":    true,
 	}
 
@@ -52,9 +53,15 @@ func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 	return GetCanonicalApiUrl(*url)
 }
 
-func IsSnykHostname(hostname string) bool {
-	return hostname == "snyk.io" || hostname == "snykgov.io" ||
-		strings.HasSuffix(hostname, ".snyk.io") || strings.HasSuffix(hostname, ".snykgov.io")
+func IsTrustedSnykHost(apiUrl string) bool {
+	parsedUrl, err := url.Parse(apiUrl)
+	if err != nil {
+		return false
+	}
+	hostname := parsedUrl.Hostname()
+	return parsedUrl.Hostname() == "snyk.io" || hostname == "snykgov.io" ||
+		strings.HasSuffix(hostname, ".snyk.io") || strings.HasSuffix(hostname, ".snykgov.io") ||
+		isImmutableHost(hostname)
 }
 
 func GetCanonicalApiAsUrl(url url.URL) (url.URL, error) {
