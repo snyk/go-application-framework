@@ -3,12 +3,14 @@ package config_utils
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -135,4 +137,61 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 	assert.True(t, result1)
 	assert.Equal(t, []string{globalOrg}, requestedOrgs)
 	assert.Equal(t, []string{globalAPIEndpoint}, requestedAPIs)
+}
+
+func TestIsFeatureEnabled_Success(t *testing.T) {
+	flag := "my-flag"
+	orgID := uuid.NewString()
+	value := true
+
+	evaluateFlags = func(
+		config configuration.Configuration,
+		engine workflow.Engine,
+		flags []string,
+		orgID uuid.UUID,
+	) (*v20241015.ListFeatureFlagsResponse, error) {
+		return &v20241015.ListFeatureFlagsResponse{
+			ApplicationvndApiJSON200: &struct {
+				Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
+				Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
+			}{
+				Data: &v20241015.FeatureFlagsDataItem{
+					Attributes: v20241015.FeatureFlagAttributesList{
+						Evaluations: []v20241015.FeatureFlagAttributes{
+							{
+								Key:   flag,
+								Value: &value,
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	}
+
+	enabled, err := isFeatureEnabled(nil, nil, orgID, flag)
+	assert.NoError(t, err)
+	assert.True(t, enabled)
+}
+
+func TestIsFeatureEnabled_Error_InvalidUUID(t *testing.T) {
+	enabled, err := isFeatureEnabled(nil, nil, "not-a-uuid", "my-flag")
+
+	assert.True(t, uuid.IsInvalidLengthError(err))
+	assert.False(t, enabled)
+}
+
+func TestIsFeatureEnabled_Error_EvaluateFlagsReturnsError(t *testing.T) {
+	flag := "my-flag"
+	orgID := uuid.NewString()
+	expectedErr := errors.New("gateway blew up")
+	evaluateFlags = func(
+		config configuration.Configuration, engine workflow.Engine, flags []string, orgID uuid.UUID,
+	) (featureFlagsResponse *v20241015.ListFeatureFlagsResponse, retErr error) {
+		return nil, expectedErr
+	}
+
+	enabled, err := isFeatureEnabled(nil, nil, orgID, flag)
+	assert.ErrorIs(t, err, expectedErr)
+	assert.False(t, enabled)
 }

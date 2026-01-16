@@ -1,6 +1,8 @@
 package config_utils
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	featureflaggateway "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway/2024-10-15"
@@ -21,12 +23,15 @@ func AddFeatureFlagGatewayToConfig(engine workflow.Engine, configKey string, fea
 		if existingValue != nil {
 			return existingValue, nil
 		}
-		enabled := isFeatureEnabled(
+		enabled, enabledErr := isFeatureEnabled(
 			c,
 			engine,
 			config.GetString(configuration.ORGANIZATION),
 			featureFlagName,
 		)
+		if enabledErr != nil {
+			return enabled, fmt.Errorf("check feature flag: %w", err)
+		}
 		return enabled, nil
 	}
 
@@ -38,24 +43,24 @@ func isFeatureEnabled(
 	engine workflow.Engine,
 	orgID string,
 	flag string,
-) bool {
+) (bool, error) {
 	orgUUID, err := uuid.Parse(orgID)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	resp, err := evaluateFlags(config, engine, []string{flag}, orgUUID)
 	if err != nil || !validEvaluateFlagsResponse(resp) {
-		return false
+		return false, err
 	}
 
 	evaluations := resp.ApplicationvndApiJSON200.Data.Attributes.Evaluations
 	for _, e := range evaluations {
 		if e.Key == flag {
-			return *e.Value
+			return *e.Value, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func validEvaluateFlagsResponse(resp *v20241015.ListFeatureFlagsResponse) bool {
