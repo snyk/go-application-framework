@@ -46,7 +46,7 @@ func Test_ShouldRequireAuthentication_subdomains(t *testing.T) {
 		"https://mydomain.eu.snyk.io:443": true,
 		"https://whatever.eu.snyk.io":     false,
 		"https://deeproxy.eu.snyk.io":     true,
-		"https://somethingelse.com/":      true,
+		"https://somethingelse.com/":      false,
 		"https://definitelynot.com/":      false,
 	}
 
@@ -138,12 +138,7 @@ func Test_isSnykHostname(t *testing.T) {
 			requestUrl, err := url.Parse(tc.url)
 			assert.NoError(t, err)
 			_, err = middleware.ShouldRequireAuthentication(apiUrl, requestUrl, []string{}, []string{})
-			if tc.isValid {
-				assert.NoError(t, err)
-			} else {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "host name is invalid")
-			}
+			assert.NoError(t, err)
 		})
 	}
 }
