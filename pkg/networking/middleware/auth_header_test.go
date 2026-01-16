@@ -46,7 +46,7 @@ func Test_ShouldRequireAuthentication_subdomains(t *testing.T) {
 		"https://mydomain.eu.snyk.io:443": true,
 		"https://whatever.eu.snyk.io":     false,
 		"https://deeproxy.eu.snyk.io":     true,
-		"https://somethingelse.com/":      true,
+		"https://somethingelse.com/":      false,
 		"https://definitelynot.com/":      false,
 	}
 
@@ -104,6 +104,43 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 
 	err = middleware.AddAuthenticationHeader(authenticator, config, request3)
 	assert.NoError(t, err)
+}
+
+func Test_isSnykHostname(t *testing.T) {
+	cases := []struct {
+		url     string
+		isValid bool
+	}{
+		// Valid hostnames
+		{"https://foobar.my.snyk.io", true},
+		{"https://api.snyk.io", true},
+		{"https://snyk.io", true},
+		{"https://snykgov.io", true},
+		{"https://api.snykgov.io", true},
+		{"https://app.au.snyk.io", true},
+		{"https://deeproxy.eu.snyk.io", true},
+		{"https://deeproxy.snykgov.io", true},
+
+		// Invalid hostnames
+		{"https://api-snyk.io", false},
+		{"https://api.staging-snyk.io", false},
+		{"https://api.eu-snyk.io", false},
+		{"https://example.com", false},
+		{"https://snyk.io.evil.com", false},
+		{"https://fakesnyk.io", false},
+		{"https://notsnykgov.io", false},
+		{"https://snykgov.io.attacker.com", false},
+	}
+
+	apiUrl := "https://api.snyk.io"
+	for _, tc := range cases {
+		t.Run(tc.url, func(t *testing.T) {
+			requestUrl, err := url.Parse(tc.url)
+			assert.NoError(t, err)
+			_, err = middleware.ShouldRequireAuthentication(apiUrl, requestUrl, []string{}, []string{})
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestAuthenticationError_Is(t *testing.T) {

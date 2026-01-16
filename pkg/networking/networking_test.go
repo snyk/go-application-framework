@@ -457,7 +457,7 @@ func TestNetworkImpl_Clone(t *testing.T) {
 	clonedNetwork := network.Clone()
 	clonedNetwork.SetConfiguration(config2)
 
-	url1, err := url.Parse("")
+	url1, err := url.Parse("https://api.snyk.io")
 	assert.NoError(t, err)
 	req1 := &http.Request{
 		Header: http.Header{},

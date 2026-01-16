@@ -100,3 +100,37 @@ func Test_isImmutableHost(t *testing.T) {
 		assert.False(t, isImmutableHost(host), host)
 	}
 }
+
+func Test_IsSnykHostname(t *testing.T) {
+	cases := []struct {
+		hostname string
+		expected bool
+	}{
+		// Valid hostnames
+		{"https://snyk.io", true},
+		{"https://snykgov.io", true},
+		{"https://api.snyk.io", true},
+		{"https://api.snykgov.io", true},
+		{"https://app.au.snyk.io", true},
+		{"https://deeproxy.eu.snyk.io", true},
+		{"https://foobar.my.snyk.io", true},
+		{"https://deeproxy.snykgov.io", true},
+
+		// Invalid hostnames
+		{"https://api-snyk.io", false},
+		{"https://staging-snyk.io", false},
+		{"https://eu-snyk.io", false},
+		{"https://example.com", false},
+		{"https://snyk.io.evil.com", false},
+		{"https://fakesnyk.io", false},
+		{"https://notsnykgov.io", false},
+		{"https://snykgov.io.attacker.com", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.hostname, func(t *testing.T) {
+			actual := IsTrustedSnykHost(tc.hostname)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
