@@ -195,3 +195,22 @@ func TestIsFeatureEnabled_Error_EvaluateFlagsReturnsError(t *testing.T) {
 	assert.ErrorIs(t, err, expectedErr)
 	assert.False(t, enabled)
 }
+
+func TestIsFeatureEnabled_Error_InvalidEvaluateFlagsResponse(t *testing.T) {
+	flag := "my-flag"
+	orgID := uuid.NewString()
+
+	evaluateFlags = func(
+		config configuration.Configuration,
+		engine workflow.Engine,
+		flags []string,
+		orgID uuid.UUID,
+	) (*v20241015.ListFeatureFlagsResponse, error) {
+		return &v20241015.ListFeatureFlagsResponse{}, nil
+	}
+
+	enabled, err := isFeatureEnabled(nil, nil, orgID, flag)
+
+	assert.ErrorIs(t, err, errInvalidEvaluateFlagsResponse)
+	assert.False(t, enabled)
+}

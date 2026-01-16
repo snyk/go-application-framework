@@ -1,6 +1,7 @@
 package config_utils
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -11,6 +12,7 @@ import (
 )
 
 var evaluateFlags = featureflaggateway.EvaluateFlags
+var errInvalidEvaluateFlagsResponse = errors.New("invalid evaluateFlags response")
 
 func AddFeatureFlagGatewayToConfig(engine workflow.Engine, configKey string, featureFlagName string) {
 	config := engine.GetConfiguration()
@@ -30,7 +32,7 @@ func AddFeatureFlagGatewayToConfig(engine workflow.Engine, configKey string, fea
 			featureFlagName,
 		)
 		if enabledErr != nil {
-			return enabled, fmt.Errorf("check feature flag: %w", err)
+			return enabled, fmt.Errorf("check feature flag: %w", enabledErr)
 		}
 		return enabled, nil
 	}
@@ -50,8 +52,12 @@ func isFeatureEnabled(
 	}
 
 	resp, err := evaluateFlags(config, engine, []string{flag}, orgUUID)
-	if err != nil || !validEvaluateFlagsResponse(resp) {
+	if err != nil {
 		return false, err
+	}
+
+	if !validEvaluateFlagsResponse(resp) {
+		return false, errInvalidEvaluateFlagsResponse
 	}
 
 	evaluations := resp.ApplicationvndApiJSON200.Data.Attributes.Evaluations
