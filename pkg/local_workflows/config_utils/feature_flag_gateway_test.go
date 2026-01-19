@@ -49,7 +49,7 @@ func Test_AddFeatureFlagGatewayToConfig_CacheDependentOnOrg(t *testing.T) {
 			}
 		},
 		func(engine workflow.Engine) error {
-			AddFeatureFlagGatewayToConfig(engine, testConfigKey, flag)
+			AddFeatureFlagsToConfig(engine, map[string]string{testConfigKey: flag})
 			return nil
 		},
 		true,
@@ -127,7 +127,7 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 	mockNetworkAccess.EXPECT().Clone().Return(mockNetworkAccess).AnyTimes()
 	mockNetworkAccess.EXPECT().SetConfiguration(gomock.Any()).AnyTimes()
 
-	AddFeatureFlagGatewayToConfig(mockEngine, testConfigKey, testFeatureFlagName)
+	AddFeatureFlagsToConfig(mockEngine, map[string]string{testConfigKey: testFeatureFlagName})
 
 	assert.Len(t, requestedOrgs, 0)
 	assert.Len(t, requestedAPIs, 0)
@@ -169,16 +169,16 @@ func TestIsFeatureEnabled_Success(t *testing.T) {
 		}, nil
 	}
 
-	enabled, err := isFeatureEnabled(nil, nil, orgID, flag)
+	enabled, err := areFeaturesEnabled(nil, nil, orgID, flag)
 	assert.NoError(t, err)
-	assert.True(t, enabled)
+	assert.True(t, enabled[flag])
 }
 
 func TestIsFeatureEnabled_Error_InvalidUUID(t *testing.T) {
-	enabled, err := isFeatureEnabled(nil, nil, "not-a-uuid", "my-flag")
+	enabled, err := areFeaturesEnabled(nil, nil, "not-a-uuid", "my-flag")
 
 	assert.True(t, uuid.IsInvalidLengthError(err))
-	assert.False(t, enabled)
+	assert.False(t, enabled["my-flag"])
 }
 
 func TestIsFeatureEnabled_Error_EvaluateFlagsReturnsError(t *testing.T) {
@@ -191,9 +191,9 @@ func TestIsFeatureEnabled_Error_EvaluateFlagsReturnsError(t *testing.T) {
 		return nil, expectedErr
 	}
 
-	enabled, err := isFeatureEnabled(nil, nil, orgID, flag)
+	enabled, err := areFeaturesEnabled(nil, nil, orgID, flag)
 	assert.ErrorIs(t, err, expectedErr)
-	assert.False(t, enabled)
+	assert.False(t, enabled[flag])
 }
 
 func TestIsFeatureEnabled_Error_InvalidEvaluateFlagsResponse(t *testing.T) {
@@ -209,8 +209,8 @@ func TestIsFeatureEnabled_Error_InvalidEvaluateFlagsResponse(t *testing.T) {
 		return &v20241015.ListFeatureFlagsResponse{}, nil
 	}
 
-	enabled, err := isFeatureEnabled(nil, nil, orgID, flag)
+	enabled, err := areFeaturesEnabled(nil, nil, orgID, flag)
 
 	assert.ErrorIs(t, err, errInvalidEvaluateFlagsResponse)
-	assert.False(t, enabled)
+	assert.False(t, enabled[flag])
 }
