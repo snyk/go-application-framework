@@ -3,7 +3,8 @@ package config_utils
 import (
 	"errors"
 	"fmt"
-	"sync"
+	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 	featureflaggateway "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway"
@@ -15,18 +16,18 @@ import (
 var evaluateFlags = featureflaggateway.EvaluateFlags
 var errInvalidEvaluateFlagsResponse = errors.New("invalid evaluateFlags response")
 
-type featureFlagBatchCache struct {
-	mu     sync.Mutex
-	cache  map[string]*featureFlagBatchEntry
-	flags  []string
-	engine workflow.Engine
-}
+//type featureFlagBatchCache struct {
+//	mu     sync.Mutex
+//	cache  map[string]*featureFlagBatchEntry
+//	flags  []string
+//	engine workflow.Engine
+//}
 
-type featureFlagBatchEntry struct {
-	once   sync.Once
-	values map[string]bool
-	err    error
-}
+//type featureFlagBatchEntry struct {
+//	once   sync.Once
+//	values map[string]bool
+//	err    error
+//}
 
 func AddFeatureFlagsToConfig(
 	engine workflow.Engine,
@@ -37,17 +38,14 @@ func AddFeatureFlagsToConfig(
 	for _, flag := range configKeyToFlag {
 		flags = append(flags, flag)
 	}
-
-	batchCache := &featureFlagBatchCache{
-		cache:  make(map[string]*featureFlagBatchEntry),
-		flags:  flags,
-		engine: engine,
-	}
+	sort.Strings(flags)
 
 	for configKey, flagName := range configKeyToFlag {
+		configKey := configKey
+		flagName := flagName
 		err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
 		if err != nil {
-			engine.GetLogger().Err(err).Msgf("Failed to add dependency for %s", configKey)
+			engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", configKey)
 		}
 
 		callback := func(c configuration.Configuration, existingValue any) (any, error) {
@@ -55,39 +53,24 @@ func AddFeatureFlagsToConfig(
 				return existingValue, nil
 			}
 
-			flagsMap, batchErr := batchCache.getBatchForOrg(c)
-			if batchErr != nil {
-				return false, fmt.Errorf("check feature flags batch: %w", batchErr)
+			orgID := c.GetString(configuration.ORGANIZATION)
+			cacheKey := fmt.Sprintf("__ffg_batch__:%s:%s", orgID, strings.Join(flags, ","))
+			if cached := c.Get(cacheKey); cached != nil {
+				if m, ok := cached.(map[string]bool); ok {
+					return m[flagName], nil
+				}
 			}
-			return flagsMap[flagName], nil
+
+			res, err := areFeaturesEnabled(c, engine, orgID, flags...)
+			if err != nil {
+				return false, fmt.Errorf("check feature flags batch: %w", err)
+			}
+			c.Set(cacheKey, res)
+
+			return res[flagName], nil
 		}
 		config.AddDefaultValue(configKey, callback)
 	}
-}
-
-func (c *featureFlagBatchCache) getBatchForOrg(
-	cfg configuration.Configuration,
-) (map[string]bool, error) {
-	orgID := cfg.GetString(configuration.ORGANIZATION)
-
-	c.mu.Lock()
-	entry, ok := c.cache[orgID]
-	if !ok {
-		entry = &featureFlagBatchEntry{}
-		c.cache[orgID] = entry
-	}
-	c.mu.Unlock()
-
-	entry.once.Do(func() {
-		v, err := areFeaturesEnabled(cfg, c.engine, orgID, c.flags...)
-		entry.values = v
-		entry.err = err
-	})
-
-	if entry.err != nil {
-		return nil, entry.err
-	}
-	return entry.values, nil
 }
 
 func areFeaturesEnabled(
