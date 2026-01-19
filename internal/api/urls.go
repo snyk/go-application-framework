@@ -20,7 +20,7 @@ var (
 	appRegexp = regexp.MustCompile(appPattern)
 )
 
-func IsImmutableHost(host string) bool {
+func isImmutableHost(host string) bool {
 	if IsKnownHostName(host) {
 		return true
 	}
@@ -71,7 +71,7 @@ func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 
 func GetCanonicalApiAsUrl(url url.URL) (url.URL, error) {
 	// for localhost we don't change the host, since there are no subdomains
-	if IsImmutableHost(url.Host) {
+	if isImmutableHost(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
 	} else {
 		url.Host = appRegexp.ReplaceAllString(url.Host, apiPrefixDot)

@@ -93,11 +93,11 @@ func Test_isImmutableHost(t *testing.T) {
 	hostlistNonLocalhost := []string{"snyk.io"}
 
 	for _, host := range hostlistLocalhost {
-		assert.True(t, IsImmutableHost(host))
+		assert.True(t, isImmutableHost(host))
 	}
 
 	for _, host := range hostlistNonLocalhost {
-		assert.False(t, IsImmutableHost(host), host)
+		assert.False(t, isImmutableHost(host), host)
 	}
 }
 
