@@ -53,10 +53,7 @@ func IsKnownHostName(host string) bool {
 	// get rid of port
 	portlessHost := strings.Split(host, ":")[0]
 
-	if knownHostNames[portlessHost] {
-		return true
-	}
-	return false
+	return knownHostNames[portlessHost]
 }
 
 func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
