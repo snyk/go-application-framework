@@ -172,7 +172,70 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- end }}
 {{- end }}
 
+{{- define "remediationSummary" }}
+    {{- /* Get all open SCA issues for remediation (includes both sca and license) */}}
+    {{- $allIssues := getIssuesFromTestResult $ "sca" }}
+    {{- $remediation := getRemediationSummary $allIssues }}
+
+    {{- /* Only show remediation section if there are fixes available */}}
+    {{- if or ($remediation.HasUpgrades) ($remediation.HasPins) ($remediation.HasUnresolved) }}
+        {{- "\n" }}
+        {{- "Remediation Advice" | bold }}
+        {{- "\n\n" }}
+
+        {{- /* Render Upgrades */}}
+        {{- if $remediation.HasUpgrades }}
+            {{- printf "  Upgrades (%d):" (len $remediation.Upgrades) | bold }}
+            {{- "\n" }}
+            {{- range $upgrade := $remediation.Upgrades }}
+                {{- printf "    Upgrade %s@%s to %s@%s to fix %d issue(s):" $upgrade.FromPackage.Name $upgrade.FromPackage.Version $upgrade.ToPackage.Name $upgrade.ToPackage.Version (len $upgrade.Fixes) }}
+                {{- "\n" }}
+                {{- range $issue := $upgrade.Fixes }}
+                    {{- printf "      - %s (%s) %s" $issue.GetTitle ($issue.GetEffectiveSeverity | renderInSeverityColor) $issue.GetID }}
+                    {{- "\n" }}
+                {{- end }}
+            {{- end }}
+            {{- "\n" }}
+        {{- end }}
+
+        {{- /* Render Pins */}}
+        {{- if $remediation.HasPins }}
+            {{- printf "  Pins (%d):" (len $remediation.Pins) | bold }}
+            {{- "\n" }}
+            {{- range $pin := $remediation.Pins }}
+                {{- printf "    Pin %s@%s to %s to fix %d issue(s):" $pin.FromPackage.Name $pin.FromPackage.Version $pin.ToPackage.Version (len $pin.Fixes) }}
+                {{- "\n" }}
+                {{- range $issue := $pin.Fixes }}
+                    {{- printf "      - %s (%s)" $issue.GetTitle ($issue.GetEffectiveSeverity | renderInSeverityColor) }}
+                    {{- "\n" }}
+                {{- end }}
+            {{- end }}
+            {{- "\n" }}
+        {{- end }}
+
+        {{- /* Render Unresolved */}}
+        {{- if $remediation.HasUnresolved }}
+            {{- printf "  No fix available (%d):" (len $remediation.Unresolved) | bold }}
+            {{- "\n" }}
+            {{- range $issue := $remediation.Unresolved }}
+                {{- $componentName := getIssueMetadata $issue "component-name" }}
+                {{- $componentVersion := getIssueMetadata $issue "component-version" }}
+                {{- if and $componentName $componentVersion }}
+                    {{- printf "    - %s in %s@%s (%s)" $issue.GetTitle $componentName $componentVersion ($issue.GetEffectiveSeverity | renderInSeverityColor) }}
+                {{- else }}
+                    {{- printf "    - %s (%s)" $issue.GetTitle ($issue.GetEffectiveSeverity | renderInSeverityColor) }}
+                {{- end }}
+                {{- "\n" }}
+            {{- end }}
+            {{- "\n" }}
+        {{- end }}
+    {{- end }}
+{{- end }} {{/* end remediationSummary */}}
+
 {{- define "resultFooter" }}
+    {{- /* Render remediation summary */}}
+    {{- template "remediationSummary" $ }}
+
     {{- "\n" }}
     {{- /* Render test summary */}}
     {{- box (renderToString "testSummary" $) }}

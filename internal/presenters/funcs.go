@@ -354,6 +354,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["convertTypeToIssueName"] = convertTypeToIssueName
 	defaultMap["sortAndFilterIssues"] = sortAndFilterIssues(config)
 	defaultMap["determineProductNameFromFindingTypes"] = determineProductNameFromFindingTypes
+	defaultMap["getRemediationSummary"] = testapi.GetRemediationSummary
 	defaultMap["getSeverities"] = func() []string {
 		return json_schemas.DEFAULT_SEVERITIES
 	}
