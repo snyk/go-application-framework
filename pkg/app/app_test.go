@@ -115,7 +115,7 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 	config := engine.GetConfiguration()
 
-	expectApiUrl := "https://api.snyk.io:2134"
+	expectApiUrl := "https://api.snyk.io"
 	config.Set(configuration.API_URL, expectApiUrl+"/v1")
 
 	actualApiUrl := config.GetString(configuration.API_URL)

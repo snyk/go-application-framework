@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension/connectivity"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -84,6 +86,7 @@ func TestJSONOutputWithOrganizations(t *testing.T) {
 	config.Set("insecure", true)
 	config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 	config.Set(configuration.API_URL, server.URL)
+	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 	config.Set("json", true) // Request JSON output
 
 	// Create NetworkAccess

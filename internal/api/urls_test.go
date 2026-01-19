@@ -93,44 +93,36 @@ func Test_isImmutableHost(t *testing.T) {
 	hostlistNonLocalhost := []string{"snyk.io"}
 
 	for _, host := range hostlistLocalhost {
-		assert.True(t, isImmutableHost(host))
+		assert.True(t, IsImmutableHost(host))
 	}
 
 	for _, host := range hostlistNonLocalhost {
-		assert.False(t, isImmutableHost(host), host)
+		assert.False(t, IsImmutableHost(host), host)
 	}
 }
 
-func Test_IsSnykHostname(t *testing.T) {
-	cases := []struct {
-		hostname string
+func Test_IsKnownHostName(t *testing.T) {
+	testCases := []struct {
+		host     string
 		expected bool
 	}{
-		// Valid hostnames
-		{"https://snyk.io", true},
-		{"https://snykgov.io", true},
-		{"https://api.snyk.io", true},
-		{"https://api.snykgov.io", true},
-		{"https://app.au.snyk.io", true},
-		{"https://deeproxy.eu.snyk.io", true},
-		{"https://foobar.my.snyk.io", true},
-		{"https://deeproxy.snykgov.io", true},
-
-		// Invalid hostnames
-		{"https://api-snyk.io", false},
-		{"https://staging-snyk.io", false},
-		{"https://eu-snyk.io", false},
-		{"https://example.com", false},
-		{"https://snyk.io.evil.com", false},
-		{"https://fakesnyk.io", false},
-		{"https://notsnykgov.io", false},
-		{"https://snykgov.io.attacker.com", false},
+		{"localhost", true},
+		{"localhost:8080", true},
+		{"127.0.0.1", true},
+		{"127.0.0.1:9000", true},
+		{"stella", true},
+		{"stella:8000", true},
+		{"http://localhost", true},
+		{"http://localhost:8080", true},
+		{"https://127.0.0.1:9000", true},
+		{"http://stella:8000", true},
+		{"192.168.1.1", false},
+		{"example.com", false},
+		{"http://example.com", false},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.hostname, func(t *testing.T) {
-			actual := IsTrustedSnykHost(tc.hostname)
-			assert.Equal(t, tc.expected, actual)
-		})
+	for _, tc := range testCases {
+		actual := IsKnownHostName(tc.host)
+		assert.Equal(t, tc.expected, actual, "IsKnownHostName(%q) = %v, want %v", tc.host, actual, tc.expected)
 	}
 }

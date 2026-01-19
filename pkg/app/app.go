@@ -138,7 +138,8 @@ func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog
 		if err != nil {
 			logger.Warn().Err(err).Str(configuration.API_URL, urlString).Msg("failed to get api url")
 		}
-		if !api.IsTrustedSnykHost(apiString) {
+
+		if isValid, validationErr := auth.IsValidAuthHost(apiString, config.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)); !isValid || validationErr != nil {
 			hostNameErr := fmt.Errorf("host name is not snyk.io or snykgov.io")
 			logger.Err(hostNameErr).Msg("host name is not snyk.io or snykgov.io")
 			return nil, fmt.Errorf("host name is not snyk.io or snykgov.io")

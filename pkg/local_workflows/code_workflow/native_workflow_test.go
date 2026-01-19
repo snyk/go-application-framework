@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -85,6 +87,7 @@ func Test_TrackUsage(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.ORGANIZATION, org)
 	config.Set(configuration.API_URL, server.URL)
+	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 	networkAccess := networking.NewNetworkAccess(config)
 
 	// call method under test

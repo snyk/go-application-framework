@@ -34,6 +34,7 @@ func getConfig() configuration.Configuration {
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 	return config
 }
 
@@ -450,9 +451,10 @@ func Test_UserAgentInfo_Complete(t *testing.T) {
 
 func TestNetworkImpl_Clone(t *testing.T) {
 	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 	network := NewNetworkAccess(config)
-
 	config2 := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	config2.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 	config2.Set(configuration.AUTHENTICATION_TOKEN, "test")
 	clonedNetwork := network.Clone()
 	clonedNetwork.SetConfiguration(config2)

@@ -56,10 +56,6 @@ func ShouldRequireAuthentication(
 	additionalSubdomains []string,
 	additionalUrls []string,
 ) (matchesPattern bool, err error) {
-	if !api.IsTrustedSnykHost(url.String()) {
-		return false, nil
-	}
-
 	subdomainsToCheck := append([]string{""}, additionalSubdomains...)
 	for _, subdomain := range subdomainsToCheck {
 		var matchesPattern bool
@@ -110,8 +106,18 @@ func AddAuthenticationHeader(
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
+	hostNameRegex := config.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
 
+	canonicalHostname, err := api.GetCanonicalApiUrl(*request.URL)
+	if err != nil {
+		return errors.Join(err, ErrAuthenticationFailed)
+	}
+	isValid, err := auth.IsValidAuthHost(canonicalHostname, hostNameRegex)
+	if !isValid || err != nil {
+		return errors.Join(err, ErrAuthenticationFailed)
+	}
+
+	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 	// requests to the api automatically get an authentication token attached
 	if !isSnykApi {
 		return err

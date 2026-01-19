@@ -20,7 +20,30 @@ var (
 	appRegexp = regexp.MustCompile(appPattern)
 )
 
-func isImmutableHost(host string) bool {
+func IsImmutableHost(host string) bool {
+	if IsKnownHostName(host) {
+		return true
+	}
+
+	// ipv6 hosts must start with "["
+	if strings.HasPrefix(host, "[") {
+		return true
+	}
+	portlessHost := strings.Split(host, ":")[0]
+
+	_, _, err := net.ParseCIDR(portlessHost + "/24")
+	return err == nil
+}
+
+func IsKnownHostName(host string) bool {
+	if strings.HasPrefix(host, "http") {
+		parsedUrl, err := url.Parse(host)
+		if err != nil {
+			return false
+		}
+		host = parsedUrl.Host
+	}
+
 	knownHostNames := map[string]bool{
 		"localhost": true,
 		"127.0.0.1": true,
@@ -33,14 +56,7 @@ func isImmutableHost(host string) bool {
 	if knownHostNames[portlessHost] {
 		return true
 	}
-
-	// ipv6 hosts must start with "["
-	if strings.HasPrefix(host, "[") {
-		return true
-	}
-
-	_, _, err := net.ParseCIDR(portlessHost + "/24")
-	return err == nil
+	return false
 }
 
 func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
@@ -53,20 +69,9 @@ func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {
 	return GetCanonicalApiUrl(*url)
 }
 
-func IsTrustedSnykHost(apiUrl string) bool {
-	parsedUrl, err := url.Parse(apiUrl)
-	if err != nil {
-		return false
-	}
-	hostname := parsedUrl.Hostname()
-	return parsedUrl.Hostname() == "snyk.io" || hostname == "snykgov.io" ||
-		strings.HasSuffix(hostname, ".snyk.io") || strings.HasSuffix(hostname, ".snykgov.io") ||
-		isImmutableHost(hostname)
-}
-
 func GetCanonicalApiAsUrl(url url.URL) (url.URL, error) {
 	// for localhost we don't change the host, since there are no subdomains
-	if isImmutableHost(url.Host) {
+	if IsImmutableHost(url.Host) {
 		url.Path = strings.Replace(url.Path, "/v1", "", 1)
 	} else {
 		url.Host = appRegexp.ReplaceAllString(url.Host, apiPrefixDot)
