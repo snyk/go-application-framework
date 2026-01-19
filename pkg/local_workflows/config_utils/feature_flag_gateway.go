@@ -27,9 +27,9 @@ func AddFeatureFlagsToConfig(
 	}
 	sort.Strings(flags)
 
-	for key, name := range configKeyToFlag {
-		configKey := key
-		flagName := name
+	for configKey, flagName := range configKeyToFlag {
+		configKey := configKey
+		flagName := flagName
 		err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
 		if err != nil {
 			engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", configKey)
@@ -41,7 +41,7 @@ func AddFeatureFlagsToConfig(
 			}
 
 			orgID := c.GetString(configuration.ORGANIZATION)
-			cacheKey := fmt.Sprintf("__ffg_batch__:%s:%s", orgID, strings.Join(flags, ","))
+			cacheKey := fmt.Sprintf("hidden_flags_%s:%s", orgID, strings.Join(flags, ","))
 			if cached := c.Get(cacheKey); cached != nil {
 				if m, ok := cached.(map[string]bool); ok {
 					return m[flagName], nil
@@ -51,6 +51,9 @@ func AddFeatureFlagsToConfig(
 			res, err := areFeaturesEnabled(c, engine, orgID, flags...)
 			if err != nil {
 				return false, fmt.Errorf("check feature flags batch: %w", err)
+			}
+			if err := config.AddKeyDependency(cacheKey, configuration.ORGANIZATION); err != nil {
+				engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", cacheKey)
 			}
 			c.Set(cacheKey, res)
 
