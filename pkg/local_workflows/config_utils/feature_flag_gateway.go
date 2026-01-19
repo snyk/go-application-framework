@@ -16,19 +16,6 @@ import (
 var evaluateFlags = featureflaggateway.EvaluateFlags
 var errInvalidEvaluateFlagsResponse = errors.New("invalid evaluateFlags response")
 
-//type featureFlagBatchCache struct {
-//	mu     sync.Mutex
-//	cache  map[string]*featureFlagBatchEntry
-//	flags  []string
-//	engine workflow.Engine
-//}
-
-//type featureFlagBatchEntry struct {
-//	once   sync.Once
-//	values map[string]bool
-//	err    error
-//}
-
 func AddFeatureFlagsToConfig(
 	engine workflow.Engine,
 	configKeyToFlag map[string]string,
@@ -40,9 +27,9 @@ func AddFeatureFlagsToConfig(
 	}
 	sort.Strings(flags)
 
-	for configKey, flagName := range configKeyToFlag {
-		configKey := configKey
-		flagName := flagName
+	for key, name := range configKeyToFlag {
+		configKey := key
+		flagName := name
 		err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
 		if err != nil {
 			engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", configKey)
@@ -101,7 +88,6 @@ func areFeaturesEnabled(
 		}
 	}
 
-	// default missing flags to false
 	for _, flag := range flags {
 		if _, ok := results[flag]; !ok {
 			results[flag] = false
