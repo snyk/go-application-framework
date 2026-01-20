@@ -23,7 +23,7 @@ func AddFeatureFlagsToConfig(
 	configKeyToFlag map[string]string,
 ) {
 	config := engine.GetConfiguration()
-	flags := slices.Collect(maps.Keys(configKeyToFlag))
+	flags := slices.Collect(maps.Values(configKeyToFlag))
 	sort.Strings(flags)
 
 	for configKey, flagName := range configKeyToFlag {
