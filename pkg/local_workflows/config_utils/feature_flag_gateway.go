@@ -3,6 +3,8 @@ package config_utils
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -21,15 +23,10 @@ func AddFeatureFlagsToConfig(
 	configKeyToFlag map[string]string,
 ) {
 	config := engine.GetConfiguration()
-	flags := make([]string, 0, len(configKeyToFlag))
-	for _, flag := range configKeyToFlag {
-		flags = append(flags, flag)
-	}
+	flags := slices.Collect(maps.Keys(configKeyToFlag))
 	sort.Strings(flags)
 
 	for configKey, flagName := range configKeyToFlag {
-		configKey := configKey
-		flagName := flagName
 		err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
 		if err != nil {
 			engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", configKey)
