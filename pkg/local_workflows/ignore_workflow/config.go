@@ -51,15 +51,18 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 		engine.GetLogger().Err(err).Msg("Failed to add dependency for ConfigIgnoreApprovalEnabled")
 	}
 
-	return func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
+	return func(c configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		if existingValue != nil {
 			return existingValue, nil
 		}
 
-		config := engine.GetConfiguration()
-		org := config.GetString(configuration.ORGANIZATION)
-		client := engine.GetNetworkAccess().GetHttpClient()
-		url := config.GetString(configuration.API_URL)
+		org := c.GetString(configuration.ORGANIZATION)
+		localNetworkStack := engine.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
+
+		client := localNetworkStack.GetHttpClient()
+		url := c.GetString(configuration.API_URL)
+
 		apiClient := api.NewApi(url, client)
 
 		settings, err := apiClient.GetOrgSettings(org)
