@@ -757,6 +757,10 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 
 // processSecretsRuleProblem extracts data from a secrets rule problem
 func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
+	if id := problem.GetID(); id != "" {
+		b.id = id
+	}
+
 	secretsProblem, err := problem.AsSecretsRuleProblem()
 	if err != nil {
 		return

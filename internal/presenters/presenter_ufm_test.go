@@ -542,13 +542,12 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			testResultPath:     "testdata/ufm/multi_project.testresult.json",
 			ignoreSuppressions: true,
 		},
-		/*{
-		name:               "secrets",
-		expectedSarifPath:  "testdata/ufm/secrets.sarif.json",
-		testResultPath:     "testdata/ufm/secrets.testresult.json",
-		ignoreSuppressions: true,
+		{
+			name:               "secrets",
+			expectedSarifPath:  "testdata/ufm/secrets.sarif.json",
+			testResultPath:     "testdata/ufm/secrets.testresult.json",
+			ignoreSuppressions: true,
 		},
-		*/
 	}
 
 	for _, tc := range testCases {

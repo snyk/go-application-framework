@@ -13,7 +13,17 @@
 {{- end }} {{/* end issueHeader */}}
 
 {{- define "issueBody" }}
-   Finding ID: {{ .GetID }}
+   {{- $findingID := .GetID }}
+   {{- if eq .GetFindingType "secret" }}
+       {{- $findings := .GetFindings }}
+       {{- if $findings }}
+           {{- $firstFinding := index $findings 0 }}
+           {{- if $firstFinding.Attributes.Key }}
+               {{- $findingID = $firstFinding.Attributes.Key }}
+           {{- end }}
+       {{- end }}
+   {{- end }}
+   Finding ID: {{ $findingID }}
     {{- $findingType := .GetFindingType }}
     {{- if or (eq $findingType "license") (eq $findingType "sca") }}
    Info: https://snyk.io/vuln/{{ .GetID }}
