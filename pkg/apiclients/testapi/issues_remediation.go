@@ -41,7 +41,6 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 
 		fixInfo := extractFixInfo(issue)
 		if fixInfo == nil {
-			summary.Unresolved = append(summary.Unresolved, issue)
 			continue
 		}
 
