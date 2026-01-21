@@ -782,15 +782,16 @@ func Test_getOrgIgnoreApprovalEnabled(t *testing.T) {
 		mockConfig.EXPECT().AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION).Return(nil)
 
 		// Expect the calls made during the actual default value function execution
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
 		mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
 		mockEngine.EXPECT().GetLogger().Return(&logger)
 		mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
 		mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
+		mockNetworkAccess.EXPECT().Clone().Return(mockNetworkAccess)
+		mockNetworkAccess.EXPECT().SetConfiguration(mockConfig)
 		mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
 
 		defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
-		result, err := defaultValueFunc(nil, nil)
+		result, err := defaultValueFunc(mockConfig, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -825,14 +826,15 @@ func setupMockEngineForOrgSettings(t *testing.T, response *contract.OrgSettingsR
 	mockConfig.EXPECT().AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION).Return(nil)
 
 	// Expect the calls made during the actual default value function execution
-	mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
 	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
 	mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
 	mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
+	mockNetworkAccess.EXPECT().Clone().Return(mockNetworkAccess)
+	mockNetworkAccess.EXPECT().SetConfiguration(mockConfig)
 	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
 
 	defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
-	return defaultValueFunc(nil, nil)
+	return defaultValueFunc(mockConfig, nil)
 }
 
 func Test_getOrgIgnoreApprovalEnabled_CacheDependentOnOrg(t *testing.T) {
