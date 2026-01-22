@@ -116,7 +116,6 @@ func processUpgradeAdvice(issue Issue, advice UpgradePackageAdvice, outcome FixA
 		return false
 	}
 
-	wasAdded := false
 	matchedPaths := 0
 
 	for _, upgradePath := range advice.UpgradePaths {
@@ -135,13 +134,12 @@ func processUpgradeAdvice(issue Issue, advice UpgradePackageAdvice, outcome FixA
 			key := fmt.Sprintf("%s@%s", fromPkg.Name, fromPkg.Version)
 
 			addOrUpdateUpgradeGroup(upgradeMap, key, fromPkg, toPkg, issue)
-			wasAdded = true
 			break
 		}
 	}
 
 	hasUnmatchedPaths := matchedPaths < len(paths)
-	return wasAdded && (outcome == FullyResolved || !hasUnmatchedPaths)
+	return outcome == FullyResolved || !hasUnmatchedPaths
 }
 
 func addOrUpdateUpgradeGroup(upgradeMap map[string]*UpgradeGroup, key string, fromPkg, toPkg Package, issue Issue) {

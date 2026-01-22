@@ -93,6 +93,51 @@ func TestGetRemediationSummary(t *testing.T) {
 			require.Empty(t, summary.Upgrades)
 			require.Empty(t, summary.Unresolved)
 		})
+
+		t.Run("a pin with multiple dependency paths returns valid summary", func(t *testing.T) {
+			issues := []Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(FullyResolved, "vulnerable", "1.0.1"),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Pins, 1)
+			require.Equal(t, "vulnerable", summary.Pins[0].FromPackage.Name)
+			require.Equal(t, "1.0.0", summary.Pins[0].FromPackage.Version)
+			require.Equal(t, "1.0.1", summary.Pins[0].ToPackage.Version)
+			require.Len(t, summary.Pins[0].Fixes, 1)
+			require.Empty(t, summary.Upgrades)
+			require.Empty(t, summary.Unresolved)
+		})
+
+		t.Run("two pins for the same package with same vuln but different versions create two pins", func(t *testing.T) {
+			issues := []Issue{
+				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
+					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(FullyResolved, "vulnerable", "1.0.1"),
+				),
+				newTestIssue(t, "VULN_ID_1", "vulnerable@2.0.0",
+					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@2.0.0"),
+					withPinFix(FullyResolved, "vulnerable", "2.0.1"),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Pins, 2)
+			require.Empty(t, summary.Upgrades)
+			require.Empty(t, summary.Unresolved)
+
+			// Both pins should have the highest TO version (2.0.1)
+			for _, pin := range summary.Pins {
+				require.Equal(t, "vulnerable", pin.FromPackage.Name)
+				require.Equal(t, "2.0.1", pin.ToPackage.Version)
+			}
+		})
 	})
 
 	t.Run("upgrades", func(t *testing.T) {
@@ -246,6 +291,51 @@ func TestGetRemediationSummary(t *testing.T) {
 			require.Len(t, summary.Upgrades, 2)
 			require.Empty(t, summary.Pins)
 			require.Empty(t, summary.Unresolved)
+		})
+
+		t.Run("upgrades for single package with multiple resolved paths of different lengths returns valid summary", func(t *testing.T) {
+			// This tests that path matching works correctly when upgrade paths
+			// don't match dep paths in order or length
+			issues := []Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths("root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
+					// Note: upgrade paths are in reverse order compared to dep paths
+					withUpgradeFix(FullyResolved,
+						[]string{"root@1.0.0", "direct-2@1.0.5", "transitive-1@1.0.4", "vulnerable@1.0.1"},
+						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
+					),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Upgrades, 2)
+			require.Empty(t, summary.Pins)
+			require.Empty(t, summary.Unresolved)
+		})
+
+		t.Run("upgrade for single package with multiple paths pointing to same direct dep does not duplicate fixes", func(t *testing.T) {
+			issues := []Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths("root@1.0.0", "direct-1@1.0.0", "another-transitive@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(PartiallyResolved,
+						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
+						[]string{"root@1.0.0", "direct-1@1.2.3", "another-transitive@1.0.0", "vulnerable@1.0.1"},
+					),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Upgrades, 1)
+			require.Equal(t, "direct-1", summary.Upgrades[0].FromPackage.Name)
+			require.Equal(t, "1.0.0", summary.Upgrades[0].FromPackage.Version)
+			require.Equal(t, "1.2.3", summary.Upgrades[0].ToPackage.Version)
+			// The fix should only be added once, not duplicated
+			require.Len(t, summary.Upgrades[0].Fixes, 1)
+			require.Empty(t, summary.Pins)
 		})
 	})
 
