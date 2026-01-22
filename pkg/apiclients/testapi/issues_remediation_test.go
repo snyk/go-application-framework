@@ -1,9 +1,9 @@
 package testapi
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -267,61 +267,62 @@ func TestGetRemediationSummary(t *testing.T) {
 	})
 }
 
-// Test helper types and functions
+// Test helpers
 
 type issueOption func(*FindingData)
 
 func withDepPaths(path ...string) issueOption {
 	return func(f *FindingData) {
-		var pathPkgs []Package
-		for _, p := range path {
-			name, version := splitNameAndVersion(p)
-			pathPkgs = append(pathPkgs, Package{Name: name, Version: version})
-		}
-		evJSON := createDependencyPathJSON(pathPkgs)
 		var ev Evidence
-		_ = json.Unmarshal([]byte(evJSON), &ev)
+		_ = ev.FromDependencyPathEvidence(DependencyPathEvidence{
+			Source: "dependency_path",
+			Path:   parsePath(path),
+		})
 		f.Attributes.Evidence = append(f.Attributes.Evidence, ev)
 	}
 }
 
 func withUpgradeFix(outcome FixAppliedOutcome, paths ...[]string) issueOption {
 	return func(f *FindingData) {
-		var upgradePaths []string
+		var upgradePaths []UpgradePath
 		for _, path := range paths {
-			var pathPkgs []string
-			for _, p := range path {
-				name, version := splitNameAndVersion(p)
-				pathPkgs = append(pathPkgs, `{"name": "`+name+`", "version": "`+version+`"}`)
-			}
-			upgradePaths = append(upgradePaths, `{"dependency_path": [`+strings.Join(pathPkgs, ",")+`], "is_drop": false}`)
+			upgradePaths = append(upgradePaths, UpgradePath{
+				DependencyPath: parsePath(path),
+				IsDrop:         false,
+			})
 		}
-		actionJSON := `{"format": "upgrade_package_advice", "package_name": "vulnerable", "upgrade_paths": [` + strings.Join(upgradePaths, ",") + `]}`
 
 		var action FixAction
-		_ = json.Unmarshal([]byte(actionJSON), &action)
+		_ = action.FromUpgradePackageAdvice(UpgradePackageAdvice{
+			Format:       UpgradePackageAdviceFormatUpgradePackageAdvice,
+			PackageName:  "vulnerable",
+			UpgradePaths: upgradePaths,
+		})
 
-		setFixRelationship(f, &FixAttributes{Outcome: outcome, Action: &action})
+		setFix(f, outcome, &action)
 	}
 }
 
 func withPinFix(outcome FixAppliedOutcome, pkgName, pinVersion string) issueOption {
 	return func(f *FindingData) {
-		actionJSON := `{"format": "pin_package_advice", "package_name": "` + pkgName + `", "pin_version": "` + pinVersion + `"}`
 		var action FixAction
-		_ = json.Unmarshal([]byte(actionJSON), &action)
+		_ = action.FromPinPackageAdvice(PinPackageAdvice{
+			Format:      PinPackageAdviceFormatPinPackageAdvice,
+			PackageName: pkgName,
+			PinVersion:  pinVersion,
+		})
 
-		setFixRelationship(f, &FixAttributes{Outcome: outcome, Action: &action})
+		setFix(f, outcome, &action)
 	}
 }
 
 func withUnresolvedFix() issueOption {
 	return func(f *FindingData) {
-		setFixRelationship(f, &FixAttributes{Outcome: Unresolved})
+		setFix(f, Unresolved, nil)
 	}
 }
 
-func setFixRelationship(f *FindingData, attrs *FixAttributes) {
+func setFix(f *FindingData, outcome FixAppliedOutcome, action *FixAction) {
 	f.Relationships = &struct {
 		Asset *struct {
 			Data *struct {
@@ -374,7 +375,7 @@ func setFixRelationship(f *FindingData, attrs *FixAttributes) {
 				Id         uuid.UUID      `json:"id"`
 				Type       string         `json:"type"`
 			}{
-				Attributes: attrs,
+				Attributes: &FixAttributes{Outcome: outcome, Action: action},
 			},
 		},
 	}
@@ -383,8 +384,38 @@ func setFixRelationship(f *FindingData, attrs *FixAttributes) {
 func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) Issue {
 	t.Helper()
 
-	pkgName, pkgVersion := splitNameAndVersion(pkg)
+	pkgName, pkgVersion := parsePkg(pkg)
 	findingID := uuid.New()
+	now := time.Now()
+
+	var loc FindingLocation
+	_ = loc.FromPackageLocation(PackageLocation{
+		Type:    "package",
+		Package: Package{Name: pkgName, Version: pkgVersion},
+	})
+
+	var problem Problem
+	_ = problem.FromSnykVulnProblem(SnykVulnProblem{
+		Id:                       vulnID,
+		Source:                   "snyk_vuln",
+		Severity:                 SeverityHigh,
+		CvssBaseScore:            7.5,
+		CvssVector:               "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+		CreatedAt:                now,
+		ModifiedAt:               now,
+		PublishedAt:              now,
+		DisclosedAt:              now,
+		PackageName:              pkgName,
+		PackageVersion:           pkgVersion,
+		IsFixable:                true,
+		IsMalicious:              false,
+		IsSocialMediaTrending:    false,
+		Credits:                  []string{},
+		References:               []SnykvulndbReferenceLinks{},
+		CvssSources:              []SnykvulndbCvssSource{},
+		InitiallyFixedInVersions: []string{"1.0.1"},
+		ExploitDetails:           SnykvulndbExploitDetails{MaturityLevels: []SnykvulndbExploitMaturityLevel{}, Sources: []string{}},
+	})
 
 	finding := &FindingData{
 		Id: &findingID,
@@ -394,8 +425,8 @@ func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) Issue {
 			Title:       "Test vulnerability " + vulnID,
 			Description: "Description for " + vulnID,
 			Rating:      Rating{Severity: SeverityHigh},
-			Problems:    []Problem{createVulnProblem(t, vulnID)},
-			Locations:   []FindingLocation{createPackageLocation(t, pkgName, pkgVersion)},
+			Problems:    []Problem{problem},
+			Locations:   []FindingLocation{loc},
 		},
 	}
 
@@ -408,54 +439,16 @@ func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) Issue {
 	return issue
 }
 
-func createVulnProblem(t *testing.T, vulnID string) Problem {
-	t.Helper()
-	var problem Problem
-	problemJSON := `{
-		"id": "` + vulnID + `",
-		"source": "snyk_vuln",
-		"severity": "high",
-		"cvss_base_score": 7.5,
-		"cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
-		"ecosystem": {"type": "build_package", "language": "javascript", "package_manager": "npm"},
-		"created_at": "2021-01-01T00:00:00Z",
-		"modified_at": "2021-01-01T00:00:00Z",
-		"published_at": "2021-01-01T00:00:00Z",
-		"disclosed_at": "2021-01-01T00:00:00Z",
-		"package_name": "vulnerable",
-		"package_version": "1.0.0",
-		"is_fixable": true,
-		"is_malicious": false,
-		"is_social_media_trending": false,
-		"credits": [],
-		"references": [],
-		"cvss_sources": [],
-		"initially_fixed_in_versions": ["1.0.1"],
-		"exploit_details": {"maturity_levels": [], "sources": []}
-	}`
-	err := json.Unmarshal([]byte(problemJSON), &problem)
-	require.NoError(t, err)
-	return problem
-}
-
-func createPackageLocation(t *testing.T, name, version string) FindingLocation {
-	t.Helper()
-	var loc FindingLocation
-	locJSON := `{"type": "package", "package": {"name": "` + name + `", "version": "` + version + `"}}`
-	err := json.Unmarshal([]byte(locJSON), &loc)
-	require.NoError(t, err)
-	return loc
-}
-
-func createDependencyPathJSON(path []Package) string {
-	var pathJSON []string
+func parsePath(path []string) []Package {
+	var pkgs []Package
 	for _, p := range path {
-		pathJSON = append(pathJSON, `{"name": "`+p.Name+`", "version": "`+p.Version+`"}`)
+		name, version := parsePkg(p)
+		pkgs = append(pkgs, Package{Name: name, Version: version})
 	}
-	return `{"source": "dependency_path", "path": [` + strings.Join(pathJSON, ",") + `]}`
+	return pkgs
 }
 
-func splitNameAndVersion(s string) (string, string) {
+func parsePkg(s string) (string, string) {
 	parts := strings.Split(s, "@")
 	if len(parts) == 2 {
 		return parts[0], parts[1]

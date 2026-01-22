@@ -34,26 +34,36 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 	pinMap := make(map[string]*PinGroup)
 
 	for _, issue := range issues {
-		// Skip ignored issues
 		if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil && ignoreDetails.IsActive() {
 			continue
 		}
 
-		fixInfo := extractFixInfo(issue)
-		if fixInfo == nil {
+		fixAttrs := getFixAttributes(issue)
+		if fixAttrs == nil {
 			continue
 		}
 
-		switch fixInfo.FixType {
-		case fixTypeUpgrade:
-			wasAdded, hasUnresolvedPaths := processUpgradeFix(issue, fixInfo, upgradeMap)
-			if !wasAdded || (hasUnresolvedPaths && fixInfo.Outcome != FullyResolved) {
+		if fixAttrs.Outcome == Unresolved {
+			summary.Unresolved = append(summary.Unresolved, issue)
+			continue
+		}
+
+		if fixAttrs.Action == nil {
+			continue
+		}
+
+		action, err := fixAttrs.Action.ValueByDiscriminator()
+		if err != nil {
+			continue
+		}
+
+		switch advice := action.(type) {
+		case UpgradePackageAdvice:
+			if !processUpgradeAdvice(issue, advice, fixAttrs.Outcome, upgradeMap) {
 				summary.Unresolved = append(summary.Unresolved, issue)
 			}
-		case fixTypePin:
-			processPinFix(issue, fixInfo, pinMap)
-		case fixTypeUnresolved:
-			summary.Unresolved = append(summary.Unresolved, issue)
+		case PinPackageAdvice:
+			processPinAdvice(issue, advice, pinMap)
 		}
 	}
 
@@ -67,84 +77,98 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 	return summary
 }
 
-type fixType int
-
-const (
-	fixTypeUnresolved fixType = iota
-	fixTypeUpgrade
-	fixTypePin
-)
-
-type fixInfo struct {
-	FixType      fixType
-	FromPackage  Package
-	ToPackage    Package
-	UpgradePaths []UpgradePath
-	Outcome      FixAppliedOutcome
+func getFixAttributes(issue Issue) *FixAttributes {
+	for _, finding := range issue.GetFindings() {
+		if finding.Relationships != nil &&
+			finding.Relationships.Fix != nil &&
+			finding.Relationships.Fix.Data != nil &&
+			finding.Relationships.Fix.Data.Attributes != nil {
+			return finding.Relationships.Fix.Data.Attributes
+		}
+	}
+	return nil
 }
 
-func extractFixInfo(issue Issue) *fixInfo {
-	findings := issue.GetFindings()
-	if len(findings) == 0 {
-		return nil
+func processUpgradeAdvice(issue Issue, advice UpgradePackageAdvice, outcome FixAppliedOutcome, upgradeMap map[string]*UpgradeGroup) bool {
+	if len(advice.UpgradePaths) == 0 {
+		return false
 	}
 
-	finding := findings[0]
-	if finding.Relationships == nil ||
-		finding.Relationships.Fix == nil ||
-		finding.Relationships.Fix.Data == nil ||
-		finding.Relationships.Fix.Data.Attributes == nil {
-		return nil
+	depPaths, ok := issue.GetData(DataKeyDependencyPaths)
+	if !ok || depPaths == nil {
+		return false
 	}
 
-	fixAttrs := finding.Relationships.Fix.Data.Attributes
-	outcome := fixAttrs.Outcome
-
-	if outcome == Unresolved {
-		return &fixInfo{FixType: fixTypeUnresolved, Outcome: outcome}
+	paths, ok := depPaths.([][]Package)
+	if !ok || len(paths) == 0 {
+		return false
 	}
 
-	if fixAttrs.Action == nil {
-		return nil
+	wasAdded := false
+	matchedPaths := 0
+
+	for _, upgradePath := range advice.UpgradePaths {
+		if len(upgradePath.DependencyPath) < 2 {
+			continue
+		}
+
+		for _, depPath := range paths {
+			if len(depPath) < 2 || !pathsMatch(upgradePath.DependencyPath, depPath) {
+				continue
+			}
+
+			matchedPaths++
+			fromPkg := depPath[1]
+			toPkg := upgradePath.DependencyPath[1]
+			key := fmt.Sprintf("%s@%s", fromPkg.Name, fromPkg.Version)
+
+			addOrUpdateUpgradeGroup(upgradeMap, key, fromPkg, toPkg, issue)
+			wasAdded = true
+			break
+		}
 	}
 
-	discriminator, err := fixAttrs.Action.Discriminator()
-	if err != nil {
-		return nil
-	}
+	// Issue is fully handled only if it was added AND either all paths matched or outcome is FullyResolved
+	hasUnmatchedPaths := matchedPaths < len(paths)
+	return wasAdded && (outcome == FullyResolved || !hasUnmatchedPaths)
+}
 
+func addOrUpdateUpgradeGroup(upgradeMap map[string]*UpgradeGroup, key string, fromPkg, toPkg Package, issue Issue) {
+	if existing, exists := upgradeMap[key]; exists {
+		if !containsIssue(existing.Fixes, issue) {
+			existing.Fixes = append(existing.Fixes, issue)
+		}
+		if compareVersions(toPkg.Version, existing.ToPackage.Version) > 0 {
+			existing.ToPackage.Version = toPkg.Version
+		}
+	} else {
+		upgradeMap[key] = &UpgradeGroup{
+			FromPackage: fromPkg,
+			ToPackage:   toPkg,
+			Fixes:       []Issue{issue},
+		}
+	}
+}
+
+func processPinAdvice(issue Issue, advice PinPackageAdvice, pinMap map[string]*PinGroup) {
 	vulnerablePkg := getVulnerablePackage(issue)
+	key := fmt.Sprintf("%s@%s", vulnerablePkg.Name, vulnerablePkg.Version)
+	toPkg := Package{Name: advice.PackageName, Version: advice.PinVersion}
 
-	switch discriminator {
-	case string(UpgradePackageAdviceFormatUpgradePackageAdvice):
-		upgradeAdvice, err := fixAttrs.Action.AsUpgradePackageAdvice()
-		if err != nil {
-			return nil
+	if existing, exists := pinMap[key]; exists {
+		if !containsIssue(existing.Fixes, issue) {
+			existing.Fixes = append(existing.Fixes, issue)
 		}
-		return &fixInfo{
-			FixType:      fixTypeUpgrade,
-			FromPackage:  vulnerablePkg,
-			UpgradePaths: upgradeAdvice.UpgradePaths,
-			Outcome:      outcome,
+		if compareVersions(toPkg.Version, existing.ToPackage.Version) > 0 {
+			existing.ToPackage.Version = toPkg.Version
 		}
-
-	case string(PinPackageAdviceFormatPinPackageAdvice):
-		pinAdvice, err := fixAttrs.Action.AsPinPackageAdvice()
-		if err != nil {
-			return nil
-		}
-		return &fixInfo{
-			FixType:     fixTypePin,
+	} else {
+		pinMap[key] = &PinGroup{
 			FromPackage: vulnerablePkg,
-			ToPackage: Package{
-				Name:    pinAdvice.PackageName,
-				Version: pinAdvice.PinVersion,
-			},
-			Outcome: outcome,
+			ToPackage:   toPkg,
+			Fixes:       []Issue{issue},
 		}
 	}
-
-	return nil
 }
 
 func getVulnerablePackage(issue Issue) Package {
@@ -175,87 +199,6 @@ func getVulnerablePackage(issue Issue) Package {
 	}
 
 	return Package{}
-}
-
-func processUpgradeFix(issue Issue, fix *fixInfo, upgradeMap map[string]*UpgradeGroup) (wasAdded bool, hasUnresolvedPaths bool) {
-	if len(fix.UpgradePaths) == 0 {
-		return false, true
-	}
-
-	depPaths, ok := issue.GetData(DataKeyDependencyPaths)
-	if !ok || depPaths == nil {
-		return false, true
-	}
-
-	paths, ok := depPaths.([][]Package)
-	if !ok || len(paths) == 0 {
-		return false, true
-	}
-
-	matchedDepPaths := make(map[int]bool)
-
-	for _, upgradePath := range fix.UpgradePaths {
-		if len(upgradePath.DependencyPath) < 2 {
-			continue
-		}
-
-		for depIdx, depPath := range paths {
-			if len(depPath) < 2 {
-				continue
-			}
-
-			if !pathsMatch(upgradePath.DependencyPath, depPath) {
-				continue
-			}
-
-			matchedDepPaths[depIdx] = true
-
-			fromPkg := depPath[1]
-			toPkg := upgradePath.DependencyPath[1]
-
-			key := fmt.Sprintf("%s@%s", fromPkg.Name, fromPkg.Version)
-
-			if existing, exists := upgradeMap[key]; exists {
-				if !containsIssue(existing.Fixes, issue) {
-					existing.Fixes = append(existing.Fixes, issue)
-				}
-				if compareVersions(toPkg.Version, existing.ToPackage.Version) > 0 {
-					existing.ToPackage.Version = toPkg.Version
-				}
-			} else {
-				upgradeMap[key] = &UpgradeGroup{
-					FromPackage: fromPkg,
-					ToPackage:   toPkg,
-					Fixes:       []Issue{issue},
-				}
-			}
-			wasAdded = true
-			break
-		}
-	}
-
-	hasUnresolvedPaths = len(matchedDepPaths) < len(paths)
-
-	return wasAdded, hasUnresolvedPaths
-}
-
-func processPinFix(issue Issue, fix *fixInfo, pinMap map[string]*PinGroup) {
-	key := fmt.Sprintf("%s@%s", fix.FromPackage.Name, fix.FromPackage.Version)
-
-	if existing, exists := pinMap[key]; exists {
-		if !containsIssue(existing.Fixes, issue) {
-			existing.Fixes = append(existing.Fixes, issue)
-		}
-		if compareVersions(fix.ToPackage.Version, existing.ToPackage.Version) > 0 {
-			existing.ToPackage.Version = fix.ToPackage.Version
-		}
-	} else {
-		pinMap[key] = &PinGroup{
-			FromPackage: fix.FromPackage,
-			ToPackage:   fix.ToPackage,
-			Fixes:       []Issue{issue},
-		}
-	}
 }
 
 func pathsMatch(upgradePath, depPath []Package) bool {
