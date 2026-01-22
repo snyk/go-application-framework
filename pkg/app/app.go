@@ -81,22 +81,17 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			}
 		}
 
-		defaultOrgId, err := config.GetStringWithError(configuration.DEFAULT_ORGANIZATION)
+		fallbackOrgId, err := configuration.GetUserPreferredOrganization(config)
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
 
-		return defaultOrgId, err
+		return fallbackOrgId, err
 	}
 	return callback
 }
 
-func defaultFuncDefaultOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
-	err := config.AddKeyDependency(configuration.DEFAULT_ORGANIZATION, configuration.API_URL)
-	if err != nil {
-		logger.Print("Failed to add dependency for ORGANIZATION:", err)
-	}
-
+func defaultFuncUserPreferredOrganization(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		// TODO - This function uses the outer (global) config and network access, so will not respect values set in the closures' (potentially cloned) configs.
 		existingString, ok := existingValue.(string)
@@ -110,7 +105,7 @@ func defaultFuncDefaultOrganization(engine workflow.Engine, config configuration
 
 		orgId, err := apiClient.GetDefaultOrgId()
 		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+			logger.Print("Failed to determine user preferred organization:", err)
 		}
 
 		return orgId, err
@@ -321,7 +316,11 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 
 	config.AddDefaultValue(configuration.ORGANIZATION, defaultFuncOrganization(engine, config, logger, apiClientFactory))
 	config.AddDefaultValue(configuration.ORGANIZATION_SLUG, defaultFuncOrganizationSlug(engine, config, logger, apiClientFactory))
-	config.AddDefaultValue(configuration.DEFAULT_ORGANIZATION, defaultFuncDefaultOrganization(engine, config, logger, apiClientFactory))
+
+	err = configuration.RegisterUserPreferredOrganizationDefault(config, defaultFuncUserPreferredOrganization(engine, config, logger, apiClientFactory), []string{configuration.API_URL})
+	if err != nil {
+		logger.Print("Failed to register user preferred organization:", err)
+	}
 
 	config.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, func(_ configuration.Configuration, existingValue any) (any, error) {
 		if existingValue == nil {
