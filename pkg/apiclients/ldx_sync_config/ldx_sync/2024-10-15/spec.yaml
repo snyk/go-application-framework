@@ -279,6 +279,7 @@ components:
           - tenant
           - group
           - org
+          - user
           - asset
           - project_name
           - remote_url
@@ -921,6 +922,38 @@ components:
           description: Only scan net-new issues
           type: boolean
       type: object
+    SettingMetadata:
+      additionalProperties: false
+      description: Metadata for a configuration setting when merged=true
+      properties:
+        enforced:
+          default: false
+          description: |
+            When true, this setting value overrides all lower-scope settings.
+            Enforced settings from higher scopes take precedence over user settings.
+          type: boolean
+        locked:
+          default: false
+          description: |
+            When true, this setting cannot be edited by the user.
+            Locked settings are read-only in the UI.
+          type: boolean
+        origin:
+          description: The scope from which this setting value originates
+          enum:
+          - global
+          - tenant
+          - group
+          - org
+          - user
+          example: org
+          type: string
+        value:
+          description: The setting value (type depends on the specific setting)
+      required:
+      - value
+      - origin
+      type: object
     TrustConfig:
       properties:
         enable:
@@ -936,6 +969,97 @@ components:
           items:
             type: string
           type: array
+      type: object
+    UserConfigResponse:
+      additionalProperties: false
+      description: |
+        Configuration response with per-setting metadata.
+        When merged=false: returns settings for the specific scope only (no inheritance).
+        When merged=true: returns merged settings with inheritance from higher scopes.
+        Both modes use the same response structure with metadata for each setting.
+      properties:
+        data:
+          additionalProperties: false
+          properties:
+            attributes:
+              additionalProperties: false
+              properties:
+                created_at:
+                  description: Timestamp when the configuration was created
+                  example: "2024-01-01T00:00:00Z"
+                  format: date-time
+                  type: string
+                folder_settings:
+                  additionalProperties:
+                    additionalProperties:
+                      $ref: '#/components/schemas/SettingMetadata'
+                    type: object
+                  description: |
+                    Folder-level settings keyed by remote_url.
+                    Each folder contains settings with per-setting metadata.
+                  type: object
+                last_modified_at:
+                  description: Timestamp of the last configuration update
+                  example: "2024-01-15T10:30:00Z"
+                  format: date-time
+                  type: string
+                organizations:
+                  description: |
+                    Organizations available for the user. When remote_url is provided,
+                    the preferred organization is indicated by preferred_by_algorithm.
+                  items:
+                    $ref: '#/components/schemas/Organization'
+                  type: array
+                scope:
+                  description: The scope of this configuration
+                  enum:
+                  - global
+                  - tenant
+                  - group
+                  - org
+                  - user
+                  type: string
+                settings:
+                  additionalProperties:
+                    $ref: '#/components/schemas/SettingMetadata'
+                  description: |
+                    Global-level settings with per-setting metadata.
+                    Each setting has value, locked, enforced, and origin fields.
+                  type: object
+              type: object
+            id:
+              description: Unique identifier for this configuration instance
+              format: uuid
+              type: string
+            type:
+              enum:
+              - configuration
+              type: string
+          required:
+          - id
+          - type
+          - attributes
+          type: object
+        jsonapi:
+          additionalProperties: false
+          properties:
+            version:
+              enum:
+              - "1.0"
+              example: "1.0"
+              type: string
+          type: object
+        links:
+          additionalProperties: false
+          properties:
+            self:
+              description: Link to this resource
+              example: https://api.snyk.io/rest/remote_client_connector/config?version=2024-10-15
+              format: uri
+              type: string
+          type: object
+      required:
+      - data
       type: object
 info:
   title: ldx-sync
@@ -1089,7 +1213,7 @@ paths:
             value: https://github.com/snyk/cli.git
           ssh:
             summary: SSH URL
-            value: git@github.com:snyk/cli.git
+            value: ssh://git@github.com/snyk/cli.git
         in: query
         name: remote_url
         schema:
@@ -1464,6 +1588,245 @@ paths:
           $ref: '#/components/responses/500'
       tags:
       - OpenAPI
+  /remote_client_connector/config:
+    get:
+      description: "Retrieve configuration for the current user or a specific scope
+        level.\n\n## Scope Query Parameters\nUse scope query parameters to retrieve
+        configuration for a specific scope:\n- `tenant=X` - Returns tenant-scope configuration\n-
+        `group=X` - Returns group-scope configuration  \n- `org=X` - Returns org-scope
+        configuration\n- No scope params - Returns current user's configuration (default)\n\nWhen
+        multiple scope params are provided, the most specific scope wins (org > group
+        > tenant).\n\n## User Configuration (default)\nWhen no scope parameters are
+        provided:\n- The user is identified from the `x-cerberus-auth-principal-id`
+        header\n- Returns 404 if no configuration exists for the user\n\n## Merged
+        Mode\nWhen `merged=true` is provided:\n- Configurations are merged from all
+        applicable scopes down to the requested scope\n- Each setting includes metadata
+        (`locked`, `enforced`, `origin`)\n- Auto-org selection is performed when `remote_url`
+        is provided\n\nWhen `merged=false` (default):\n- Returns raw database values
+        for the requested scope's configuration only\n- No inheritance or precedence
+        is applied\n- No per-setting metadata is included\n"
+      operationId: getUserConfig
+      parameters:
+      - description: API version in format YYYY-MM-DD
+        in: query
+        name: version
+        required: true
+        schema:
+          example: "2024-10-15"
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      - description: |
+          Tenant identifier to retrieve tenant-scope configuration.
+          When provided, returns configuration for the specified tenant instead of user config.
+        in: query
+        name: tenant
+        schema:
+          example: api.snyk.io
+          type: string
+      - description: |
+          Group UUID to retrieve group-scope configuration.
+          When provided, returns configuration for the specified group instead of user config.
+        in: query
+        name: group
+        schema:
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+          format: uuid
+          type: string
+      - description: |
+          Organization UUID to retrieve org-scope configuration.
+          When provided, returns configuration for the specified org instead of user config.
+        in: query
+        name: org
+        schema:
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+          format: uuid
+          type: string
+      - description: |
+          When true, returns merged configuration with inheritance, precedence, and per-setting metadata.
+          When false (default), returns raw database values without metadata.
+        in: query
+        name: merged
+        schema:
+          default: false
+          type: boolean
+      - description: |
+          Repository URL for automatic organization selection (used with merged=true).
+          When provided, the service will perform auto-org selection for folder-level settings.
+        in: query
+        name: remote_url
+        schema:
+          example: https://github.com/snyk/cli
+          format: uri
+          type: string
+      - description: Return results starting after this cursor
+        in: query
+        name: starting_after
+        schema:
+          type: string
+      - description: Return results ending before this cursor
+        in: query
+        name: ending_before
+        schema:
+          type: string
+      - description: Maximum number of results to return
+        in: query
+        name: limit
+        schema:
+          default: 10
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+          description: |
+            Configuration retrieved successfully.
+            When merged=true, returns merged settings with inheritance from higher scopes.
+            When merged=false (default), returns settings for the specific scope only.
+          headers:
+            deprecation:
+              $ref: '#/components/headers/Deprecation'
+            snyk-request-id:
+              $ref: '#/components/headers/SnykRequestId'
+            snyk-version-lifecycle-stage:
+              $ref: '#/components/headers/SnykVersionLifecycleStage'
+            snyk-version-requested:
+              $ref: '#/components/headers/SnykVersionRequested'
+            snyk-version-served:
+              $ref: '#/components/headers/SnykVersionServed'
+            sunset:
+              $ref: '#/components/headers/Sunset'
+        "400":
+          $ref: '#/components/responses/ErrorResponse'
+        "401":
+          $ref: '#/components/responses/ErrorResponse'
+        "404":
+          $ref: '#/components/responses/ErrorResponse'
+        "500":
+          $ref: '#/components/responses/ErrorResponse'
+        "501":
+          $ref: '#/components/responses/ErrorResponse'
+      summary: Get configuration for current user or specific scope
+      tags:
+      - Configuration
+      x-cerberus:
+        authorization:
+          reason: user-scoped authorization - user identified from Cerberus header
+          skip: true
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/ide'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      x-snyk-api-resource: config
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-stability-level: beta
+  /remote_client_connector/config/{id}:
+    get:
+      description: "Retrieve a specific configuration by its ID. Authorization is
+        checked \nto ensure the user has permission to access the configuration's
+        scope.\n\n## Merged Mode\nWhen `merged=true` is provided:\n- Configurations
+        are merged from all applicable scopes up to and including this config's scope\n-
+        Each setting includes metadata (`locked`, `enforced`, `origin`)\n- Auto-org
+        selection is performed when `remote_url` is provided\n\nWhen `merged=false`
+        (default):\n- Returns raw database values for this configuration only\n- No
+        inheritance or precedence is applied\n- No per-setting metadata is included\n"
+      operationId: getConfigById
+      parameters:
+      - description: Configuration UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+          format: uuid
+          type: string
+      - description: API version in format YYYY-MM-DD
+        in: query
+        name: version
+        required: true
+        schema:
+          example: "2024-10-15"
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      - description: |
+          When true, returns merged configuration with inheritance, precedence, and per-setting metadata.
+          When false (default), returns raw database values without metadata.
+        in: query
+        name: merged
+        schema:
+          default: false
+          type: boolean
+      - description: |
+          Repository URL for automatic organization selection (used with merged=true).
+          When provided, the service will perform auto-org selection for folder-level settings.
+        in: query
+        name: remote_url
+        schema:
+          example: https://github.com/snyk/cli
+          format: uri
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+          description: |
+            Configuration retrieved successfully.
+            When merged=true, returns merged settings with inheritance from higher scopes.
+            When merged=false (default), returns settings for the specific scope only.
+          headers:
+            deprecation:
+              $ref: '#/components/headers/Deprecation'
+            snyk-request-id:
+              $ref: '#/components/headers/SnykRequestId'
+            snyk-version-lifecycle-stage:
+              $ref: '#/components/headers/SnykVersionLifecycleStage'
+            snyk-version-requested:
+              $ref: '#/components/headers/SnykVersionRequested'
+            snyk-version-served:
+              $ref: '#/components/headers/SnykVersionServed'
+            sunset:
+              $ref: '#/components/headers/Sunset'
+        "400":
+          $ref: '#/components/responses/ErrorResponse'
+        "401":
+          $ref: '#/components/responses/ErrorResponse'
+        "403":
+          $ref: '#/components/responses/ErrorResponse'
+        "404":
+          $ref: '#/components/responses/ErrorResponse'
+        "500":
+          $ref: '#/components/responses/ErrorResponse'
+        "501":
+          $ref: '#/components/responses/ErrorResponse'
+      summary: Get configuration by ID
+      tags:
+      - Configuration
+      x-cerberus:
+        authorization:
+          reason: configuration-level authorization - checked against user's permissions
+          skip: true
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/ide'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      x-snyk-api-resource: config
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-stability-level: beta
 servers:
 - description: ldx-sync
   url: /rest

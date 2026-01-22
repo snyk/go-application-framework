@@ -11,6 +11,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	types "github.com/oapi-codegen/runtime/types"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
@@ -173,6 +174,46 @@ func (mr *MockClientInterfaceMockRecorder) GetConfig(ctx, params interface{}, re
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, params}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*MockClientInterface)(nil).GetConfig), varargs...)
+}
+
+// GetConfigById mocks base method.
+func (m *MockClientInterface) GetConfigById(ctx context.Context, id types.UUID, params *v20241015.GetConfigByIdParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, id, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetConfigById", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetConfigById indicates an expected call of GetConfigById.
+func (mr *MockClientInterfaceMockRecorder) GetConfigById(ctx, id, params interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, id, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigById", reflect.TypeOf((*MockClientInterface)(nil).GetConfigById), varargs...)
+}
+
+// GetUserConfig mocks base method.
+func (m *MockClientInterface) GetUserConfig(ctx context.Context, params *v20241015.GetUserConfigParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetUserConfig", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserConfig indicates an expected call of GetUserConfig.
+func (mr *MockClientInterfaceMockRecorder) GetUserConfig(ctx, params interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfig", reflect.TypeOf((*MockClientInterface)(nil).GetUserConfig), varargs...)
 }
 
 // ListAPIVersions mocks base method.
@@ -338,6 +379,26 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAPIVersionWithRespons
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAPIVersionWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetAPIVersionWithResponse), varargs...)
 }
 
+// GetConfigByIdWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetConfigByIdWithResponse(ctx context.Context, id types.UUID, params *v20241015.GetConfigByIdParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.GetConfigByIdResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, id, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetConfigByIdWithResponse", varargs...)
+	ret0, _ := ret[0].(*v20241015.GetConfigByIdResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetConfigByIdWithResponse indicates an expected call of GetConfigByIdWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetConfigByIdWithResponse(ctx, id, params interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, id, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigByIdWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetConfigByIdWithResponse), varargs...)
+}
+
 // GetConfigWithResponse mocks base method.
 func (m *MockClientWithResponsesInterface) GetConfigWithResponse(ctx context.Context, params *v20241015.GetConfigParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.GetConfigResponse, error) {
 	m.ctrl.T.Helper()
@@ -356,6 +417,26 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetConfigWithResponse(ct
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, params}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetConfigWithResponse), varargs...)
+}
+
+// GetUserConfigWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetUserConfigWithResponse(ctx context.Context, params *v20241015.GetUserConfigParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.GetUserConfigResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetUserConfigWithResponse", varargs...)
+	ret0, _ := ret[0].(*v20241015.GetUserConfigResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserConfigWithResponse indicates an expected call of GetUserConfigWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetUserConfigWithResponse(ctx, params interface{}, reqEditors ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfigWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetUserConfigWithResponse), varargs...)
 }
 
 // ListAPIVersionsWithResponse mocks base method.
