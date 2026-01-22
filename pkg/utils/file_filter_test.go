@@ -59,7 +59,7 @@ func TestFileFilter_GetAllFiles(t *testing.T) {
 	})
 }
 
-func TestFileFilter_GetRules(t *testing.T) {
+func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 	// create temp filesystem
 	tempDir := t.TempDir()
 	tempFile1 := filepath.Join(tempDir, "test1.ts")
@@ -119,6 +119,83 @@ func TestFileFilter_GetRules(t *testing.T) {
 			[]string{
 				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)), // apply ignore in subDirs
 				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),    // apply ignore in curDir
+			},
+			fileFilter.defaultRules...,
+		)
+
+		assert.ElementsMatch(t, expectedRules, actualRules)
+	})
+}
+
+func TestFileFilter_GetRules_dotSnykFormat(t *testing.T) {
+	// create temp filesystem
+	tempDir := t.TempDir()
+	tempFile1 := filepath.Join(tempDir, "test1.ts")
+	createFileInPath(t, tempFile1, []byte{})
+	tempFile2 := filepath.Join(tempDir, "test2.ts")
+	createFileInPath(t, tempFile2, []byte{})
+
+	t.Run("gets ignore rules for .snyk excludes scalar format", func(t *testing.T) {
+		// adds .snyk ignore file to filesystem
+		ignoreFile := filepath.Join(tempDir, ".snyk")
+		ignoreFileContent := fmt.Sprintf(`# Snyk (https://snyk.io) policy file
+version: v1.25.1
+ignore: {}
+exclude:
+  code:
+    - %s
+`, tempFile1)
+		createFileInPath(t, ignoreFile, []byte(ignoreFileContent))
+
+		// create fileFilter
+		ruleFiles := []string{".snyk"}
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		actualRules, err := fileFilter.GetRules(ruleFiles)
+		assert.NoError(t, err)
+
+		// create expected rules
+		expectedRules := append(
+			[]string{
+				filepath.ToSlash(tempFile1) + "/**",
+				filepath.ToSlash(tempFile1),
+			},
+			fileFilter.defaultRules...,
+		)
+
+		assert.ElementsMatch(t, expectedRules, actualRules)
+	})
+
+	t.Run("gets ignore rules for .snyk excludes map format", func(t *testing.T) {
+		// adds .snyk ignore file to filesystem
+		ignoreFile := filepath.Join(tempDir, ".snyk")
+		ignoreFileContent := fmt.Sprintf(`# Snyk (https://snyk.io) policy file
+version: v1.25.1
+ignore: {}
+exclude:
+  code:
+    - %s:
+        reason: testing valid expiry
+        expires: 3026-01-01T00:00:00Z
+        created: 2000-01-01T00:00:00Z
+  global:
+    - %s:
+        reason: testing expired ignore
+        expires: 1999-01-01T00:00:00Z
+        created: 1990-01-01T00:00:00Z
+`, tempFile1, tempFile2)
+		createFileInPath(t, ignoreFile, []byte(ignoreFileContent))
+
+		// create fileFilter
+		ruleFiles := []string{".snyk"}
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		actualRules, err := fileFilter.GetRules(ruleFiles)
+		assert.NoError(t, err)
+
+		// create expected rules
+		expectedRules := append(
+			[]string{
+				filepath.ToSlash(tempFile1) + "/**",
+				filepath.ToSlash(tempFile1),
 			},
 			fileFilter.defaultRules...,
 		)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
@@ -166,29 +167,92 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
 func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string {
-	type DotSnykRules struct {
+	type DotSnykRule struct {
 		Exclude struct {
-			Code   []string `yaml:"code"`
-			Global []string `yaml:"global"`
+			Code   []DotSnykExclude `yaml:"code"`
+			Global []DotSnykExclude `yaml:"global"`
 		} `yaml:"exclude"`
 	}
 
-	var rules DotSnykRules
+	var rules DotSnykRule
 	err := yaml.Unmarshal(content, &rules)
 	if err != nil {
 		fw.logger.Error().Msgf("parse .snyk failed: %v", err)
 		return nil
 	}
 
+	// combine code and global rules
+	allRules := append(rules.Exclude.Code, rules.Exclude.Global...)
+
 	var globs []string
-	for _, codeRule := range rules.Exclude.Code {
-		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath, defaultInvalidRules)...)
+	for _, rule := range allRules {
+		isExpired, err := rule.IsExpired()
+		if err != nil {
+			fw.logger.Error().Msgf("parse .snyk expires: %v", err)
+			continue
+		}
+		if isExpired {
+			continue
+		}
+
+		// handle absolute paths
+		if filepath.IsAbs(rule.Path) {
+			globs = append(globs, filepath.ToSlash(rule.Path)+"/**")
+			globs = append(globs, filepath.ToSlash(rule.Path))
+			continue
+		}
+
+		globs = append(globs, parseIgnoreRuleToGlobs(rule.Path, filePath, defaultInvalidRules)...)
 	}
-	for _, codeRule := range rules.Exclude.Global {
-		globs = append(globs, parseIgnoreRuleToGlobs(codeRule, filePath, defaultInvalidRules)...)
+	return globs
+}
+
+type DotSnykExclude struct {
+	Path    string `yaml:"-"`
+	Expires string `yaml:"expires,omitempty"`
+}
+
+// IsExpired returns true if the exclude rule is expired
+func (dse *DotSnykExclude) IsExpired() (bool, error) {
+	if dse.Expires == "" {
+		return false, nil
+	}
+	expires, err := time.Parse(time.RFC3339, dse.Expires)
+	if err != nil {
+		return false, err
+	}
+	return time.Now().After(expires), nil
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface
+// It correctly unmarshals a .snyk style exclude rule
+func (dse *DotSnykExclude) UnmarshalYAML(d *yaml.Node) error {
+	if d == nil {
+		return nil
 	}
 
-	return globs
+	// handle []string format
+	if d.Kind == yaml.ScalarNode {
+		dse.Path = d.Value
+		return nil
+	}
+
+	// handle map format, i.e. DotSnykExclude
+	if d.Kind == yaml.MappingNode && len(d.Content) >= 2 {
+		dse.Path = d.Content[0].Value
+
+		type metadata struct {
+			Expires string `yaml:"expires,omitempty"`
+		}
+		var m metadata
+		if err := d.Content[1].Decode(&m); err != nil {
+			return err
+		}
+		dse.Expires = m.Expires
+		return nil
+	}
+
+	return fmt.Errorf("unexpected yaml node kind: %v", d.Kind)
 }
 
 // parseIgnoreFile builds a list of glob patterns from a given .gitignore style file
