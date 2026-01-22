@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -283,6 +282,9 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
+	fnMap["colorBySeverity"] = renderInSeverityColor // 2-arg version from styles.go
+	fnMap["renderGreen"] = renderGreen
+	fnMap["renderGray"] = renderGray
 	fnMap["bold"] = renderBold
 	fnMap["tip"] = func(s string) string {
 		return RenderTip(s + "\n")

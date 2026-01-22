@@ -11,6 +11,18 @@ type RemediationSummary struct {
 	Unresolved []Issue
 }
 
+func (s *RemediationSummary) HasUpgrades() bool {
+	return len(s.Upgrades) > 0
+}
+
+func (s *RemediationSummary) HasPins() bool {
+	return len(s.Pins) > 0
+}
+
+func (s *RemediationSummary) HasUnresolved() bool {
+	return len(s.Unresolved) > 0
+}
+
 type UpgradeGroup struct {
 	FromPackage Package
 	ToPackage   Package
@@ -128,7 +140,6 @@ func processUpgradeAdvice(issue Issue, advice UpgradePackageAdvice, outcome FixA
 		}
 	}
 
-	// Issue is fully handled only if it was added AND either all paths matched or outcome is FullyResolved
 	hasUnmatchedPaths := matchedPaths < len(paths)
 	return wasAdded && (outcome == FullyResolved || !hasUnmatchedPaths)
 }
@@ -224,27 +235,4 @@ func containsIssue(issues []Issue, issue Issue) bool {
 
 func compareVersions(v1, v2 string) int {
 	return strings.Compare(v1, v2)
-}
-
-func (s *RemediationSummary) HasUpgrades() bool {
-	return len(s.Upgrades) > 0
-}
-
-func (s *RemediationSummary) HasPins() bool {
-	return len(s.Pins) > 0
-}
-
-func (s *RemediationSummary) HasUnresolved() bool {
-	return len(s.Unresolved) > 0
-}
-
-func (s *RemediationSummary) TotalFixableIssues() int {
-	count := 0
-	for _, upgrade := range s.Upgrades {
-		count += len(upgrade.Fixes)
-	}
-	for _, pin := range s.Pins {
-		count += len(pin.Fixes)
-	}
-	return count
 }

@@ -24,3 +24,13 @@ func renderInSeverityColor(severity string, str string) string {
 	severityStyle := lipgloss.NewStyle().Foreground(severityToColor[strings.ToUpper(severity)])
 	return severityStyle.Render(str)
 }
+
+func renderGreen(str string) string {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	return style.Render(str)
+}
+
+func renderGray(str string) string {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	return style.Render(str)
+}
