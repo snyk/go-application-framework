@@ -174,6 +174,45 @@ func TestIsFeatureEnabled_Success(t *testing.T) {
 	assert.True(t, enabled[flag])
 }
 
+func TestIsFeatureEnabled_PartialResponse(t *testing.T) {
+	flagTrue := "flag-true"
+	flagMissing := "flag-missing"
+
+	orgID := uuid.NewString()
+	value := true
+
+	evaluateFlags = func(
+		config configuration.Configuration,
+		engine workflow.Engine,
+		flags []string,
+		orgID uuid.UUID,
+	) (*v20241015.ListFeatureFlagsResponse, error) {
+		return &v20241015.ListFeatureFlagsResponse{
+			ApplicationvndApiJSON200: &struct {
+				Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
+				Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
+			}{
+				Data: &v20241015.FeatureFlagsDataItem{
+					Attributes: v20241015.FeatureFlagAttributesList{
+						Evaluations: []v20241015.FeatureFlagAttributes{
+							{
+								Key:   flagTrue,
+								Value: &value,
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	}
+
+	enabled, err := areFeaturesEnabled(nil, nil, orgID, flagTrue, flagMissing)
+
+	assert.NoError(t, err)
+	assert.True(t, enabled[flagTrue], "returned flag should be true")
+	assert.False(t, enabled[flagMissing], "missing flag should default to false")
+}
+
 func TestIsFeatureEnabled_Error_InvalidUUID(t *testing.T) {
 	enabled, err := areFeaturesEnabled(nil, nil, "not-a-uuid", "my-flag")
 

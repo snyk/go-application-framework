@@ -88,12 +88,6 @@ func areFeaturesEnabled(
 		}
 	}
 
-	for _, flag := range flags {
-		if _, ok := results[flag]; !ok {
-			results[flag] = false
-		}
-	}
-
 	return results, nil
 }
 
