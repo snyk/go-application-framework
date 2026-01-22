@@ -1574,8 +1574,16 @@ type SnykLicenseProblem struct {
 	// License Software license identifier.
 	License string `json:"license"`
 
+	// PackageFullName The full name of the vulnerable software package.
+	// It's achieved by combining the packageName and packageNamespace
+	// with the ecosystem specific delimiter.
+	PackageFullName *string `json:"package_full_name,omitempty"`
+
 	// PackageName Package name.
 	PackageName string `json:"package_name"`
+
+	// PackageNamespace Vulnerable software package namespace, if applicable.
+	PackageNamespace *string `json:"package_namespace,omitempty"`
 
 	// PackageVersion Package version.
 	PackageVersion string `json:"package_version"`
@@ -1630,6 +1638,11 @@ type SnykVulnProblem struct {
 	// being used.
 	AffectedVersions *[]string `json:"affected_versions,omitempty"`
 
+	// AlternativeIds This is the list of alternative IDs Snyk gives for a certain vulnerability.
+	// It's usually present in older vulnerabilities, in which Snyk used to use a different identifier format.
+	// e.g a vuln with the ID "npm:foo:bar", will likely have an alternative ID of "SNYK-JS-FOO-BAR".
+	AlternativeIds *[]string `json:"alternative_ids,omitempty"`
+
 	// CreatedAt Timestamp indicating when the problem was orginally created.
 	CreatedAt time.Time `json:"created_at"`
 
@@ -1680,12 +1693,32 @@ type SnykVulnProblem struct {
 	// a given version is vulnerable.
 	InitiallyFixedInVersions []string `json:"initially_fixed_in_versions"`
 
+	// IsDisputed Indicates if the vulnerability is formally disputed.
+	// A vulnerability's claim (e.g., that it's a security flaw, or the scope/impact) is
+	// **disputed** when one party, often the vendor or a security professional, formally
+	// challenges the assertion.
+	// Most cybersecurity public listings, such as CVE, have a defined process
+	// allowing vendors or researchers to officially challenge the validity
+	// of a reported issue, leading to this 'DISPUTED' status being formally annotated.
+	IsDisputed *bool `json:"is_disputed,omitempty"`
+
 	// IsFixable Is there a fixed version published to the relevant package manager
 	// repository- i.e., a newer version without this specific vulnerability
 	IsFixable bool `json:"is_fixable"`
 
 	// IsMalicious Indicate if the vulnerability is known to mark a malicious package.
 	IsMalicious bool `json:"is_malicious"`
+
+	// IsProprietary This field indicates if the vulnerability was first published in the Snyk DB.
+	// This happens when either of the following is true:
+	// - Snyk was responsilbe for coordinating the disclosure
+	// - Snyk researchers discovered the vulnerability/malicious package
+	// - Snyk gave the first or best indication about the vulnerability based on unofficial sources.
+	// The only exceptions are when:
+	// - The vulnerability is a Linux container
+	// - The vulnerable package is written in C/C++ and not hosted on conan center
+	// - The vulnerable package is a `webjar`
+	IsProprietary *bool `json:"is_proprietary,omitempty"`
 
 	// IsSocialMediaTrending This boolean field is true when increased activity is detected related to
 	// this vulnerability. The "trending" determination is based on social media
@@ -1698,8 +1731,16 @@ type SnykVulnProblem struct {
 	// field and published will be (almost) identical.
 	ModifiedAt time.Time `json:"modified_at"`
 
+	// PackageFullName The full name of the vulnerable software package.
+	// It's achieved by combining the packageName and packageNamespace
+	// with the ecosystem specific delimiter.
+	PackageFullName *string `json:"package_full_name,omitempty"`
+
 	// PackageName Package name.
 	PackageName string `json:"package_name"`
+
+	// PackageNamespace Vulnerable software package namespace, if applicable.
+	PackageNamespace *string `json:"package_namespace,omitempty"`
 
 	// PackagePopularityRank Percentile rank indicating the package's prevalence across Snyk-monitored projects.
 	// A higher rank signifies the package is used in a larger percentage of projects.
@@ -1719,8 +1760,11 @@ type SnykVulnProblem struct {
 	References []SnykvulndbReferenceLinks `json:"references"`
 
 	// Severity The Snyk curated or recommended vulnerability severity for the problem.
-	Severity Severity              `json:"severity"`
-	Source   SnykVulnProblemSource `json:"source"`
+	Severity Severity `json:"severity"`
+
+	// SeverityBasedOn Indicates how the vulnerability severity was determined.
+	SeverityBasedOn *string               `json:"severity_based_on,omitempty"`
+	Source          SnykVulnProblemSource `json:"source"`
 
 	// VendorSeverity The assigned severity/impact/urgency rating by the distros teams for the
 	// specific vulnerability package and release of the operating system (if available).
@@ -2233,7 +2277,13 @@ type SnykcoderuleProperties struct {
 //
 // Examples include, but are not limited to: Javascript NPM, Java Maven, Python pip, etc.
 type SnykvulndbBuildPackageEcosystem struct {
-	Language       string                              `json:"language"`
+	// Client Ecosystem client is the tool the consumer used to manage the dependencies.
+	// In managed ecosystems, this is commonly refered to as the package manager,
+	// while in the case of C++, this would be "unmanaged".
+	Client *string `json:"client,omitempty"`
+	// Deprecated:
+	Language string `json:"language"`
+	// Deprecated:
 	PackageManager string                              `json:"package_manager"`
 	Type           SnykvulndbBuildPackageEcosystemType `json:"type"`
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/cenkalti/backoff/v5"
@@ -299,6 +300,22 @@ func Test_shouldRetry(t *testing.T) {
 			response:        newResponse(http.StatusTooManyRequests, http.Header{"Retry-After": []string{"5"}}),
 			expectedErrorIs: &backoff.PermanentError{Err: errRetryNecessary},
 			attempts:        1,
+			maxAttempts:     1,
+		},
+		{
+			name: "Retryable status code (503) with maintenance window error",
+			response: func() *http.Response {
+				resp := newResponse(http.StatusServiceUnavailable, http.Header{"Retry-After": []string{"5"}})
+				var buf bytes.Buffer
+				err := snyk.NewMaintenanceWindowError("").MarshalToJSONAPIError(&buf, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				resp.Body = io.NopCloser(&buf)
+				return resp
+			}(),
+			expectedErrorIs: &backoff.PermanentError{Err: errRetryNecessary},
+			attempts:        0,
 			maxAttempts:     1,
 		},
 	}
