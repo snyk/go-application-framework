@@ -1,13 +1,12 @@
 package middleware_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/internal/constants"
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -71,7 +70,6 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.AUTHENTICATION_SUBDOMAINS, []string{"deeproxy"})
-	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 
 	// case: headers added (api)
 	url, err := url.Parse("https://app.snyk.io/rest/endpoint1")
@@ -157,6 +155,8 @@ func TestAuthenticationError_Is(t *testing.T) {
 	}
 
 	authenticator := mocks.NewMockAuthenticator(ctrl)
+	authenticator.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(fmt.Errorf("nope"))
 	err = middleware.AddAuthenticationHeader(authenticator, config, request)
 	assert.ErrorIs(t, err, middleware.ErrAuthenticationFailed)
+	assert.ErrorContains(t, err, "nope")
 }

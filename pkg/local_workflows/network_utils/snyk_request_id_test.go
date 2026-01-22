@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/snyk/go-application-framework/internal/constants"
-	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -15,8 +14,8 @@ import (
 func Test_AddRequestId(t *testing.T) {
 	t.Run("Add missing snyk-request-id", func(t *testing.T) {
 		config := configuration.NewInMemory()
-		config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 		net := networking.NewNetworkAccess(config)
+		config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 
 		// use method under test
 		AddSnykRequestId(net)
@@ -34,7 +33,7 @@ func Test_AddRequestId(t *testing.T) {
 	t.Run("Do not override snyk-request-id", func(t *testing.T) {
 		config := configuration.NewInMemory()
 		net := networking.NewNetworkAccess(config)
-		config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
+		config.Set(configuration.API_URL, "https://api.snyk.io")
 		expectedValue := "pre-existing-id"
 
 		// use method under test

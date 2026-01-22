@@ -103,19 +103,12 @@ func AddAuthenticationHeader(
 	config configuration.Configuration,
 	request *http.Request,
 ) error {
-	apiUrl := config.GetString(configuration.API_URL)
-	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
-	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	hostNameRegex := config.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
-
-	canonicalHostname, err := api.GetCanonicalApiUrl(*request.URL)
+	apiUrl, err := config.GetStringWithError(configuration.API_URL)
 	if err != nil {
 		return errors.Join(err, ErrAuthenticationFailed)
 	}
-	isValid, err := auth.IsValidAuthHost(canonicalHostname, hostNameRegex)
-	if !isValid || err != nil {
-		return errors.Join(err, ErrAuthenticationFailed)
-	}
+	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
+	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 
 	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 	// requests to the api automatically get an authentication token attached

@@ -34,7 +34,6 @@ func getConfig() configuration.Configuration {
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 	config.Set(configuration.AUTHENTICATION_TOKEN, "")
 	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 	return config
 }
 
@@ -451,10 +450,10 @@ func Test_UserAgentInfo_Complete(t *testing.T) {
 
 func TestNetworkImpl_Clone(t *testing.T) {
 	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
+	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 	network := NewNetworkAccess(config)
 	config2 := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	config2.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
+	config2.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 	config2.Set(configuration.AUTHENTICATION_TOKEN, "test")
 	clonedNetwork := network.Clone()
 	clonedNetwork.SetConfiguration(config2)
@@ -482,6 +481,7 @@ func TestNetworkImpl_Clone(t *testing.T) {
 func TestNetworkImpl_ErrorHandler(t *testing.T) {
 	expectedErr := snyk.NewUnauthorisedError("no auth")
 	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

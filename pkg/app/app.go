@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/fips140"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -142,7 +143,7 @@ func defaultFuncApiUrl(globalConfig configuration.Configuration, logger *zerolog
 		if isValid, validationErr := auth.IsValidAuthHost(apiString, config.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)); !isValid || validationErr != nil {
 			hostNameErr := fmt.Errorf("host name is not snyk.io or snykgov.io")
 			logger.Err(hostNameErr).Msg("host name is not snyk.io or snykgov.io")
-			return nil, fmt.Errorf("host name is not snyk.io or snykgov.io")
+			return nil, errors.Join(validationErr, hostNameErr)
 		}
 		return apiString, nil
 	}
