@@ -43,7 +43,7 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 	}
 
 	upgradeMap := make(map[string]*UpgradeGroup)
-	pinMap := make(map[string]*PinGroup)
+	pinMap := make(map[string][]*PinGroup)
 
 	for _, issue := range issues {
 		if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil && ignoreDetails.IsActive() {
@@ -82,8 +82,8 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 	for _, upgrade := range upgradeMap {
 		summary.Upgrades = append(summary.Upgrades, upgrade)
 	}
-	for _, pin := range pinMap {
-		summary.Pins = append(summary.Pins, pin)
+	for _, pins := range pinMap {
+		summary.Pins = append(summary.Pins, pins...)
 	}
 
 	return summary
@@ -161,24 +161,49 @@ func addOrUpdateUpgradeGroup(upgradeMap map[string]*UpgradeGroup, key string, fr
 	}
 }
 
-func processPinAdvice(issue Issue, advice PinPackageAdvice, pinMap map[string]*PinGroup) {
+func processPinAdvice(issue Issue, advice PinPackageAdvice, pinMap map[string][]*PinGroup) {
 	vulnerablePkg := getVulnerablePackage(issue)
-	key := fmt.Sprintf("%s@%s", vulnerablePkg.Name, vulnerablePkg.Version)
+	key := vulnerablePkg.Name
 	toPkg := Package{Name: advice.PackageName, Version: advice.PinVersion}
 
-	if existing, exists := pinMap[key]; exists {
-		if !containsIssue(existing.Fixes, issue) {
-			existing.Fixes = append(existing.Fixes, issue)
+	existingPins, exists := pinMap[key]
+	if exists {
+		for _, pin := range existingPins {
+			if compareVersions(toPkg.Version, pin.ToPackage.Version) > 0 {
+				pin.ToPackage.Version = toPkg.Version
+			}
 		}
-		if compareVersions(toPkg.Version, existing.ToPackage.Version) > 0 {
-			existing.ToPackage.Version = toPkg.Version
+
+		versionFound := false
+		for _, pin := range existingPins {
+			if pin.FromPackage.Version == vulnerablePkg.Version {
+				if !containsIssue(pin.Fixes, issue) {
+					pin.Fixes = append(pin.Fixes, issue)
+				}
+				versionFound = true
+				break
+			}
+		}
+
+		if !versionFound {
+			highestToVersion := toPkg.Version
+			for _, pin := range existingPins {
+				if compareVersions(pin.ToPackage.Version, highestToVersion) > 0 {
+					highestToVersion = pin.ToPackage.Version
+				}
+			}
+			pinMap[key] = append(existingPins, &PinGroup{
+				FromPackage: vulnerablePkg,
+				ToPackage:   Package{Name: toPkg.Name, Version: highestToVersion},
+				Fixes:       []Issue{issue},
+			})
 		}
 	} else {
-		pinMap[key] = &PinGroup{
+		pinMap[key] = []*PinGroup{{
 			FromPackage: vulnerablePkg,
 			ToPackage:   toPkg,
 			Fixes:       []Issue{issue},
-		}
+		}}
 	}
 }
 
@@ -225,14 +250,22 @@ func pathsMatch(upgradePath, depPath []Package) bool {
 }
 
 func containsIssue(issues []Issue, issue Issue) bool {
+	issueID := issue.GetID()
+	issueVersion, _ := issue.GetData(DataKeyComponentVersion)
+
 	for _, existing := range issues {
-		if existing.GetID() == issue.GetID() {
+		if existing.GetID() != issueID {
+			continue
+		}
+		existingVersion, _ := existing.GetData(DataKeyComponentVersion)
+		if issueVersion == existingVersion {
 			return true
 		}
 	}
 	return false
 }
 
+// TODO: this must use semver to compare versions (depends on the package manager?)
 func compareVersions(v1, v2 string) int {
 	return strings.Compare(v1, v2)
 }
