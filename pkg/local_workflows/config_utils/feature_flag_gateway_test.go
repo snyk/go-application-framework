@@ -139,78 +139,88 @@ func Test_AddFeatureFlagGatewayToConfig(t *testing.T) {
 	assert.Equal(t, []string{globalAPIEndpoint}, requestedAPIs)
 }
 
-func TestIsFeatureEnabled_Success(t *testing.T) {
-	flag := "my-flag"
+func TestAreFeaturesEnabled_PartialAndNilValue(t *testing.T) {
 	orgID := uuid.NewString()
-	value := true
 
-	evaluateFlags = func(
-		config configuration.Configuration,
-		engine workflow.Engine,
-		flags []string,
-		orgID uuid.UUID,
-	) (*v20241015.ListFeatureFlagsResponse, error) {
-		return &v20241015.ListFeatureFlagsResponse{
-			ApplicationvndApiJSON200: &struct {
-				Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
-				Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
-			}{
-				Data: &v20241015.FeatureFlagsDataItem{
-					Attributes: v20241015.FeatureFlagAttributesList{
-						Evaluations: []v20241015.FeatureFlagAttributes{
-							{
-								Key:   flag,
-								Value: &value,
+	tests := []struct {
+		name        string
+		requested   []string
+		evaluations []v20241015.FeatureFlagAttributes
+		want        map[string]bool
+	}{
+		{
+			name:      "missing flag defaults to false",
+			requested: []string{"flag-true", "flag-missing"},
+			evaluations: func() []v20241015.FeatureFlagAttributes {
+				v := true
+				return []v20241015.FeatureFlagAttributes{
+					{Key: "flag-true", Value: &v},
+				}
+			}(),
+			want: map[string]bool{
+				"flag-true":    true,
+				"flag-missing": false,
+			},
+		},
+		{
+			name:      "value == nil defaults to false",
+			requested: []string{"flag-nil"},
+			evaluations: []v20241015.FeatureFlagAttributes{
+				{Key: "flag-nil", Value: nil},
+			},
+			want: map[string]bool{
+				"flag-nil": false,
+			},
+		},
+		{
+			name:      "unknown evaluation key is ignored (requested still defaulted)",
+			requested: []string{"flag-a"},
+			evaluations: func() []v20241015.FeatureFlagAttributes {
+				v := true
+				return []v20241015.FeatureFlagAttributes{
+					{Key: "some-other-flag", Value: &v},
+				}
+			}(),
+			want: map[string]bool{
+				"flag-a": false,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			evaluateFlags = func(
+				config configuration.Configuration,
+				engine workflow.Engine,
+				flags []string,
+				orgID uuid.UUID,
+			) (*v20241015.ListFeatureFlagsResponse, error) {
+				return &v20241015.ListFeatureFlagsResponse{
+					ApplicationvndApiJSON200: &struct {
+						Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
+						Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
+					}{
+						Data: &v20241015.FeatureFlagsDataItem{
+							Attributes: v20241015.FeatureFlagAttributesList{
+								Evaluations: tc.evaluations,
 							},
 						},
 					},
-				},
-			},
-		}, nil
+				}, nil
+			}
+
+			got, err := areFeaturesEnabled(nil, nil, orgID, tc.requested...)
+			assert.NoError(t, err)
+
+			for _, key := range tc.requested {
+				wantVal, ok := tc.want[key]
+				if !ok {
+					t.Fatalf("test case missing expected value for requested flag %q", key)
+				}
+				assert.Equal(t, wantVal, got[key], "flag %q", key)
+			}
+		})
 	}
-
-	enabled, err := areFeaturesEnabled(nil, nil, orgID, flag)
-	assert.NoError(t, err)
-	assert.True(t, enabled[flag])
-}
-
-func TestIsFeatureEnabled_PartialResponse(t *testing.T) {
-	flagTrue := "flag-true"
-	flagMissing := "flag-missing"
-
-	orgID := uuid.NewString()
-	value := true
-
-	evaluateFlags = func(
-		config configuration.Configuration,
-		engine workflow.Engine,
-		flags []string,
-		orgID uuid.UUID,
-	) (*v20241015.ListFeatureFlagsResponse, error) {
-		return &v20241015.ListFeatureFlagsResponse{
-			ApplicationvndApiJSON200: &struct {
-				Data    *v20241015.FeatureFlagsDataItem `json:"data,omitempty"`
-				Jsonapi *v20241015.JsonApi              `json:"jsonapi,omitempty"`
-			}{
-				Data: &v20241015.FeatureFlagsDataItem{
-					Attributes: v20241015.FeatureFlagAttributesList{
-						Evaluations: []v20241015.FeatureFlagAttributes{
-							{
-								Key:   flagTrue,
-								Value: &value,
-							},
-						},
-					},
-				},
-			},
-		}, nil
-	}
-
-	enabled, err := areFeaturesEnabled(nil, nil, orgID, flagTrue, flagMissing)
-
-	assert.NoError(t, err)
-	assert.True(t, enabled[flagTrue], "returned flag should be true")
-	assert.False(t, enabled[flagMissing], "missing flag should default to false")
 }
 
 func TestIsFeatureEnabled_Error_InvalidUUID(t *testing.T) {
