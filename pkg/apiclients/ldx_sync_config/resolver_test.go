@@ -52,14 +52,12 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 		expectedOrgId string
 		expectedErr   error
 		cfgResult     LdxSyncConfigResult
-		existingOrgID string
 	}{
 		{
 			name:          "error in config result",
 			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("no input directory specified")},
-			existingOrgID: "",
 		},
 		{
 			name:          "successful resolution with PreferredByAlgorithm",
@@ -72,7 +70,6 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "",
 		},
 		{
 			name:          "successful resolution using ApplicationvndApiJSON200 response",
@@ -84,7 +81,6 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "",
 		},
 		{
 			name:          "fallback to default org when no preferred",
@@ -97,7 +93,6 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "",
 		},
 		{
 			name:          "no preferred or default org, fallback to api",
@@ -112,7 +107,6 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "",
 		},
 		{
 			name:          "no organizations in response, fallback to API",
@@ -123,7 +117,6 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "",
 		},
 		{
 			name:          "nil organizations in response, fallback to API",
@@ -134,57 +127,50 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "",
 		},
 		{
 			name:          "API error, fallback to api",
 			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: errors.New("API error")},
-			existingOrgID: "",
 		},
 		{
 			name:          "API returns 404, fallback to api",
 			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("404 API error occurred")},
-			existingOrgID: "",
 		},
 		{
 			name:          "API returns 200 with no data, fallback to api",
 			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("no configuration data in response, status code: 200")},
-			existingOrgID: "",
 		},
 		{
 			name:          "git remote detection fails, fallback to api",
 			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("git remote detection failed: git command failed")},
-			existingOrgID: "",
 		},
 		{
 			name:          "client creation fails, fallback to api",
 			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("failed to create LDX-Sync client: client creation failed")},
-			existingOrgID: "",
 		},
 		{
-			name: "existing valid org ID (not default)",
-			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetDefaultOrgId().Return("22222222-2222-2222-2222-222222222222", nil)
-			},
+			name:          "LDX-Sync returns preferred org",
 			expectedOrgId: "123e4567-e89b-12d3-a456-426614174000",
-			cfgResult:     LdxSyncConfigResult{},
-			existingOrgID: "123e4567-e89b-12d3-a456-426614174000",
+			cfgResult: LdxSyncConfigResult{
+				Config: makeUserConfigResponse([]v20241015.Organization{
+					{Id: "123e4567-e89b-12d3-a456-426614174000", PreferredByAlgorithm: utils.Ptr(true)},
+				}),
+				RemoteUrl:   "https://github.com/test/repo.git",
+				ProjectRoot: tempDir,
+			},
 		},
 		{
-			name: "existing org ID is default, return LDX-Sync preferred",
-			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetDefaultOrgId().Return("11111111-1111-1111-1111-111111111111", nil)
-			},
+			name:          "LDX-Sync returns another preferred org",
 			expectedOrgId: "ldx-preferred-org",
 			cfgResult: LdxSyncConfigResult{
 				Config: makeUserConfigResponse([]v20241015.Organization{
@@ -193,24 +179,20 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "11111111-1111-1111-1111-111111111111",
 		},
 		{
-			name: "existing valid org slug (not default)",
-			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetOrgIdFromSlug("my-org").Return("33333333-3333-3333-3333-333333333333", nil)
-				mock.EXPECT().GetDefaultOrgId().Return("22222222-2222-2222-2222-222222222222", nil)
-			},
+			name:          "LDX-Sync returns specific org as preferred",
 			expectedOrgId: "33333333-3333-3333-3333-333333333333",
-			cfgResult:     LdxSyncConfigResult{},
-			existingOrgID: "my-org",
+			cfgResult: LdxSyncConfigResult{
+				Config: makeUserConfigResponse([]v20241015.Organization{
+					{Id: "33333333-3333-3333-3333-333333333333", PreferredByAlgorithm: utils.Ptr(true)},
+				}),
+				RemoteUrl:   "https://github.com/test/repo.git",
+				ProjectRoot: tempDir,
+			},
 		},
 		{
-			name: "existing org slug is default, return LDX-Sync preferred",
-			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetOrgIdFromSlug("default-org-slug").Return("11111111-1111-1111-1111-111111111111", nil)
-				mock.EXPECT().GetDefaultOrgId().Return("11111111-1111-1111-1111-111111111111", nil)
-			},
+			name:          "LDX-Sync preferred org from config",
 			expectedOrgId: "ldx-preferred-from-slug",
 			cfgResult: LdxSyncConfigResult{
 				Config: makeUserConfigResponse([]v20241015.Organization{
@@ -219,27 +201,6 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 				RemoteUrl:   "https://github.com/test/repo.git",
 				ProjectRoot: tempDir,
 			},
-			existingOrgID: "default-org-slug",
-		},
-		{
-			name: "existing invalid org slug",
-			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetOrgIdFromSlug("invalid-org").Return("", errors.New("not found"))
-			},
-			expectedOrgId: "",
-			expectedErr:   errors.New("not found"),
-			cfgResult:     LdxSyncConfigResult{},
-			existingOrgID: "invalid-org",
-		},
-		{
-			name: "existing org ID, GetDefaultOrgId fails, returns error",
-			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetDefaultOrgId().Return("", errors.New("api error"))
-			},
-			expectedOrgId: "",
-			expectedErr:   errors.New("api error"),
-			cfgResult:     LdxSyncConfigResult{},
-			existingOrgID: "123e4567-e89b-12d3-a456-426614174000",
 		},
 		{
 			name: "LDX fails, fallback to API default org fails",
@@ -249,7 +210,6 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 			expectedOrgId: "",
 			expectedErr:   errors.New("api is down"),
 			cfgResult:     LdxSyncConfigResult{Error: errors.New("ldx api error")},
-			existingOrgID: "",
 		},
 	}
 
@@ -272,7 +232,7 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 			mockEngine.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
 
-			result, err := ResolveOrgFromUserConfig(mockEngine, tt.cfgResult, tt.existingOrgID)
+			result, err := ResolveOrgFromUserConfig(mockEngine, tt.cfgResult)
 			if tt.expectedErr != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedErr, err)
