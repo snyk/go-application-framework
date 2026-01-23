@@ -108,7 +108,8 @@ func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) L
 	}
 
 	if orgId != "" {
-		orgUUID, err := resolveOrgIdToUUID(orgId, engine, config)
+		var orgUUID *uuid.UUID
+		orgUUID, err = resolveOrgIdToUUID(orgId, engine, config)
 		if err != nil {
 			return LdxSyncConfigResult{Error: err}
 		}
