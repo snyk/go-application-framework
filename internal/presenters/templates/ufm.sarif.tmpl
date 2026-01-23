@@ -5,9 +5,8 @@
 		"runs": [
 		{{- range $resultIndex, $result := $.TestResults}}
 			{{- $findingTypes := getFindingTypesFromTestResult $result }}
-			{{- $findingTypesSize := sub (len $findingTypes) 1 }}
-			{{- range $findingTypeIndex, $findingType := $findingTypes }}
-			{{- $issues := getIssuesFromTestResult $result $findingType }}
+			{{- $findingType := index $findingTypes 0 }}
+			{{- $issues := getIssuesFromTestResult $result }}
 			{{- $issuesSize := sub (len $issues) 1 }}
 			{{- $metadata := $result.GetMetadata }}
 			{
@@ -26,12 +25,14 @@
 								"shortDescription": {
 									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
 								},
+								{{- with buildRuleFullDescription $issue }}
 								"fullDescription": {
-									"text": {{ getQuotedString (buildRuleFullDescription $issue) }}
+									"text": {{ getQuotedString . }}
 								},
+								{{- end }}
 								"help": {
 									"text": "",
-									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $findingType) }}
+									"markdown": {{ getQuotedString (buildRuleHelpMarkdown $issue $issue.GetFindingType) }}
 								},
 								"properties": {
 									"tags": [
@@ -55,10 +56,13 @@
 					}
 				},
 			"results": [
-				{{- $targetFile := index $result.GetMetadata "display-target-file" }}
+				{{- $displayTargetFile := index $result.GetMetadata "display-target-file" }}
+				{{- $targetFile := "" }}
+				{{- if $displayTargetFile }} {{- $targetFile = $displayTargetFile }} {{- end }}
 				{{- range $index, $issue := $issues }}
 				{{- $location := buildLocationFromIssue $issue $targetFile }}
 				{{- $physicalLoc := index $location "physicalLocation" }}
+				{{- $logicalLocs := index $location "logicalLocations" }}
 				{{- $region := index $physicalLoc "region" }}
 				{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
 				{{- $fixes := buildFixesFromIssue $issue }}
@@ -71,17 +75,28 @@
 					},
 					"locations": [
 						{{- if $location }}
-					
-						{{- $logicalLocs := index $location "logicalLocations" }}
 						{
+							{{- if $physicalLoc }}
 							"physicalLocation": {
 								"artifactLocation": {
 									"uri": {{ getQuotedString (index $artifactLocation "uri") }}
 								},
 								"region": {
-									"startLine": {{ index $region "startLine" }}
+									"startLine": {{ index $region "startLine" }}{{if index $region "startColumn"}},{{end}}
+									{{- if index $region "startColumn" }}
+									"startColumn": {{ index $region "startColumn" }}{{if index $region "endLine"}},{{end}}
+									{{- end }}
+									{{- if index $region "endLine" }}
+									"endLine": {{ index $region "endLine" }}{{if index $region "endColumn"}},{{end}}
+									{{- end }}
+									{{- if index $region "endColumn" }}
+									"endColumn": {{ index $region "endColumn" }}
+									{{- end }}
 								}
-							},
+							}
+							{{- end }}
+							{{- if and $physicalLoc $logicalLocs}} , {{end}}
+							{{- if $logicalLocs }}
 							"logicalLocations": [
 								{{- range $logLoc := $logicalLocs }}
 								{
@@ -89,6 +104,7 @@
 								}
 								{{- end }}
 							]
+							{{- end }}
 						}
 						{{- end }}
 					]
@@ -207,11 +223,11 @@
 				},
 				*/ -}}
 				"automationDetails": {
-					{{- $projectName := index $metadata "project-name" }}
-					"id": "{{- getAutomationDetailsId (printf "%s/%d" $projectName $resultIndex) (printf "%s" $findingType) }}"
+					{{- $projectName := or (index $metadata "project-name") "" }}
+					{{- if not $projectName }} {{- $projectName = printf "%d" $resultIndex }} {{- end }}
+					"id": "{{- getAutomationDetailsId $projectName (printf "%s" $findingType) }}"
 				}
-			}{{if or (lt $findingTypeIndex $findingTypesSize) (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}	
-		{{- end}}
+			}{{if (lt $resultIndex (sub (len $.TestResults) 1))}},{{end}}{{- end}}
 		]
 	}
 {{end }} {{/* end main */}}

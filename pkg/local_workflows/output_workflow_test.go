@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,16 +20,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
-	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
-	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
-
-	iMocks "github.com/snyk/go-application-framework/internal/mocks"
 	"github.com/snyk/go-application-framework/internal/utils"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/output_workflow"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -138,23 +138,69 @@ func Test_Output_InitOutputWorkflow(t *testing.T) {
 	assert.Equal(t, "", jsonFileOutput)
 }
 
-func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
+type testOutputDestination struct {
+	writer         *bytes.Buffer
+	writeRealFiles bool
+}
+
+func (t *testOutputDestination) Println(a ...any) (n int, err error) {
+	return fmt.Fprintln(t.writer, a...)
+}
+
+func (t *testOutputDestination) Remove(name string) error {
+	if t.writeRealFiles {
+		return os.Remove(name)
+	}
+	return nil
+}
+
+func (t *testOutputDestination) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	if t.writeRealFiles {
+		return os.WriteFile(filename, data, perm)
+	}
+	_, err := t.writer.Write(data)
+	return err
+}
+
+func (t *testOutputDestination) GetWriter() io.Writer {
+	return t.writer
+}
+
+type testSetup struct {
+	logger                *zerolog.Logger
+	config                configuration.Configuration
+	writer                *bytes.Buffer
+	ctrl                  *gomock.Controller
+	invocationContextMock *mocks.MockInvocationContext
+	outputDestination     utils.OutputDestination
+}
+
+func setupTest(t *testing.T) *testSetup {
+	t.Helper()
+
 	logger := &zerolog.Logger{}
-	config := configuration.NewInMemory()
+	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	writer := new(bytes.Buffer)
 
-	// setup mocks
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	outputDestination := iMocks.NewMockOutputDestination(ctrl)
-
-	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("Random Application Name"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
 
-	outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
+	outputDestination := &testOutputDestination{writer: writer}
 
+	return &testSetup{
+		logger:                logger,
+		config:                config,
+		writer:                writer,
+		ctrl:                  ctrl,
+		invocationContextMock: invocationContextMock,
+		outputDestination:     outputDestination,
+	}
+}
+
+func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	payload := `
 	{
 		"schemaVersion": "1.2.0",
@@ -188,121 +234,115 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 			]
 		}
 	}`
+	expectedOutput := payload + "\n"
 
 	t.Run("should output to stdout by default for application/json", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
-
-		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should output to stdout by default for text/plain", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
-
-		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
-		expectedFileName := "test.json"
-		config.Set("json-file-output", expectedFileName)
-		defer config.Set("json-file-output", nil)
+		setup := setupTest(t)
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
+		setup.config.Set("json-file-output", expectedFileName)
+		defer setup.config.Set("json-file-output", nil)
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Remove(expectedFileName).Return(nil).Times(1)
-		outputDestination.EXPECT().WriteFile(expectedFileName, []byte(payload), utils.FILEPERM_666).Return(nil).Times(1)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
-
-		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should output to (real) file when json-file-output is provided", func(t *testing.T) {
-		expectedFileName := t.TempDir() + "test.json"
-		config.Set("json-file-output", expectedFileName)
-		defer config.Set("json-file-output", nil)
+		setup := setupTest(t)
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
+		setup.config.Set("json-file-output", expectedFileName)
+		defer setup.config.Set("json-file-output", nil)
+
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
-
-		// mock assertions
 		realOutputDestination := &utils.OutputDestinationImpl{}
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, realOutputDestination)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
 		assert.FileExists(t, expectedFileName)
 
-		output, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, realOutputDestination)
+		fileContent, err := os.ReadFile(expectedFileName)
+		assert.NoError(t, err)
+		assert.Equal(t, payload, string(fileContent))
+
+		// Second write should overwrite
+		output, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+
+		fileContent, err = os.ReadFile(expectedFileName)
+		assert.NoError(t, err)
+		assert.Equal(t, payload, string(fileContent))
 	})
 
 	t.Run("should print unsupported mimeTypes that are string convertible", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "hammer/head", payload)
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
-
-		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should reject unsupported mimeTypes", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, "hammer/head", workflowIdentifier) // re-using workflowIdentifier as data to have some non string data
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
-		// assert
 		assert.Equal(t, []workflow.Data{}, output)
 		assert.Equal(t, "unsupported output type: hammer/head", err.Error())
+		assert.Equal(t, "", setup.writer.String())
 	})
 
 	t.Run("should not output anything for test summary mimeType", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(0)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
-
-		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(output))
+		assert.Empty(t, setup.writer.String())
 	})
 
 	t.Run("should output local finding presentation for content_types.LOCAL_FINDING_MODEL", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		testfile := "testdata/sarif-snyk-goof-ignores.json"
 		localFinding, err := sarifToLocalFinding(t, testfile, "/mypath")
@@ -311,42 +351,79 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.NoError(t, err)
 		data := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
 		wrongData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte("yolo"))
-		writer.Reset()
+		setup.writer.Reset()
 
-		// execute
-		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data, wrongData}, outputDestination)
+		_, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data, wrongData}, setup.outputDestination)
 		assert.Nil(t, err)
 
-		content := writer.String()
-		// assert
+		content := setup.writer.String()
 		assert.Contains(t, content, "Total issues:   11")
 		assert.Contains(t, content, "Project path:      /mypath")
 	})
 
+	t.Run("should use the default UFM SARIF template files for the default writer", func(t *testing.T) {
+		setup := setupTest(t)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+
+		testResultBytes, err := os.ReadFile("../../internal/presenters/testdata/ufm/testresult_cli.json")
+		assert.NoError(t, err)
+
+		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+		assert.NoError(t, err)
+		testResultData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), testResult)
+		setup.writer.Reset()
+
+		_, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{testResultData}, setup.outputDestination)
+		assert.Nil(t, err)
+
+		content := setup.writer.Bytes()
+		validateSarifData(t, content)
+	})
+
+	t.Run("should use the configured template files for the default writer", func(t *testing.T) {
+		setup := setupTest(t)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_TEMPLATE_FILE, "testdata/constant.template")
+		defer setup.config.Set(output_workflow.OUTPUT_CONFIG_TEMPLATE_FILE, nil)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+
+		testResultBytes, err := os.ReadFile("../../internal/presenters/testdata/ufm/testresult_cli.json")
+		assert.NoError(t, err)
+
+		testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+		assert.NoError(t, err)
+		testResultData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), testResult)
+		setup.writer.Reset()
+
+		_, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{testResultData}, setup.outputDestination)
+		assert.Nil(t, err)
+
+		content := setup.writer.String()
+		assert.Contains(t, content, "Hello world")
+	})
+
 	t.Run("should output multiple results when there are multiple local findings models", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		writer.Reset()
+		setup.writer.Reset()
+
 		testfile1 := "testdata/sarif-snyk-goof-ignores.json"
 		localFinding1, err := sarifToLocalFinding(t, testfile1, "/mypath")
 		assert.NoError(t, err)
 		localFindingBytes1, err := json.Marshal(localFinding1)
 		assert.NoError(t, err)
 		data1 := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes1)
+
 		testfile2 := "testdata/sarif-juice-shop.json"
 		localFinding2, err := sarifToLocalFinding(t, testfile2, "/juice-shop")
 		assert.NoError(t, err)
 		localFindingBytes2, err := json.Marshal(localFinding2)
 		assert.NoError(t, err)
 		data2 := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes2)
-		// mock assertions
-		outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
 
-		// execute
-		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data1, data2}, outputDestination)
+		_, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data1, data2}, setup.outputDestination)
 		assert.Nil(t, err)
 
-		content := writer.String()
-		// assert
+		content := setup.writer.String()
 		assert.Contains(t, content, "Total issues:   11")
 		assert.Contains(t, content, "Project path:      /mypath")
 		assert.Contains(t, content, "Total issues:   278")
@@ -354,38 +431,33 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 	})
 
 	t.Run("should not output anything for versioned test summary mimeType", func(t *testing.T) {
+		setup := setupTest(t)
 		versionedTestSummaryContentType := content_type.TEST_SUMMARY + "; version=2024-04-10"
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		data := workflow.NewData(workflowIdentifier, versionedTestSummaryContentType, []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(0)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
-
-		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(output))
+		assert.Empty(t, setup.writer.String())
 	})
 
 	t.Run("should reject test summary mimeType and display known mimeType", func(t *testing.T) {
+		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 		testSummaryData := workflow.NewData(workflowIdentifier, content_type.TEST_SUMMARY, []byte(payload))
 		textData := workflow.NewData(workflowIdentifier, "text/plain", []byte(payload))
 
-		// mock assertions
-		outputDestination.EXPECT().Println(payload).Return(0, nil).Times(1)
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{testSummaryData, textData}, setup.outputDestination)
 
-		// execute
-		output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{testSummaryData, textData}, outputDestination)
-
-		// assert
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(output))
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should print valid sarif json output", func(t *testing.T) {
+		setup := setupTest(t)
 		expectedSarif := "testdata/sarif-snyk-goof-ignores.json"
 		apiResponse := "testdata/sarif-snyk-goof-ignores.api.response.json"
 		localFinding, err := sarifToLocalFinding(t, apiResponse, "/mypath")
@@ -396,7 +468,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 			ProjectId:  "123",
 			SnapshotId: "456",
 		}
-		local_models.TranslateMetadataToLocalFindingModel(resultMetaData, localFinding, config)
+		local_models.TranslateMetadataToLocalFindingModel(resultMetaData, localFinding, setup.config)
 
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
 
@@ -406,18 +478,14 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		sarifData := workflow.NewData(workflowIdentifier, content_type.LOCAL_FINDING_MODEL, localFindingBytes)
 		sarifData.SetContentLocation("/mypath")
 
-		// mock assertions
-		writer.Reset()
+		setup.writer.Reset()
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+		defer setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, nil)
 
-		config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
-		defer config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, nil)
-
-		// execute
-		_, err = outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{sarifData}, outputDestination)
+		_, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{sarifData}, setup.outputDestination)
 		assert.NoError(t, err)
 
-		// assert
-		validateSarifData(t, writer.Bytes())
+		validateSarifData(t, setup.writer.Bytes())
 
 		expectedSarifFile, err := os.Open(expectedSarif)
 		assert.NoError(t, err)
@@ -428,7 +496,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		prettyExpectedSarif, err := getSortedSarifBytes(expectedSarifBytes)
 		assert.NoError(t, err)
 
-		prettyActualSarif, err := getSortedSarifBytes(writer.Bytes())
+		prettyActualSarif, err := getSortedSarifBytes(setup.writer.Bytes())
 		assert.NoError(t, err)
 
 		expectedString := string(prettyExpectedSarif)
@@ -461,7 +529,6 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	outputDestination := iMocks.NewMockOutputDestination(ctrl)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
@@ -469,7 +536,7 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
 
 	byteBuffer := &bytes.Buffer{}
-	outputDestination.EXPECT().GetWriter().Return(byteBuffer).AnyTimes()
+	outputDestination := &testOutputDestination{writer: byteBuffer, writeRealFiles: true}
 
 	expectedSarifFile := filepath.Join(t.TempDir(), "TestLocalFindingsHandling.sarif")
 	expectedJsonFile := filepath.Join(t.TempDir(), "TestLocalFindingsHandling.json")
@@ -489,8 +556,10 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	randomData2 := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "random"), "plain", []byte{})
 	input := []workflow.Data{randomData1, findingData, randomData2}
 
+	writers := output_workflow.GetWritersFromConfiguration(config, outputDestination)
+
 	// invoking method under test
-	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, outputDestination)
+	actualRemainingData, err := output_workflow.HandleContentTypeFindingsModel(input, invocationContextMock, writers)
 	assert.NoError(t, err)
 	assert.NotNil(t, actualRemainingData)
 
@@ -519,13 +588,13 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
-	outputDestination := iMocks.NewMockOutputDestination(ctrl)
 
 	// invocation context mocks
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("SnykCode"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
-	outputDestination.EXPECT().GetWriter().Return(writer).AnyTimes()
+
+	outputDestination := &testOutputDestination{writer: writer}
 
 	config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
 	testfile := "testdata/10000Findings.json"
@@ -566,20 +635,4 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 			}
 		}
 	})
-}
-
-func TestJsonWriteToFile(t *testing.T) {
-	i := 0
-	logger := zerolog.Nop()
-	outputDi := utils.NewOutputDestination()
-	fileName := filepath.Join(t.TempDir(), "not-existing", "file.json")
-	rawData := []byte("hello world")
-	data := []workflow.Data{
-		workflow.NewData(workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output"), "content-type", rawData),
-	}
-
-	assert.NoFileExists(t, fileName)
-	err := jsonWriteToFile(&logger, data, i, rawData, fileName, outputDi)
-	assert.NoError(t, err)
-	assert.FileExists(t, fileName)
 }

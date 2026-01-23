@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
@@ -106,8 +107,9 @@ type TestResult interface {
 	GetTestID() *uuid.UUID
 	GetTestConfiguration() *TestConfiguration
 	GetCreatedAt() *time.Time
-	GetTestSubject() TestSubject
+	GetTestSubject() *TestSubject
 	GetSubjectLocators() *[]TestSubjectLocator
+	GetTestResources() *[]TestResource
 
 	GetExecutionState() TestExecutionStates
 	GetErrors() *[]IoSnykApiCommonError
@@ -119,8 +121,10 @@ type TestResult interface {
 
 	GetEffectiveSummary() *FindingSummary
 	GetRawSummary() *FindingSummary
+	GetTestFacts() *[]TestFact
 
 	SetMetadata(key string, value interface{})
+	GetMetadataValue(key string) interface{}
 	GetMetadata() map[string]interface{}
 
 	Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error)
@@ -171,8 +175,31 @@ var (
 // StartTestParams defines parameters for the high-level StartTest function.
 type StartTestParams struct {
 	OrgID       string
-	Subject     TestSubjectCreate
+	Subject     *TestSubjectCreate
+	Resources   *[]TestResourceCreateItem
 	LocalPolicy *LocalPolicy
+	ScanConfig  *ScanConfiguration // Only valid when Resources is set, not Subject
+}
+
+// NewStartTestParamsFromSubject creates params for a subject-based test.
+// ScanConfig is not supported for subject-based tests.
+func NewStartTestParamsFromSubject(orgID string, subject *TestSubjectCreate, localPolicy *LocalPolicy) StartTestParams {
+	return StartTestParams{
+		OrgID:       orgID,
+		Subject:     subject,
+		LocalPolicy: localPolicy,
+	}
+}
+
+// NewStartTestParamsFromResources creates params for a resources-based test.
+// ScanConfig is optional and only valid for resource-based tests.
+func NewStartTestParamsFromResources(orgID string, resources *[]TestResourceCreateItem, localPolicy *LocalPolicy, scanConfig *ScanConfiguration) StartTestParams {
+	return StartTestParams{
+		OrgID:       orgID,
+		Resources:   resources,
+		LocalPolicy: localPolicy,
+		ScanConfig:  scanConfig,
+	}
 }
 
 // testResult is the concrete implementation of the TestResult interface for
@@ -181,8 +208,9 @@ type testResult struct {
 	TestID            *uuid.UUID // The final Test ID (different from Job ID)
 	TestConfiguration *TestConfiguration
 	CreatedAt         *time.Time
-	TestSubject       TestSubject
+	TestSubject       *TestSubject
 	SubjectLocators   *[]TestSubjectLocator
+	TestResources     *[]TestResource
 
 	ExecutionState TestExecutionStates // e.g., "finished", "errored"
 	Errors         *[]IoSnykApiCommonError
@@ -194,6 +222,7 @@ type testResult struct {
 
 	EffectiveSummary *FindingSummary // Summary excluding suppressed findings
 	RawSummary       *FindingSummary // Summary including suppressed findings
+	TestFacts        *[]TestFact     // Facts computed during test execution
 
 	findings         []FindingData // Stores the actual findings
 	findingsComplete bool          // True if all findings pages were fetched
@@ -234,16 +263,22 @@ func (r *testResult) GetTestConfiguration() *TestConfiguration { return r.TestCo
 func (r *testResult) GetCreatedAt() *time.Time { return r.CreatedAt }
 
 // GetTestSubject returns the test subject.
-func (r *testResult) GetTestSubject() TestSubject { return r.TestSubject }
+func (r *testResult) GetTestSubject() *TestSubject { return r.TestSubject }
 
 // GetSubjectLocators returns the subject locators.
 func (r *testResult) GetSubjectLocators() *[]TestSubjectLocator { return r.SubjectLocators }
+
+// GetTestResources returns the test resources.
+func (r *testResult) GetTestResources() *[]TestResource { return r.TestResources }
 
 // GetEffectiveSummary returns the summary excluding suppressed findings.
 func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveSummary }
 
 // GetRawSummary returns the summary including suppressed findings.
 func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
+
+// GetTestFacts returns the facts computed during test execution.
+func (r *testResult) GetTestFacts() *[]TestFact { return r.TestFacts }
 
 // SetMetadata sets the metadata for the given key.
 func (r *testResult) SetMetadata(key string, value interface{}) {
@@ -253,6 +288,11 @@ func (r *testResult) SetMetadata(key string, value interface{}) {
 // GetMetadata returns the metadata for the given key.
 func (r *testResult) GetMetadata() map[string]interface{} {
 	return r.metadata
+}
+
+// GetMetadataValue returns the metadata value for the given key.
+func (r *testResult) GetMetadataValue(key string) interface{} {
+	return r.metadata[key]
 }
 
 // NewTestClient returns a new instance of the test client, configured with the provided options.
@@ -287,26 +327,57 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 	}, nil
 }
 
-// Create the initial test and return a handle to poll it
-func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
-	if len(params.Subject.union) == 0 {
-		return nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
+// validateStartTestParams validates the StartTestParams and returns the parsed OrgID UUID.
+func validateStartTestParams(params StartTestParams) (uuid.UUID, error) {
+	if params.Resources != nil {
+		if len(*params.Resources) > 0 {
+			for i, resource := range *params.Resources {
+				if len(resource.union) == 0 {
+					return uuid.Nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
+				}
+			}
+		} else {
+			return uuid.Nil, fmt.Errorf("resources do not contain any items in StartTestParams")
+		}
+	} else if params.Subject != nil {
+		if len(params.Subject.union) == 0 {
+			return uuid.Nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
+		}
+	} else {
+		return uuid.Nil, fmt.Errorf("either resources or subject are required in StartTestParams and must be populated")
 	}
+
+	if params.ScanConfig != nil && params.Subject != nil {
+		return uuid.Nil, fmt.Errorf("ScanConfig is only supported with Resources, not Subject")
+	}
+
 	if params.OrgID == "" {
-		return nil, fmt.Errorf("OrgID is required")
+		return uuid.Nil, fmt.Errorf("OrgID is required")
 	}
 	orgUUID, err := uuid.Parse(params.OrgID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid OrgID format: %w", err)
+		return uuid.Nil, fmt.Errorf("invalid OrgID format: %w", err)
+	}
+	return orgUUID, nil
+}
+
+// Create the initial test and return a handle to poll it
+func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHandle, error) {
+	orgUUID, err := validateStartTestParams(params)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create test body
-	testAttributes := TestAttributesCreate{Subject: params.Subject}
-	if params.LocalPolicy != nil {
+	testAttributes := TestAttributesCreate{Subject: params.Subject, Resources: params.Resources}
+
+	if params.LocalPolicy != nil || params.ScanConfig != nil {
 		testAttributes.Config = &TestConfiguration{
 			LocalPolicy: params.LocalPolicy,
+			ScanConfig:  params.ScanConfig,
 		}
 	}
+
 	requestBody := TestRequestBody{
 		Data: TestDataCreate{
 			Attributes: testAttributes,
@@ -316,6 +387,7 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 
 	// Call the low-level client
 	createTestParams := &CreateTestParams{Version: c.config.APIVersion}
+
 	resp, err := c.lowLevelClient.CreateTestWithApplicationVndAPIPlusJSONBodyWithResponse(
 		ctx,
 		orgUUID,
@@ -539,8 +611,10 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		CreatedAt:         attrs.CreatedAt,
 		TestSubject:       attrs.Subject,
 		SubjectLocators:   attrs.SubjectLocators,
+		TestResources:     attrs.Resources,
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
+		TestFacts:         attrs.TestFacts,
 		handle:            h,
 		metadata:          make(map[string]interface{}),
 	}

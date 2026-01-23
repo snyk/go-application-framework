@@ -1,6 +1,6 @@
 module github.com/snyk/go-application-framework
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -13,7 +13,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
-	github.com/snyk/code-client-go v1.24.3
+	github.com/snyk/code-client-go v1.24.5
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -27,15 +27,16 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/gofrs/flock v0.12.1
+	github.com/manifoldco/promptui v0.9.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/snyk/error-catalog-golang-public v0.0.0-20251008132755-b542bb643649
+	github.com/puzpuzpuz/xsync v1.5.2
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14
 	github.com/subosito/gotenv v1.6.0
-	golang.org/x/net v0.38.0
-	golang.org/x/sync v0.13.0
-	golang.org/x/term v0.31.0
-	golang.org/x/text v0.24.0
+	golang.org/x/net v0.48.0
+	golang.org/x/sync v0.19.0
+	golang.org/x/term v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -50,6 +51,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
+	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
 	github.com/cloudflare/circl v1.6.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -90,7 +92,6 @@ require (
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/puzpuzpuz/xsync v1.5.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
@@ -112,10 +113,11 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/tools v0.31.0 // indirect
+	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/mod v0.30.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/tools v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250404141209-ee84b53bf3d0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect

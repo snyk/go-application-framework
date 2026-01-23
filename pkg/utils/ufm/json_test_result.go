@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
@@ -16,8 +18,9 @@ type jsonTestResult struct {
 	TestID            *uuid.UUID                      `json:"testId,omitempty"`
 	TestConfiguration *testapi.TestConfiguration      `json:"testConfiguration,omitempty"`
 	CreatedAt         *time.Time                      `json:"createdAt,omitempty"`
-	TestSubject       testapi.TestSubject             `json:"testSubject"`
+	TestSubject       *testapi.TestSubject            `json:"testSubject,omitempty"`
 	SubjectLocators   *[]testapi.TestSubjectLocator   `json:"subjectLocators,omitempty"`
+	TestResources     *[]testapi.TestResource         `json:"testResources,omitempty"`
 	ExecutionState    testapi.TestExecutionStates     `json:"executionState"`
 	Errors            *[]testapi.IoSnykApiCommonError `json:"errors,omitempty"`
 	Warnings          *[]testapi.IoSnykApiCommonError `json:"warnings,omitempty"`
@@ -26,6 +29,7 @@ type jsonTestResult struct {
 	BreachedPolicies  *testapi.PolicyRefSet           `json:"breachedPolicies,omitempty"`
 	EffectiveSummary  *testapi.FindingSummary         `json:"effectiveSummary,omitempty"`
 	RawSummary        *testapi.FindingSummary         `json:"rawSummary,omitempty"`
+	TestFacts         *[]testapi.TestFact             `json:"testFacts,omitempty"`
 	FindingsComplete  bool                            `json:"findingsComplete"`
 	Metadata          map[string]interface{}          `json:"metadata,omitempty"`
 	// Optimized wire format: central problem store (optional, for serialization)
@@ -37,6 +41,8 @@ type jsonTestResult struct {
 
 	// In-memory cache of full findings (not serialized, used after deserialization)
 	fullFindings []testapi.FindingData `json:"-"`
+
+	mutex sync.Mutex
 }
 
 // GetTestID returns the test ID.
@@ -55,13 +61,18 @@ func (j *jsonTestResult) GetCreatedAt() *time.Time {
 }
 
 // GetTestSubject returns the test subject.
-func (j *jsonTestResult) GetTestSubject() testapi.TestSubject {
+func (j *jsonTestResult) GetTestSubject() *testapi.TestSubject {
 	return j.TestSubject
 }
 
 // GetSubjectLocators returns the subject locators.
 func (j *jsonTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
 	return j.SubjectLocators
+}
+
+// GetResources returns the test resources.
+func (j *jsonTestResult) GetTestResources() *[]testapi.TestResource {
+	return j.TestResources
 }
 
 // GetExecutionState returns the execution state.
@@ -104,8 +115,17 @@ func (j *jsonTestResult) GetRawSummary() *testapi.FindingSummary {
 	return j.RawSummary
 }
 
+// GetTestFacts returns the facts computed during test execution.
+func (j *jsonTestResult) GetTestFacts() *[]testapi.TestFact {
+	return j.TestFacts
+}
+
 // SetMetadata sets the metadata for the given key.
 func (j *jsonTestResult) SetMetadata(key string, value interface{}) {
+	if j.Metadata == nil {
+		j.Metadata = make(map[string]interface{})
+	}
+
 	j.Metadata[key] = value
 }
 
@@ -114,9 +134,17 @@ func (j *jsonTestResult) GetMetadata() map[string]interface{} {
 	return j.Metadata
 }
 
+// GetMetadataValue returns the metadata value for the given key.
+func (j *jsonTestResult) GetMetadataValue(key string) interface{} {
+	return j.Metadata[key]
+}
+
 // Findings returns the stored findings without making any API calls.
 // The complete parameter indicates whether all findings were successfully fetched.
 func (j *jsonTestResult) Findings(ctx context.Context) (resultFindings []testapi.FindingData, complete bool, err error) {
+	j.mutex.Lock()
+	defer j.mutex.Unlock()
+
 	// Return fullFindings if available (reconstructed from optimized format)
 	if j.fullFindings != nil {
 		return j.fullFindings, j.FindingsComplete, nil
@@ -168,6 +196,7 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 		BreachedPolicies:  tr.GetBreachedPolicies(),
 		EffectiveSummary:  tr.GetEffectiveSummary(),
 		RawSummary:        tr.GetRawSummary(),
+		TestFacts:         tr.GetTestFacts(),
 		FindingsComplete:  complete,
 		ProblemStore:      problemStore,
 		ProblemRefs:       problemRefs,

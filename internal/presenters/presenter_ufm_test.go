@@ -8,12 +8,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/xeipuuv/gojsonschema"
 
@@ -251,18 +254,76 @@ func normalizeFixURIs(result map[string]interface{}) {
 }
 
 // normalizeSuppressions removes suppressions from results for consistent comparison
-func normalizeSuppressions(run map[string]interface{}) {
+//
+//nolint:gocyclo // to avoid repetition it's easier to read this way
+func normalizeSuppressions(run map[string]interface{}, ignoreSuppressions bool) {
 	results, ok := run["results"].([]interface{})
 	if !ok {
 		return
 	}
+
+	// just generally remove all suppressions available
+	if ignoreSuppressions {
+		for _, resultInterface := range results {
+			result, ok := resultInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			delete(result, "suppressions")
+		}
+		return
+	}
+
+	// otherwise use suppression information to remove rules and results to be comparable with the legacy output
+	var driver map[string]interface{}
+	var newRules []interface{}
+	var rules []interface{}
+	if tool, ok := run["tool"].(map[string]interface{}); ok {
+		if driver, ok = tool["driver"].(map[string]interface{}); ok {
+			if tmp, ok := driver["rules"].([]interface{}); ok {
+				rules = tmp
+			}
+		}
+	}
+
+	// create a new results slice
+	newResults := make([]interface{}, 0)
+	suppressedResults := []string{}
+
 	for _, resultInterface := range results {
 		result, ok := resultInterface.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		delete(result, "suppressions")
+
+		if result["suppressions"] != nil {
+			ruleId, ok := result["ruleId"].(string)
+			if !ok {
+				continue
+			}
+			suppressedResults = append(suppressedResults, ruleId)
+			continue
+		}
+
+		newResults = append(newResults, resultInterface)
 	}
+
+	for _, rule := range rules {
+		if ruleAsMap, ok := rule.(map[string]interface{}); ok {
+			ruleId, ok := ruleAsMap["id"].(string)
+			if !ok {
+				continue
+			}
+			if slices.Contains(suppressedResults, ruleId) {
+				continue
+			}
+
+			newRules = append(newRules, rule)
+		}
+	}
+
+	run["results"] = newResults
+	driver["rules"] = newRules
 }
 
 // normalizeFixes keeps only fixes that are present in expected SARIF.
@@ -411,7 +472,7 @@ func sortTags(tags []interface{}) {
 
 // normalizeSarifForComparison removes or normalizes fields with known gaps
 // to allow testing of correctly implemented features while documenting TODOs
-func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]interface{} {
+func normalizeSarifForComparison(t *testing.T, sarifJSON string, ignoreSuppressions bool) map[string]interface{} {
 	t.Helper()
 
 	var sarif map[string]interface{}
@@ -429,6 +490,9 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 			continue
 		}
 
+		// Normalize suppressions (not included in original SARIF)
+		normalizeSuppressions(run, ignoreSuppressions)
+
 		// Normalize automation ID (missing project name in actual output)
 		normalizeAutomationID(run)
 
@@ -440,9 +504,6 @@ func normalizeSarifForComparison(t *testing.T, sarifJSON string) map[string]inte
 
 		// Normalize help content (test data may have different vulnerability descriptions)
 		normalizeHelpContent(run)
-
-		// Normalize suppressions (not included in original SARIF)
-		normalizeSuppressions(run)
 	}
 
 	return sarif
@@ -452,29 +513,40 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
 
 	testCases := []struct {
-		name              string
-		expectedSarifPath string
-		testResultPath    string
+		name               string
+		expectedSarifPath  string
+		testResultPath     string
+		ignoreSuppressions bool
 	}{
 		{
-			name:              "cli",
-			expectedSarifPath: "testdata/ufm/original_cli.sarif",
-			testResultPath:    "testdata/ufm/testresult_cli.json",
+			name:               "cli",
+			expectedSarifPath:  "testdata/ufm/original_cli.sarif",
+			testResultPath:     "testdata/ufm/testresult_cli.json",
+			ignoreSuppressions: true,
 		},
 		{
-			name:              "webgoat",
-			expectedSarifPath: "testdata/ufm/webgoat.sarif.json",
-			testResultPath:    "testdata/ufm/webgoat.testresult.json",
+			name:               "webgoat",
+			expectedSarifPath:  "testdata/ufm/webgoat.sarif.json",
+			testResultPath:     "testdata/ufm/webgoat.testresult.json",
+			ignoreSuppressions: true,
 		},
 		{
-			name:              "webgoat with suppression",
-			expectedSarifPath: "testdata/ufm/webgoat.ignore.sarif.json",
-			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
+			name:               "webgoat_with_suppression",
+			expectedSarifPath:  "testdata/ufm/webgoat.ignore.sarif.json",
+			testResultPath:     "testdata/ufm/webgoat.ignore.testresult.json",
+			ignoreSuppressions: false,
 		},
 		{
-			name:              "multiproject",
-			expectedSarifPath: "testdata/ufm/multi_project.sarif.json",
-			testResultPath:    "testdata/ufm/multi_project.testresult.json",
+			name:               "multiproject",
+			expectedSarifPath:  "testdata/ufm/multi_project.sarif.json",
+			testResultPath:     "testdata/ufm/multi_project.testresult.json",
+			ignoreSuppressions: true,
+		},
+		{
+			name:               "secrets",
+			expectedSarifPath:  "testdata/ufm/secrets.sarif.json",
+			testResultPath:     "testdata/ufm/secrets.testresult.json",
+			ignoreSuppressions: true,
 		},
 	}
 
@@ -501,8 +573,8 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			validateSarifData(t, writer.Bytes())
 
 			// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
-			expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes))
-			actualNormalized := normalizeSarifForComparison(t, writer.String())
+			expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes), tc.ignoreSuppressions)
+			actualNormalized := normalizeSarifForComparison(t, writer.String(), tc.ignoreSuppressions)
 
 			// Normalize fixes to only keep fixes that are present in expected SARIF
 			normalizeFixes(t, expectedNormalized, actualNormalized)
@@ -528,7 +600,7 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 				if err := os.WriteFile(fmt.Sprintf("/tmp/%s_actual_normalized.json", tc.name), actualJSON, 0644); err != nil {
 					t.Logf("Failed to write actual output: %v", err)
 				}
-				t.Log("Wrote normalized outputs to /tmp/expected_normalized.json and /tmp/actual_normalized.json for debugging")
+				t.Logf("Wrote normalized outputs to /tmp/%s_expected_normalized.json and /tmp/%s_actual_normalized.json for debugging", tc.name, tc.name)
 			}
 		})
 	}
@@ -1019,4 +1091,55 @@ func createDependencyPathEvidence(tb testing.TB, packageName, packageVersion str
 		tb.Fatalf("Failed to create dependency path evidence: %v", err)
 	}
 	return depPathEvidence
+}
+
+func Test_UfmPresenter_HumanReadable(t *testing.T) {
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
+
+	lipgloss.SetHasDarkBackground(true)
+	lipgloss.SetColorProfile(termenv.TrueColor)
+
+	testCases := []struct {
+		name               string
+		expectedPath       string
+		testResultPath     string
+		ignoreSuppressions bool
+	}{
+		{
+			name:               "cli",
+			expectedPath:       "testdata/ufm/webgoat.ignore.human.readable",
+			testResultPath:     "testdata/ufm/webgoat.ignore.testresult.json",
+			ignoreSuppressions: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expectedBytes, err := os.ReadFile(tc.expectedPath)
+			assert.NoError(t, err)
+
+			testResultBytes, err := os.ReadFile(tc.testResultPath)
+			assert.NoError(t, err)
+
+			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
+			assert.NoError(t, err)
+
+			config := configuration.NewWithOpts()
+			config.Set(configuration.ORGANIZATION_SLUG, "My Org")
+			config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "medium")
+
+			writer := &bytes.Buffer{}
+
+			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
+			err = presenter.RenderTemplate(presenters.DefaultTemplateFilesUfm, presenters.DefaultMimeType)
+			assert.NoError(t, err)
+
+			actualBytes := writer.Bytes()
+			assert.NotEmpty(t, actualBytes)
+			assert.NotEmpty(t, expectedBytes)
+			assert.Equal(t, string(expectedBytes), string(actualBytes))
+		})
+	}
+
+	lipgloss.SetColorProfile(termenv.Ascii)
 }

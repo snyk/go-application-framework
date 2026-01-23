@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/cenkalti/backoff/v5"
@@ -43,10 +44,15 @@ type failRoundtripper struct {
 	NumberOfAttemptsUntilSuccess uint
 	Error                        error
 	ExpectedBody                 []byte
-	t                            *testing.T
+	// roundTripFn overrides the default RoundTrip implementation
+	roundTripFn *func(req *http.Request) (*http.Response, error)
+	t           *testing.T
 }
 
 func (f *failRoundtripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if f.roundTripFn != nil {
+		return (*f.roundTripFn)(req)
+	}
 	f.actualCount++
 	f.t.Helper()
 	f.t.Logf("%s: roundtrip", time.Now())
@@ -69,6 +75,49 @@ func (f *failRoundtripper) RoundTrip(req *http.Request) (*http.Response, error) 
 func TestNewRetryMiddleware(t *testing.T) {
 	expectedBody := []byte("hello")
 	logger := zerolog.Nop()
+
+	t.Run("Max attempts cached from first response, not recalculated on retry", func(t *testing.T) {
+		attemptCount := uint(0)
+
+		//nolint:unparam // error is always nil but signature must match http.RoundTripper
+		customRTFn := func(req *http.Request) (*http.Response, error) {
+			attemptCount++
+			headers := http.Header{}
+
+			switch attemptCount {
+			case 1:
+				return &http.Response{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     headers,
+					Request:    req,
+				}, nil
+			default:
+				return &http.Response{
+					StatusCode: http.StatusInternalServerError,
+					Header:     headers,
+					Request:    req,
+				}, nil
+			}
+		}
+
+		failRoundtripper := &failRoundtripper{
+			t:           t,
+			roundTripFn: &customRTFn,
+		}
+
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRetryAttempts, 1)
+		config.Set(configurationKeyRetryAfter, 1)
+
+		sut := NewRetryMiddleware(config, &logger, failRoundtripper)
+		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+
+		assert.Equal(t, uint(3), attemptCount, "Should use cached max attempts from first 429 response")
+		assert.Equal(t, http.StatusInternalServerError, response.StatusCode, "Final response should be 500")
+	})
 
 	t.Run("Happy path, no retry required", func(t *testing.T) {
 		var expectedAttempts uint = 1
@@ -187,46 +236,87 @@ func Test_shouldRetry(t *testing.T) {
 		expectedErrorIs   error
 		expectedRetryable *backoff.RetryAfterError // For checking RetryAfter duration
 		expectNilError    bool
+		attempts          uint
+		maxAttempts       uint
 	}{
 		{
 			name:            "Retryable status code (429) with Retry-After header too far in the future (4years)",
 			response:        newResponse(http.StatusTooManyRequests, http.Header{"Retry-After": []string{"126144000"}}),
 			expectedErrorIs: &backoff.PermanentError{Err: errRetryAfterHeaderError},
+			attempts:        0,
+			maxAttempts:     1,
 		},
 		{
 			name:              "Retryable status code (429) with Retry-After header",
 			response:          newResponse(http.StatusTooManyRequests, http.Header{"Retry-After": []string{"5"}}),
 			expectedRetryable: &backoff.RetryAfterError{Duration: 5 * time.Second},
+			attempts:          0,
+			maxAttempts:       1,
 		},
 		{
 			name:            "Retryable status code (503) with invalid Retry-After header",
 			response:        newResponse(http.StatusServiceUnavailable, http.Header{"Retry-After": []string{"abc"}}),
 			expectedErrorIs: errRetryNecessary, // retryDelaySecs will be 0
+			attempts:        0,
+			maxAttempts:     1,
 		},
 		{
 			name:            "Retryable status code (500) without Retry-After header",
 			response:        newResponse(http.StatusInternalServerError, nil),
 			expectedErrorIs: errRetryNecessary,
+			attempts:        0,
+			maxAttempts:     1,
 		},
 		{
 			name:           "Non-retryable status code (200)",
 			response:       newResponse(http.StatusOK, nil),
 			expectNilError: true,
+			attempts:       0,
+			maxAttempts:    1,
 		},
 		{
 			name:           "Non-retryable status code (400)",
 			response:       newResponse(http.StatusBadRequest, nil),
 			expectNilError: true,
+			attempts:       0,
+			maxAttempts:    1,
 		},
 		{
 			name:            "Retryable status code (502) with Retry-After: 0",
 			response:        newResponse(http.StatusBadGateway, http.Header{"Retry-After": []string{"0"}}),
 			expectedErrorIs: errRetryNecessary, // retryDelaySecs will be 0
+			attempts:        0,
+			maxAttempts:     1,
 		},
 		{
 			name:            "Retryable status code (504) with Retry-After: -1",
 			response:        newResponse(http.StatusGatewayTimeout, http.Header{"Retry-After": []string{"-1"}}),
 			expectedErrorIs: errRetryNecessary, // retryDelaySecs will be -1
+			attempts:        0,
+			maxAttempts:     1,
+		},
+		{
+			name:            "Retryable status code (429) with max attempts reached",
+			response:        newResponse(http.StatusTooManyRequests, http.Header{"Retry-After": []string{"5"}}),
+			expectedErrorIs: &backoff.PermanentError{Err: errRetryNecessary},
+			attempts:        1,
+			maxAttempts:     1,
+		},
+		{
+			name: "Retryable status code (503) with maintenance window error",
+			response: func() *http.Response {
+				resp := newResponse(http.StatusServiceUnavailable, http.Header{"Retry-After": []string{"5"}})
+				var buf bytes.Buffer
+				err := snyk.NewMaintenanceWindowError("").MarshalToJSONAPIError(&buf, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				resp.Body = io.NopCloser(&buf)
+				return resp
+			}(),
+			expectedErrorIs: &backoff.PermanentError{Err: errRetryNecessary},
+			attempts:        0,
+			maxAttempts:     1,
 		},
 	}
 
@@ -234,7 +324,7 @@ func Test_shouldRetry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := shouldRetry(tt.response)
+			err := shouldRetry(tt.response, tt.attempts, tt.maxAttempts)
 
 			if tt.expectNilError {
 				assert.Nil(t, err)

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
 
 // Data keys for common issue properties (case-insensitive)
@@ -42,6 +44,12 @@ const (
 	// DataKeyDependencyPaths is the key for dependency paths (SCA findings)
 	// Value type: [][]Package
 	DataKeyDependencyPaths = "dependency-paths"
+
+	// DataKeyRuleShortDescription is the key for the rule short description (SAST or Secret findings)
+	// Value type: string
+	DataKeyRuleShortDescription = "rule-short-description"
+
+	FindingTypeLicense = "license"
 )
 
 //go:generate go run github.com/golang/mock/mockgen -source=issues.go -destination=../mocks/issues.go -package=mocks
@@ -345,6 +353,10 @@ func (i *issue) GetFindings() []*FindingData {
 
 // GetFindingType returns the finding type of this issue.
 func (i *issue) GetFindingType() FindingType {
+	issueID := i.GetID()
+	if len(issueID) >= 9 && issueID[:9] == "snyk:lic:" {
+		return FindingTypeLicense
+	}
 	return i.findingType
 }
 
@@ -446,30 +458,31 @@ func newIssue(findings []*FindingData) (Issue, error) {
 
 // issueBuilder helps construct an Issue from FindingData
 type issueBuilder struct {
-	findingType       FindingType
-	allProblems       []*Problem
-	primaryProblem    *Problem
-	firstFinding      *FindingData
-	cwes              []string
-	cves              []string
-	id                string
-	severity          string
-	effectiveSeverity string
-	ecosystem         string
-	title             string
-	description       string
-	packageName       string
-	packageVersion    string
-	cvssScore         float32
-	isFixable         bool
-	fixedInVersions   []string
-	dependencyPaths   [][]Package // Each element is a path (array of packages with name and version)
-	snykVulnProblem   *SnykVulnProblem
-	sourceLocations   []SourceLocation
-	riskScore         uint16
-	reachability      *ReachabilityEvidence
-	findings          []*FindingData
-	ignoreDetails     []IssueIgnoreDetails
+	findingType          FindingType
+	allProblems          []*Problem
+	primaryProblem       *Problem
+	firstFinding         *FindingData
+	cwes                 []string
+	cves                 []string
+	id                   string
+	severity             string
+	effectiveSeverity    string
+	ecosystem            string
+	title                string
+	description          string
+	ruleShortDescription string
+	packageName          string
+	packageVersion       string
+	cvssScore            float32
+	isFixable            bool
+	fixedInVersions      []string
+	dependencyPaths      [][]Package // Each element is a path (array of packages with name and version)
+	snykVulnProblem      *SnykVulnProblem
+	sourceLocations      []SourceLocation
+	riskScore            uint16
+	reachability         *ReachabilityEvidence
+	findings             []*FindingData
+	ignoreDetails        []IssueIgnoreDetails
 }
 
 // processFindings extracts data from all findings
@@ -630,6 +643,8 @@ func (b *issueBuilder) processProblems(finding *FindingData) {
 			b.processCveProblem(&problem)
 		case "cwe":
 			b.processCweProblem(&problem)
+		case "secret":
+			b.processSecretsRuleProblem(&problem)
 		}
 
 		// Fallback to first problem if no snyk_vuln or snyk_license found
@@ -740,6 +755,20 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 	}
 }
 
+// processSecretsRuleProblem extracts data from a secrets rule problem
+func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
+	if id := problem.GetID(); id != "" {
+		b.id = id
+	}
+
+	secretsProblem, err := problem.AsSecretsRuleProblem()
+	if err != nil {
+		return
+	}
+
+	b.ruleShortDescription = secretsProblem.ShortDescription
+}
+
 // determineFallbackID sets ID from finding key or ID if not already set
 func (b *issueBuilder) determineFallbackID() {
 	if b.id == "" && b.firstFinding != nil {
@@ -839,6 +868,11 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 		metadata[DataKeyDependencyPaths] = b.dependencyPaths
 	}
 
+	// Add short description
+	if b.ruleShortDescription != "" {
+		metadata[DataKeyRuleShortDescription] = b.ruleShortDescription
+	}
+
 	return metadata
 }
 
@@ -900,17 +934,21 @@ func (e *IssueError) Unwrap() error {
 }
 
 // GetIssuesFromTestResult converts test results to Issues and filters by finding type
-func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) ([]Issue, error) {
+func GetIssuesFromTestResult(testResults TestResult, findingType []FindingType) ([]Issue, error) {
 	ctx := context.Background()
 	issuesList, err := NewIssuesFromTestResult(ctx, testResults)
 	if err != nil {
 		return []Issue{}, err
 	}
 
+	if len(findingType) == 0 {
+		return issuesList, nil
+	}
+
 	// Filter issues by finding type
 	var filteredIssues []Issue
 	for _, issue := range issuesList {
-		if issue.GetFindingType() == findingType {
+		if slices.Contains(findingType, issue.GetFindingType()) {
 			filteredIssues = append(filteredIssues, issue)
 		}
 	}
@@ -921,4 +959,103 @@ func GetIssuesFromTestResult(testResults TestResult, findingType FindingType) ([
 	})
 
 	return filteredIssues, nil
+}
+
+// IssueSummary extends FindingSummary with the actual issues for better performance.
+// This allows callers to:
+// - Get issues from test results once
+// - Calculate counts once
+// - Sort issues once
+// - Reuse the same data structure across multiple template sections
+// Instead of repeatedly calling conversion and sorting functions.
+type IssueSummary struct {
+	FindingSummary
+	Issues []Issue
+}
+
+// GetSortedIssues returns issues sorted by severity (high to low) and ID
+func (s *IssueSummary) GetSortedIssues(severityOrder []string) []Issue {
+	if s == nil || len(s.Issues) == 0 {
+		return []Issue{}
+	}
+
+	sorted := make([]Issue, len(s.Issues))
+	copy(sorted, s.Issues)
+
+	slices.SortFunc(sorted, func(a, b Issue) int {
+		// Sort by severity first
+		aSeverity := strings.ToLower(a.GetSeverity())
+		bSeverity := strings.ToLower(b.GetSeverity())
+		aIdx := slices.Index(severityOrder, aSeverity)
+		bIdx := slices.Index(severityOrder, bSeverity)
+
+		if aIdx != bIdx {
+			return aIdx - bIdx
+		}
+
+		// Then by ID for deterministic output
+		return strings.Compare(a.GetID(), b.GetID())
+	})
+
+	return sorted
+}
+
+func createNewSummary(severities []string) *FindingSummary {
+	initialSeverityCount := map[string]uint32{}
+	for _, severity := range severities {
+		initialSeverityCount[severity] = 0
+	}
+
+	return &FindingSummary{
+		Count: 0,
+		CountBy: &map[string]map[string]uint32{
+			"severity": initialSeverityCount,
+		},
+	}
+}
+
+func createNewIssueSummary(severities []string) *IssueSummary {
+	return &IssueSummary{
+		FindingSummary: *createNewSummary(severities),
+		Issues:         []Issue{},
+	}
+}
+
+func GetSummariesFromIssues(issues []Issue) map[string]*IssueSummary {
+	effective := createNewIssueSummary(json_schemas.DEFAULT_SEVERITIES)
+	raw := createNewIssueSummary(json_schemas.DEFAULT_SEVERITIES)
+	ignored := createNewIssueSummary(json_schemas.DEFAULT_SEVERITIES)
+
+	effectiveSeverityCount := (*effective.CountBy)
+	rawSeverityCount := (*raw.CountBy)
+	ignoredSeverityCount := (*ignored.CountBy)
+
+	for _, issue := range issues {
+		ignore := issue.GetIgnoreDetails()
+		severity := strings.ToLower(issue.GetSeverity())
+
+		raw.Count++
+		raw.Issues = append(raw.Issues, issue)
+		rawSeverityCount["severity"][severity]++
+
+		if ignore == nil || !ignore.IsActive() {
+			effective.Count++
+			effective.Issues = append(effective.Issues, issue)
+			effectiveSeverityCount["severity"][severity]++
+		} else {
+			ignored.Count++
+			ignored.Issues = append(ignored.Issues, issue)
+			ignoredSeverityCount["severity"][severity]++
+		}
+	}
+
+	effective.CountBy = &effectiveSeverityCount
+	raw.CountBy = &rawSeverityCount
+	ignored.CountBy = &ignoredSeverityCount
+
+	return map[string]*IssueSummary{
+		"effective": effective,
+		"raw":       raw,
+		"ignored":   ignored,
+	}
 }

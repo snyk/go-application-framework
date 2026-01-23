@@ -12,6 +12,7 @@ type UserInterface interface {
 	OutputError(err error, opts ...Opts) error
 	NewProgressBar() ProgressBar
 	Input(prompt string) (string, error)
+	SelectOptions(prompt string, options []string) (int, string, error)
 }
 
 func DefaultUi() UserInterface {

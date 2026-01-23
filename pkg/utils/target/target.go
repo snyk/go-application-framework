@@ -1,4 +1,4 @@
-package instrumentation
+package target
 
 import (
 	"crypto/sha256"

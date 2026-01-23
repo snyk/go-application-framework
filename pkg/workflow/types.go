@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"log"
 	"net/url"
 
@@ -39,6 +40,7 @@ type Data interface {
 
 // InvocationContext is an interface that wraps various context information that is passed to a workflow when it is invoked.
 type InvocationContext interface {
+	Context() context.Context
 	GetWorkflowIdentifier() Identifier
 	GetConfiguration() configuration.Configuration
 	GetEngine() Engine

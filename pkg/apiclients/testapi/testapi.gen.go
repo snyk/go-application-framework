@@ -19,6 +19,32 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BaseResourceType.
+const (
+	BaseResourceTypeBase BaseResourceType = "base"
+)
+
+// Defines values for BaseResourceCreateItemType.
+const (
+	BaseResourceCreateItemTypeBase BaseResourceCreateItemType = "base"
+)
+
+// Defines values for BundleResourceContentType.
+const (
+	BundleResourceContentTypeSbom   BundleResourceContentType = "sbom"
+	BundleResourceContentTypeSource BundleResourceContentType = "source"
+)
+
+// Defines values for BundleResourceType.
+const (
+	Bundle BundleResourceType = "bundle"
+)
+
+// Defines values for ContainerRepoResourceType.
+const (
+	Container ContainerRepoResourceType = "container"
+)
+
 // Defines values for CveProblemSource.
 const (
 	Cve CveProblemSource = "cve"
@@ -44,6 +70,11 @@ const (
 	DepGraphSubjectCreateTypeDepGraph DepGraphSubjectCreateType = "dep_graph"
 )
 
+// Defines values for DependencyCountFactType.
+const (
+	DependencyCountFactTypeDependencyCountFact DependencyCountFactType = "dependency_count_fact"
+)
+
 // Defines values for DependencyPathEvidenceSource.
 const (
 	DependencyPath DependencyPathEvidenceSource = "dependency_path"
@@ -52,6 +83,16 @@ const (
 // Defines values for DiffFormat.
 const (
 	DiffFormatDiff DiffFormat = "diff"
+)
+
+// Defines values for DiffResourceType.
+const (
+	DiffResourceTypeDiff DiffResourceType = "diff"
+)
+
+// Defines values for DiffResourceCreateItemType.
+const (
+	DiffResourceCreateItemTypeDiff DiffResourceCreateItemType = "diff"
 )
 
 // Defines values for ExecutionFlowEvidenceSource.
@@ -66,10 +107,12 @@ const (
 
 // Defines values for FindingType.
 const (
-	FindingTypeDast  FindingType = "dast"
-	FindingTypeOther FindingType = "other"
-	FindingTypeSast  FindingType = "sast"
-	FindingTypeSca   FindingType = "sca"
+	FindingTypeConfig FindingType = "config"
+	FindingTypeDast   FindingType = "dast"
+	FindingTypeOther  FindingType = "other"
+	FindingTypeSast   FindingType = "sast"
+	FindingTypeSca    FindingType = "sca"
+	FindingTypeSecret FindingType = "secret"
 )
 
 // Defines values for FixAppliedOutcome.
@@ -99,6 +142,21 @@ const (
 	NotVulnerable   IgnoreDetailsReasonType = "not-vulnerable"
 	TemporaryIgnore IgnoreDetailsReasonType = "temporary-ignore"
 	WontFix         IgnoreDetailsReasonType = "wont-fix"
+)
+
+// Defines values for InlineContentType.
+const (
+	DepGraph InlineContentType = "dep_graph"
+)
+
+// Defines values for InlineResourceType.
+const (
+	InlineResourceTypeInline InlineResourceType = "inline"
+)
+
+// Defines values for InlineResourceCreateItemType.
+const (
+	InlineResourceCreateItemTypeInline InlineResourceCreateItemType = "inline"
 )
 
 // Defines values for JobDataType.
@@ -213,12 +271,22 @@ const (
 
 // Defines values for SbomSubjectType.
 const (
-	Sbom SbomSubjectType = "sbom"
+	SbomSubjectTypeSbom SbomSubjectType = "sbom"
 )
 
 // Defines values for ScmRepoLocatorType.
 const (
 	ScmRepo ScmRepoLocatorType = "scm_repo"
+)
+
+// Defines values for ScmResourceType.
+const (
+	Scm ScmResourceType = "scm"
+)
+
+// Defines values for SecretsRuleProblemSource.
+const (
+	Secret SecretsRuleProblemSource = "secret"
 )
 
 // Defines values for Severity.
@@ -257,6 +325,18 @@ const (
 	Org   SnykPolicyRefOwner = "org"
 )
 
+// Defines values for SnykReferenceResourceReferenceType.
+const (
+	Asset   SnykReferenceResourceReferenceType = "asset"
+	Project SnykReferenceResourceReferenceType = "project"
+	Target  SnykReferenceResourceReferenceType = "target"
+)
+
+// Defines values for SnykReferenceResourceType.
+const (
+	SnykRef SnykReferenceResourceType = "snyk_ref"
+)
+
 // Defines values for SnykVulnProblemSource.
 const (
 	SnykVuln SnykVulnProblemSource = "snyk_vuln"
@@ -264,7 +344,7 @@ const (
 
 // Defines values for SourceLocationType.
 const (
-	Source SourceLocationType = "source"
+	SourceLocationTypeSource SourceLocationType = "source"
 )
 
 // Defines values for SuppressionStatus.
@@ -304,6 +384,17 @@ const (
 	UpgradePackageAdviceFormatUpgradePackageAdvice UpgradePackageAdviceFormat = "upgrade_package_advice"
 )
 
+// Defines values for UploadResourceContentType.
+const (
+	UploadResourceContentTypeSbom   UploadResourceContentType = "sbom"
+	UploadResourceContentTypeSource UploadResourceContentType = "source"
+)
+
+// Defines values for UploadResourceType.
+const (
+	Upload UploadResourceType = "upload"
+)
+
 // Defines values for IoSnykApiCommonJsonApiVersion.
 const (
 	N10 IoSnykApiCommonJsonApiVersion = "1.0"
@@ -338,6 +429,66 @@ type ActualVersion = string
 type AppliedPolicy struct {
 	union json.RawMessage
 }
+
+// BaseResource defines model for BaseResource.
+type BaseResource struct {
+	// Resource Resources containing testable content.
+	Resource BaseResourceVariant `json:"resource"`
+	Type     BaseResourceType    `json:"type"`
+}
+
+// BaseResourceType defines model for BaseResource.Type.
+type BaseResourceType string
+
+// BaseResourceCreateItem defines model for BaseResourceCreateItem.
+type BaseResourceCreateItem struct {
+	// Resource Resources containing testable content.
+	Resource BaseResourceVariantCreateItem `json:"resource"`
+	Type     BaseResourceCreateItemType    `json:"type"`
+}
+
+// BaseResourceCreateItemType defines model for BaseResourceCreateItem.Type.
+type BaseResourceCreateItemType string
+
+// BaseResourceVariant Resources containing testable content.
+type BaseResourceVariant struct {
+	union json.RawMessage
+}
+
+// BaseResourceVariantCreateItem Resources containing testable content.
+type BaseResourceVariantCreateItem struct {
+	union json.RawMessage
+}
+
+// BundleResource defines model for BundleResource.
+type BundleResource struct {
+	BundleId      string                    `json:"bundle_id"`
+	ContentType   BundleResourceContentType `json:"content_type"`
+	FilePatterns  []string                  `json:"file_patterns"`
+	Name          *string                   `json:"name,omitempty"`
+	RepositoryUrl *string                   `json:"repository_url,omitempty"`
+	RootFolderId  *string                   `json:"root_folder_id,omitempty"`
+	Type          BundleResourceType        `json:"type"`
+}
+
+// BundleResourceContentType defines model for BundleResource.ContentType.
+type BundleResourceContentType string
+
+// BundleResourceType defines model for BundleResource.Type.
+type BundleResourceType string
+
+// ContainerRepoResource defines model for ContainerRepoResource.
+type ContainerRepoResource struct {
+	ImageUrl string                    `json:"image_url"`
+	Tag      string                    `json:"tag"`
+	Type     ContainerRepoResourceType `json:"type"`
+}
+
+// ContainerRepoResourceType defines model for ContainerRepoResource.Type.
+type ContainerRepoResourceType string
+
+// ContainerScanConfiguration defines model for ContainerScanConfiguration.
+type ContainerScanConfiguration = map[string]interface{}
 
 // CveProblem CVE designation according to the public Common Vulnerability Exposure
 // database.
@@ -404,6 +555,15 @@ type DepGraphSubjectCreate struct {
 // DepGraphSubjectCreateType defines model for DepGraphSubjectCreate.Type.
 type DepGraphSubjectCreateType string
 
+// DependencyCountFact DependencyCountFact represents a dependency count fact.
+type DependencyCountFact struct {
+	TotalDependencyCount int64                   `json:"total_dependency_count"`
+	Type                 DependencyCountFactType `json:"type"`
+}
+
+// DependencyCountFactType defines model for DependencyCountFact.Type.
+type DependencyCountFactType string
+
 // DependencyPathEvidence Dependency path to a software component within an SBOM dependency graph.
 //
 // Finding types: SCA
@@ -431,6 +591,32 @@ type Diff struct {
 
 // DiffFormat defines model for Diff.Format.
 type DiffFormat string
+
+// DiffResource defines model for DiffResource.
+type DiffResource struct {
+	// Base Resources containing testable content.
+	Base BaseResourceVariant `json:"base"`
+
+	// Compare Resources containing testable content.
+	Compare BaseResourceVariant `json:"compare"`
+	Type    DiffResourceType    `json:"type"`
+}
+
+// DiffResourceType defines model for DiffResource.Type.
+type DiffResourceType string
+
+// DiffResourceCreateItem defines model for DiffResourceCreateItem.
+type DiffResourceCreateItem struct {
+	// Base Resources containing testable content.
+	Base BaseResourceVariantCreateItem `json:"base"`
+
+	// Compare Resources containing testable content.
+	Compare BaseResourceVariantCreateItem `json:"compare"`
+	Type    DiffResourceCreateItemType    `json:"type"`
+}
+
+// DiffResourceCreateItemType defines model for DiffResourceCreateItem.Type.
+type DiffResourceCreateItemType string
 
 // DiffSuggestion A suggestion in unified diff format representing the code changes to fix the vulnerability.
 type DiffSuggestion struct {
@@ -734,6 +920,9 @@ type GithubSecurityAdvisoryProblem struct {
 // GithubSecurityAdvisoryProblemSource defines model for GithubSecurityAdvisoryProblem.Source.
 type GithubSecurityAdvisoryProblemSource string
 
+// IacScanConfiguration defines model for IacScanConfiguration.
+type IacScanConfiguration = map[string]interface{}
+
 // Ignore defines model for Ignore.
 type Ignore struct {
 	ActionType IgnoreActionType `json:"action_type"`
@@ -780,6 +969,34 @@ type IgnoredBy struct {
 	// Name Name of the user who created the ignore
 	Name string `json:"name"`
 }
+
+// InlineContent defines model for InlineContent.
+type InlineContent struct {
+	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
+	Type     InlineContentType                      `json:"type"`
+}
+
+// InlineContentType defines model for InlineContent.Type.
+type InlineContentType string
+
+// InlineResource defines model for InlineResource.
+type InlineResource struct {
+	Name string             `json:"name"`
+	Type InlineResourceType `json:"type"`
+}
+
+// InlineResourceType defines model for InlineResource.Type.
+type InlineResourceType string
+
+// InlineResourceCreateItem defines model for InlineResourceCreateItem.
+type InlineResourceCreateItem struct {
+	Content InlineContent                `json:"content"`
+	Name    string                       `json:"name"`
+	Type    InlineResourceCreateItemType `json:"type"`
+}
+
+// InlineResourceCreateItemType defines model for InlineResourceCreateItem.Type.
+type InlineResourceCreateItemType string
 
 // JobAttributes JobAttributes represents the attributes of a Job resource
 type JobAttributes struct {
@@ -1159,6 +1376,9 @@ type RiskScore struct {
 	Value uint16 `json:"value"`
 }
 
+// SastScanConfiguration defines model for SastScanConfiguration.
+type SastScanConfiguration = map[string]interface{}
+
 // SbomReachabilitySubject Test subject for SBOM test with reachability analysis.
 type SbomReachabilitySubject struct {
 	// CodeBundleId Source code to inspect for the reach of the vulnerable dependencies.
@@ -1188,6 +1408,18 @@ type SbomSubject struct {
 // SbomSubjectType defines model for SbomSubject.Type.
 type SbomSubjectType string
 
+// ScaScanConfiguration defines model for ScaScanConfiguration.
+type ScaScanConfiguration = map[string]interface{}
+
+// ScanConfiguration defines model for ScanConfiguration.
+type ScanConfiguration struct {
+	Container *ContainerScanConfiguration `json:"container,omitempty"`
+	Iac       *IacScanConfiguration       `json:"iac,omitempty"`
+	Sast      *SastScanConfiguration      `json:"sast,omitempty"`
+	Sca       *ScaScanConfiguration       `json:"sca,omitempty"`
+	Secrets   *SecretsScanConfiguration   `json:"secrets,omitempty"`
+}
+
 // ScmRepoLocator ScmRepoLocator locates a test subject by SCM repository coordinates.
 type ScmRepoLocator struct {
 	// BranchName Branch name, if known and applicable to locating the test subject.
@@ -1203,6 +1435,45 @@ type ScmRepoLocator struct {
 
 // ScmRepoLocatorType defines model for ScmRepoLocator.Type.
 type ScmRepoLocatorType string
+
+// ScmResource defines model for ScmResource.
+type ScmResource struct {
+	Commit        *string            `json:"commit,omitempty"`
+	FilePatterns  *[]string          `json:"file_patterns,omitempty"`
+	IntegrationId openapi_types.UUID `json:"integration_id"`
+	Ref           *string            `json:"ref,omitempty"`
+	RepoUrl       string             `json:"repo_url"`
+	Type          ScmResourceType    `json:"type"`
+}
+
+// ScmResourceType defines model for ScmResource.Type.
+type ScmResourceType string
+
+// SecretsRuleProblem Secret rule that produces a Secret finding.
+type SecretsRuleProblem struct {
+	// Categories Categories applied to the rule.
+	Categories []string `json:"categories"`
+	Help       string   `json:"help"`
+	Id         string   `json:"id"`
+	Name       string   `json:"name"`
+
+	// Precision A qualitative description of the rule's precision.
+	Precision string `json:"precision"`
+
+	// Severity Indicate the severity of a finding discovered by a Test.
+	Severity         Severity                 `json:"severity"`
+	ShortDescription string                   `json:"short_description"`
+	Source           SecretsRuleProblemSource `json:"source"`
+
+	// Tags Tags applied to the rule.
+	Tags []string `json:"tags"`
+}
+
+// SecretsRuleProblemSource defines model for SecretsRuleProblem.Source.
+type SecretsRuleProblemSource string
+
+// SecretsScanConfiguration defines model for SecretsScanConfiguration.
+type SecretsScanConfiguration = map[string]interface{}
 
 // Severity Indicate the severity of a finding discovered by a Test.
 type Severity string
@@ -1303,8 +1574,16 @@ type SnykLicenseProblem struct {
 	// License Software license identifier.
 	License string `json:"license"`
 
+	// PackageFullName The full name of the vulnerable software package.
+	// It's achieved by combining the packageName and packageNamespace
+	// with the ecosystem specific delimiter.
+	PackageFullName *string `json:"package_full_name,omitempty"`
+
 	// PackageName Package name.
 	PackageName string `json:"package_name"`
+
+	// PackageNamespace Vulnerable software package namespace, if applicable.
+	PackageNamespace *string `json:"package_namespace,omitempty"`
 
 	// PackageVersion Package version.
 	PackageVersion string `json:"package_version"`
@@ -1329,6 +1608,19 @@ type SnykPolicyRef struct {
 // SnykPolicyRefOwner defines model for SnykPolicyRef.Owner.
 type SnykPolicyRefOwner string
 
+// SnykReferenceResource defines model for SnykReferenceResource.
+type SnykReferenceResource struct {
+	RefId         openapi_types.UUID                 `json:"ref_id"`
+	ReferenceType SnykReferenceResourceReferenceType `json:"reference_type"`
+	Type          SnykReferenceResourceType          `json:"type"`
+}
+
+// SnykReferenceResourceReferenceType defines model for SnykReferenceResource.ReferenceType.
+type SnykReferenceResourceReferenceType string
+
+// SnykReferenceResourceType defines model for SnykReferenceResource.Type.
+type SnykReferenceResourceType string
+
 // SnykVulnProblem Vulnerability from Snyk's Vulnerability Database.
 type SnykVulnProblem struct {
 	// AffectedHashRanges Range of commit hashes known to be affected by this problem.
@@ -1345,6 +1637,11 @@ type SnykVulnProblem struct {
 	// revoked. Per ecosystem, the official package version guidelines are
 	// being used.
 	AffectedVersions *[]string `json:"affected_versions,omitempty"`
+
+	// AlternativeIds This is the list of alternative IDs Snyk gives for a certain vulnerability.
+	// It's usually present in older vulnerabilities, in which Snyk used to use a different identifier format.
+	// e.g a vuln with the ID "npm:foo:bar", will likely have an alternative ID of "SNYK-JS-FOO-BAR".
+	AlternativeIds *[]string `json:"alternative_ids,omitempty"`
 
 	// CreatedAt Timestamp indicating when the problem was orginally created.
 	CreatedAt time.Time `json:"created_at"`
@@ -1396,12 +1693,32 @@ type SnykVulnProblem struct {
 	// a given version is vulnerable.
 	InitiallyFixedInVersions []string `json:"initially_fixed_in_versions"`
 
+	// IsDisputed Indicates if the vulnerability is formally disputed.
+	// A vulnerability's claim (e.g., that it's a security flaw, or the scope/impact) is
+	// **disputed** when one party, often the vendor or a security professional, formally
+	// challenges the assertion.
+	// Most cybersecurity public listings, such as CVE, have a defined process
+	// allowing vendors or researchers to officially challenge the validity
+	// of a reported issue, leading to this 'DISPUTED' status being formally annotated.
+	IsDisputed *bool `json:"is_disputed,omitempty"`
+
 	// IsFixable Is there a fixed version published to the relevant package manager
 	// repository- i.e., a newer version without this specific vulnerability
 	IsFixable bool `json:"is_fixable"`
 
 	// IsMalicious Indicate if the vulnerability is known to mark a malicious package.
 	IsMalicious bool `json:"is_malicious"`
+
+	// IsProprietary This field indicates if the vulnerability was first published in the Snyk DB.
+	// This happens when either of the following is true:
+	// - Snyk was responsilbe for coordinating the disclosure
+	// - Snyk researchers discovered the vulnerability/malicious package
+	// - Snyk gave the first or best indication about the vulnerability based on unofficial sources.
+	// The only exceptions are when:
+	// - The vulnerability is a Linux container
+	// - The vulnerable package is written in C/C++ and not hosted on conan center
+	// - The vulnerable package is a `webjar`
+	IsProprietary *bool `json:"is_proprietary,omitempty"`
 
 	// IsSocialMediaTrending This boolean field is true when increased activity is detected related to
 	// this vulnerability. The "trending" determination is based on social media
@@ -1414,8 +1731,16 @@ type SnykVulnProblem struct {
 	// field and published will be (almost) identical.
 	ModifiedAt time.Time `json:"modified_at"`
 
+	// PackageFullName The full name of the vulnerable software package.
+	// It's achieved by combining the packageName and packageNamespace
+	// with the ecosystem specific delimiter.
+	PackageFullName *string `json:"package_full_name,omitempty"`
+
 	// PackageName Package name.
 	PackageName string `json:"package_name"`
+
+	// PackageNamespace Vulnerable software package namespace, if applicable.
+	PackageNamespace *string `json:"package_namespace,omitempty"`
 
 	// PackagePopularityRank Percentile rank indicating the package's prevalence across Snyk-monitored projects.
 	// A higher rank signifies the package is used in a larger percentage of projects.
@@ -1435,8 +1760,11 @@ type SnykVulnProblem struct {
 	References []SnykvulndbReferenceLinks `json:"references"`
 
 	// Severity The Snyk curated or recommended vulnerability severity for the problem.
-	Severity Severity              `json:"severity"`
-	Source   SnykVulnProblemSource `json:"source"`
+	Severity Severity `json:"severity"`
+
+	// SeverityBasedOn Indicates how the vulnerability severity was determined.
+	SeverityBasedOn *string               `json:"severity_based_on,omitempty"`
+	Source          SnykVulnProblemSource `json:"source"`
 
 	// VendorSeverity The assigned severity/impact/urgency rating by the distros teams for the
 	// specific vulnerability package and release of the operating system (if available).
@@ -1537,12 +1865,13 @@ type TestAttributes struct {
 	// completes (state.execution == 'finished') successfully (without fatal errors
 	// blocking an outcome).
 	RawSummary *FindingSummary `json:"raw_summary,omitempty"`
+	Resources  *[]TestResource `json:"resources,omitempty"`
 
 	// State The state of the test's execution.
 	State *TestState `json:"state,omitempty"`
 
 	// Subject The subject of a test.
-	Subject TestSubject `json:"subject"`
+	Subject *TestSubject `json:"subject,omitempty"`
 
 	// SubjectLocators Additional locators which may help locate the test subject across test workflows.
 	//
@@ -1550,16 +1879,20 @@ type TestAttributes struct {
 	// may be provided to help link the test to existing projects and/or assets in
 	// the Snyk platform.
 	SubjectLocators *[]TestSubjectLocator `json:"subject_locators,omitempty"`
+
+	// TestFacts Facts about the test that were computed during test execution.
+	TestFacts *[]TestFact `json:"test_facts,omitempty"`
 }
 
 // TestAttributesCreate TestAttributes represents the attributes of a Test resource.
 type TestAttributesCreate struct {
 	// Config The test configuration. If not specified, caller accepts test configuration
 	// defaults within the calling scope (org, group or tenant settings, etc).
-	Config *TestConfiguration `json:"config,omitempty"`
+	Config    *TestConfiguration        `json:"config,omitempty"`
+	Resources *[]TestResourceCreateItem `json:"resources,omitempty"`
 
 	// Subject The subject of a test.
-	Subject TestSubjectCreate `json:"subject"`
+	Subject *TestSubjectCreate `json:"subject,omitempty"`
 
 	// SubjectLocators Additional locators which may help locate the test subject across test workflows.
 	//
@@ -1576,10 +1909,19 @@ type TestConfiguration struct {
 	// If centrally managed policies are in scope, inline policies are overridden
 	// by managed policies. Policy references explain which policies were
 	// effective for test evaluation.
-	LocalPolicy *LocalPolicy `json:"local_policy,omitempty"`
+	LocalPolicy                *LocalPolicy `json:"local_policy,omitempty"`
+	ProjectBusinessCriticality *string      `json:"project_business_criticality,omitempty"`
+	ProjectEnvironment         *[]string    `json:"project_environment,omitempty"`
+	ProjectLifecycle           *[]string    `json:"project_lifecycle,omitempty"`
+	ProjectTags                *[]string    `json:"project_tags,omitempty"`
 
 	// PublishReport Publish findings into a report, viewable in the Snyk web UI.
-	PublishReport *bool `json:"publish_report,omitempty"`
+	PublishReport *bool              `json:"publish_report,omitempty"`
+	ScanConfig    *ScanConfiguration `json:"scan_config,omitempty"`
+	TargetName    *string            `json:"target_name,omitempty"`
+
+	// TargetReference Fields from CLI.
+	TargetReference *string `json:"target_reference,omitempty"`
 
 	// Timeout Maximum test time in seconds, after which execution will be cancelled and
 	// the test will fail with reason "timeout".
@@ -1614,6 +1956,9 @@ type TestDataCreateType string
 // TestExecutionStates defines model for TestExecutionStates.
 type TestExecutionStates string
 
+// TestFact DependencyCountFact represents a dependency count fact.
+type TestFact = DependencyCountFact
+
 // TestOutcome Outcome of a test; pass or fail.
 type TestOutcome struct {
 	// BreachedPolicies Test-level policies which were breached in a failing outcome.
@@ -1635,6 +1980,16 @@ type TestOutcomeReason string
 type TestRequestBody struct {
 	// Data TestData represents a Test resource object.
 	Data TestDataCreate `json:"data"`
+}
+
+// TestResource defines model for TestResource.
+type TestResource struct {
+	union json.RawMessage
+}
+
+// TestResourceCreateItem defines model for TestResourceCreateItem.
+type TestResourceCreateItem struct {
+	union json.RawMessage
 }
 
 // TestState Test execution state information.
@@ -1710,6 +2065,23 @@ type UpgradePath struct {
 	// Note: For drops, the length of the upgradePath will be smaller than the length of the original dependencyPath.
 	IsDrop bool `json:"is_drop"`
 }
+
+// UploadResource defines model for UploadResource.
+type UploadResource struct {
+	ContentType   UploadResourceContentType `json:"content_type"`
+	FilePatterns  []string                  `json:"file_patterns"`
+	Name          *string                   `json:"name,omitempty"`
+	RepositoryUrl *string                   `json:"repository_url,omitempty"`
+	RevisionId    string                    `json:"revision_id"`
+	RootFolderId  *string                   `json:"root_folder_id,omitempty"`
+	Type          UploadResourceType        `json:"type"`
+}
+
+// UploadResourceContentType defines model for UploadResource.ContentType.
+type UploadResourceContentType string
+
+// UploadResourceType defines model for UploadResource.Type.
+type UploadResourceType string
 
 // Uuid defines model for Uuid.
 type Uuid = openapi_types.UUID
@@ -1905,7 +2277,13 @@ type SnykcoderuleProperties struct {
 //
 // Examples include, but are not limited to: Javascript NPM, Java Maven, Python pip, etc.
 type SnykvulndbBuildPackageEcosystem struct {
-	Language       string                              `json:"language"`
+	// Client Ecosystem client is the tool the consumer used to manage the dependencies.
+	// In managed ecosystems, this is commonly refered to as the package manager,
+	// while in the case of C++, this would be "unmanaged".
+	Client *string `json:"client,omitempty"`
+	// Deprecated:
+	Language string `json:"language"`
+	// Deprecated:
 	PackageManager string                              `json:"package_manager"`
 	Type           SnykvulndbBuildPackageEcosystemType `json:"type"`
 }
@@ -2905,6 +3283,424 @@ func (t *AppliedPolicy) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsInlineResource returns the union data inside the BaseResourceVariant as a InlineResource
+func (t BaseResourceVariant) AsInlineResource() (InlineResource, error) {
+	var body InlineResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInlineResource overwrites any union data inside the BaseResourceVariant as the provided InlineResource
+func (t *BaseResourceVariant) FromInlineResource(v InlineResource) error {
+	v.Type = "inline"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInlineResource performs a merge with any union data inside the BaseResourceVariant, using the provided InlineResource
+func (t *BaseResourceVariant) MergeInlineResource(v InlineResource) error {
+	v.Type = "inline"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBundleResource returns the union data inside the BaseResourceVariant as a BundleResource
+func (t BaseResourceVariant) AsBundleResource() (BundleResource, error) {
+	var body BundleResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundleResource overwrites any union data inside the BaseResourceVariant as the provided BundleResource
+func (t *BaseResourceVariant) FromBundleResource(v BundleResource) error {
+	v.Type = "bundle"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundleResource performs a merge with any union data inside the BaseResourceVariant, using the provided BundleResource
+func (t *BaseResourceVariant) MergeBundleResource(v BundleResource) error {
+	v.Type = "bundle"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsUploadResource returns the union data inside the BaseResourceVariant as a UploadResource
+func (t BaseResourceVariant) AsUploadResource() (UploadResource, error) {
+	var body UploadResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromUploadResource overwrites any union data inside the BaseResourceVariant as the provided UploadResource
+func (t *BaseResourceVariant) FromUploadResource(v UploadResource) error {
+	v.Type = "upload"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeUploadResource performs a merge with any union data inside the BaseResourceVariant, using the provided UploadResource
+func (t *BaseResourceVariant) MergeUploadResource(v UploadResource) error {
+	v.Type = "upload"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsScmResource returns the union data inside the BaseResourceVariant as a ScmResource
+func (t BaseResourceVariant) AsScmResource() (ScmResource, error) {
+	var body ScmResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScmResource overwrites any union data inside the BaseResourceVariant as the provided ScmResource
+func (t *BaseResourceVariant) FromScmResource(v ScmResource) error {
+	v.Type = "scm"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScmResource performs a merge with any union data inside the BaseResourceVariant, using the provided ScmResource
+func (t *BaseResourceVariant) MergeScmResource(v ScmResource) error {
+	v.Type = "scm"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsContainerRepoResource returns the union data inside the BaseResourceVariant as a ContainerRepoResource
+func (t BaseResourceVariant) AsContainerRepoResource() (ContainerRepoResource, error) {
+	var body ContainerRepoResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromContainerRepoResource overwrites any union data inside the BaseResourceVariant as the provided ContainerRepoResource
+func (t *BaseResourceVariant) FromContainerRepoResource(v ContainerRepoResource) error {
+	v.Type = "container"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeContainerRepoResource performs a merge with any union data inside the BaseResourceVariant, using the provided ContainerRepoResource
+func (t *BaseResourceVariant) MergeContainerRepoResource(v ContainerRepoResource) error {
+	v.Type = "container"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSnykReferenceResource returns the union data inside the BaseResourceVariant as a SnykReferenceResource
+func (t BaseResourceVariant) AsSnykReferenceResource() (SnykReferenceResource, error) {
+	var body SnykReferenceResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSnykReferenceResource overwrites any union data inside the BaseResourceVariant as the provided SnykReferenceResource
+func (t *BaseResourceVariant) FromSnykReferenceResource(v SnykReferenceResource) error {
+	v.Type = "snyk_ref"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSnykReferenceResource performs a merge with any union data inside the BaseResourceVariant, using the provided SnykReferenceResource
+func (t *BaseResourceVariant) MergeSnykReferenceResource(v SnykReferenceResource) error {
+	v.Type = "snyk_ref"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t BaseResourceVariant) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t BaseResourceVariant) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "bundle":
+		return t.AsBundleResource()
+	case "container":
+		return t.AsContainerRepoResource()
+	case "inline":
+		return t.AsInlineResource()
+	case "scm":
+		return t.AsScmResource()
+	case "snyk_ref":
+		return t.AsSnykReferenceResource()
+	case "upload":
+		return t.AsUploadResource()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t BaseResourceVariant) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *BaseResourceVariant) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsInlineResourceCreateItem returns the union data inside the BaseResourceVariantCreateItem as a InlineResourceCreateItem
+func (t BaseResourceVariantCreateItem) AsInlineResourceCreateItem() (InlineResourceCreateItem, error) {
+	var body InlineResourceCreateItem
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInlineResourceCreateItem overwrites any union data inside the BaseResourceVariantCreateItem as the provided InlineResourceCreateItem
+func (t *BaseResourceVariantCreateItem) FromInlineResourceCreateItem(v InlineResourceCreateItem) error {
+	v.Type = "inline"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInlineResourceCreateItem performs a merge with any union data inside the BaseResourceVariantCreateItem, using the provided InlineResourceCreateItem
+func (t *BaseResourceVariantCreateItem) MergeInlineResourceCreateItem(v InlineResourceCreateItem) error {
+	v.Type = "inline"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBundleResource returns the union data inside the BaseResourceVariantCreateItem as a BundleResource
+func (t BaseResourceVariantCreateItem) AsBundleResource() (BundleResource, error) {
+	var body BundleResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBundleResource overwrites any union data inside the BaseResourceVariantCreateItem as the provided BundleResource
+func (t *BaseResourceVariantCreateItem) FromBundleResource(v BundleResource) error {
+	v.Type = "bundle"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBundleResource performs a merge with any union data inside the BaseResourceVariantCreateItem, using the provided BundleResource
+func (t *BaseResourceVariantCreateItem) MergeBundleResource(v BundleResource) error {
+	v.Type = "bundle"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsUploadResource returns the union data inside the BaseResourceVariantCreateItem as a UploadResource
+func (t BaseResourceVariantCreateItem) AsUploadResource() (UploadResource, error) {
+	var body UploadResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromUploadResource overwrites any union data inside the BaseResourceVariantCreateItem as the provided UploadResource
+func (t *BaseResourceVariantCreateItem) FromUploadResource(v UploadResource) error {
+	v.Type = "upload"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeUploadResource performs a merge with any union data inside the BaseResourceVariantCreateItem, using the provided UploadResource
+func (t *BaseResourceVariantCreateItem) MergeUploadResource(v UploadResource) error {
+	v.Type = "upload"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsScmResource returns the union data inside the BaseResourceVariantCreateItem as a ScmResource
+func (t BaseResourceVariantCreateItem) AsScmResource() (ScmResource, error) {
+	var body ScmResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScmResource overwrites any union data inside the BaseResourceVariantCreateItem as the provided ScmResource
+func (t *BaseResourceVariantCreateItem) FromScmResource(v ScmResource) error {
+	v.Type = "scm"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScmResource performs a merge with any union data inside the BaseResourceVariantCreateItem, using the provided ScmResource
+func (t *BaseResourceVariantCreateItem) MergeScmResource(v ScmResource) error {
+	v.Type = "scm"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsContainerRepoResource returns the union data inside the BaseResourceVariantCreateItem as a ContainerRepoResource
+func (t BaseResourceVariantCreateItem) AsContainerRepoResource() (ContainerRepoResource, error) {
+	var body ContainerRepoResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromContainerRepoResource overwrites any union data inside the BaseResourceVariantCreateItem as the provided ContainerRepoResource
+func (t *BaseResourceVariantCreateItem) FromContainerRepoResource(v ContainerRepoResource) error {
+	v.Type = "container"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeContainerRepoResource performs a merge with any union data inside the BaseResourceVariantCreateItem, using the provided ContainerRepoResource
+func (t *BaseResourceVariantCreateItem) MergeContainerRepoResource(v ContainerRepoResource) error {
+	v.Type = "container"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSnykReferenceResource returns the union data inside the BaseResourceVariantCreateItem as a SnykReferenceResource
+func (t BaseResourceVariantCreateItem) AsSnykReferenceResource() (SnykReferenceResource, error) {
+	var body SnykReferenceResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSnykReferenceResource overwrites any union data inside the BaseResourceVariantCreateItem as the provided SnykReferenceResource
+func (t *BaseResourceVariantCreateItem) FromSnykReferenceResource(v SnykReferenceResource) error {
+	v.Type = "snyk_ref"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSnykReferenceResource performs a merge with any union data inside the BaseResourceVariantCreateItem, using the provided SnykReferenceResource
+func (t *BaseResourceVariantCreateItem) MergeSnykReferenceResource(v SnykReferenceResource) error {
+	v.Type = "snyk_ref"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t BaseResourceVariantCreateItem) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t BaseResourceVariantCreateItem) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "bundle":
+		return t.AsBundleResource()
+	case "container":
+		return t.AsContainerRepoResource()
+	case "inline":
+		return t.AsInlineResourceCreateItem()
+	case "scm":
+		return t.AsScmResource()
+	case "snyk_ref":
+		return t.AsSnykReferenceResource()
+	case "upload":
+		return t.AsUploadResource()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t BaseResourceVariantCreateItem) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *BaseResourceVariantCreateItem) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsDependencyPathEvidence returns the union data inside the Evidence as a DependencyPathEvidence
 func (t Evidence) AsDependencyPathEvidence() (DependencyPathEvidence, error) {
 	var body DependencyPathEvidence
@@ -3612,6 +4408,34 @@ func (t *Problem) MergeGithubSecurityAdvisoryProblem(v GithubSecurityAdvisoryPro
 	return err
 }
 
+// AsSecretsRuleProblem returns the union data inside the Problem as a SecretsRuleProblem
+func (t Problem) AsSecretsRuleProblem() (SecretsRuleProblem, error) {
+	var body SecretsRuleProblem
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSecretsRuleProblem overwrites any union data inside the Problem as the provided SecretsRuleProblem
+func (t *Problem) FromSecretsRuleProblem(v SecretsRuleProblem) error {
+	v.Source = "secret"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSecretsRuleProblem performs a merge with any union data inside the Problem, using the provided SecretsRuleProblem
+func (t *Problem) MergeSecretsRuleProblem(v SecretsRuleProblem) error {
+	v.Source = "secret"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsOtherProblem returns the union data inside the Problem as a OtherProblem
 func (t Problem) AsOtherProblem() (OtherProblem, error) {
 	var body OtherProblem
@@ -3662,6 +4486,8 @@ func (t Problem) ValueByDiscriminator() (interface{}, error) {
 		return t.AsGithubSecurityAdvisoryProblem()
 	case "other":
 		return t.AsOtherProblem()
+	case "secret":
+		return t.AsSecretsRuleProblem()
 	case "snyk_cloud_rule":
 		return t.AsSnykCloudRuleProblem()
 	case "snyk_code_rule":
@@ -3681,6 +4507,184 @@ func (t Problem) MarshalJSON() ([]byte, error) {
 }
 
 func (t *Problem) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsBaseResource returns the union data inside the TestResource as a BaseResource
+func (t TestResource) AsBaseResource() (BaseResource, error) {
+	var body BaseResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBaseResource overwrites any union data inside the TestResource as the provided BaseResource
+func (t *TestResource) FromBaseResource(v BaseResource) error {
+	v.Type = "base"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBaseResource performs a merge with any union data inside the TestResource, using the provided BaseResource
+func (t *TestResource) MergeBaseResource(v BaseResource) error {
+	v.Type = "base"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDiffResource returns the union data inside the TestResource as a DiffResource
+func (t TestResource) AsDiffResource() (DiffResource, error) {
+	var body DiffResource
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDiffResource overwrites any union data inside the TestResource as the provided DiffResource
+func (t *TestResource) FromDiffResource(v DiffResource) error {
+	v.Type = "diff"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeDiffResource performs a merge with any union data inside the TestResource, using the provided DiffResource
+func (t *TestResource) MergeDiffResource(v DiffResource) error {
+	v.Type = "diff"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t TestResource) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t TestResource) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "base":
+		return t.AsBaseResource()
+	case "diff":
+		return t.AsDiffResource()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t TestResource) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *TestResource) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsBaseResourceCreateItem returns the union data inside the TestResourceCreateItem as a BaseResourceCreateItem
+func (t TestResourceCreateItem) AsBaseResourceCreateItem() (BaseResourceCreateItem, error) {
+	var body BaseResourceCreateItem
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBaseResourceCreateItem overwrites any union data inside the TestResourceCreateItem as the provided BaseResourceCreateItem
+func (t *TestResourceCreateItem) FromBaseResourceCreateItem(v BaseResourceCreateItem) error {
+	v.Type = "base"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBaseResourceCreateItem performs a merge with any union data inside the TestResourceCreateItem, using the provided BaseResourceCreateItem
+func (t *TestResourceCreateItem) MergeBaseResourceCreateItem(v BaseResourceCreateItem) error {
+	v.Type = "base"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDiffResourceCreateItem returns the union data inside the TestResourceCreateItem as a DiffResourceCreateItem
+func (t TestResourceCreateItem) AsDiffResourceCreateItem() (DiffResourceCreateItem, error) {
+	var body DiffResourceCreateItem
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDiffResourceCreateItem overwrites any union data inside the TestResourceCreateItem as the provided DiffResourceCreateItem
+func (t *TestResourceCreateItem) FromDiffResourceCreateItem(v DiffResourceCreateItem) error {
+	v.Type = "diff"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeDiffResourceCreateItem performs a merge with any union data inside the TestResourceCreateItem, using the provided DiffResourceCreateItem
+func (t *TestResourceCreateItem) MergeDiffResourceCreateItem(v DiffResourceCreateItem) error {
+	v.Type = "diff"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t TestResourceCreateItem) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t TestResourceCreateItem) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "base":
+		return t.AsBaseResourceCreateItem()
+	case "diff":
+		return t.AsDiffResourceCreateItem()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t TestResourceCreateItem) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *TestResourceCreateItem) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

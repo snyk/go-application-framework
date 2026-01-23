@@ -222,6 +222,121 @@ components:
           ignore: '#/components/schemas/Ignore'
           severity-change: '#/components/schemas/SeverityChange'
         propertyName: action_type
+    BaseResource:
+      properties:
+        resource:
+          $ref: '#/components/schemas/BaseResourceVariant'
+        type:
+          enum:
+          - base
+          type: string
+      required:
+      - type
+      - resource
+      type: object
+    BaseResourceCreateItem:
+      properties:
+        resource:
+          $ref: '#/components/schemas/BaseResourceVariantCreateItem'
+        type:
+          enum:
+          - base
+          type: string
+      required:
+      - type
+      - resource
+      type: object
+    BaseResourceVariant:
+      description: Resources containing testable content.
+      discriminator:
+        mapping:
+          bundle: '#/components/schemas/BundleResource'
+          container: '#/components/schemas/ContainerRepoResource'
+          inline: '#/components/schemas/InlineResource'
+          scm: '#/components/schemas/ScmResource'
+          snyk_ref: '#/components/schemas/SnykReferenceResource'
+          upload: '#/components/schemas/UploadResource'
+        propertyName: type
+      oneOf:
+      - $ref: '#/components/schemas/InlineResource'
+      - $ref: '#/components/schemas/BundleResource'
+      - $ref: '#/components/schemas/UploadResource'
+      - $ref: '#/components/schemas/ScmResource'
+      - $ref: '#/components/schemas/ContainerRepoResource'
+      - $ref: '#/components/schemas/SnykReferenceResource'
+    BaseResourceVariantCreateItem:
+      description: Resources containing testable content.
+      discriminator:
+        mapping:
+          bundle: '#/components/schemas/BundleResource'
+          container: '#/components/schemas/ContainerRepoResource'
+          inline: '#/components/schemas/InlineResourceCreateItem'
+          scm: '#/components/schemas/ScmResource'
+          snyk_ref: '#/components/schemas/SnykReferenceResource'
+          upload: '#/components/schemas/UploadResource'
+        propertyName: type
+      oneOf:
+      - $ref: '#/components/schemas/InlineResourceCreateItem'
+      - $ref: '#/components/schemas/BundleResource'
+      - $ref: '#/components/schemas/UploadResource'
+      - $ref: '#/components/schemas/ScmResource'
+      - $ref: '#/components/schemas/ContainerRepoResource'
+      - $ref: '#/components/schemas/SnykReferenceResource'
+    BundleResource:
+      properties:
+        bundle_id:
+          pattern: ^[a-fA-F0-9]{64}$
+          type: string
+        content_type:
+          enum:
+          - sbom
+          - source
+          type: string
+        file_patterns:
+          items:
+            type: string
+          maxItems: 20
+          type: array
+        name:
+          maxLength: 256
+          type: string
+        repository_url:
+          format: url
+          maxLength: 1024
+          type: string
+        root_folder_id:
+          maxLength: 1024
+          type: string
+        type:
+          enum:
+          - bundle
+          type: string
+      required:
+      - type
+      - bundle_id
+      - content_type
+      - file_patterns
+      type: object
+    ContainerRepoResource:
+      properties:
+        image_url:
+          format: url
+          maxLength: 1024
+          type: string
+        tag:
+          pattern: ^[a-fA-F0-9]{64}$
+          type: string
+        type:
+          enum:
+          - container
+          type: string
+      required:
+      - type
+      - image_url
+      - tag
+      type: object
+    ContainerScanConfiguration:
+      type: object
     CveProblem:
       description: |-
         CVE designation according to the public Common Vulnerability Exposure
@@ -327,6 +442,20 @@ components:
       - dep_graph
       - locator
       type: object
+    DependencyCountFact:
+      description: DependencyCountFact represents a dependency count fact.
+      properties:
+        total_dependency_count:
+          format: int64
+          type: integer
+        type:
+          enum:
+          - dependency_count_fact
+          type: string
+      required:
+      - type
+      - total_dependency_count
+      type: object
     DependencyPathEvidence:
       description: |-
         Dependency path to a software component within an SBOM dependency graph.
@@ -388,6 +517,36 @@ components:
       required:
       - format
       - suggestions
+      type: object
+    DiffResource:
+      properties:
+        base:
+          $ref: '#/components/schemas/BaseResourceVariant'
+        compare:
+          $ref: '#/components/schemas/BaseResourceVariant'
+        type:
+          enum:
+          - diff
+          type: string
+      required:
+      - type
+      - base
+      - compare
+      type: object
+    DiffResourceCreateItem:
+      properties:
+        base:
+          $ref: '#/components/schemas/BaseResourceVariantCreateItem'
+        compare:
+          $ref: '#/components/schemas/BaseResourceVariantCreateItem'
+        type:
+          enum:
+          - diff
+          type: string
+      required:
+      - type
+      - base
+      - compare
       type: object
     DiffSuggestion:
       description: A suggestion in unified diff format representing the code changes
@@ -882,6 +1041,8 @@ components:
       - sast
       - dast
       - other
+      - config
+      - secret
       type: string
     FixAction:
       description: |-
@@ -977,6 +1138,8 @@ components:
       - source
       - id
       type: object
+    IacScanConfiguration:
+      type: object
     Ignore:
       properties:
         action_type:
@@ -1041,6 +1204,47 @@ components:
       required:
       - id
       - name
+      type: object
+    InlineContent:
+      properties:
+        dep_graph:
+          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.DepGraph'
+        type:
+          enum:
+          - dep_graph
+          type: string
+      required:
+      - type
+      - dep_graph
+      type: object
+    InlineResource:
+      properties:
+        name:
+          maxLength: 256
+          type: string
+        type:
+          enum:
+          - inline
+          type: string
+      required:
+      - type
+      - name
+      type: object
+    InlineResourceCreateItem:
+      properties:
+        content:
+          $ref: '#/components/schemas/InlineContent'
+        name:
+          maxLength: 256
+          type: string
+        type:
+          enum:
+          - inline
+          type: string
+      required:
+      - type
+      - name
+      - content
       type: object
     JobAttributes:
       description: JobAttributes represents the attributes of a Job resource
@@ -1507,6 +1711,7 @@ components:
           cwe: '#/components/schemas/CweProblem'
           ghsa: '#/components/schemas/GithubSecurityAdvisoryProblem'
           other: '#/components/schemas/OtherProblem'
+          secret: '#/components/schemas/SecretsRuleProblem'
           snyk_cloud_rule: '#/components/schemas/SnykCloudRuleProblem'
           snyk_code_rule: '#/components/schemas/SnykCodeRuleProblem'
           snyk_license: '#/components/schemas/SnykLicenseProblem'
@@ -1520,6 +1725,7 @@ components:
       - $ref: '#/components/schemas/SnykLicenseProblem'
       - $ref: '#/components/schemas/SnykCloudRuleProblem'
       - $ref: '#/components/schemas/GithubSecurityAdvisoryProblem'
+      - $ref: '#/components/schemas/SecretsRuleProblem'
       - $ref: '#/components/schemas/OtherProblem'
     ProjectEntityLocator:
       description: ProjectEntityLocator locates a Snyk Project by its public ID.
@@ -1648,6 +1854,8 @@ components:
       required:
       - value
       type: object
+    SastScanConfiguration:
+      type: object
     SbomReachabilitySubject:
       description: Test subject for SBOM test with reachability analysis.
       properties:
@@ -1695,6 +1903,21 @@ components:
       - sbom_bundle_id
       - locator
       type: object
+    ScaScanConfiguration:
+      type: object
+    ScanConfiguration:
+      properties:
+        container:
+          $ref: '#/components/schemas/ContainerScanConfiguration'
+        iac:
+          $ref: '#/components/schemas/IacScanConfiguration'
+        sast:
+          $ref: '#/components/schemas/SastScanConfiguration'
+        sca:
+          $ref: '#/components/schemas/ScaScanConfiguration'
+        secrets:
+          $ref: '#/components/schemas/SecretsScanConfiguration'
+      type: object
     ScmRepoLocator:
       description: ScmRepoLocator locates a test subject by SCM repository coordinates.
       properties:
@@ -1716,6 +1939,85 @@ components:
       required:
       - type
       - url
+      type: object
+    ScmResource:
+      properties:
+        commit:
+          maxLength: 1024
+          type: string
+        file_patterns:
+          items:
+            type: string
+          maxItems: 20
+          type: array
+        integration_id:
+          format: uuid
+          type: string
+        ref:
+          maxLength: 1024
+          type: string
+        repo_url:
+          format: url
+          maxLength: 1024
+          type: string
+        type:
+          enum:
+          - scm
+          type: string
+      required:
+      - type
+      - repo_url
+      - integration_id
+      type: object
+    SecretsRuleProblem:
+      description: Secret rule that produces a Secret finding.
+      properties:
+        categories:
+          description: Categories applied to the rule.
+          example:
+          - security
+          items:
+            type: string
+          maxItems: 10
+          type: array
+        help:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        precision:
+          description: A qualitative description of the rule's precision.
+          example: very-high
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        short_description:
+          type: string
+        source:
+          enum:
+          - secret
+          type: string
+        tags:
+          description: Tags applied to the rule.
+          example:
+          - aws
+          items:
+            type: string
+          maxItems: 20
+          type: array
+      required:
+      - source
+      - id
+      - severity
+      - name
+      - short_description
+      - help
+      - tags
+      - precision
+      - categories
+      type: object
+    SecretsScanConfiguration:
       type: object
     Severity:
       description: Indicate the severity of a finding discovered by a Test.
@@ -1858,8 +2160,17 @@ components:
           description: Software license identifier.
           example: MPL-2.0
           type: string
+        package_full_name:
+          description: |-
+            The full name of the vulnerable software package.
+            It's achieved by combining the packageName and packageNamespace
+            with the ecosystem specific delimiter.
+          type: string
         package_name:
           description: Package name.
+          type: string
+        package_namespace:
+          description: Vulnerable software package namespace, if applicable.
           type: string
         package_version:
           description: Package version.
@@ -1907,6 +2218,26 @@ components:
       - id
       - owner
       type: object
+    SnykReferenceResource:
+      properties:
+        ref_id:
+          format: uuid
+          type: string
+        reference_type:
+          enum:
+          - target
+          - project
+          - asset
+          type: string
+        type:
+          enum:
+          - snyk_ref
+          type: string
+      required:
+      - type
+      - reference_type
+      - ref_id
+      type: object
     SnykVulnProblem:
       description: Vulnerability from Snyk's Vulnerability Database.
       properties:
@@ -1933,6 +2264,15 @@ components:
             being used.
           items:
             type: string
+          type: array
+        alternative_ids:
+          description: |-
+            This is the list of alternative IDs Snyk gives for a certain vulnerability.
+            It's usually present in older vulnerabilities, in which Snyk used to use a different identifier format.
+            e.g a vuln with the ID "npm:foo:bar", will likely have an alternative ID of "SNYK-JS-FOO-BAR".
+          items:
+            type: string
+          maxItems: 50
           type: array
         created_at:
           description: Timestamp indicating when the problem was orginally created.
@@ -2011,6 +2351,17 @@ components:
           items:
             type: string
           type: array
+        is_disputed:
+          default: false
+          description: |-
+            Indicates if the vulnerability is formally disputed.
+            A vulnerability's claim (e.g., that it's a security flaw, or the scope/impact) is
+            **disputed** when one party, often the vendor or a security professional, formally
+            challenges the assertion.
+            Most cybersecurity public listings, such as CVE, have a defined process
+            allowing vendors or researchers to officially challenge the validity
+            of a reported issue, leading to this 'DISPUTED' status being formally annotated.
+          type: boolean
         is_fixable:
           default: false
           description: |-
@@ -2021,6 +2372,19 @@ components:
           default: false
           description: Indicate if the vulnerability is known to mark a malicious
             package.
+          type: boolean
+        is_proprietary:
+          default: false
+          description: |-
+            This field indicates if the vulnerability was first published in the Snyk DB.
+            This happens when either of the following is true:
+            - Snyk was responsilbe for coordinating the disclosure
+            - Snyk researchers discovered the vulnerability/malicious package
+            - Snyk gave the first or best indication about the vulnerability based on unofficial sources.
+            The only exceptions are when:
+            - The vulnerability is a Linux container
+            - The vulnerable package is written in C/C++ and not hosted on conan center
+            - The vulnerable package is a `webjar`
           type: boolean
         is_social_media_trending:
           default: false
@@ -2037,8 +2401,17 @@ components:
             field and published will be (almost) identical.
           format: date-time
           type: string
+        package_full_name:
+          description: |-
+            The full name of the vulnerable software package.
+            It's achieved by combining the packageName and packageNamespace
+            with the ecosystem specific delimiter.
+          type: string
         package_name:
           description: Package name.
+          type: string
+        package_namespace:
+          description: Vulnerable software package namespace, if applicable.
           type: string
         package_popularity_rank:
           description: |-
@@ -2073,6 +2446,9 @@ components:
           description: The Snyk curated or recommended vulnerability severity for
             the problem.
           example: critical
+        severity_based_on:
+          description: Indicates how the vulnerability severity was determined.
+          type: string
         source:
           enum:
           - snyk_vuln
@@ -2241,6 +2617,24 @@ components:
             completes (state.execution == 'finished') successfully (without fatal errors
             blocking an outcome).
           readOnly: true
+        resources:
+          example:
+          - resource:
+              content_type: source
+              file_patterns:
+              - '*.go'
+              repository_url: https://example.com/source/repo
+              revision_id: abcde12345
+              type: upload
+            type: base
+          - resource:
+              ref_id: 6BD4F5E2-D4E8-4C6B-BB0E-ECF0A70423F5
+              reference_type: target
+              type: snyk_ref
+            type: base
+          items:
+            $ref: '#/components/schemas/TestResource'
+          type: array
         state:
           allOf:
           - $ref: '#/components/schemas/TestState'
@@ -2264,8 +2658,13 @@ components:
           items:
             $ref: '#/components/schemas/TestSubjectLocator'
           type: array
+        test_facts:
+          description: Facts about the test that were computed during test execution.
+          items:
+            $ref: '#/components/schemas/TestFact'
+          readOnly: true
+          type: array
       required:
-      - subject
       - created_at
       - state
       type: object
@@ -2278,6 +2677,24 @@ components:
           description: |-
             The test configuration. If not specified, caller accepts test configuration
             defaults within the calling scope (org, group or tenant settings, etc).
+        resources:
+          example:
+          - resource:
+              content_type: source
+              file_patterns:
+              - '*.go'
+              repository_url: https://example.com/source/repo
+              revision_id: abcde12345
+              type: upload
+            type: base
+          - resource:
+              ref_id: 6BD4F5E2-D4E8-4C6B-BB0E-ECF0A70423F5
+              reference_type: target
+              type: snyk_ref
+            type: base
+          items:
+            $ref: '#/components/schemas/TestResourceCreateItem'
+          type: array
         subject:
           allOf:
           - $ref: '#/components/schemas/TestSubjectCreate'
@@ -2296,8 +2713,6 @@ components:
           items:
             $ref: '#/components/schemas/TestSubjectLocator'
           type: array
-      required:
-      - subject
       type: object
     TestConfiguration:
       description: Test configuration.
@@ -2311,9 +2726,36 @@ components:
             If centrally managed policies are in scope, inline policies are overridden
             by managed policies. Policy references explain which policies were
             effective for test evaluation.
+        project_business_criticality:
+          maxLength: 256
+          type: string
+        project_environment:
+          items:
+            type: string
+          maxItems: 10
+          type: array
+        project_lifecycle:
+          items:
+            type: string
+          maxItems: 10
+          type: array
+        project_tags:
+          items:
+            type: string
+          maxItems: 10
+          type: array
         publish_report:
           description: Publish findings into a report, viewable in the Snyk web UI.
           type: boolean
+        scan_config:
+          $ref: '#/components/schemas/ScanConfiguration'
+        target_name:
+          maxLength: 256
+          type: string
+        target_reference:
+          description: Fields from CLI.
+          maxLength: 1024
+          type: string
         timeout:
           allOf:
           - $ref: '#/components/schemas/TimeoutSpec'
@@ -2367,6 +2809,11 @@ components:
       - finished
       - errored
       type: string
+    TestFact:
+      allOf:
+      - $ref: '#/components/schemas/DependencyCountFact'
+      description: TestFact represents a test fact union.
+      type: object
     TestOutcome:
       description: Outcome of a test; pass or fail.
       properties:
@@ -2404,6 +2851,24 @@ components:
       required:
       - data
       type: object
+    TestResource:
+      anyOf:
+      - $ref: '#/components/schemas/BaseResource'
+      - $ref: '#/components/schemas/DiffResource'
+      discriminator:
+        mapping:
+          base: '#/components/schemas/BaseResource'
+          diff: '#/components/schemas/DiffResource'
+        propertyName: type
+    TestResourceCreateItem:
+      anyOf:
+      - $ref: '#/components/schemas/BaseResourceCreateItem'
+      - $ref: '#/components/schemas/DiffResourceCreateItem'
+      discriminator:
+        mapping:
+          base: '#/components/schemas/BaseResourceCreateItem'
+          diff: '#/components/schemas/DiffResourceCreateItem'
+        propertyName: type
     TestState:
       description: Test execution state information.
       properties:
@@ -2558,6 +3023,41 @@ components:
       required:
       - dependency_path
       - is_drop
+      type: object
+    UploadResource:
+      properties:
+        content_type:
+          enum:
+          - sbom
+          - source
+          type: string
+        file_patterns:
+          items:
+            type: string
+          maxItems: 20
+          type: array
+        name:
+          maxLength: 256
+          type: string
+        repository_url:
+          format: url
+          maxLength: 1024
+          type: string
+        revision_id:
+          maxLength: 1024
+          type: string
+        root_folder_id:
+          maxLength: 1024
+          type: string
+        type:
+          enum:
+          - upload
+          type: string
+      required:
+      - type
+      - revision_id
+      - content_type
+      - file_patterns
       type: object
     Uuid:
       format: uuid
@@ -2867,9 +3367,17 @@ components:
 
         Examples include, but are not limited to: Javascript NPM, Java Maven, Python pip, etc.
       properties:
+        client:
+          description: |-
+            Ecosystem client is the tool the consumer used to manage the dependencies.
+            In managed ecosystems, this is commonly refered to as the package manager,
+            while in the case of C++, this would be "unmanaged".
+          type: string
         language:
+          deprecated: true
           type: string
         package_manager:
+          deprecated: true
           type: string
         type:
           enum:

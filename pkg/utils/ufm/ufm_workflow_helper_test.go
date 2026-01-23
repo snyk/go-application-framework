@@ -30,8 +30,9 @@ func Test_CreateAndRetrieveDataFromUFM(t *testing.T) {
 	singleResult.EXPECT().GetTestID().Return(&testID).AnyTimes()
 	singleResult.EXPECT().GetTestConfiguration().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetCreatedAt().Return(nil).AnyTimes()
-	singleResult.EXPECT().GetTestSubject().Return(testapi.TestSubject{}).AnyTimes()
+	singleResult.EXPECT().GetTestSubject().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetSubjectLocators().Return(nil).AnyTimes()
+	singleResult.EXPECT().GetTestResources().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetExecutionState().Return(testapi.TestExecutionStatesFinished).AnyTimes()
 	singleResult.EXPECT().GetErrors().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetWarnings().Return(nil).AnyTimes()
@@ -40,6 +41,7 @@ func Test_CreateAndRetrieveDataFromUFM(t *testing.T) {
 	singleResult.EXPECT().GetBreachedPolicies().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetEffectiveSummary().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetRawSummary().Return(nil).AnyTimes()
+	singleResult.EXPECT().GetTestFacts().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetMetadata().Return(nil).AnyTimes()
 	singleResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
 

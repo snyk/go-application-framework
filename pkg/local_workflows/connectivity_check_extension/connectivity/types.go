@@ -130,12 +130,6 @@ type Organization struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
-type Tenant struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-}
-
 // BinaryInfo represents information about a CLI binary found in a directory
 type BinaryInfo struct {
 	Name        string `json:"name"`

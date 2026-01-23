@@ -19,3 +19,15 @@ func TestIsSnykIde(t *testing.T) {
 		})
 	}
 }
+func TestIsRunningFromNpm(t *testing.T) {
+	testset := map[string]bool{
+		"TS_BINARY_WRAPPER":     true,
+		"NOT_TS_BINARY_WRAPPER": false,
+	}
+	for k, expected := range testset {
+		t.Run(k, func(t *testing.T) {
+			actual := IsRunningFromNpm(k)
+			assert.Equal(t, expected, actual)
+		})
+	}
+}

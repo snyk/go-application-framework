@@ -137,6 +137,20 @@ func (mr *MockTestResultMockRecorder) GetMetadata() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetadata", reflect.TypeOf((*MockTestResult)(nil).GetMetadata))
 }
 
+// GetMetadataValue mocks base method.
+func (m *MockTestResult) GetMetadataValue(key string) interface{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMetadataValue", key)
+	ret0, _ := ret[0].(interface{})
+	return ret0
+}
+
+// GetMetadataValue indicates an expected call of GetMetadataValue.
+func (mr *MockTestResultMockRecorder) GetMetadataValue(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetadataValue", reflect.TypeOf((*MockTestResult)(nil).GetMetadataValue), key)
+}
+
 // GetOutcomeReason mocks base method.
 func (m *MockTestResult) GetOutcomeReason() *testapi.TestOutcomeReason {
 	m.ctrl.T.Helper()
@@ -207,6 +221,20 @@ func (mr *MockTestResultMockRecorder) GetTestConfiguration() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestConfiguration", reflect.TypeOf((*MockTestResult)(nil).GetTestConfiguration))
 }
 
+// GetTestFacts mocks base method.
+func (m *MockTestResult) GetTestFacts() *[]testapi.TestFact {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTestFacts")
+	ret0, _ := ret[0].(*[]testapi.TestFact)
+	return ret0
+}
+
+// GetTestFacts indicates an expected call of GetTestFacts.
+func (mr *MockTestResultMockRecorder) GetTestFacts() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestFacts", reflect.TypeOf((*MockTestResult)(nil).GetTestFacts))
+}
+
 // GetTestID mocks base method.
 func (m *MockTestResult) GetTestID() *uuid.UUID {
 	m.ctrl.T.Helper()
@@ -221,11 +249,25 @@ func (mr *MockTestResultMockRecorder) GetTestID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestID", reflect.TypeOf((*MockTestResult)(nil).GetTestID))
 }
 
+// GetTestResources mocks base method.
+func (m *MockTestResult) GetTestResources() *[]testapi.TestResource {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTestResources")
+	ret0, _ := ret[0].(*[]testapi.TestResource)
+	return ret0
+}
+
+// GetTestResources indicates an expected call of GetTestResources.
+func (mr *MockTestResultMockRecorder) GetTestResources() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestResources", reflect.TypeOf((*MockTestResult)(nil).GetTestResources))
+}
+
 // GetTestSubject mocks base method.
-func (m *MockTestResult) GetTestSubject() testapi.TestSubject {
+func (m *MockTestResult) GetTestSubject() *testapi.TestSubject {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTestSubject")
-	ret0, _ := ret[0].(testapi.TestSubject)
+	ret0, _ := ret[0].(*testapi.TestSubject)
 	return ret0
 }
 

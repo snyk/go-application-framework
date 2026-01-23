@@ -267,7 +267,7 @@ func TestIssue_GeneralizedMethods(t *testing.T) {
 		location := testapi.SourceLocation{
 			FilePath: "src/main.go",
 			FromLine: 10,
-			Type:     testapi.Source,
+			Type:     testapi.SourceLocationTypeSource,
 		}
 		var locationUnion testapi.FindingLocation
 		err := locationUnion.MergeSourceLocation(location)
@@ -423,7 +423,7 @@ func TestGetIssuesFromTestResult(t *testing.T) {
 
 		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
 
-		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, []testapi.FindingType{testapi.FindingTypeSca})
 		require.NoError(t, err)
 		require.NotNil(t, issues)
 		assert.Len(t, issues, 2)
@@ -456,13 +456,13 @@ func TestGetIssuesFromTestResult(t *testing.T) {
 
 		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
 
-		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSast)
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, []testapi.FindingType{testapi.FindingTypeSast})
 		require.NoError(t, err)
 		assert.Len(t, issues, 0)
 	})
 
 	t.Run("returns error when test result is nil", func(t *testing.T) {
-		issues, err := testapi.GetIssuesFromTestResult(nil, testapi.FindingTypeSca)
+		issues, err := testapi.GetIssuesFromTestResult(nil, []testapi.FindingType{testapi.FindingTypeSca})
 		assert.Error(t, err)
 		assert.Len(t, issues, 0)
 	})
@@ -474,7 +474,7 @@ func TestGetIssuesFromTestResult(t *testing.T) {
 		mockResult := mocks.NewMockTestResult(ctrl)
 		mockResult.EXPECT().Findings(gomock.Any()).Return(nil, false, errors.New("fetch error")).Times(1)
 
-		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, []testapi.FindingType{testapi.FindingTypeSca})
 		assert.Error(t, err)
 		assert.Len(t, issues, 0)
 	})
@@ -486,7 +486,7 @@ func TestGetIssuesFromTestResult(t *testing.T) {
 		mockResult := mocks.NewMockTestResult(ctrl)
 		mockResult.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil).Times(1)
 
-		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSca)
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, []testapi.FindingType{testapi.FindingTypeSca})
 		require.NoError(t, err)
 		assert.Len(t, issues, 0)
 	})
@@ -525,7 +525,7 @@ func TestGetIssuesFromTestResult(t *testing.T) {
 
 		mockResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).Times(1)
 
-		issues, err := testapi.GetIssuesFromTestResult(mockResult, testapi.FindingTypeSast)
+		issues, err := testapi.GetIssuesFromTestResult(mockResult, []testapi.FindingType{testapi.FindingTypeSast})
 		require.NoError(t, err)
 		require.NotNil(t, issues)
 		assert.Len(t, issues, 3)

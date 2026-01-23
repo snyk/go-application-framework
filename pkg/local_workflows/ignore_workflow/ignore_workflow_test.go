@@ -53,7 +53,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	config := configuration.New()
 	config.Set(configuration.API_URL, "https://api.snyk.io")
 	config.Set(configuration.ORGANIZATION, uuid.New().String())
-	config.Set(ConfigIgnoreApprovalEnabled, true)
+
 	// setup mocks
 	ctrl := gomock.NewController(t)
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
@@ -301,6 +301,7 @@ func Test_ignoreCreateWorkflowEntryPoint(t *testing.T) {
 		assert.Error(t, err, "Should return an error")
 		assert.Nil(t, result, "payload be nil")
 	})
+
 	t.Run("IAW FF is disabled", func(t *testing.T) {
 		expectedFindingsId := uuid.New().String()
 		expectedIgnoreType := string(policyApi.WontFix)
@@ -782,15 +783,16 @@ func Test_getOrgIgnoreApprovalEnabled(t *testing.T) {
 		mockConfig.EXPECT().AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION).Return(nil)
 
 		// Expect the calls made during the actual default value function execution
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
 		mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
 		mockEngine.EXPECT().GetLogger().Return(&logger)
 		mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
 		mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
+		mockNetworkAccess.EXPECT().Clone().Return(mockNetworkAccess)
+		mockNetworkAccess.EXPECT().SetConfiguration(mockConfig)
 		mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
 
 		defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
-		result, err := defaultValueFunc(nil, nil)
+		result, err := defaultValueFunc(mockConfig, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -825,14 +827,15 @@ func setupMockEngineForOrgSettings(t *testing.T, response *contract.OrgSettingsR
 	mockConfig.EXPECT().AddKeyDependency(ConfigIgnoreApprovalEnabled, configuration.ORGANIZATION).Return(nil)
 
 	// Expect the calls made during the actual default value function execution
-	mockEngine.EXPECT().GetConfiguration().Return(mockConfig)
 	mockEngine.EXPECT().GetNetworkAccess().Return(mockNetworkAccess)
 	mockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(orgId)
 	mockConfig.EXPECT().GetString(configuration.API_URL).Return(apiUrl)
+	mockNetworkAccess.EXPECT().Clone().Return(mockNetworkAccess)
+	mockNetworkAccess.EXPECT().SetConfiguration(mockConfig)
 	mockNetworkAccess.EXPECT().GetHttpClient().Return(httpClient)
 
 	defaultValueFunc := getOrgIgnoreApprovalEnabled(mockEngine)
-	return defaultValueFunc(nil, nil)
+	return defaultValueFunc(mockConfig, nil)
 }
 
 func Test_getOrgIgnoreApprovalEnabled_CacheDependentOnOrg(t *testing.T) {

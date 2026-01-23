@@ -3,6 +3,9 @@ package ufm
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,8 +30,9 @@ func TestNewSerializableTestResult(t *testing.T) {
 	mock.EXPECT().GetTestID().Return(&testID).AnyTimes()
 	mock.EXPECT().GetTestConfiguration().Return(nil).AnyTimes()
 	mock.EXPECT().GetCreatedAt().Return(&createdAt).AnyTimes()
-	mock.EXPECT().GetTestSubject().Return(testapi.TestSubject{}).AnyTimes()
+	mock.EXPECT().GetTestSubject().Return(nil).AnyTimes()
 	mock.EXPECT().GetSubjectLocators().Return(nil).AnyTimes()
+	mock.EXPECT().GetTestResources().Return(nil).AnyTimes()
 	mock.EXPECT().GetExecutionState().Return(testapi.TestExecutionStatesFinished).AnyTimes()
 	mock.EXPECT().GetErrors().Return(nil).AnyTimes()
 	mock.EXPECT().GetWarnings().Return(nil).AnyTimes()
@@ -37,6 +41,7 @@ func TestNewSerializableTestResult(t *testing.T) {
 	mock.EXPECT().GetBreachedPolicies().Return(nil).AnyTimes()
 	mock.EXPECT().GetEffectiveSummary().Return(nil).AnyTimes()
 	mock.EXPECT().GetRawSummary().Return(nil).AnyTimes()
+	mock.EXPECT().GetTestFacts().Return(nil).AnyTimes()
 	mock.EXPECT().GetMetadata().Return(nil).AnyTimes()
 	mock.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil).Times(1)
 
@@ -435,4 +440,29 @@ func TestOptimizedWireFormat_MemoryCleanup(t *testing.T) {
 	require.Len(t, decodedFindings, 1)
 	assert.Len(t, decodedFindings[0].Attributes.Problems, 1)
 	assert.Equal(t, "SNYK-JS-LODASH-590103", decodedFindings[0].Attributes.Problems[0].GetID())
+}
+
+func Test_Findings_ConcurrentAccess(t *testing.T) {
+	ctx := context.Background()
+	testResultsPath, err := filepath.Abs("../../../internal/presenters/testdata/ufm/webgoat.ignore.testresult.json")
+	require.NoError(t, err)
+	testResultsData, err := os.ReadFile(testResultsPath)
+	require.NoError(t, err)
+
+	testResults, err := NewSerializableTestResultFromBytes(testResultsData)
+	require.NoError(t, err)
+	require.Len(t, testResults, 1)
+
+	var wg sync.WaitGroup
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			findings, complete, err := testResults[0].Findings(ctx)
+			require.NoError(t, err)
+			require.True(t, complete)
+			require.Len(t, findings, 47)
+		}()
+	}
+	wg.Wait()
 }

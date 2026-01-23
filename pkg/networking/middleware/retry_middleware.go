@@ -11,6 +11,7 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -22,15 +23,22 @@ const ConfigurationKeyRetryAttempts = "internal_network_request_max_attempts"
 const configurationKeyRetryAfter = "internal_network_request_retry_after_seconds"
 const retryCountHeaderKey = "Snyk-Request-Attempt-Count"
 
-// This lookup table defines the response status codes that should be retried
-var statusCodesToRetryLUT = map[int]bool{
-	http.StatusTooManyRequests:     true,
-	http.StatusTooEarly:            true,
-	http.StatusRequestTimeout:      true,
-	http.StatusInternalServerError: true,
-	http.StatusBadGateway:          true,
-	http.StatusServiceUnavailable:  true,
-	http.StatusGatewayTimeout:      true,
+type RetryLogic struct {
+	shouldRetry      bool
+	maxRetryOverride *uint
+}
+
+var attemptThreeNetworkRequests uint = 3
+
+// This lookup table defines the response status codes that should be retried and the ability to override the default retry count
+var statusCodesToRetryLUT = map[int]RetryLogic{
+	http.StatusTooManyRequests:     {true, &attemptThreeNetworkRequests},
+	http.StatusTooEarly:            {true, nil},
+	http.StatusRequestTimeout:      {true, nil},
+	http.StatusInternalServerError: {true, nil},
+	http.StatusBadGateway:          {true, nil},
+	http.StatusServiceUnavailable:  {true, nil},
+	http.StatusGatewayTimeout:      {true, nil},
 }
 
 var errRetryNecessary = errors.New("retry with backoff")
@@ -56,7 +64,8 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	var localBodyBuffer []byte
 	var maxAttempts = defaultRetryCount
 	var retryAfterSeconds = defaultRetryAfterSeconds
-	var actualAttempts = 0
+	var actualAttempts uint = 0
+	var cachedMaxRetries *uint = nil // Per-request cached max retries
 
 	if tmp := (uint)(rm.config.GetInt(ConfigurationKeyRetryAttempts)); tmp > 0 {
 		maxAttempts = tmp
@@ -105,8 +114,14 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			return response, backoff.Permanent(err)
 		}
 
+		// Cache max retry attempts for the current request
+		if cachedMaxRetries == nil {
+			calculated := getMaxRetryAttempts(response, maxAttempts)
+			cachedMaxRetries = &calculated
+		}
+
 		// depending on the response determine if we should retry
-		if retryError := shouldRetry(response); retryError != nil {
+		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
 			return response, retryError
 		}
@@ -116,19 +131,43 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	backoffMethod := backoff.NewExponentialBackOff()
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
-	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod), backoff.WithMaxTries(maxAttempts))
+	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod))
 
 	// if retries fail to resolve the issue, we need to unset the locally used error type to not return it from the RoundTripper
 	if errors.Is(finalError, errRetryNecessary) {
-		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", maxAttempts)
+		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
 		finalError = nil
 	}
 
 	return finalResponse, finalError
 }
 
-func shouldRetry(response *http.Response) error {
-	if statusCodesToRetryLUT[response.StatusCode] {
+func getMaxRetryAttempts(response *http.Response, maxAttempts uint) uint {
+	attempts := statusCodesToRetryLUT[response.StatusCode].maxRetryOverride
+	if attempts != nil {
+		return max(*attempts, maxAttempts)
+	}
+	return maxAttempts
+}
+
+func shouldRetry(response *http.Response, attempts uint, maxAttempts uint) error {
+	// if the Snyk API is in maintenance mode, we should not retry
+	if response.StatusCode == http.StatusServiceUnavailable {
+		errorList := getErrorList(response)
+		for _, actualError := range errorList {
+			if actualError.ErrorCode == snyk.NewMaintenanceWindowError("").ErrorCode {
+				return backoff.Permanent(errRetryNecessary)
+			}
+		}
+	}
+
+	if statusCodesToRetryLUT[response.StatusCode].shouldRetry {
+		// if we have reached the maximum number of permitted attempts, stop retrying
+		if attempts >= maxAttempts {
+			// return backoff.Permanent() to end the retry loop
+			return backoff.Permanent(errRetryNecessary)
+		}
+
 		fixRetryDelay := time.Duration(0)
 
 		// try to read retry-after header if available

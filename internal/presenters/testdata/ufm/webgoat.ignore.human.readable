@@ -1,0 +1,371 @@
+[1mTesting  (pom.xml) ...[0m
+
+Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
+
+[1mOpen Security issues: 38[0m
+
+ ✗ [33m[MEDIUM][0m [1mExternal Initialization of Trusted Variables or Data Stores[0m
+   Finding ID: SNYK-JAVA-CHQOSLOGBACK-13169722
+   Info: https://snyk.io/vuln/SNYK-JAVA-CHQOSLOGBACK-13169722
+   Introduced by: ch.qos.logback:logback-core
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-validation@3.5.6 > org.springframework.boot:spring-boot-starter@3.5.6 > org.springframework.boot:spring-boot-starter-logging@3.5.6 > ch.qos.logback:logback-classic@1.5.18 > ch.qos.logback:logback-core@1.5.18
+   Risk Score: 41
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Deletion[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 429
+   Reachability: Reachable
+
+ ✗ [33m[MEDIUM][0m [1mServer-Side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051967
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051967
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 559
+   Reachability: Reachable
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088328
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088328
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 334
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088329
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088329
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 196
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088331
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088331
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 337
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088332
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088332
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 162
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088333
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088333
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 142
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088334
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088334
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 164
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088335
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088335
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 157
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088336
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088336
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 169
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088338
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088338
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 142
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1294540
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1294540
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 641
+   Reachability: Reachable
+
+ ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569189
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569189
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 180
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-3091180
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-3091180
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 53
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-3182897
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-3182897
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 230
+   Reachability: Reachable
+
+ ✗ [33m[MEDIUM][0m [1mInsecure XML deserialization[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-460764
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-460764
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 255
+   Reachability: Reachable
+
+ ✗ [31m[HIGH][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 620
+   Reachability: Reachable
+
+ ✗ [31m[HIGH][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088337
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088337
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 240
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569176
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569176
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 275
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569177
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569177
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 557
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569178
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569178
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 275
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569179
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569179
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 275
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569180
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569180
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 455
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569181
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569181
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 275
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569182
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569182
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 275
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mRemote Code Execution (RCE)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569183
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569183
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 866
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569185
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569185
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 275
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569186
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569186
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 275
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569187
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569187
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 274
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569190
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569190
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 501
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569191
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569191
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 279
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-2388977
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-2388977
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 172
+   Reachability: Reachable
+
+ ✗ [31m[HIGH][0m [1mXML External Entity (XXE) Injection[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-30385
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-30385
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 139
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-31394
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-31394
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 174
+   Reachability: Reachable
+
+ ✗ [31m[HIGH][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-8352924
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-8352924
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 194
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mUncontrolled Recursion[0m
+   Finding ID: SNYK-JAVA-ORGAPACHECOMMONS-10734078
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGAPACHECOMMONS-10734078
+   Introduced by: org.apache.commons:commons-lang3
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.apache.commons:commons-lang3@3.14.0
+   Risk Score: 172
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-ORGJRUBY-10557730
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGJRUBY-10557730
+   Introduced by: org.jruby:jruby-stdlib
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.asciidoctor:asciidoctorj@3.0.0 > org.jruby:jruby@10.0.0.1 > org.jruby:jruby-stdlib@10.0.0.1
+   Risk Score: 98
+   Reachability: No Path Found
+
+[1mOpen License issues: 4[0m
+
+ ✗ [33m[MEDIUM][0m [1mDual license: EPL-1.0, LGPL-2.1[0m
+   Finding ID: snyk:lic:maven:ch.qos.logback:logback-classic:(EPL-1.0_OR_LGPL-2.1)
+   Info: https://snyk.io/vuln/snyk:lic:maven:ch.qos.logback:logback-classic:(EPL-1.0_OR_LGPL-2.1)
+   Introduced by: ch.qos.logback:logback-classic
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-validation@3.5.6 > org.springframework.boot:spring-boot-starter@3.5.6 > org.springframework.boot:spring-boot-starter-logging@3.5.6 > ch.qos.logback:logback-classic@1.5.18
+   Reachability: Not Applicable
+
+ ✗ [33m[MEDIUM][0m [1mDual license: EPL-1.0, LGPL-2.1[0m
+   Finding ID: snyk:lic:maven:ch.qos.logback:logback-core:(EPL-1.0_OR_LGPL-2.1)
+   Info: https://snyk.io/vuln/snyk:lic:maven:ch.qos.logback:logback-core:(EPL-1.0_OR_LGPL-2.1)
+   Introduced by: ch.qos.logback:logback-core
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-validation@3.5.6 > org.springframework.boot:spring-boot-starter@3.5.6 > org.springframework.boot:spring-boot-starter-logging@3.5.6 > ch.qos.logback:logback-classic@1.5.18 > ch.qos.logback:logback-core@1.5.18
+   Reachability: Not Applicable
+
+ ✗ [33m[MEDIUM][0m [1mLGPL-2.1 license[0m
+   Finding ID: snyk:lic:maven:org.hibernate.orm:hibernate-core:LGPL-2.1
+   Info: https://snyk.io/vuln/snyk:lic:maven:org.hibernate.orm:hibernate-core:LGPL-2.1
+   Introduced by: org.hibernate.orm:hibernate-core
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-data-jpa@3.5.6 > org.hibernate.orm:hibernate-core@6.6.29.Final
+   Reachability: Not Applicable
+
+ ✗ [31m[HIGH][0m [1mMultiple licenses: EPL-1.0, GPL-2.0, LGPL-2.1[0m
+   Finding ID: snyk:lic:maven:com.github.jnr:jnr-posix:(EPL-1.0_OR_GPL-2.0_OR_LGPL-2.1)
+   Info: https://snyk.io/vuln/snyk:lic:maven:com.github.jnr:jnr-posix:(EPL-1.0_OR_GPL-2.0_OR_LGPL-2.1)
+   Introduced by: com.github.jnr:jnr-posix
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.asciidoctor:asciidoctorj@3.0.0 > org.jruby:jruby@10.0.0.1 > org.jruby:jruby-base@10.0.0.1 > com.github.jnr:jnr-posix@3.1.20
+   Reachability: Not Applicable
+
+╭────────────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                                   │
+│                                                                │
+│   Organization:      My Org                                    │
+│   Test type:         Software Composition Analysis             │
+│   Project path:      /Users/catalin.iuga/code/goofs/WebGoat    │
+│                                                                │
+│   Total security issues: 42                                    │
+│   Ignored: [1m4[0m [[35m 0 CRITICAL [0m[31m 2 HIGH [0m[33m 2 MEDIUM [0m 0 LOW ]           │
+│   Open   : [1m38[0m [[35m 0 CRITICAL [0m[31m 21 HIGH [0m[33m 17 MEDIUM [0m 0 LOW ]        │
+│                                                                │
+│   Total license issues: 5                                      │
+│   Ignored: [1m1[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 1 MEDIUM [0m 0 LOW ]           │
+│   Open   : [1m4[0m [[35m 0 CRITICAL [0m[31m 1 HIGH [0m[33m 3 MEDIUM [0m 0 LOW ]           │
+╰────────────────────────────────────────────────────────────────╯
+
+💡 Tip
+
+   Some capabilities, including the ability to apply ignores, are unavailable. Retest the project with the --remote-repo-url parameter or from within a repository to enable full functionality.
+                                                                                                                                                                                                
+
+💡 Tip
+
+   You are currently viewing results with --severity-threshold applied.
+   To view all issues, remove the --severity-threshold flag            
+                                                                       
+
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            
