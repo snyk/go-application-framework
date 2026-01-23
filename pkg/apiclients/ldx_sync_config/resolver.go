@@ -51,6 +51,11 @@ func newApiClientImpl(engine workflow.Engine, config configuration.Configuration
 	return api.NewApi(url, client)
 }
 
+// TODO remove
+func ResolveOrganization(config configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, dir string, existingOrgID string) (Organization, error) {
+	return Organization{}, nil
+}
+
 // GetUserConfigForProject retrieves LDX-Sync user configuration for the current project
 func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) LdxSyncConfigResult {
 	if dir == "" {
