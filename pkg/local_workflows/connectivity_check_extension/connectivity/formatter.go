@@ -61,19 +61,7 @@ func (f *Formatter) FormatResult(result *ConnectivityCheckResult) error {
 	}
 
 	if result.TokenPresent || result.OrgCheckError != nil {
-		if err := f.formatOrganizations(result); err != nil {
-			return err
-		}
-	}
-
-	// Format user information
-	if err := f.formatUserInformation(result); err != nil {
-		return err
-	}
-
-	// Format directory checks
-	if err := f.formatDirectoryChecks(result); err != nil {
-		return err
+		return f.formatOrganizations(result)
 	}
 
 	return nil
@@ -252,85 +240,6 @@ func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
 			f.output(f.renderHTML(fmt.Sprintf(`<span class="success">%s</span>`, orgLine)))
 		} else {
 			f.output(orgLine)
-		}
-	}
-
-	return nil
-}
-
-// formatUserInformation formats the current user information
-func (f *Formatter) formatUserInformation(result *ConnectivityCheckResult) error {
-	f.output("")
-	f.output(presenters.RenderTitle("Current User Information"))
-	if result.CurrentUser != "" {
-		f.output(f.renderHTML(fmt.Sprintf(`<span class="info">Username: %s</span>`, result.CurrentUser)))
-	} else {
-		f.output(f.renderHTML(`<span class="warning">⚠ Unable to determine current username</span>`))
-	}
-
-	return nil
-}
-
-// formatDirectoryChecks formats the potential Snyk used directory permission checks (CLI, config, cache, temp)
-func (f *Formatter) formatDirectoryChecks(result *ConnectivityCheckResult) error {
-	f.output("")
-	f.output(presenters.RenderTitle("Potential Snyk Used Configuration and CLI Download Directories"))
-
-	// If no directory results, return early
-	if len(result.DirectoryResults) == 0 {
-		f.output(f.renderHTML(`<span class="dim">No directories checked</span>`))
-		return nil
-	}
-
-	// Format each directory result
-	for _, dirResult := range result.DirectoryResults {
-		if err := f.formatDirectoryResult(dirResult); err != nil {
-			return err
-		}
-		f.output("")
-	}
-
-	return nil
-}
-
-// formatDirectoryResult formats a single directory check result
-func (f *Formatter) formatDirectoryResult(result DirectoryCheckResult) error {
-	// Show the wanted path first
-	f.output(f.renderHTML(fmt.Sprintf(`<span class="info">Directory: %s (Purpose: %s)</span>`, result.PathWanted, result.Purpose)))
-
-	// Handle errors
-	if result.Error != "" {
-		f.output(f.renderHTML(fmt.Sprintf(`  <span class="error">✗ Error: %s</span>`, result.Error)))
-		return nil
-	}
-
-	// Check if the wanted path exists or if we found a parent
-	if result.PathWanted == result.PathFound {
-		// Directory exists
-		f.output(f.renderHTML(`  <span class="success">✓ Exists</span>`))
-	} else {
-		// Directory doesn't exist, showing parent
-		f.output(f.renderHTML(`  <span class="warning">⚠ Does not exist</span>`))
-		f.output(f.renderHTML(fmt.Sprintf(`  <span class="dim">Nearest existing parent: %s</span>`, result.PathFound)))
-	}
-
-	// Show write permissions
-	if result.IsWritable {
-		f.output(f.renderHTML(fmt.Sprintf(`  <span class="success">✓ Writable</span> (permissions: %s)`, result.Permissions)))
-	} else {
-		f.output(f.renderHTML(fmt.Sprintf(`  <span class="error">✗ Not writable</span> (permissions: %s)`, result.Permissions)))
-	}
-
-	// Show binaries found (only if the wanted path exists and may contain a Snyk CLI binary)
-	if result.PathWanted == result.PathFound && result.MayContainCLI {
-		if len(result.BinariesFound) > 0 {
-			f.output(f.renderHTML(fmt.Sprintf(`  <span class="success">Found %d potential Snyk CLI binary/binaries:</span>`, len(result.BinariesFound))))
-			for _, binary := range result.BinariesFound {
-				f.output(f.renderHTML(fmt.Sprintf(`    <span class="success">• %s</span> (permissions: %s)`,
-					binary.Name, binary.Permissions)))
-			}
-		} else {
-			f.output(f.renderHTML(`  <span class="dim">No Snyk CLI binaries found</span>`))
 		}
 	}
 

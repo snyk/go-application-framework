@@ -30,7 +30,7 @@ func createTestChecker(t *testing.T, ctrl *gomock.Controller, config configurati
 	// Expect GetHttpClient to be called for API client initialization
 	mockNA.EXPECT().GetHttpClient().Return(&http.Client{}).AnyTimes()
 
-	checker := NewChecker(mockNA, &logger, config, nil)
+	checker := NewChecker(mockNA, &logger, config)
 	return checker, mockNA
 }
 
@@ -47,7 +47,7 @@ func TestNewChecker(t *testing.T) {
 	mockNA.EXPECT().GetHttpClient().Return(&http.Client{})
 
 	// Create checker
-	checker := NewChecker(mockNA, &logger, config, nil)
+	checker := NewChecker(mockNA, &logger, config)
 
 	// Verify checker is created correctly
 	if checker == nil {
@@ -579,7 +579,7 @@ func TestCheckConnectivity(t *testing.T) {
 
 	logger := zerolog.Nop()
 	config := configuration.New()
-	checker := NewChecker(mockNA, &logger, config, nil)
+	checker := NewChecker(mockNA, &logger, config)
 
 	// Run connectivity check
 	result, err := checker.CheckConnectivity()
@@ -640,7 +640,7 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
 
 		// Create checker
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Run connectivity check
 		result, err := checker.CheckConnectivity()
@@ -678,7 +678,7 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
 
 		// Create checker
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Run connectivity check
 		result, err := checker.CheckConnectivity()
@@ -717,7 +717,7 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
 
 		// Create checker
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Run connectivity check
 		result, err := checker.CheckConnectivity()
@@ -811,7 +811,7 @@ func TestCheckOrganizations(t *testing.T) {
 		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
 
 		// Create checker with mock API client
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Test fetching organizations
 		orgs, err := checker.CheckOrganizations(100)
@@ -846,7 +846,7 @@ func TestCheckOrganizations(t *testing.T) {
 		mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("failed to get default org"))
 
 		// Create checker with mock API client
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		// Test fetching organizations
 		orgs, err := checker.CheckOrganizations(100)
@@ -871,7 +871,7 @@ func TestCheckOrganizations(t *testing.T) {
 		// Make sure OAuth is disabled by setting the disable flag
 		configNoToken.Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
 
-		checkerNoToken := NewCheckerWithApiClient(mockNA, &logger, configNoToken, nil, mockApiClient)
+		checkerNoToken := NewCheckerWithApiClient(mockNA, &logger, configNoToken, mockApiClient)
 
 		orgs, err := checkerNoToken.CheckOrganizations(100)
 		if err != nil {
@@ -895,7 +895,7 @@ func TestCheckOrganizations(t *testing.T) {
 		// Set expectations for error case
 		mockApiClient.EXPECT().GetOrganizations(100).Return(nil, errors.New("API error"))
 
-		checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		_, err := checker.CheckOrganizations(100)
 		if err == nil {
@@ -935,7 +935,7 @@ func TestCheckOrganizations(t *testing.T) {
 				mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
 
 				// Create checker with mock API client
-				checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+				checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 				// Test fetching organizations with the specific limit
 				orgs, err := checker.CheckOrganizations(tc.limit)
@@ -984,7 +984,7 @@ func TestCheckConnectivityHandlesOrgError(t *testing.T) {
 	mockApiClient.EXPECT().GetOrganizations(100).Return(nil, expectedError)
 
 	// Create checker with mocked API client
-	checker := NewCheckerWithApiClient(mockNA, &logger, config, nil, mockApiClient)
+	checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 	// Run connectivity check
 	result, err := checker.CheckConnectivity()
@@ -1010,65 +1010,5 @@ func TestCheckConnectivityHandlesOrgError(t *testing.T) {
 
 	if len(result.Organizations) != 0 {
 		t.Error("Expected Organizations to be empty when fetch fails")
-	}
-}
-
-func TestCheckConnectivity_IncludesDirectoryChecks(t *testing.T) {
-	// Create a test server for host connectivity checks
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	// Override SnykHosts for testing
-	cleanup := SetSnykHostsForTesting([]string{"api.snyk.io"})
-	defer cleanup()
-
-	// Create controller for mocks
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Setup mocks
-	mockNA := mocks.NewMockNetworkAccess(ctrl)
-	logger := zerolog.Nop()
-	config := configuration.New()
-
-	// Set expectation for GetUnauthorizedHttpClient (used by checkHost)
-	mockNA.EXPECT().GetUnauthorizedHttpClient().Return(server.Client()).AnyTimes()
-	// Set expectation for GetHttpClient (used by API client initialization)
-	mockNA.EXPECT().GetHttpClient().Return(server.Client()).AnyTimes()
-	// Mock GetConfiguration
-	mockNA.EXPECT().GetConfiguration().Return(config).AnyTimes()
-
-	// Create checker
-	checker := NewChecker(mockNA, &logger, config, nil)
-
-	// Run connectivity check
-	result, err := checker.CheckConnectivity()
-
-	// Should not return an error
-	if err != nil {
-		t.Fatalf("Unexpected error from CheckConnectivity: %v", err)
-	}
-
-	// Verify that DirectoryResults are populated
-	if len(result.DirectoryResults) == 0 {
-		t.Error("Expected DirectoryResults to be populated, but got empty slice")
-	}
-
-	// Verify that CurrentUser is set
-	if result.CurrentUser == "" {
-		t.Error("Expected CurrentUser to be set")
-	}
-
-	// Verify each directory result has required fields
-	for i, dirResult := range result.DirectoryResults {
-		if dirResult.PathWanted == "" {
-			t.Errorf("DirectoryResult[%d]: Expected PathWanted to be set", i)
-		}
-		// PathFound should be set if no error occurred
-		if dirResult.Error == "" && dirResult.PathFound == "" {
-			t.Errorf("DirectoryResult[%d]: Expected PathFound to be set when no error", i)
-		}
 	}
 }

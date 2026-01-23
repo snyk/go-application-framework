@@ -7,7 +7,6 @@ A Go-based extension for the Snyk CLI that performs comprehensive network connec
 - **Comprehensive Endpoint Testing**: Tests connectivity to all Snyk API endpoints and services
 - **Proxy Detection & Validation**: Automatically detects and validates proxy configurations
 - **Organization Listing**: Displays your Snyk organizations when authenticated (with default organization highlighted)
-- **Directory Permission Checks**: Verifies permissions for directories used by Snyk (CLI downloads, config, cache, temp)
 - **Multiple Output Formats**: Human-readable (with color support) and JSON formats
 - **Actionable Diagnostics**: Provides specific recommendations based on connectivity issues
 - **Integration Ready**: Built as a workflow extension for the Snyk CLI using go-application-framework
@@ -107,22 +106,6 @@ Group ID                              Org ID                                Name
 ---------------------------------------------------------------------------------------------------------------------------------------
 a1b2c3d4-e5f6-7890-abcd-ef1234567890  d4e5f6a7-b890-cdef-1234-567890abcdef  My Organization       my-organization      Yes
 b2c3d4e5-f6a7-8901-bcde-f23456789012  e5f6a7b8-c901-def2-3456-7890abcdef12  Another Org           another-org
-
---- Current User Information ---
-Username: john.doe
-
---- Potential Snyk Used Configuration and CLI Download Directories ---
-
-Directory: /Users/john/.local/share/snyk-ls (Purpose: Default CLI Download Location for Language Server)
-  ✓ Exists
-  ✓ Writable (permissions: 0755)
-  Found 1 potential Snyk CLI binary/binaries:
-    • snyk-macos (permissions: 0755)
-
-Directory: /Users/john/Library/Caches/snyk/snyk-cli (Purpose: CLI Download Cache for GAF)
-  ⚠ Does not exist
-  Nearest existing parent: /Users/john/Library/Caches
-  ✓ Writable (permissions: 0755)
 ```
 
 ### JSON Output
@@ -170,30 +153,6 @@ snyk tools connectivity-check --json --experimental
     }
   ],
   "tokenPresent": true,
-  "currentUser": "john.doe",
-  "directoryResults": [
-    {
-      "pathWanted": "/Users/john/.local/share/snyk-ls",
-      "purpose": "Default CLI Download Location for Language Server",
-      "pathFound": "/Users/john/.local/share/snyk-ls",
-      "isWritable": true,
-      "permissions": "0755",
-      "binariesFound": [
-        {
-          "name": "snyk-macos",
-          "permissions": "0755"
-        }
-      ]
-    },
-    {
-      "pathWanted": "/Users/john/Library/Caches/snyk/snyk-cli",
-      "purpose": "CLI Download Cache for GAF",
-      "pathFound": "/Users/john/Library/Caches",
-      "isWritable": true,
-      "permissions": "0755",
-      "binariesFound": []
-    }
-  ],
   "startTime": "2024-01-15T10:00:00Z",
   "endTime": "2024-01-15T10:00:05Z"
 }
@@ -225,29 +184,6 @@ If authenticated but no organizations shown:
 - Verify your token has the correct permissions
 - Check if you belong to any organizations
 - Try re-authenticating with `snyk auth`
-
-#### Directory Permission Issues
-If directories show as not writable:
-- **Linux/macOS**: Check directory ownership with `ls -ld <path>`
-- **Windows**: Check folder properties and security settings
-- **Common fix**: Create the directory manually with appropriate permissions
-- **IDE extensions**: If CLI downloads or config writes fail, the tool will highlight which directory lacks write permissions
-
-The tool checks the following default directories used by Snyk:
-- **Default VS Code Extension CLI Download Location**:
-  - macOS: `~/Library/Application Support/snyk/vscode-cli` and `$XDG_DATA_HOME/snyk/vscode-cli` (defaults to `~/.local/share/snyk/vscode-cli`)
-  - Linux: `$XDG_DATA_HOME/snyk/vscode-cli` (defaults to `~/.local/share/snyk/vscode-cli`)
-  - Windows: `%LOCALAPPDATA%\snyk\vscode-cli`
-- **Default Eclipse Plugin CLI Download Location**: `~/.snyk` (Linux/macOS) or `%LOCALAPPDATA%\Snyk` (Windows)
-- **Default Visual Studio Plugin CLI Download Location**: `%LOCALAPPDATA%\Snyk` (Windows)
-- **Default Language Server CLI Download Location**: `$XDG_DATA_HOME/snyk-ls` (defaults to `~/.local/share/snyk-ls` on Linux/macOS)
-- **Language Server Config**:
-  - macOS: `~/Library/Application Support/snyk`
-  - Linux: `~/.config/snyk`
-  - Windows: `%LOCALAPPDATA%\snyk`
-- **Runtime Cache for Temporary Files**: `{UserCacheDir}/snyk/snyk-cli` (OS-specific cache location)
-
-**Note**: Callers may pass additional directories to check via the `additional-check-dirs` configuration parameter.
 
 ### Status Meanings
 
