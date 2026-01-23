@@ -56,12 +56,8 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 	return Organization{}, nil
 }
 
-// resolveOrgIdToUUID resolves an organization ID (UUID or slug) to a UUID
+// resolveOrgIdToUUID resolves a non-empty organization ID (UUID or slug) to a UUID
 func resolveOrgIdToUUID(orgId string, engine workflow.Engine, config configuration.Configuration) (*uuid.UUID, error) {
-	if orgId == "" {
-		return nil, nil
-	}
-
 	// Try to parse as UUID first to determine if it's a slug
 	parsedUUID, err := uuid.Parse(orgId)
 	if err == nil {
@@ -111,11 +107,11 @@ func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) L
 		params.RemoteUrl = &remoteUrl
 	}
 
-	orgUUID, err := resolveOrgIdToUUID(orgId, engine, config)
-	if err != nil {
-		return LdxSyncConfigResult{Error: err}
-	}
-	if orgUUID != nil {
+	if orgId != "" {
+		orgUUID, err := resolveOrgIdToUUID(orgId, engine, config)
+		if err != nil {
+			return LdxSyncConfigResult{Error: err}
+		}
 		params.Org = orgUUID
 	}
 
