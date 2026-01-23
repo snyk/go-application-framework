@@ -56,6 +56,34 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 	return Organization{}, nil
 }
 
+// resolveOrgIdToUUID resolves an organization ID (UUID or slug) to a UUID
+func resolveOrgIdToUUID(orgId string, engine workflow.Engine, config configuration.Configuration) (*uuid.UUID, error) {
+	if orgId == "" {
+		return nil, nil
+	}
+
+	// Try to parse as UUID first to determine if it's a slug
+	parsedUUID, err := uuid.Parse(orgId)
+	if err == nil {
+		// Already a valid UUID
+		return &parsedUUID, nil
+	}
+
+	// Not a UUID, try to resolve as slug
+	apiClient := newApiClient(engine, config)
+	resolvedOrgId, err := apiClient.GetOrgIdFromSlug(orgId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve organization slug: %w", err)
+	}
+
+	parsedUUID, err = uuid.Parse(resolvedOrgId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid organization ID: %w", err)
+	}
+
+	return &parsedUUID, nil
+}
+
 // GetUserConfigForProject retrieves LDX-Sync user configuration for the current project
 func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) LdxSyncConfigResult {
 	if dir == "" {
@@ -83,25 +111,12 @@ func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) L
 		params.RemoteUrl = &remoteUrl
 	}
 
-	if orgId != "" {
-		// Try to parse as UUID first to determine if it's a slug
-		_, err := uuid.Parse(orgId)
-		isSlugName := err != nil
-
-		if isSlugName {
-			// Resolve slug to org ID
-			apiClient := newApiClient(engine, config)
-			orgId, err = apiClient.GetOrgIdFromSlug(orgId)
-			if err != nil {
-				return LdxSyncConfigResult{Error: fmt.Errorf("failed to resolve organization slug: %w", err)}
-			}
-		}
-
-		parsedOrgId, err := uuid.Parse(orgId)
-		if err != nil {
-			return LdxSyncConfigResult{Error: fmt.Errorf("invalid organization ID: %w", err)}
-		}
-		params.Org = &parsedOrgId
+	orgUUID, err := resolveOrgIdToUUID(orgId, engine, config)
+	if err != nil {
+		return LdxSyncConfigResult{Error: err}
+	}
+	if orgUUID != nil {
+		params.Org = orgUUID
 	}
 
 	response, err := ldxClient.GetUserConfigWithResponse(context.Background(), params)
