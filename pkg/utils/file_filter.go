@@ -169,8 +169,8 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string {
 	type DotSnykRule struct {
 		Exclude struct {
-			Code   []DotSnykExclude `yaml:"code"`
-			Global []DotSnykExclude `yaml:"global"`
+			Code   []dotSnykExclude `yaml:"code"`
+			Global []dotSnykExclude `yaml:"global"`
 		} `yaml:"exclude"`
 	}
 
@@ -187,18 +187,19 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 	var globs []string
 	for _, rule := range allRules {
 		isExpired, err := rule.IsExpired()
+
+		// treat invalid expires as not expired
 		if err != nil {
 			fw.logger.Error().Msgf("parse .snyk expires: %v", err)
-			continue
 		}
+
 		if isExpired {
 			continue
 		}
 
-		// handle absolute paths
+		// skip absolute paths as they're only relevant for a local file system
 		if filepath.IsAbs(rule.Path) {
-			globs = append(globs, filepath.ToSlash(rule.Path)+"/**")
-			globs = append(globs, filepath.ToSlash(rule.Path))
+			fw.logger.Warn().Msgf("Absolute paths are currently not supported when excluding files (%s)", rule.Path)
 			continue
 		}
 
@@ -207,48 +208,71 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 	return globs
 }
 
-type DotSnykExclude struct {
-	Path    string `yaml:"-"`
-	Expires string `yaml:"expires,omitempty"`
+type dotSnykExclude struct {
+	Path    string
+	Expires string
 }
 
 // IsExpired returns true if the exclude rule is expired
-func (dse *DotSnykExclude) IsExpired() (bool, error) {
+func (dse *dotSnykExclude) IsExpired() (expired bool, err error) {
 	if dse.Expires == "" {
 		return false, nil
 	}
-	expires, err := time.Parse(time.RFC3339, dse.Expires)
-	if err != nil {
-		return false, err
+
+	formats := []string{
+		time.RFC3339,
+		time.RFC1123Z,
+		time.DateOnly,
+		time.StampMilli,
 	}
-	return time.Now().After(expires), nil
+
+	var expires time.Time
+	for _, format := range formats {
+		expires, err = time.Parse(format, dse.Expires)
+		if err == nil {
+			return time.Now().After(expires), nil
+		}
+	}
+	return false, err
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 // It correctly unmarshals a .snyk style exclude rule
-func (dse *DotSnykExclude) UnmarshalYAML(d *yaml.Node) error {
+func (dse *dotSnykExclude) UnmarshalYAML(d *yaml.Node) error {
 	if d == nil {
 		return nil
 	}
 
-	// handle []string format
+	// handle scalar format: "- /path/to/file"
 	if d.Kind == yaml.ScalarNode {
 		dse.Path = d.Value
 		return nil
 	}
 
-	// handle map format, i.e. DotSnykExclude
-	if d.Kind == yaml.MappingNode && len(d.Content) >= 2 {
-		dse.Path = d.Content[0].Value
+	// handle map format: "- /path/to/file: {expires: ..., reason: ...}"
+	// In YAML node structure: Content[0] = key node (path), Content[1] = value node (metadata map)
+	if d.Kind == yaml.MappingNode {
+		if len(d.Content) < 2 {
+			return fmt.Errorf("invalid mapping node: expected at least 2 content nodes, got %d", len(d.Content))
+		}
 
-		type metadata struct {
-			Expires string `yaml:"expires,omitempty"`
+		// Extract path from key node
+		keyNode := d.Content[0]
+		if keyNode.Kind != yaml.ScalarNode {
+			return fmt.Errorf("expected scalar node for path, got %v", keyNode.Kind)
 		}
-		var m metadata
-		if err := d.Content[1].Decode(&m); err != nil {
-			return err
+		dse.Path = keyNode.Value
+
+		// Extract expires from value node (metadata map)
+		valueNode := d.Content[1]
+		if valueNode.Kind == yaml.MappingNode {
+			var metadata map[string]string
+			if err := valueNode.Decode(&metadata); err != nil {
+				return err
+			}
+			dse.Expires = metadata["expires"]
 		}
-		dse.Expires = m.Expires
+
 		return nil
 	}
 
