@@ -3,6 +3,10 @@ package config_utils
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 	featureflaggateway "github.com/snyk/go-application-framework/pkg/apiclients/feature_flag_gateway"
@@ -14,59 +18,77 @@ import (
 var evaluateFlags = featureflaggateway.EvaluateFlags
 var errInvalidEvaluateFlagsResponse = errors.New("invalid evaluateFlags response")
 
-func AddFeatureFlagGatewayToConfig(engine workflow.Engine, configKey string, featureFlagName string) {
+func AddFeatureFlagsToConfig(
+	engine workflow.Engine,
+	configKeyToFlag map[string]string,
+) {
 	config := engine.GetConfiguration()
-	err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
-	if err != nil {
-		engine.GetLogger().Err(err).Msgf("Failed to add dependency for %s", configKey)
-	}
+	flags := slices.Collect(maps.Values(configKeyToFlag))
+	sort.Strings(flags)
 
-	callback := func(c configuration.Configuration, existingValue any) (any, error) {
-		if existingValue != nil {
-			return existingValue, nil
+	for configKey, flagName := range configKeyToFlag {
+		err := config.AddKeyDependency(configKey, configuration.ORGANIZATION)
+		if err != nil {
+			engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", configKey)
 		}
-		enabled, enabledErr := isFeatureEnabled(
-			c,
-			engine,
-			config.GetString(configuration.ORGANIZATION),
-			featureFlagName,
-		)
-		if enabledErr != nil {
-			return enabled, fmt.Errorf("check feature flag: %w", enabledErr)
-		}
-		return enabled, nil
-	}
 
-	config.AddDefaultValue(configKey, callback)
+		callback := func(c configuration.Configuration, existingValue any) (any, error) {
+			if existingValue != nil {
+				return existingValue, nil
+			}
+
+			orgID := c.GetString(configuration.ORGANIZATION)
+			cacheKey := fmt.Sprintf("hidden_flags_%s:%s", orgID, strings.Join(flags, ","))
+			if cached := c.Get(cacheKey); cached != nil {
+				if m, ok := cached.(map[string]bool); ok {
+					return m[flagName], nil
+				}
+			}
+
+			res, err := areFeaturesEnabled(c, engine, orgID, flags...)
+			if err != nil {
+				return false, fmt.Errorf("check feature flags batch: %w", err)
+			}
+			if err := config.AddKeyDependency(cacheKey, configuration.ORGANIZATION); err != nil {
+				engine.GetLogger().Err(err).Msgf("failed to add dependency for %s", cacheKey)
+			}
+			c.Set(cacheKey, res)
+
+			return res[flagName], nil
+		}
+		config.AddDefaultValue(configKey, callback)
+	}
 }
 
-func isFeatureEnabled(
+func areFeaturesEnabled(
 	config configuration.Configuration,
 	engine workflow.Engine,
 	orgID string,
-	flag string,
-) (bool, error) {
+	flags ...string,
+) (map[string]bool, error) {
 	orgUUID, err := uuid.Parse(orgID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	resp, err := evaluateFlags(config, engine, []string{flag}, orgUUID)
+	resp, err := evaluateFlags(config, engine, flags, orgUUID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	if !validEvaluateFlagsResponse(resp) {
-		return false, errInvalidEvaluateFlagsResponse
+		return nil, errInvalidEvaluateFlagsResponse
 	}
 
+	results := make(map[string]bool, len(flags))
 	evaluations := resp.ApplicationvndApiJSON200.Data.Attributes.Evaluations
 	for _, e := range evaluations {
-		if e.Key == flag {
-			return *e.Value, nil
+		if e.Value != nil {
+			results[e.Key] = *e.Value
 		}
 	}
-	return false, nil
+
+	return results, nil
 }
 
 func validEvaluateFlagsResponse(resp *v20241015.ListFeatureFlagsResponse) bool {
