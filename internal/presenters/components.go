@@ -47,8 +47,9 @@ type SarifPresenter struct {
 
 const valueStyleWidth = 80
 
+var urlPattern = regexp.MustCompile(`https?://[^\s]+`)
+
 func containsURL(text string) bool {
-	urlPattern := regexp.MustCompile(`https?://[^\s]+`)
 	return urlPattern.MatchString(text)
 }
 
