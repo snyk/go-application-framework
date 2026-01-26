@@ -3,7 +3,7 @@
 		"$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
 		"version": "2.1.0",
 		"runs": [
-		{{- range $result := $.Results}}
+		{{- range $resultIndex, $result := $.Results}}
 			{
 				"tool": {
 					"driver" : {
@@ -234,7 +234,11 @@
 					{{- end }}
 				},
 				"automationDetails": {
-					"id": "{{- getAutomationDetailsId (getValueFromConfig "project-name") "sast" }}"
+					{{- $projectName := getValueFromConfig "project-name" }}
+					{{- if not $projectName }} {{- $projectName = printf "%d" $resultIndex }}
+					{{- else }} {{- $projectName = (printf "%s/%d" $projectName $resultIndex) }} 
+					{{- end }}
+					"id": "{{- getAutomationDetailsId $projectName "sast" }}"
 				}
 			}
 		{{- end}}
