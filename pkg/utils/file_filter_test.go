@@ -59,7 +59,7 @@ func TestFileFilter_GetAllFiles(t *testing.T) {
 	})
 }
 
-func TestFileFilter_GetRules(t *testing.T) {
+func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 	// create temp filesystem
 	tempDir := t.TempDir()
 	tempFile1 := filepath.Join(tempDir, "test1.ts")
@@ -119,6 +119,91 @@ func TestFileFilter_GetRules(t *testing.T) {
 			[]string{
 				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)), // apply ignore in subDirs
 				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),    // apply ignore in curDir
+			},
+			fileFilter.defaultRules...,
+		)
+
+		assert.ElementsMatch(t, expectedRules, actualRules)
+	})
+}
+
+func TestFileFilter_GetRules_dotSnykFormat(t *testing.T) {
+	// create temp filesystem
+	tempDir := t.TempDir()
+	tempFile1 := "test1.ts"
+	tempFilePath1 := filepath.Join(tempDir, tempFile1)
+	createFileInPath(t, tempFilePath1, []byte{})
+	tempFile2 := "test2.ts"
+	tempFilePath2 := filepath.Join(tempDir, tempFile2)
+	createFileInPath(t, tempFilePath2, []byte{})
+
+	t.Run("gets ignore rules for .snyk excludes", func(t *testing.T) {
+		// adds .snyk ignore file to filesystem
+		ignoreFile := filepath.Join(tempDir, ".snyk")
+		ignoreFileContent := fmt.Sprintf(`# Snyk (https://snyk.io) policy file
+version: v1.25.1
+ignore: {}
+exclude:
+  code:
+    - %s
+    - %s:
+        reason: testing valid expiry
+        expires: 3026-01-01T00:00:00Z
+        created: 2000-01-01T00:00:00Z
+`, tempFile1, tempFile2)
+		createFileInPath(t, ignoreFile, []byte(ignoreFileContent))
+
+		// create fileFilter
+		ruleFiles := []string{".snyk"}
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		actualRules, err := fileFilter.GetRules(ruleFiles)
+		assert.NoError(t, err)
+
+		// create expected rules
+		expectedRules := append(
+			[]string{
+				fmt.Sprintf("%s/**/%s/**", filepath.ToSlash(tempDir), tempFile1),
+				fmt.Sprintf("%s/**/%s", filepath.ToSlash(tempDir), tempFile1),
+				fmt.Sprintf("%s/**/%s/**", filepath.ToSlash(tempDir), tempFile2),
+				fmt.Sprintf("%s/**/%s", filepath.ToSlash(tempDir), tempFile2),
+			},
+			fileFilter.defaultRules...,
+		)
+
+		assert.ElementsMatch(t, expectedRules, actualRules)
+	})
+
+	t.Run("does not apply ignore rules for expired .snyk excludes", func(t *testing.T) {
+		// adds .snyk ignore file to filesystem
+		ignoreFile := filepath.Join(tempDir, ".snyk")
+		ignoreFileContent := fmt.Sprintf(`# Snyk (https://snyk.io) policy file
+version: v1.25.1
+ignore: {}
+exclude:
+  code:
+    - %s:
+        reason: testing valid expiry
+        expires: 3026-01-01T00:00:00Z
+        created: 2000-01-01T00:00:00Z
+  global:
+    - %s:
+        reason: testing expired ignore
+        expires: Fri, 01 Jan 1999 00:00:00 +0000
+        created: Mon, 01 Jan 1990 00:00:00 +0000
+`, tempFile1, tempFile2)
+		createFileInPath(t, ignoreFile, []byte(ignoreFileContent))
+
+		// create fileFilter
+		ruleFiles := []string{".snyk"}
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		actualRules, err := fileFilter.GetRules(ruleFiles)
+		assert.NoError(t, err)
+
+		// create expected rules
+		expectedRules := append(
+			[]string{
+				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)),
+				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),
 			},
 			fileFilter.defaultRules...,
 		)
@@ -328,19 +413,23 @@ func testCases(t *testing.T) []fileFilterTestCase {
 exclude:
   code:
     - path/to/code/ignore1
-    - path/to/code/ignore2
+    - path/to/code/ignore2:
+        reason: testing map format
+        expires: 3026-01-01T00:00:00Z
   global:
     - path/to/global/ignore1
-    - path/to/global/ignore2
+    - path/to/global/ignore2:
+        reason: testing expired rule
+        expires: 1999-01-01T00:00:00Z
 `,
 			},
 			filesToFilter: []string{
 				"path/to/code/ignore1/ignoredFile.java",
 				"path/to/code/ignore2/ignoredFile.java",
 				"path/to/global/ignore1/ignoredFile.java",
-				"path/to/global/ignore2/ignoredFile.java",
+				"path/to/global/ignore2/ignoredFile.java", // expired, should NOT be filtered
 			},
-			expectedFiles: []string{"path/to/code/notIgnored.java", ".snyk"},
+			expectedFiles: []string{"path/to/code/notIgnored.java", "path/to/global/ignore2/ignoredFile.java", ".snyk"},
 		},
 	}
 	return cases
@@ -559,4 +648,62 @@ func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
 		// With "/*" pattern, all files should be ignored
 		assert.Empty(t, filteredFilesList, "All files should be filtered out with /* pattern")
 	})
+}
+
+func TestDotSnykExclude_isExpired(t *testing.T) {
+	expiryTests := []struct {
+		name        string
+		expires     string
+		expected    bool
+		expectError bool
+	}{
+		{
+			name:        "ISO 8601",
+			expires:     "2000-01-01T00:00:00Z",
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:        "Javascript ISO format (YYYY-MM-DDThh:mm:ss.fffZ)",
+			expires:     "2000-12-31T00:00:00.000Z",
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:        "Date only format (YYYY-MM-DD)",
+			expires:     "2000-12-31",
+			expected:    true,
+			expectError: false,
+		},
+		{
+			name:        "RFC 2822",
+			expires:     "Mon, 01 Jan 3000 00:00:00 +0000",
+			expected:    false,
+			expectError: false,
+		},
+		{
+			name:        "invalid timestamp",
+			expires:     "invalid timestamp",
+			expected:    false,
+			expectError: true,
+		},
+		{
+			name:        "no expiry",
+			expires:     "",
+			expected:    false,
+			expectError: false,
+		},
+	}
+	for _, test := range expiryTests {
+		t.Run(test.name, func(t *testing.T) {
+			exclude := newDotSnykExclude("test/path", test.expires)
+			isExpired, err := exclude.IsExpired()
+			if test.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, test.expected, isExpired)
+		})
+	}
 }
