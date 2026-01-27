@@ -1,4 +1,4 @@
-package testapi
+package ufm_helpers
 
 import (
 	"strings"
@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetRemediationSummary(t *testing.T) {
 	t.Run("no issues returns empty summary", func(t *testing.T) {
-		summary := GetRemediationSummary([]Issue{})
+		summary := GetRemediationSummary([]testapi.Issue{})
 
 		require.Empty(t, summary.Upgrades)
 		require.Empty(t, summary.Pins)
@@ -19,7 +20,7 @@ func TestGetRemediationSummary(t *testing.T) {
 	})
 
 	t.Run("an issue containing no fix action returns empty summary", func(t *testing.T) {
-		issues := []Issue{
+		issues := []testapi.Issue{
 			newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 				withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 			),
@@ -34,10 +35,10 @@ func TestGetRemediationSummary(t *testing.T) {
 
 	t.Run("pins", func(t *testing.T) {
 		t.Run("single pin for single package returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(FullyResolved, "vulnerable", "1.0.1"),
+					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 			}
 
@@ -54,14 +55,14 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("two pins for two different packages returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(FullyResolved, "vulnerable", "1.0.1"),
+					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable-2@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable-2@1.0.0"),
-					withPinFix(FullyResolved, "vulnerable-2", "1.0.2"),
+					withPinFix(testapi.FullyResolved, "vulnerable-2", "1.0.2"),
 				),
 			}
 
@@ -73,14 +74,14 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("two pins for the same package with different vulns merge into one pin", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(FullyResolved, "vulnerable", "1.0.1"),
+					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(FullyResolved, "vulnerable", "1.0.2"),
+					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.2"),
 				),
 			}
 
@@ -95,11 +96,11 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("a pin with multiple dependency paths returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
 					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(FullyResolved, "vulnerable", "1.0.1"),
+					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 			}
 
@@ -115,14 +116,14 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("two pins for the same package with same vuln but different versions create two pins", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(FullyResolved, "vulnerable", "1.0.1"),
+					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 				newTestIssue(t, "VULN_ID_1", "vulnerable@2.0.0",
 					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@2.0.0"),
-					withPinFix(FullyResolved, "vulnerable", "2.0.1"),
+					withPinFix(testapi.FullyResolved, "vulnerable", "2.0.1"),
 				),
 			}
 
@@ -142,10 +143,10 @@ func TestGetRemediationSummary(t *testing.T) {
 
 	t.Run("upgrades", func(t *testing.T) {
 		t.Run("upgrade for single package with single path returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -162,10 +163,10 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrade with drop for single package returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct@1.2.3"}), // Drop - shorter path
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3"}), // Drop - shorter path
 				),
 			}
 
@@ -181,11 +182,11 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrades for single package with multiple resolved paths returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(FullyResolved,
+					withUpgradeFix(testapi.FullyResolved,
 						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
 						[]string{"root@1.0.0", "direct-2@1.0.5", "vulnerable@1.0.1"},
 					),
@@ -200,11 +201,11 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrade for single package with an unresolved path and a resolved path returns upgrade and unresolved", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 					withDepPaths("root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(PartiallyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
+					withUpgradeFix(testapi.PartiallyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -217,11 +218,11 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrade for single package with fully resolved fix results returns upgrade and NO unresolved", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 					withDepPaths("root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -233,14 +234,14 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrade for single package with multiple vulns returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -253,14 +254,14 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrade for multiple packages with multiple vulns returns valid summary with merged upgrades", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable-1@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable-1@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable-1@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable-1@1.0.1"}),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable-2@1.0.0",
 					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable-2@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct@1.4.0", "vulnerable-2@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.4.0", "vulnerable-2@1.0.1"}),
 				),
 			}
 
@@ -275,14 +276,14 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrades for multiple packages to different direct deps returns multiple upgrades", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable-1@1.0.0",
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable-1@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable-1@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable-1@1.0.1"}),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable-2@1.0.0",
 					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable-2@1.0.0"),
-					withUpgradeFix(FullyResolved, []string{"root@1.0.0", "direct-2@1.4.0", "vulnerable-2@1.0.1"}),
+					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct-2@1.4.0", "vulnerable-2@1.0.1"}),
 				),
 			}
 
@@ -296,12 +297,12 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrades for single package with multiple resolved paths of different lengths returns valid summary", func(t *testing.T) {
 			// This tests that path matching works correctly when upgrade paths
 			// don't match dep paths in order or length
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 					withDepPaths("root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
 					// Note: upgrade paths are in reverse order compared to dep paths
-					withUpgradeFix(FullyResolved,
+					withUpgradeFix(testapi.FullyResolved,
 						[]string{"root@1.0.0", "direct-2@1.0.5", "transitive-1@1.0.4", "vulnerable@1.0.1"},
 						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
 					),
@@ -316,11 +317,11 @@ func TestGetRemediationSummary(t *testing.T) {
 		})
 
 		t.Run("upgrade for single package with multiple paths pointing to same direct dep does not duplicate fixes", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "another-transitive@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(PartiallyResolved,
+					withUpgradeFix(testapi.PartiallyResolved,
 						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
 						[]string{"root@1.0.0", "direct-1@1.2.3", "another-transitive@1.0.0", "vulnerable@1.0.1"},
 					),
@@ -341,7 +342,7 @@ func TestGetRemediationSummary(t *testing.T) {
 
 	t.Run("unresolved", func(t *testing.T) {
 		t.Run("an issue containing an unresolved fix action returns valid summary", func(t *testing.T) {
-			issues := []Issue{
+			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
 					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 					withUnresolvedFix(),
@@ -359,12 +360,12 @@ func TestGetRemediationSummary(t *testing.T) {
 
 // Test helpers
 
-type issueOption func(*FindingData)
+type issueOption func(*testapi.FindingData)
 
 func withDepPaths(path ...string) issueOption {
-	return func(f *FindingData) {
-		var ev Evidence
-		_ = ev.FromDependencyPathEvidence(DependencyPathEvidence{
+	return func(f *testapi.FindingData) {
+		var ev testapi.Evidence
+		_ = ev.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
 			Source: "dependency_path",
 			Path:   parsePath(path),
 		})
@@ -372,19 +373,19 @@ func withDepPaths(path ...string) issueOption {
 	}
 }
 
-func withUpgradeFix(outcome FixAppliedOutcome, paths ...[]string) issueOption {
-	return func(f *FindingData) {
-		var upgradePaths []UpgradePath
+func withUpgradeFix(outcome testapi.FixAppliedOutcome, paths ...[]string) issueOption {
+	return func(f *testapi.FindingData) {
+		var upgradePaths []testapi.UpgradePath
 		for _, path := range paths {
-			upgradePaths = append(upgradePaths, UpgradePath{
+			upgradePaths = append(upgradePaths, testapi.UpgradePath{
 				DependencyPath: parsePath(path),
 				IsDrop:         false,
 			})
 		}
 
-		var action FixAction
-		_ = action.FromUpgradePackageAdvice(UpgradePackageAdvice{
-			Format:       UpgradePackageAdviceFormatUpgradePackageAdvice,
+		var action testapi.FixAction
+		_ = action.FromUpgradePackageAdvice(testapi.UpgradePackageAdvice{
+			Format:       testapi.UpgradePackageAdviceFormatUpgradePackageAdvice,
 			PackageName:  "vulnerable",
 			UpgradePaths: upgradePaths,
 		})
@@ -393,11 +394,11 @@ func withUpgradeFix(outcome FixAppliedOutcome, paths ...[]string) issueOption {
 	}
 }
 
-func withPinFix(outcome FixAppliedOutcome, pkgName, pinVersion string) issueOption {
-	return func(f *FindingData) {
-		var action FixAction
-		_ = action.FromPinPackageAdvice(PinPackageAdvice{
-			Format:      PinPackageAdviceFormatPinPackageAdvice,
+func withPinFix(outcome testapi.FixAppliedOutcome, pkgName, pinVersion string) issueOption {
+	return func(f *testapi.FindingData) {
+		var action testapi.FixAction
+		_ = action.FromPinPackageAdvice(testapi.PinPackageAdvice{
+			Format:      testapi.PinPackageAdviceFormatPinPackageAdvice,
 			PackageName: pkgName,
 			PinVersion:  pinVersion,
 		})
@@ -407,24 +408,24 @@ func withPinFix(outcome FixAppliedOutcome, pkgName, pinVersion string) issueOpti
 }
 
 func withUnresolvedFix() issueOption {
-	return func(f *FindingData) {
-		setFix(f, Unresolved, nil)
+	return func(f *testapi.FindingData) {
+		setFix(f, testapi.Unresolved, nil)
 	}
 }
 
-func setFix(f *FindingData, outcome FixAppliedOutcome, action *FixAction) {
+func setFix(f *testapi.FindingData, outcome testapi.FixAppliedOutcome, action *testapi.FixAction) {
 	f.Relationships = &struct {
 		Asset *struct {
 			Data *struct {
 				Id   uuid.UUID `json:"id"`
 				Type string    `json:"type"`
 			} `json:"data,omitempty"`
-			Links IoSnykApiCommonRelatedLink `json:"links"`
-			Meta  *IoSnykApiCommonMeta       `json:"meta,omitempty"`
+			Links testapi.IoSnykApiCommonRelatedLink `json:"links"`
+			Meta  *testapi.IoSnykApiCommonMeta       `json:"meta,omitempty"`
 		} `json:"asset,omitempty"`
 		Fix *struct {
 			Data *struct {
-				Attributes *FixAttributes `json:"attributes,omitempty"`
+				Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
 				Id         uuid.UUID      `json:"id"`
 				Type       string         `json:"type"`
 			} `json:"data,omitempty"`
@@ -437,58 +438,58 @@ func setFix(f *FindingData, outcome FixAppliedOutcome, action *FixAction) {
 		} `json:"org,omitempty"`
 		Policy *struct {
 			Data *struct {
-				Attributes *PolicyAttributes `json:"attributes,omitempty"`
+				Attributes *testapi.PolicyAttributes `json:"attributes,omitempty"`
 				Id         uuid.UUID         `json:"id"`
 				Type       string            `json:"type"`
 			} `json:"data,omitempty"`
-			Links IoSnykApiCommonRelatedLink `json:"links"`
-			Meta  *IoSnykApiCommonMeta       `json:"meta,omitempty"`
+			Links testapi.IoSnykApiCommonRelatedLink `json:"links"`
+			Meta  *testapi.IoSnykApiCommonMeta       `json:"meta,omitempty"`
 		} `json:"policy,omitempty"`
 		Test *struct {
 			Data *struct {
 				Id   uuid.UUID `json:"id"`
 				Type string    `json:"type"`
 			} `json:"data,omitempty"`
-			Links IoSnykApiCommonRelatedLink `json:"links"`
-			Meta  *IoSnykApiCommonMeta       `json:"meta,omitempty"`
+			Links testapi.IoSnykApiCommonRelatedLink `json:"links"`
+			Meta  *testapi.IoSnykApiCommonMeta       `json:"meta,omitempty"`
 		} `json:"test,omitempty"`
 	}{
 		Fix: &struct {
 			Data *struct {
-				Attributes *FixAttributes `json:"attributes,omitempty"`
+				Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
 				Id         uuid.UUID      `json:"id"`
 				Type       string         `json:"type"`
 			} `json:"data,omitempty"`
 		}{
 			Data: &struct {
-				Attributes *FixAttributes `json:"attributes,omitempty"`
-				Id         uuid.UUID      `json:"id"`
+				Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
+				Id         uuid.UUID      `json:"id"`	
 				Type       string         `json:"type"`
 			}{
-				Attributes: &FixAttributes{Outcome: outcome, Action: action},
+				Attributes: &testapi.FixAttributes{Outcome: outcome, Action: action},
 			},
 		},
 	}
 }
 
-func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) Issue {
+func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) testapi.Issue {
 	t.Helper()
 
 	pkgName, pkgVersion := parsePkg(pkg)
 	findingID := uuid.New()
 	now := time.Now()
 
-	var loc FindingLocation
-	_ = loc.FromPackageLocation(PackageLocation{
+	var loc testapi.FindingLocation
+	_ = loc.FromPackageLocation(testapi.PackageLocation{
 		Type:    "package",
-		Package: Package{Name: pkgName, Version: pkgVersion},
+		Package: testapi.Package{Name: pkgName, Version: pkgVersion},
 	})
 
-	var problem Problem
-	_ = problem.FromSnykVulnProblem(SnykVulnProblem{
+	var problem testapi.Problem
+	_ = problem.FromSnykVulnProblem(testapi.SnykVulnProblem{
 		Id:                       vulnID,
 		Source:                   "snyk_vuln",
-		Severity:                 SeverityHigh,
+		Severity:                 testapi.SeverityHigh,
 		CvssBaseScore:            7.5,
 		CvssVector:               "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
 		CreatedAt:                now,
@@ -501,22 +502,22 @@ func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) Issue {
 		IsMalicious:              false,
 		IsSocialMediaTrending:    false,
 		Credits:                  []string{},
-		References:               []SnykvulndbReferenceLinks{},
-		CvssSources:              []SnykvulndbCvssSource{},
+		References:               []testapi.SnykvulndbReferenceLinks{},
+		CvssSources:              []testapi.SnykvulndbCvssSource{},
 		InitiallyFixedInVersions: []string{"1.0.1"},
-		ExploitDetails:           SnykvulndbExploitDetails{MaturityLevels: []SnykvulndbExploitMaturityLevel{}, Sources: []string{}},
+		ExploitDetails:           testapi.SnykvulndbExploitDetails{MaturityLevels: []testapi.SnykvulndbExploitMaturityLevel{}, Sources: []string{}},
 	})
 
-	finding := &FindingData{
+	finding := &testapi.FindingData{
 		Id: &findingID,
-		Attributes: &FindingAttributes{
-			FindingType: FindingTypeSca,
+		Attributes: &testapi.FindingAttributes{
+			FindingType: testapi.FindingTypeSca,
 			Key:         vulnID,
 			Title:       "Test vulnerability " + vulnID,
 			Description: "Description for " + vulnID,
-			Rating:      Rating{Severity: SeverityHigh},
-			Problems:    []Problem{problem},
-			Locations:   []FindingLocation{loc},
+			Rating:      testapi.Rating{Severity: testapi.SeverityHigh},
+			Problems:    []testapi.Problem{problem},
+			Locations:   []testapi.FindingLocation{loc},
 		},
 	}
 
@@ -524,16 +525,16 @@ func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) Issue {
 		opt(finding)
 	}
 
-	issue, err := NewIssueFromFindings([]*FindingData{finding})
+	issue, err := testapi.NewIssueFromFindings([]*testapi.FindingData{finding})
 	require.NoError(t, err)
 	return issue
 }
 
-func parsePath(path []string) []Package {
-	var pkgs []Package
+func parsePath(path []string) []testapi.Package {
+	var pkgs []testapi.Package
 	for _, p := range path {
 		name, version := parsePkg(p)
-		pkgs = append(pkgs, Package{Name: name, Version: version})
+		pkgs = append(pkgs, testapi.Package{Name: name, Version: version})
 	}
 	return pkgs
 }

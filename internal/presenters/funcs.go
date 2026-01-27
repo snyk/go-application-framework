@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -356,7 +357,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["convertTypeToIssueName"] = convertTypeToIssueName
 	defaultMap["sortAndFilterIssues"] = sortAndFilterIssues(config)
 	defaultMap["determineProductNameFromFindingTypes"] = determineProductNameFromFindingTypes
-	defaultMap["getRemediationSummary"] = testapi.GetRemediationSummary
+	defaultMap["getRemediationSummary"] = ufm_helpers.GetRemediationSummary
 	defaultMap["getSeverities"] = func() []string {
 		return json_schemas.DEFAULT_SEVERITIES
 	}

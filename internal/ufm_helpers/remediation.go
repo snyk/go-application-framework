@@ -1,16 +1,17 @@
-package testapi
+package ufm_helpers
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"golang.org/x/mod/semver"
 )
 
 type RemediationSummary struct {
 	Upgrades   []*UpgradeGroup
 	Pins       []*PinGroup
-	Unresolved []Issue
+	Unresolved []testapi.Issue
 }
 
 func (s *RemediationSummary) HasUpgrades() bool {
@@ -26,22 +27,22 @@ func (s *RemediationSummary) HasUnresolved() bool {
 }
 
 type UpgradeGroup struct {
-	FromPackage Package
-	ToPackage   Package
-	FixedIssues []Issue
+	FromPackage testapi.Package
+	ToPackage   testapi.Package
+	FixedIssues []testapi.Issue
 }
 
 type PinGroup struct {
-	FromPackage Package
-	ToPackage   Package
-	FixedIssues []Issue
+	FromPackage testapi.Package
+	ToPackage   testapi.Package
+	FixedIssues []testapi.Issue
 }
 
-func GetRemediationSummary(issues []Issue) *RemediationSummary {
+func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 	summary := &RemediationSummary{
 		Upgrades:   []*UpgradeGroup{},
 		Pins:       []*PinGroup{},
-		Unresolved: []Issue{},
+		Unresolved: []testapi.Issue{},
 	}
 
 	upgradeMap := make(map[string]*UpgradeGroup)
@@ -57,7 +58,7 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 			continue
 		}
 
-		if fixAttrs.Outcome == Unresolved {
+		if fixAttrs.Outcome == testapi.Unresolved {
 			summary.Unresolved = append(summary.Unresolved, issue)
 			continue
 		}
@@ -72,11 +73,11 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 		}
 
 		switch advice := action.(type) {
-		case UpgradePackageAdvice:
+		case testapi.UpgradePackageAdvice:
 			if !processUpgradeAdvice(issue, advice, fixAttrs.Outcome, upgradeMap) {
 				summary.Unresolved = append(summary.Unresolved, issue)
 			}
-		case PinPackageAdvice:
+		case testapi.PinPackageAdvice:
 			processPinAdvice(issue, advice, pinMap)
 		}
 	}
@@ -91,7 +92,7 @@ func GetRemediationSummary(issues []Issue) *RemediationSummary {
 	return summary
 }
 
-func getFixAttributes(issue Issue) *FixAttributes {
+func getFixAttributes(issue testapi.Issue) *testapi.FixAttributes {
 	for _, finding := range issue.GetFindings() {
 		if finding.Relationships != nil &&
 			finding.Relationships.Fix != nil &&
@@ -103,17 +104,17 @@ func getFixAttributes(issue Issue) *FixAttributes {
 	return nil
 }
 
-func processUpgradeAdvice(issue Issue, advice UpgradePackageAdvice, outcome FixAppliedOutcome, upgradeMap map[string]*UpgradeGroup) bool {
+func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvice, outcome testapi.FixAppliedOutcome, upgradeMap map[string]*UpgradeGroup) bool {
 	if len(advice.UpgradePaths) == 0 {
 		return false
 	}
 
-	depPaths, ok := issue.GetData(DataKeyDependencyPaths)
+	depPaths, ok := issue.GetData(testapi.DataKeyDependencyPaths)
 	if !ok || depPaths == nil {
 		return false
 	}
 
-	paths, ok := depPaths.([][]Package)
+	paths, ok := depPaths.([][]testapi.Package)
 	if !ok || len(paths) == 0 {
 		return false
 	}
@@ -141,10 +142,10 @@ func processUpgradeAdvice(issue Issue, advice UpgradePackageAdvice, outcome FixA
 	}
 
 	hasUnmatchedPaths := matchedPaths < len(paths)
-	return outcome == FullyResolved || !hasUnmatchedPaths
+	return outcome == testapi.FullyResolved || !hasUnmatchedPaths
 }
 
-func addOrUpdateUpgradeGroup(upgradeMap map[string]*UpgradeGroup, key string, fromPkg, toPkg Package, issue Issue) {
+func addOrUpdateUpgradeGroup(upgradeMap map[string]*UpgradeGroup, key string, fromPkg, toPkg testapi.Package, issue testapi.Issue) {
 	if existing, exists := upgradeMap[key]; exists {
 		if !containsIssue(existing.FixedIssues, issue) {
 			existing.FixedIssues = append(existing.FixedIssues, issue)
@@ -156,15 +157,15 @@ func addOrUpdateUpgradeGroup(upgradeMap map[string]*UpgradeGroup, key string, fr
 		upgradeMap[key] = &UpgradeGroup{
 			FromPackage: fromPkg,
 			ToPackage:   toPkg,
-			FixedIssues: []Issue{issue},
+			FixedIssues: []testapi.Issue{issue},
 		}
 	}
 }
 
-func processPinAdvice(issue Issue, advice PinPackageAdvice, pinMap map[string][]*PinGroup) {
+func processPinAdvice(issue testapi.Issue, advice testapi.PinPackageAdvice, pinMap map[string][]*PinGroup) {
 	vulnerablePkg := getVulnerablePackage(issue)
 	key := vulnerablePkg.Name
-	toPkg := Package{Name: advice.PackageName, Version: advice.PinVersion}
+	toPkg := testapi.Package{Name: advice.PackageName, Version: advice.PinVersion}
 
 	existingPins, exists := pinMap[key]
 	if exists {
@@ -194,29 +195,29 @@ func processPinAdvice(issue Issue, advice PinPackageAdvice, pinMap map[string][]
 			}
 			pinMap[key] = append(existingPins, &PinGroup{
 				FromPackage: vulnerablePkg,
-				ToPackage:   Package{Name: toPkg.Name, Version: highestToVersion},
-				FixedIssues: []Issue{issue},
+				ToPackage:   testapi.Package{Name: toPkg.Name, Version: highestToVersion},
+				FixedIssues: []testapi.Issue{issue},
 			})
 		}
 	} else {
 		pinMap[key] = []*PinGroup{{
 			FromPackage: vulnerablePkg,
 			ToPackage:   toPkg,
-			FixedIssues: []Issue{issue},
+			FixedIssues: []testapi.Issue{issue},
 		}}
 	}
 }
 
-func getVulnerablePackage(issue Issue) Package {
-	if componentName, ok := issue.GetData(DataKeyComponentName); ok {
+func getVulnerablePackage(issue testapi.Issue) testapi.Package {
+	if componentName, ok := issue.GetData(testapi.DataKeyComponentName); ok {
 		if name, ok := componentName.(string); ok {
 			version := ""
-			if componentVersion, ok := issue.GetData(DataKeyComponentVersion); ok {
+			if componentVersion, ok := issue.GetData(testapi.DataKeyComponentVersion); ok {
 				if v, ok := componentVersion.(string); ok {
 					version = v
 				}
 			}
-			return Package{Name: name, Version: version}
+			return testapi.Package{Name: name, Version: version}
 		}
 	}
 
@@ -234,10 +235,10 @@ func getVulnerablePackage(issue Issue) Package {
 		}
 	}
 
-	return Package{}
+	return testapi.Package{}
 }
 
-func pathsMatch(upgradePath, depPath []Package) bool {
+func pathsMatch(upgradePath, depPath []testapi.Package) bool {
 	if len(upgradePath) > len(depPath) {
 		return false
 	}
@@ -249,15 +250,15 @@ func pathsMatch(upgradePath, depPath []Package) bool {
 	return true
 }
 
-func containsIssue(issues []Issue, issue Issue) bool {
+func containsIssue(issues []testapi.Issue, issue testapi.Issue) bool {
 	issueID := issue.GetID()
-	issueVersion, _ := issue.GetData(DataKeyComponentVersion)
+	issueVersion, _ := issue.GetData(testapi.DataKeyComponentVersion)
 
 	for _, existing := range issues {
 		if existing.GetID() != issueID {
 			continue
 		}
-		existingVersion, _ := existing.GetData(DataKeyComponentVersion)
+		existingVersion, _ := existing.GetData(testapi.DataKeyComponentVersion)
 		if issueVersion == existingVersion {
 			return true
 		}
