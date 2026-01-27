@@ -221,7 +221,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
                 {{- $toPkg := printf "%s@%s" $upgrade.ToPackage.Name $upgrade.ToPackage.Version | bold }}
                 {{- printf "\n  Upgrade %s to %s to fix" $fromPkg $toPkg }}
                 {{- "\n" }}
-                {{- range $issue := $upgrade.Fixes }}
+                {{- range $issue := $upgrade.FixedIssues }}
                     {{- template "issueRemediationDetails" $issue }}
                 {{- end }}
             {{- end }}
@@ -236,7 +236,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
                 {{- $toPkg := printf "%s@%s" $pin.ToPackage.Name $pin.ToPackage.Version | bold }}
                 {{- printf "\n  Pin %s to %s to fix" $fromPkg $toPkg }}
                 {{- "\n" }}
-                {{- range $issue := $pin.Fixes }}
+                {{- range $issue := $pin.FixedIssues }}
                     {{- template "issueRemediationDetails" $issue }}
                 {{- end }}
             {{- end }}
