@@ -209,31 +209,32 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 }
 
 type dotSnykExclude struct {
-	Path    string
-	Expires string
+	Path       string
+	expireTime time.Time
+	parseError error
+}
+
+// newDotSnykExclude creates a new dotSnykExclude with parsed expiry time
+func newDotSnykExclude(path string, expiresStr string) dotSnykExclude {
+	expireTime, parseError := parseExpireTime(expiresStr)
+	return dotSnykExclude{
+		Path:       path,
+		expireTime: expireTime,
+		parseError: parseError,
+	}
 }
 
 // IsExpired returns true if the exclude rule is expired
 func (dse *dotSnykExclude) IsExpired() (expired bool, err error) {
-	if dse.Expires == "" {
+	if dse.parseError != nil {
+		return false, dse.parseError
+	}
+
+	if dse.expireTime.IsZero() {
 		return false, nil
 	}
 
-	formats := []string{
-		time.RFC3339,
-		time.RFC1123Z,
-		time.DateOnly,
-		time.StampMilli,
-	}
-
-	var expires time.Time
-	for _, format := range formats {
-		expires, err = time.Parse(format, dse.Expires)
-		if err == nil {
-			return time.Now().After(expires), nil
-		}
-	}
-	return false, err
+	return time.Now().After(dse.expireTime), nil
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
@@ -245,7 +246,7 @@ func (dse *dotSnykExclude) UnmarshalYAML(d *yaml.Node) error {
 
 	// handle scalar format: "- /path/to/file"
 	if d.Kind == yaml.ScalarNode {
-		dse.Path = d.Value
+		*dse = newDotSnykExclude(d.Value, "")
 		return nil
 	}
 
@@ -261,22 +262,50 @@ func (dse *dotSnykExclude) UnmarshalYAML(d *yaml.Node) error {
 		if keyNode.Kind != yaml.ScalarNode {
 			return fmt.Errorf("expected scalar node for path, got %v", keyNode.Kind)
 		}
-		dse.Path = keyNode.Value
+		path := keyNode.Value
 
 		// Extract expires from value node (metadata map)
+		var expiresStr string
 		valueNode := d.Content[1]
 		if valueNode.Kind == yaml.MappingNode {
 			var metadata map[string]string
 			if err := valueNode.Decode(&metadata); err != nil {
 				return err
 			}
-			dse.Expires = metadata["expires"]
+			expiresStr = metadata["expires"]
 		}
 
+		*dse = newDotSnykExclude(path, expiresStr)
 		return nil
 	}
 
 	return fmt.Errorf("unexpected yaml node kind: %v", d.Kind)
+}
+
+// parseExpireTime attempts to parse the expires string using multiple date formats
+func parseExpireTime(expiresStr string) (time.Time, error) {
+	if expiresStr == "" {
+		return time.Time{}, nil
+	}
+
+	formats := []string{
+		time.RFC3339,
+		time.RFC1123Z,
+		time.DateOnly,
+		time.StampMilli,
+	}
+
+	var lastErr error
+	for _, format := range formats {
+		if t, err := time.Parse(format, expiresStr); err == nil {
+			return t, nil
+		} else {
+			lastErr = err
+		}
+	}
+
+	// Return error if all formats failed
+	return time.Time{}, fmt.Errorf("failed to parse expires time '%s': %w", expiresStr, lastErr)
 }
 
 // parseIgnoreFile builds a list of glob patterns from a given .gitignore style file

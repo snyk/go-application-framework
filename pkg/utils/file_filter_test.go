@@ -696,9 +696,7 @@ func TestDotSnykExclude_isExpired(t *testing.T) {
 	}
 	for _, test := range expiryTests {
 		t.Run(test.name, func(t *testing.T) {
-			exclude := dotSnykExclude{
-				Expires: test.expires,
-			}
+			exclude := newDotSnykExclude("test/path", test.expires)
 			isExpired, err := exclude.IsExpired()
 			if test.expectError {
 				assert.Error(t, err)
