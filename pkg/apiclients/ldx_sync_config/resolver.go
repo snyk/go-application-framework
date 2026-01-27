@@ -93,18 +93,15 @@ func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) L
 	}
 
 	remoteUrl, err := git.GetRemoteUrl(dir)
-	if err != nil {
+	if err != nil || remoteUrl == "" {
 		return LdxSyncConfigResult{Error: fmt.Errorf("git remote detection failed: %w", err)}
 	}
 
 	merged := true
 	params := &v20241015.GetUserConfigParams{
-		Version: "2024-10-15",
-		Merged:  &merged,
-	}
-
-	if remoteUrl != "" {
-		params.RemoteUrl = &remoteUrl
+		Version:   "2024-10-15",
+		Merged:    &merged,
+		RemoteUrl: &remoteUrl,
 	}
 
 	if orgId != "" {
