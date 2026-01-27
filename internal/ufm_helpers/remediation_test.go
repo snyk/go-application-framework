@@ -426,8 +426,8 @@ func setFix(f *testapi.FindingData, outcome testapi.FixAppliedOutcome, action *t
 		Fix *struct {
 			Data *struct {
 				Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
-				Id         uuid.UUID      `json:"id"`
-				Type       string         `json:"type"`
+				Id         uuid.UUID              `json:"id"`
+				Type       string                 `json:"type"`
 			} `json:"data,omitempty"`
 		} `json:"fix,omitempty"`
 		Org *struct {
@@ -439,8 +439,8 @@ func setFix(f *testapi.FindingData, outcome testapi.FixAppliedOutcome, action *t
 		Policy *struct {
 			Data *struct {
 				Attributes *testapi.PolicyAttributes `json:"attributes,omitempty"`
-				Id         uuid.UUID         `json:"id"`
-				Type       string            `json:"type"`
+				Id         uuid.UUID                 `json:"id"`
+				Type       string                    `json:"type"`
 			} `json:"data,omitempty"`
 			Links testapi.IoSnykApiCommonRelatedLink `json:"links"`
 			Meta  *testapi.IoSnykApiCommonMeta       `json:"meta,omitempty"`
@@ -457,14 +457,14 @@ func setFix(f *testapi.FindingData, outcome testapi.FixAppliedOutcome, action *t
 		Fix: &struct {
 			Data *struct {
 				Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
-				Id         uuid.UUID      `json:"id"`
-				Type       string         `json:"type"`
+				Id         uuid.UUID              `json:"id"`
+				Type       string                 `json:"type"`
 			} `json:"data,omitempty"`
 		}{
 			Data: &struct {
 				Attributes *testapi.FixAttributes `json:"attributes,omitempty"`
-				Id         uuid.UUID      `json:"id"`	
-				Type       string         `json:"type"`
+				Id         uuid.UUID              `json:"id"`
+				Type       string                 `json:"type"`
 			}{
 				Attributes: &testapi.FixAttributes{Outcome: outcome, Action: action},
 			},
