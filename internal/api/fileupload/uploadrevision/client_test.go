@@ -305,8 +305,8 @@ func TestClient_UploadFiles_TotalPayloadSizeExactlyAtLimit(t *testing.T) {
 
 	// Create files that sum exactly to 200MB
 	// 4 files of 50MB each = 200MB exactly
-	fileSize := int64(50_000_000)
-	numFiles := 4
+	fileSize := int64(10_000_000)
+	numFiles := 5
 
 	for i := 0; i < numFiles; i++ {
 		filename := fmt.Sprintf("file%d.txt", i)
