@@ -22,7 +22,7 @@ func TestGetRemediationSummary(t *testing.T) {
 	t.Run("an issue containing no fix action returns empty summary", func(t *testing.T) {
 		issues := []testapi.Issue{
 			newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-				withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+				withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 			),
 		}
 
@@ -37,8 +37,8 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("single pin for single package returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 			}
 
@@ -57,12 +57,12 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("two pins for two different packages returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable-2@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable-2@1.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable-2", "1.0.2"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable-2@1.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable-2", "1.0.2"),
 				),
 			}
 
@@ -76,12 +76,12 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("two pins for the same package with different vulns merge into one pin", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.2"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable", "1.0.2"),
 				),
 			}
 
@@ -98,9 +98,9 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("a pin with multiple dependency paths returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-2@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 			}
 
@@ -115,15 +115,32 @@ func TestGetRemediationSummary(t *testing.T) {
 			require.Empty(t, summary.Unresolved)
 		})
 
+		t.Run("a pin with partially resolved outcome is still processed as a pin (not added to unresolved)", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.PartiallyResolved, "vulnerable", "1.0.1"),
+				),
+			}
+		
+			summary := GetRemediationSummary(issues)
+		
+			require.Len(t, summary.Pins, 1)
+			require.Equal(t, "vulnerable", summary.Pins[0].FromPackage.Name)
+			require.Equal(t, "1.0.1", summary.Pins[0].ToPackage.Version)
+			require.Empty(t, summary.Upgrades)
+			require.Empty(t, summary.Unresolved, "PartiallyResolved pins are NOT added to unresolved (unlike upgrades)")
+		})
+
 		t.Run("two pins for the same package with same vuln but different versions create two pins", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable", "1.0.1"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable", "1.0.1"),
 				),
 				newTestIssue(t, "VULN_ID_1", "vulnerable@2.0.0",
-					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@2.0.0"),
-					withPinFix(testapi.FullyResolved, "vulnerable", "2.0.1"),
+					withDepPaths(t, "root@1.0.0", "direct-2@1.0.0", "vulnerable@2.0.0"),
+					withPinFix(t, testapi.FullyResolved, "vulnerable", "2.0.1"),
 				),
 			}
 
@@ -145,8 +162,8 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrade for single package with single path returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -165,8 +182,8 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrade with drop for single package returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3"}), // Drop - shorter path
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3"}), // Drop - shorter path
 				),
 			}
 
@@ -184,9 +201,9 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrades for single package with multiple resolved paths returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
-					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved,
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-2@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved,
 						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
 						[]string{"root@1.0.0", "direct-2@1.0.5", "vulnerable@1.0.1"},
 					),
@@ -203,9 +220,9 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrade for single package with an unresolved path and a resolved path returns upgrade and unresolved", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
-					withDepPaths("root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.PartiallyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.PartiallyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -220,9 +237,9 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrade for single package with fully resolved fix results returns upgrade and NO unresolved", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
-					withDepPaths("root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -236,12 +253,12 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrade for single package with multiple vulns returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"}),
 				),
 			}
 
@@ -256,12 +273,12 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrade for multiple packages with multiple vulns returns valid summary with merged upgrades", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable-1@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable-1@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable-1@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable-1@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct@1.2.3", "vulnerable-1@1.0.1"}),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable-2@1.0.0",
-					withDepPaths("root@1.0.0", "direct@1.0.0", "vulnerable-2@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct@1.4.0", "vulnerable-2@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable-2@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct@1.4.0", "vulnerable-2@1.0.1"}),
 				),
 			}
 
@@ -278,12 +295,12 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrades for multiple packages to different direct deps returns multiple upgrades", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID_1", "vulnerable-1@1.0.0",
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable-1@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable-1@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable-1@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct-1@1.2.3", "vulnerable-1@1.0.1"}),
 				),
 				newTestIssue(t, "VULN_ID_2", "vulnerable-2@1.0.0",
-					withDepPaths("root@1.0.0", "direct-2@1.0.0", "vulnerable-2@1.0.0"),
-					withUpgradeFix(testapi.FullyResolved, []string{"root@1.0.0", "direct-2@1.4.0", "vulnerable-2@1.0.1"}),
+					withDepPaths(t, "root@1.0.0", "direct-2@1.0.0", "vulnerable-2@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct-2@1.4.0", "vulnerable-2@1.0.1"}),
 				),
 			}
 
@@ -299,10 +316,10 @@ func TestGetRemediationSummary(t *testing.T) {
 			// don't match dep paths in order or length
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
-					withDepPaths("root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-2@1.0.0", "transitive-1@1.0.0", "vulnerable@1.0.0"),
 					// Note: upgrade paths are in reverse order compared to dep paths
-					withUpgradeFix(testapi.FullyResolved,
+					withUpgradeFix(t, testapi.FullyResolved,
 						[]string{"root@1.0.0", "direct-2@1.0.5", "transitive-1@1.0.4", "vulnerable@1.0.1"},
 						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
 					),
@@ -319,9 +336,9 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("upgrade for single package with multiple paths pointing to same direct dep does not duplicate fixes", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "another-transitive@1.0.0", "vulnerable@1.0.0"),
-					withUpgradeFix(testapi.PartiallyResolved,
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "another-transitive@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.PartiallyResolved,
 						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
 						[]string{"root@1.0.0", "direct-1@1.2.3", "another-transitive@1.0.0", "vulnerable@1.0.1"},
 					),
@@ -344,7 +361,7 @@ func TestGetRemediationSummary(t *testing.T) {
 		t.Run("an issue containing an unresolved fix action returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
-					withDepPaths("root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
 					withUnresolvedFix(),
 				),
 			}
@@ -362,18 +379,21 @@ func TestGetRemediationSummary(t *testing.T) {
 
 type issueOption func(*testapi.FindingData)
 
-func withDepPaths(path ...string) issueOption {
+func withDepPaths(t *testing.T, path ...string) issueOption {
+	t.Helper()
 	return func(f *testapi.FindingData) {
 		var ev testapi.Evidence
-		_ = ev.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
+		err := ev.FromDependencyPathEvidence(testapi.DependencyPathEvidence{
 			Source: "dependency_path",
 			Path:   parsePath(path),
 		})
+		require.NoError(t, err)
 		f.Attributes.Evidence = append(f.Attributes.Evidence, ev)
 	}
 }
 
-func withUpgradeFix(outcome testapi.FixAppliedOutcome, paths ...[]string) issueOption {
+func withUpgradeFix(t *testing.T, outcome testapi.FixAppliedOutcome, paths ...[]string) issueOption {
+	t.Helper()
 	return func(f *testapi.FindingData) {
 		var upgradePaths []testapi.UpgradePath
 		for _, path := range paths {
@@ -384,24 +404,27 @@ func withUpgradeFix(outcome testapi.FixAppliedOutcome, paths ...[]string) issueO
 		}
 
 		var action testapi.FixAction
-		_ = action.FromUpgradePackageAdvice(testapi.UpgradePackageAdvice{
+		err := action.FromUpgradePackageAdvice(testapi.UpgradePackageAdvice{
 			Format:       testapi.UpgradePackageAdviceFormatUpgradePackageAdvice,
 			PackageName:  "vulnerable",
 			UpgradePaths: upgradePaths,
 		})
+		require.NoError(t, err)
 
 		setFix(f, outcome, &action)
 	}
 }
 
-func withPinFix(outcome testapi.FixAppliedOutcome, pkgName, pinVersion string) issueOption {
+func withPinFix(t *testing.T, outcome testapi.FixAppliedOutcome, pkgName, pinVersion string) issueOption {
+	t.Helper()
 	return func(f *testapi.FindingData) {
 		var action testapi.FixAction
-		_ = action.FromPinPackageAdvice(testapi.PinPackageAdvice{
+		err := action.FromPinPackageAdvice(testapi.PinPackageAdvice{
 			Format:      testapi.PinPackageAdviceFormatPinPackageAdvice,
 			PackageName: pkgName,
 			PinVersion:  pinVersion,
 		})
+		require.NoError(t, err)
 
 		setFix(f, outcome, &action)
 	}
@@ -480,13 +503,14 @@ func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) testapi
 	now := time.Now()
 
 	var loc testapi.FindingLocation
-	_ = loc.FromPackageLocation(testapi.PackageLocation{
+	err := loc.FromPackageLocation(testapi.PackageLocation{
 		Type:    "package",
 		Package: testapi.Package{Name: pkgName, Version: pkgVersion},
 	})
+	require.NoError(t, err)
 
 	var problem testapi.Problem
-	_ = problem.FromSnykVulnProblem(testapi.SnykVulnProblem{
+	err = problem.FromSnykVulnProblem(testapi.SnykVulnProblem{
 		Id:                       vulnID,
 		Source:                   "snyk_vuln",
 		Severity:                 testapi.SeverityHigh,
@@ -507,6 +531,7 @@ func newTestIssue(t *testing.T, vulnID, pkg string, opts ...issueOption) testapi
 		InitiallyFixedInVersions: []string{"1.0.1"},
 		ExploitDetails:           testapi.SnykvulndbExploitDetails{MaturityLevels: []testapi.SnykvulndbExploitMaturityLevel{}, Sources: []string{}},
 	})
+	require.NoError(t, err)
 
 	finding := &testapi.FindingData{
 		Id: &findingID,
