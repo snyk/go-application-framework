@@ -27,8 +27,12 @@ func redirectAuthHost(instance string) (string, error) {
 	return canonicalizedInstanceUrl.Host, nil
 }
 
-func IsValidAuthHost(instance string, redirectAuthHostRE string) (bool, error) {
-	isValidHost, err := utils.MatchesRegex(instance, redirectAuthHostRE)
+func IsValidAuthHost(instance string, authHostRegex string) (bool, error) {
+	if api.IsKnownHostName(instance) {
+		return true, nil
+	}
+
+	isValidHost, err := utils.MatchesRegex(instance, authHostRegex)
 	if err != nil {
 		return false, err
 	}

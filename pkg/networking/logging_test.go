@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -299,6 +300,7 @@ func Test_LogResponse_skipsBinaryContent(t *testing.T) {
 
 func Test_logRoundTrip(t *testing.T) {
 	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 	expectedResponseBody := "hello client"
 	expectedResponseBodyError := "who are you?"
 	expectedRequestBody := "hello server"

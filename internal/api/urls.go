@@ -21,15 +21,7 @@ var (
 )
 
 func isImmutableHost(host string) bool {
-	knownHostNames := map[string]bool{
-		"localhost": true,
-		"stella":    true,
-	}
-
-	// get rid of port
-	portlessHost := strings.Split(host, ":")[0]
-
-	if knownHostNames[portlessHost] {
+	if IsKnownHostName(host) {
 		return true
 	}
 
@@ -37,9 +29,31 @@ func isImmutableHost(host string) bool {
 	if strings.HasPrefix(host, "[") {
 		return true
 	}
+	portlessHost := strings.Split(host, ":")[0]
 
 	_, _, err := net.ParseCIDR(portlessHost + "/24")
 	return err == nil
+}
+
+func IsKnownHostName(host string) bool {
+	if strings.HasPrefix(host, "http") {
+		parsedUrl, err := url.Parse(host)
+		if err != nil {
+			return false
+		}
+		host = parsedUrl.Host
+	}
+
+	knownHostNames := map[string]bool{
+		"localhost": true,
+		"127.0.0.1": true,
+		"stella":    true,
+	}
+
+	// get rid of port
+	portlessHost := strings.Split(host, ":")[0]
+
+	return knownHostNames[portlessHost]
 }
 
 func GetCanonicalApiUrlFromString(userDefinedUrl string) (string, error) {

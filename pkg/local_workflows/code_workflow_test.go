@@ -17,6 +17,8 @@ import (
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/error-catalog-golang-public/code"
+	"github.com/snyk/go-application-framework/internal/constants"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,6 +79,7 @@ func Test_Code_entrypoint(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(configuration.API_URL, server.URL)
 	config.Set(configuration.ORGANIZATION, org)
+	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 
 	engine := workflow.NewWorkFlowEngine(config)
 
