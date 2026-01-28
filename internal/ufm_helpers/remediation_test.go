@@ -122,9 +122,9 @@ func TestGetRemediationSummary(t *testing.T) {
 					withPinFix(t, testapi.PartiallyResolved, "vulnerable", "1.0.1"),
 				),
 			}
-		
+
 			summary := GetRemediationSummary(issues)
-		
+
 			require.Len(t, summary.Pins, 1)
 			require.Equal(t, "vulnerable", summary.Pins[0].FromPackage.Name)
 			require.Equal(t, "1.0.1", summary.Pins[0].ToPackage.Version)
