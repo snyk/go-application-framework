@@ -340,10 +340,6 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
 
 [32m[1mIssues to fix by upgrading:[0m[0m
 
-  Upgrade [1morg.springframework.boot:spring-boot-starter-validation@3.5.6[0m to [1morg.springframework.boot:spring-boot-starter-validation@3.5.7[0m to fix
-  ✗ [33m[1mExternal Initialization of Trusted Variables or Data Stores[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-CHQOSLOGBACK-13169722] in [1mch.qos.logback:logback-core[0m
-    introduced by org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-validation@3.5.6 > org.springframework.boot:spring-boot-starter@3.5.6 > org.springframework.boot:spring-boot-starter-logging@3.5.6 > ch.qos.logback:logback-classic@1.5.18 > ch.qos.logback:logback-core@1.5.18
-
   Upgrade [1mcom.thoughtworks.xstream:xstream@1.4.5[0m to [1mcom.thoughtworks.xstream:xstream@1.4.21[0m to fix
   ✗ [31m[1mDeserialization of Untrusted Data[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458] in [1mcom.thoughtworks.xstream:xstream[0m
     introduced by org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
@@ -419,7 +415,11 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
   Upgrade [1morg.apache.commons:commons-lang3@3.14.0[0m to [1morg.apache.commons:commons-lang3@3.18.0[0m to fix
   ✗ [31m[1mUncontrolled Recursion[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGAPACHECOMMONS-10734078] in [1morg.apache.commons:commons-lang3[0m
     introduced by org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.apache.commons:commons-lang3@3.14.0
-[90m[1m[0m                                       [0m
+
+  Upgrade [1morg.springframework.boot:spring-boot-starter-validation@3.5.6[0m to [1morg.springframework.boot:spring-boot-starter-validation@3.5.7[0m to fix
+  ✗ [33m[1mExternal Initialization of Trusted Variables or Data Stores[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-CHQOSLOGBACK-13169722] in [1mch.qos.logback:logback-core[0m
+    introduced by org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-validation@3.5.6 > org.springframework.boot:spring-boot-starter@3.5.6 > org.springframework.boot:spring-boot-starter-logging@3.5.6 > ch.qos.logback:logback-classic@1.5.18 > ch.qos.logback:logback-core@1.5.18
+
 [90m[1mIssues with no direct upgrade or patch:[0m[0m
   ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGJRUBY-10557730] in [1morg.jruby:jruby-stdlib[0m
     introduced by org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.asciidoctor:asciidoctorj@3.0.0 > org.jruby:jruby@10.0.0.1 > org.jruby:jruby-stdlib@10.0.0.1

@@ -2,6 +2,7 @@ package ufm_helpers
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -88,6 +89,13 @@ func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 	for _, pins := range pinMap {
 		summary.Pins = append(summary.Pins, pins...)
 	}
+
+	sort.Slice(summary.Upgrades, func(i, j int) bool {
+		return summary.Upgrades[i].FromPackage.Name < summary.Upgrades[j].FromPackage.Name
+	})
+	sort.Slice(summary.Pins, func(i, j int) bool {
+		return summary.Pins[i].FromPackage.Name < summary.Pins[j].FromPackage.Name
+	})
 
 	return summary
 }

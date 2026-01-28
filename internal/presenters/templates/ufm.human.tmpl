@@ -244,7 +244,8 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 
         {{- /* Render Unresolved */}}
         {{- if $remediation.HasUnresolved }}
-            {{- "\nIssues with no direct upgrade or patch:" | bold | renderGray }}
+            {{- "\n" }}
+            {{- "Issues with no direct upgrade or patch:" | bold | renderGray }}
             {{- "\n" }}
             {{- range $issue := $remediation.Unresolved }}
                 {{- template "issueRemediationDetails" $issue }}
