@@ -43,7 +43,7 @@ const apiVersion = "2024-10-15"
 const (
 	fileSizeLimit         = 50_000_000 // 50MB - maximum size per individual file
 	fileCountLimit        = 300_000    // 300,000 - maximum number of files per request
-	totalPayloadSizeLimit = 50_000_000 // 200MB - maximum total uncompressed payload size per request
+	totalPayloadSizeLimit = 50_000_000 // 50MB - maximum total uncompressed payload size per request
 	filePathLengthLimit   = 256        // 256 - maximum length of file names
 )
 
