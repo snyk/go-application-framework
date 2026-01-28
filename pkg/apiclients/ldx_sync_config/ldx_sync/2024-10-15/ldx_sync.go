@@ -20,13 +20,14 @@ import (
 
 // Defines values for ConfigAttributesScope.
 const (
-	Asset       ConfigAttributesScope = "asset"
-	Global      ConfigAttributesScope = "global"
-	Group       ConfigAttributesScope = "group"
-	Org         ConfigAttributesScope = "org"
-	ProjectName ConfigAttributesScope = "project_name"
-	RemoteUrl   ConfigAttributesScope = "remote_url"
-	Tenant      ConfigAttributesScope = "tenant"
+	ConfigAttributesScopeAsset       ConfigAttributesScope = "asset"
+	ConfigAttributesScopeGlobal      ConfigAttributesScope = "global"
+	ConfigAttributesScopeGroup       ConfigAttributesScope = "group"
+	ConfigAttributesScopeOrg         ConfigAttributesScope = "org"
+	ConfigAttributesScopeProjectName ConfigAttributesScope = "project_name"
+	ConfigAttributesScopeRemoteUrl   ConfigAttributesScope = "remote_url"
+	ConfigAttributesScopeTenant      ConfigAttributesScope = "tenant"
+	ConfigAttributesScopeUser        ConfigAttributesScope = "user"
 )
 
 // Defines values for ConfigDataAuthenticationMethod.
@@ -54,6 +55,34 @@ const (
 // Defines values for ErrorDocument0JsonapiVersion.
 const (
 	ErrorDocument0JsonapiVersionN10 ErrorDocument0JsonapiVersion = "1.0"
+)
+
+// Defines values for SettingMetadataOrigin.
+const (
+	SettingMetadataOriginGlobal SettingMetadataOrigin = "global"
+	SettingMetadataOriginGroup  SettingMetadataOrigin = "group"
+	SettingMetadataOriginOrg    SettingMetadataOrigin = "org"
+	SettingMetadataOriginTenant SettingMetadataOrigin = "tenant"
+	SettingMetadataOriginUser   SettingMetadataOrigin = "user"
+)
+
+// Defines values for UserConfigResponseDataAttributesScope.
+const (
+	Global UserConfigResponseDataAttributesScope = "global"
+	Group  UserConfigResponseDataAttributesScope = "group"
+	Org    UserConfigResponseDataAttributesScope = "org"
+	Tenant UserConfigResponseDataAttributesScope = "tenant"
+	User   UserConfigResponseDataAttributesScope = "user"
+)
+
+// Defines values for UserConfigResponseDataType.
+const (
+	Configuration UserConfigResponseDataType = "configuration"
+)
+
+// Defines values for UserConfigResponseJsonapiVersion.
+const (
+	N10 UserConfigResponseJsonapiVersion = "1.0"
 )
 
 // ActualVersion Resolved API version
@@ -478,6 +507,26 @@ type ScanConfig struct {
 	NetNew *bool `json:"net_new,omitempty"`
 }
 
+// SettingMetadata Metadata for a configuration setting when merged=true
+type SettingMetadata struct {
+	// Enforced When true, this setting value overrides all lower-scope settings.
+	// Enforced settings from higher scopes take precedence over user settings.
+	Enforced *bool `json:"enforced,omitempty"`
+
+	// Locked When true, this setting cannot be edited by the user.
+	// Locked settings are read-only in the UI.
+	Locked *bool `json:"locked,omitempty"`
+
+	// Origin The scope from which this setting value originates
+	Origin SettingMetadataOrigin `json:"origin"`
+
+	// Value The setting value (type depends on the specific setting)
+	Value interface{} `json:"value"`
+}
+
+// SettingMetadataOrigin The scope from which this setting value originates
+type SettingMetadataOrigin string
+
 // TrustConfig defines model for TrustConfig.
 type TrustConfig struct {
 	// Enable Enable trust configuration
@@ -486,6 +535,57 @@ type TrustConfig struct {
 	// TrustedFolders List of trusted folder paths (relative to target)
 	TrustedFolders *[]string `json:"trusted_folders,omitempty"`
 }
+
+// UserConfigResponse Configuration response with per-setting metadata.
+// When merged=false: returns settings for the specific scope only (no inheritance).
+// When merged=true: returns merged settings with inheritance from higher scopes.
+// Both modes use the same response structure with metadata for each setting.
+type UserConfigResponse struct {
+	Data struct {
+		Attributes struct {
+			// CreatedAt Timestamp when the configuration was created
+			CreatedAt *time.Time `json:"created_at,omitempty"`
+
+			// FolderSettings Folder-level settings keyed by remote_url.
+			// Each folder contains settings with per-setting metadata.
+			FolderSettings *map[string]map[string]SettingMetadata `json:"folder_settings,omitempty"`
+
+			// LastModifiedAt Timestamp of the last configuration update
+			LastModifiedAt *time.Time `json:"last_modified_at,omitempty"`
+
+			// Organizations Organizations available for the user. When remote_url is provided,
+			// the preferred organization is indicated by preferred_by_algorithm.
+			Organizations *[]Organization `json:"organizations,omitempty"`
+
+			// Scope The scope of this configuration
+			Scope *UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+
+			// Settings Global-level settings with per-setting metadata.
+			// Each setting has value, locked, enforced, and origin fields.
+			Settings *map[string]SettingMetadata `json:"settings,omitempty"`
+		} `json:"attributes"`
+
+		// Id Unique identifier for this configuration instance
+		Id   openapi_types.UUID         `json:"id"`
+		Type UserConfigResponseDataType `json:"type"`
+	} `json:"data"`
+	Jsonapi *struct {
+		Version *UserConfigResponseJsonapiVersion `json:"version,omitempty"`
+	} `json:"jsonapi,omitempty"`
+	Links *struct {
+		// Self Link to this resource
+		Self *string `json:"self,omitempty"`
+	} `json:"links,omitempty"`
+}
+
+// UserConfigResponseDataAttributesScope The scope of this configuration
+type UserConfigResponseDataAttributesScope string
+
+// UserConfigResponseDataType defines model for UserConfigResponse.Data.Type.
+type UserConfigResponseDataType string
+
+// UserConfigResponseJsonapiVersion defines model for UserConfigResponse.Jsonapi.Version.
+type UserConfigResponseJsonapiVersion string
 
 // N400 defines model for 400.
 type N400 = ErrorDocument
@@ -621,6 +721,55 @@ type CreateConfigParams struct {
 	ProjectName *string `form:"project_name,omitempty" json:"project_name,omitempty"`
 
 	// RemoteUrl Repository URL
+	RemoteUrl *string `form:"remote_url,omitempty" json:"remote_url,omitempty"`
+}
+
+// GetUserConfigParams defines parameters for GetUserConfig.
+type GetUserConfigParams struct {
+	// Version API version in format YYYY-MM-DD
+	Version string `form:"version" json:"version"`
+
+	// Tenant Tenant identifier to retrieve tenant-scope configuration.
+	// When provided, returns configuration for the specified tenant instead of user config.
+	Tenant *string `form:"tenant,omitempty" json:"tenant,omitempty"`
+
+	// Group Group UUID to retrieve group-scope configuration.
+	// When provided, returns configuration for the specified group instead of user config.
+	Group *openapi_types.UUID `form:"group,omitempty" json:"group,omitempty"`
+
+	// Org Organization UUID to retrieve org-scope configuration.
+	// When provided, returns configuration for the specified org instead of user config.
+	Org *openapi_types.UUID `form:"org,omitempty" json:"org,omitempty"`
+
+	// Merged When true, returns merged configuration with inheritance, precedence, and per-setting metadata.
+	// When false (default), returns raw database values without metadata.
+	Merged *bool `form:"merged,omitempty" json:"merged,omitempty"`
+
+	// RemoteUrl Repository URL for automatic organization selection (used with merged=true).
+	// When provided, the service will perform auto-org selection for folder-level settings.
+	RemoteUrl *string `form:"remote_url,omitempty" json:"remote_url,omitempty"`
+
+	// StartingAfter Return results starting after this cursor
+	StartingAfter *string `form:"starting_after,omitempty" json:"starting_after,omitempty"`
+
+	// EndingBefore Return results ending before this cursor
+	EndingBefore *string `form:"ending_before,omitempty" json:"ending_before,omitempty"`
+
+	// Limit Maximum number of results to return
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetConfigByIdParams defines parameters for GetConfigById.
+type GetConfigByIdParams struct {
+	// Version API version in format YYYY-MM-DD
+	Version string `form:"version" json:"version"`
+
+	// Merged When true, returns merged configuration with inheritance, precedence, and per-setting metadata.
+	// When false (default), returns raw database values without metadata.
+	Merged *bool `form:"merged,omitempty" json:"merged,omitempty"`
+
+	// RemoteUrl Repository URL for automatic organization selection (used with merged=true).
+	// When provided, the service will perform auto-org selection for folder-level settings.
 	RemoteUrl *string `form:"remote_url,omitempty" json:"remote_url,omitempty"`
 }
 
@@ -786,6 +935,12 @@ type ClientInterface interface {
 
 	// GetAPIVersion request
 	GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUserConfig request
+	GetUserConfig(ctx context.Context, params *GetUserConfigParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetConfigById request
+	GetConfigById(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) DeleteConfig(ctx context.Context, params *DeleteConfigParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -874,6 +1029,30 @@ func (c *Client) ListAPIVersions(ctx context.Context, reqEditors ...RequestEdito
 
 func (c *Client) GetAPIVersion(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAPIVersionRequest(c.Server, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetUserConfig(ctx context.Context, params *GetUserConfigParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserConfigRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetConfigById(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetConfigByIdRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1647,6 +1826,263 @@ func NewGetAPIVersionRequest(server string, version string) (*http.Request, erro
 	return req, nil
 }
 
+// NewGetUserConfigRequest generates requests for GetUserConfig
+func NewGetUserConfigRequest(server string, params *GetUserConfigParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/remote_client_connector/config")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.Tenant != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Group != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Org != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Merged != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "merged", runtime.ParamLocationQuery, *params.Merged); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.RemoteUrl != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.StartingAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "starting_after", runtime.ParamLocationQuery, *params.StartingAfter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndingBefore != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ending_before", runtime.ParamLocationQuery, *params.EndingBefore); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetConfigByIdRequest generates requests for GetConfigById
+func NewGetConfigByIdRequest(server string, id openapi_types.UUID, params *GetConfigByIdParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/remote_client_connector/config/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.Merged != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "merged", runtime.ParamLocationQuery, *params.Merged); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.RemoteUrl != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "remote_url", runtime.ParamLocationQuery, *params.RemoteUrl); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -1711,6 +2147,12 @@ type ClientWithResponsesInterface interface {
 
 	// GetAPIVersionWithResponse request
 	GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...RequestEditorFn) (*GetAPIVersionResponse, error)
+
+	// GetUserConfigWithResponse request
+	GetUserConfigWithResponse(ctx context.Context, params *GetUserConfigParams, reqEditors ...RequestEditorFn) (*GetUserConfigResponse, error)
+
+	// GetConfigByIdWithResponse request
+	GetConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*GetConfigByIdResponse, error)
 }
 
 type DeleteConfigResponse struct {
@@ -1885,6 +2327,74 @@ func (r GetAPIVersionResponse) StatusCode() int {
 	return 0
 }
 
+type GetUserConfigResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON200                  *UserConfigResponse
+	ApplicationvndApiJSON200 *UserConfigResponse
+	JSON400                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON404                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON404 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON501                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON501 *ErrorResponseApplicationVndAPIPlusJSON
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserConfigResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserConfigResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetConfigByIdResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON200                  *UserConfigResponse
+	ApplicationvndApiJSON200 *UserConfigResponse
+	JSON400                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON403                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON403 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON404                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON404 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON501                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON501 *ErrorResponseApplicationVndAPIPlusJSON
+}
+
+// Status returns HTTPResponse.Status
+func (r GetConfigByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetConfigByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // DeleteConfigWithResponse request returning *DeleteConfigResponse
 func (c *ClientWithResponses) DeleteConfigWithResponse(ctx context.Context, params *DeleteConfigParams, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error) {
 	rsp, err := c.DeleteConfig(ctx, params, reqEditors...)
@@ -1953,6 +2463,24 @@ func (c *ClientWithResponses) GetAPIVersionWithResponse(ctx context.Context, ver
 		return nil, err
 	}
 	return ParseGetAPIVersionResponse(rsp)
+}
+
+// GetUserConfigWithResponse request returning *GetUserConfigResponse
+func (c *ClientWithResponses) GetUserConfigWithResponse(ctx context.Context, params *GetUserConfigParams, reqEditors ...RequestEditorFn) (*GetUserConfigResponse, error) {
+	rsp, err := c.GetUserConfig(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserConfigResponse(rsp)
+}
+
+// GetConfigByIdWithResponse request returning *GetConfigByIdResponse
+func (c *ClientWithResponses) GetConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*GetConfigByIdResponse, error) {
+	rsp, err := c.GetConfigById(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetConfigByIdResponse(rsp)
 }
 
 // ParseDeleteConfigResponse parses an HTTP response from a DeleteConfigWithResponse call
@@ -2385,6 +2913,226 @@ func ParseGetAPIVersionResponse(rsp *http.Response) (*GetAPIVersionResponse, err
 			return nil, err
 		}
 		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUserConfigResponse parses an HTTP response from a GetUserConfigWithResponse call
+func ParseGetUserConfigResponse(rsp *http.Response) (*GetUserConfigResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserConfigResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 200:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 501:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 200:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 501:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetConfigByIdResponse parses an HTTP response from a GetConfigByIdWithResponse call
+func ParseGetConfigByIdResponse(rsp *http.Response) (*GetConfigByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetConfigByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 200:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 501:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 200:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 501:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON501 = &dest
 
 	}
 
