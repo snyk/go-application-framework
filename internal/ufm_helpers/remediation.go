@@ -39,6 +39,8 @@ type PinGroup struct {
 	FixedIssues []testapi.Issue
 }
 
+// GetRemediationSummary returns a summary of the remediation actions needed for the issues.
+// It groups issues by the package they are related to and the action needed to fix them.
 func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 	summary := &RemediationSummary{
 		Upgrades:   []*UpgradeGroup{},
@@ -54,7 +56,7 @@ func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 			continue
 		}
 
-		fixAttrs := getFixAttributes(issue)
+		fixAttrs := GetFixAttributes(issue)
 		if fixAttrs == nil {
 			continue
 		}
@@ -100,16 +102,50 @@ func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 	return summary
 }
 
-func getFixAttributes(issue testapi.Issue) *testapi.FixAttributes {
+// GetFixAttributes extracts fix attributes from an issue's findings.
+func GetFixAttributes(issue testapi.Issue) *testapi.FixAttributes {
 	for _, finding := range issue.GetFindings() {
-		if finding.Relationships != nil &&
-			finding.Relationships.Fix != nil &&
-			finding.Relationships.Fix.Data != nil &&
-			finding.Relationships.Fix.Data.Attributes != nil {
-			return finding.Relationships.Fix.Data.Attributes
+		if finding == nil || finding.Relationships == nil ||
+			finding.Relationships.Fix == nil ||
+			finding.Relationships.Fix.Data == nil ||
+			finding.Relationships.Fix.Data.Attributes == nil {
+			continue
 		}
+		return finding.Relationships.Fix.Data.Attributes
 	}
 	return nil
+}
+
+// GetUpgradeTarget returns the direct dependency to upgrade from fix attributes.
+// Returns the package name and version to upgrade to, or empty strings if not applicable.
+func GetDirectPackageUpgradeTarget(attrs *testapi.FixAttributes) (packageName, packageVersion string) {
+	if attrs == nil || attrs.Action == nil {
+		return "", ""
+	}
+	advice, err := attrs.Action.AsUpgradePackageAdvice()
+	if err != nil {
+		return "", ""
+	}
+	for _, path := range advice.UpgradePaths {
+		if len(path.DependencyPath) >= 2 {
+			dep := path.DependencyPath[1]
+			return dep.Name, dep.Version
+		}
+	}
+	return "", ""
+}
+
+// GetPinTarget returns the package to pin from fix attributes.
+// Returns the package name and version to pin to, or empty strings if not applicable.
+func GetDirectPackagePinTarget(attrs *testapi.FixAttributes) (packageName, packageVersion string) {
+	if attrs == nil || attrs.Action == nil {
+		return "", ""
+	}
+	advice, err := attrs.Action.AsPinPackageAdvice()
+	if err != nil {
+		return "", ""
+	}
+	return advice.PackageName, advice.PinVersion
 }
 
 func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvice, outcome testapi.FixAppliedOutcome, upgradeMap map[string]*UpgradeGroup) bool {

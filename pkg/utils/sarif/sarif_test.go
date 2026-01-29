@@ -1,10 +1,15 @@
 package sarif
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/apiclients/mocks"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
 func TestSeverityLevelConverter(t *testing.T) {
@@ -148,4 +153,114 @@ func TestSuppressionPrecedence(t *testing.T) {
 
 	assert.NotNil(t, suppression)
 	assert.Equal(t, sarif.Rejected, suppressionStatus)
+}
+
+func TestBuildFixFromIssue(t *testing.T) {
+	t.Run("returns nil when isFixable is not set", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIssue := mocks.NewMockIssue(ctrl)
+		mockIssue.EXPECT().GetData(testapi.DataKeyIsFixable).Return(nil, false)
+
+		fix := BuildFixFromIssue(mockIssue)
+		assert.Nil(t, fix)
+	})
+
+	t.Run("returns nil when isFixable is false", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIssue := mocks.NewMockIssue(ctrl)
+		mockIssue.EXPECT().GetData(testapi.DataKeyIsFixable).Return(false, true)
+
+		fix := BuildFixFromIssue(mockIssue)
+		assert.Nil(t, fix)
+	})
+
+	t.Run("returns nil when no findings", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIssue := mocks.NewMockIssue(ctrl)
+		mockIssue.EXPECT().GetData(testapi.DataKeyIsFixable).Return(true, true)
+		mockIssue.EXPECT().GetFindings().Return(nil)
+
+		fix := BuildFixFromIssue(mockIssue)
+		assert.Nil(t, fix)
+	})
+
+	t.Run("returns upgrade fix when upgrade advice exists", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		upgradeAdvice := testapi.UpgradePackageAdvice{
+			UpgradePaths: []testapi.UpgradePath{
+				{
+					DependencyPath: []testapi.Package{
+						{Name: "root", Version: "1.0.0"},
+						{Name: "lodash", Version: "4.17.21"},
+					},
+				},
+			},
+		}
+
+		fixAction := &testapi.FixAction{}
+		_ = fixAction.FromUpgradePackageAdvice(upgradeAdvice)
+
+		finding := createFindingWithFixAction(fixAction)
+
+		mockIssue := mocks.NewMockIssue(ctrl)
+		mockIssue.EXPECT().GetData(testapi.DataKeyIsFixable).Return(true, true)
+		mockIssue.EXPECT().GetFindings().Return([]*testapi.FindingData{finding})
+
+		fix := BuildFixFromIssue(mockIssue)
+		assert.NotNil(t, fix)
+		assert.Equal(t, "Upgrade to lodash@4.17.21", fix["description"])
+		assert.Equal(t, "lodash@4.17.21", fix["packageVersion"])
+	})
+
+	t.Run("returns pin fix when pin advice exists", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		pinAdvice := testapi.PinPackageAdvice{
+			PackageName: "lodash",
+			PinVersion:  "4.17.21",
+		}
+
+		fixAction := &testapi.FixAction{}
+		_ = fixAction.FromPinPackageAdvice(pinAdvice)
+
+		finding := createFindingWithFixAction(fixAction)
+
+		mockIssue := mocks.NewMockIssue(ctrl)
+		mockIssue.EXPECT().GetData(testapi.DataKeyIsFixable).Return(true, true)
+		mockIssue.EXPECT().GetFindings().Return([]*testapi.FindingData{finding})
+
+		fix := BuildFixFromIssue(mockIssue)
+		assert.NotNil(t, fix)
+		assert.Equal(t, "Upgrade to lodash@4.17.21", fix["description"])
+		assert.Equal(t, "lodash@4.17.21", fix["packageVersion"])
+	})
+}
+
+func createFindingWithFixAction(fixAction *testapi.FixAction) *testapi.FindingData {
+	findingJSON := `{
+		"relationships": {
+			"fix": {
+				"data": {
+					"id": "00000000-0000-0000-0000-000000000000",
+					"type": "fixes",
+					"attributes": {}
+				}
+			}
+		}
+	}`
+	var finding testapi.FindingData
+	_ = json.Unmarshal([]byte(findingJSON), &finding)
+	finding.Relationships.Fix.Data.Attributes = &testapi.FixAttributes{
+		Action: fixAction,
+	}
+	return &finding
 }
