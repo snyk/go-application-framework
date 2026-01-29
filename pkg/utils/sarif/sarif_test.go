@@ -206,9 +206,10 @@ func TestBuildFixFromIssue(t *testing.T) {
 		}
 
 		fixAction := &testapi.FixAction{}
-		_ = fixAction.FromUpgradePackageAdvice(upgradeAdvice)
+		err := fixAction.FromUpgradePackageAdvice(upgradeAdvice)
+		assert.NoError(t, err)
 
-		finding := createFindingWithFixAction(fixAction)
+		finding := createFindingWithFixAction(t, fixAction)
 
 		mockIssue := mocks.NewMockIssue(ctrl)
 		mockIssue.EXPECT().GetData(testapi.DataKeyIsFixable).Return(true, true)
@@ -230,9 +231,10 @@ func TestBuildFixFromIssue(t *testing.T) {
 		}
 
 		fixAction := &testapi.FixAction{}
-		_ = fixAction.FromPinPackageAdvice(pinAdvice)
+		err := fixAction.FromPinPackageAdvice(pinAdvice)
+		assert.NoError(t, err)
 
-		finding := createFindingWithFixAction(fixAction)
+		finding := createFindingWithFixAction(t, fixAction)
 
 		mockIssue := mocks.NewMockIssue(ctrl)
 		mockIssue.EXPECT().GetData(testapi.DataKeyIsFixable).Return(true, true)
@@ -245,7 +247,9 @@ func TestBuildFixFromIssue(t *testing.T) {
 	})
 }
 
-func createFindingWithFixAction(fixAction *testapi.FixAction) *testapi.FindingData {
+func createFindingWithFixAction(t *testing.T, fixAction *testapi.FixAction) *testapi.FindingData {
+	t.Helper()
+
 	findingJSON := `{
 		"relationships": {
 			"fix": {
@@ -258,7 +262,9 @@ func createFindingWithFixAction(fixAction *testapi.FixAction) *testapi.FindingDa
 		}
 	}`
 	var finding testapi.FindingData
-	_ = json.Unmarshal([]byte(findingJSON), &finding)
+	err := json.Unmarshal([]byte(findingJSON), &finding)
+	assert.NoError(t, err)
+
 	finding.Relationships.Fix.Data.Attributes = &testapi.FixAttributes{
 		Action: fixAction,
 	}
