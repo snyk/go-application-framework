@@ -32,8 +32,9 @@ const (
 	// Org related configuration
 	// ---------
 
-	ORGANIZATION      string = "org"               // ORGANIZATION (string) sets/returns the Organization ID
-	ORGANIZATION_SLUG string = "internal_org_slug" // ORGANIZATION_SLUG (string) returns the slug of the organization and correlates to the ORGANIZATION ID.
+	ORGANIZATION              string = "org"                         // ORGANIZATION (string) sets/returns the Organization ID
+	ORGANIZATION_SLUG         string = "internal_org_slug"           // ORGANIZATION_SLUG (string) returns the slug of the organization and correlates to the ORGANIZATION ID.
+	userPreferredOrganization string = "internal_user_preferred_org" // userPreferredOrganization (string) returns the user's preferred organization as configured in the Snyk web UI.
 
 	// ---------
 	// URL configuration
