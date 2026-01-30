@@ -175,6 +175,20 @@ func (mr *MockIssueMockRecorder) GetPrimaryProblem() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPrimaryProblem", reflect.TypeOf((*MockIssue)(nil).GetPrimaryProblem))
 }
 
+// GetProblemID mocks base method.
+func (m *MockIssue) GetProblemID() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProblemID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetProblemID indicates an expected call of GetProblemID.
+func (mr *MockIssueMockRecorder) GetProblemID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProblemID", reflect.TypeOf((*MockIssue)(nil).GetProblemID))
+}
+
 // GetProblems mocks base method.
 func (m *MockIssue) GetProblems() []*testapi.Problem {
 	m.ctrl.T.Helper()

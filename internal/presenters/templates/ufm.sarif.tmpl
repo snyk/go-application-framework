@@ -20,10 +20,10 @@
 							{{- range $index, $issue := $issues }}
 							{{- $tags := buildRuleTags $issue }}
 							{{- $cvssScore := getRuleCVSSScore $issue }}
-							{{- $ruleID := getRuleID $issue }}
-							{{- if not $ruleID }}{{ $ruleID = $issue.GetID }}{{ end }}
+							{{- $problemID := $issue.GetProblemID }}
+							{{- if not $problemID }}{{ $problemID = $issue.GetID }}{{ end }}
 							{
-								"id": {{ getQuotedString $ruleID }},
+								"id": {{ getQuotedString $problemID }},
 								"shortDescription": {
 									"text": {{ getQuotedString (buildRuleShortDescription $issue) }}
 								},
@@ -69,10 +69,10 @@
 				{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
 				{{- $fixes := buildFixesFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
-				{{- $ruleID := getRuleID $issue }}
-				{{- if not $ruleID }}{{ $ruleID = $issue.GetID }}{{ end }}
+				{{- $problemID := $issue.GetProblemID }}
+				{{- if not $problemID }}{{ $problemID = $issue.GetID }}{{ end }}
 				{
-					"ruleId": {{ getQuotedString $ruleID }},
+					"ruleId": {{ getQuotedString $problemID }},
 					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
 					"message": {
 						"text": {{ getQuotedString (formatIssueMessage $issue) }}

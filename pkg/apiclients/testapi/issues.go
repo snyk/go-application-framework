@@ -49,10 +49,6 @@ const (
 	// Value type: string
 	DataKeyRuleShortDescription = "rule-short-description"
 
-	// DataKeyRuleID is the key for the rule ID
-	// Value type: string
-	DataKeyRuleID = "rule-id"
-
 	FindingTypeLicense = "license"
 )
 
@@ -143,6 +139,12 @@ type Issue interface {
 	// Use the DataKey* constants for well-known keys.
 	// Callers should perform type assertions on the returned interface{}.
 	GetData(key string) (interface{}, bool)
+
+	// GetProblemID returns the problem ID for this issue.
+	// For SCA findings, this is the vulnerability or license ID (e.g., SNYK-JS-LODASH-590103).
+	// For secret findings, this is the secret rule ID.
+	// Returns empty string if no problem ID is available.
+	GetProblemID() string
 }
 
 // NewIssuesFromTestResult creates a list of Issues from a TestResult.
@@ -336,6 +338,7 @@ type issue struct {
 	problems          []*Problem
 	primaryProblem    *Problem
 	id                string
+	problemID         string
 	severity          string
 	effectiveSeverity string
 	cwes              []string
@@ -377,6 +380,11 @@ func (i *issue) GetPrimaryProblem() *Problem {
 // GetID returns the unique identifier for this issue.
 func (i *issue) GetID() string {
 	return i.id
+}
+
+// GetProblemID returns the problem ID for this issue.
+func (i *issue) GetProblemID() string {
+	return i.problemID
 }
 
 // GetSeverity returns the severity of this issue.
@@ -475,7 +483,7 @@ type issueBuilder struct {
 	title                string
 	description          string
 	ruleShortDescription string
-	ruleID               string
+	problemID            string
 	packageName          string
 	packageVersion       string
 	cvssScore            float32
@@ -664,7 +672,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 	// Quick ID extraction without full unmarshal
 	if id := problem.GetID(); id != "" {
 		b.id = id
-		b.ruleID = id
+		b.problemID = id
 	}
 
 	// Full unmarshal for detailed metadata
@@ -715,7 +723,7 @@ func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	// Extract the license ID - this is critical for grouping license issues
 	if id := problem.GetID(); id != "" {
 		b.id = id
-		b.ruleID = id
+		b.problemID = id
 	}
 
 	if b.primaryProblem == nil {
@@ -765,7 +773,7 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 // processSecretsRuleProblem extracts data from a secrets rule problem
 func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
-		b.ruleID = id
+		b.problemID = id
 	}
 
 	secretsProblem, err := problem.AsSecretsRuleProblem()
@@ -806,6 +814,7 @@ func (b *issueBuilder) build() *issue {
 		problems:          b.allProblems,
 		primaryProblem:    b.primaryProblem,
 		id:                b.id,
+		problemID:         b.problemID,
 		severity:          b.severity,
 		effectiveSeverity: b.effectiveSeverity,
 		cwes:              b.cwes,
@@ -878,11 +887,6 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 	// Add short description
 	if b.ruleShortDescription != "" {
 		metadata[DataKeyRuleShortDescription] = b.ruleShortDescription
-	}
-
-	// Add rule ID
-	if b.ruleID != "" {
-		metadata[DataKeyRuleID] = b.ruleID
 	}
 
 	return metadata

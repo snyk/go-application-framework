@@ -273,7 +273,6 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildLocationFromIssue"] = sarif.BuildLocation
 	fnMap["buildFixesFromIssue"] = sarif.BuildFixesFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
-	fnMap["getRuleID"] = sarif.GetRuleID
 	return fnMap
 }
 

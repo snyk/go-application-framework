@@ -215,17 +215,6 @@ func BuildRuleTags(issue testapi.Issue) []interface{} {
 	return tags
 }
 
-// GetRuleID returns the rule ID of an issue
-// Returns empty string if no rule ID is available in the issue's metadata
-func GetRuleID(issue testapi.Issue) string {
-	if ruleID, ok := issue.GetData(testapi.DataKeyRuleID); ok {
-		if str, ok := ruleID.(string); ok {
-			return str
-		}
-	}
-	return ""
-}
-
 // GetRuleCVSSScore extracts the CVSS score from issue metadata
 func GetRuleCVSSScore(issue testapi.Issue) float32 {
 	cvssScore, ok := issue.GetData(testapi.DataKeyCVSSScore)
