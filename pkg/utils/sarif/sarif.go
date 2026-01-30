@@ -6,6 +6,7 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 )
@@ -243,35 +244,32 @@ func FormatIssueMessage(issue testapi.Issue) string {
 	return fmt.Sprintf("This file contains a %s severity %s vulnerability.", issue.GetSeverity(), title)
 }
 
-// BuildFixesFromIssue builds SARIF fixes array from issue
-// Checks metadata to determine if fixes should be shown, then delegates to BuildFixes
-func BuildFixesFromIssue(issue testapi.Issue) []interface{} {
-	findings := issue.GetFindings()
-	if len(findings) == 0 {
-		return nil
-	}
-
-	// Check metadata to determine if fixes should be shown (maintains backward compatibility)
+// BuildFixFromIssue builds SARIF fix from an issue (nil if the issue is not fixable)
+func BuildFixFromIssue(issue testapi.Issue) map[string]string {
 	isFixable, ok := issue.GetData(testapi.DataKeyIsFixable)
 	if !ok {
 		return nil
 	}
-	isFixableBool, ok := isFixable.(bool)
-	if !ok || !isFixableBool {
+	if fixable, ok := isFixable.(bool); !ok || !fixable {
 		return nil
 	}
 
-	fixedVersionsVal, ok := issue.GetData(testapi.DataKeyFixedInVersions)
-	if !ok {
-		return nil
-	}
-	fixedVersions, ok := fixedVersionsVal.([]string)
-	if !ok || len(fixedVersions) == 0 {
+	fixAttrs := ufm_helpers.GetFixAttributes(issue)
+	if fixAttrs == nil || fixAttrs.Action == nil {
 		return nil
 	}
 
-	// Use the existing buildFixes logic
-	return BuildFixes(findings[0])
+	if packageName, packageVersion := ufm_helpers.GetDirectPackageUpgradeTarget(fixAttrs); packageName != "" && packageVersion != "" {
+		packageAndVersion := fmt.Sprintf("%s@%s", packageName, packageVersion)
+		return map[string]string{"description": "Upgrade to " + packageAndVersion, "packageVersion": packageAndVersion}
+	}
+
+	if packageName, packageVersion := ufm_helpers.GetDirectPackagePinTarget(fixAttrs); packageName != "" && packageVersion != "" {
+		packageAndVersion := fmt.Sprintf("%s@%s", packageName, packageVersion)
+		return map[string]string{"description": "Upgrade to " + packageAndVersion, "packageVersion": packageAndVersion}
+	}
+
+	return nil
 }
 
 // appendTechnologySection adds technology/ecosystem information to the markdown
@@ -583,89 +581,4 @@ func getPackageNameAndVersionFromIssue(issue testapi.Issue) (packageName, packag
 		}
 	}
 	return packageName, packageVersion
-}
-
-// BuildFixes extracts fix information from a finding's relationship data
-func BuildFixes(finding *testapi.FindingData) []interface{} {
-	if finding.Relationships == nil || finding.Relationships.Fix == nil || finding.Relationships.Fix.Data == nil {
-		return nil
-	}
-
-	fixData := finding.Relationships.Fix.Data
-	if fixData.Attributes == nil || fixData.Attributes.Action == nil {
-		return nil
-	}
-
-	upgradeAdvice, err := fixData.Attributes.Action.AsUpgradePackageAdvice()
-	if err != nil {
-		return nil
-	}
-
-	packageName := upgradeAdvice.PackageName
-	if packageName == "" {
-		return nil
-	}
-
-	// TODO: where to get the uri from?
-	uri := "package.json"
-	startLine := 1
-	if len(finding.Attributes.Locations) > 0 {
-		loc := finding.Attributes.Locations[0]
-
-		if sourceLoc, err := loc.AsSourceLocation(); err == nil && sourceLoc.FilePath != "" {
-			uri = sourceLoc.FilePath
-			startLine = sourceLoc.FromLine
-		}
-	}
-
-	var fixes []interface{}
-	for _, upgradePath := range upgradeAdvice.UpgradePaths {
-		if len(upgradePath.DependencyPath) < 2 {
-			continue
-		}
-
-		// Get the direct dependency to upgrade (second package in path, after root)
-		directDependency := upgradePath.DependencyPath[1]
-		directPackageName := directDependency.Name
-		directVersion := directDependency.Version
-
-		packageVersion := fmt.Sprintf("%s@%s", directPackageName, directVersion)
-
-		// Always show as an upgrade, regardless of isDrop
-		// isDrop indicates that the vulnerable dependency will be removed from the tree,
-		// but the fix action is still to upgrade the direct dependency
-		fixDescription := fmt.Sprintf("Upgrade to %s", packageVersion)
-
-		fix := map[string]interface{}{
-			"description": map[string]interface{}{
-				"text": fixDescription,
-			},
-			"artifactChanges": []interface{}{
-				map[string]interface{}{
-					"artifactLocation": map[string]interface{}{
-						"uri": uri,
-					},
-					"replacements": []interface{}{
-						map[string]interface{}{
-							"deletedRegion": map[string]interface{}{
-								"startLine": startLine,
-							},
-							"insertedContent": map[string]interface{}{
-								"text": packageVersion,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		fixes = append(fixes, fix)
-	}
-
-	// Only one or no upgrade paths are expected
-	if len(fixes) > 0 {
-		return []interface{}{fixes[0]}
-	}
-
-	return nil
 }
