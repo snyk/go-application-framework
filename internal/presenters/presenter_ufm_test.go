@@ -1138,9 +1138,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			if tc.severityThreshold != "" {
 				config.Set(configuration.FLAG_SEVERITY_THRESHOLD, tc.severityThreshold)
 			}
-			if tc.includeIgnores {
-				config.Set(configuration.FLAG_INCLUDE_IGNORES, "true")
-			}
+			config.Set(configuration.FLAG_INCLUDE_IGNORES, tc.includeIgnores)
 
 			writer := &bytes.Buffer{}
 
