@@ -49,6 +49,10 @@ const (
 	// Value type: string
 	DataKeyRuleShortDescription = "rule-short-description"
 
+	// DataKeyRuleID is the key for the rule ID
+	// Value type: string
+	DataKeyRuleID = "rule-id"
+
 	FindingTypeLicense = "license"
 )
 
@@ -471,6 +475,7 @@ type issueBuilder struct {
 	title                string
 	description          string
 	ruleShortDescription string
+	ruleID               string
 	packageName          string
 	packageVersion       string
 	cvssScore            float32
@@ -659,6 +664,7 @@ func (b *issueBuilder) processSnykVulnProblem(problem *Problem) {
 	// Quick ID extraction without full unmarshal
 	if id := problem.GetID(); id != "" {
 		b.id = id
+		b.ruleID = id
 	}
 
 	// Full unmarshal for detailed metadata
@@ -709,6 +715,7 @@ func (b *issueBuilder) processSnykLicenseProblem(problem *Problem) {
 	// Extract the license ID - this is critical for grouping license issues
 	if id := problem.GetID(); id != "" {
 		b.id = id
+		b.ruleID = id
 	}
 
 	if b.primaryProblem == nil {
@@ -758,7 +765,7 @@ func (b *issueBuilder) processCweProblem(problem *Problem) {
 // processSecretsRuleProblem extracts data from a secrets rule problem
 func (b *issueBuilder) processSecretsRuleProblem(problem *Problem) {
 	if id := problem.GetID(); id != "" {
-		b.id = id
+		b.ruleID = id
 	}
 
 	secretsProblem, err := problem.AsSecretsRuleProblem()
@@ -871,6 +878,11 @@ func (b *issueBuilder) buildMetadata() map[string]interface{} {
 	// Add short description
 	if b.ruleShortDescription != "" {
 		metadata[DataKeyRuleShortDescription] = b.ruleShortDescription
+	}
+
+	// Add rule ID
+	if b.ruleID != "" {
+		metadata[DataKeyRuleID] = b.ruleID
 	}
 
 	return metadata
