@@ -585,7 +585,7 @@ type Diff struct {
 	Format DiffFormat `json:"format"`
 
 	// Suggestions Alternative suggestions - choose one to fix the vulnerability.
-	// The 'rank' field signals the relative confidence in each one.
+	// The 'rank' field signals the relative confidence in each onex.
 	Suggestions []DiffSuggestion `json:"suggestions"`
 }
 
