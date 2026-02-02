@@ -507,18 +507,18 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
 	findingTypes := map[testapi.FindingType]bool{}
 
-	// todo: this is potentially an expensive intermediate conversion to issues, which we could cache or optimize differently.
-	issues, err := testapi.NewIssuesFromTestResult(context.Background(), testResults)
-	if err != nil {
-		return []testapi.FindingType{}
+	// Add finding types from ScanConfiguration
+	for _, t := range getDefaultFindingTypesFromConfig(testResults) {
+		findingTypes[t] = true
 	}
 
-	for _, i := range issues {
-		t := i.GetFindingType()
-		if _, ok := findingTypes[t]; ok {
-			continue
+	// Add finding types derived from actual findings
+	// todo: this is potentially an expensive intermediate conversion to issues, which we could cache or optimize differently.
+	issues, err := testapi.NewIssuesFromTestResult(context.Background(), testResults)
+	if err == nil {
+		for _, i := range issues {
+			findingTypes[i.GetFindingType()] = true
 		}
-		findingTypes[t] = true
 	}
 
 	findingTypesList := slices.Collect(maps.Keys(findingTypes))
@@ -530,4 +530,15 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 	slices.Reverse(findingTypesList)
 
 	return findingTypesList
+}
+
+func getDefaultFindingTypesFromConfig(testResults testapi.TestResult) []testapi.FindingType {
+	if testResults == nil {
+		return nil
+	}
+	config := testResults.GetTestConfiguration()
+	if config == nil || config.ScanConfig == nil {
+		return nil
+	}
+	return config.ScanConfig.GetDefaultFindingTypes()
 }
