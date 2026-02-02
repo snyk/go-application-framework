@@ -169,7 +169,9 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
         {{- end }}
 
         {{- /* Render remediation summary */}}
-        {{- template "remediationSummary" $openIssues }}
+        {{- if eq $findingType "sca" }}
+            {{- template "remediationSummary" $openIssues }}
+        {{- end }}
     {{- end }}
 {{- end }}
 
