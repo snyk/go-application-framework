@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -271,7 +271,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildRuleTags"] = sarif.BuildRuleTags
 	fnMap["getRuleCVSSScore"] = sarif.GetRuleCVSSScore
 	fnMap["buildLocationFromIssue"] = sarif.BuildLocation
-	fnMap["buildFixesFromIssue"] = sarif.BuildFixesFromIssue
+	fnMap["buildFixFromIssue"] = sarif.BuildFixFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
 	return fnMap
 }
@@ -283,6 +283,9 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
+	fnMap["colorBySeverity"] = renderInSeverityColor // 2-arg version from styles.go
+	fnMap["renderGreen"] = renderGreen
+	fnMap["renderGray"] = renderGray
 	fnMap["bold"] = renderBold
 	fnMap["tip"] = func(s string) string {
 		return RenderTip(s + "\n")
@@ -354,6 +357,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["convertTypeToIssueName"] = convertTypeToIssueName
 	defaultMap["sortAndFilterIssues"] = sortAndFilterIssues(config)
 	defaultMap["determineProductNameFromFindingTypes"] = determineProductNameFromFindingTypes
+	defaultMap["getRemediationSummary"] = ufm_helpers.GetRemediationSummary
 	defaultMap["getSeverities"] = func() []string {
 		return json_schemas.DEFAULT_SEVERITIES
 	}

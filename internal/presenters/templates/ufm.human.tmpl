@@ -52,8 +52,6 @@
         {{- $reachabilityString = "Not Applicable" }}
     {{- end }}
    Reachability: {{ $reachabilityString }}
-   {{- else }}
-   Reachability: Not Applicable
    {{- end }}
 
     {{- $ignoreDetails := .GetIgnoreDetails}}
@@ -169,8 +167,100 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
                     {{- end }}
             {{- end }}
         {{- end }}
+
+        {{- /* Render remediation summary */}}
+        {{- if eq $findingType "sca" }}
+            {{- template "remediationSummary" $openIssues }}
+        {{- end }}
     {{- end }}
 {{- end }}
+
+{{- define "issueRemediationDetails" }}
+    {{- $issue := . }}
+    {{- $componentName := getIssueMetadata $issue "component-name" }}
+    {{- $severity := $issue.GetEffectiveSeverity }}
+    {{- $title := colorBySeverity $severity ($issue.GetTitle | bold) }}
+    {{- $severityBadge := colorBySeverity $severity (printf "[%s]" ($severity | toUpperCase)) }}
+    {{- $url := printf "[https://security.snyk.io/vuln/%s]" $issue.GetID }}
+    {{- $pkgDisplay := $componentName | bold }}
+    {{- printf "  ✗ %s %s %s in %s" $title $severityBadge $url $pkgDisplay }}
+    {{- "\n" }}
+
+    {{- $depPaths := getIssueMetadata $issue "dependency-paths" }}
+    {{- if $depPaths }}
+        {{- $pathCount := len $depPaths }}
+        {{- if gt $pathCount 0 }}
+            {{- $firstPath := index $depPaths 0 }}
+            {{- $pathStr := "" }}
+            {{- range $i, $pkg := $firstPath }}
+                {{- if eq $i 0 }}
+                    {{- $pathStr = printf "%s@%s" $pkg.Name $pkg.Version }}
+                {{- else }}
+                    {{- $pathStr = printf "%s > %s@%s" $pathStr $pkg.Name $pkg.Version }}
+                {{- end }}
+            {{- end }}
+            {{- if gt $pathCount 1 }}
+                {{- printf "    introduced by %s and %d other path(s)" $pathStr (sub $pathCount 1) }}
+            {{- else }}
+                {{- printf "    introduced by %s" $pathStr }}
+            {{- end }}
+            {{- "\n" }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "remediationSummary" }}
+    {{- $remediation := getRemediationSummary $ }}
+
+    {{- if or ($remediation.HasUpgrades) ($remediation.HasPins) ($remediation.HasUnresolved) }}
+        {{- "\n" }}
+
+        {{- if $remediation.HasUpgrades }}
+            {{- "Issues to fix by upgrading:" | bold | renderGreen }}
+            {{- "\n" }}
+            {{- range $upgrade := $remediation.Upgrades }}
+                {{- $fromPkg := printf "%s@%s" $upgrade.FromPackage.Name $upgrade.FromPackage.Version | bold }}
+                {{- $toPkg := printf "%s@%s" $upgrade.ToPackage.Name $upgrade.ToPackage.Version | bold }}
+                {{- printf "\n  Upgrade %s to %s to fix" $fromPkg $toPkg }}
+                {{- "\n" }}
+                {{- range $issue := $upgrade.FixedIssues }}
+                    {{- template "issueRemediationDetails" $issue }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+
+        {{- /* Render Pins */}}
+        {{- if $remediation.HasPins }}
+            {{- "\nIssues to fix by upgrading dependencies:" | bold | renderGreen }}
+            {{- "\n" }}
+            {{- range $pin := $remediation.Pins }}
+                {{- $fromPkg := printf "%s@%s" $pin.FromPackage.Name $pin.FromPackage.Version | bold }}
+                {{- $toPkg := printf "%s@%s" $pin.ToPackage.Name $pin.ToPackage.Version | bold }}
+                {{- printf "\n  Pin %s to %s to fix" $fromPkg $toPkg }}
+                {{- "\n" }}
+                {{- range $issue := $pin.FixedIssues }}
+                    {{- template "issueRemediationDetails" $issue }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+
+        {{- /* Render Unresolved */}}
+        {{- if $remediation.HasUnresolved }}
+            {{- "\n" }}
+            {{- "Issues with no direct upgrade or patch:" | bold | renderGray }}
+            {{- "\n" }}
+            {{- range $issue := $remediation.Unresolved }}
+                {{- template "issueRemediationDetails" $issue }}
+                {{- /* Show fixed-in versions for unresolved issues */}}
+                {{- $fixedInVersions := getIssueMetadata $issue "fixed-in-versions" }}
+                {{- if $fixedInVersions }}
+                    {{- printf "  This issue was fixed in: %s" (join $fixedInVersions ", " | bold) }}
+                    {{- "\n" }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }} {{/* end remediationSummary */}}
 
 {{- define "resultFooter" }}
     {{- "\n" }}

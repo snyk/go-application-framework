@@ -67,7 +67,7 @@
 				{{- $logicalLocs := index $location "logicalLocations" }}
 				{{- $region := index $physicalLoc "region" }}
 				{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
-				{{- $fixes := buildFixesFromIssue $issue }}
+				{{- $fix := buildFixFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
 				{{- $problemID := $issue.GetProblemID }}
 				{{- if not $problemID }}{{ $problemID = $issue.GetID }}{{ end }}
@@ -112,41 +112,30 @@
 						}
 						{{- end }}
 					]
-					{{- if $fixes }},
+					{{- if $fix }},
 					"fixes": [
-						{{- $fixSize := sub (len $fixes) 1 }}
-						{{- range $fixIndex, $fix := $fixes }}
 						{
 							"description": {
-								"text": {{ getQuotedString (index (index $fix "description") "text") }}
+								"text": {{ getQuotedString (index $fix "description") }}
 							},
 							"artifactChanges": [
-								{{- $artifactChanges := index $fix "artifactChanges" }}
-								{{- $changeSize := sub (len $artifactChanges) 1 }}
-								{{- range $changeIndex, $change := $artifactChanges }}
 								{
 									"artifactLocation": {
 										"uri": {{ getQuotedString (index $artifactLocation "uri") }}
 									},
 									"replacements": [
-										{{- $replacements := index $change "replacements" }}
-										{{- $replaceSize := sub (len $replacements) 1 }}
-										{{- range $replaceIndex, $replacement := $replacements }}
 										{
 											"deletedRegion": {
-												"startLine": {{ index (index $replacement "deletedRegion") "startLine" }}
+												"startLine": {{ index $region "startLine" }}
 											},
 											"insertedContent": {
-												"text": {{ getQuotedString (index (index $replacement "insertedContent") "text") }}
+												"text": {{ getQuotedString (index $fix "packageVersion") }}
 											}
-										}{{if lt $replaceIndex $replaceSize}},{{end}}
-										{{- end }}
+										}
 									]
-								}{{if lt $changeIndex $changeSize}},{{end}}
-								{{- end }}
+								}
 							]
-						}{{if lt $fixIndex $fixSize}},{{end}}
-						{{- end }}
+						}
 					]
 					{{- end }}
 					{{- if $ignoreDetails }},
