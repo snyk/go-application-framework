@@ -308,6 +308,62 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
    Risk Score: 98
    Reachability: No Path Found
 
+[1mIgnored Security issues: 4[0m
+[1m[0m                          
+ ! [IGNORED] [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088330
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088330
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+   Risk Score: 141
+   Reachability: No Path Found
+
+   Expiration: November 10, 2026
+   Category:   wont-fix
+   Ignored on: November 19, 2025
+   Ignored by: Catalin
+   Reason:     Does not apply
+
+ ! [IGNORED] [33m[MEDIUM][0m [1mImproper Resource Shutdown or Release[0m
+   Finding ID: SNYK-JAVA-ORGAPACHETOMCATEMBED-13723930
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGAPACHETOMCATEMBED-13723930
+   Introduced by: org.apache.tomcat.embed:tomcat-embed-core
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-web@3.5.6 > org.springframework.boot:spring-boot-starter-tomcat@3.5.6 > org.apache.tomcat.embed:tomcat-embed-core@10.1.46
+   Risk Score: 87
+   Reachability: No Path Found
+
+   Expiration: December 12, 2026
+   Category:   unavailable
+   Ignored on: November 11, 2025
+   Reason:     False positive
+
+ ! [IGNORED] [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-ORGBITBUCKETBC-6139942
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGBITBUCKETBC-6139942
+   Introduced by: org.bitbucket.b_c:jose4j
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.bitbucket.b_c:jose4j@0.9.3
+   Risk Score: 194
+   Reachability: No Path Found
+
+   Expiration: never
+   Category:   not-vulnerable
+   Ignored on: November 19, 2025
+   Ignored by: Catalin
+   Reason:     Is not used
+
+ ! [IGNORED] [31m[HIGH][0m [1mMemory Allocation with Excessive Size Value[0m
+   Finding ID: SNYK-JAVA-ORGJRUBY-10557729
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGJRUBY-10557729
+   Introduced by: org.jruby:jruby-stdlib
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.asciidoctor:asciidoctorj@3.0.0 > org.jruby:jruby@10.0.0.1 > org.jruby:jruby-stdlib@10.0.0.1
+   Risk Score: 84
+   Reachability: No Path Found
+
+   Expiration: never
+   Category:   unavailable
+   Ignored on: November 11, 2025
+   Reason:     None Given
+
 [32m[1mIssues to fix by upgrading:[0m[0m
 
   Upgrade [1mcom.thoughtworks.xstream:xstream@1.4.5[0m to [1mcom.thoughtworks.xstream:xstream@1.4.21[0m to fix
@@ -424,6 +480,21 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
    Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.asciidoctor:asciidoctorj@3.0.0 > org.jruby:jruby@10.0.0.1 > org.jruby:jruby-base@10.0.0.1 > com.github.jnr:jnr-posix@3.1.20
    Reachability: Not Applicable
 
+[1mIgnored License issues: 1[0m
+[1m[0m                         
+ ! [IGNORED] [33m[MEDIUM][0m [1mLGPL-2.1 license[0m
+   Finding ID: snyk:lic:maven:org.hibernate.common:hibernate-commons-annotations:LGPL-2.1
+   Info: https://snyk.io/vuln/snyk:lic:maven:org.hibernate.common:hibernate-commons-annotations:LGPL-2.1
+   Introduced by: org.hibernate.common:hibernate-commons-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-data-jpa@3.5.6 > org.hibernate.orm:hibernate-core@6.6.29.Final > org.hibernate.common:hibernate-commons-annotations@7.0.3.Final
+   Reachability: Not Applicable
+
+   Expiration: never
+   Category:   not-vulnerable
+   Ignored on: November 19, 2025
+   Ignored by: Catalin
+   Reason:     License issue
+
 ╭────────────────────────────────────────────────────────────────╮
 │ [1mTest Summary[0m                                                   │
 │                                                                │
@@ -450,8 +521,3 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
    You are currently viewing results with --severity-threshold applied.
    To view all issues, remove the --severity-threshold flag            
                                                                        
-
-💡 Tip
-
-   To view ignored issues, use the --include-ignores option.
-                                                            
