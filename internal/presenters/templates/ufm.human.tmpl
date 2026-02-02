@@ -167,6 +167,9 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
                     {{- end }}
             {{- end }}
         {{- end }}
+
+        {{- /* Render remediation summary */}}
+        {{- template "remediationSummary" $openIssues }}
     {{- end }}
 {{- end }}
 
@@ -205,8 +208,7 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 {{- end }}
 
 {{- define "remediationSummary" }}
-    {{- $allIssues := getIssuesFromTestResult $ "sca" }}
-    {{- $remediation := getRemediationSummary $allIssues }}
+    {{- $remediation := getRemediationSummary $ }}
 
     {{- if or ($remediation.HasUpgrades) ($remediation.HasPins) ($remediation.HasUnresolved) }}
         {{- "\n" }}
@@ -259,9 +261,6 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 {{- end }} {{/* end remediationSummary */}}
 
 {{- define "resultFooter" }}
-    {{- /* Render remediation summary */}}
-    {{- template "remediationSummary" $ }}
-
     {{- "\n" }}
     {{- /* Render test summary */}}
     {{- box (renderToString "testSummary" $) }}
