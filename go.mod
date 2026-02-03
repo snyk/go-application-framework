@@ -32,8 +32,9 @@ require (
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/puzpuzpuz/xsync v1.5.2
-	github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
 	github.com/subosito/gotenv v1.6.0
+	golang.org/x/mod v0.30.0
 	golang.org/x/net v0.48.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/term v0.38.0
@@ -114,7 +115,6 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/tools v0.39.0 // indirect
