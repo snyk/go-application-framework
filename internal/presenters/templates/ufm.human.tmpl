@@ -60,10 +60,10 @@
         {{- if or (eq $ignoreStatus "ignored") (eq $ignoreStatus "pending_ignore_approval") }}
 
    Expiration: {{ if $ignoreDetails.GetExpiresAt }}{{ $ignoreDetails.GetExpiresAt.Format "January 02, 2006" }} {{- else }}never {{- end }}
-   Category:   {{ if $ignoreDetails.GetIgnoreReasonType }}{{ $ignoreDetails.GetIgnoreReasonType }} {{- else }}unavailable {{- end }}
-   Ignored on: {{ if $ignoreDetails.GetCreatedAt }}{{ $ignoreDetails.GetCreatedAt.Format "January 02, 2006" }} {{- else }}unavailable {{- end }}
+   {{- if $ignoreDetails.GetIgnoreReasonType }}{{- "\n" }}   Category:   {{ $ignoreDetails.GetIgnoreReasonType }}{{- end }}
+   {{- if $ignoreDetails.GetCreatedAt }}{{- "\n" }}   Ignored on: {{ $ignoreDetails.GetCreatedAt.Format "January 02, 2006" }}{{- end }}
 {{- if $ignoreDetails.GetIgnoredBy }}
-   Ignored by: {{if $ignoreDetails.GetIgnoredBy.Name }}{{ $ignoreDetails.GetIgnoredBy.Name }} {{- else }}unavailable {{- end }}
+   {{if $ignoreDetails.GetIgnoredBy.Name }}Ignored by: {{ $ignoreDetails.GetIgnoredBy.Name }} {{- end }}
 {{- end }}
 {{- if $ignoreDetails.GetJustification }}
    Reason:     {{ $ignoreDetails.GetJustification }}

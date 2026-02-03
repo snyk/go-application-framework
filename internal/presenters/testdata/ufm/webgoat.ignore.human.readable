@@ -333,7 +333,6 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
    Reachability: No Path Found
 
    Expiration: December 12, 2026
-   Category:   unavailable
    Ignored on: November 11, 2025
    Reason:     False positive
 
@@ -360,7 +359,6 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
    Reachability: No Path Found
 
    Expiration: never
-   Category:   unavailable
    Ignored on: November 11, 2025
    Reason:     None Given
 
