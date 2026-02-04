@@ -70,6 +70,7 @@
 				{{- $fix := buildFixFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
 				{{- $problemID := $issue.GetProblemID }}
+				{{- $fingerPrintID := $issue.GetID }}
 				{{- if not $problemID }}{{ $problemID = $issue.GetID }}{{ end }}
 				{
 					"ruleId": {{ getQuotedString $problemID }},
@@ -111,7 +112,11 @@
 							{{- end }}
 						}
 						{{- end }}
-					]
+					],
+					"fingerprints": {
+						"identity": {{ getQuotedString $fingerPrintID }},
+						"snyk/asset/finding/v1": {{ getQuotedString $fingerPrintID }}
+					}
 					{{- if $fix }},
 					"fixes": [
 						{
