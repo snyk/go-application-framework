@@ -270,7 +270,8 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildRuleHelpMarkdown"] = sarif.BuildHelpMarkdown
 	fnMap["buildRuleTags"] = sarif.BuildRuleTags
 	fnMap["getRuleCVSSScore"] = sarif.GetRuleCVSSScore
-	fnMap["buildLocationFromIssue"] = sarif.BuildLocation
+	fnMap["buildLocationsFromIssue"] = sarif.BuildLocations
+	fnMap["getElementAtIndex"] = sarif.GetElementAtIndex
 	fnMap["buildFixFromIssue"] = sarif.BuildFixFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
 	return fnMap
