@@ -3,6 +3,7 @@ package localworkflows
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
@@ -325,7 +328,12 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
 
 		assert.Equal(t, []workflow.Data{}, output)
-		assert.Equal(t, "unsupported output type: hammer/head", err.Error())
+		assert.Error(t, err)
+		// convert err to error catalog error and check that it is a data rendering error
+		errCatalogError := snyk_errors.Error{}
+		assert.True(t, errors.As(err, &errCatalogError))
+		assert.Equal(t, cli.NewDataRenderingError("").ErrorCode, errCatalogError.ErrorCode)
+		assert.Equal(t, "unsupported output type: hammer/head", errCatalogError.Detail)
 		assert.Equal(t, "", setup.writer.String())
 	})
 

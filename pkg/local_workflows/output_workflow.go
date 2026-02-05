@@ -3,6 +3,8 @@ package localworkflows
 import (
 	"errors"
 
+	"github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
 
 	iUtils "github.com/snyk/go-application-framework/internal/utils"
@@ -73,6 +75,10 @@ func outputWorkflowEntryPoint(invocation workflow.InvocationContext, input []wor
 		for _, t := range input {
 			debugLogger.Warn().Msgf(" - %s", t.GetContentType())
 		}
+	}
+
+	if finalError != nil {
+		finalError = cli.NewDataRenderingError(finalError.Error(), snyk_errors.WithCause(finalError))
 	}
 
 	return output, finalError
