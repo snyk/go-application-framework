@@ -115,7 +115,7 @@ func Test_CreateAppEngine_config_replaceV1inApi(t *testing.T) {
 
 	config := engine.GetConfiguration()
 
-	expectApiUrl := "https://api.somehost:2134"
+	expectApiUrl := "https://api.snyk.io"
 	config.Set(configuration.API_URL, expectApiUrl+"/v1")
 
 	actualApiUrl := config.GetString(configuration.API_URL)
@@ -148,22 +148,22 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 			name:              "only user-defined API URL is defined, use that",
 			patPayload:        "",
 			oauthJWTPayload:   "",
-			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.user",
+			userDefinedApiUrl: "https://api.snyk.io",
+			expectedURL:       "https://api.snyk.io",
 		},
 		{
 			name:              "with a broken PAT configured and a user-defined API URL, user-defined API URL should take precedence",
 			patPayload:        `{broken`,
 			oauthJWTPayload:   "",
-			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.user",
+			expectedURL:       "https://api.snyk.io",
+			userDefinedApiUrl: "https://api.snyk.io",
 		},
 		{
 			name:              "with an empty PAT configured and a user-defined API URL, user-defined API URL should take precedence",
 			patPayload:        `{}`,
 			oauthJWTPayload:   "",
-			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.user",
+			expectedURL:       "https://api.snyk.io",
+			userDefinedApiUrl: "https://api.snyk.io",
 		},
 		{
 			name:              "with a PAT configured and a user-defined API URL, PAT host should take precedence",
@@ -176,22 +176,22 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 			name:              "with a broken OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
 			patPayload:        "",
 			oauthJWTPayload:   `{broken`,
-			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.user",
+			expectedURL:       "https://api.snyk.io",
+			userDefinedApiUrl: "https://api.snyk.io",
 		},
 		{
 			name:              "with OAuth with no host configured and a user-defined API URL, user-defined API URL should take precedence",
 			patPayload:        "",
 			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":[]}`,
-			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.user",
+			expectedURL:       "https://api.snyk.io",
+			userDefinedApiUrl: "https://api.snyk.io",
 		},
 		{
 			name:              "with OAuth configured and a user-defined API URL, OAuth audience should take precedence",
 			patPayload:        "",
-			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth"]}`,
-			userDefinedApiUrl: "https://api.user",
-			expectedURL:       "https://api.oauth",
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.eu.snyk.io"]}`,
+			userDefinedApiUrl: "https://api.snyk.io",
+			expectedURL:       "https://api.eu.snyk.io",
 		},
 		{
 			name:              "with only PAT configured, use PAT host",
@@ -203,9 +203,9 @@ func Test_EnsureAuthConfigurationPrecedence(t *testing.T) {
 		{
 			name:              "with only OAuth configured, use OAuth audience",
 			patPayload:        "",
-			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.oauth"]}`,
+			oauthJWTPayload:   `{"sub":"1234567890","name":"John Doe","iat":1516239022,"aud":["https://api.snyk.io"]}`,
 			userDefinedApiUrl: "",
-			expectedURL:       "https://api.oauth",
+			expectedURL:       "https://api.snyk.io",
 		},
 		// This is not a likely scenario, as you cannot define both at the same time. However, it will potentially
 		// catch regressions if this test starts to fail.
@@ -307,13 +307,13 @@ func Test_CreateAppEngine_config_OauthAudHasPrecedence(t *testing.T) {
 	config := configuration.New()
 	config.Set(auth.CONFIG_KEY_OAUTH_TOKEN,
 		// JWT generated at https://jwt.io with claim:
-		//   "aud": ["https://api.example.com"]
-		`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhdWQiOlsiaHR0cHM6Ly9hcGkuZXhhbXBsZS5jb20iXX0.hWq0fKukObQSkphAdyEC7-m4jXIb4VdWyQySmmgy0GU"}`,
+		//   "aud": ["https://api.snyk.io"]
+		`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhdWQiOlsiaHR0cHM6Ly9hcGkuc255ay5pbyJdfQ.vww25T4UtkxEzQzTysDI5zSi9XOYmXC5CXgxfp6mWtA"}`,
 	)
 	logger := log.New(os.Stderr, "", 0)
 
 	t.Run("Audience claim takes precedence of configured value", func(t *testing.T) {
-		expectedApiUrl := "https://api.example.com"
+		expectedApiUrl := "https://api.snyk.io"
 		localConfig := config.Clone()
 		localConfig.Set(configuration.API_URL, "https://api.dev.snyk.io")
 
@@ -325,7 +325,7 @@ func Test_CreateAppEngine_config_OauthAudHasPrecedence(t *testing.T) {
 	})
 
 	t.Run("nothing configured", func(t *testing.T) {
-		expectedApiUrl := "https://api.example.com"
+		expectedApiUrl := "https://api.snyk.io"
 		localConfig := config.Clone()
 
 		engine := CreateAppEngineWithOptions(WithConfiguration(localConfig), WithLogger(logger))

@@ -45,6 +45,11 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	return n.next.RoundTrip(newRequest)
 }
 
+// ShouldRequireAuthentication checks if a request requires authentication.
+// apiUrl is the configured API URL.
+// url is the URL of the request.
+// additionalSubdomains is a list of additional subdomains to check.
+// additionalUrls is a list of additional URLs to check.
 func ShouldRequireAuthentication(
 	apiUrl string,
 	url *url.URL,
@@ -98,11 +103,14 @@ func AddAuthenticationHeader(
 	config configuration.Configuration,
 	request *http.Request,
 ) error {
-	apiUrl := config.GetString(configuration.API_URL)
+	apiUrl, err := config.GetStringWithError(configuration.API_URL)
+	if err != nil {
+		return errors.Join(err, ErrAuthenticationFailed)
+	}
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 
+	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 	// requests to the api automatically get an authentication token attached
 	if !isSnykApi {
 		return err

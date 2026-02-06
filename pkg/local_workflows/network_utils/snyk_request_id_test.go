@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -14,6 +15,7 @@ func Test_AddRequestId(t *testing.T) {
 	t.Run("Add missing snyk-request-id", func(t *testing.T) {
 		config := configuration.NewInMemory()
 		net := networking.NewNetworkAccess(config)
+		config.Set(configuration.API_URL, constants.SNYK_DEFAULT_API_URL)
 
 		// use method under test
 		AddSnykRequestId(net)
@@ -31,6 +33,7 @@ func Test_AddRequestId(t *testing.T) {
 	t.Run("Do not override snyk-request-id", func(t *testing.T) {
 		config := configuration.NewInMemory()
 		net := networking.NewNetworkAccess(config)
+		config.Set(configuration.API_URL, "https://api.snyk.io")
 		expectedValue := "pre-existing-id"
 
 		// use method under test

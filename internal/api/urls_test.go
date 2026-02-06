@@ -100,3 +100,29 @@ func Test_isImmutableHost(t *testing.T) {
 		assert.False(t, isImmutableHost(host), host)
 	}
 }
+
+func Test_IsKnownHostName(t *testing.T) {
+	testCases := []struct {
+		host     string
+		expected bool
+	}{
+		{"localhost", true},
+		{"localhost:8080", true},
+		{"127.0.0.1", true},
+		{"127.0.0.1:9000", true},
+		{"stella", true},
+		{"stella:8000", true},
+		{"http://localhost", true},
+		{"http://localhost:8080", true},
+		{"https://127.0.0.1:9000", true},
+		{"http://stella:8000", true},
+		{"192.168.1.1", false},
+		{"example.com", false},
+		{"http://example.com", false},
+	}
+
+	for _, tc := range testCases {
+		actual := IsKnownHostName(tc.host)
+		assert.Equal(t, tc.expected, actual, "IsKnownHostName(%q) = %v, want %v", tc.host, actual, tc.expected)
+	}
+}
