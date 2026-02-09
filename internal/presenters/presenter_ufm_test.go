@@ -1126,6 +1126,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			includeIgnores:    true,
 			severityThreshold: "",
 		},
+		{
+			name:              "multi_project",
+			expectedPath:      "testdata/ufm/multi_project.human.readable",
+			testResultPath:    "testdata/ufm/multi_project.testresult.json",
+			includeIgnores:    false,
+			severityThreshold: "",
+		},
 	}
 
 	for _, tc := range testCases {
