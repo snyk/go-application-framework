@@ -85,8 +85,10 @@ const (
 	// feature flags
 	// ---------
 
-	FF_OAUTH_AUTH_FLOW_ENABLED    string = "internal_snyk_oauth_enabled"
-	FF_CODE_CONSISTENT_IGNORES    string = "internal_snyk_code_ignores_enabled"
+	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
+	FF_TRANSFORMATION_WORKFLOW string = "internal_snyk_transformation_workflow_enabled"
+	// Feature flag to enable consistent ignores for code ,used in code-client-go's code workflow
+	FF_CODE_CONSISTENT_IGNORES string = "internal_snyk_code_ignores_enabled"
+	// Feature flag to enable native implementation for code, used in code-client-go's code workflow
 	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
-	FF_TRANSFORMATION_WORKFLOW    string = "internal_snyk_transformation_workflow_enabled"
 )

@@ -18,7 +18,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 )
@@ -486,7 +485,7 @@ func TestSarifAutomationDetailsId(t *testing.T) {
 	t.Run("with project name", func(t *testing.T) {
 		projectName := "test-project"
 		config := configuration.New()
-		config.Set(code_workflow.ConfigurationProjectName, projectName)
+		config.Set("project-name", projectName)
 		writer := new(bytes.Buffer)
 		p := presenters.NewLocalFindingsRenderer(
 			[]*local_models.LocalFinding{input},

@@ -10,7 +10,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	contract "github.com/snyk/go-application-framework/internal/api/contract"
-	sast_contract "github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 // MockApiClient is a mock of ApiClient interface.
@@ -109,21 +108,6 @@ func (m *MockApiClient) GetOrganizations(limit int) (*contract.OrganizationsResp
 func (mr *MockApiClientMockRecorder) GetOrganizations(limit interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizations", reflect.TypeOf((*MockApiClient)(nil).GetOrganizations), limit)
-}
-
-// GetSastSettings mocks base method.
-func (m *MockApiClient) GetSastSettings(orgId string) (*sast_contract.SastResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSastSettings", orgId)
-	ret0, _ := ret[0].(*sast_contract.SastResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetSastSettings indicates an expected call of GetSastSettings.
-func (mr *MockApiClientMockRecorder) GetSastSettings(orgId interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSastSettings", reflect.TypeOf((*MockApiClient)(nil).GetSastSettings), orgId)
 }
 
 // GetSelf mocks base method.
