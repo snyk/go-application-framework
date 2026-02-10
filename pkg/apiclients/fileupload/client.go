@@ -2,16 +2,12 @@ package fileupload
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/puzpuzpuz/xsync"
-	"github.com/rs/zerolog"
 	"net/http"
-	"path/filepath"
 
-	fileuploadinternal "github.com/snyk/go-application-framework/internal/api/fileupload"
-	"github.com/snyk/go-application-framework/internal/api/fileupload/filters"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+
 	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
@@ -25,9 +21,7 @@ type Config struct {
 // HTTPClient provides high-level file upload functionality.
 type HTTPClient struct {
 	uploadRevisionSealableClient uploadrevision2.SealableClient
-	filtersClient                filters.Client
 	cfg                          Config
-	filters                      fileuploadinternal.Filters
 	logger                       *zerolog.Logger
 }
 
@@ -42,10 +36,6 @@ var _ Client = (*HTTPClient)(nil)
 func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 	client := &HTTPClient{
 		cfg: cfg,
-		filters: fileuploadinternal.Filters{
-			SupportedExtensions:  xsync.NewMapOf[bool](),
-			SupportedConfigFiles: xsync.NewMapOf[bool](),
-		},
 	}
 
 	for _, opt := range opts {
@@ -62,67 +52,7 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 		}, uploadrevision2.WithHTTPClient(httpClient))
 	}
 
-	if client.filtersClient == nil {
-		client.filtersClient = filters.NewDeeproxyClient(filters.Config{
-			BaseURL:   cfg.BaseURL,
-			IsFedRamp: false, //cfg.IsFedRamp,
-		}, filters.WithHTTPClient(httpClient))
-	}
-
 	return client
-}
-
-func (c *HTTPClient) loadFilters(ctx context.Context) error {
-	c.filters.Once.Do(func() {
-		filtersResp, err := c.filtersClient.GetFilters(ctx, c.cfg.OrgID)
-		if err != nil {
-			c.filters.InitErr = err
-			return
-		}
-
-		for _, ext := range filtersResp.Extensions {
-			c.filters.SupportedExtensions.Store(ext, true)
-		}
-		for _, configFile := range filtersResp.ConfigFiles {
-			// .gitignore and .dcignore should not be uploaded
-			// (https://github.com/snyk/code-client/blob/d6f6a2ce4c14cb4b05aa03fb9f03533d8cf6ca4a/src/files.ts#L138)
-			if configFile == ".gitignore" || configFile == ".dcignore" {
-				continue
-			}
-			c.filters.SupportedConfigFiles.Store(configFile, true)
-		}
-	})
-	return c.filters.InitErr
-}
-
-// createDeeproxyFilter creates a filter function based on the current deeproxy filtering configuration.
-func (c *HTTPClient) createDeeproxyFilter(ctx context.Context) (filter, error) {
-	if err := c.loadFilters(ctx); err != nil {
-		return nil, fmt.Errorf("failed to load deeproxy filters: %w", err)
-	}
-
-	return func(ff fileToFilter) *FilteredFile {
-		fileExt := filepath.Ext(ff.Stat.Name())
-		fileName := filepath.Base(ff.Stat.Name())
-		_, isSupportedExtension := c.filters.SupportedExtensions.Load(fileExt)
-		_, isSupportedConfigFile := c.filters.SupportedConfigFiles.Load(fileName)
-
-		if !isSupportedExtension && !isSupportedConfigFile {
-			var reason error
-			if !isSupportedConfigFile {
-				reason = errors.Join(reason, fmt.Errorf("file name is not a part of the supported config files: %s", fileName))
-			}
-			if !isSupportedExtension {
-				reason = errors.Join(reason, fmt.Errorf("file extension is not supported: %s", fileExt))
-			}
-			return &FilteredFile{
-				Path:   ff.Path,
-				Reason: reason,
-			}
-		}
-
-		return nil
-	}, nil
 }
 
 func (c *HTTPClient) uploadBatch(ctx context.Context, revID RevisionID, batch *uploadBatch) error {
@@ -146,7 +76,6 @@ func (c *HTTPClient) addPathsToRevision(
 	revisionID RevisionID,
 	rootPath string,
 	pathsChan <-chan string,
-	opts uploadOptions,
 ) (UploadResult, error) {
 	res := UploadResult{
 		RevisionID:    revisionID,
@@ -180,14 +109,6 @@ func (c *HTTPClient) addPathsToRevision(
 	filters := []filter{
 		fileSizeFilter,
 		filePathLengthFilter,
-	}
-	if !opts.SkipDeeproxyFiltering {
-		deeproxyFilter, err := c.createDeeproxyFilter(ctx)
-		if err != nil {
-			return res, err
-		}
-
-		filters = append(filters, deeproxyFilter)
 	}
 
 	for batchResult, err := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), filters...) {
@@ -243,8 +164,7 @@ func (c *HTTPClient) CreateRevisionFromChan(ctx context.Context, paths <-chan st
 	}
 	res.RevisionID = revisionID
 
-	opts := uploadOptions{SkipDeeproxyFiltering: true}
-	res, err = c.addPathsToRevision(ctx, revisionID, rootPath, paths, opts)
+	res, err = c.addPathsToRevision(ctx, revisionID, rootPath, paths)
 	if err != nil {
 		return UploadResult{}, fmt.Errorf("failed to add paths to revision %s: %w", revisionID, err)
 	}
