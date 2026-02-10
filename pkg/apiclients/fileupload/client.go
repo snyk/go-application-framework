@@ -78,14 +78,14 @@ func (c *HTTPClient) addPathsToRevision(
 	pathsChan <-chan string,
 ) (UploadResult, error) {
 	res := UploadResult{
-		RevisionID:    revisionID,
-		FilteredFiles: make([]FilteredFile, 0),
+		RevisionID:   revisionID,
+		SkippedFiles: make([]SkippedFile, 0),
 	}
 
-	fileSizeFilter := func(ff fileToFilter) *FilteredFile {
+	fileSizeFilter := func(ff fileToFilter) *SkippedFile {
 		fileSizeLimit := c.uploadRevisionSealableClient.GetLimits().FileSizeLimit
 		if ff.Stat.Size() > fileSizeLimit {
-			return &FilteredFile{
+			return &SkippedFile{
 				Path:   ff.Path,
 				Reason: uploadrevision2.NewFileSizeLimitError(ff.Stat.Name(), ff.Stat.Size(), fileSizeLimit),
 			}
@@ -94,10 +94,10 @@ func (c *HTTPClient) addPathsToRevision(
 		return nil
 	}
 
-	filePathLengthFilter := func(ff fileToFilter) *FilteredFile {
+	filePathLengthFilter := func(ff fileToFilter) *SkippedFile {
 		filePathLengthLimit := c.uploadRevisionSealableClient.GetLimits().FilePathLengthLimit
 		if len(ff.Path) > filePathLengthLimit {
-			return &FilteredFile{
+			return &SkippedFile{
 				Path:   ff.Path,
 				Reason: uploadrevision2.NewFilePathLengthLimitError(ff.Path, len(ff.Path), filePathLengthLimit),
 			}
@@ -111,18 +111,10 @@ func (c *HTTPClient) addPathsToRevision(
 		filePathLengthFilter,
 	}
 
-	for batchResult, err := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), filters...) {
-		if err != nil {
-			// make sure to close all previously open files if an error occurs
-			if batchResult != nil && batchResult.batch != nil {
-				batchResult.batch.closeRemainingFiles()
-			}
-			return res, fmt.Errorf("failed to batch files: %w", err)
-		}
+	for batchResult := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), c.logger, filters...) {
+		res.SkippedFiles = append(res.SkippedFiles, batchResult.skippedFiles...)
 
-		res.FilteredFiles = append(res.FilteredFiles, batchResult.filteredFiles...)
-
-		err = c.uploadBatch(ctx, revisionID, batchResult.batch)
+		err := c.uploadBatch(ctx, revisionID, batchResult.batch)
 		if err != nil {
 			return res, err
 		}
@@ -155,7 +147,7 @@ func (c *HTTPClient) sealRevision(ctx context.Context, revisionID RevisionID) er
 // This is a convenience method that creates, uploads, and seals a revision.
 func (c *HTTPClient) CreateRevisionFromChan(ctx context.Context, paths <-chan string, rootPath string) (UploadResult, error) {
 	res := UploadResult{
-		FilteredFiles: make([]FilteredFile, 0),
+		SkippedFiles: make([]SkippedFile, 0),
 	}
 
 	revisionID, err := c.createRevision(ctx)
@@ -169,7 +161,7 @@ func (c *HTTPClient) CreateRevisionFromChan(ctx context.Context, paths <-chan st
 		return UploadResult{}, fmt.Errorf("failed to add paths to revision %s: %w", revisionID, err)
 	}
 
-	if res.UploadedFilesCount == 0 && len(res.FilteredFiles) == 0 {
+	if res.UploadedFilesCount == 0 && len(res.SkippedFiles) == 0 {
 		return res, ErrNoFilesProvided
 	}
 

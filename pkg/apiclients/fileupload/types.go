@@ -12,7 +12,7 @@ type RevisionID = uploadrevision.RevisionID
 
 // UploadResult respresents the result of the upload.
 type UploadResult struct {
-	RevisionID         RevisionID     // The ID of the revision which was created.
-	UploadedFilesCount int            // The number of uploaded files.
-	FilteredFiles      []FilteredFile // The list of files which were filtered.
+	RevisionID         RevisionID    // The ID of the revision which was created.
+	UploadedFilesCount int           // The number of uploaded files.
+	SkippedFiles       []SkippedFile // The list of files which were skipped.
 }
