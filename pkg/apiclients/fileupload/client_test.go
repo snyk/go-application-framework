@@ -24,7 +24,6 @@ var helperpath = filepath.Join("src", "utils", "helper.go")
 var docpath = filepath.Join("docs", "README.md")
 var gomodpath = filepath.Join("src", "go.mod")
 var nonexistpath = filepath.Join("nonexistent", "file.go")
-var missingpath = filepath.Join("another", "missing", "path.txt")
 
 // CreateTmpFiles is an utility function used to create temporary files in tests.
 func createTmpFiles(t *testing.T, files []uploadrevision2.LoadedFile) (dir *os.File) {
@@ -96,7 +95,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
-		assert.Empty(t, res.FilteredFiles)
+		assert.Empty(t, res.SkippedFiles)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
 		require.NoError(t, err)
 		require.Len(t, uploadedFiles, 4)
@@ -109,7 +108,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		expectEqualFiles(t, expectedFiles, uploadedFiles)
 	})
 
-	t.Run("error handling with better context", func(t *testing.T) {
+	t.Run("file access errors result in skipping the file", func(t *testing.T) {
 		allFiles := []uploadrevision2.LoadedFile{
 			{Path: "README.md", Content: "# Project"},
 		}
@@ -123,28 +122,13 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 			paths <- nonexistpath
 		}()
 
-		_, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
-		require.Error(t, err)
-		var fileAccessErr *uploadrevision2.FileAccessError
-		assert.ErrorAs(t, err, &fileAccessErr)
-		assert.Equal(t, nonexistpath, fileAccessErr.FilePath)
-	})
+		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.NoError(t, err)
 
-	t.Run("only non-existent files", func(t *testing.T) {
-		ctx, _, client, dir := setupTest(t, llcfg, []uploadrevision2.LoadedFile{})
-
-		paths := make(chan string)
-		go func() {
-			defer close(paths)
-			paths <- missingpath
-			paths <- nonexistpath
-		}()
-
-		_, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
-		require.Error(t, err)
-		var fileAccessErr *uploadrevision2.FileAccessError
-		assert.ErrorAs(t, err, &fileAccessErr)
-		assert.Equal(t, missingpath, fileAccessErr.FilePath)
+		assert.Equal(t, 1, res.UploadedFilesCount)
+		assert.Len(t, res.SkippedFiles, 1)
+		assert.Equal(t, nonexistpath, res.SkippedFiles[0].Path)
+		assert.Contains(t, res.SkippedFiles[0].Reason.Error(), "cannot be accessed")
 	})
 
 	t.Run("uploading a file from chan exceeding the file size limit", func(t *testing.T) {
@@ -173,8 +157,8 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		require.NoError(t, err)
 
 		var fileSizeErr *uploadrevision2.FileSizeLimitError
-		assert.Len(t, res.FilteredFiles, 1)
-		ff := res.FilteredFiles[0]
+		assert.Len(t, res.SkippedFiles, 1)
+		ff := res.SkippedFiles[0]
 		assert.Contains(t, ff.Path, "file1.txt")
 		assert.ErrorAs(t, ff.Reason, &fileSizeErr)
 		assert.Equal(t, "file1.txt", fileSizeErr.FilePath)
@@ -212,8 +196,8 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		require.NoError(t, err)
 
 		var filePathErr *uploadrevision2.FilePathLengthLimitError
-		assert.Len(t, res.FilteredFiles, 1)
-		ff := res.FilteredFiles[0]
+		assert.Len(t, res.SkippedFiles, 1)
+		ff := res.SkippedFiles[0]
 		assert.Contains(t, ff.Path, "file1.txt")
 		assert.ErrorAs(t, ff.Reason, &filePathErr)
 		assert.Equal(t, "file1.txt", filePathErr.FilePath)
@@ -260,7 +244,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
-		assert.Empty(t, res.FilteredFiles)
+		assert.Empty(t, res.SkippedFiles)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
 		require.NoError(t, err)
 		expectEqualFiles(t, expectedFiles, uploadedFiles)
@@ -304,8 +288,8 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		require.NoError(t, err)
 
 		var fileSizeErr *uploadrevision2.FileSizeLimitError
-		assert.Len(t, res.FilteredFiles, 1)
-		ff := res.FilteredFiles[0]
+		assert.Len(t, res.SkippedFiles, 1)
+		ff := res.SkippedFiles[0]
 		assert.Contains(t, ff.Path, "file1.txt")
 		assert.ErrorAs(t, ff.Reason, &fileSizeErr)
 		assert.Equal(t, "file1.txt", fileSizeErr.FilePath)
@@ -354,7 +338,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
-		assert.Empty(t, res.FilteredFiles)
+		assert.Empty(t, res.SkippedFiles)
 		// Success proves size-based batching works - without it, the low-level client
 		// would reject the 90-byte payload (limit: 70 bytes).
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
@@ -400,7 +384,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
-		assert.Empty(t, res.FilteredFiles)
+		assert.Empty(t, res.SkippedFiles)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
 		require.NoError(t, err)
 		expectEqualFiles(t, expectedFiles, uploadedFiles)
@@ -452,7 +436,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
-		assert.Empty(t, res.FilteredFiles)
+		assert.Empty(t, res.SkippedFiles)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
 		require.NoError(t, err)
 		expectEqualFiles(t, expectedFiles, uploadedFiles)
@@ -490,7 +474,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
-		assert.Empty(t, res.FilteredFiles)
+		assert.Empty(t, res.SkippedFiles)
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
 		require.NoError(t, err)
 		expectEqualFiles(t, expectedFiles, uploadedFiles)

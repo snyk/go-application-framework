@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 )
 
@@ -44,51 +45,69 @@ func (b *uploadBatch) closeRemainingFiles() {
 }
 
 type batchingResult struct {
-	batch         *uploadBatch
-	filteredFiles []FilteredFile
+	batch        *uploadBatch
+	skippedFiles []SkippedFile
 }
 
-func batchPaths(rootPath string, paths <-chan string, limits uploadrevision.Limits, filters ...filter) iter.Seq2[*batchingResult, error] {
-	return func(yield func(*batchingResult, error) bool) {
+func batchPaths(
+	rootPath string,
+	paths <-chan string,
+	limits uploadrevision.Limits,
+	logger *zerolog.Logger,
+	filters ...filter,
+) iter.Seq[*batchingResult] {
+	return func(yield func(*batchingResult) bool) {
 		batch := newUploadBatch(limits)
-		filtered := []FilteredFile{}
+		skipped := []SkippedFile{}
+		batchNumber := 0
+		logger.Debug().
+			Int("file_count_limit", limits.FileCountLimit).
+			Int64("file_size_limit_bytes", limits.FileSizeLimit).
+			Int64("total_payload_limit_bytes", limits.TotalPayloadSizeLimit).
+			Msg("Starting file batching")
 		for path := range paths {
 			relPath, err := filepath.Rel(rootPath, path)
 			if err != nil {
-				if !yield(&batchingResult{batch: batch, filteredFiles: filtered}, uploadrevision.NewFileAccessError(path, err)) {
-					return
-				}
+				logger.Debug().Msgf("failed to get relative path for file: %s", path)
+				skipped = append(skipped, SkippedFile{Path: path, Reason: uploadrevision.NewFileAccessError(path, err)})
+				continue
 			}
 
 			f, err := os.Open(path)
 			if err != nil {
+				logger.Debug().Msgf("failed to open file: %s", path)
 				f.Close()
-				if !yield(&batchingResult{batch: batch, filteredFiles: filtered}, uploadrevision.NewFileAccessError(path, err)) {
-					return
-				}
+				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
+				continue
 			}
 
 			fstat, err := f.Stat()
 			if err != nil {
+				logger.Debug().Msgf("failed to stat file: %s", path)
 				f.Close()
-				if !yield(&batchingResult{batch: batch, filteredFiles: filtered}, uploadrevision.NewFileAccessError(path, err)) {
-					return
-				}
+				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
+				continue
 			}
 
 			ff := applyFilters(fileToFilter{Path: relPath, Stat: fstat}, filters...)
 			if ff != nil {
 				f.Close()
-				filtered = append(filtered, *ff)
+				skipped = append(skipped, *ff)
 				continue
 			}
 
 			if batch.wouldExceedLimits(fstat.Size()) {
-				if !yield(&batchingResult{batch: batch, filteredFiles: filtered}, nil) {
+				batchNumber++
+				logger.Debug().
+					Int("batch_number", batchNumber).
+					Int("file_count", len(batch.files)).
+					Int64("total_size_bytes", batch.currentSize).
+					Msg("Batch complete, starting new batch")
+				if !yield(&batchingResult{batch: batch, skippedFiles: skipped}) {
 					return
 				}
 				batch = newUploadBatch(limits)
-				filtered = []FilteredFile{}
+				skipped = []SkippedFile{}
 			}
 
 			batch.addFile(uploadrevision.UploadFile{
@@ -97,13 +116,13 @@ func batchPaths(rootPath string, paths <-chan string, limits uploadrevision.Limi
 			}, fstat.Size())
 		}
 
-		if !batch.isEmpty() || len(filtered) > 0 {
-			yield(&batchingResult{batch: batch, filteredFiles: filtered}, nil)
+		if !batch.isEmpty() || len(skipped) > 0 {
+			yield(&batchingResult{batch: batch, skippedFiles: skipped})
 		}
 	}
 }
 
-func applyFilters(ff fileToFilter, filters ...filter) *FilteredFile {
+func applyFilters(ff fileToFilter, filters ...filter) *SkippedFile {
 	for _, filter := range filters {
 		if ff := filter(ff); ff != nil {
 			return ff

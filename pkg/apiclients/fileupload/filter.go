@@ -9,15 +9,15 @@ type fileToFilter struct {
 	Stat os.FileInfo
 }
 
-// FilteredFile represents a file that was filtered.
-// It includes the filtered file's path and the reason it was filtered.
-type FilteredFile struct {
+// SkippedFile represents a file that was skipped.
+// It includes the skipped file's path and the reason it was skipped.
+type SkippedFile struct {
 	Path   string
 	Reason error
 }
 
 // filter is the type definition for functions which are used to
 // filter files before uploading.
-// The function will get metadata about files in the form of FileToFilter
-// and return a FilteredFile object if the file should be filtered, or nil otherwise.
-type filter func(fileToFilter) *FilteredFile
+// The function will get metadata about files in the form of fileToFilter
+// and return a SkippedFile object if the file should be skipped, or nil otherwise.
+type filter func(fileToFilter) *SkippedFile
