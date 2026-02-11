@@ -134,3 +134,69 @@ func TestGetRemoteUrl_Priority(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/origin/repo.git", remoteUrl)
 }
+
+func TestGetSanitizedRemoteUrl(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "HTTPS URL",
+			input:    "https://github.com/user/repo.git",
+			expected: "http://github.com/user/repo.git",
+		},
+		{
+			name:     "HTTP URL",
+			input:    "http://github.com/user/repo.git",
+			expected: "http://github.com/user/repo.git",
+		},
+		{
+			name:     "SSH URL with protocol",
+			input:    "ssh://git@github.com/user/repo.git",
+			expected: "http://github.com/user/repo.git",
+		},
+		{
+			name:     "SCP-like syntax with user",
+			input:    "git@github.com:user/repo.git",
+			expected: "http://github.com/user/repo.git",
+		},
+		{
+			name:     "SCP-like syntax without user",
+			input:    "github.com:user/repo.git",
+			expected: "http://github.com/user/repo.git",
+		},
+		{
+			name:     "SCP-like syntax with different host",
+			input:    "git@gitlab.com:organization/project.git",
+			expected: "http://gitlab.com/organization/project.git",
+		},
+		{
+			name:     "HTTPS URL with port",
+			input:    "https://github.com:443/user/repo.git",
+			expected: "http://github.com:443/user/repo.git",
+		},
+		{
+			name:     "unsupported protocol",
+			input:    "ftp://example.com/repo.git",
+			expected: "ftp://example.com/repo.git",
+		},
+		{
+			name:     "plain path (no match)",
+			input:    "/path/to/repo",
+			expected: "/path/to/repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetSanitizedRemoteUrl(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
