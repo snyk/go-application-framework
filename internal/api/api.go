@@ -9,8 +9,6 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	"github.com/snyk/go-application-framework/internal/constants"
-
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=api.go -destination ../mocks/api.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/api/
@@ -24,7 +22,6 @@ type ApiClient interface {
 	GetFeatureFlag(flagname string, origId string) (bool, error)
 	GetUserMe() (string, error)
 	GetSelf() (contract.SelfResponse, error)
-	GetSastSettings(orgId string) (*sast_contract.SastResponse, error)
 	GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error)
 }
 
@@ -224,28 +221,6 @@ func (a *snykApiClient) GetSelf() (contract.SelfResponse, error) {
 	}
 
 	return selfData, nil
-}
-
-func (a *snykApiClient) GetSastSettings(orgId string) (*sast_contract.SastResponse, error) {
-	endpoint := a.url + "/v1/cli-config/settings/sast?org=" + url.QueryEscape(orgId)
-	res, err := a.client.Get(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve settings: %w", err)
-	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve settings: %w", err)
-	}
-
-	var response sast_contract.SastResponse
-	if err = json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("unable to retrieve settings (status: %d): %w", res.StatusCode, err)
-	}
-
-	return &response, err
 }
 
 func (a *snykApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error) {
