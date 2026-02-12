@@ -495,7 +495,7 @@ func expectEqualFiles(t *testing.T, expectedFiles, uploadedFiles []uploadrevisio
 	})
 
 	for i := range uploadedFiles {
-		assert.Equal(t, expectedFiles[i].Path, uploadedFiles[i].Path)
+		assert.Equal(t, filepath.ToSlash(expectedFiles[i].Path), uploadedFiles[i].Path)
 		assert.Equal(t, expectedFiles[i].Content, uploadedFiles[i].Content)
 	}
 }
