@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net/url"
 	"reflect"
 	"slices"
 	"strconv"
@@ -257,7 +258,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 		driverName = strings.TrimSpace(strings.Replace(driverName, "Snyk", "", 1))
 
 		if projectName != "" {
-			projectName = projectName + "/"
+			projectName = url.PathEscape(projectName) + "/"
 		}
 		return fmt.Sprintf("Snyk/%s/%s%s", driverName, projectName, time.Now().UTC().Format(time.RFC3339))
 	}
