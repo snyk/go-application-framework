@@ -187,24 +187,43 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- "\n" }}
 
     {{- $depPaths := getIssueMetadata $issue "dependency-paths" }}
-    {{- if $depPaths }}
+    {{- $showPaths := getValueFromConfig "show-vulnerable-paths" }}
+    {{- if and $depPaths (ne $showPaths "none") }}
         {{- $pathCount := len $depPaths }}
         {{- if gt $pathCount 0 }}
-            {{- $firstPath := index $depPaths 0 }}
-            {{- $pathStr := "" }}
-            {{- range $i, $pkg := $firstPath }}
-                {{- if eq $i 0 }}
-                    {{- $pathStr = printf "%s@%s" $pkg.Name $pkg.Version }}
+            {{- if eq $showPaths "all" }}
+                {{- printf "    introduced by\n" }}
+                {{- range $depPaths }}
+                    {{- $pathStr := "" }}
+                    {{- range $i, $pkg := . }}
+                        {{- if eq $i 0 }}
+                            {{- $pathStr = printf "%s@%s" $pkg.Name $pkg.Version }}
+                        {{- else }}
+                            {{- $pathStr = printf "%s > %s@%s" $pathStr $pkg.Name $pkg.Version }}
+                        {{- end }}
+                    {{- end }}
+                    {{- printf "    %s\n" $pathStr }}
+                {{- end }}
+            {{- else }}
+                {{- $firstPath := index $depPaths 0 }}
+                {{- $pathStr := "" }}
+                {{- range $i, $pkg := $firstPath }}
+                    {{- if eq $i 0 }}
+                        {{- $pathStr = printf "%s@%s" $pkg.Name $pkg.Version }}
+                    {{- else }}
+                        {{- $pathStr = printf "%s > %s@%s" $pathStr $pkg.Name $pkg.Version }}
+                    {{- end }}
+                {{- end }}
+                {{- if gt $pathCount 1 }}
+                    {{- if eq (sub $pathCount 1) 1 }}
+                        {{- printf "    introduced by %s and %d other path\n" $pathStr (sub $pathCount 1) }}
+                    {{- else }}
+                        {{- printf "    introduced by %s and %d other paths\n" $pathStr (sub $pathCount 1) }}
+                    {{- end }}
                 {{- else }}
-                    {{- $pathStr = printf "%s > %s@%s" $pathStr $pkg.Name $pkg.Version }}
+                    {{- printf "    introduced by %s\n" $pathStr }}
                 {{- end }}
             {{- end }}
-            {{- if gt $pathCount 1 }}
-                {{- printf "    introduced by %s and %d other path(s)" $pathStr (sub $pathCount 1) }}
-            {{- else }}
-                {{- printf "    introduced by %s" $pathStr }}
-            {{- end }}
-            {{- "\n" }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -278,11 +297,15 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 
 {{- /* Main template */}}
 {{- define "main" }}
+    {{- $totalResults := len $.TestResults }}
     {{- /* Render each result */}}
     {{- range $resultIndex, $result := $.TestResults}}
         {{- template "resultHeader" $result}}
         {{- template "resultBody" $result}}
         {{- template "resultFooter" $result}}
+        {{- if lt (add $resultIndex 1) $totalResults }}
+            {{- "\n" }}{{- divider }}{{- "\n" }}
+        {{- end }}
     {{- end }}
 
     {{- /* Show hint if results are filtered */}}
