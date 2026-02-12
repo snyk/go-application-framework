@@ -54,6 +54,7 @@ func batchPaths(
 	paths <-chan string,
 	limits uploadrevision.Limits,
 	logger *zerolog.Logger,
+	relativePathNormalizer func(string) string,
 	filters ...filter,
 ) iter.Seq[*batchingResult] {
 	return func(yield func(*batchingResult) bool) {
@@ -72,6 +73,7 @@ func batchPaths(
 				skipped = append(skipped, SkippedFile{Path: path, Reason: uploadrevision.NewFileAccessError(path, err)})
 				continue
 			}
+			relPath = relativePathNormalizer(relPath)
 
 			f, err := os.Open(path)
 			if err != nil {

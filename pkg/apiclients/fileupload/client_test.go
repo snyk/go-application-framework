@@ -108,6 +108,45 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		expectEqualFiles(t, expectedFiles, uploadedFiles)
 	})
 
+	t.Run("normalizes relative paths when configured", func(t *testing.T) {
+		files := []uploadrevision2.LoadedFile{
+			{Path: filepath.Join("src", "windows", "main.go"), Content: "package main"},
+			{Path: filepath.Join("d", "n", "README.md"), Content: "# doc"},
+		}
+		expectedFiles := make([]uploadrevision2.LoadedFile, 0, len(files))
+		for _, file := range files {
+			expectedFiles = append(expectedFiles, uploadrevision2.LoadedFile{
+				Path:    filepath.ToSlash(file.Path),
+				Content: file.Content,
+			})
+		}
+
+		ctx, fakeSealableClient, client, dir := setupTest(
+			t,
+			llcfg,
+			files,
+		)
+		httpClient, ok := client.(*fileupload.HTTPClient)
+		require.True(t, ok)
+		client = httpClient.WithPathNormalizer(filepath.ToSlash)
+
+		paths := make(chan string)
+		go func() {
+			defer close(paths)
+			for _, file := range files {
+				paths <- filepath.Join(dir.Name(), file.Path)
+			}
+		}()
+
+		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.NoError(t, err)
+		assert.Empty(t, res.SkippedFiles)
+
+		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
+		require.NoError(t, err)
+		expectEqualFiles(t, expectedFiles, uploadedFiles)
+	})
+
 	t.Run("file access errors result in skipping the file", func(t *testing.T) {
 		allFiles := []uploadrevision2.LoadedFile{
 			{Path: "README.md", Content: "# Project"},
