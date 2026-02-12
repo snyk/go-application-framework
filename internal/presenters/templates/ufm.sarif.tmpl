@@ -62,11 +62,19 @@
 				{{- $targetFile := "" }}
 				{{- if $displayTargetFile }} {{- $targetFile = $displayTargetFile }} {{- end }}
 				{{- range $index, $issue := $issues }}
-				{{- $location := buildLocationFromIssue $issue $targetFile }}
-				{{- $physicalLoc := index $location "physicalLocation" }}
-				{{- $logicalLocs := index $location "logicalLocations" }}
-				{{- $region := index $physicalLoc "region" }}
-				{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
+				{{- $locations := buildLocationsFromIssue $issue $targetFile }}
+				{{- $location := "" }}
+				{{- $physicalLoc := "" }}
+				{{- $region := "" }}
+				{{- $artifactLocation := "" }}
+				{{- if $locations }}
+				{{- $location = getElementAtIndex $locations 0 }}
+				{{- $physicalLoc = index $location "physicalLocation" }}
+				{{- if $physicalLoc }}
+				{{- $region = index $physicalLoc "region" }}
+				{{- $artifactLocation = index $physicalLoc "artifactLocation" }}
+				{{- end }}
+				{{- end }}
 				{{- $fix := buildFixFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
 				{{- $problemID := $issue.GetProblemID }}
@@ -76,10 +84,16 @@
 					"level": {{ getQuotedString (severityToSarifLevel $issue.GetSeverity) }},
 					"message": {
 						"text": {{ getQuotedString (formatIssueMessage $issue) }}
-					},
+					}
+					{{- if $locations }},
 					"locations": [
-						{{- if $location }}
+						{{- $locationsSize := sub (len $locations) 1 }}
+						{{- range $locIndex, $loc := $locations }}
 						{
+							{{- $physicalLoc := index $loc "physicalLocation" }}
+							{{- $logicalLocs := index $loc "logicalLocations" }}
+							{{- $region := index $physicalLoc "region" }}
+							{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
 							{{- if $physicalLoc }}
 							"physicalLocation": {
 								"artifactLocation": {
@@ -102,14 +116,16 @@
 							{{- if and $physicalLoc $logicalLocs}} , {{end}}
 							{{- if $logicalLocs }}
 							"logicalLocations": [
-								{{- range $logLoc := $logicalLocs }}
+								{{- $logicalLocsSize := sub (len $logicalLocs) 1 }}
+								{{- range $logLocIndex, $logLoc := $logicalLocs }}
 								{
 									"fullyQualifiedName": {{ getQuotedString (index $logLoc "fullyQualifiedName") }}
-								}
+								}{{if lt $logLocIndex $logicalLocsSize}},{{end}}
 								{{- end }}
 							]
 							{{- end }}
-						}
+						}{{if lt $locIndex $locationsSize}},{{end}}
+						{{- end }}
 						{{- end }}
 					]
 					{{- if $fix }},
@@ -120,14 +136,18 @@
 							},
 							"artifactChanges": [
 								{
+									{{- if $artifactLocation }}
 									"artifactLocation": {
 										"uri": {{ getQuotedString (index $artifactLocation "uri") }}
 									},
+									{{- end }}
 									"replacements": [
 										{
+											{{- if $region }}
 											"deletedRegion": {
 												"startLine": {{ index $region "startLine" }}
 											},
+											{{- end }}
 											"insertedContent": {
 												"text": {{ getQuotedString (index $fix "packageVersion") }}
 											}
