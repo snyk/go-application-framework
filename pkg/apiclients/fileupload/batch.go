@@ -73,6 +73,9 @@ func batchPaths(
 				continue
 			}
 
+			// normalize to forward slashes
+			relPath = filepath.ToSlash(relPath)
+
 			f, err := os.Open(path)
 			if err != nil {
 				logger.Debug().Msgf("failed to open file: %s", path)
