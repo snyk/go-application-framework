@@ -23,6 +23,7 @@ type HTTPClient struct {
 	uploadRevisionSealableClient uploadrevision2.SealableClient
 	cfg                          Config
 	logger                       *zerolog.Logger
+	relativePathNormalizer       func(string) string
 }
 
 // Client defines the interface for the high level file upload client.
@@ -46,6 +47,10 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 		client.logger = utils.Ptr(zerolog.Nop())
 	}
 
+	client.relativePathNormalizer = func(path string) string {
+		return path
+	}
+
 	if client.uploadRevisionSealableClient == nil {
 		client.uploadRevisionSealableClient = uploadrevision2.NewClient(uploadrevision2.Config{
 			BaseURL: cfg.BaseURL,
@@ -53,6 +58,12 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 	}
 
 	return client
+}
+
+// WithPathNormalizer sets a path normalizer for relative paths and returns the client.
+func (c *HTTPClient) WithPathNormalizer(normalizer func(string) string) *HTTPClient {
+	c.relativePathNormalizer = normalizer
+	return c
 }
 
 func (c *HTTPClient) uploadBatch(ctx context.Context, revID RevisionID, batch *uploadBatch) error {
@@ -111,7 +122,14 @@ func (c *HTTPClient) addPathsToRevision(
 		filePathLengthFilter,
 	}
 
-	for batchResult := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), c.logger, filters...) {
+	for batchResult := range batchPaths(
+		rootPath,
+		pathsChan,
+		c.uploadRevisionSealableClient.GetLimits(),
+		c.logger,
+		c.relativePathNormalizer,
+		filters...,
+	) {
 		res.SkippedFiles = append(res.SkippedFiles, batchResult.skippedFiles...)
 
 		err := c.uploadBatch(ctx, revisionID, batchResult.batch)
