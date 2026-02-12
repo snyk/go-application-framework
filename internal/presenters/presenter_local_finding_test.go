@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/url"
 	"os"
 	"testing"
 	"text/template"
@@ -483,7 +484,7 @@ func TestSarifAutomationDetailsId(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("with project name", func(t *testing.T) {
-		projectName := "test-project"
+		projectName := "test project"
 		config := configuration.New()
 		config.Set("project-name", projectName)
 		writer := new(bytes.Buffer)
@@ -498,8 +499,9 @@ func TestSarifAutomationDetailsId(t *testing.T) {
 
 		var sarifOutput SarifOutput
 		err = json.Unmarshal(writer.Bytes(), &sarifOutput)
+		expectedProjectName := url.PathEscape(projectName)
 		require.Nil(t, err)
-		require.Regexp(t, "Snyk/Code/"+projectName+"/.*", sarifOutput.Runs[0].AutomationDetails.Id)
+		require.Regexp(t, "Snyk/Code/"+expectedProjectName+"/.*", sarifOutput.Runs[0].AutomationDetails.Id)
 	})
 
 	t.Run("without project name", func(t *testing.T) {
