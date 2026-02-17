@@ -188,7 +188,7 @@ func validateFiles(files []UploadFile) error {
 	}
 
 	if len(files) == 0 {
-		return ErrNoFilesProvided
+		return ErrNoFilesUploaded
 	}
 
 	var totalPayloadSize int64

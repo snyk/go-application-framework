@@ -154,7 +154,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		}()
 
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
-		require.NoError(t, err)
+		require.Error(t, err)
 
 		var fileSizeErr *uploadrevision2.FileSizeLimitError
 		assert.Len(t, res.SkippedFiles, 1)
@@ -166,7 +166,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		assert.Equal(t, int64(7), fileSizeErr.FileSize)
 
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
-		require.NoError(t, err)
+		require.Error(t, err)
 		expectEqualFiles(t, nil, uploadedFiles)
 	})
 
@@ -193,7 +193,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		}()
 
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
-		require.NoError(t, err)
+		require.Error(t, err)
 
 		var filePathErr *uploadrevision2.FilePathLengthLimitError
 		assert.Len(t, res.SkippedFiles, 1)
@@ -204,7 +204,7 @@ func Test_CreateRevisionFromChan(t *testing.T) {
 		assert.Equal(t, 5, filePathErr.Limit)
 
 		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
-		require.NoError(t, err)
+		require.Error(t, err)
 		expectEqualFiles(t, nil, uploadedFiles)
 	})
 

@@ -161,7 +161,7 @@ func (c *HTTPClient) CreateRevisionFromChan(ctx context.Context, paths <-chan st
 		return UploadResult{}, fmt.Errorf("failed to add paths to revision %s: %w", revisionID, err)
 	}
 
-	if res.UploadedFilesCount == 0 && len(res.SkippedFiles) == 0 {
+	if res.UploadedFilesCount == 0 {
 		return res, ErrNoFilesProvided
 	}
 
