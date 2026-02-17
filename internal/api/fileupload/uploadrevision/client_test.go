@@ -451,7 +451,7 @@ func TestClient_UploadFiles_EmptyFileList(t *testing.T) {
 	err := c.UploadFiles(context.Background(), orgID, revID, []uploadrevision2.UploadFile{})
 
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, uploadrevision2.ErrNoFilesProvided)
+	assert.ErrorIs(t, err, uploadrevision2.ErrNoFilesUploaded)
 }
 
 func TestClient_SealRevision(t *testing.T) {
