@@ -3,10 +3,10 @@ package fileupload
 import (
 	"iter"
 	"os"
-	"path/filepath"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 // uploadBatch manages a batch of files for upload.
@@ -66,9 +66,9 @@ func batchPaths(
 			Int64("total_payload_limit_bytes", limits.TotalPayloadSizeLimit).
 			Msg("Starting file batching")
 		for path := range paths {
-			relPath, err := filepath.Rel(rootPath, path)
+			relPath, err := utils.ToRelativeUnixPath(rootPath, path)
 			if err != nil {
-				logger.Debug().Msgf("failed to get relative path for file: %s", path)
+				logger.Debug().Msgf("failed to get relative unix path for file: %s", path)
 				skipped = append(skipped, SkippedFile{Path: path, Reason: uploadrevision.NewFileAccessError(path, err)})
 				continue
 			}
