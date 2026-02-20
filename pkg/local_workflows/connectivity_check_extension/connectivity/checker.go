@@ -105,6 +105,19 @@ func (c *Checker) DetectProxyConfig() ProxyConfig {
 		config.NoProxy = noProxy
 	}
 
+	// Check NODE_EXTRA_CA_CERTS
+	if nodeExtraCACerts := os.Getenv("NODE_EXTRA_CA_CERTS"); nodeExtraCACerts != "" {
+		config.NodeExtraCACerts = nodeExtraCACerts
+	}
+
+	// Check Kerberos environment variables
+	if krb5Config := os.Getenv("KRB5_CONFIG"); krb5Config != "" {
+		config.KRB5Config = krb5Config
+	}
+	if krb5CCName := os.Getenv("KRB5CCNAME"); krb5CCName != "" {
+		config.KRB5CCName = krb5CCName
+	}
+
 	return config
 }
 
