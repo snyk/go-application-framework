@@ -276,7 +276,85 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
+		assert.Empty(t, setup.writer.String())
+	})
+
+	t.Run("should output to (real) file when json-file-output is provided in json based format", func(t *testing.T) {
+		setup := setupTest(t)
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
+		setup.config.Set("json-file-output", expectedFileName)
+		defer setup.config.Set("json-file-output", nil)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/vnd.cyclonedx+json", []byte(payload))
+		realOutputDestination := &utils.OutputDestinationImpl{}
+
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+		assert.FileExists(t, expectedFileName)
+
+		fileContent, err := os.ReadFile(expectedFileName)
+		assert.NoError(t, err)
+		assert.Equal(t, payload, string(fileContent))
+
+		// Second write should overwrite
+		output, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+
+		fileContent, err = os.ReadFile(expectedFileName)
+		assert.NoError(t, err)
+		assert.Equal(t, payload, string(fileContent))
+	})
+
+	t.Run("should output to file when json-file-output is provided in json based format", func(t *testing.T) {
+		setup := setupTest(t)
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
+		setup.config.Set("json-file-output", expectedFileName)
+		defer setup.config.Set("json-file-output", nil)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/vnd.cyclonedx+json", []byte(payload))
+
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
+
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+		assert.Empty(t, setup.writer.String())
+	})
+
+	t.Run("should not output to (real) file when json-file-output is provided in non-json based format", func(t *testing.T) {
+		setup := setupTest(t)
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
+		setup.config.Set("json-file-output", expectedFileName)
+		defer setup.config.Set("json-file-output", nil)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/vnd.cyclonedx+xml", []byte(payload))
+		realOutputDestination := &utils.OutputDestinationImpl{}
+
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+		assert.NoFileExists(t, expectedFileName)
+	})
+
+	t.Run("should not output to file when json-file-output is provided in non-json based format", func(t *testing.T) {
+		setup := setupTest(t)
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
+		setup.config.Set("json-file-output", expectedFileName)
+		defer setup.config.Set("json-file-output", nil)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/vnd.cyclonedx+xml", []byte(payload))
+
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
+
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
 		assert.Equal(t, expectedOutput, setup.writer.String())
+		assert.NoFileExists(t, expectedFileName)
 	})
 
 	t.Run("should output to (real) file when json-file-output is provided", func(t *testing.T) {
