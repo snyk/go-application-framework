@@ -16,6 +16,8 @@ var ignoredMimetypes = []string{
 	content_type.TEST_SUMMARY,
 }
 
+var supportedMimeTypes = []string{"sarif", "json", DEFAULT_MIME_TYPE}
+
 func HandleContentTypeOther(input []workflow.Data, invocation workflow.InvocationContext, writers WriterMap) ([]workflow.Data, error) {
 	var finalError error
 	debugLogger := invocation.GetEnhancedLogger()
@@ -26,24 +28,9 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 		return output, nil
 	}
 
-	supportedMimeTypes := []MimeType2Template{
-		{
-			mimetype:  SARIF_MIME_TYPE,
-			templates: []string{},
-		},
-		{
-			mimetype:  JSON_MIME_TYPE,
-			templates: []string{},
-		},
-		{
-			mimetype:  DEFAULT_MIME_TYPE,
-			templates: []string{},
-		},
-	}
-	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
+	dataToMimeTypeMap := map[string][]workflow.Data{}
 
-	usedWriters := make(map[string]bool)
-
+	// map data to mime type
 	for _, data := range otherData {
 		contentLocation := data.GetContentLocation()
 		if len(contentLocation) == 0 {
@@ -51,23 +38,42 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 		}
 
 		debugLogger.Printf("Other - Processing '%s' based on '%s' of type '%s'", data.GetIdentifier().String(), contentLocation, data.GetContentType())
-		dataWasWritten, err := useWriterWithOther(debugLogger, data, data.GetContentType(), writerMap, usedWriters)
-		if !dataWasWritten {
-			output = append(output, data)
+
+		dataMimetype := data.GetContentType()
+		dataMapped := false
+
+		// filter data based on supportedMimeTypes
+		for _, fuzzyType := range supportedMimeTypes {
+			if !strings.Contains(dataMimetype, fuzzyType) {
+				output = append(output, data)
+				continue
+			}
+
+			// determine writer mimetype based on fuzzy type
+			writerMimetypes := writers.AvailableMimetypes()
+			for _, writerMimetype := range writerMimetypes {
+				if strings.Contains(writerMimetype, fuzzyType) {
+					dataToMimeTypeMap[writerMimetype] = append(dataToMimeTypeMap[writerMimetype], data)
+					dataMapped = true
+				}
+			}
 		}
 
-		if err != nil {
-			finalError = errors.Join(finalError, err)
+		if !dataMapped {
+			dataToMimeTypeMap[DEFAULT_MIME_TYPE] = append(dataToMimeTypeMap[DEFAULT_MIME_TYPE], data)
 		}
 	}
 
-	for name, writer := range writerMap {
-		if name == DEFAULT_WRITER && !usedWriters[name] {
-			continue
+	// render data based on mimetype
+	for mimeType, data := range dataToMimeTypeMap {
+		writersToUse := writers.PopWritersByMimetype(mimeType)
+
+		dataWasWritten, err := useWriterWithOther(debugLogger, data, writersToUse)
+		if !dataWasWritten {
+			output = append(output, data...)
 		}
-		debugLogger.Info().Msgf("Other - Closing writer: %s", name)
-		if err := writer.GetWriter().Close(); err != nil {
-			debugLogger.Err(err).Msgf("Other - Failed to close writer: %s", name)
+
+		if err != nil {
 			finalError = errors.Join(finalError, err)
 		}
 	}
@@ -92,51 +98,34 @@ func getOtherResultsFromWorkflowData(input []workflow.Data) ([]workflow.Data, []
 	return otherData, remainingData
 }
 
-func useWriterWithOther(debugLogger *zerolog.Logger, input workflow.Data, mimeType string, writerMap map[string]*WriterEntry, usedWriters map[string]bool) (bool, error) {
+func useWriterWithOther(debugLogger *zerolog.Logger, input []workflow.Data, writerMap []*WriterEntry) (bool, error) {
 	var finalError error
 	dataWasWritten := false
 
-	var singleDataAsString string
-	singleData, typeCastSuccessful := input.GetPayload().([]byte)
-	if !typeCastSuccessful {
-		singleDataAsString, typeCastSuccessful = input.GetPayload().(string)
-		if !typeCastSuccessful {
-			return dataWasWritten, fmt.Errorf("unsupported output type: %s", mimeType)
-		}
-	} else {
-		singleDataAsString = string(singleData)
-	}
+	for _, writer := range writerMap {
+		name := writer.name
 
-	var defaultWriter *WriterEntry
-	var defaultWriterName string
-	var matchedWriters []*WriterEntry
-	var matchedNames []string
-
-	mimeTypeMatches := func(writerMime, dataMime string) bool {
-		if writerMime == dataMime {
-			return true
-		}
-		for _, keyword := range []string{"json", "sarif"} {
-			if strings.Contains(writerMime, keyword) && strings.Contains(dataMime, keyword) {
-				return true
+		defer func() {
+			closeErr := writer.writer.Close()
+			if closeErr != nil {
+				debugLogger.Err(closeErr).Msgf("Other - [%s] Error while closing writer.", name)
 			}
-		}
-		return false
-	}
+		}()
 
-	for name, writer := range writerMap {
-		if mimeTypeMatches(writer.mimeType, mimeType) {
-			matchedWriters = append(matchedWriters, writer)
-			matchedNames = append(matchedNames, name)
-		} else if name == DEFAULT_WRITER {
-			defaultWriter = writer
-			defaultWriterName = name
-		}
-	}
+		for _, data := range input {
+			mimeType := data.GetContentType()
 
-	if len(matchedWriters) > 0 {
-		for i, writer := range matchedWriters {
-			name := matchedNames[i]
+			var singleDataAsString string
+			singleData, typeCastSuccessful := data.GetPayload().([]byte)
+			if !typeCastSuccessful {
+				singleDataAsString, typeCastSuccessful = data.GetPayload().(string)
+				if !typeCastSuccessful {
+					return dataWasWritten, fmt.Errorf("unsupported output type: %s", mimeType)
+				}
+			} else {
+				singleDataAsString = string(singleData)
+			}
+
 			debugLogger.Info().Msgf("Other - Using '%s' writer for: %s", name, mimeType)
 
 			debugLogger.Info().Msgf("Other - [%s] Rendering %s", name, writer.mimeType)
@@ -145,20 +134,8 @@ func useWriterWithOther(debugLogger *zerolog.Logger, input workflow.Data, mimeTy
 				finalError = errors.Join(finalError, err)
 			}
 			dataWasWritten = true
-			usedWriters[name] = true
 			debugLogger.Info().Msgf("Other - [%s] Rendering done", name)
 		}
-	} else if defaultWriter != nil {
-		debugLogger.Info().Msgf("Other - No exact mimetype match, using default writer for: %s", mimeType)
-
-		debugLogger.Info().Msgf("Other - [%s] Rendering %s", defaultWriterName, mimeType)
-		_, err := fmt.Fprint(defaultWriter.GetWriter(), singleDataAsString)
-		if err != nil {
-			finalError = errors.Join(finalError, err)
-		}
-		dataWasWritten = true
-		usedWriters[defaultWriterName] = true
-		debugLogger.Info().Msgf("Other - [%s] Rendering done", defaultWriterName)
 	}
 
 	return dataWasWritten, finalError
