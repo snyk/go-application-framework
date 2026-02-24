@@ -231,7 +231,7 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 	}
 }
 
-func TestGetUserConfigForProject(t *testing.T) {
+func TestGetMergedConfigForFolder(t *testing.T) {
 	logger := zerolog.Nop()
 
 	// Preserve original global variables and restore after tests
@@ -556,7 +556,7 @@ func TestGetUserConfigForProject(t *testing.T) {
 				}
 			}
 
-			result := GetUserConfigForProject(t.Context(), mockEngine, tt.dir, tt.orgId)
+			result := GetMergedConfigForFolder(t.Context(), mockEngine, tt.dir, tt.orgId)
 
 			if tt.expectNoError {
 				assert.NoError(t, result.Error)
