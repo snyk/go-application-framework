@@ -277,6 +277,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, []workflow.Data{}, output)
 		assert.Empty(t, setup.writer.String())
+		assert.FileExists(t, expectedFileName)
 	})
 
 	t.Run("should output to (real) file when json-file-output is provided in json based format", func(t *testing.T) {
@@ -384,6 +385,31 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		fileContent, err = os.ReadFile(expectedFileName)
 		assert.NoError(t, err)
 		assert.Equal(t, payload, string(fileContent))
+	})
+
+	t.Run("should output to both stdout and file when json-file-output and json are provided", func(t *testing.T) {
+		setup := setupTest(t)
+		expectedFileName := filepath.Join(t.TempDir(), "test.json")
+		setup.config.Set("json-file-output", expectedFileName)
+		defer setup.config.Set("json-file-output", nil)
+		setup.config.Set("json", true)
+		defer setup.config.Set("json", nil)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
+		realOutputDestination := &testOutputDestination{writer: setup.writer, writeRealFiles: true}
+
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
+
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+		assert.FileExists(t, expectedFileName)
+
+		fileContent, err := os.ReadFile(expectedFileName)
+		assert.NoError(t, err)
+		assert.Equal(t, payload, string(fileContent))
+
+		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
 	t.Run("should print unsupported mimeTypes that are string convertible", func(t *testing.T) {
