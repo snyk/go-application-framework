@@ -40,8 +40,8 @@ func newResponse(statusCode int, headers http.Header) *http.Response {
 }
 
 type failRoundtripper struct {
-	actualCount                  uint
-	NumberOfAttemptsUntilSuccess uint
+	actualCount                  int
+	NumberOfAttemptsUntilSuccess int
 	Error                        error
 	ExpectedBody                 []byte
 	// roundTripFn overrides the default RoundTrip implementation
@@ -77,7 +77,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 	logger := zerolog.Nop()
 
 	t.Run("Max attempts cached from first response, not recalculated on retry", func(t *testing.T) {
-		attemptCount := uint(0)
+		attemptCount := 0
 
 		//nolint:unparam // error is always nil but signature must match http.RoundTripper
 		customRTFn := func(req *http.Request) (*http.Response, error) {
@@ -106,7 +106,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		}
 
 		config := configuration.NewWithOpts()
-		config.Set(ConfigurationKeyRetryAttempts, 1)
+		config.Set(ConfigurationKeyRequestAttempts, 1)
 		config.Set(configurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failRoundtripper)
@@ -115,19 +115,19 @@ func TestNewRetryMiddleware(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, response)
 
-		assert.Equal(t, uint(3), attemptCount, "Should use cached max attempts from first 429 response")
+		assert.Equal(t, 3, attemptCount, "Should use cached max attempts from first 429 response")
 		assert.Equal(t, http.StatusInternalServerError, response.StatusCode, "Final response should be 500")
 	})
 
 	t.Run("Happy path, no retry required", func(t *testing.T) {
-		var expectedAttempts uint = 1
+		var expectedAttempts = 1
 		failureRoundtripper := &failRoundtripper{
 			NumberOfAttemptsUntilSuccess: expectedAttempts,
 			ExpectedBody:                 expectedBody,
 			t:                            t,
 		}
 		config := configuration.NewWithOpts()
-		config.Set(ConfigurationKeyRetryAttempts, 3)
+		config.Set(ConfigurationKeyRequestAttempts, 3)
 		config.Set(configurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
@@ -138,14 +138,14 @@ func TestNewRetryMiddleware(t *testing.T) {
 	})
 
 	t.Run("Happy path, retry resolves successfully", func(t *testing.T) {
-		var expectedAttempts uint = 3
+		var expectedAttempts int = 3
 		failureRoundtripper := &failRoundtripper{
 			NumberOfAttemptsUntilSuccess: expectedAttempts,
 			ExpectedBody:                 expectedBody,
 			t:                            t,
 		}
 		config := configuration.NewWithOpts()
-		config.Set(ConfigurationKeyRetryAttempts, int(expectedAttempts))
+		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
@@ -157,14 +157,14 @@ func TestNewRetryMiddleware(t *testing.T) {
 	})
 
 	t.Run("Unhappy path, retries didn't resolve the issue", func(t *testing.T) {
-		var expectedAttempts uint = 3
+		var expectedAttempts = 3
 		failureRoundtripper := &failRoundtripper{
 			NumberOfAttemptsUntilSuccess: 10,
 			ExpectedBody:                 expectedBody,
 			t:                            t,
 		}
 		config := configuration.NewWithOpts()
-		config.Set(ConfigurationKeyRetryAttempts, int(expectedAttempts))
+		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
@@ -175,14 +175,14 @@ func TestNewRetryMiddleware(t *testing.T) {
 	})
 
 	t.Run("Unhappy path, non default values", func(t *testing.T) {
-		var expectedAttempts uint = 2
+		var expectedAttempts = 2
 		failureRoundtripper := &failRoundtripper{
 			NumberOfAttemptsUntilSuccess: 10,
 			ExpectedBody:                 expectedBody,
 			t:                            t,
 		}
 		config := configuration.NewWithOpts()
-		config.Set(ConfigurationKeyRetryAttempts, int(expectedAttempts))
+		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
@@ -193,14 +193,14 @@ func TestNewRetryMiddleware(t *testing.T) {
 	})
 
 	t.Run("Unhappy path, no retries", func(t *testing.T) {
-		var expectedAttempts uint = 1
+		var expectedAttempts = 1
 		failureRoundtripper := &failRoundtripper{
 			NumberOfAttemptsUntilSuccess: 10,
 			ExpectedBody:                 expectedBody,
 			t:                            t,
 		}
 		config := configuration.NewWithOpts()
-		config.Set(ConfigurationKeyRetryAttempts, int(expectedAttempts))
+		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
@@ -212,7 +212,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 	t.Run("Unhappy path, lower level failure, no retries", func(t *testing.T) {
 		expectedErr := errors.New("blabla")
-		var expectedAttempts uint = 1
+		var expectedAttempts = 1
 
 		failureRoundtripper := &failRoundtripper{Error: expectedErr, t: t}
 		config := configuration.NewWithOpts()
@@ -236,8 +236,8 @@ func Test_shouldRetry(t *testing.T) {
 		expectedErrorIs   error
 		expectedRetryable *backoff.RetryAfterError // For checking RetryAfter duration
 		expectNilError    bool
-		attempts          uint
-		maxAttempts       uint
+		attempts          int
+		maxAttempts       int
 	}{
 		{
 			name:            "Retryable status code (429) with Retry-After header too far in the future (4years)",
