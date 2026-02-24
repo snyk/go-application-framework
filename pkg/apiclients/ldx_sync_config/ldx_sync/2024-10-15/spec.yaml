@@ -405,6 +405,47 @@ components:
       required:
       - data
       type: object
+    CreateCentralizedConfigRequest:
+      additionalProperties: false
+      description: |
+        Request body for create (POST) or partial update (PATCH). Supports partial updates.
+        POST requires data.type and data.attributes (shape per CreateConfigAttributes). PATCH accepts any subset.
+      properties:
+        data:
+          additionalProperties: false
+          properties:
+            attributes:
+              $ref: '#/components/schemas/CreateConfigAttributes'
+            id:
+              description: |
+                Optional; for JSON:API and API tooling compatibility. PATCH uses path param as authoritative; omit for POST (server-assigned).
+              format: uuid
+              type: string
+            type:
+              description: Resource type (required for POST; optional for PATCH).
+              example: config
+              pattern: ^config$
+              type: string
+          type: object
+      required:
+      - data
+      type: object
+    CreateConfigAttributes:
+      additionalProperties: false
+      description: Configuration attributes for creation
+      properties:
+        folder_configs:
+          description: Folder-specific configurations
+          items:
+            $ref: '#/components/schemas/FolderConfigInput'
+          type: array
+        settings:
+          description: Global-level settings for this configuration (distinct from
+            folder-level; no override or merge). Only global setting names allowed.
+          items:
+            $ref: '#/components/schemas/GlobalSettingInput'
+          type: array
+      type: object
     Endpoints:
       properties:
         api_endpoint:
@@ -648,7 +689,9 @@ components:
         organizations:
           description: "This list includes only organizations \nthat have access to
             the specified repository, sorted by relevance.\nThe preferred organization
-            is marked with preferred_by_algorithm: true.\n"
+            is marked with preferred_by_algorithm: true.\n\nNote: If preferred_org_id
+            is set, that organization will be used for\nconfiguration resolution regardless
+            of this list.\n"
           example:
           - asset_id: asset-123
             id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
@@ -674,6 +717,19 @@ components:
           description: Command to execute before scanning
           example: npm install
           type: string
+        preferred_org_id:
+          description: |
+            Pre-assigned organization UUID for this folder.
+            When set, this organization will be used as the preferred organization
+            for configuration resolution instead of running the auto-selection algorithm.
+            This is useful when you want to explicitly associate a folder with a specific
+            organization regardless of the algorithm's recommendation.
+
+            On POST/PATCH: Sets the pre-assigned org for this folder (saved to config_folder_organizations).
+            On GET: Returns the pre-assigned org if one exists.
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+          format: uuid
+          type: string
         reference_branch:
           description: Git reference branch
           example: main
@@ -693,10 +749,119 @@ components:
       - remote_url
       - folder_path
       type: object
+    FolderConfigInput:
+      additionalProperties: false
+      description: |
+        Input for creating a folder configuration.
+        All folder-level configuration (reference_branch, organization, etc.) should be
+        stored as settings, not as dedicated fields. This keeps the API flexible.
+      properties:
+        folder_path:
+          description: Path within the repository
+          example: .
+          type: string
+        remote_url:
+          description: Repository URL for this folder
+          example: https://github.com/snyk/cli
+          type: string
+        settings:
+          description: |
+            Folder-level settings (only FolderSettingName allowed). Distinct from global; no overlap.
+            Examples: reference_branch, reference_folder, pre_assigned_org_id, additional_parameters, additional_environment.
+          items:
+            $ref: '#/components/schemas/FolderSettingInput'
+          type: array
+      required:
+      - remote_url
+      - folder_path
+      type: object
     FolderConfigs:
       items:
         $ref: '#/components/schemas/FolderConfig'
       type: array
+    FolderSettingInput:
+      additionalProperties: false
+      description: A folder-level setting. Name must be one of FolderSettingName;
+        use only in folder_configs[].settings.
+      properties:
+        enforced:
+          default: false
+          description: If true, this setting cannot be overridden by lower scopes
+          type: boolean
+        locked:
+          default: false
+          description: If true, this setting cannot be changed by the user
+          type: boolean
+        name:
+          $ref: '#/components/schemas/FolderSettingName'
+        value:
+          description: Setting value (type depends on the setting; validated server-side)
+          example: main
+      required:
+      - name
+      - value
+      type: object
+    FolderSettingName:
+      description: Setting names allowed at folder level only. Must not be used in
+        top-level settings.
+      enum:
+      - reference_folder
+      - reference_branch
+      - additional_parameters
+      - additional_environment
+      - pre_assigned_org_id
+      type: string
+    GlobalSettingInput:
+      additionalProperties: false
+      description: A global-level setting. Name must be one of GlobalSettingName;
+        use only in top-level settings.
+      properties:
+        enforced:
+          default: false
+          description: If true, this setting cannot be overridden by lower scopes
+          type: boolean
+        locked:
+          default: false
+          description: If true, this setting cannot be changed by the user
+          type: boolean
+        name:
+          $ref: '#/components/schemas/GlobalSettingName'
+        value:
+          description: Setting value (type depends on the setting; validated server-side)
+          example: https://api.snyk.io
+      required:
+      - name
+      - value
+      type: object
+    GlobalSettingName:
+      description: Setting names allowed at global level only. Must not be used in
+        folder_configs[].settings.
+      enum:
+      - api_endpoint
+      - code_endpoint
+      - authentication_method
+      - proxy_http
+      - proxy_https
+      - proxy_no_proxy
+      - proxy_insecure
+      - enabled_severities
+      - risk_score_threshold
+      - cwe_ids
+      - cve_ids
+      - rule_ids
+      - enabled_products
+      - scan_automatic
+      - scan_net_new
+      - issue_view_open_issues
+      - issue_view_ignored_issues
+      - auto_configure_mcp_server
+      - secure_at_inception_execution_frequency
+      - trust_enabled
+      - binary_base_url
+      - cli_path
+      - automatic_download
+      - cli_release_channel
+      type: string
     IdeConfig:
       properties:
         auto_configure_mcp_server:
@@ -1326,6 +1491,12 @@ paths:
         Update an existing configuration at the specified scope level.
         Only provided fields will be updated (partial update).
         The scope is determined by the provided query parameters.
+
+        ## Folder Configuration
+        When updating folder configurations (via `folder_configs`), you can optionally specify
+        or modify the `preferred_org_id` for each folder. This pre-assigns an organization to the folder,
+        which will be used for configuration resolution instead of the auto-selection algorithm.
+        Set to null to remove the pre-assigned organization.
       operationId: updateConfig
       parameters:
       - description: API version in format YYYY-MM-DD
@@ -1424,7 +1595,11 @@ paths:
       x-stability-level: beta
     post:
       description: "Create a new configuration at the specified scope level. \nThe
-        scope is determined by the provided query parameters.\n"
+        scope is determined by the provided query parameters.\n\n## Folder Configuration\nWhen
+        creating folder configurations (via `folder_configs`), you can optionally
+        specify\na `preferred_org_id` for each folder. This pre-assigns an organization
+        to the folder,\nwhich will be used for configuration resolution instead of
+        the auto-selection algorithm.\n"
       operationId: createConfig
       parameters:
       - description: API version in format YYYY-MM-DD
@@ -1728,7 +1903,193 @@ paths:
       x-snyk-api-stability: beta
       x-snyk-api-version: 2024-10-15~beta
       x-stability-level: beta
+    post:
+      description: |
+        Create a new configuration at the specified scope level.
+
+        ## Scope Determination
+        The scope is determined by query parameters:
+        - `org=X` - Creates org-scope configuration
+        - `group=X` - Creates group-scope configuration
+        - `tenant=X` - Creates tenant-scope configuration
+        - No scope params - Creates user-scope configuration (default)
+
+        When multiple scope params are provided, the most specific scope wins (org > group > tenant).
+
+        ## Membership Validation
+        The user must be a member of the requested scope:
+        - Org scope: User must be a member of the organization
+        - Group scope: User must be a member of an org in the group
+        - Tenant scope: User must be a member of an org in the tenant
+
+        ## Request Body
+        The request body contains:
+        - `settings` - Global-level settings for this configuration
+        - `folder_configs` - Folder-specific configurations with their own settings
+
+        ## Folder Configuration
+        Each folder config can optionally specify:
+        - `organization` - Pre-assigned organization for this folder
+        - `settings` - Folder-level settings (distinct from global; apply only to that folder and do not override global settings)
+      operationId: createUserConfig
+      parameters:
+      - description: API version in format YYYY-MM-DD
+        in: query
+        name: version
+        required: true
+        schema:
+          example: "2024-10-15"
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      - description: Tenant identifier for tenant-scope configuration
+        in: query
+        name: tenant
+        schema:
+          example: api.snyk.io
+          type: string
+      - description: Group UUID for group-scope configuration
+        in: query
+        name: group
+        schema:
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+          format: uuid
+          type: string
+      - description: Organization UUID for org-scope configuration
+        in: query
+        name: org
+        schema:
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCentralizedConfigRequest'
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/CreateCentralizedConfigRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+          description: Configuration created successfully
+          headers:
+            deprecation:
+              $ref: '#/components/headers/Deprecation'
+            location:
+              description: URL of the created configuration
+              schema:
+                example: https://api.snyk.io/rest/remote_client_connector/config/3fa85f64-5717-4562-b3fc-2c963f66afa6
+                format: uri
+                type: string
+            snyk-request-id:
+              $ref: '#/components/headers/SnykRequestId'
+            snyk-version-lifecycle-stage:
+              $ref: '#/components/headers/SnykVersionLifecycleStage'
+            snyk-version-requested:
+              $ref: '#/components/headers/SnykVersionRequested'
+            snyk-version-served:
+              $ref: '#/components/headers/SnykVersionServed'
+            sunset:
+              $ref: '#/components/headers/Sunset'
+        "400":
+          $ref: '#/components/responses/ErrorResponse'
+        "401":
+          $ref: '#/components/responses/ErrorResponse'
+        "403":
+          $ref: '#/components/responses/ErrorResponse'
+        "409":
+          $ref: '#/components/responses/ErrorResponse'
+        "500":
+          $ref: '#/components/responses/ErrorResponse'
+      summary: Create configuration for a scope
+      tags:
+      - Configuration
+      x-cerberus:
+        authorization:
+          reason: user-scoped authorization - user identified from Cerberus header
+          skip: true
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/ide'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      x-snyk-api-resource: config
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-stability-level: beta
   /remote_client_connector/config/{id}:
+    delete:
+      description: |
+        Delete a specific configuration by its ID.
+        Authorization is checked to ensure the user has permission to delete the configuration's scope.
+      operationId: deleteConfigById
+      parameters:
+      - description: Configuration UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+          format: uuid
+          type: string
+      - description: API version in format YYYY-MM-DD
+        in: query
+        name: version
+        required: true
+        schema:
+          example: "2024-10-15"
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      responses:
+        "204":
+          description: Configuration deleted successfully.
+          headers:
+            deprecation:
+              $ref: '#/components/headers/Deprecation'
+            snyk-request-id:
+              $ref: '#/components/headers/SnykRequestId'
+            snyk-version-lifecycle-stage:
+              $ref: '#/components/headers/SnykVersionLifecycleStage'
+            snyk-version-requested:
+              $ref: '#/components/headers/SnykVersionRequested'
+            snyk-version-served:
+              $ref: '#/components/headers/SnykVersionServed'
+            sunset:
+              $ref: '#/components/headers/Sunset'
+        "400":
+          $ref: '#/components/responses/ErrorResponse'
+        "401":
+          $ref: '#/components/responses/ErrorResponse'
+        "403":
+          $ref: '#/components/responses/ErrorResponse'
+        "404":
+          $ref: '#/components/responses/ErrorResponse'
+        "500":
+          $ref: '#/components/responses/ErrorResponse'
+      summary: Delete configuration by ID
+      tags:
+      - Configuration
+      x-cerberus:
+        authorization:
+          reason: configuration-level authorization - checked against user's permissions
+          skip: true
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/ide'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      x-snyk-api-resource: config
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-stability-level: beta
     get:
       description: "Retrieve a specific configuration by its ID. Authorization is
         checked \nto ensure the user has permission to access the configuration's
@@ -1812,6 +2173,86 @@ paths:
         "501":
           $ref: '#/components/responses/ErrorResponse'
       summary: Get configuration by ID
+      tags:
+      - Configuration
+      x-cerberus:
+        authorization:
+          reason: configuration-level authorization - checked against user's permissions
+          skip: true
+      x-snyk-api-lifecycle: released
+      x-snyk-api-owners:
+      - '@snyk/ide'
+      x-snyk-api-releases:
+      - 2024-10-15~beta
+      x-snyk-api-resource: config
+      x-snyk-api-stability: beta
+      x-snyk-api-version: 2024-10-15~beta
+      x-stability-level: beta
+    patch:
+      description: |
+        Update an existing configuration by ID. Only provided fields will be updated (partial update).
+        Request body uses JSON:API-style attributes with config_data and optional policy.
+      operationId: updateConfigById
+      parameters:
+      - description: Configuration UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+          format: uuid
+          type: string
+      - description: API version in format YYYY-MM-DD
+        in: query
+        name: version
+        required: true
+        schema:
+          example: "2024-10-15"
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCentralizedConfigRequest'
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/CreateCentralizedConfigRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+          description: Configuration updated successfully
+          headers:
+            deprecation:
+              $ref: '#/components/headers/Deprecation'
+            snyk-request-id:
+              $ref: '#/components/headers/SnykRequestId'
+            snyk-version-lifecycle-stage:
+              $ref: '#/components/headers/SnykVersionLifecycleStage'
+            snyk-version-requested:
+              $ref: '#/components/headers/SnykVersionRequested'
+            snyk-version-served:
+              $ref: '#/components/headers/SnykVersionServed'
+            sunset:
+              $ref: '#/components/headers/Sunset'
+        "400":
+          $ref: '#/components/responses/ErrorResponse'
+        "401":
+          $ref: '#/components/responses/ErrorResponse'
+        "403":
+          $ref: '#/components/responses/ErrorResponse'
+        "404":
+          $ref: '#/components/responses/ErrorResponse'
+        "500":
+          $ref: '#/components/responses/ErrorResponse'
+      summary: Update configuration by ID
       tags:
       - Configuration
       x-cerberus:

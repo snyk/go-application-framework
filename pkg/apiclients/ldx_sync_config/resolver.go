@@ -81,7 +81,7 @@ func resolveOrgIdToUUID(orgId string, engine workflow.Engine, config configurati
 }
 
 // GetUserConfigForProject retrieves LDX-Sync user configuration for the current project
-func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) LdxSyncConfigResult {
+func GetUserConfigForProject(ctx context.Context, engine workflow.Engine, dir string, orgId string) LdxSyncConfigResult {
 	if dir == "" {
 		return LdxSyncConfigResult{Error: fmt.Errorf("no input directory specified")}
 	}
@@ -113,7 +113,7 @@ func GetUserConfigForProject(engine workflow.Engine, dir string, orgId string) L
 		params.Org = orgUUID
 	}
 
-	response, err := ldxClient.GetUserConfigWithResponse(context.Background(), params)
+	response, err := ldxClient.GetUserConfigWithResponse(ctx, params)
 	if err != nil {
 		return LdxSyncConfigResult{Error: fmt.Errorf("failed to retrieve LDX-Sync config: %w", err)}
 	}

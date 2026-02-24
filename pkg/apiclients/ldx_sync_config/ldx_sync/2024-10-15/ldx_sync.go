@@ -57,6 +57,43 @@ const (
 	ErrorDocument0JsonapiVersionN10 ErrorDocument0JsonapiVersion = "1.0"
 )
 
+// Defines values for FolderSettingName.
+const (
+	AdditionalEnvironment FolderSettingName = "additional_environment"
+	AdditionalParameters  FolderSettingName = "additional_parameters"
+	PreAssignedOrgId      FolderSettingName = "pre_assigned_org_id"
+	ReferenceBranch       FolderSettingName = "reference_branch"
+	ReferenceFolder       FolderSettingName = "reference_folder"
+)
+
+// Defines values for GlobalSettingName.
+const (
+	ApiEndpoint                         GlobalSettingName = "api_endpoint"
+	AuthenticationMethod                GlobalSettingName = "authentication_method"
+	AutoConfigureMcpServer              GlobalSettingName = "auto_configure_mcp_server"
+	AutomaticDownload                   GlobalSettingName = "automatic_download"
+	BinaryBaseUrl                       GlobalSettingName = "binary_base_url"
+	CliPath                             GlobalSettingName = "cli_path"
+	CliReleaseChannel                   GlobalSettingName = "cli_release_channel"
+	CodeEndpoint                        GlobalSettingName = "code_endpoint"
+	CveIds                              GlobalSettingName = "cve_ids"
+	CweIds                              GlobalSettingName = "cwe_ids"
+	EnabledProducts                     GlobalSettingName = "enabled_products"
+	EnabledSeverities                   GlobalSettingName = "enabled_severities"
+	IssueViewIgnoredIssues              GlobalSettingName = "issue_view_ignored_issues"
+	IssueViewOpenIssues                 GlobalSettingName = "issue_view_open_issues"
+	ProxyHttp                           GlobalSettingName = "proxy_http"
+	ProxyHttps                          GlobalSettingName = "proxy_https"
+	ProxyInsecure                       GlobalSettingName = "proxy_insecure"
+	ProxyNoProxy                        GlobalSettingName = "proxy_no_proxy"
+	RiskScoreThreshold                  GlobalSettingName = "risk_score_threshold"
+	RuleIds                             GlobalSettingName = "rule_ids"
+	ScanAutomatic                       GlobalSettingName = "scan_automatic"
+	ScanNetNew                          GlobalSettingName = "scan_net_new"
+	SecureAtInceptionExecutionFrequency GlobalSettingName = "secure_at_inception_execution_frequency"
+	TrustEnabled                        GlobalSettingName = "trust_enabled"
+)
+
 // Defines values for SettingMetadataOrigin.
 const (
 	SettingMetadataOriginGlobal SettingMetadataOrigin = "global"
@@ -210,6 +247,30 @@ type ConfigurationRequest struct {
 // ConfigurationRequestDataType Resource type
 type ConfigurationRequestDataType string
 
+// CreateCentralizedConfigRequest Request body for create (POST) or partial update (PATCH). Supports partial updates.
+// POST requires data.type and data.attributes (shape per CreateConfigAttributes). PATCH accepts any subset.
+type CreateCentralizedConfigRequest struct {
+	Data struct {
+		// Attributes Configuration attributes for creation
+		Attributes *CreateConfigAttributes `json:"attributes,omitempty"`
+
+		// Id Optional; for JSON:API and API tooling compatibility. PATCH uses path param as authoritative; omit for POST (server-assigned).
+		Id *openapi_types.UUID `json:"id,omitempty"`
+
+		// Type Resource type (required for POST; optional for PATCH).
+		Type *string `json:"type,omitempty"`
+	} `json:"data"`
+}
+
+// CreateConfigAttributes Configuration attributes for creation
+type CreateConfigAttributes struct {
+	// FolderConfigs Folder-specific configurations
+	FolderConfigs *[]FolderConfigInput `json:"folder_configs,omitempty"`
+
+	// Settings Global-level settings for this configuration (distinct from folder-level; no override or merge). Only global setting names allowed.
+	Settings *[]GlobalSettingInput `json:"settings,omitempty"`
+}
+
 // Endpoints defines model for Endpoints.
 type Endpoints struct {
 	// ApiEndpoint Snyk API endpoint
@@ -337,6 +398,9 @@ type FolderConfig struct {
 	// Organizations This list includes only organizations
 	// that have access to the specified repository, sorted by relevance.
 	// The preferred organization is marked with preferred_by_algorithm: true.
+	//
+	// Note: If preferred_org_id is set, that organization will be used for
+	// configuration resolution regardless of this list.
 	Organizations *[]Organization `json:"organizations,omitempty"`
 
 	// PostScanExecuteCommand Command to execute after scanning
@@ -344,6 +408,16 @@ type FolderConfig struct {
 
 	// PreScanExecuteCommand Command to execute before scanning
 	PreScanExecuteCommand *string `json:"pre_scan_execute_command,omitempty"`
+
+	// PreferredOrgId Pre-assigned organization UUID for this folder.
+	// When set, this organization will be used as the preferred organization
+	// for configuration resolution instead of running the auto-selection algorithm.
+	// This is useful when you want to explicitly associate a folder with a specific
+	// organization regardless of the algorithm's recommendation.
+	//
+	// On POST/PATCH: Sets the pre-assigned org for this folder (saved to config_folder_organizations).
+	// On GET: Returns the pre-assigned org if one exists.
+	PreferredOrgId *openapi_types.UUID `json:"preferred_org_id,omitempty"`
 
 	// ReferenceBranch Git reference branch
 	ReferenceBranch *string `json:"reference_branch,omitempty"`
@@ -356,8 +430,59 @@ type FolderConfig struct {
 	RemoteUrl string `json:"remote_url"`
 }
 
+// FolderConfigInput Input for creating a folder configuration.
+// All folder-level configuration (reference_branch, organization, etc.) should be
+// stored as settings, not as dedicated fields. This keeps the API flexible.
+type FolderConfigInput struct {
+	// FolderPath Path within the repository
+	FolderPath string `json:"folder_path"`
+
+	// RemoteUrl Repository URL for this folder
+	RemoteUrl string `json:"remote_url"`
+
+	// Settings Folder-level settings (only FolderSettingName allowed). Distinct from global; no overlap.
+	// Examples: reference_branch, reference_folder, pre_assigned_org_id, additional_parameters, additional_environment.
+	Settings *[]FolderSettingInput `json:"settings,omitempty"`
+}
+
 // FolderConfigs defines model for FolderConfigs.
 type FolderConfigs = []FolderConfig
+
+// FolderSettingInput A folder-level setting. Name must be one of FolderSettingName; use only in folder_configs[].settings.
+type FolderSettingInput struct {
+	// Enforced If true, this setting cannot be overridden by lower scopes
+	Enforced *bool `json:"enforced,omitempty"`
+
+	// Locked If true, this setting cannot be changed by the user
+	Locked *bool `json:"locked,omitempty"`
+
+	// Name Setting names allowed at folder level only. Must not be used in top-level settings.
+	Name FolderSettingName `json:"name"`
+
+	// Value Setting value (type depends on the setting; validated server-side)
+	Value interface{} `json:"value"`
+}
+
+// FolderSettingName Setting names allowed at folder level only. Must not be used in top-level settings.
+type FolderSettingName string
+
+// GlobalSettingInput A global-level setting. Name must be one of GlobalSettingName; use only in top-level settings.
+type GlobalSettingInput struct {
+	// Enforced If true, this setting cannot be overridden by lower scopes
+	Enforced *bool `json:"enforced,omitempty"`
+
+	// Locked If true, this setting cannot be changed by the user
+	Locked *bool `json:"locked,omitempty"`
+
+	// Name Setting names allowed at global level only. Must not be used in folder_configs[].settings.
+	Name GlobalSettingName `json:"name"`
+
+	// Value Setting value (type depends on the setting; validated server-side)
+	Value interface{} `json:"value"`
+}
+
+// GlobalSettingName Setting names allowed at global level only. Must not be used in folder_configs[].settings.
+type GlobalSettingName string
 
 // IdeConfig defines model for IdeConfig.
 type IdeConfig struct {
@@ -759,6 +884,27 @@ type GetUserConfigParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// CreateUserConfigParams defines parameters for CreateUserConfig.
+type CreateUserConfigParams struct {
+	// Version API version in format YYYY-MM-DD
+	Version string `form:"version" json:"version"`
+
+	// Tenant Tenant identifier for tenant-scope configuration
+	Tenant *string `form:"tenant,omitempty" json:"tenant,omitempty"`
+
+	// Group Group UUID for group-scope configuration
+	Group *openapi_types.UUID `form:"group,omitempty" json:"group,omitempty"`
+
+	// Org Organization UUID for org-scope configuration
+	Org *openapi_types.UUID `form:"org,omitempty" json:"org,omitempty"`
+}
+
+// DeleteConfigByIdParams defines parameters for DeleteConfigById.
+type DeleteConfigByIdParams struct {
+	// Version API version in format YYYY-MM-DD
+	Version string `form:"version" json:"version"`
+}
+
 // GetConfigByIdParams defines parameters for GetConfigById.
 type GetConfigByIdParams struct {
 	// Version API version in format YYYY-MM-DD
@@ -773,11 +919,29 @@ type GetConfigByIdParams struct {
 	RemoteUrl *string `form:"remote_url,omitempty" json:"remote_url,omitempty"`
 }
 
+// UpdateConfigByIdParams defines parameters for UpdateConfigById.
+type UpdateConfigByIdParams struct {
+	// Version API version in format YYYY-MM-DD
+	Version string `form:"version" json:"version"`
+}
+
 // UpdateConfigJSONRequestBody defines body for UpdateConfig for application/json ContentType.
 type UpdateConfigJSONRequestBody = ConfigurationRequest
 
 // CreateConfigJSONRequestBody defines body for CreateConfig for application/json ContentType.
 type CreateConfigJSONRequestBody = ConfigurationRequest
+
+// CreateUserConfigJSONRequestBody defines body for CreateUserConfig for application/json ContentType.
+type CreateUserConfigJSONRequestBody = CreateCentralizedConfigRequest
+
+// CreateUserConfigApplicationVndAPIPlusJSONRequestBody defines body for CreateUserConfig for application/vnd.api+json ContentType.
+type CreateUserConfigApplicationVndAPIPlusJSONRequestBody = CreateCentralizedConfigRequest
+
+// UpdateConfigByIdJSONRequestBody defines body for UpdateConfigById for application/json ContentType.
+type UpdateConfigByIdJSONRequestBody = CreateCentralizedConfigRequest
+
+// UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody defines body for UpdateConfigById for application/vnd.api+json ContentType.
+type UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody = CreateCentralizedConfigRequest
 
 // AsLinkProperty0 returns the union data inside the LinkProperty as a LinkProperty0
 func (t LinkProperty) AsLinkProperty0() (LinkProperty0, error) {
@@ -939,8 +1103,25 @@ type ClientInterface interface {
 	// GetUserConfig request
 	GetUserConfig(ctx context.Context, params *GetUserConfigParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateUserConfigWithBody request with any body
+	CreateUserConfigWithBody(ctx context.Context, params *CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateUserConfig(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateUserConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteConfigById request
+	DeleteConfigById(ctx context.Context, id openapi_types.UUID, params *DeleteConfigByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetConfigById request
 	GetConfigById(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateConfigByIdWithBody request with any body
+	UpdateConfigByIdWithBody(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateConfigById(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateConfigByIdWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) DeleteConfig(ctx context.Context, params *DeleteConfigParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1051,8 +1232,92 @@ func (c *Client) GetUserConfig(ctx context.Context, params *GetUserConfigParams,
 	return c.Client.Do(req)
 }
 
+func (c *Client) CreateUserConfigWithBody(ctx context.Context, params *CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateUserConfigRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateUserConfig(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateUserConfigRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateUserConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateUserConfigRequestWithApplicationVndAPIPlusJSONBody(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteConfigById(ctx context.Context, id openapi_types.UUID, params *DeleteConfigByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteConfigByIdRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetConfigById(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetConfigByIdRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateConfigByIdWithBody(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateConfigByIdRequestWithBody(c.Server, id, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateConfigById(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateConfigByIdRequest(c.Server, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateConfigByIdWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateConfigByIdRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1999,6 +2264,175 @@ func NewGetUserConfigRequest(server string, params *GetUserConfigParams) (*http.
 	return req, nil
 }
 
+// NewCreateUserConfigRequest calls the generic CreateUserConfig builder with application/json body
+func NewCreateUserConfigRequest(server string, params *CreateUserConfigParams, body CreateUserConfigJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateUserConfigRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateUserConfigRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateUserConfig builder with application/vnd.api+json body
+func NewCreateUserConfigRequestWithApplicationVndAPIPlusJSONBody(server string, params *CreateUserConfigParams, body CreateUserConfigApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateUserConfigRequestWithBody(server, params, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateUserConfigRequestWithBody generates requests for CreateUserConfig with any type of body
+func NewCreateUserConfigRequestWithBody(server string, params *CreateUserConfigParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/remote_client_connector/config")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.Tenant != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, *params.Tenant); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Group != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "group", runtime.ParamLocationQuery, *params.Group); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Org != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "org", runtime.ParamLocationQuery, *params.Org); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteConfigByIdRequest generates requests for DeleteConfigById
+func NewDeleteConfigByIdRequest(server string, id openapi_types.UUID, params *DeleteConfigByIdParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/remote_client_connector/config/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetConfigByIdRequest generates requests for GetConfigById
 func NewGetConfigByIdRequest(server string, id openapi_types.UUID, params *GetConfigByIdParams) (*http.Request, error) {
 	var err error
@@ -2083,6 +2517,82 @@ func NewGetConfigByIdRequest(server string, id openapi_types.UUID, params *GetCo
 	return req, nil
 }
 
+// NewUpdateConfigByIdRequest calls the generic UpdateConfigById builder with application/json body
+func NewUpdateConfigByIdRequest(server string, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateConfigByIdRequestWithBody(server, id, params, "application/json", bodyReader)
+}
+
+// NewUpdateConfigByIdRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateConfigById builder with application/vnd.api+json body
+func NewUpdateConfigByIdRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateConfigByIdRequestWithBody(server, id, params, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdateConfigByIdRequestWithBody generates requests for UpdateConfigById with any type of body
+func NewUpdateConfigByIdRequestWithBody(server string, id openapi_types.UUID, params *UpdateConfigByIdParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/remote_client_connector/config/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "version", runtime.ParamLocationQuery, params.Version); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -2151,8 +2661,25 @@ type ClientWithResponsesInterface interface {
 	// GetUserConfigWithResponse request
 	GetUserConfigWithResponse(ctx context.Context, params *GetUserConfigParams, reqEditors ...RequestEditorFn) (*GetUserConfigResponse, error)
 
+	// CreateUserConfigWithBodyWithResponse request with any body
+	CreateUserConfigWithBodyWithResponse(ctx context.Context, params *CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateUserConfigResponse, error)
+
+	CreateUserConfigWithResponse(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUserConfigResponse, error)
+
+	CreateUserConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUserConfigResponse, error)
+
+	// DeleteConfigByIdWithResponse request
+	DeleteConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *DeleteConfigByIdParams, reqEditors ...RequestEditorFn) (*DeleteConfigByIdResponse, error)
+
 	// GetConfigByIdWithResponse request
 	GetConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*GetConfigByIdResponse, error)
+
+	// UpdateConfigByIdWithBodyWithResponse request with any body
+	UpdateConfigByIdWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigByIdResponse, error)
+
+	UpdateConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigByIdResponse, error)
+
+	UpdateConfigByIdWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigByIdResponse, error)
 }
 
 type DeleteConfigResponse struct {
@@ -2360,6 +2887,70 @@ func (r GetUserConfigResponse) StatusCode() int {
 	return 0
 }
 
+type CreateUserConfigResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON201                  *UserConfigResponse
+	ApplicationvndApiJSON201 *UserConfigResponse
+	JSON400                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON403                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON403 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON409                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON409 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateUserConfigResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateUserConfigResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteConfigByIdResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON400                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON403                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON403 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON404                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON404 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteConfigByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteConfigByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetConfigByIdResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -2389,6 +2980,39 @@ func (r GetConfigByIdResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetConfigByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateConfigByIdResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	JSON200                  *UserConfigResponse
+	ApplicationvndApiJSON200 *UserConfigResponse
+	JSON400                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON400 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON401                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON401 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON403                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON403 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON404                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON404 *ErrorResponseApplicationVndAPIPlusJSON
+	JSON500                  *ErrorResponseApplicationJSON
+	ApplicationvndApiJSON500 *ErrorResponseApplicationVndAPIPlusJSON
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateConfigByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateConfigByIdResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2474,6 +3098,40 @@ func (c *ClientWithResponses) GetUserConfigWithResponse(ctx context.Context, par
 	return ParseGetUserConfigResponse(rsp)
 }
 
+// CreateUserConfigWithBodyWithResponse request with arbitrary body returning *CreateUserConfigResponse
+func (c *ClientWithResponses) CreateUserConfigWithBodyWithResponse(ctx context.Context, params *CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateUserConfigResponse, error) {
+	rsp, err := c.CreateUserConfigWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateUserConfigResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateUserConfigWithResponse(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUserConfigResponse, error) {
+	rsp, err := c.CreateUserConfig(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateUserConfigResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateUserConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *CreateUserConfigParams, body CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUserConfigResponse, error) {
+	rsp, err := c.CreateUserConfigWithApplicationVndAPIPlusJSONBody(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateUserConfigResponse(rsp)
+}
+
+// DeleteConfigByIdWithResponse request returning *DeleteConfigByIdResponse
+func (c *ClientWithResponses) DeleteConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *DeleteConfigByIdParams, reqEditors ...RequestEditorFn) (*DeleteConfigByIdResponse, error) {
+	rsp, err := c.DeleteConfigById(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteConfigByIdResponse(rsp)
+}
+
 // GetConfigByIdWithResponse request returning *GetConfigByIdResponse
 func (c *ClientWithResponses) GetConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *GetConfigByIdParams, reqEditors ...RequestEditorFn) (*GetConfigByIdResponse, error) {
 	rsp, err := c.GetConfigById(ctx, id, params, reqEditors...)
@@ -2481,6 +3139,31 @@ func (c *ClientWithResponses) GetConfigByIdWithResponse(ctx context.Context, id 
 		return nil, err
 	}
 	return ParseGetConfigByIdResponse(rsp)
+}
+
+// UpdateConfigByIdWithBodyWithResponse request with arbitrary body returning *UpdateConfigByIdResponse
+func (c *ClientWithResponses) UpdateConfigByIdWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigByIdResponse, error) {
+	rsp, err := c.UpdateConfigByIdWithBody(ctx, id, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateConfigByIdResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateConfigByIdWithResponse(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigByIdResponse, error) {
+	rsp, err := c.UpdateConfigById(ctx, id, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateConfigByIdResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateConfigByIdWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, params *UpdateConfigByIdParams, body UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigByIdResponse, error) {
+	rsp, err := c.UpdateConfigByIdWithApplicationVndAPIPlusJSONBody(ctx, id, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateConfigByIdResponse(rsp)
 }
 
 // ParseDeleteConfigResponse parses an HTTP response from a DeleteConfigWithResponse call
@@ -3022,6 +3705,198 @@ func ParseGetUserConfigResponse(rsp *http.Response) (*GetUserConfigResponse, err
 	return response, nil
 }
 
+// ParseCreateUserConfigResponse parses an HTTP response from a CreateUserConfigWithResponse call
+func ParseCreateUserConfigResponse(rsp *http.Response) (*CreateUserConfigResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateUserConfigResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 201:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 409:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 201:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 409:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteConfigByIdResponse parses an HTTP response from a DeleteConfigByIdWithResponse call
+func ParseDeleteConfigByIdResponse(rsp *http.Response) (*DeleteConfigByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteConfigByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetConfigByIdResponse parses an HTTP response from a GetConfigByIdWithResponse call
 func ParseGetConfigByIdResponse(rsp *http.Response) (*GetConfigByIdResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3133,6 +4008,109 @@ func ParseGetConfigByIdResponse(rsp *http.Response) (*GetConfigByIdResponse, err
 			return nil, err
 		}
 		response.ApplicationvndApiJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateConfigByIdResponse parses an HTTP response from a UpdateConfigByIdWithResponse call
+func ParseUpdateConfigByIdResponse(rsp *http.Response) (*UpdateConfigByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateConfigByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 200:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 200:
+		var dest UserConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 400:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 401:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 403:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON403 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 404:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/vnd.api+json" && rsp.StatusCode == 500:
+		var dest ErrorResponseApplicationVndAPIPlusJSON
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
 
 	}
 
