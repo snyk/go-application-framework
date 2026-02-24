@@ -17,6 +17,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/jws"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/mocks"
@@ -27,9 +31,6 @@ import (
 	pkgMocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/jws"
 )
 
 func createOAuthTokenWithAudience(t *testing.T, audience string) string {
@@ -1027,6 +1028,66 @@ func Test_config_compareCachedAndUncachedConfig(t *testing.T) {
 			// exlicitly set API URL is restored
 			assert.Equal(t, "https://api.us.snyk.io", tt.config.GetString(configuration.API_URL))
 			assert.Equal(t, "https://app.us.snyk.io", tt.config.GetString(configuration.WEB_APP_URL))
+		})
+	}
+}
+
+func Test_defaultMaxNetworkRequestAttempts(t *testing.T) {
+	tests := []struct {
+		name           string
+		existingValue  interface{}
+		previewEnabled bool
+		expected       int
+	}{
+		{
+			name:           "existing value=nil and preview, return 3",
+			existingValue:  nil,
+			previewEnabled: true,
+			expected:       3,
+		},
+		{
+			name:           "existing value=-1 and preview, return 3",
+			existingValue:  -1,
+			previewEnabled: true,
+			expected:       3,
+		},
+		{
+			name:           "existing value=10 and preview, return 10",
+			existingValue:  10,
+			previewEnabled: true,
+			expected:       10,
+		},
+		{
+			name:           "existing value=11 and not preview, return 11",
+			existingValue:  11,
+			previewEnabled: false,
+			expected:       11,
+		},
+		{
+			name:           "existing value=-1 and not preview, return 1",
+			existingValue:  -1,
+			previewEnabled: false,
+			expected:       1,
+		},
+		{
+			name:           "existing value=-1 string and not preview, return 1",
+			existingValue:  "-1",
+			previewEnabled: false,
+			expected:       1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := workflow.NewDefaultWorkFlowEngine()
+			config := engine.GetConfiguration()
+			config.Set(configuration.PREVIEW_FEATURES_ENABLED, tt.previewEnabled)
+			defaultFunction := defaultMaxNetworkRequestAttempts(engine)
+
+			result, err := defaultFunction(config, tt.existingValue)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
