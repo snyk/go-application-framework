@@ -1,7 +1,6 @@
 package ldx_sync_config
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -557,7 +556,7 @@ func TestGetUserConfigForProject(t *testing.T) {
 				}
 			}
 
-			result := GetUserConfigForProject(context.Background(), mockEngine, tt.dir, tt.orgId)
+			result := GetUserConfigForProject(t.Context(), mockEngine, tt.dir, tt.orgId)
 
 			if tt.expectNoError {
 				assert.NoError(t, result.Error)
