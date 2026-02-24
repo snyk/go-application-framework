@@ -25,6 +25,7 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/utils/conversion"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -228,13 +229,13 @@ func defaultPreviewFeaturesEnabled(engine workflow.Engine) configuration.Default
 	return callback
 }
 
-func defaultMaxNetworkRetryAttempts(engine workflow.Engine) configuration.DefaultValueFunction {
+func defaultMaxNetworkRequestAttempts(engine workflow.Engine) configuration.DefaultValueFunction {
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		// TODO - This function uses the outer (global) config, so will not respect values set in the closures' (potentially cloned) configs.
 		const multipleAttempts = 3 // three here is chosen based on other places in the application
 		const singleAttempt = 1
 
-		if existingValue != nil {
+		if value, err := conversion.ToInt(existingValue); err == nil && value > 0 {
 			return existingValue, nil
 		}
 
@@ -320,7 +321,7 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.INPUT_DIRECTORY, defaultInputDirectory())
 	config.AddDefaultValue(configuration.PREVIEW_FEATURES_ENABLED, defaultPreviewFeaturesEnabled(engine))
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
-	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRetryAttempts(engine))
+	config.AddDefaultValue(middleware.ConfigurationKeyRetryAttempts, defaultMaxNetworkRequestAttempts(engine))
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
 }
 
