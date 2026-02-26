@@ -12,22 +12,27 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/mattn/go-isatty"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 func newConsoleUi(in io.Reader, out io.Writer, err io.Writer) UserInterface {
+	return NewConsoleUi(in, out, out, err)
+}
+
+func NewConsoleUi(in io.Reader, out io.Writer, err io.Writer, progressWriter io.Writer) UserInterface {
 	// Default Console UI should not have errors (this is tested in consoleui_test.go)
 	defaultUi := &consoleUi{
 		writer:      out,
-		errorWriter: out,
+		errorWriter: err,
 		reader:      bufio.NewReader(in),
 	}
 
 	defaultUi.progressBarFactory = func() ProgressBar {
-		if stderr, ok := err.(*os.File); ok {
+		if stderr, ok := progressWriter.(*os.File); ok {
 			if isatty.IsTerminal(stderr.Fd()) || isatty.IsCygwinTerminal(stderr.Fd()) {
-				return newProgressBar(err, SpinnerType, true)
+				return newProgressBar(progressWriter, SpinnerType, true)
 			}
 		}
 
