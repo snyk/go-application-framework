@@ -464,6 +464,38 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
+	// This test demonstrates a bug: when multiple application/json items are passed with --json flag,
+	// only the first item is output. The PopWritersByMimetype function removes the writer after the
+	// first use, causing subsequent items to find no writer available.
+	t.Run("should output all application/json items when json flag is set", func(t *testing.T) {
+		setup := setupTest(t)
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_JSON, true)
+		defer setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_JSON, nil)
+
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+
+		jsonPayload1 := `{"project":"first-project","dependencies":["pkg-a","pkg-b"]}`
+		jsonPayload2 := `{"project":"second-project","dependencies":["pkg-c","pkg-d"]}`
+
+		data1 := workflow.NewData(workflowIdentifier, "application/json", []byte(jsonPayload1))
+		data1.SetContentLocation("first-project/lock.file")
+
+		data2 := workflow.NewData(workflowIdentifier, "application/json", []byte(jsonPayload2))
+		data2.SetContentLocation("second-project/lock.file")
+
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data1, data2}, setup.outputDestination)
+
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+
+		// BUG: Currently only the first JSON is output because PopWritersByMimetype
+		// removes the writer after the first item is processed.
+		// Expected: both JSON payloads should be in the output
+		outputStr := setup.writer.String()
+		assert.Contains(t, outputStr, "first-project", "First JSON payload should be in output")
+		assert.Contains(t, outputStr, "second-project", "Second JSON payload should be in output (BUG: this fails)")
+	})
+
 	t.Run("should print valid sarif json output", func(t *testing.T) {
 		setup := setupTest(t)
 		expectedSarif := "testdata/sarif-snyk-goof-ignores.json"
