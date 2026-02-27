@@ -263,51 +263,6 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		assert.Equal(t, expectedOutput, setup.writer.String())
 	})
 
-	t.Run("should output to file when json-file-output is provided", func(t *testing.T) {
-		setup := setupTest(t)
-		expectedFileName := filepath.Join(t.TempDir(), "test.json")
-		setup.config.Set("json-file-output", expectedFileName)
-		defer setup.config.Set("json-file-output", nil)
-
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
-
-		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
-
-		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
-		assert.Equal(t, expectedOutput, setup.writer.String())
-	})
-
-	t.Run("should output to (real) file when json-file-output is provided", func(t *testing.T) {
-		setup := setupTest(t)
-		expectedFileName := filepath.Join(t.TempDir(), "test.json")
-		setup.config.Set("json-file-output", expectedFileName)
-		defer setup.config.Set("json-file-output", nil)
-
-		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
-		data := workflow.NewData(workflowIdentifier, "application/json", []byte(payload))
-		realOutputDestination := &utils.OutputDestinationImpl{}
-
-		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
-		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
-		assert.FileExists(t, expectedFileName)
-
-		fileContent, err := os.ReadFile(expectedFileName)
-		assert.NoError(t, err)
-		assert.Equal(t, payload, string(fileContent))
-
-		// Second write should overwrite
-		output, err = outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, realOutputDestination)
-		assert.Nil(t, err)
-		assert.Equal(t, []workflow.Data{}, output)
-
-		fileContent, err = os.ReadFile(expectedFileName)
-		assert.NoError(t, err)
-		assert.Equal(t, payload, string(fileContent))
-	})
-
 	t.Run("should print unsupported mimeTypes that are string convertible", func(t *testing.T) {
 		setup := setupTest(t)
 		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
@@ -511,6 +466,121 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		actualSarifString := string(prettyActualSarif)
 
 		require.JSONEq(t, expectedString, actualSarifString)
+	})
+
+	t.Run("should control the output destinations based on configuration flags", func(t *testing.T) {
+		jsonPayload := `{"schemaVersion":"1.2.0","pkgManager":{"name":"npm"}}`
+		expectedStdoutOutput := jsonPayload + "\n" // Default writer adds a newline
+		expectedFileOutput := jsonPayload
+
+		tc := []struct {
+			name                  string
+			jsonFlag              bool
+			jsonFileOutput        bool
+			contentType           string
+			expectedStdoutContent *string
+			expectedFileContent   *string
+		}{
+			{
+				name:                  "json content with --json prints to stdout only",
+				jsonFlag:              true,
+				jsonFileOutput:        false,
+				contentType:           "application/json",
+				expectedStdoutContent: &expectedStdoutOutput,
+				expectedFileContent:   nil,
+			},
+			{
+				name:                  "json content with --json-file-output writes to file only",
+				jsonFlag:              false,
+				jsonFileOutput:        true,
+				contentType:           "application/json",
+				expectedStdoutContent: nil,
+				expectedFileContent:   &expectedFileOutput,
+			},
+			{
+				name:                  "json content with --json and --json-file-output prints to stdout and writes to file",
+				jsonFlag:              true,
+				jsonFileOutput:        true,
+				contentType:           "application/json",
+				expectedStdoutContent: &expectedStdoutOutput,
+				expectedFileContent:   &expectedFileOutput,
+			},
+			{
+				name:                  "non-json content with --json-file-output prints to stdout via default writer",
+				jsonFlag:              false,
+				jsonFileOutput:        true,
+				contentType:           "application/xml",
+				expectedStdoutContent: &expectedStdoutOutput,
+				expectedFileContent:   nil,
+			},
+			{
+				name:                  "non-json content with --json does not print to stdout",
+				jsonFlag:              true,
+				jsonFileOutput:        false,
+				contentType:           "application/xml",
+				expectedStdoutContent: nil,
+				expectedFileContent:   nil,
+			},
+			{
+				name:                  "json-like content with --json-file-output writes to file only",
+				jsonFlag:              false,
+				jsonFileOutput:        true,
+				contentType:           "application/vnd.cyclonedx+json",
+				expectedStdoutContent: nil,
+				expectedFileContent:   &expectedFileOutput,
+			},
+			{
+				name:                  "json-like content with --json and --json-file-output prints to stdout and writes to file",
+				jsonFlag:              true,
+				jsonFileOutput:        true,
+				contentType:           "application/vnd.cyclonedx+json",
+				expectedStdoutContent: &expectedStdoutOutput,
+				expectedFileContent:   &expectedFileOutput,
+			},
+		}
+
+		for _, tc := range tc {
+			t.Run(tc.name, func(t *testing.T) {
+				expectedFileName := filepath.Join(t.TempDir(), "test.json")
+				config := configuration.NewWithOpts()
+				logger := &zerolog.Logger{}
+				ctrl := gomock.NewController(t)
+				invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+
+				invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+				invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
+				invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
+
+				byteBuffer := &bytes.Buffer{}
+				outputDestination := &testOutputDestination{writer: byteBuffer, writeRealFiles: true}
+
+				config.Set(output_workflow.OUTPUT_CONFIG_KEY_JSON, tc.jsonFlag)
+				if tc.jsonFileOutput {
+					config.Set(output_workflow.OUTPUT_CONFIG_KEY_JSON_FILE, expectedFileName)
+				}
+
+				workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+				data := workflow.NewData(workflowIdentifier, tc.contentType, []byte(jsonPayload))
+
+				output, err := outputWorkflowEntryPoint(invocationContextMock, []workflow.Data{data}, outputDestination)
+				assert.Nil(t, err)
+				assert.Equal(t, []workflow.Data{}, output)
+				if tc.expectedStdoutContent != nil {
+					assert.Equal(t, *tc.expectedStdoutContent, byteBuffer.String())
+				} else {
+					assert.Empty(t, byteBuffer.String())
+				}
+
+				if tc.expectedFileContent != nil {
+					assert.FileExists(t, expectedFileName)
+					fileContent, err := os.ReadFile(expectedFileName)
+					assert.NoError(t, err)
+					assert.Equal(t, *tc.expectedFileContent, string(fileContent))
+				} else {
+					assert.NoFileExists(t, expectedFileName)
+				}
+			})
+		}
 	})
 }
 
