@@ -468,7 +468,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 		require.JSONEq(t, expectedString, actualSarifString)
 	})
 
-	t.Run("should control flow of output based on configuration flags", func(t *testing.T) {
+	t.Run("should control the output destinations based on configuration flags", func(t *testing.T) {
 		jsonPayload := `{"schemaVersion":"1.2.0","pkgManager":{"name":"npm"}}`
 		expectedStdoutOutput := jsonPayload + "\n" // Default writer adds a newline
 		expectedFileOutput := jsonPayload

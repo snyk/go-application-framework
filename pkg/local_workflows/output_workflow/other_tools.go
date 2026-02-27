@@ -45,7 +45,6 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 		// filter data based on supportedMimeTypes
 		for _, fuzzyType := range supportedMimeTypes {
 			if !strings.Contains(dataMimetype, fuzzyType) {
-				output = append(output, data)
 				continue
 			}
 
