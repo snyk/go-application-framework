@@ -60,6 +60,11 @@ const (
 	DeepcodeBundle DeepcodeBundleSubjectType = "deepcode_bundle"
 )
 
+// Defines values for DepGraphContentType.
+const (
+	DepGraphContentTypeDepGraph DepGraphContentType = "dep_graph"
+)
+
 // Defines values for DepGraphSubjectType.
 const (
 	DepGraphSubjectTypeDepGraph DepGraphSubjectType = "dep_graph"
@@ -67,7 +72,7 @@ const (
 
 // Defines values for DepGraphSubjectCreateType.
 const (
-	DepGraphSubjectCreateTypeDepGraph DepGraphSubjectCreateType = "dep_graph"
+	DepGraph DepGraphSubjectCreateType = "dep_graph"
 )
 
 // Defines values for DependencyCountFactType.
@@ -142,11 +147,6 @@ const (
 	NotVulnerable   IgnoreDetailsReasonType = "not-vulnerable"
 	TemporaryIgnore IgnoreDetailsReasonType = "temporary-ignore"
 	WontFix         IgnoreDetailsReasonType = "wont-fix"
-)
-
-// Defines values for InlineContentType.
-const (
-	DepGraph InlineContentType = "dep_graph"
 )
 
 // Defines values for InlineResourceType.
@@ -232,6 +232,7 @@ const (
 	PolicyRuleReviewNotRequired PolicyRuleReview = "not-required"
 	PolicyRuleReviewPending     PolicyRuleReview = "pending"
 	PolicyRuleReviewRejected    PolicyRuleReview = "rejected"
+	PolicyRuleReviewUnknown     PolicyRuleReview = "unknown"
 )
 
 // Defines values for ProjectEntityLocatorType.
@@ -282,6 +283,16 @@ const (
 // Defines values for ScmResourceType.
 const (
 	Scm ScmResourceType = "scm"
+)
+
+// Defines values for SdlcStage.
+const (
+	SdlcStageCiCd    SdlcStage = "ci_cd"
+	SdlcStageCli     SdlcStage = "cli"
+	SdlcStageIde     SdlcStage = "ide"
+	SdlcStageMcp     SdlcStage = "mcp"
+	SdlcStageOther   SdlcStage = "other"
+	SdlcStagePrCheck SdlcStage = "pr_check"
 )
 
 // Defines values for SecretsRuleProblemSource.
@@ -419,7 +430,7 @@ const (
 
 // Defines values for SnykvulndbOtherPackageEcosystemType.
 const (
-	Other SnykvulndbOtherPackageEcosystemType = "other"
+	SnykvulndbOtherPackageEcosystemTypeOther SnykvulndbOtherPackageEcosystemType = "other"
 )
 
 // ActualVersion Resolved API version
@@ -430,9 +441,9 @@ type AppliedPolicy struct {
 	union json.RawMessage
 }
 
-// BaseResource defines model for BaseResource.
+// BaseResource BaseResources contain a single instance of testable content.
 type BaseResource struct {
-	// Resource Resources containing testable content.
+	// Resource The specific representation of what content to test.
 	Resource BaseResourceVariant `json:"resource"`
 	Type     BaseResourceType    `json:"type"`
 }
@@ -440,9 +451,9 @@ type BaseResource struct {
 // BaseResourceType defines model for BaseResource.Type.
 type BaseResourceType string
 
-// BaseResourceCreateItem defines model for BaseResourceCreateItem.
+// BaseResourceCreateItem BaseResources contain a single instance of testable content.
 type BaseResourceCreateItem struct {
-	// Resource Resources containing testable content.
+	// Resource The specific representation of what content to test.
 	Resource BaseResourceVariantCreateItem `json:"resource"`
 	Type     BaseResourceCreateItemType    `json:"type"`
 }
@@ -450,44 +461,115 @@ type BaseResourceCreateItem struct {
 // BaseResourceCreateItemType defines model for BaseResourceCreateItem.Type.
 type BaseResourceCreateItemType string
 
-// BaseResourceVariant Resources containing testable content.
+// BaseResourceVariant defines model for BaseResourceVariant.
 type BaseResourceVariant struct {
 	union json.RawMessage
 }
 
-// BaseResourceVariantCreateItem Resources containing testable content.
+// BaseResourceVariantCreateItem defines model for BaseResourceVariantCreateItem.
 type BaseResourceVariantCreateItem struct {
 	union json.RawMessage
 }
 
-// BundleResource defines model for BundleResource.
+// BundleResource Resource representing Bundles of files created through the
+// Deepcode Bundle API.
+//
+// Bundles contain collections of files uploaded by clients to
+// Snyk for testing.
+//
+// BundleResources can be marked either as SBOM or Source to
+// indicate the contents of the Bundle.
+//
+// SBOM BundleResources should provide the following fields:
+// - type
+// - bundle_id
+// - name
+// - file_patterns (may be empty)
+//
+// Source BundleResources should provide the following fields:
+// - type
+// - bundle_id
+// - repository_url
+// - root_folder_id
+// - file_patterns (may be empty)
+//
+// Currently supported scans utilizing BundleResources are:
+// - SAST: (1) BundleResource containing Source files.
+// - SBOM (SCA): (1) BundleResource containing an SBOM
+// - SBOM + Reachability Analysis (SCA): (1) BundleResource containing an SBOM, (1) BundleResource containing Source files.
 type BundleResource struct {
-	BundleId      string                    `json:"bundle_id"`
-	ContentType   BundleResourceContentType `json:"content_type"`
-	FilePatterns  []string                  `json:"file_patterns"`
-	Name          *string                   `json:"name,omitempty"`
-	RepositoryUrl *string                   `json:"repository_url,omitempty"`
-	RootFolderId  *string                   `json:"root_folder_id,omitempty"`
-	Type          BundleResourceType        `json:"type"`
+	// BundleId The ID returned from the Files Bundle Store API for a given Bundle.
+	// The Deepcode Bundle API is not intended for direct public use,
+	// and will be replaced with the File Upload API in the future.
+	//
+	// These IDs are sha256 digests (32 bytes or 64 hex digits).
+	BundleId string `json:"bundle_id"`
+
+	// ContentType Content present in the Bundle.
+	//
+	// Currently only SBOMs and Source files are accepted
+	// content types.
+	ContentType BundleResourceContentType `json:"content_type"`
+
+	// FilePatterns File Patterns to include in the scan.
+	//
+	// Currently unsupported. Provide an empty list.
+	FilePatterns []string `json:"file_patterns"`
+
+	// Name A name to assign to the SBOM contained in the BundleRevision.
+	//
+	// Overrides the filename in the BundleRevision.
+	Name *string `json:"name,omitempty"`
+
+	// RepositoryUrl Repository URL at which the Source files are stored.
+	RepositoryUrl *string `json:"repository_url,omitempty"`
+
+	// RootFolderId Folder inside the BundleRevision at which the Source files are located.
+	RootFolderId *string `json:"root_folder_id,omitempty"`
+
+	// ScmContext Additional SCM information about a resource.
+	// Provides context about where the content came from; the resource itself is the testable item.
+	// ScmResource does not use this; it identifies SCM via its own fields.
+	ScmContext *ScmContext        `json:"scm_context,omitempty"`
+	Type       BundleResourceType `json:"type"`
 }
 
-// BundleResourceContentType defines model for BundleResource.ContentType.
+// BundleResourceContentType Content present in the Bundle.
+//
+// Currently only SBOMs and Source files are accepted
+// content types.
 type BundleResourceContentType string
 
 // BundleResourceType defines model for BundleResource.Type.
 type BundleResourceType string
 
-// ContainerRepoResource defines model for ContainerRepoResource.
+// ContainerRepoResource Resource representing a container repository.
+//
+// Container Repos identify a specific container
+// image in a container registry. These images can be scanned
+// using the Snyk Container scanner.
+//
+// Currently no scans are supported through the Test API for
+// ContainerRepoResources.
 type ContainerRepoResource struct {
-	ImageUrl string                    `json:"image_url"`
-	Tag      string                    `json:"tag"`
-	Type     ContainerRepoResourceType `json:"type"`
+	// ImageUrl URL at which the specific container image can be found
+	// in a container registry.
+	ImageUrl string `json:"image_url"`
+
+	// ScmContext Additional SCM information about a resource.
+	// Provides context about where the content came from; the resource itself is the testable item.
+	// ScmResource does not use this; it identifies SCM via its own fields.
+	ScmContext *ScmContext `json:"scm_context,omitempty"`
+
+	// Tag Tagged version of the container to scan.
+	Tag  string                    `json:"tag"`
+	Type ContainerRepoResourceType `json:"type"`
 }
 
 // ContainerRepoResourceType defines model for ContainerRepoResource.Type.
 type ContainerRepoResourceType string
 
-// ContainerScanConfiguration defines model for ContainerScanConfiguration.
+// ContainerScanConfiguration Scan configuration parameters for the Container scanner.
 type ContainerScanConfiguration = map[string]interface{}
 
 // CveProblem CVE designation according to the public Common Vulnerability Exposure
@@ -510,8 +592,16 @@ type CweProblem struct {
 // CweProblemSource defines model for CweProblem.Source.
 type CweProblemSource string
 
-// DeepcodeBundleSubject Test subject representing source code uploaded to Snyk using DeepCode
+// DeepcodeBundleSubject **Deprecated**
+//
+// Provide a BundleResource and include the
+// SAST Scan Configuration instead.
+//
+// Test subject representing source code uploaded to Snyk using DeepCode
 // bundle APIs.
+//
+// Deepcode bundles are accepted through the API, but are not
+// guaranteed to return Findings.
 type DeepcodeBundleSubject struct {
 	// BundleId Deepcode Bundle ID. These IDs are sha256 digests (32 bytes or 64 hex digits).
 	BundleId string `json:"bundle_id"`
@@ -524,7 +614,22 @@ type DeepcodeBundleSubject struct {
 // DeepcodeBundleSubjectType defines model for DeepcodeBundleSubject.Type.
 type DeepcodeBundleSubjectType string
 
-// DepGraphSubject Test subject representing a Snyk dependency graph (a legacy SBOM format).
+// DepGraphContent Dep Graph file contents, of the same format as Dep Graphs
+// provided to /v1/test-dep-graph endpoint.
+type DepGraphContent struct {
+	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
+	Type     DepGraphContentType                    `json:"type"`
+}
+
+// DepGraphContentType defines model for DepGraphContent.Type.
+type DepGraphContentType string
+
+// DepGraphSubject **Deprecated**
+//
+// Provide an InlineResource with the DepGraph contents
+// and the SCA Scan Configuration instead.
+//
+// Test subject representing a Snyk dependency graph (a legacy SBOM format).
 type DepGraphSubject struct {
 	// Locator Source file(s) from which the dependency graph was derived.
 	//
@@ -537,7 +642,12 @@ type DepGraphSubject struct {
 // DepGraphSubjectType defines model for DepGraphSubject.Type.
 type DepGraphSubjectType string
 
-// DepGraphSubjectCreate Test subject representing a Snyk dependency graph (a legacy SBOM format).
+// DepGraphSubjectCreate **Deprecated**
+//
+// Provide an InlineResource with the DepGraph contents
+// and the SCA Scan Configuration instead.
+//
+// Test subject representing a Snyk dependency graph (a legacy SBOM format).
 type DepGraphSubjectCreate struct {
 	// DepGraph When creating a test, provide the dep-graph contents inline to the request.
 	//
@@ -592,12 +702,20 @@ type Diff struct {
 // DiffFormat defines model for Diff.Format.
 type DiffFormat string
 
-// DiffResource defines model for DiffResource.
+// DiffResource DiffResources contain two versions of the same content
+// to compare against each other.
+//
+// The Base and Compare fields contain Resources representing
+// an "existing" (base) version as well as a "new" (compare)
+// version. Most commonly these Resources will be of the same type,
+// e.g. an ScmResource containing a reference the `main` branch being
+// compared to an ScmResource containing a reference to a new
+// feature branch.
+//
+// Currently no scans are supported through the Test API
+// for DiffResources.
 type DiffResource struct {
-	// Base Resources containing testable content.
-	Base BaseResourceVariant `json:"base"`
-
-	// Compare Resources containing testable content.
+	Base    BaseResourceVariant `json:"base"`
 	Compare BaseResourceVariant `json:"compare"`
 	Type    DiffResourceType    `json:"type"`
 }
@@ -605,12 +723,20 @@ type DiffResource struct {
 // DiffResourceType defines model for DiffResource.Type.
 type DiffResourceType string
 
-// DiffResourceCreateItem defines model for DiffResourceCreateItem.
+// DiffResourceCreateItem DiffResources contain two versions of the same content
+// to compare against each other.
+//
+// The Base and Compare fields contain Resources representing
+// an "existing" (base) version as well as a "new" (compare)
+// version. Most commonly these Resources will be of the same type,
+// e.g. an ScmResource containing a reference the `main` branch being
+// compared to an ScmResource containing a reference to a new
+// feature branch.
+//
+// Currently no scans are supported through the Test API
+// for DiffResources.
 type DiffResourceCreateItem struct {
-	// Base Resources containing testable content.
-	Base BaseResourceVariantCreateItem `json:"base"`
-
-	// Compare Resources containing testable content.
+	Base    BaseResourceVariantCreateItem `json:"base"`
 	Compare BaseResourceVariantCreateItem `json:"compare"`
 	Type    DiffResourceCreateItemType    `json:"type"`
 }
@@ -734,7 +860,7 @@ type FindingAttributes struct {
 	// Findings within a Test execution are aggregated by this key.
 	Key string `json:"key"`
 
-	// Locations Locations in the Asset's contents where the finding may be found.
+	// Locations Locations in the tested component's contents where the finding may be found.
 	Locations []FindingLocation `json:"locations"`
 
 	// PolicyModifications Attributes which have been modified by policy decisions.
@@ -892,8 +1018,16 @@ type FixAttributes struct {
 	Outcome FixAppliedOutcome `json:"outcome"`
 }
 
-// GitUrlCoordinatesSubject Test subject representing a source tree located in a Git repository that
+// GitUrlCoordinatesSubject **Deprecated**
+//
+// Provide an ScmResource and include the
+// SAST Scan Configuration instead.
+//
+// Test subject representing a source tree located in a Git repository that
 // has a Snyk SCM integration.
+//
+// Git URL coordinates are accepted through the API, but are not
+// guaranteed to return Findings.
 type GitUrlCoordinatesSubject struct {
 	// CommitId Commit ID of the Git commit from which content will be retrieved for the
 	// test.
@@ -920,7 +1054,7 @@ type GithubSecurityAdvisoryProblem struct {
 // GithubSecurityAdvisoryProblemSource defines model for GithubSecurityAdvisoryProblem.Source.
 type GithubSecurityAdvisoryProblemSource string
 
-// IacScanConfiguration defines model for IacScanConfiguration.
+// IacScanConfiguration Scan configuration parameters for the IAC scanner.
 type IacScanConfiguration = map[string]interface{}
 
 // Ignore defines model for Ignore.
@@ -970,29 +1104,43 @@ type IgnoredBy struct {
 	Name string `json:"name"`
 }
 
-// InlineContent defines model for InlineContent.
-type InlineContent struct {
-	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
-	Type     InlineContentType                      `json:"type"`
-}
+// InlineContent Dep Graph file contents, of the same format as Dep Graphs
+// provided to /v1/test-dep-graph endpoint.
+type InlineContent = DepGraphContent
 
-// InlineContentType defines model for InlineContent.Type.
-type InlineContentType string
-
-// InlineResource defines model for InlineResource.
+// InlineResource Resource comprised of file contents included directly in
+// a request body.
+//
+// Currently supported scans utilizing InlineResources are:
+// - SCA (Open Source): (1) InlineResource containing a Dep Graph
 type InlineResource struct {
-	Name string             `json:"name"`
-	Type InlineResourceType `json:"type"`
+	Name string `json:"name"`
+
+	// ScmContext Additional SCM information about a resource.
+	// Provides context about where the content came from; the resource itself is the testable item.
+	// ScmResource does not use this; it identifies SCM via its own fields.
+	ScmContext *ScmContext        `json:"scm_context,omitempty"`
+	Type       InlineResourceType `json:"type"`
 }
 
 // InlineResourceType defines model for InlineResource.Type.
 type InlineResourceType string
 
-// InlineResourceCreateItem defines model for InlineResourceCreateItem.
+// InlineResourceCreateItem Resource comprised of file contents included directly in
+// a request body.
+//
+// Currently supported scans utilizing InlineResources are:
+// - SCA (Open Source): (1) InlineResource containing a Dep Graph
 type InlineResourceCreateItem struct {
-	Content InlineContent                `json:"content"`
-	Name    string                       `json:"name"`
-	Type    InlineResourceCreateItemType `json:"type"`
+	// Content File contents to be tested.
+	Content InlineContent `json:"content"`
+	Name    string        `json:"name"`
+
+	// ScmContext Additional SCM information about a resource.
+	// Provides context about where the content came from; the resource itself is the testable item.
+	// ScmResource does not use this; it identifies SCM via its own fields.
+	ScmContext *ScmContext                  `json:"scm_context,omitempty"`
+	Type       InlineResourceCreateItemType `json:"type"`
 }
 
 // InlineResourceCreateItemType defines model for InlineResourceCreateItem.Type.
@@ -1032,6 +1180,7 @@ type JobRelationshipFieldDataType string
 
 // JobRelationships defines model for JobRelationships.
 type JobRelationships struct {
+	// Test Test resource associated with the finished Job.
 	Test JobRelationshipField `json:"test"`
 }
 
@@ -1292,6 +1441,7 @@ type PolicyRuleReview string
 // - Code SAST rules
 // - VulnDB vulnerabilities
 // - Software licenses
+// - Secret leaks
 type Problem struct {
 	union json.RawMessage
 }
@@ -1332,10 +1482,11 @@ type Rating struct {
 
 // ReachabilityEvidence Indicate the reachability signals as additional evidence for the finding.
 type ReachabilityEvidence struct {
-	// Paths Sequence of locations within this flow of execution.
+	// Paths Paths by which the vulnerable code can be reached.
 	//
-	// For example, a sequence of locations connecting the "source" location
-	// where input data is obtained, to a "sink" location where it is used.
+	// Includes the name of the function, the path through the
+	// source code that reaches the function, and the location
+	// at which the vulnerable function is called.
 	Paths *[]ReachablePath `json:"paths,omitempty"`
 
 	// Reachability Reachability enum for reachability signal.
@@ -1376,10 +1527,19 @@ type RiskScore struct {
 	Value uint16 `json:"value"`
 }
 
-// SastScanConfiguration defines model for SastScanConfiguration.
+// SastScanConfiguration Scan configuration parameters for the SAST scanner.
 type SastScanConfiguration = map[string]interface{}
 
-// SbomReachabilitySubject Test subject for SBOM test with reachability analysis.
+// SbomReachabilitySubject **Deprecated**
+//
+// Provide a BundleResource with SBOM Bundle ID,
+// a BundleResource with Source Bundle ID, and include
+// SCA Scan Configuration instead.
+//
+// SBOM Reachability tests can also be initiated using
+// UploadResources if using the File Upload API.
+//
+// Test subject for SBOM test with reachability analysis.
 type SbomReachabilitySubject struct {
 	// CodeBundleId Source code to inspect for the reach of the vulnerable dependencies.
 	CodeBundleId string `json:"code_bundle_id"`
@@ -1395,7 +1555,15 @@ type SbomReachabilitySubject struct {
 // SbomReachabilitySubjectType defines model for SbomReachabilitySubject.Type.
 type SbomReachabilitySubjectType string
 
-// SbomSubject Test subject for SBOM test without reachability analysis.
+// SbomSubject **Deprecated**
+//
+// Provide a BundleResource with SBOM Bundle ID and include
+// SCA Scan Configuration instead.
+//
+// SBOM tests can also be initiated using an
+// UploadResource if using the File Upload API.
+//
+// Test subject for SBOM test without reachability analysis.
 type SbomSubject struct {
 	// Locator Locate the local paths from which the SBOM and source code were derived.
 	Locator LocalPathLocator `json:"locator"`
@@ -1408,16 +1576,44 @@ type SbomSubject struct {
 // SbomSubjectType defines model for SbomSubject.Type.
 type SbomSubjectType string
 
-// ScaScanConfiguration defines model for ScaScanConfiguration.
+// ScaScanConfiguration Scan configuration parameters for the SCA scanner.
 type ScaScanConfiguration = map[string]interface{}
 
-// ScanConfiguration defines model for ScanConfiguration.
+// ScanConfiguration A map of scanner types to their specific set of
+// configuration parameters.
+//
+// The presence of a scanner's configuration in the
+// provided ScanConfiguration is used to determine what scans
+// to run on the list of Resources provided.
+//
+// Note that an empty config object is different than
+// omitting the field. An omitted scanner config results in
+// that scanner not being run. A provided empty scan config
+// will run the scanner if it is possible.
 type ScanConfiguration struct {
+	// Container Scan configuration parameters for the Container scanner.
 	Container *ContainerScanConfiguration `json:"container,omitempty"`
-	Iac       *IacScanConfiguration       `json:"iac,omitempty"`
-	Sast      *SastScanConfiguration      `json:"sast,omitempty"`
-	Sca       *ScaScanConfiguration       `json:"sca,omitempty"`
-	Secrets   *SecretsScanConfiguration   `json:"secrets,omitempty"`
+
+	// Iac Scan configuration parameters for the IAC scanner.
+	Iac *IacScanConfiguration `json:"iac,omitempty"`
+
+	// Sast Scan configuration parameters for the SAST scanner.
+	Sast *SastScanConfiguration `json:"sast,omitempty"`
+
+	// Sca Scan configuration parameters for the SCA scanner.
+	Sca *ScaScanConfiguration `json:"sca,omitempty"`
+
+	// Secrets Scan configuration parameters for the Secrets scanner.
+	Secrets *SecretsScanConfiguration `json:"secrets,omitempty"`
+}
+
+// ScmContext Additional SCM information about a resource.
+// Provides context about where the content came from; the resource itself is the testable item.
+// ScmResource does not use this; it identifies SCM via its own fields.
+type ScmContext struct {
+	Branch    *string `json:"branch,omitempty"`
+	CommitRef *string `json:"commit_ref,omitempty"`
+	RepoUrl   *string `json:"repo_url,omitempty"`
 }
 
 // ScmRepoLocator ScmRepoLocator locates a test subject by SCM repository coordinates.
@@ -1436,32 +1632,65 @@ type ScmRepoLocator struct {
 // ScmRepoLocatorType defines model for ScmRepoLocator.Type.
 type ScmRepoLocatorType string
 
-// ScmResource defines model for ScmResource.
+// ScmResource Resource representing a repository of source files located in
+// a Source Code Management tool (e.g. GitHub).
+//
+// ScmResources provide Snyk with the requisite information to
+// locate and scan the source files located in the repository.
+//
+// Currently supported scans utilizing ScmResources are:
+// - SAST scans on (1) ScmResource that references a repo already
+// imported into Snyk
 type ScmResource struct {
-	Commit        *string            `json:"commit,omitempty"`
-	FilePatterns  *[]string          `json:"file_patterns,omitempty"`
+	// Commit Commit hash to reference specifically.
+	Commit *string `json:"commit,omitempty"`
+
+	// FilePatterns File Patterns to include in the scan.
+	//
+	// Currently unsupported. Provide an empty list.
+	FilePatterns *[]string `json:"file_patterns,omitempty"`
+
+	// IntegrationId Integration ID assigned to the specific SCM.
+	// This ID can be found in the Snyk UI by navigating to
+	// "Settings" > "Integrations" > "<Your SCM>"
+	//
+	// The ID will be displayed under "General" > "Integration ID"
 	IntegrationId openapi_types.UUID `json:"integration_id"`
-	Ref           *string            `json:"ref,omitempty"`
-	RepoUrl       string             `json:"repo_url"`
-	Type          ScmResourceType    `json:"type"`
+
+	// Ref Ref contains a branch name or other non-commit hash reference
+	// to a version of the content.
+	Ref *string `json:"ref,omitempty"`
+
+	// RepoUrl URL at which the repository can be found in the SCM.
+	RepoUrl string          `json:"repo_url"`
+	Type    ScmResourceType `json:"type"`
 }
 
 // ScmResourceType defines model for ScmResource.Type.
 type ScmResourceType string
 
+// SdlcStage SDLC stage where the test was initiated.
+type SdlcStage string
+
 // SecretsRuleProblem Secret rule that produces a Secret finding.
 type SecretsRuleProblem struct {
 	// Categories Categories applied to the rule.
 	Categories []string `json:"categories"`
-	Help       string   `json:"help"`
-	Id         string   `json:"id"`
-	Name       string   `json:"name"`
+
+	// Help Assistance on resolving the finding.
+	Help string `json:"help"`
+	Id   string `json:"id"`
+
+	// Name Name for the kind of finding uncovered.
+	Name string `json:"name"`
 
 	// Precision A qualitative description of the rule's precision.
 	Precision string `json:"precision"`
 
-	// Severity Indicate the severity of a finding discovered by a Test.
-	Severity         Severity                 `json:"severity"`
+	// Severity Severity level of the finding.
+	Severity Severity `json:"severity"`
+
+	// ShortDescription Short description of the found Secret's type.
 	ShortDescription string                   `json:"short_description"`
 	Source           SecretsRuleProblemSource `json:"source"`
 
@@ -1472,7 +1701,7 @@ type SecretsRuleProblem struct {
 // SecretsRuleProblemSource defines model for SecretsRuleProblem.Source.
 type SecretsRuleProblemSource string
 
-// SecretsScanConfiguration defines model for SecretsScanConfiguration.
+// SecretsScanConfiguration Scan configuration parameters for the Secrets scanner.
 type SecretsScanConfiguration = map[string]interface{}
 
 // Severity Indicate the severity of a finding discovered by a Test.
@@ -1608,14 +1837,41 @@ type SnykPolicyRef struct {
 // SnykPolicyRefOwner defines model for SnykPolicyRef.Owner.
 type SnykPolicyRefOwner string
 
-// SnykReferenceResource defines model for SnykReferenceResource.
+// SnykReferenceResource SnykReferenceResources contain references to source code,
+// containers, SBOMs, and other testable content that has already
+// been provided to Snyk to create a Project or Target.
+//
+// If the intended content to test is already known to Snyk as a
+// Project, Target, or otherwise, this SnykReferenceResource can
+// be used to initiate a Test with the appropriate ID.
+//
+// Currently no scans are supported through the Test API for
+// SnykReferenceResources.
 type SnykReferenceResource struct {
-	RefId         openapi_types.UUID                 `json:"ref_id"`
+	// RefId ID referring the contents already known by Snyk.
+	RefId openapi_types.UUID `json:"ref_id"`
+
+	// ReferenceType Kind of Snyk reference contained in Ref ID.
+	//
+	// Targets and Projects exist in Snyk currently.
+	//
+	// Assets are a feature in-development, and are listed
+	// here for future-forward compatibility.
 	ReferenceType SnykReferenceResourceReferenceType `json:"reference_type"`
-	Type          SnykReferenceResourceType          `json:"type"`
+
+	// ScmContext Additional SCM information about a resource.
+	// Provides context about where the content came from; the resource itself is the testable item.
+	// ScmResource does not use this; it identifies SCM via its own fields.
+	ScmContext *ScmContext               `json:"scm_context,omitempty"`
+	Type       SnykReferenceResourceType `json:"type"`
 }
 
-// SnykReferenceResourceReferenceType defines model for SnykReferenceResource.ReferenceType.
+// SnykReferenceResourceReferenceType Kind of Snyk reference contained in Ref ID.
+//
+// Targets and Projects exist in Snyk currently.
+//
+// Assets are a feature in-development, and are listed
+// here for future-forward compatibility.
 type SnykReferenceResourceReferenceType string
 
 // SnykReferenceResourceType defines model for SnykReferenceResource.Type.
@@ -1865,15 +2121,38 @@ type TestAttributes struct {
 	// completes (state.execution == 'finished') successfully (without fatal errors
 	// blocking an outcome).
 	RawSummary *FindingSummary `json:"raw_summary,omitempty"`
-	Resources  *[]TestResource `json:"resources,omitempty"`
+
+	// Resources The units of testable content to be scanned by Snyk.
+	//
+	// Resources are provided in conjunction with the ScanConfiguration,
+	// and appropriate scans to run are determined from that combination.
+	//
+	// There is a "best-fit" approach taken, and not all Resources will be
+	// scanned by all requested scanners. E.g. Container resources cannot be
+	// scanned by the SAST scanner.
+	Resources *[]TestResource `json:"resources,omitempty"`
+
+	// SdlcStage SDLC stage where the test was initiated.
+	SdlcStage *SdlcStage `json:"sdlc_stage,omitempty"`
 
 	// State The state of the test's execution.
 	State *TestState `json:"state,omitempty"`
 
-	// Subject The subject of a test.
+	// Subject **Deprecated**
+	//
+	// Use an equivalent combination of Resources and
+	// Scan Configurations instead. See Subject descriptions
+	// for appropriate replacements.
+	//
+	// The subject of a test.
 	Subject *TestSubject `json:"subject,omitempty"`
 
-	// SubjectLocators Additional locators which may help locate the test subject across test workflows.
+	// SubjectLocators **Deprecated**
+	//
+	// Metadata about testable content is located on
+	// Resources directly.
+	//
+	// Additional locators which may help locate the test subject across test workflows.
 	//
 	// Test subjects generally will have a primary locator. Additional locators
 	// may be provided to help link the test to existing projects and/or assets in
@@ -1882,24 +2161,53 @@ type TestAttributes struct {
 
 	// TestFacts Facts about the test that were computed during test execution.
 	TestFacts *[]TestFact `json:"test_facts,omitempty"`
+
+	// UserPublicId Public identifier of the user who initiated the test.
+	UserPublicId *string `json:"user_public_id,omitempty"`
 }
 
 // TestAttributesCreate TestAttributes represents the attributes of a Test resource.
 type TestAttributesCreate struct {
 	// Config The test configuration. If not specified, caller accepts test configuration
 	// defaults within the calling scope (org, group or tenant settings, etc).
-	Config    *TestConfiguration        `json:"config,omitempty"`
+	Config *TestConfiguration `json:"config,omitempty"`
+
+	// Resources The units of testable content to be scanned by Snyk.
+	//
+	// Resources are provided in conjunction with the ScanConfiguration,
+	// and appropriate scans to run are determined from that combination.
+	//
+	// There is a "best-fit" approach taken, and not all Resources will be
+	// scanned by all requested scanners. E.g. Container resources cannot be
+	// scanned by the SAST scanner.
 	Resources *[]TestResourceCreateItem `json:"resources,omitempty"`
 
-	// Subject The subject of a test.
+	// SdlcStage SDLC stage where the test was initiated.
+	SdlcStage *SdlcStage `json:"sdlc_stage,omitempty"`
+
+	// Subject **Deprecated**
+	//
+	// Use an equivalent combination of Resources and
+	// Scan Configurations instead. See Subject descriptions
+	// for appropriate replacements.
+	//
+	// The subject of a test.
 	Subject *TestSubjectCreate `json:"subject,omitempty"`
 
-	// SubjectLocators Additional locators which may help locate the test subject across test workflows.
+	// SubjectLocators **Deprecated**
+	//
+	// Metadata about testable content is located on
+	// Resources directly.
+	//
+	// Additional locators which may help locate the test subject across test workflows.
 	//
 	// Test subjects generally will have a primary locator. Additional locators
 	// may be provided to help link the test to existing projects and/or assets in
 	// the Snyk platform.
 	SubjectLocators *[]TestSubjectLocator `json:"subject_locators,omitempty"`
+
+	// UserPublicId Public identifier of the user who initiated the test.
+	UserPublicId *string `json:"user_public_id,omitempty"`
 }
 
 // TestConfiguration Test configuration.
@@ -1916,9 +2224,21 @@ type TestConfiguration struct {
 	ProjectTags                *[]string    `json:"project_tags,omitempty"`
 
 	// PublishReport Publish findings into a report, viewable in the Snyk web UI.
-	PublishReport *bool              `json:"publish_report,omitempty"`
-	ScanConfig    *ScanConfiguration `json:"scan_config,omitempty"`
-	TargetName    *string            `json:"target_name,omitempty"`
+	PublishReport *bool `json:"publish_report,omitempty"`
+
+	// ScanConfig A map of scanner types to their specific set of
+	// configuration parameters.
+	//
+	// The presence of a scanner's configuration in the
+	// provided ScanConfiguration is used to determine what scans
+	// to run on the list of Resources provided.
+	//
+	// Note that an empty config object is different than
+	// omitting the field. An omitted scanner config results in
+	// that scanner not being run. A provided empty scan config
+	// will run the scanner if it is possible.
+	ScanConfig *ScanConfiguration `json:"scan_config,omitempty"`
+	TargetName *string            `json:"target_name,omitempty"`
 
 	// TargetReference Fields from CLI.
 	TargetReference *string `json:"target_reference,omitempty"`
@@ -1982,12 +2302,14 @@ type TestRequestBody struct {
 	Data TestDataCreate `json:"data"`
 }
 
-// TestResource defines model for TestResource.
+// TestResource TestResources contain single instances of testable content
+// to be provided to Snyk scanners.
 type TestResource struct {
 	union json.RawMessage
 }
 
-// TestResourceCreateItem defines model for TestResourceCreateItem.
+// TestResourceCreateItem TestResources contain single instances of testable content
+// to be provided to Snyk scanners.
 type TestResourceCreateItem struct {
 	union json.RawMessage
 }
@@ -2066,18 +2388,72 @@ type UpgradePath struct {
 	IsDrop bool `json:"is_drop"`
 }
 
-// UploadResource defines model for UploadResource.
+// UploadResource Resource referring to an Upload Revision created through the
+// File Upload API (currently in Closed Beta).
+//
+// Revisions contain collections of files uploaded by clients to
+// Snyk for testing.
+//
+// UploadResources can be marked either as SBOM or Source to
+// indicate the contents of the Revision.
+//
+// SBOM UploadResources should provide the following fields:
+// - type
+// - revision_id
+// - name
+// - file_patterns (may be empty)
+//
+// Source UploadResources should provide the following fields:
+// - type
+// - revision_id
+// - repository_url
+// - root_folder_id
+// - file_patterns (may be empty)
+//
+// Currently supported scans utilizing UploadResources are:
+// - SBOM (SCA): (1) UploadResource containing an SBOM
+// - SBOM + Reachability Analysis (SCA): (1) UploadResource containing an SBOM, (1) UploadResource containing Source files.
+// - Secrets: (1) UploadResource containing Source files
 type UploadResource struct {
-	ContentType   UploadResourceContentType `json:"content_type"`
-	FilePatterns  []string                  `json:"file_patterns"`
-	Name          *string                   `json:"name,omitempty"`
-	RepositoryUrl *string                   `json:"repository_url,omitempty"`
-	RevisionId    string                    `json:"revision_id"`
-	RootFolderId  *string                   `json:"root_folder_id,omitempty"`
-	Type          UploadResourceType        `json:"type"`
+	// ContentType Content present in the Upload Revision.
+	//
+	// Currently only SBOMs and Source files are accepted
+	// content types.
+	ContentType UploadResourceContentType `json:"content_type"`
+
+	// FilePatterns File Patterns to include in the scan.
+	//
+	// Currently unsupported. Provide an empty list.
+	FilePatterns []string `json:"file_patterns"`
+
+	// Name A name to assign to the SBOM contained in the UploadRevision.
+	//
+	// Overrides the filename in the UploadRevision.
+	Name *string `json:"name,omitempty"`
+
+	// RepositoryUrl Repository URL at which the Source files are stored.
+	RepositoryUrl *string `json:"repository_url,omitempty"`
+
+	// RevisionId The ID returned from the File Upload API for a given Revision.
+	// The File Upload API is released in Closed Beta.
+	// Customers with access may view the preview documentation for
+	// information on its usage.
+	RevisionId string `json:"revision_id"`
+
+	// RootFolderId Folder inside the UploadRevision at which the Source files are located.
+	RootFolderId *string `json:"root_folder_id,omitempty"`
+
+	// ScmContext Additional SCM information about a resource.
+	// Provides context about where the content came from; the resource itself is the testable item.
+	// ScmResource does not use this; it identifies SCM via its own fields.
+	ScmContext *ScmContext        `json:"scm_context,omitempty"`
+	Type       UploadResourceType `json:"type"`
 }
 
-// UploadResourceContentType defines model for UploadResource.ContentType.
+// UploadResourceContentType Content present in the Upload Revision.
+//
+// Currently only SBOMs and Source files are accepted
+// content types.
 type UploadResourceContentType string
 
 // UploadResourceType defines model for UploadResource.Type.

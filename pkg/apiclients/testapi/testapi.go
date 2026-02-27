@@ -174,31 +174,33 @@ var (
 
 // StartTestParams defines parameters for the high-level StartTest function.
 type StartTestParams struct {
-	OrgID       string
-	Subject     *TestSubjectCreate
-	Resources   *[]TestResourceCreateItem
-	LocalPolicy *LocalPolicy
-	ScanConfig  *ScanConfiguration // Only valid when Resources is set, not Subject
+	orgID      string
+	subject    *TestSubjectCreate
+	resources  *[]TestResourceCreateItem
+	testConfig *TestConfiguration
 }
 
+func (p StartTestParams) OrgID() string                        { return p.orgID }
+func (p StartTestParams) Subject() *TestSubjectCreate          { return p.subject }
+func (p StartTestParams) Resources() *[]TestResourceCreateItem { return p.resources }
+func (p StartTestParams) TestConfig() *TestConfiguration       { return p.testConfig }
+
 // NewStartTestParamsFromSubject creates params for a subject-based test.
-// ScanConfig is not supported for subject-based tests.
-func NewStartTestParamsFromSubject(orgID string, subject *TestSubjectCreate, localPolicy *LocalPolicy) StartTestParams {
+// ScanConfig within TestConfiguration is not supported for subject-based tests.
+func NewStartTestParamsFromSubject(orgID string, subject *TestSubjectCreate, config *TestConfiguration) StartTestParams {
 	return StartTestParams{
-		OrgID:       orgID,
-		Subject:     subject,
-		LocalPolicy: localPolicy,
+		orgID:      orgID,
+		subject:    subject,
+		testConfig: config,
 	}
 }
 
 // NewStartTestParamsFromResources creates params for a resources-based test.
-// ScanConfig is optional and only valid for resource-based tests.
-func NewStartTestParamsFromResources(orgID string, resources *[]TestResourceCreateItem, localPolicy *LocalPolicy, scanConfig *ScanConfiguration) StartTestParams {
+func NewStartTestParamsFromResources(orgID string, resources *[]TestResourceCreateItem, config *TestConfiguration) StartTestParams {
 	return StartTestParams{
-		OrgID:       orgID,
-		Resources:   resources,
-		LocalPolicy: localPolicy,
-		ScanConfig:  scanConfig,
+		orgID:      orgID,
+		resources:  resources,
+		testConfig: config,
 	}
 }
 
@@ -329,9 +331,9 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 
 // validateStartTestParams validates the StartTestParams and returns the parsed OrgID UUID.
 func validateStartTestParams(params StartTestParams) (uuid.UUID, error) {
-	if params.Resources != nil {
-		if len(*params.Resources) > 0 {
-			for i, resource := range *params.Resources {
+	if params.resources != nil {
+		if len(*params.resources) > 0 {
+			for i, resource := range *params.resources {
 				if len(resource.union) == 0 {
 					return uuid.Nil, fmt.Errorf("resource at index %d is required in StartTestParams and must be populated", i)
 				}
@@ -339,22 +341,22 @@ func validateStartTestParams(params StartTestParams) (uuid.UUID, error) {
 		} else {
 			return uuid.Nil, fmt.Errorf("resources do not contain any items in StartTestParams")
 		}
-	} else if params.Subject != nil {
-		if len(params.Subject.union) == 0 {
+	} else if params.subject != nil {
+		if len(params.subject.union) == 0 {
 			return uuid.Nil, fmt.Errorf("subject is required in StartTestParams and must be populated")
 		}
 	} else {
 		return uuid.Nil, fmt.Errorf("either resources or subject are required in StartTestParams and must be populated")
 	}
 
-	if params.ScanConfig != nil && params.Subject != nil {
+	if params.testConfig != nil && params.testConfig.ScanConfig != nil && params.subject != nil {
 		return uuid.Nil, fmt.Errorf("ScanConfig is only supported with Resources, not Subject")
 	}
 
-	if params.OrgID == "" {
+	if params.orgID == "" {
 		return uuid.Nil, fmt.Errorf("OrgID is required")
 	}
-	orgUUID, err := uuid.Parse(params.OrgID)
+	orgUUID, err := uuid.Parse(params.orgID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("invalid OrgID format: %w", err)
 	}
@@ -369,19 +371,14 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	}
 
 	// Create test body
-	testAttributes := TestAttributesCreate{Subject: params.Subject, Resources: params.Resources}
-
-	if params.LocalPolicy != nil || params.ScanConfig != nil {
-		testAttributes.Config = &TestConfiguration{
-			LocalPolicy: params.LocalPolicy,
-			ScanConfig:  params.ScanConfig,
-		}
-	}
-
 	requestBody := TestRequestBody{
 		Data: TestDataCreate{
-			Attributes: testAttributes,
-			Type:       Tests,
+			Attributes: TestAttributesCreate{
+				Subject:   params.subject,
+				Resources: params.resources,
+				Config:    params.testConfig,
+			},
+			Type: Tests,
 		},
 	}
 
