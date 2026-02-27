@@ -175,21 +175,15 @@ func Test_StartTest_Success(t *testing.T) {
 		RiskScoreThreshold: &riskScoreThreshold,
 	}
 
-	params := testapi.StartTestParams{
-		OrgID:       testData.OrgID.String(),
-		Subject:     testData.TestSubjectCreate,
-		LocalPolicy: localPolicy,
-	}
+	config := &testapi.TestConfiguration{LocalPolicy: localPolicy}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, config)
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Subject:   params.Subject,
-				Resources: params.Resources,
-				Config: &testapi.TestConfiguration{
-					LocalPolicy: localPolicy,
-				},
+				Subject: testData.TestSubjectCreate,
+				Config:  config,
 			},
 			Type: testapi.Tests,
 		},
@@ -285,20 +279,15 @@ func Test_StartTestWithResources_Success(t *testing.T) {
 		RiskScoreThreshold: &riskScoreThreshold,
 	}
 
-	params := testapi.StartTestParams{
-		OrgID:       testData.OrgID.String(),
-		Resources:   testData.TestResourceCreateItems,
-		LocalPolicy: localPolicy,
-	}
+	config := &testapi.TestConfiguration{LocalPolicy: localPolicy}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, config)
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Resources: params.Resources,
-				Config: &testapi.TestConfiguration{
-					LocalPolicy: localPolicy,
-				},
+				Resources: testData.TestResourceCreateItems,
+				Config:    config,
 			},
 			Type: testapi.Tests,
 		},
@@ -387,10 +376,7 @@ func Test_StartTest_Error_InvalidOrgID(t *testing.T) {
 	ctx := context.Background()
 
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{
-		OrgID:   "not-a-valid-uuid",
-		Subject: &testSubject,
-	}
+	params := testapi.NewStartTestParamsFromSubject("not-a-valid-uuid", &testSubject, nil)
 
 	// Act: OrgID error occurs before network setup so client can point anywhere
 	testClient, err := testapi.NewTestClient("http://localhost:12345")
@@ -410,10 +396,7 @@ func Test_StartTestWithResources_Error_InvalidOrgID(t *testing.T) {
 	ctx := context.Background()
 
 	testData := setupTestScenarioWithResources(t)
-	params := testapi.StartTestParams{
-		OrgID:     "not-a-valid-uuid",
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources("not-a-valid-uuid", testData.TestResourceCreateItems, nil)
 
 	// Act: OrgID error occurs before network setup so client can point anywhere
 	testClient, err := testapi.NewTestClient("http://localhost:12345")
@@ -454,7 +437,7 @@ func Test_StartTest_Error_ApiFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: &testSubject}
+	params := testapi.NewStartTestParamsFromSubject(orgID.String(), &testSubject, nil)
 
 	handle, err := testClient.StartTest(ctx, params)
 
@@ -495,7 +478,7 @@ func Test_StartTestWithResources_Error_ApiFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	testData := setupTestScenarioWithResources(t)
-	params := testapi.StartTestParams{OrgID: orgID.String(), Resources: testData.TestResourceCreateItems}
+	params := testapi.NewStartTestParamsFromResources(orgID.String(), testData.TestResourceCreateItems, nil)
 
 	handle, err := testClient.StartTest(ctx, params)
 
@@ -526,7 +509,7 @@ func Test_StartTest_Error_Network(t *testing.T) {
 	require.NoError(t, err, "NewTestClient should not error for a non-listening port if HTTPClient is not immediately used")
 
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{OrgID: uuid.New().String(), Subject: &testSubject}
+	params := testapi.NewStartTestParamsFromSubject(uuid.New().String(), &testSubject, nil)
 
 	handle, err := testClient.StartTest(ctx, params)
 
@@ -555,7 +538,7 @@ func Test_StartTestWithResources_Error_Network(t *testing.T) {
 	require.NoError(t, err, "NewTestClient should not error for a non-listening port if HTTPClient is not immediately used")
 
 	testData := setupTestScenarioWithResources(t)
-	params := testapi.StartTestParams{OrgID: uuid.New().String(), Resources: testData.TestResourceCreateItems}
+	params := testapi.NewStartTestParamsFromResources(uuid.New().String(), testData.TestResourceCreateItems, nil)
 
 	handle, err := testClient.StartTest(ctx, params)
 
@@ -577,10 +560,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 
 	testData := setupTestScenarioWithSubject(t)
 
-	startParams := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	startParams := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	testData.ExpectedEffectiveSummary.Count = 1
 	testData.ExpectedRawSummary.Count = 1
@@ -663,10 +643,7 @@ func Test_Wait_Synchronous_WithResources_Success_Pass_WithFindings(t *testing.T)
 	ctx := context.Background()
 
 	testData := setupTestScenarioWithResources(t)
-	startParams := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	startParams := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	testData.ExpectedEffectiveSummary.Count = 1
 	testData.ExpectedRawSummary.Count = 1
@@ -751,10 +728,7 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 	testData := setupTestScenarioWithSubject(t)
 	failReason := testapi.TestOutcomeReasonPolicyBreach
 
-	params := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -824,10 +798,7 @@ func Test_Wait_Synchronous_WithResources_Success_Fail(t *testing.T) {
 	testData := setupTestScenarioWithResources(t)
 	failReason := testapi.TestOutcomeReasonPolicyBreach
 
-	params := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -895,17 +866,13 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 
 	testData := setupTestScenarioWithSubject(t)
 
-	params := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Subject:   params.Subject,
-				Resources: params.Resources,
+				Subject: testData.TestSubjectCreate,
 			},
 			Type: testapi.Tests,
 		},
@@ -998,16 +965,13 @@ func Test_Wait_Asynchronous_WithResources_Success_Pass(t *testing.T) {
 
 	testData := setupTestScenarioWithResources(t)
 
-	params := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Resources: params.Resources,
+				Resources: testData.TestResourceCreateItems,
 			},
 			Type: testapi.Tests,
 		},
@@ -1099,10 +1063,7 @@ func Test_Wait_Synchronous_JobErrored(t *testing.T) {
 
 	testData := setupTestScenarioWithSubject(t)
 
-	params := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -1161,10 +1122,7 @@ func Test_Wait_WithResources_Synchronous_JobErrored(t *testing.T) {
 
 	testData := setupTestScenarioWithResources(t)
 
-	params := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -1226,10 +1184,7 @@ func Test_Wait_Asynchronous_PollingTimeout(t *testing.T) {
 
 	testData := setupTestScenarioWithSubject(t)
 
-	params := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -1311,10 +1266,7 @@ func Test_Wait_WithResources_Asynchronous_PollingTimeout(t *testing.T) {
 
 	testData := setupTestScenarioWithResources(t)
 
-	params := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -1394,10 +1346,7 @@ func Test_Wait_Synchronous_FetchResultFails(t *testing.T) {
 
 	testData := setupTestScenarioWithSubject(t)
 
-	params := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -1463,10 +1412,7 @@ func Test_Wait_WithResources_Synchronous_FetchResultFails(t *testing.T) {
 
 	testData := setupTestScenarioWithResources(t)
 
-	params := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	// Mock server handler using newTestAPIMockHandler
 	handlerConfig := TestAPIHandlerConfig{
@@ -1545,10 +1491,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 		LocalPolicy: utils.Ptr(true),
 	}
 
-	params := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	testData.ExpectedEffectiveSummary.Count = 5 // Example count
 	testData.ExpectedRawSummary.Count = 10      // Example count
@@ -1639,10 +1582,7 @@ func Test_Wait_WithResources_Synchronous_Finished_With_ErrorsAndWarnings(t *test
 		LocalPolicy: utils.Ptr(true),
 	}
 
-	params := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	testData.ExpectedEffectiveSummary.Count = 5 // Example count
 	testData.ExpectedRawSummary.Count = 10      // Example count
@@ -1830,7 +1770,7 @@ func Test_NewTestClient_CustomLogger(t *testing.T) {
 
 	// Start a test with a minimal subject.
 	testSubject := newDepGraphTestSubject(t)
-	params := testapi.StartTestParams{OrgID: orgID.String(), Subject: &testSubject}
+	params := testapi.NewStartTestParamsFromSubject(orgID.String(), &testSubject, nil)
 
 	handle, err := testClient.StartTest(ctx, params)
 	require.NoError(t, err)
@@ -1897,10 +1837,7 @@ func Test_NewTestClient_WithResource_CustomLogger(t *testing.T) {
 	// Start a test with a minimal subject.
 	uploadResource := newUploadResource(t)
 	testResourceCreateItem := newUploadTestResourceCreateItem(t, &uploadResource)
-	params := testapi.StartTestParams{
-		OrgID:     orgID.String(),
-		Resources: &[]testapi.TestResourceCreateItem{testResourceCreateItem},
-	}
+	params := testapi.NewStartTestParamsFromResources(orgID.String(), &[]testapi.TestResourceCreateItem{testResourceCreateItem}, nil)
 
 	handle, err := testClient.StartTest(ctx, params)
 	require.NoError(t, err)
@@ -2035,10 +1972,7 @@ func Test_Wait_CallsJitter(t *testing.T) {
 
 	testData := setupTestScenarioWithSubject(t)
 
-	params := testapi.StartTestParams{
-		OrgID:   testData.OrgID.String(),
-		Subject: testData.TestSubjectCreate,
-	}
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
 
 	// Mock Jitter
 	var jitterCalled bool
@@ -2094,10 +2028,7 @@ func Test_Wait_WithResources_CallsJitter(t *testing.T) {
 
 	testData := setupTestScenarioWithResources(t)
 
-	params := testapi.StartTestParams{
-		OrgID:     testData.OrgID.String(),
-		Resources: testData.TestResourceCreateItems,
-	}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
 	// Mock Jitter
 	var jitterCalled bool
@@ -2147,81 +2078,145 @@ func Test_Wait_WithResources_CallsJitter(t *testing.T) {
 	assert.True(t, jitterCalled)
 }
 
-// Test factory function for creating params from subject
+// Test factory function for creating params from subject — verify through StartTest round-trip
+// that the constructor populates the right fields. Fields are unexported so we validate behavior
+// by checking the generated request body via the mock server.
 func Test_NewStartTestParamsFromSubject(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
-	// Arrange
-	orgID := "test-org-id"
-	testSubject := newDepGraphTestSubject(t)
+	testData := setupTestScenarioWithSubject(t)
 	riskScoreThreshold := uint16(750)
-	localPolicy := &testapi.LocalPolicy{
-		RiskScoreThreshold: &riskScoreThreshold,
+	localPolicy := &testapi.LocalPolicy{RiskScoreThreshold: &riskScoreThreshold}
+	config := &testapi.TestConfiguration{LocalPolicy: localPolicy}
+
+	params := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, config)
+
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Subject: testData.TestSubjectCreate,
+				Config:  config,
+			},
+			Type: testapi.Tests,
+		},
 	}
 
-	// Act
-	params := testapi.NewStartTestParamsFromSubject(orgID, &testSubject, localPolicy)
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		JobPollResponses:       []JobPollResponseConfig{{ShouldRedirect: true}},
+		FinalTestResult:        FinalTestResultConfig{Outcome: testapi.Pass},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
 
-	// Assert
-	assert.Equal(t, orgID, params.OrgID)
-	assert.Equal(t, &testSubject, params.Subject)
-	assert.Nil(t, params.Resources)
-	assert.Equal(t, localPolicy, params.LocalPolicy)
-	assert.Nil(t, params.ScanConfig)
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
 }
 
-// Test factory function for creating params from resources with ScanConfig
+// Test factory function for creating params from resources with config
 func Test_NewStartTestParamsFromResources(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
-	// Arrange
-	orgID := "test-org-id"
-	uploadResource := newUploadResource(t)
-	testResourceCreateItem := newUploadTestResourceCreateItem(t, &uploadResource)
-	resources := &[]testapi.TestResourceCreateItem{testResourceCreateItem}
-
+	testData := setupTestScenarioWithResources(t)
 	riskScoreThreshold := uint16(750)
-	localPolicy := &testapi.LocalPolicy{
-		RiskScoreThreshold: &riskScoreThreshold,
+	localPolicy := &testapi.LocalPolicy{RiskScoreThreshold: &riskScoreThreshold}
+	scaScanConfig := testapi.ScaScanConfiguration{"package_manifests": []string{"package.json"}}
+	scanConfig := &testapi.ScanConfiguration{Sca: &scaScanConfig}
+	config := &testapi.TestConfiguration{LocalPolicy: localPolicy, ScanConfig: scanConfig}
+
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, config)
+
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Resources: testData.TestResourceCreateItems,
+				Config:    config,
+			},
+			Type: testapi.Tests,
+		},
 	}
 
-	scaScanConfig := testapi.ScaScanConfiguration{
-		"package_manifests": []string{"package.json"},
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		JobPollResponses:       []JobPollResponseConfig{{ShouldRedirect: true}},
+		FinalTestResult:        FinalTestResultConfig{Outcome: testapi.Pass},
 	}
-	scanConfig := &testapi.ScanConfiguration{
-		Sca: &scaScanConfig,
-	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
 
-	// Act
-	params := testapi.NewStartTestParamsFromResources(orgID, resources, localPolicy, scanConfig)
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
 
-	// Assert
-	assert.Equal(t, orgID, params.OrgID)
-	assert.Nil(t, params.Subject)
-	assert.Equal(t, resources, params.Resources)
-	assert.Equal(t, localPolicy, params.LocalPolicy)
-	assert.Equal(t, scanConfig, params.ScanConfig)
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
 }
 
-// Test factory function for creating params from resources without ScanConfig
-func Test_NewStartTestParamsFromResources_NilScanConfig(t *testing.T) {
+// Test factory function for creating params from resources without config
+func Test_NewStartTestParamsFromResources_NilConfig(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
-	// Arrange
-	orgID := "test-org-id"
-	uploadResource := newUploadResource(t)
-	testResourceCreateItem := newUploadTestResourceCreateItem(t, &uploadResource)
-	resources := &[]testapi.TestResourceCreateItem{testResourceCreateItem}
+	testData := setupTestScenarioWithResources(t)
 
-	// Act
-	params := testapi.NewStartTestParamsFromResources(orgID, resources, nil, nil)
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, nil)
 
-	// Assert
-	assert.Equal(t, orgID, params.OrgID)
-	assert.Nil(t, params.Subject)
-	assert.Equal(t, resources, params.Resources)
-	assert.Nil(t, params.LocalPolicy)
-	assert.Nil(t, params.ScanConfig)
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Resources: testData.TestResourceCreateItems,
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		JobPollResponses:       []JobPollResponseConfig{{ShouldRedirect: true}},
+		FinalTestResult:        FinalTestResultConfig{Outcome: testapi.Pass},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
 }
 
 // Test that StartTest rejects ScanConfig when used with Subject
@@ -2238,11 +2233,8 @@ func Test_StartTest_Error_ScanConfigWithSubject(t *testing.T) {
 		Sca: &scaScanConfig,
 	}
 
-	params := testapi.StartTestParams{
-		OrgID:      uuid.New().String(),
-		Subject:    &testSubject,
-		ScanConfig: scanConfig,
-	}
+	config := &testapi.TestConfiguration{ScanConfig: scanConfig}
+	params := testapi.NewStartTestParamsFromSubject(uuid.New().String(), &testSubject, config)
 
 	// Act
 	testClient, err := testapi.NewTestClient("http://localhost:12345")
@@ -2272,21 +2264,15 @@ func Test_StartTestWithResources_WithScanConfig_Success(t *testing.T) {
 		Sca: &scaScanConfig,
 	}
 
-	params := testapi.NewStartTestParamsFromResources(
-		testData.OrgID.String(),
-		testData.TestResourceCreateItems,
-		nil,
-		scanConfig,
-	)
+	config := &testapi.TestConfiguration{ScanConfig: scanConfig}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, config)
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Resources: params.Resources,
-				Config: &testapi.TestConfiguration{
-					ScanConfig: scanConfig,
-				},
+				Resources: testData.TestResourceCreateItems,
+				Config:    config,
 			},
 			Type: testapi.Tests,
 		},
@@ -2369,22 +2355,15 @@ func Test_StartTestWithResources_WithLocalPolicyAndScanConfig_Success(t *testing
 		Sca: &scaScanConfig,
 	}
 
-	params := testapi.NewStartTestParamsFromResources(
-		testData.OrgID.String(),
-		testData.TestResourceCreateItems,
-		localPolicy,
-		scanConfig,
-	)
+	config := &testapi.TestConfiguration{LocalPolicy: localPolicy, ScanConfig: scanConfig}
+	params := testapi.NewStartTestParamsFromResources(testData.OrgID.String(), testData.TestResourceCreateItems, config)
 
 	// Define expected request body that StartTest should generate
 	expectedRequestBody := testapi.TestRequestBody{
 		Data: testapi.TestDataCreate{
 			Attributes: testapi.TestAttributesCreate{
-				Resources: params.Resources,
-				Config: &testapi.TestConfiguration{
-					LocalPolicy: localPolicy,
-					ScanConfig:  scanConfig,
-				},
+				Resources: testData.TestResourceCreateItems,
+				Config:    config,
 			},
 			Type: testapi.Tests,
 		},
