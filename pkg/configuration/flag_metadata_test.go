@@ -190,12 +190,12 @@ func Test_FC038_Resolve_MachineScope(t *testing.T) {
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
 
-	// 5. default
+	// 4. default
 	val, src := resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceDefault, src)
 	assert.Equal(t, "", val)
 
-	// 4. remote (regular) — machine scope uses RemoteMachineKey, not RemoteOrgKey
+	// 3. remote (regular) — machine scope uses RemoteMachineKey, not RemoteOrgKey
 	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://remote.example.com"})
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceRemote, src)
@@ -206,19 +206,6 @@ func Test_FC038_Resolve_MachineScope(t *testing.T) {
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceUserGlobal, src)
 	assert.Equal(t, "https://user.example.com", val)
-
-	// 3. enforced remote: on sync user global is cleared; enforced remote applies when user hasn't set value
-	conf.Unset(UserGlobalKey(name))
-	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://enforced.example.com", IsEnforced: true})
-	val, src = resolver.Resolve(name, orgID, folderPath)
-	assert.Equal(t, ConfigSourceRemoteEnforced, src)
-	assert.Equal(t, "https://enforced.example.com", val)
-
-	// 2. user global also beats enforced remote (set between syncs)
-	conf.Set(UserGlobalKey(name), "https://user-override.example.com")
-	val, src = resolver.Resolve(name, orgID, folderPath)
-	assert.Equal(t, ConfigSourceUserGlobal, src)
-	assert.Equal(t, "https://user-override.example.com", val)
 
 	// 1. locked remote beats everything including user global
 	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://locked.example.com", IsLocked: true})
@@ -241,18 +228,18 @@ func Test_FC039_Resolve_OrgScope(t *testing.T) {
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
 
-	// 6. default
+	// 5. default
 	val, src := resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceDefault, src)
 	assert.Equal(t, false, val)
 
-	// 5. remote (regular)
+	// 4. remote (regular)
 	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: true})
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceRemote, src)
 	assert.Equal(t, true, val)
 
-	// 4. user global
+	// 3. user global
 	conf.Set(UserGlobalKey(name), true)
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceUserGlobal, src)
@@ -263,14 +250,6 @@ func Test_FC039_Resolve_OrgScope(t *testing.T) {
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceUserOverride, src)
 	assert.Equal(t, false, val)
-
-	// 3. enforced remote: user override cleared on sync; without override, enforced applies
-	conf.Unset(UserFolderKey(folderPath, name))
-	conf.Unset(UserGlobalKey(name))
-	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: true, IsEnforced: true})
-	val, src = resolver.Resolve(name, orgID, folderPath)
-	assert.Equal(t, ConfigSourceRemoteEnforced, src)
-	assert.Equal(t, true, val)
 
 	// 1. locked remote wins over everything
 	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: false, IsLocked: true})
@@ -339,23 +318,6 @@ func Test_FC042_IsLocked_ReadsRemote(t *testing.T) {
 
 	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: true, IsLocked: true})
 	assert.True(t, resolver.IsLocked(name, orgID))
-}
-
-// FC-043: IsEnforced reads RemoteConfigField.IsEnforced from RemoteOrgKey
-func Test_FC043_IsEnforced_ReadsRemote(t *testing.T) {
-	conf := NewInMemory()
-	fs := newFlagSetWithAnnotations()
-	err := conf.AddFlagSet(fs)
-	require.NoError(t, err)
-
-	resolver := NewConfigResolver(conf)
-	const name = "snyk_code_enabled"
-	const orgID = "org123"
-
-	assert.False(t, resolver.IsEnforced(name, orgID))
-
-	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: true, IsEnforced: true})
-	assert.True(t, resolver.IsEnforced(name, orgID))
 }
 
 // FC-044: LocalConfigField with Changed: false is NOT an active override
