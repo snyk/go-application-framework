@@ -393,3 +393,37 @@ func Test_FC045_Resolver_FolderOverride_FromPrefixKeys(t *testing.T) {
 	assert.Equal(t, ConfigSourceUserOverride, src)
 	assert.Equal(t, true, val)
 }
+
+// Test_ClonePreservesFlagMetadata verifies that Clone() preserves flag metadata indexes.
+// Clone iterates stored flagsets and calls AddFlagSet on each, which re-indexes annotations.
+func Test_ClonePreservesFlagMetadata(t *testing.T) {
+	conf := NewInMemory()
+	fs := newFlagSetWithAnnotations()
+	err := conf.AddFlagSet(fs)
+	require.NoError(t, err)
+
+	clone := conf.Clone()
+	fm, ok := clone.(FlagMetadata)
+	require.True(t, ok, "Clone must implement FlagMetadata")
+
+	// Verify FlagMetadata methods work on the clone
+	val, found := fm.GetFlagAnnotation("snyk_code_enabled", AnnotationScope)
+	assert.True(t, found)
+	assert.Equal(t, "org", val)
+
+	orgFlags := fm.FlagsByAnnotation(AnnotationScope, "org")
+	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, orgFlags)
+
+	name, found := fm.FlagNameByAnnotation(AnnotationRemoteKey, "api_endpoint")
+	assert.True(t, found)
+	assert.Equal(t, "api_endpoint", name)
+
+	assert.Equal(t, "bool", fm.GetFlagType("snyk_code_enabled"))
+	assert.Equal(t, "Enable Snyk Code analysis", fm.GetFlagUsage("snyk_code_enabled"))
+
+	// ConfigResolver on clone should resolve correctly
+	resolver := NewConfigResolver(clone)
+	valResolved, src := resolver.Resolve("snyk_code_enabled", "org123", "/workspace/project")
+	assert.Equal(t, ConfigSourceDefault, src)
+	assert.Equal(t, false, valResolved)
+}
