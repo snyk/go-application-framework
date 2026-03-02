@@ -1,6 +1,6 @@
 module github.com/snyk/go-application-framework
 
-go 1.24.0
+go 1.26.0
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
