@@ -109,6 +109,14 @@ type extendedViper struct {
 	supportedEnvVars []string
 
 	interkeyDependencies map[string][]string
+
+	// scopeIndex maps annotation scope value -> flag names (e.g. "org" -> ["snyk_code_enabled"]).
+	// Populated during AddFlagSet for fast FlagsByAnnotation lookups.
+	scopeIndex map[string][]string
+
+	// remoteKeyIndex maps remote key annotation value -> flag name for fast reverse lookup.
+	// Populated during AddFlagSet.
+	remoteKeyIndex map[string]string
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -249,6 +257,8 @@ func createViperDefaultConfig(opts ...Opts) *extendedViper {
 		defaultValues:        make(map[string]DefaultValueFunction),
 		persistedKeys:        make(map[string]bool),
 		interkeyDependencies: make(map[string][]string),
+		scopeIndex:           make(map[string][]string),
+		remoteKeyIndex:       make(map[string]string),
 	}
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
@@ -326,7 +336,7 @@ func (ev *extendedViper) Clone() Configuration {
 
 	for _, v := range ev.flagsets {
 		//nolint:errcheck // breaking api change needed to fix this
-		clone.AddFlagSet(v)
+		_ = clone.AddFlagSet(v)
 	}
 
 	if ev.defaultCache != nil {
@@ -625,12 +635,28 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 	}
 }
 
-// AddFlagSet adds a flag set to the configuration.
+// AddFlagSet adds a flag set to the configuration and indexes flag annotations for fast metadata lookups.
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 	ev.flagsets = append(ev.flagsets, flagset)
+	ev.indexFlagAnnotations(flagset)
 	return ev.viper.BindPFlags(flagset)
+}
+
+// indexFlagAnnotations iterates the flagset and populates scopeIndex and remoteKeyIndex.
+// Caller must hold the write lock.
+func (ev *extendedViper) indexFlagAnnotations(flagset *pflag.FlagSet) {
+	flagset.VisitAll(func(f *pflag.Flag) {
+		if scopeVals, ok := f.Annotations[AnnotationScope]; ok && len(scopeVals) > 0 {
+			scope := scopeVals[0]
+			ev.scopeIndex[scope] = append(ev.scopeIndex[scope], f.Name)
+		}
+
+		if remoteVals, ok := f.Annotations[AnnotationRemoteKey]; ok && len(remoteVals) > 0 {
+			ev.remoteKeyIndex[remoteVals[0]] = f.Name
+		}
+	})
 }
 
 // GetStringSlice returns a configuration value as []string.
