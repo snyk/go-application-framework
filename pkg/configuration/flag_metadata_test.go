@@ -256,6 +256,7 @@ func Test_FC039_Resolve_OrgScope(t *testing.T) {
 	conf.Set(UserGlobalKey(name), true)
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceUserGlobal, src)
+	assert.Equal(t, true, val)
 
 	// 2. folder override beats user global
 	conf.Set(UserFolderKey(folderPath, name), &LocalConfigField{Value: false, Changed: true})
