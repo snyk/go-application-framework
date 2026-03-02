@@ -43,7 +43,10 @@ func (r *ConfigResolver) Resolve(name, effectiveOrg, folderPath string) (any, Co
 // ResolveBool is a typed convenience wrapper around Resolve.
 func (r *ConfigResolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 	val, _ := r.Resolve(name, effectiveOrg, folderPath)
-	b, _ := val.(bool)
+	b, ok := val.(bool)
+	if !ok {
+		return false
+	}
 	return b
 }
 
