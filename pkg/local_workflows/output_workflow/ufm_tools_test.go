@@ -118,7 +118,6 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		input := []workflow.Data{workflowData}
 
 		buffer := &bytes.Buffer{}
-		_ = buffer
 		writers := &testWriterMap{
 			writers: map[string][]*WriterEntry{
 				DEFAULT_MIME_TYPE: {{
@@ -150,7 +149,6 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 
 		buffer1 := &bytes.Buffer{}
 		buffer2 := &bytes.Buffer{}
-		_, _ = buffer1, buffer2
 		writers := &testWriterMap{
 			writers: map[string][]*WriterEntry{
 				DEFAULT_MIME_TYPE: {{

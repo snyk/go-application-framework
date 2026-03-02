@@ -73,7 +73,7 @@ func TestClient_UploadFiles(t *testing.T) {
 	defer srv.Close()
 
 	mockFS := fstest.MapFS{
-		"foo/bar": &fstest.MapFile{Data: []byte("asdf")},
+		"foo/bar": {Data: []byte("asdf")},
 	}
 	fd, err := mockFS.Open("foo/bar")
 	require.NoError(t, err)
@@ -93,8 +93,8 @@ func TestClient_UploadFiles_MultipleFiles(t *testing.T) {
 	defer srv.Close()
 
 	mockFS := fstest.MapFS{
-		"file1.txt":  &fstest.MapFile{Data: []byte("content1")},
-		"file2.json": &fstest.MapFile{Data: []byte("content2")},
+		"file1.txt":  {Data: []byte("content1")},
+		"file2.json": {Data: []byte("content2")},
 	}
 
 	file1, err := mockFS.Open("file1.txt")
@@ -117,7 +117,7 @@ func TestClient_UploadFiles_EmptyOrgID(t *testing.T) {
 	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	mockFS := fstest.MapFS{
-		"test.txt": &fstest.MapFile{Data: []byte("content")},
+		"test.txt": {Data: []byte("content")},
 	}
 	file, err := mockFS.Open("test.txt")
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestClient_UploadFiles_EmptyRevisionID(t *testing.T) {
 	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	mockFS := fstest.MapFS{
-		"test.txt": &fstest.MapFile{Data: []byte("content")},
+		"test.txt": {Data: []byte("content")},
 	}
 	file, err := mockFS.Open("test.txt")
 	require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestClient_UploadFiles_FileSizeLimit(t *testing.T) {
 
 	largeContent := make([]byte, c.GetLimits().FileSizeLimit+1)
 	mockFS := fstest.MapFS{
-		"large_file.txt": &fstest.MapFile{Data: largeContent},
+		"large_file.txt": {Data: largeContent},
 	}
 
 	file, err := mockFS.Open("large_file.txt")
@@ -214,7 +214,7 @@ func TestClient_UploadFiles_FilePathLengthLimit(t *testing.T) {
 	longFilePath := strings.Repeat("a", c.GetLimits().FilePathLengthLimit+1)
 
 	mockFS := fstest.MapFS{
-		"short_file.txt": &fstest.MapFile{Data: []byte("content")},
+		"short_file.txt": {Data: []byte("content")},
 	}
 
 	file, err := mockFS.Open("short_file.txt")
@@ -243,7 +243,7 @@ func TestClient_UploadFiles_FilePathLengthExactlyAtLimit(t *testing.T) {
 	filePathAtLimit := strings.Repeat("a", c.GetLimits().FilePathLengthLimit)
 
 	mockFS := fstest.MapFS{
-		"short_file.txt": &fstest.MapFile{Data: []byte("content")},
+		"short_file.txt": {Data: []byte("content")},
 	}
 
 	file, err := mockFS.Open("short_file.txt")
@@ -333,7 +333,7 @@ func TestClient_UploadFiles_IndividualFileSizeExactlyAtLimit(t *testing.T) {
 
 	// Test boundary: individual file exactly 50MB (should succeed)
 	mockFS := fstest.MapFS{
-		"exact_limit.bin": &fstest.MapFile{Data: make([]byte, c.GetLimits().FileSizeLimit)},
+		"exact_limit.bin": {Data: make([]byte, c.GetLimits().FileSizeLimit)},
 	}
 
 	file, err := mockFS.Open("exact_limit.bin")
