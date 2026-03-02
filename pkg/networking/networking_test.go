@@ -46,7 +46,7 @@ func Test_HttpClient_CallingApiUrl_Unauthorized(t *testing.T) {
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
 	net.AddHeaderField("User-Agent", userAgent)
 	expectedHeader := http.Header{
-		"User-Agent": {userAgent},
+		"User-Agent": []string{userAgent},
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for key, expectedValue := range expectedHeader {
@@ -68,9 +68,9 @@ func Test_HttpClient_CallingApiUrl_UsesAuthHeaders(t *testing.T) {
 	config.Set(configuration.AUTHENTICATION_TOKEN, token)
 	net.AddHeaderField("User-Agent", userAgent)
 	expectedHeader := http.Header{
-		"User-Agent":    {userAgent},
-		"Authorization": {"token " + token},
-		"Session-Token": {"token " + token},
+		"User-Agent":    []string{userAgent},
+		"Authorization": []string{"token " + token},
+		"Session-Token": []string{"token " + token},
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for key, expectedValue := range expectedHeader {
@@ -276,10 +276,10 @@ func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
 
 func Test_AddHeaders_AddsDefaultAndAuthHeaders(t *testing.T) {
 	expectedHeader := http.Header{
-		"Secret-Header": {"secret-value"},
-		"Authorization": {"Bearer MyToken"},
-		"Session-Token": {"Bearer MyToken"},
-		"Request-Id":    {"my-request"},
+		"Secret-Header": []string{"secret-value"},
+		"Authorization": []string{"Bearer MyToken"},
+		"Session-Token": []string{"Bearer MyToken"},
+		"Request-Id":    []string{"my-request"},
 	}
 
 	replaceableHeader := "I was here first"
