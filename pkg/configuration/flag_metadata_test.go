@@ -195,8 +195,8 @@ func Test_FC038_Resolve_MachineScope(t *testing.T) {
 	assert.Equal(t, ConfigSourceDefault, src)
 	assert.Equal(t, "", val)
 
-	// 4. remote (regular)
-	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: "https://remote.example.com"})
+	// 4. remote (regular) — machine scope uses RemoteMachineKey, not RemoteOrgKey
+	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://remote.example.com"})
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceRemote, src)
 	assert.Equal(t, "https://remote.example.com", val)
@@ -209,7 +209,7 @@ func Test_FC038_Resolve_MachineScope(t *testing.T) {
 
 	// 3. enforced remote: on sync user global is cleared; enforced remote applies when user hasn't set value
 	conf.Unset(UserGlobalKey(name))
-	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: "https://enforced.example.com", IsEnforced: true})
+	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://enforced.example.com", IsEnforced: true})
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceRemoteEnforced, src)
 	assert.Equal(t, "https://enforced.example.com", val)
@@ -221,7 +221,7 @@ func Test_FC038_Resolve_MachineScope(t *testing.T) {
 	assert.Equal(t, "https://user-override.example.com", val)
 
 	// 1. locked remote beats everything including user global
-	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: "https://locked.example.com", IsLocked: true})
+	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://locked.example.com", IsLocked: true})
 	val, src = resolver.Resolve(name, orgID, folderPath)
 	assert.Equal(t, ConfigSourceRemoteLocked, src)
 	assert.Equal(t, "https://locked.example.com", val)
@@ -373,6 +373,78 @@ func Test_FC044_LocalConfigField_ChangedRequired(t *testing.T) {
 	conf.Set(UserFolderKey(folderPath, name), &LocalConfigField{Value: true, Changed: false})
 	_, src := resolver.Resolve(name, orgID, folderPath)
 	assert.NotEqual(t, ConfigSourceUserOverride, src, "Changed:false override must not apply")
+}
+
+// Test_ResolveBool_Returns_TypedBool verifies ResolveBool extracts a bool from Resolve.
+func Test_ResolveBool_Returns_TypedBool(t *testing.T) {
+	conf := NewInMemory()
+	fs := newFlagSetWithAnnotations()
+	err := conf.AddFlagSet(fs)
+	require.NoError(t, err)
+
+	resolver := NewConfigResolver(conf)
+	const orgID = "org123"
+	const folderPath = "/workspace/project"
+
+	assert.False(t, resolver.ResolveBool("snyk_code_enabled", orgID, folderPath))
+
+	conf.Set(UserGlobalKey("snyk_code_enabled"), true)
+	assert.True(t, resolver.ResolveBool("snyk_code_enabled", orgID, folderPath))
+}
+
+// Test_ResolveMachine_UsesMachineKey verifies machine-scope resolution uses RemoteMachineKey, not RemoteOrgKey.
+func Test_ResolveMachine_UsesMachineKey(t *testing.T) {
+	conf := NewInMemory()
+	fs := newFlagSetWithAnnotations()
+	err := conf.AddFlagSet(fs)
+	require.NoError(t, err)
+
+	resolver := NewConfigResolver(conf)
+	const name = "api_endpoint"
+	const orgID = "org123"
+	const folderPath = "/workspace/project"
+
+	// Remote value stored under machine key
+	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://machine.example.com"})
+	val, src := resolver.Resolve(name, orgID, folderPath)
+	assert.Equal(t, ConfigSourceRemote, src)
+	assert.Equal(t, "https://machine.example.com", val)
+
+	// Remote value stored under org key should NOT be used for machine-scope
+	conf.Unset(RemoteMachineKey(name))
+	conf.Set(RemoteOrgKey(orgID, name), &RemoteConfigField{Value: "https://org.example.com"})
+	val, src = resolver.Resolve(name, orgID, folderPath)
+	assert.Equal(t, ConfigSourceDefault, src, "org key must not apply to machine-scope setting")
+	assert.Equal(t, "", val)
+}
+
+// Test_IsLocked_MachineScope verifies IsLocked checks RemoteMachineKey for machine-scope flags.
+func Test_IsLocked_MachineScope(t *testing.T) {
+	conf := NewInMemory()
+	fs := newFlagSetWithAnnotations()
+	err := conf.AddFlagSet(fs)
+	require.NoError(t, err)
+
+	resolver := NewConfigResolver(conf)
+	const name = "api_endpoint"
+
+	conf.Set(RemoteMachineKey(name), &RemoteConfigField{Value: "https://locked.example.com", IsLocked: true})
+	assert.True(t, resolver.IsLocked(name, "any-org"))
+}
+
+// Test_IndexFlagAnnotations_Idempotent verifies adding the same flagset twice does not duplicate scopeIndex entries.
+func Test_IndexFlagAnnotations_Idempotent(t *testing.T) {
+	conf := NewInMemory()
+	ev, ok := conf.(*extendedViper)
+	require.True(t, ok)
+
+	fs := newFlagSetWithAnnotations()
+	require.NoError(t, conf.AddFlagSet(fs))
+	require.NoError(t, conf.AddFlagSet(fs)) // add same flagset again
+
+	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, ev.scopeIndex["org"], "duplicate entries must not appear")
+	assert.ElementsMatch(t, []string{"api_endpoint"}, ev.scopeIndex["machine"])
+	assert.ElementsMatch(t, []string{"reference_branch"}, ev.scopeIndex["folder"])
 }
 
 // FC-045: Resolver reads folder overrides from user:folder:<folderPath>:<name> keys

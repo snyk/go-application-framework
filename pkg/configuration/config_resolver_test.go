@@ -69,7 +69,8 @@ func Test_FC100_Resolver_AllSettingsCorrect(t *testing.T) {
 	assert.Equal(t, ConfigSourceUserGlobal, src)
 	assert.Equal(t, "https://user.example.com", val)
 
-	conf.Set(RemoteOrgKey(orgID, "api_endpoint"), &RemoteConfigField{Value: "https://remote.example.com"})
+	// machine-scope remote uses RemoteMachineKey, not RemoteOrgKey
+	conf.Set(RemoteMachineKey("api_endpoint"), &RemoteConfigField{Value: "https://remote.example.com"})
 	val, src = resolver.Resolve("api_endpoint", orgID, folderPath)
 	assert.Equal(t, ConfigSourceUserGlobal, src, "user global beats remote")
 	assert.Equal(t, "https://user.example.com", val)

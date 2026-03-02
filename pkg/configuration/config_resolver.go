@@ -47,16 +47,30 @@ func (r *ConfigResolver) ResolveBool(name, effectiveOrg, folderPath string) bool
 	return b
 }
 
-// IsLocked reports whether the setting is locked in the remote config for the given org.
+// IsLocked reports whether the setting is locked in the remote config.
+// For org-scope flags, pass the effective org ID. For machine-scope flags,
+// pass any value — the lookup uses RemoteMachineKey when the scope annotation is "machine".
 func (r *ConfigResolver) IsLocked(name, effectiveOrg string) bool {
-	f := r.remoteField(RemoteOrgKey(effectiveOrg, name))
+	f := r.remoteField(r.remoteKeyForName(name, effectiveOrg))
 	return f != nil && f.IsLocked
 }
 
-// IsEnforced reports whether the setting is enforced in the remote config for the given org.
+// IsEnforced reports whether the setting is enforced in the remote config.
+// For org-scope flags, pass the effective org ID. For machine-scope flags,
+// pass any value — the lookup uses RemoteMachineKey when the scope annotation is "machine".
 func (r *ConfigResolver) IsEnforced(name, effectiveOrg string) bool {
-	f := r.remoteField(RemoteOrgKey(effectiveOrg, name))
+	f := r.remoteField(r.remoteKeyForName(name, effectiveOrg))
 	return f != nil && f.IsEnforced
+}
+
+// remoteKeyForName returns the correct remote config key for the named setting based on its scope annotation.
+func (r *ConfigResolver) remoteKeyForName(name, effectiveOrg string) string {
+	if fm, ok := r.conf.(FlagMetadata); ok {
+		if scope, found := fm.GetFlagAnnotation(name, AnnotationScope); found && scope == "machine" {
+			return RemoteMachineKey(name)
+		}
+	}
+	return RemoteOrgKey(effectiveOrg, name)
 }
 
 // isUserSet returns true only when the key is explicitly set to a real value (not the keyDeleted marker).
@@ -69,8 +83,9 @@ func (r *ConfigResolver) isUserSet(key string) bool {
 }
 
 // resolveMachine applies: locked remote > user global > enforced remote > remote > default
-func (r *ConfigResolver) resolveMachine(name, effectiveOrg string) (any, ConfigSource) {
-	remote := r.remoteField(RemoteOrgKey(effectiveOrg, name))
+// Machine-scope remote config is stored under RemoteMachineKey (remote:machine:<name>), not per-org.
+func (r *ConfigResolver) resolveMachine(name, _ string) (any, ConfigSource) {
+	remote := r.remoteField(RemoteMachineKey(name))
 
 	// 1. locked remote
 	if remote != nil && remote.IsLocked {
