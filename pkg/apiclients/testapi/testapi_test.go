@@ -2444,3 +2444,129 @@ func Test_StartTestWithResources_WithLocalPolicyAndScanConfig_Success(t *testing
 	assertTestOutcomePass(t, result, testData.TestID)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 }
+
+func Test_StartTest_TestConfigFieldsPassedToRequest(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+
+	localPolicy := &testapi.LocalPolicy{RiskScoreThreshold: utils.Ptr(uint16(750))}
+
+	params := testapi.StartTestParams{
+		OrgID:       testData.OrgID.String(),
+		Subject:     testData.TestSubjectCreate,
+		LocalPolicy: localPolicy,
+		TestConfig: &testapi.TestConfig{
+			PublishReport: utils.Ptr(true),
+			Project: &testapi.ProjectConfig{
+				BusinessCriticality: utils.Ptr("critical"),
+				Environment:         &[]string{"frontend", "backend"},
+				Lifecycle:           &[]string{"production"},
+				Tags:                &[]string{"team:security", "component:auth"},
+			},
+			Target: &testapi.TargetConfig{
+				Name:      utils.Ptr("my-project"),
+				Reference: utils.Ptr("main"),
+			},
+		},
+	}
+
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Subject: params.Subject,
+				Config: &testapi.TestConfiguration{
+					LocalPolicy:                localPolicy,
+					PublishReport:              utils.Ptr(true),
+					ProjectBusinessCriticality: utils.Ptr("critical"),
+					ProjectEnvironment:         &[]string{"frontend", "backend"},
+					ProjectLifecycle:           &[]string{"production"},
+					ProjectTags:                &[]string{"team:security", "component:auth"},
+					TargetName:                 utils.Ptr("my-project"),
+					TargetReference:            utils.Ptr("main"),
+				},
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		JobPollResponses:       []JobPollResponseConfig{{ShouldRedirect: true}},
+		FinalTestResult:        FinalTestResultConfig{Outcome: testapi.Pass},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+}
+
+func Test_StartTest_TestConfigPartialFields(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+
+	params := testapi.StartTestParams{
+		OrgID:   testData.OrgID.String(),
+		Subject: testData.TestSubjectCreate,
+		TestConfig: &testapi.TestConfig{
+			PublishReport: utils.Ptr(true),
+			Target: &testapi.TargetConfig{
+				Name: utils.Ptr("my-project"),
+			},
+		},
+	}
+
+	expectedRequestBody := testapi.TestRequestBody{
+		Data: testapi.TestDataCreate{
+			Attributes: testapi.TestAttributesCreate{
+				Subject: params.Subject,
+				Config: &testapi.TestConfiguration{
+					PublishReport: utils.Ptr(true),
+					TargetName:    utils.Ptr("my-project"),
+				},
+			},
+			Type: testapi.Tests,
+		},
+	}
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:                  testData.OrgID,
+		JobID:                  testData.JobID,
+		TestID:                 testData.TestID,
+		APIVersion:             testapi.DefaultAPIVersion,
+		ExpectedCreateTestBody: &expectedRequestBody,
+		JobPollResponses:       []JobPollResponseConfig{{ShouldRedirect: true}},
+		FinalTestResult:        FinalTestResultConfig{Outcome: testapi.Pass},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	testClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := testClient.StartTest(ctx, params)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+}

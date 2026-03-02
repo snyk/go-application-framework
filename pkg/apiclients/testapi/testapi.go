@@ -172,6 +172,27 @@ var (
 	ErrFindingsNextPageCursor  = errors.New("failed to determine next findings page cursor from API response")
 )
 
+// ProjectConfig holds project-related test configuration parameters.
+type ProjectConfig struct {
+	BusinessCriticality *string
+	Environment         *[]string
+	Lifecycle           *[]string
+	Tags                *[]string
+}
+
+// TargetConfig holds target-related test configuration parameters.
+type TargetConfig struct {
+	Name      *string
+	Reference *string
+}
+
+// TestConfig holds optional test-level configuration for reporting, project, and target settings.
+type TestConfig struct {
+	PublishReport *bool
+	Project       *ProjectConfig
+	Target        *TargetConfig
+}
+
 // StartTestParams defines parameters for the high-level StartTest function.
 type StartTestParams struct {
 	OrgID       string
@@ -179,6 +200,7 @@ type StartTestParams struct {
 	Resources   *[]TestResourceCreateItem
 	LocalPolicy *LocalPolicy
 	ScanConfig  *ScanConfiguration // Only valid when Resources is set, not Subject
+	TestConfig  *TestConfig
 }
 
 // NewStartTestParamsFromSubject creates params for a subject-based test.
@@ -327,6 +349,36 @@ func NewTestClient(serverBaseUrl string, options ...ConfigOption) (TestClient, e
 	}, nil
 }
 
+// buildTestConfiguration maps StartTestParams fields into the API's TestConfiguration.
+// Returns nil if no configuration was provided.
+func buildTestConfiguration(params StartTestParams) *TestConfiguration {
+	if params.TestConfig == nil && params.LocalPolicy == nil && params.ScanConfig == nil {
+		return nil
+	}
+
+	var cfg TestConfiguration
+	cfg.LocalPolicy = params.LocalPolicy
+	cfg.ScanConfig = params.ScanConfig
+
+	if params.TestConfig != nil {
+		cfg.PublishReport = params.TestConfig.PublishReport
+
+		if params.TestConfig.Project != nil {
+			cfg.ProjectBusinessCriticality = params.TestConfig.Project.BusinessCriticality
+			cfg.ProjectEnvironment = params.TestConfig.Project.Environment
+			cfg.ProjectLifecycle = params.TestConfig.Project.Lifecycle
+			cfg.ProjectTags = params.TestConfig.Project.Tags
+		}
+
+		if params.TestConfig.Target != nil {
+			cfg.TargetName = params.TestConfig.Target.Name
+			cfg.TargetReference = params.TestConfig.Target.Reference
+		}
+	}
+
+	return &cfg
+}
+
 // validateStartTestParams validates the StartTestParams and returns the parsed OrgID UUID.
 func validateStartTestParams(params StartTestParams) (uuid.UUID, error) {
 	if params.Resources != nil {
@@ -369,13 +421,10 @@ func (c *client) StartTest(ctx context.Context, params StartTestParams) (TestHan
 	}
 
 	// Create test body
-	testAttributes := TestAttributesCreate{Subject: params.Subject, Resources: params.Resources}
-
-	if params.LocalPolicy != nil || params.ScanConfig != nil {
-		testAttributes.Config = &TestConfiguration{
-			LocalPolicy: params.LocalPolicy,
-			ScanConfig:  params.ScanConfig,
-		}
+	testAttributes := TestAttributesCreate{
+		Subject:   params.Subject,
+		Resources: params.Resources,
+		Config:    buildTestConfiguration(params),
 	}
 
 	requestBody := TestRequestBody{
