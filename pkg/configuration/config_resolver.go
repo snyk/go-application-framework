@@ -4,8 +4,8 @@ package configuration
 // scope (machine, org, folder). effectiveOrg and folderPath are parameters, never stored state.
 //
 // Precedence rules:
-//   - Machine: locked remote > user global > enforced remote > remote > default
-//   - Org:     locked remote > user folder override > enforced remote > user global > remote > default
+//   - Machine: locked remote > user global > remote > default
+//   - Org:     locked remote > user folder override > user global > remote > default
 //   - Folder:  folder value > default
 type ConfigResolver struct {
 	conf Configuration
@@ -58,14 +58,6 @@ func (r *ConfigResolver) IsLocked(name, effectiveOrg string) bool {
 	return f != nil && f.IsLocked
 }
 
-// IsEnforced reports whether the setting is enforced in the remote config.
-// For org-scope flags, pass the effective org ID. For machine-scope flags,
-// pass any value — the lookup uses RemoteMachineKey when the scope annotation is "machine".
-func (r *ConfigResolver) IsEnforced(name, effectiveOrg string) bool {
-	f := r.remoteField(r.remoteKeyForName(name, effectiveOrg))
-	return f != nil && f.IsEnforced
-}
-
 // remoteKeyForName returns the correct remote config key for the named setting based on its scope annotation.
 func (r *ConfigResolver) remoteKeyForName(name, effectiveOrg string) string {
 	if fm, ok := r.conf.(FlagMetadata); ok {
@@ -85,7 +77,7 @@ func (r *ConfigResolver) isUserSet(key string) bool {
 	return r.conf.Get(key) != keyDeleted
 }
 
-// resolveMachine applies: locked remote > user global > enforced remote > remote > default
+// resolveMachine applies: locked remote > user global > remote > default
 // Machine-scope remote config is stored under RemoteMachineKey (remote:machine:<name>), not per-org.
 func (r *ConfigResolver) resolveMachine(name, _ string) (any, ConfigSource) {
 	remote := r.remoteField(RemoteMachineKey(name))
@@ -100,21 +92,16 @@ func (r *ConfigResolver) resolveMachine(name, _ string) (any, ConfigSource) {
 		return r.conf.Get(UserGlobalKey(name)), ConfigSourceUserGlobal
 	}
 
-	// 3. enforced remote
-	if remote != nil && remote.IsEnforced {
-		return remote.Value, ConfigSourceRemoteEnforced
-	}
-
-	// 4. regular remote
+	// 3. regular remote
 	if remote != nil {
 		return remote.Value, ConfigSourceRemote
 	}
 
-	// 5. default
+	// 4. default
 	return r.conf.Get(name), ConfigSourceDefault
 }
 
-// resolveOrg applies: locked remote > user folder override > enforced remote > user global > remote > default
+// resolveOrg applies: locked remote > user folder override > user global > remote > default
 func (r *ConfigResolver) resolveOrg(name, effectiveOrg, folderPath string) (any, ConfigSource) {
 	remote := r.remoteField(RemoteOrgKey(effectiveOrg, name))
 
@@ -133,22 +120,17 @@ func (r *ConfigResolver) resolveOrg(name, effectiveOrg, folderPath string) (any,
 		}
 	}
 
-	// 3. enforced remote
-	if remote != nil && remote.IsEnforced {
-		return remote.Value, ConfigSourceRemoteEnforced
-	}
-
-	// 4. user global
+	// 3. user global
 	if r.isUserSet(UserGlobalKey(name)) {
 		return r.conf.Get(UserGlobalKey(name)), ConfigSourceUserGlobal
 	}
 
-	// 5. regular remote
+	// 4. regular remote
 	if remote != nil {
 		return remote.Value, ConfigSourceRemote
 	}
 
-	// 6. default
+	// 5. default
 	return r.conf.Get(name), ConfigSourceDefault
 }
 

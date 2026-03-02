@@ -11,12 +11,10 @@ const (
 
 // RemoteConfigField holds a single configuration value received from remote config (e.g. LDX-Sync).
 // IsLocked: admin prevents any override; LS rejects edit attempts.
-// IsEnforced: user overrides are cleared on sync, but LS accepts temporary edits.
 type RemoteConfigField struct {
-	Value      any
-	IsLocked   bool
-	IsEnforced bool
-	Origin     string
+	Value    any
+	IsLocked bool
+	Origin   string
 }
 
 // LocalConfigField holds a single user-provided configuration value.
@@ -35,6 +33,5 @@ const (
 	ConfigSourceUserOverride                       // user:folder:<folderPath>:<name> (org-scope override)
 	ConfigSourceFolder                             // user:folder:<folderPath>:<name> (folder-scope)
 	ConfigSourceRemote                             // remote:<orgId>:<name> — regular
-	ConfigSourceRemoteEnforced                     // remote:<orgId>:<name> — enforced
 	ConfigSourceRemoteLocked                       // remote:<orgId>:<name> — locked
 )
