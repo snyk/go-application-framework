@@ -645,12 +645,15 @@ func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
 }
 
 // indexFlagAnnotations iterates the flagset and populates scopeIndex and remoteKeyIndex.
+// Duplicate entries are skipped so that adding the same flagset twice (e.g. via Clone) is idempotent.
 // Caller must hold the write lock.
 func (ev *extendedViper) indexFlagAnnotations(flagset *pflag.FlagSet) {
 	flagset.VisitAll(func(f *pflag.Flag) {
 		if scopeVals, ok := f.Annotations[AnnotationScope]; ok && len(scopeVals) > 0 {
 			scope := scopeVals[0]
-			ev.scopeIndex[scope] = append(ev.scopeIndex[scope], f.Name)
+			if !slices.Contains(ev.scopeIndex[scope], f.Name) {
+				ev.scopeIndex[scope] = append(ev.scopeIndex[scope], f.Name)
+			}
 		}
 
 		if remoteVals, ok := f.Annotations[AnnotationRemoteKey]; ok && len(remoteVals) > 0 {
