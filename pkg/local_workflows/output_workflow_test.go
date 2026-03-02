@@ -582,6 +582,22 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("should match fuzzy mime types", func(t *testing.T) {
+		setup := setupTest(t)
+		jsonPayload := `{"schemaVersion":"1.2.0","pkgManager":{"name":"npm"}}`
+		workflowIdentifier := workflow.NewTypeIdentifier(WORKFLOWID_OUTPUT_WORKFLOW, "output")
+		data := workflow.NewData(workflowIdentifier, "application/json", []byte(jsonPayload))
+
+		setup.config.Set(output_workflow.OUTPUT_CONFIG_KEY_SARIF, true)
+
+		// Writer mime type is application/sarif+json
+		// Data mime type is application/json
+		output, err := outputWorkflowEntryPoint(setup.invocationContextMock, []workflow.Data{data}, setup.outputDestination)
+		assert.Nil(t, err)
+		assert.Equal(t, []workflow.Data{}, output)
+		assert.Equal(t, jsonPayload+"\n", setup.writer.String())
+	})
 }
 
 func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
