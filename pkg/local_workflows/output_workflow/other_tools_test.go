@@ -70,7 +70,7 @@ func Test_useWriterWithOther(t *testing.T) {
 		}
 		data := workflow.NewData(workflowID, "application/json", []byte(`{"key":"value"}`))
 
-		written, err := useWriterWithOther(&logger, []workflow.Data{data}, []*WriterEntry{writer})
+		written, err := useWriterWithOther(&logger, data, []*WriterEntry{writer})
 		assert.NoError(t, err)
 		assert.True(t, written)
 		assert.Equal(t, `{"key":"value"}`, buffer.String())
@@ -85,7 +85,7 @@ func Test_useWriterWithOther(t *testing.T) {
 		}
 		data := workflow.NewData(workflowID, "text/plain", "hello world")
 
-		written, err := useWriterWithOther(&logger, []workflow.Data{data}, []*WriterEntry{writer})
+		written, err := useWriterWithOther(&logger, data, []*WriterEntry{writer})
 		assert.NoError(t, err)
 		assert.True(t, written)
 		assert.Equal(t, "hello world", buffer.String())
@@ -100,7 +100,7 @@ func Test_useWriterWithOther(t *testing.T) {
 		}
 		data := workflow.NewData(workflowID, "hammer/head", 12345)
 
-		written, err := useWriterWithOther(&logger, []workflow.Data{data}, []*WriterEntry{writer})
+		written, err := useWriterWithOther(&logger, data, []*WriterEntry{writer})
 		assert.Error(t, err)
 		assert.False(t, written)
 		assert.Contains(t, err.Error(), "unsupported output type: hammer/head")
@@ -109,7 +109,7 @@ func Test_useWriterWithOther(t *testing.T) {
 	t.Run("no writer slice returns dataWasWritten false", func(t *testing.T) {
 		data := workflow.NewData(workflowID, "application/json", []byte(`{}`))
 
-		written, err := useWriterWithOther(&logger, []workflow.Data{data}, []*WriterEntry{})
+		written, err := useWriterWithOther(&logger, data, []*WriterEntry{})
 		assert.NoError(t, err)
 		assert.False(t, written)
 	})
@@ -215,7 +215,8 @@ func Test_HandleContentTypeOther(t *testing.T) {
 		remaining, err := HandleContentTypeOther([]workflow.Data{data1, data2}, ctx, writers)
 		assert.NoError(t, err)
 		assert.Empty(t, remaining)
-		assert.Equal(t, `{"a":1}{"b":2}`, buffer.String())
+		// only the first data is written to the writer
+		assert.Equal(t, `{"a":1}`, buffer.String())
 	})
 
 	t.Run("data with no matching writer is returned as remaining", func(t *testing.T) {

@@ -67,13 +67,17 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 	for mimeType, data := range dataToMimeTypeMap {
 		writersToUse := writers.PopWritersByMimetype(mimeType)
 
-		dataWasWritten, err := useWriterWithOther(debugLogger, data, writersToUse)
-		if !dataWasWritten {
-			output = append(output, data...)
-		}
+		for _, inputData := range data {
+			dataWasWritten, err := useWriterWithOther(debugLogger, inputData, writersToUse)
+			if err != nil {
+				finalError = errors.Join(finalError, err)
+			}
 
-		if err != nil {
-			finalError = errors.Join(finalError, err)
+			if dataWasWritten {
+				break
+			}
+
+			output = append(output, inputData)
 		}
 	}
 
@@ -97,9 +101,22 @@ func getOtherResultsFromWorkflowData(input []workflow.Data) ([]workflow.Data, []
 	return otherData, remainingData
 }
 
-func useWriterWithOther(debugLogger *zerolog.Logger, input []workflow.Data, writerMap []*WriterEntry) (bool, error) {
+func useWriterWithOther(debugLogger *zerolog.Logger, data workflow.Data, writerMap []*WriterEntry) (bool, error) {
 	var finalError error
 	dataWasWritten := false
+
+	mimeType := data.GetContentType()
+
+	var singleDataAsString string
+	singleData, typeCastSuccessful := data.GetPayload().([]byte)
+	if !typeCastSuccessful {
+		singleDataAsString, typeCastSuccessful = data.GetPayload().(string)
+		if !typeCastSuccessful {
+			return dataWasWritten, fmt.Errorf("unsupported output type: %s", mimeType)
+		}
+	} else {
+		singleDataAsString = string(singleData)
+	}
 
 	for _, writer := range writerMap {
 		name := writer.name
@@ -111,30 +128,15 @@ func useWriterWithOther(debugLogger *zerolog.Logger, input []workflow.Data, writ
 			}
 		}()
 
-		for _, data := range input {
-			mimeType := data.GetContentType()
+		debugLogger.Info().Msgf("Other - Using '%s' writer for: %s", name, mimeType)
 
-			var singleDataAsString string
-			singleData, typeCastSuccessful := data.GetPayload().([]byte)
-			if !typeCastSuccessful {
-				singleDataAsString, typeCastSuccessful = data.GetPayload().(string)
-				if !typeCastSuccessful {
-					return dataWasWritten, fmt.Errorf("unsupported output type: %s", mimeType)
-				}
-			} else {
-				singleDataAsString = string(singleData)
-			}
-
-			debugLogger.Info().Msgf("Other - Using '%s' writer for: %s", name, mimeType)
-
-			debugLogger.Info().Msgf("Other - [%s] Rendering %s", name, writer.mimeType)
-			_, err := fmt.Fprint(writer.GetWriter(), singleDataAsString)
-			if err != nil {
-				finalError = errors.Join(finalError, err)
-			}
-			dataWasWritten = true
-			debugLogger.Info().Msgf("Other - [%s] Rendering done", name)
+		debugLogger.Info().Msgf("Other - [%s] Rendering %s", name, writer.mimeType)
+		_, err := fmt.Fprint(writer.GetWriter(), singleDataAsString)
+		if err != nil {
+			finalError = errors.Join(finalError, err)
 		}
+		dataWasWritten = true
+		debugLogger.Info().Msgf("Other - [%s] Rendering done", name)
 	}
 
 	return dataWasWritten, finalError
