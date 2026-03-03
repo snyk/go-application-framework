@@ -7,6 +7,7 @@ const (
 	AnnotationDisplayName = "config.displayName"
 	AnnotationDescription = "config.description"
 	AnnotationIdeKey      = "config.ideKey"
+	AnnotationWriteOnly   = "config.writeOnly"
 )
 
 // RemoteConfigField holds a single configuration value received from remote config (e.g. LDX-Sync).
@@ -19,9 +20,13 @@ type RemoteConfigField struct {
 
 // LocalConfigField holds a single user-provided configuration value.
 // Changed must be true for the resolver to treat this as an active override.
+// Wire protocol semantics (as *LocalConfigField):
+//   - nil pointer = omitted (don't change)
+//   - Changed: true + Value: non-nil = set override
+//   - Changed: true + Value: nil = clear/reset to default
 type LocalConfigField struct {
-	Value   any
-	Changed bool
+	Value   any  `json:"value"`
+	Changed bool `json:"changed"`
 }
 
 // ConfigSource identifies which layer of the precedence chain resolved a value.
