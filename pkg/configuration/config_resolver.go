@@ -40,6 +40,39 @@ func (r *ConfigResolver) Resolve(name, effectiveOrg, folderPath string) (any, Co
 	}
 }
 
+// ResolveDefaultFunc returns a DefaultValueFunction that uses Configuration.Resolve to
+// look up settingName through the full precedence chain (remote-locked → user-global →
+// remote → folder → default).
+//
+// Recursion safety: if Resolve returns ConfigSourceDefault (i.e. it fell through to the
+// bare key), the function returns existingValue unchanged so that the caller's own default
+// applies — this prevents infinite recursion when the function is registered as the default
+// for the same key via AddDefaultValue.
+//
+// Typical usage:
+//
+//	config.AddDefaultValue("snyk_code_enabled", configuration.ResolveDefaultFunc("snyk_code_enabled"))
+func ResolveDefaultFunc(settingName string) DefaultValueFunction {
+	return func(c Configuration, existingValue interface{}) (interface{}, error) {
+		val, src, err := c.Resolve(settingName)
+		if err != nil {
+			return nil, err
+		}
+
+		// When the resolver fell through to the bare key (ConfigSourceDefault) it found
+		// nothing in any prefixed key. Return existingValue so the caller's own default
+		// applies. This also breaks any recursive call that reaches here via the
+		// ConfigResolver's final Get(name) fallback (the recursion guard in Resolve
+		// catches re-entrant calls before they reach this function, so src will be
+		// ConfigSourceDefault in that case).
+		if src == ConfigSourceDefault {
+			return existingValue, nil
+		}
+
+		return val, nil
+	}
+}
+
 // ResolveBool is a typed convenience wrapper around Resolve.
 func (r *ConfigResolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 	val, _ := r.Resolve(name, effectiveOrg, folderPath)
