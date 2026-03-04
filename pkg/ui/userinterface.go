@@ -3,31 +3,33 @@ package ui
 import (
 	"context"
 	"os"
+
+	"github.com/snyk/go-application-framework/pkg/ui/consoleui"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
-//go:generate go tool github.com/golang/mock/mockgen -source=userinterface.go -destination ../mocks/userinterface.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/
+// Type aliases for backward compatibility - these point to uitypes package
+type (
+	UserInterface    = uitypes.UserInterface
+	ProgressBar      = uitypes.ProgressBar
+	Opts             = uitypes.Opts
+	EmptyProgressBar = uitypes.EmptyProgressBar
+)
 
-type UserInterface interface {
-	Output(output string) error
-	OutputError(err error, opts ...Opts) error
-	NewProgressBar() ProgressBar
-	Input(prompt string) (string, error)
-	SelectOptions(prompt string, options []string) (int, string, error)
-}
+// Constant aliases for backward compatibility
+const InfiniteProgress = uitypes.InfiniteProgress
 
-func DefaultUi() UserInterface {
-	return newConsoleUi(os.Stdin, os.Stdout, os.Stderr)
-}
-
-type uiConfig struct {
-	//nolint:containedctx // internal struct used to maintain backwards compatibility
-	context context.Context
-}
-
-type Opts = func(ui *uiConfig)
-
+// WithContext returns an Opts that sets the context.
+// This is an alias for uitypes.WithContext for backward compatibility.
 func WithContext(ctx context.Context) Opts {
-	return func(ui *uiConfig) {
-		ui.context = ctx
-	}
+	return uitypes.WithContext(ctx)
+}
+
+// DefaultUi returns a default console-based UserInterface.
+func DefaultUi() UserInterface {
+	return consoleui.New(
+		consoleui.WithInput(os.Stdin),
+		consoleui.WithOutput(os.Stdout),
+		consoleui.WithErrorOutput(os.Stdout),
+		consoleui.WithProgressWriter(os.Stderr))
 }

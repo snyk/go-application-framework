@@ -21,3 +21,4 @@ const (
 var DefaultTemplateFiles = presenters.DefaultTemplateFiles
 var ApplicationSarifTemplates = presenters.ApplicationSarifTemplates
 var ApplicationSarifTemplatesUfm = presenters.ApplicationSarifTemplatesUfm
+var structuredContent = []string{SARIF_MIME_TYPE, JSON_MIME_TYPE}

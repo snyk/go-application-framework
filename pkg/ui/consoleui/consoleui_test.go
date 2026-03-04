@@ -1,4 +1,4 @@
-package ui
+package consoleui
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"github.com/muesli/termenv"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 func Test_ProgressBar_Spinner(t *testing.T) {
@@ -43,11 +45,11 @@ func Test_ProgressBar_Spinner_Infinite(t *testing.T) {
 	bar := newProgressBar(writer, SpinnerType, false)
 	bar.SetTitle("Hello")
 
-	err = bar.UpdateProgress(InfiniteProgress)
+	err = bar.UpdateProgress(uitypes.InfiniteProgress)
 	assert.NoError(t, err)
-	err = bar.UpdateProgress(InfiniteProgress)
+	err = bar.UpdateProgress(uitypes.InfiniteProgress)
 	assert.NoError(t, err)
-	err = bar.UpdateProgress(InfiniteProgress)
+	err = bar.UpdateProgress(uitypes.InfiniteProgress)
 	assert.NoError(t, err)
 
 	err = bar.Clear()
@@ -119,13 +121,13 @@ func Test_DefaultUi(t *testing.T) {
 	name := "Hans"
 	stdin.WriteString(name + "\n")
 
-	ui := newConsoleUi(stdin, stdout, stderr)
+	ui := New(WithInput(stdin), WithOutput(stdout), WithErrorOutput(stdout), WithProgressWriter(stderr))
 	bar := ui.NewProgressBar()
 	assert.NotNil(t, bar)
 
 	// the bar will not render since the writer is not a TTY
 	bar.SetTitle("Hello")
-	err := bar.UpdateProgress(InfiniteProgress)
+	err := bar.UpdateProgress(uitypes.InfiniteProgress)
 	assert.NoError(t, err)
 
 	err = bar.Clear()
@@ -153,7 +155,7 @@ func Test_DefaultUi_Html(t *testing.T) {
 
 	name := "Hans"
 	stdin.WriteString(name + "\n")
-	ui := newConsoleUi(stdin, stdout, stderr)
+	ui := New(WithInput(stdin), WithOutput(stdout), WithErrorOutput(stdout), WithProgressWriter(stderr))
 
 	err := ui.Output("<h1>Hello</h1>")
 	assert.NoError(t, err)
@@ -174,7 +176,7 @@ func Test_OutputError(t *testing.T) {
 	stdin := &bytes.Buffer{}
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	ui := newConsoleUi(stdin, stdout, stderr)
+	ui := New(WithInput(stdin), WithOutput(stdout), WithErrorOutput(stdout), WithProgressWriter(stderr))
 
 	t.Run("Default error", func(t *testing.T) {
 		err := fmt.Errorf("hello error world")
