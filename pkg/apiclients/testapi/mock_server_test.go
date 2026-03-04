@@ -292,7 +292,7 @@ func newDepGraphTestSubject(t *testing.T) testapi.TestSubjectCreate {
 	t.Helper()
 	testSubject := testapi.TestSubjectCreate{}
 	err := testSubject.FromDepGraphSubjectCreate(testapi.DepGraphSubjectCreate{
-		Type:     testapi.DepGraphSubjectCreateTypeDepGraph,
+		Type:     testapi.DepGraph,
 		DepGraph: depGraphFromJSON(t),
 		Locator: testapi.LocalPathLocator{
 			Paths: []string{"package.json"},
