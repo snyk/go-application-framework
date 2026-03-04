@@ -229,3 +229,37 @@ func Test_HandleContentTypeOther(t *testing.T) {
 		assert.Contains(t, remaining, data)
 	})
 }
+
+func Test_DefaultOutputIsStructured(t *testing.T) {
+	t.Run("returns true when sarif output is enabled", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
+
+		result := DefaultOutputIsStructured(config)
+		assert.True(t, result)
+	})
+
+	t.Run("returns true when json output is enabled", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_JSON, true)
+
+		result := DefaultOutputIsStructured(config)
+		assert.True(t, result)
+	})
+
+	t.Run("returns false when default output is used", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+
+		result := DefaultOutputIsStructured(config)
+		assert.False(t, result)
+	})
+
+	t.Run("sarif takes precedence over json", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_SARIF, true)
+		config.Set(OUTPUT_CONFIG_KEY_JSON, true)
+
+		result := DefaultOutputIsStructured(config)
+		assert.True(t, result)
+	})
+}

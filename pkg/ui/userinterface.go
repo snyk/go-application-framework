@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"os"
 
 	"github.com/snyk/go-application-framework/pkg/ui/consoleui"
 	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
@@ -26,5 +27,9 @@ func WithContext(ctx context.Context) Opts {
 
 // DefaultUi returns a default console-based UserInterface.
 func DefaultUi() UserInterface {
-	return consoleui.New()
+	return consoleui.New(
+		consoleui.WithInput(os.Stdin),
+		consoleui.WithOutput(os.Stdout),
+		consoleui.WithErrorOutput(os.Stdout),
+		consoleui.WithProgressWriter(os.Stderr))
 }
