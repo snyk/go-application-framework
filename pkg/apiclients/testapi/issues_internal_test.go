@@ -374,3 +374,22 @@ func TestDeduplicateSourceLocations(t *testing.T) {
 		assert.Len(t, result, 1, "Only FilePath:FromLine is used for deduplication")
 	})
 }
+
+func Test_validateStartTestParams_ResourcesAndSubjectMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	subject := &TestSubjectCreate{}
+	subject.union = json.RawMessage(`{"type":"dep_graph"}`)
+	resource := TestResourceCreateItem{}
+	resource.union = json.RawMessage(`{"type":"upload"}`)
+
+	params := StartTestParams{
+		orgID:     uuid.New().String(),
+		subject:   subject,
+		resources: &[]TestResourceCreateItem{resource},
+	}
+
+	_, err := validateStartTestParams(params)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resources and subject are mutually exclusive")
+}
