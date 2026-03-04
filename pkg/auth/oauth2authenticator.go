@@ -379,7 +379,11 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 		} else {
 			var appUrl string
 			if o.apiURL != "" {
-				appUrl, _ = api.DeriveAppUrl(o.apiURL)
+				var deriveErr error
+				appUrl, deriveErr = api.DeriveAppUrl(o.apiURL)
+				if deriveErr != nil {
+					appUrl = o.apiURL
+				}
 			} else {
 				appUrl = o.config.GetString(configuration.WEB_APP_URL)
 			}
