@@ -566,3 +566,153 @@ func Test_Authenticate_UTMSource_EmptyIntegrationName(t *testing.T) {
 	assert.NotContains(t, capturedURL, "utm_source",
 		"Expected utm_source to not be present when INTEGRATION_NAME is empty")
 }
+
+func Test_WithApiURL_OverridesOAuthConfig(t *testing.T) {
+	overrideURL := "https://api.eu.snyk.io"
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.API_URL, "https://api.snyk.io")
+	config.Set(configuration.WEB_APP_URL, "https://app.snyk.io")
+
+	authenticator, ok := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithApiURL(overrideURL),
+	).(*oAuth2Authenticator)
+	require.True(t, ok)
+
+	assert.Equal(t, "https://api.eu.snyk.io/oauth2/token", authenticator.oauthConfig.Endpoint.TokenURL)
+	assert.Equal(t, "https://app.eu.snyk.io/oauth2/authorize", authenticator.oauthConfig.Endpoint.AuthURL)
+}
+
+func Test_WithApiURL_CancelableAuthenticate_UsesOverrideUrl(t *testing.T) {
+	t.Parallel()
+
+	// Set up the "EU" override server that the browser will hit.
+	var capturedAuthURL string
+	euMux := http.NewServeMux()
+	euMux.HandleFunc("/oauth2/authorize", func(w http.ResponseWriter, r *http.Request) {
+		capturedAuthURL = r.URL.RequestURI()
+		// Cancel the context so the test doesn't block.
+		w.WriteHeader(http.StatusOK)
+	})
+	euServer := httptest.NewServer(euMux)
+	defer euServer.Close()
+
+	// The config points to a different (production) server.
+	prodMux := http.NewServeMux()
+	prodServer := httptest.NewServer(prodMux)
+	defer prodServer.Close()
+
+	config := configuration.NewWithOpts()
+	config.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	config.Set(configuration.API_URL, prodServer.URL)
+	config.Set(configuration.WEB_APP_URL, prodServer.URL)
+
+	authCtx, cancelAuthCtx := context.WithCancel(context.Background())
+	t.Cleanup(cancelAuthCtx)
+
+	authenticator, ok := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithApiURL(euServer.URL),
+		WithoutTokenPersistence(),
+		WithOpenBrowserFunc(func(url string) {
+			// Simulate the browser opening, then cancel the flow.
+			_, _ = http.DefaultClient.Get(url)
+			cancelAuthCtx()
+		}),
+		WithShutdownServerFunc(ShutdownServer),
+	).(*oAuth2Authenticator)
+	require.True(t, ok)
+
+	authErrChannel := make(chan error, 1)
+	go func() {
+		authErrChannel <- authenticator.CancelableAuthenticate(authCtx)
+	}()
+
+	select {
+	case authErr := <-authErrChannel:
+		assert.ErrorIs(t, authErr, ErrAuthCanceled)
+		// Verify the browser URL used the EU server, not the production server.
+		assert.Contains(t, capturedAuthURL, "/oauth2/authorize",
+			"Expected the authorize URL to hit the EU server")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Test timed out waiting for CancelableAuthenticate to return")
+	}
+}
+
+func Test_WithoutTokenPersistence_SkipsPersistInStorage(t *testing.T) {
+	storageCalled := false
+	mockStorage := &mockTokenStorage{
+		setFunc: func(key string, value any) error {
+			if key == CONFIG_KEY_OAUTH_TOKEN {
+				storageCalled = true
+			}
+			return nil
+		},
+	}
+
+	config := configuration.NewWithOpts()
+	config.SetStorage(mockStorage)
+
+	authenticator, ok := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithoutTokenPersistence(),
+	).(*oAuth2Authenticator)
+	require.True(t, ok)
+	assert.True(t, authenticator.skipPersistInStorage)
+
+	token := &oauth2.Token{
+		AccessToken:  "test-access-token",
+		TokenType:    "Bearer",
+		RefreshToken: "test-refresh-token",
+	}
+	err := authenticator.persistToken(token)
+	require.NoError(t, err)
+
+	// Token must be set in the in-memory config.
+	assert.NotEmpty(t, config.GetString(CONFIG_KEY_OAUTH_TOKEN))
+	// Storage must NOT have been written (no PersistInStorage registered for this key).
+	assert.False(t, storageCalled, "storage.Set should not be called when WithoutTokenPersistence is used")
+}
+
+func Test_WithApiURL_FallbackOnDeriveError(t *testing.T) {
+	// A URL with a scheme-only format that DeriveAppUrl would still handle;
+	// the important thing is that the authenticator construction does not panic
+	// and produces a non-nil oauthConfig.
+	malformedURL := "://no-scheme"
+
+	config := configuration.NewWithOpts()
+
+	authenticator, ok := NewOAuth2AuthenticatorWithOpts(
+		config,
+		WithApiURL(malformedURL),
+	).(*oAuth2Authenticator)
+	require.True(t, ok)
+	require.NotNil(t, authenticator.oauthConfig, "oauthConfig must not be nil even for a malformed URL")
+	// When DeriveAppUrl fails, the apiURL itself is used as the app URL fallback.
+	assert.Equal(t, malformedURL+"/oauth2/token", authenticator.oauthConfig.Endpoint.TokenURL)
+}
+
+// mockTokenStorage is a test helper that records Set calls.
+type mockTokenStorage struct {
+	setFunc func(key string, value any) error
+}
+
+func (m *mockTokenStorage) Set(key string, value any) error {
+	if m.setFunc != nil {
+		return m.setFunc(key, value)
+	}
+	return nil
+}
+
+func (m *mockTokenStorage) Refresh(_ configuration.Configuration, _ string) error {
+	return nil
+}
+
+func (m *mockTokenStorage) Lock(_ context.Context, _ time.Duration) error {
+	return nil
+}
+
+func (m *mockTokenStorage) Unlock() error {
+	return nil
+}

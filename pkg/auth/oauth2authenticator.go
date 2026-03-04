@@ -23,6 +23,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
+	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -66,8 +67,10 @@ type oAuth2Authenticator struct {
 	openBrowserFunc func(authUrl string)
 	// shutdownServerFunc must be/call a function which is race condition safe with server.Server if it is called first
 	// and will result in server.Server exiting immediately when called.
-	shutdownServerFunc func(server *http.Server)
-	tokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
+	shutdownServerFunc   func(server *http.Server)
+	tokenRefresherFunc   func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error)
+	apiURL               string // if non-empty, bypasses config-based API_URL/WEB_APP_URL resolution
+	skipPersistInStorage bool   // if true, skip PersistInStorage in constructor
 }
 
 func OpenBrowser(authUrl string) {
@@ -99,6 +102,41 @@ func getOAuthConfiguration(config configuration.Configuration) *oauth2.Config {
 		Endpoint: oauth2.Endpoint{
 			TokenURL:  tokenUrl,
 			AuthURL:   authUrl,
+			AuthStyle: oauth2.AuthStyleInParams,
+		},
+	}
+
+	if determineGrantType(config) == ClientCredentialsGrant {
+		conf.ClientID = config.GetString(PARAMETER_CLIENT_ID)
+		conf.ClientSecret = config.GetString(PARAMETER_CLIENT_SECRET)
+	}
+
+	return conf
+}
+
+// resolveOAuthConfig returns the oauth2.Config to use for authentication.
+// When an explicit apiURL is set via WithApiURL, URLs are derived directly
+// from it, bypassing the config's API_URL default function (which reads
+// token audience claims). Otherwise falls back to the existing config-based
+// derivation.
+func (o *oAuth2Authenticator) resolveOAuthConfig() *oauth2.Config {
+	if o.apiURL != "" {
+		return getOAuthConfigurationFromURL(o.apiURL, o.config)
+	}
+	return getOAuthConfiguration(o.config)
+}
+
+func getOAuthConfigurationFromURL(apiURL string, config configuration.Configuration) *oauth2.Config {
+	appURL, err := api.DeriveAppUrl(apiURL)
+	if err != nil {
+		appURL = apiURL
+	}
+
+	conf := &oauth2.Config{
+		ClientID: OAUTH_CLIENT_ID,
+		Endpoint: oauth2.Endpoint{
+			TokenURL:  apiURL + "/oauth2/token",
+			AuthURL:   appURL + "/oauth2/authorize",
 			AuthStyle: oauth2.AuthStyleInParams,
 		},
 	}
@@ -208,8 +246,6 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 	o.config = config
 	//nolint:errcheck // breaking api change needed to fix this
 	o.token, _ = GetOAuthToken(config)
-	o.oauthConfig = getOAuthConfiguration(config)
-	config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
 
 	// set defaults
 	o.httpClient = http.DefaultClient
@@ -224,10 +260,16 @@ func NewOAuth2AuthenticatorWithOpts(config configuration.Configuration, opts ...
 		o.tokenRefresherFunc = RefreshToken
 	}
 
-	// apply options
+	// apply options FIRST so WithApiURL is visible to oauthConfig resolution
 	for _, opt := range opts {
 		opt(o)
 	}
+
+	o.oauthConfig = o.resolveOAuthConfig()
+	if !o.skipPersistInStorage {
+		config.PersistInStorage(CONFIG_KEY_OAUTH_TOKEN)
+	}
+
 	return o
 }
 
@@ -272,7 +314,7 @@ func (o *oAuth2Authenticator) CancelableAuthenticate(ctx context.Context) error 
 	var err error
 
 	globalRefreshMutex.Lock()
-	o.oauthConfig = getOAuthConfiguration(o.config)
+	o.oauthConfig = o.resolveOAuthConfig()
 	globalRefreshMutex.Unlock()
 
 	if o.grantType == ClientCredentialsGrant {
@@ -335,7 +377,12 @@ func (o *oAuth2Authenticator) authenticateWithAuthorizationCode(ctx context.Cont
 				return
 			}
 		} else {
-			appUrl := o.config.GetString(configuration.WEB_APP_URL)
+			var appUrl string
+			if o.apiURL != "" {
+				appUrl, _ = api.DeriveAppUrl(o.apiURL)
+			} else {
+				appUrl = o.config.GetString(configuration.WEB_APP_URL)
+			}
 			responseCode = html.EscapeString(r.URL.Query().Get("code"))
 			responseState = html.EscapeString(r.URL.Query().Get("state"))
 			responseInstance = html.EscapeString(r.URL.Query().Get("instance"))

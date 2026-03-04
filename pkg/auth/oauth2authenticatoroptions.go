@@ -42,3 +42,27 @@ func WithHttpClient(httpClient *http.Client) OAuth2AuthenticatorOption {
 		authenticator.httpClient = httpClient
 	}
 }
+
+// WithApiURL sets an explicit API URL for the OAuth flow, bypassing the
+// config's API_URL default function (which derives the URL from existing
+// token audience claims). The app URL for the browser and post-auth redirect
+// are derived automatically via api.DeriveAppUrl. Use this when the target
+// endpoint differs from the currently saved/authenticated endpoint.
+func WithApiURL(apiURL string) OAuth2AuthenticatorOption {
+	return func(authenticator *oAuth2Authenticator) {
+		authenticator.apiURL = apiURL
+	}
+}
+
+// WithoutTokenPersistence prevents the authenticator from registering
+// CONFIG_KEY_OAUTH_TOKEN for storage persistence. Use this for login-only
+// authenticators where the consumer handles token persistence externally
+// (e.g. after the user confirms a settings save). Without this option,
+// persistToken writes the new token to the shared config file immediately,
+// which can produce a mismatch if the user's auth method type was changed
+// in the UI but not yet saved.
+func WithoutTokenPersistence() OAuth2AuthenticatorOption {
+	return func(authenticator *oAuth2Authenticator) {
+		authenticator.skipPersistInStorage = true
+	}
+}
