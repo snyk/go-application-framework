@@ -455,28 +455,24 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
    Info: https://snyk.io/vuln/snyk:lic:maven:ch.qos.logback:logback-classic:(EPL-1.0_OR_LGPL-2.1)
    Introduced by: ch.qos.logback:logback-classic
    Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-validation@3.5.6 > org.springframework.boot:spring-boot-starter@3.5.6 > org.springframework.boot:spring-boot-starter-logging@3.5.6 > ch.qos.logback:logback-classic@1.5.18
-   Reachability: Not Applicable
 
  ✗ [33m[MEDIUM][0m [1mDual license: EPL-1.0, LGPL-2.1[0m
    Finding ID: snyk:lic:maven:ch.qos.logback:logback-core:(EPL-1.0_OR_LGPL-2.1)
    Info: https://snyk.io/vuln/snyk:lic:maven:ch.qos.logback:logback-core:(EPL-1.0_OR_LGPL-2.1)
    Introduced by: ch.qos.logback:logback-core
    Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-validation@3.5.6 > org.springframework.boot:spring-boot-starter@3.5.6 > org.springframework.boot:spring-boot-starter-logging@3.5.6 > ch.qos.logback:logback-classic@1.5.18 > ch.qos.logback:logback-core@1.5.18
-   Reachability: Not Applicable
 
  ✗ [33m[MEDIUM][0m [1mLGPL-2.1 license[0m
    Finding ID: snyk:lic:maven:org.hibernate.orm:hibernate-core:LGPL-2.1
    Info: https://snyk.io/vuln/snyk:lic:maven:org.hibernate.orm:hibernate-core:LGPL-2.1
    Introduced by: org.hibernate.orm:hibernate-core
    Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-data-jpa@3.5.6 > org.hibernate.orm:hibernate-core@6.6.29.Final
-   Reachability: Not Applicable
 
  ✗ [31m[HIGH][0m [1mMultiple licenses: EPL-1.0, GPL-2.0, LGPL-2.1[0m
    Finding ID: snyk:lic:maven:com.github.jnr:jnr-posix:(EPL-1.0_OR_GPL-2.0_OR_LGPL-2.1)
    Info: https://snyk.io/vuln/snyk:lic:maven:com.github.jnr:jnr-posix:(EPL-1.0_OR_GPL-2.0_OR_LGPL-2.1)
    Introduced by: com.github.jnr:jnr-posix
    Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.asciidoctor:asciidoctorj@3.0.0 > org.jruby:jruby@10.0.0.1 > org.jruby:jruby-base@10.0.0.1 > com.github.jnr:jnr-posix@3.1.20
-   Reachability: Not Applicable
 
 [1mIgnored License issues: 1[0m
 [1m[0m                         
@@ -485,7 +481,6 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
    Info: https://snyk.io/vuln/snyk:lic:maven:org.hibernate.common:hibernate-commons-annotations:LGPL-2.1
    Introduced by: org.hibernate.common:hibernate-commons-annotations
    Introduced through: org.owasp.webgoat:webgoat@2025.4-SNAPSHOT > org.springframework.boot:spring-boot-starter-data-jpa@3.5.6 > org.hibernate.orm:hibernate-core@6.6.29.Final > org.hibernate.common:hibernate-commons-annotations@7.0.3.Final
-   Reachability: Not Applicable
 
    Expiration: never
    Category:   not-vulnerable

@@ -41,8 +41,7 @@
    Risk Score: {{ $riskScore }}
    {{- end }}
    {{- $reachability := .GetReachability }}
-   {{- $findingType := .GetFindingType }}
-   {{- if $reachability }}
+   {{- if and $reachability (ne $findingType "license") }}
     {{- $reachabilityString := "" }}
     {{- if eq $reachability.Reachability "function" }}
         {{- $reachabilityString = "Reachable" }}
