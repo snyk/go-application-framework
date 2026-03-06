@@ -13,6 +13,8 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/internal/api/contract"
 	internalmocks "github.com/snyk/go-application-framework/internal/mocks"
@@ -50,24 +52,12 @@ func TestNewChecker(t *testing.T) {
 	checker := NewChecker(mockNA, &logger, config)
 
 	// Verify checker is created correctly
-	if checker == nil {
-		t.Fatal("Expected NewChecker to return a checker, got nil")
-	}
-	if checker.networkAccess != mockNA {
-		t.Error("Expected checker to have the provided NetworkAccess")
-	}
-	if checker.logger != &logger {
-		t.Error("Expected checker to have the provided logger")
-	}
-	if checker.config != config {
-		t.Error("Expected checker to have the provided configuration")
-	}
-	if checker.timeout != 10*time.Second {
-		t.Errorf("Expected default timeout to be 10s, got %v", checker.timeout)
-	}
-	if checker.apiClient == nil {
-		t.Error("Expected checker to have an API client")
-	}
+	require.NotNil(t, checker, "Expected NewChecker to return a checker, got nil")
+	assert.Equal(t, mockNA, checker.networkAccess, "Expected checker to have the provided NetworkAccess")
+	assert.Equal(t, &logger, checker.logger, "Expected checker to have the provided logger")
+	assert.Equal(t, config, checker.config, "Expected checker to have the provided configuration")
+	assert.Equal(t, 10*time.Second, checker.timeout, "Expected default timeout to be 10s")
+	assert.NotNil(t, checker.apiClient, "Expected checker to have an API client")
 }
 
 func TestDetectProxyConfig(t *testing.T) {
@@ -180,39 +170,24 @@ func TestDetectProxyConfig(t *testing.T) {
 			result := checker.DetectProxyConfig()
 
 			// Verify results
-			if result.Detected != tt.expected.Detected {
-				t.Errorf("Expected Detected=%v, got %v", tt.expected.Detected, result.Detected)
-			}
-			if result.URL != tt.expected.URL {
-				t.Errorf("Expected URL=%s, got %s", tt.expected.URL, result.URL)
-			}
-			if result.Variable != tt.expected.Variable {
-				t.Errorf("Expected Variable=%s, got %s", tt.expected.Variable, result.Variable)
-			}
-			if result.NoProxy != tt.expected.NoProxy {
-				t.Errorf("Expected NoProxy=%s, got %s", tt.expected.NoProxy, result.NoProxy)
-			}
-			if result.NodeExtraCACerts != tt.expected.NodeExtraCACerts {
-				t.Errorf("Expected NodeExtraCACerts=%s, got %s", tt.expected.NodeExtraCACerts, result.NodeExtraCACerts)
-			}
-			if result.KRB5Config != tt.expected.KRB5Config {
-				t.Errorf("Expected KRB5Config=%s, got %s", tt.expected.KRB5Config, result.KRB5Config)
-			}
-			if result.KRB5CCName != tt.expected.KRB5CCName {
-				t.Errorf("Expected KRB5CCName=%s, got %s", tt.expected.KRB5CCName, result.KRB5CCName)
-			}
+			assert.Equal(t, tt.expected.Detected, result.Detected, "Detected mismatch")
+			assert.Equal(t, tt.expected.URL, result.URL, "URL mismatch")
+			assert.Equal(t, tt.expected.Variable, result.Variable, "Variable mismatch")
+			assert.Equal(t, tt.expected.NoProxy, result.NoProxy, "NoProxy mismatch")
+			assert.Equal(t, tt.expected.NodeExtraCACerts, result.NodeExtraCACerts, "NodeExtraCACerts mismatch")
+			assert.Equal(t, tt.expected.KRB5Config, result.KRB5Config, "KRB5Config mismatch")
+			assert.Equal(t, tt.expected.KRB5CCName, result.KRB5CCName, "KRB5CCName mismatch")
 		})
 	}
 }
 
 func TestCheckHost(t *testing.T) {
 	tests := []struct {
-		name             string
-		serverResponse   int
-		serverHeader     map[string]string
-		expectedStatus   ConnectionStatus
-		expectedCategory string
-		expectedAuth     string
+		name           string
+		serverResponse int
+		serverHeader   map[string]string
+		expectedStatus ConnectionStatus
+		expectedAuth   string
 	}{
 		{
 			name:           "OK response",
@@ -255,9 +230,8 @@ func TestCheckHost(t *testing.T) {
 			serverHeader: map[string]string{
 				"Proxy-Authenticate": "Negotiate",
 			},
-			expectedStatus:   StatusProxyAuthSupported,
-			expectedCategory: "proxy_auth",
-			expectedAuth:     "Negotiate",
+			expectedStatus: StatusProxyAuthSupported,
+			expectedAuth:   "Negotiate",
 		},
 		{
 			name:           "Proxy auth required - Basic",
@@ -265,9 +239,8 @@ func TestCheckHost(t *testing.T) {
 			serverHeader: map[string]string{
 				"Proxy-Authenticate": "Basic realm=\"Proxy\"",
 			},
-			expectedStatus:   StatusProxyAuthSupported,
-			expectedCategory: "proxy_auth",
-			expectedAuth:     "Basic realm=\"Proxy\"",
+			expectedStatus: StatusProxyAuthSupported,
+			expectedAuth:   "Basic realm=\"Proxy\"",
 		},
 		{
 			name:           "Proxy auth required - Unsupported",
@@ -275,9 +248,8 @@ func TestCheckHost(t *testing.T) {
 			serverHeader: map[string]string{
 				"Proxy-Authenticate": "Digest realm=\"Proxy\"",
 			},
-			expectedStatus:   StatusProxyAuthUnsupported,
-			expectedCategory: "proxy_auth",
-			expectedAuth:     "Digest realm=\"Proxy\"",
+			expectedStatus: StatusProxyAuthUnsupported,
+			expectedAuth:   "Digest realm=\"Proxy\"",
 		},
 		{
 			name:           "Unauthorized",
@@ -308,21 +280,15 @@ func TestCheckHost(t *testing.T) {
 
 			// Parse server URL to get host
 			serverURL, err := url.Parse(server.URL)
-			if err != nil {
-				t.Fatalf("Failed to parse server URL: %v", err)
-			}
+			require.NoError(t, err, "Failed to parse server URL")
 			host := serverURL.Host
 
 			// Test checkHost
 			result := checker.checkHost(host)
 
 			// Verify results
-			if result.Status != tt.expectedStatus {
-				t.Errorf("Expected status %v, got %v", tt.expectedStatus, result.Status)
-			}
-			if tt.expectedAuth != "" && result.ProxyAuth != tt.expectedAuth {
-				t.Errorf("Expected proxy auth %v, got %v", tt.expectedAuth, result.ProxyAuth)
-			}
+			assert.Equal(t, tt.expectedStatus, result.Status, "Status mismatch")
+			assert.Equal(t, tt.expectedAuth, result.ProxyAuth, "Proxy auth mismatch")
 		})
 	}
 }
@@ -364,9 +330,7 @@ func TestCheckHost_WithPath(t *testing.T) {
 
 			// Get server host/port
 			serverURL, err := url.Parse(server.URL)
-			if err != nil {
-				t.Fatalf("Failed to parse server URL: %v", err)
-			}
+			require.NoError(t, err, "Failed to parse server URL")
 
 			// For this test, we need to map the test host to our test server
 			// Since we can't actually hit the real hosts
@@ -387,12 +351,8 @@ func TestCheckHost_WithPath(t *testing.T) {
 			result := checker.checkHost(testHost)
 
 			// Verify the request path was correct
-			if requestPath != tt.expectedPath {
-				t.Errorf("Expected request path %s, got %s", tt.expectedPath, requestPath)
-			}
-			if result.Status != StatusOK {
-				t.Errorf("Expected status OK, got %v", result.Status)
-			}
+			assert.Equal(t, tt.expectedPath, requestPath, "Request path mismatch")
+			assert.Equal(t, StatusOK, result.Status, "Expected status OK")
 		})
 	}
 }
@@ -449,9 +409,7 @@ func TestCategorizeError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			status := checker.categorizeError(tt.err)
-			if status != tt.expectedStatus {
-				t.Errorf("Expected status %v for error '%v', got %v", tt.expectedStatus, tt.err, status)
-			}
+			assert.Equal(t, tt.expectedStatus, status, "Expected status for error %v", tt.err)
 		})
 	}
 }
@@ -543,13 +501,9 @@ func TestGenerateTODOs(t *testing.T) {
 			checker.generateTODOs(result, &tt.hostResult)
 
 			if tt.expectedNil {
-				if len(result.TODOs) > 0 {
-					t.Errorf("Expected no TODOs, got %v", result.TODOs)
-				}
+				assert.Empty(t, result.TODOs, "Expected no TODOs")
 			} else {
-				if len(result.TODOs) == 0 {
-					t.Fatal("Expected TODO to be generated")
-				}
+				require.NotEmpty(t, result.TODOs, "Expected TODO to be generated")
 				// Check if expected TODO message is present
 				found := false
 				for _, todo := range result.TODOs {
@@ -558,9 +512,7 @@ func TestGenerateTODOs(t *testing.T) {
 						break
 					}
 				}
-				if !found {
-					t.Errorf("Expected TODO containing '%s', got %v", tt.expectedTODO, result.TODOs)
-				}
+				assert.True(t, found, "Expected TODO containing '%s', got %v", tt.expectedTODO, result.TODOs)
 			}
 		})
 	}
@@ -606,25 +558,16 @@ func TestCheckConnectivity(t *testing.T) {
 
 	// Run connectivity check
 	result, err := checker.CheckConnectivity()
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
+	require.NoError(t, err, "Unexpected error")
+	require.NotNil(t, result)
 
 	// Verify result structure
-	if result.StartTime.IsZero() {
-		t.Error("Expected StartTime to be set")
-	}
-	if result.EndTime.IsZero() {
-		t.Error("Expected EndTime to be set")
-	}
-	if result.EndTime.Before(result.StartTime) {
-		t.Error("Expected EndTime to be after StartTime")
-	}
+	assert.False(t, result.StartTime.IsZero(), "Expected StartTime to be set")
+	assert.False(t, result.EndTime.IsZero(), "Expected EndTime to be set")
+	assert.False(t, result.EndTime.Before(result.StartTime), "Expected EndTime to be after StartTime")
 
 	// Verify we got results for all hosts
-	if len(result.HostResults) != 3 { // We're testing with 3 hosts
-		t.Errorf("Expected 3 host results, got %d", len(result.HostResults))
-	}
+	assert.Len(t, result.HostResults, 3, "Expected 3 host results") // We're testing with 3 hosts
 }
 
 func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
@@ -667,14 +610,11 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 
 		// Run connectivity check
 		result, err := checker.CheckConnectivity()
-		if err != nil {
-			t.Fatalf("CheckConnectivity failed: %v", err)
-		}
+		require.NoError(t, err, "CheckConnectivity failed")
+		require.NotNil(t, result)
 
 		// Verify organizations were fetched
-		if len(result.Organizations) != 2 {
-			t.Errorf("Expected 2 organizations, got %d", len(result.Organizations))
-		}
+		assert.Len(t, result.Organizations, 2, "Expected 2 organizations")
 	})
 
 	t.Run("uses default when max-org-count is not set", func(t *testing.T) {
@@ -705,14 +645,11 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 
 		// Run connectivity check
 		result, err := checker.CheckConnectivity()
-		if err != nil {
-			t.Fatalf("CheckConnectivity failed: %v", err)
-		}
+		require.NoError(t, err, "CheckConnectivity failed")
+		require.NotNil(t, result)
 
 		// Verify organizations were fetched
-		if len(result.Organizations) != 2 {
-			t.Errorf("Expected 2 organizations, got %d", len(result.Organizations))
-		}
+		assert.Len(t, result.Organizations, 2, "Expected 2 organizations")
 	})
 
 	t.Run("uses default when max-org-count is invalid", func(t *testing.T) {
@@ -744,14 +681,11 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 
 		// Run connectivity check
 		result, err := checker.CheckConnectivity()
-		if err != nil {
-			t.Fatalf("CheckConnectivity failed: %v", err)
-		}
+		require.NoError(t, err, "CheckConnectivity failed")
+		require.NotNil(t, result)
 
 		// Verify organizations were fetched
-		if len(result.Organizations) != 2 {
-			t.Errorf("Expected 2 organizations, got %d", len(result.Organizations))
-		}
+		assert.Len(t, result.Organizations, 2, "Expected 2 organizations")
 	})
 }
 
@@ -791,29 +725,20 @@ func createTestOrgResponse() *contract.OrganizationsResponse {
 // Helper function to verify organizations
 func verifyOrganizations(t *testing.T, orgs []Organization, expectedCount int, expectDefault bool) {
 	t.Helper()
-	if len(orgs) != expectedCount {
-		t.Errorf("Expected %d organizations, got %d", expectedCount, len(orgs))
+	assert.Len(t, orgs, expectedCount, "Did not get the expected number of organizations")
+	if expectedCount == 0 {
 		return
 	}
+	require.NotEmpty(t, orgs)
 
-	if expectedCount > 0 {
-		if orgs[0].ID != "org-1" {
-			t.Errorf("Expected first org ID to be 'org-1', got '%s'", orgs[0].ID)
-		}
-		if orgs[0].GroupID != "group-id-1" {
-			t.Errorf("Expected first org GroupID to be 'group-id-1', got '%s'", orgs[0].GroupID)
-		}
-		if orgs[0].Name != "Test Org 1" {
-			t.Errorf("Expected first org name to be 'Test Org 1', got '%s'", orgs[0].Name)
-		}
-		if orgs[0].Slug != "test-org-1" {
-			t.Errorf("Expected first org slug to be 'test-org-1', got '%s'", orgs[0].Slug)
-		}
-		if expectDefault && orgs[0].IsDefault != true {
-			t.Errorf("Expected first org to be default, got %v", orgs[0].IsDefault)
-		} else if !expectDefault && orgs[0].IsDefault != false {
-			t.Errorf("Expected no org to be default when GetDefaultOrgId fails, got %v", orgs[0].IsDefault)
-		}
+	assert.Equal(t, "org-1", orgs[0].ID, "Expected first org ID")
+	assert.Equal(t, "group-id-1", orgs[0].GroupID, "Expected first org GroupID")
+	assert.Equal(t, "Test Org 1", orgs[0].Name, "Expected first org name")
+	assert.Equal(t, "test-org-1", orgs[0].Slug, "Expected first org slug")
+	if expectDefault {
+		assert.True(t, orgs[0].IsDefault, "Expected first org to be default")
+	} else {
+		assert.False(t, orgs[0].IsDefault, "Expected no org to be default when GetDefaultOrgId fails")
 	}
 }
 
@@ -838,9 +763,7 @@ func TestCheckOrganizations(t *testing.T) {
 
 		// Test fetching organizations
 		orgs, err := checker.CheckOrganizations(100)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
+		require.NoError(t, err, "Expected no error")
 
 		// Verify organizations
 		verifyOrganizations(t, orgs, 2, true)
@@ -873,9 +796,7 @@ func TestCheckOrganizations(t *testing.T) {
 
 		// Test fetching organizations
 		orgs, err := checker.CheckOrganizations(100)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
+		require.NoError(t, err, "Expected no error")
 
 		// Verify organizations
 		verifyOrganizations(t, orgs, 1, false)
@@ -897,12 +818,8 @@ func TestCheckOrganizations(t *testing.T) {
 		checkerNoToken := NewCheckerWithApiClient(mockNA, &logger, configNoToken, mockApiClient)
 
 		orgs, err := checkerNoToken.CheckOrganizations(100)
-		if err != nil {
-			t.Errorf("Expected no error when no token configured, got: %v", err)
-		}
-		if orgs != nil {
-			t.Errorf("Expected nil organizations when no token configured, got %v", orgs)
-		}
+		require.NoError(t, err, "Expected no error when no token configured")
+		assert.Nil(t, orgs, "Expected nil organizations when no token configured")
 	})
 
 	t.Run("with API error", func(t *testing.T) {
@@ -921,12 +838,8 @@ func TestCheckOrganizations(t *testing.T) {
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
 		_, err := checker.CheckOrganizations(100)
-		if err == nil {
-			t.Fatalf("Expected error, got nil")
-		}
-		if err.Error() != "API error" {
-			t.Errorf("Expected 'API error', got: %v", err)
-		}
+		require.Error(t, err, "Expected error")
+		assert.EqualError(t, err, "API error")
 	})
 
 	t.Run("with custom limit", func(t *testing.T) {
@@ -962,14 +875,10 @@ func TestCheckOrganizations(t *testing.T) {
 
 				// Test fetching organizations with the specific limit
 				orgs, err := checker.CheckOrganizations(tc.limit)
-				if err != nil {
-					t.Fatalf("Expected no error, got: %v", err)
-				}
+				require.NoError(t, err, "Expected no error")
 
 				// Verify organizations were returned
-				if len(orgs) != 2 {
-					t.Errorf("Expected 2 organizations, got %d", len(orgs))
-				}
+				assert.Len(t, orgs, 2, "Expected 2 organizations")
 			})
 		}
 	})
@@ -1013,25 +922,13 @@ func TestCheckConnectivityHandlesOrgError(t *testing.T) {
 	result, err := checker.CheckConnectivity()
 
 	// The method should not return an error, but should populate OrgCheckError
-	if err != nil {
-		t.Fatalf("Unexpected error from CheckConnectivity: %v", err)
-	}
+	require.NoError(t, err, "Unexpected error from CheckConnectivity")
+	require.NotNil(t, result)
 
 	// Verify that OrgCheckError is set to the expected error
-	if result.OrgCheckError == nil {
-		t.Fatal("Expected OrgCheckError to be set, but it was nil")
-	}
-
-	if result.OrgCheckError.Error() != expectedError.Error() {
-		t.Errorf("Expected OrgCheckError to be '%v', got '%v'", expectedError, result.OrgCheckError)
-	}
+	assert.EqualError(t, result.OrgCheckError, expectedError.Error())
 
 	// Verify other fields are still populated correctly
-	if !result.TokenPresent {
-		t.Error("Expected TokenPresent to be true when token is configured")
-	}
-
-	if len(result.Organizations) != 0 {
-		t.Error("Expected Organizations to be empty when fetch fails")
-	}
+	assert.True(t, result.TokenPresent, "Expected TokenPresent to be true when token is configured")
+	assert.Empty(t, result.Organizations, "Expected Organizations to be empty when fetch fails")
 }
