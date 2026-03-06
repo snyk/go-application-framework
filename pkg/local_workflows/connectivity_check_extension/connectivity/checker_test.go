@@ -862,6 +862,11 @@ func TestCheckOrganizations(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		// Clear all env vars that New() would pick up as auth tokens so the
+		// "no token" branch is actually exercised regardless of the local environment.
+		t.Setenv("SNYK_TOKEN", "")
+		t.Setenv("SNYK_OAUTH_TOKEN", "")
+
 		logger := zerolog.Nop()
 		mockNA := mocks.NewMockNetworkAccess(ctrl)
 		mockApiClient := internalmocks.NewMockApiClient(ctrl)
