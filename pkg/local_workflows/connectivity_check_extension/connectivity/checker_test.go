@@ -141,6 +141,20 @@ func TestDetectProxyConfig(t *testing.T) {
 				NoProxy:  "*.local,169.254.0.0/16",
 			},
 		},
+		{
+			name: "Node and Kerberos env vars set",
+			envVars: map[string]string{
+				"NODE_EXTRA_CA_CERTS": "/tmp/custom-ca.pem",
+				"KRB5_CONFIG":         "/etc/krb5.conf",
+				"KRB5CCNAME":          "FILE:/tmp/krb5cc_1000",
+			},
+			expected: ProxyConfig{
+				Detected:         false,
+				NodeExtraCACerts: "/tmp/custom-ca.pem",
+				KRB5Config:       "/etc/krb5.conf",
+				KRB5CCName:       "FILE:/tmp/krb5cc_1000",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -177,6 +191,15 @@ func TestDetectProxyConfig(t *testing.T) {
 			}
 			if result.NoProxy != tt.expected.NoProxy {
 				t.Errorf("Expected NoProxy=%s, got %s", tt.expected.NoProxy, result.NoProxy)
+			}
+			if result.NodeExtraCACerts != tt.expected.NodeExtraCACerts {
+				t.Errorf("Expected NodeExtraCACerts=%s, got %s", tt.expected.NodeExtraCACerts, result.NodeExtraCACerts)
+			}
+			if result.KRB5Config != tt.expected.KRB5Config {
+				t.Errorf("Expected KRB5Config=%s, got %s", tt.expected.KRB5Config, result.KRB5Config)
+			}
+			if result.KRB5CCName != tt.expected.KRB5CCName {
+				t.Errorf("Expected KRB5CCName=%s, got %s", tt.expected.KRB5CCName, result.KRB5CCName)
 			}
 		})
 	}

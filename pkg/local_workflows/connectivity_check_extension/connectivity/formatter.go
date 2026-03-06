@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+
 	"github.com/snyk/go-application-framework/internal/presenters"
 )
 
@@ -73,26 +74,14 @@ func (f *Formatter) formatProxyConfig(config ProxyConfig) error {
 	f.output("")
 	f.output("Environment variables:")
 
-	proxyVars := []struct {
-		name  string
-		value string
-	}{
-		{"HTTPS_PROXY", getEnvOrEmpty("HTTPS_PROXY")},
-		{"https_proxy", getEnvOrEmpty("https_proxy")},
-		{"HTTP_PROXY", getEnvOrEmpty("HTTP_PROXY")},
-		{"http_proxy", getEnvOrEmpty("http_proxy")},
-		{"NO_PROXY", getEnvOrEmpty("NO_PROXY")},
-		{"no_proxy", getEnvOrEmpty("no_proxy")},
-		{"NODE_EXTRA_CA_CERTS", getEnvOrEmpty("NODE_EXTRA_CA_CERTS")},
-		{"KRB5_CONFIG", getEnvOrEmpty("KRB5_CONFIG")},
-		{"KRB5CCNAME", getEnvOrEmpty("KRB5CCNAME")},
-	}
-
-	for _, pv := range proxyVars {
-		if pv.value != "" {
-			f.output(fmt.Sprintf("  %-21s %s", pv.name+":", f.renderHTML(fmt.Sprintf(`<span class="warning">%s</span>`, pv.value))))
-		} else {
-			f.output(fmt.Sprintf("  %-21s %s", pv.name+":", f.renderHTML(`<span class="prompt-help">(not set)</span>`)))
+	for _, spec := range envVarSpecs {
+		for _, envVarName := range spec.names {
+			envVarValue := getEnvOrEmpty(envVarName)
+			if envVarValue != "" {
+				f.output(fmt.Sprintf("  %-21s %s", envVarName+":", f.renderHTML(fmt.Sprintf(`<span class="warning">%s</span>`, envVarValue))))
+			} else {
+				f.output(fmt.Sprintf("  %-21s %s", envVarName+":", f.renderHTML(`<span class="prompt-help">(not set)</span>`)))
+			}
 		}
 	}
 
