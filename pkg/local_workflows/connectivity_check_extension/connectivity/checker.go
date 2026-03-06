@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -86,23 +87,13 @@ func NewCheckerWithApiClient(networkAccess networking.NetworkAccess, logger *zer
 func (c *Checker) DetectProxyConfig() ProxyConfig {
 	config := ProxyConfig{}
 
-	// Check proxy variables in priority order
-	proxyVars := []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"}
-	for _, varName := range proxyVars {
-		if value := os.Getenv(varName); value != "" {
-			if !config.Detected {
-				config.Detected = true
-				config.URL = value
-				config.Variable = varName
+	for _, spec := range envVarSpecs {
+		for _, varName := range spec.names {
+			if value := os.Getenv(varName); value != "" {
+				spec.set(&config, varName, value)
+				break
 			}
 		}
-	}
-
-	// Check NO_PROXY
-	if noProxy := os.Getenv("NO_PROXY"); noProxy != "" {
-		config.NoProxy = noProxy
-	} else if noProxy := os.Getenv("no_proxy"); noProxy != "" {
-		config.NoProxy = noProxy
 	}
 
 	return config

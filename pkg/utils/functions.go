@@ -21,6 +21,14 @@ func ErrorOf(_ any, err error) error { return err }
 
 func ValueOf[T any](value T, _ error) T { return value }
 
+func Ternary[T any](condition bool, value1, value2 T) T {
+	if condition {
+		return value1
+	} else {
+		return value2
+	}
+}
+
 func MatchesRegex(inputString string, regex string) (bool, error) {
 	if len(regex) == 0 {
 		return false, fmt.Errorf("regular expression must not be empty")
