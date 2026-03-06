@@ -110,3 +110,33 @@ Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-9999
                                                                      
 ID:      urn:snyk:interaction:some-UUID 
 ---
+
+[Test_RenderError/detail_with_URL_should_not_break_URL - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mClient request cannot be processed (SNYK-0003)[0m
+         The server cannot process the request due to a client error, such as malformed 
+         request syntax, size too large, invalid request message framing, or deceptive  
+         request routing. Review the request and try again.                             
+                                                                                                                                                                                                                
+           For more information see https://docs.snyk.io/getting-started/supported-languages-frameworks-and-feature-availability-overview#code-analysis-snyk-code-with-a-very-long-url-that-would-normally-wrap 
+
+Status:  400 Bad Request 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0003 
+                                                                     
+---
+
+[Test_RenderError/detail_without_URL_should_apply_width_constraint - 1]
+
+[41m [0m[97;41mERROR[0m[41m [0m  [1mClient request cannot be processed (SNYK-0003)[0m
+         The server cannot process the request due to a client error, such as malformed 
+         request syntax, size too large, invalid request message framing, or deceptive  
+         request routing. Review the request and try again.                             
+                                                                                        
+           This is a long detail message without any URLs that should be wrapped        
+           according to the normal width constraints for better readability in the      
+           terminal                                                                     
+
+Status:  400 Bad Request 
+Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0003 
+                                                                     
+---

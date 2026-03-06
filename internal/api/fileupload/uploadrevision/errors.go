@@ -8,7 +8,7 @@ import (
 
 // Sentinel errors for common conditions.
 var (
-	ErrNoFilesProvided = errors.New("no files provided for upload")
+	ErrNoFilesUploaded = errors.New("no files uploaded")
 	ErrEmptyOrgID      = errors.New("organization ID cannot be empty")
 	ErrEmptyRevisionID = errors.New("revision ID cannot be empty")
 )

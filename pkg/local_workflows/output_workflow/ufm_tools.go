@@ -2,6 +2,8 @@ package output_workflow
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	"golang.org/x/sync/semaphore"
 
@@ -27,12 +29,12 @@ func getTotalNumberOfUnifiedFindings(results []testapi.TestResult) int {
 	return count
 }
 
-func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) {
+func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) error {
 	debugLogger := invocation.GetEnhancedLogger()
 
 	if !wEntry.renderEmptyData && getTotalNumberOfUnifiedFindings(results) == 0 {
 		debugLogger.Info().Msgf("UFM - [%s] The input is empty, skipping rendering!", name)
-		return
+		return nil
 	}
 
 	debugLogger.Info().Msgf("UFM - [%s] Creating UFM renderer", name)
@@ -56,10 +58,11 @@ func useRendererWithUnifiedModel(name string, wEntry *WriterEntry, results []tes
 	err := renderer.RenderTemplate(wEntry.templates, wEntry.mimeType)
 	if err != nil {
 		debugLogger.Warn().Err(err).Msgf("UFM - [%s] Failed to render local finding", name)
-		return
+		return err
 	}
 
 	debugLogger.Info().Msgf("UFM - [%s] Rendering done", name)
+	return nil
 }
 
 func getTestResultsFromWorkflowData(input []workflow.Data) ([]testapi.TestResult, []workflow.Data) {
@@ -110,6 +113,9 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 	// iterate over all writers and render for each of them
 	ctx := context.Background()
 	availableThreads := semaphore.NewWeighted(threadCount)
+	var errMu sync.Mutex
+	var errs []error
+
 	for k, v := range writerMap {
 		err = availableThreads.Acquire(ctx, 1)
 		if err != nil {
@@ -119,13 +125,24 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 
 		go func(name string, writer *WriterEntry, results []testapi.TestResult, invocation workflow.InvocationContext) {
 			defer availableThreads.Release(1)
-			useRendererWithUnifiedModel(name, writer, results, invocation)
+			if renderErr := useRendererWithUnifiedModel(name, writer, results, invocation); renderErr != nil {
+				errMu.Lock()
+				errs = append(errs, renderErr)
+				errMu.Unlock()
+			}
 		}(k, v, results, invocation)
 	}
 
+	// Wait for all goroutines to complete by acquiring all thread slots
 	err = availableThreads.Acquire(ctx, threadCount)
 	if err != nil {
 		debugLogger.Err(err).Msg("UFM - Failed to wait for all threads")
+	}
+
+	if len(errs) > 0 {
+		combinedErr := errors.Join(errs...)
+		debugLogger.Err(combinedErr).Msg("UFM - Errors occurred during parallel rendering")
+		return remainingData, combinedErr
 	}
 
 	debugLogger.Info().Msgf("UFM - All Rendering done")

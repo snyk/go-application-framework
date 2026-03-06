@@ -8,7 +8,7 @@ import (
 
 // Sentinel errors for common conditions.
 var (
-	ErrNoFilesProvided = uploadrevision.ErrNoFilesProvided
+	ErrNoFilesProvided = uploadrevision.ErrNoFilesUploaded
 	ErrEmptyOrgID      = uploadrevision.ErrEmptyOrgID
 	ErrEmptyRevisionID = uploadrevision.ErrEmptyRevisionID
 )

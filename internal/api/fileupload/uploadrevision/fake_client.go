@@ -74,7 +74,7 @@ func (f *FakeSealableClient) UploadFiles(_ context.Context, orgID OrgID, revisio
 	}
 
 	if len(files) == 0 {
-		return ErrNoFilesProvided
+		return ErrNoFilesUploaded
 	}
 
 	var totalPayloadSize int64

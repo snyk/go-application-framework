@@ -51,7 +51,7 @@ components:
         type: string
   parameters:
     JobIdParam:
-      description: The job id
+      description: Job ID returned from the Test API to query.
       in: path
       name: job_id
       required: true
@@ -59,7 +59,9 @@ components:
         format: uuid
         type: string
     OrgIdParam:
-      description: The org id
+      description: |-
+        Snyk Org ID under which to run or query information
+        about a Job or Test.
       in: path
       name: org_id
       required: true
@@ -67,7 +69,7 @@ components:
         format: uuid
         type: string
     TestIdParam:
-      description: The test id
+      description: Test ID returned from the Test API to query.
       in: path
       name: test_id
       required: true
@@ -223,9 +225,21 @@ components:
           severity-change: '#/components/schemas/SeverityChange'
         propertyName: action_type
     BaseResource:
+      description: BaseResources contain a single instance of testable content.
+      example:
+        resource:
+          content_type: source
+          file_patterns: []
+          repository_url: https://github.com/example/repo
+          revision_id: 00000000-0000-0000-0000-000000000000
+          root_folder_id: .
+          type: upload
+        type: base
       properties:
         resource:
-          $ref: '#/components/schemas/BaseResourceVariant'
+          allOf:
+          - $ref: '#/components/schemas/BaseResourceVariant'
+          description: The specific representation of what content to test.
         type:
           enum:
           - base
@@ -235,9 +249,21 @@ components:
       - resource
       type: object
     BaseResourceCreateItem:
+      description: BaseResources contain a single instance of testable content.
+      example:
+        resource:
+          content_type: source
+          file_patterns: []
+          repository_url: https://github.com/example/repo
+          revision_id: 00000000-0000-0000-0000-000000000000
+          root_folder_id: .
+          type: upload
+        type: base
       properties:
         resource:
-          $ref: '#/components/schemas/BaseResourceVariantCreateItem'
+          allOf:
+          - $ref: '#/components/schemas/BaseResourceVariantCreateItem'
+          description: The specific representation of what content to test.
         type:
           enum:
           - base
@@ -247,7 +273,6 @@ components:
       - resource
       type: object
     BaseResourceVariant:
-      description: Resources containing testable content.
       discriminator:
         mapping:
           bundle: '#/components/schemas/BundleResource'
@@ -265,7 +290,6 @@ components:
       - $ref: '#/components/schemas/ContainerRepoResource'
       - $ref: '#/components/schemas/SnykReferenceResource'
     BaseResourceVariantCreateItem:
-      description: Resources containing testable content.
       discriminator:
         mapping:
           bundle: '#/components/schemas/BundleResource'
@@ -283,30 +307,88 @@ components:
       - $ref: '#/components/schemas/ContainerRepoResource'
       - $ref: '#/components/schemas/SnykReferenceResource'
     BundleResource:
+      description: |-
+        Resource representing Bundles of files created through the
+        Deepcode Bundle API.
+
+        Bundles contain collections of files uploaded by clients to
+        Snyk for testing.
+
+        BundleResources can be marked either as SBOM or Source to
+        indicate the contents of the Bundle.
+
+        SBOM BundleResources should provide the following fields:
+        - type
+        - bundle_id
+        - name
+        - file_patterns (may be empty)
+
+        Source BundleResources should provide the following fields:
+        - type
+        - bundle_id
+        - repository_url
+        - root_folder_id
+        - file_patterns (may be empty)
+
+        Currently supported scans utilizing BundleResources are:
+        - SAST: (1) BundleResource containing Source files.
+        - SBOM (SCA): (1) BundleResource containing an SBOM
+        - SBOM + Reachability Analysis (SCA): (1) BundleResource containing an SBOM, (1) BundleResource containing Source files.
+      example:
+        bundle_id: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        content_type: source
+        file_patterns: []
+        repository_url: https://github.com/example/repo
+        root_folder_id: .
+        type: bundle
       properties:
         bundle_id:
+          description: |-
+            The ID returned from the Files Bundle Store API for a given Bundle.
+            The Deepcode Bundle API is not intended for direct public use,
+            and will be replaced with the File Upload API in the future.
+
+            These IDs are sha256 digests (32 bytes or 64 hex digits).
+          example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
           pattern: ^[a-fA-F0-9]{64}$
           type: string
         content_type:
+          description: |-
+            Content present in the Bundle.
+
+            Currently only SBOMs and Source files are accepted
+            content types.
           enum:
           - sbom
           - source
           type: string
         file_patterns:
+          description: |-
+            File Patterns to include in the scan.
+
+            Currently unsupported. Provide an empty list.
           items:
             type: string
           maxItems: 20
           type: array
         name:
+          description: |-
+            A name to assign to the SBOM contained in the BundleRevision.
+
+            Overrides the filename in the BundleRevision.
           maxLength: 256
           type: string
         repository_url:
-          format: url
+          description: Repository URL at which the Source files are stored.
           maxLength: 1024
           type: string
         root_folder_id:
+          description: Folder inside the BundleRevision at which the Source files
+            are located.
           maxLength: 1024
           type: string
+        scm_context:
+          $ref: '#/components/schemas/ScmContext'
         type:
           enum:
           - bundle
@@ -318,13 +400,31 @@ components:
       - file_patterns
       type: object
     ContainerRepoResource:
+      description: |-
+        Resource representing a container repository.
+
+        Container Repos identify a specific container
+        image in a container registry. These images can be scanned
+        using the Snyk Container scanner.
+
+        Currently no scans are supported through the Test API for
+        ContainerRepoResources.
+      example:
+        image_url: https://docker.io/example/image
+        tag: version_0.0.0
+        type: container
       properties:
         image_url:
+          description: |-
+            URL at which the specific container image can be found
+            in a container registry.
           format: url
           maxLength: 1024
           type: string
+        scm_context:
+          $ref: '#/components/schemas/ScmContext'
         tag:
-          pattern: ^[a-fA-F0-9]{64}$
+          description: Tagged version of the container to scan.
           type: string
         type:
           enum:
@@ -336,6 +436,7 @@ components:
       - tag
       type: object
     ContainerScanConfiguration:
+      description: Scan configuration parameters for the Container scanner.
       type: object
     CveProblem:
       description: |-
@@ -373,8 +474,16 @@ components:
       type: object
     DeepcodeBundleSubject:
       description: |-
+        **Deprecated**
+
+        Provide a BundleResource and include the
+        SAST Scan Configuration instead.
+
         Test subject representing source code uploaded to Snyk using DeepCode
         bundle APIs.
+
+        Deepcode bundles are accepted through the API, but are not
+        guaranteed to return Findings.
       properties:
         bundle_id:
           description: Deepcode Bundle ID. These IDs are sha256 digests (32 bytes
@@ -394,9 +503,29 @@ components:
       - bundle_id
       - locator
       type: object
+    DepGraphContent:
+      description: |-
+        Dep Graph file contents, of the same format as Dep Graphs
+        provided to /v1/test-dep-graph endpoint.
+      properties:
+        dep_graph:
+          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.DepGraph'
+        type:
+          enum:
+          - dep_graph
+          type: string
+      required:
+      - type
+      - dep_graph
+      type: object
     DepGraphSubject:
-      description: Test subject representing a Snyk dependency graph (a legacy SBOM
-        format).
+      description: |-
+        **Deprecated**
+
+        Provide an InlineResource with the DepGraph contents
+        and the SCA Scan Configuration instead.
+
+        Test subject representing a Snyk dependency graph (a legacy SBOM format).
       properties:
         locator:
           allOf:
@@ -415,8 +544,13 @@ components:
       - locator
       type: object
     DepGraphSubjectCreate:
-      description: Test subject representing a Snyk dependency graph (a legacy SBOM
-        format).
+      description: |-
+        **Deprecated**
+
+        Provide an InlineResource with the DepGraph contents
+        and the SCA Scan Configuration instead.
+
+        Test subject representing a Snyk dependency graph (a legacy SBOM format).
       properties:
         dep_graph:
           allOf:
@@ -519,6 +653,33 @@ components:
       - suggestions
       type: object
     DiffResource:
+      description: |-
+        DiffResources contain two versions of the same content
+        to compare against each other.
+
+        The Base and Compare fields contain Resources representing
+        an "existing" (base) version as well as a "new" (compare)
+        version. Most commonly these Resources will be of the same type,
+        e.g. an ScmResource containing a reference the `main` branch being
+        compared to an ScmResource containing a reference to a new
+        feature branch.
+
+        Currently no scans are supported through the Test API
+        for DiffResources.
+      example:
+        base:
+          file_patterns: []
+          integration_id: 00000000-0000-0000-0000-000000000000
+          ref: main
+          repo_url: https://github.com/example/repo
+          type: scm
+        compare:
+          file_patterns: []
+          integration_id: 00000000-0000-0000-0000-000000000000
+          ref: feat/homepage
+          repo_url: https://github.com/example/repo
+          type: scm
+        type: diff
       properties:
         base:
           $ref: '#/components/schemas/BaseResourceVariant'
@@ -534,6 +695,33 @@ components:
       - compare
       type: object
     DiffResourceCreateItem:
+      description: |-
+        DiffResources contain two versions of the same content
+        to compare against each other.
+
+        The Base and Compare fields contain Resources representing
+        an "existing" (base) version as well as a "new" (compare)
+        version. Most commonly these Resources will be of the same type,
+        e.g. an ScmResource containing a reference the `main` branch being
+        compared to an ScmResource containing a reference to a new
+        feature branch.
+
+        Currently no scans are supported through the Test API
+        for DiffResources.
+      example:
+        base:
+          file_patterns: []
+          integration_id: 00000000-0000-0000-0000-000000000000
+          ref: main
+          repo_url: https://github.com/example/repo
+          type: scm
+        compare:
+          file_patterns: []
+          integration_id: 00000000-0000-0000-0000-000000000000
+          ref: feat/homepage
+          repo_url: https://github.com/example/repo
+          type: scm
+        type: diff
       properties:
         base:
           $ref: '#/components/schemas/BaseResourceVariantCreateItem'
@@ -761,8 +949,8 @@ components:
             Findings within a Test execution are aggregated by this key.
           type: string
         locations:
-          description: Locations in the Asset's contents where the finding may be
-            found.
+          description: Locations in the tested component's contents where the finding
+            may be found.
           items:
             $ref: '#/components/schemas/FindingLocation'
           type: array
@@ -1094,8 +1282,16 @@ components:
       type: object
     GitUrlCoordinatesSubject:
       description: |-
+        **Deprecated**
+
+        Provide an ScmResource and include the
+        SAST Scan Configuration instead.
+
         Test subject representing a source tree located in a Git repository that
         has a Snyk SCM integration.
+
+        Git URL coordinates are accepted through the API, but are not
+        guaranteed to return Findings.
       properties:
         commit_id:
           description: |-
@@ -1139,6 +1335,7 @@ components:
       - id
       type: object
     IacScanConfiguration:
+      description: Scan configuration parameters for the IAC scanner.
       type: object
     Ignore:
       properties:
@@ -1206,22 +1403,43 @@ components:
       - name
       type: object
     InlineContent:
-      properties:
-        dep_graph:
-          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.DepGraph'
-        type:
-          enum:
-          - dep_graph
-          type: string
-      required:
-      - type
-      - dep_graph
+      allOf:
+      - $ref: '#/components/schemas/DepGraphContent'
+      description: Content formats accepted inline for testing.
       type: object
     InlineResource:
+      description: |-
+        Resource comprised of file contents included directly in
+        a request body.
+
+        Currently supported scans utilizing InlineResources are:
+        - SCA (Open Source): (1) InlineResource containing a Dep Graph
+      example:
+        content:
+          dep_graph:
+            graph:
+              nodes:
+              - deps: []
+                nodeId: root-node
+                pkgId: snyk@1.0.0-monorepo
+              rootNodeId: root-node
+            pkgManager:
+              name: npm
+            pkgs:
+            - id: snyk@1.0.0-monorepo
+              info:
+                name: snyk
+                version: 1.0.0-monorepo
+            schemaVersion: 1.3.0
+          type: dep_graph
+        name: dep_graph.json
+        type: inline
       properties:
         name:
           maxLength: 256
           type: string
+        scm_context:
+          $ref: '#/components/schemas/ScmContext'
         type:
           enum:
           - inline
@@ -1231,12 +1449,42 @@ components:
       - name
       type: object
     InlineResourceCreateItem:
+      description: |-
+        Resource comprised of file contents included directly in
+        a request body.
+
+        Currently supported scans utilizing InlineResources are:
+        - SCA (Open Source): (1) InlineResource containing a Dep Graph
+      example:
+        content:
+          dep_graph:
+            graph:
+              nodes:
+              - deps: []
+                nodeId: root-node
+                pkgId: snyk@1.0.0-monorepo
+              rootNodeId: root-node
+            pkgManager:
+              name: npm
+            pkgs:
+            - id: snyk@1.0.0-monorepo
+              info:
+                name: snyk
+                version: 1.0.0-monorepo
+            schemaVersion: 1.3.0
+          type: dep_graph
+        name: dep_graph.json
+        type: inline
       properties:
         content:
-          $ref: '#/components/schemas/InlineContent'
+          allOf:
+          - $ref: '#/components/schemas/InlineContent'
+          description: File contents to be tested.
         name:
           maxLength: 256
           type: string
+        scm_context:
+          $ref: '#/components/schemas/ScmContext'
         type:
           enum:
           - inline
@@ -1302,7 +1550,9 @@ components:
     JobRelationships:
       properties:
         test:
-          $ref: '#/components/schemas/JobRelationshipField'
+          allOf:
+          - $ref: '#/components/schemas/JobRelationshipField'
+          description: Test resource associated with the finished Job.
       required:
       - test
       type: object
@@ -1681,6 +1931,7 @@ components:
           - pending
           - cancelled
           - not-required
+          - unknown
           type: string
       required:
       - id
@@ -1705,6 +1956,7 @@ components:
         - Code SAST rules
         - VulnDB vulnerabilities
         - Software licenses
+        - Secret leaks
       discriminator:
         mapping:
           cve: '#/components/schemas/CveProblem'
@@ -1782,10 +2034,11 @@ components:
       properties:
         paths:
           description: |-
-            Sequence of locations within this flow of execution.
+            Paths by which the vulnerable code can be reached.
 
-            For example, a sequence of locations connecting the "source" location
-            where input data is obtained, to a "sink" location where it is used.
+            Includes the name of the function, the path through the
+            source code that reaches the function, and the location
+            at which the vulnerable function is called.
           items:
             $ref: '#/components/schemas/ReachablePath'
           minItems: 1
@@ -1855,9 +2108,20 @@ components:
       - value
       type: object
     SastScanConfiguration:
+      description: Scan configuration parameters for the SAST scanner.
       type: object
     SbomReachabilitySubject:
-      description: Test subject for SBOM test with reachability analysis.
+      description: |-
+        **Deprecated**
+
+        Provide a BundleResource with SBOM Bundle ID,
+        a BundleResource with Source Bundle ID, and include
+        SCA Scan Configuration instead.
+
+        SBOM Reachability tests can also be initiated using
+        UploadResources if using the File Upload API.
+
+        Test subject for SBOM test with reachability analysis.
       properties:
         code_bundle_id:
           description: Source code to inspect for the reach of the vulnerable dependencies.
@@ -1883,7 +2147,16 @@ components:
       - locator
       type: object
     SbomSubject:
-      description: Test subject for SBOM test without reachability analysis.
+      description: |-
+        **Deprecated**
+
+        Provide a BundleResource with SBOM Bundle ID and include
+        SCA Scan Configuration instead.
+
+        SBOM tests can also be initiated using an
+        UploadResource if using the File Upload API.
+
+        Test subject for SBOM test without reachability analysis.
       properties:
         locator:
           allOf:
@@ -1904,8 +2177,23 @@ components:
       - locator
       type: object
     ScaScanConfiguration:
+      description: Scan configuration parameters for the SCA scanner.
       type: object
     ScanConfiguration:
+      description: |-
+        A map of scanner types to their specific set of
+        configuration parameters.
+
+        The presence of a scanner's configuration in the
+        provided ScanConfiguration is used to determine what scans
+        to run on the list of Resources provided.
+
+        Note that an empty config object is different than
+        omitting the field. An omitted scanner config results in
+        that scanner not being run. A provided empty scan config
+        will run the scanner if it is possible.
+      example:
+        secrets: {}
       properties:
         container:
           $ref: '#/components/schemas/ContainerScanConfiguration'
@@ -1917,6 +2205,22 @@ components:
           $ref: '#/components/schemas/ScaScanConfiguration'
         secrets:
           $ref: '#/components/schemas/SecretsScanConfiguration'
+      type: object
+    ScmContext:
+      description: |-
+        Additional SCM information about a resource.
+        Provides context about where the content came from; the resource itself is the testable item.
+        ScmResource does not use this; it identifies SCM via its own fields.
+      properties:
+        branch:
+          maxLength: 256
+          type: string
+        commit_ref:
+          maxLength: 1024
+          type: string
+        repo_url:
+          maxLength: 1024
+          type: string
       type: object
     ScmRepoLocator:
       description: ScmRepoLocator locates a test subject by SCM repository coordinates.
@@ -1941,23 +2245,55 @@ components:
       - url
       type: object
     ScmResource:
+      description: |-
+        Resource representing a repository of source files located in
+        a Source Code Management tool (e.g. GitHub).
+
+        ScmResources provide Snyk with the requisite information to
+        locate and scan the source files located in the repository.
+
+        Currently supported scans utilizing ScmResources are:
+        - SAST scans on (1) ScmResource that references a repo already
+        imported into Snyk
+      example:
+        commit: 8dbd1ea7201a0d49603467981075a633d91e40b9
+        file_patterns: []
+        integration_id: 00000000-0000-0000-0000-000000000000
+        ref: main
+        repo_url: https://github.com/example/repo
+        type: scm
       properties:
         commit:
+          description: Commit hash to reference specifically.
           maxLength: 1024
           type: string
         file_patterns:
+          description: |-
+            File Patterns to include in the scan.
+
+            Currently unsupported. Provide an empty list.
           items:
             type: string
           maxItems: 20
           type: array
         integration_id:
+          description: |-
+            Integration ID assigned to the specific SCM.
+            This ID can be found in the Snyk UI by navigating to
+            "Settings" > "Integrations" > "<Your SCM>"
+
+            The ID will be displayed under "General" > "Integration ID"
           format: uuid
           type: string
         ref:
+          description: |-
+            Ref contains a branch name or other non-commit hash reference
+            to a version of the content.
           maxLength: 1024
           type: string
         repo_url:
-          format: url
+          description: URL at which the repository can be found in the SCM.
+          example: https://github.com/snyk/cli
           maxLength: 1024
           type: string
         type:
@@ -1969,6 +2305,16 @@ components:
       - repo_url
       - integration_id
       type: object
+    SdlcStage:
+      description: SDLC stage where the test was initiated.
+      enum:
+      - ide
+      - cli
+      - pr_check
+      - ci_cd
+      - mcp
+      - other
+      type: string
     SecretsRuleProblem:
       description: Secret rule that produces a Secret finding.
       properties:
@@ -1981,18 +2327,23 @@ components:
           maxItems: 10
           type: array
         help:
+          description: Assistance on resolving the finding.
           type: string
         id:
           type: string
         name:
+          description: Name for the kind of finding uncovered.
           type: string
         precision:
           description: A qualitative description of the rule's precision.
           example: very-high
           type: string
         severity:
-          $ref: '#/components/schemas/Severity'
+          allOf:
+          - $ref: '#/components/schemas/Severity'
+          description: Severity level of the finding.
         short_description:
+          description: Short description of the found Secret's type.
           type: string
         source:
           enum:
@@ -2018,6 +2369,7 @@ components:
       - categories
       type: object
     SecretsScanConfiguration:
+      description: Scan configuration parameters for the Secrets scanner.
       type: object
     Severity:
       description: Indicate the severity of a finding discovered by a Test.
@@ -2219,16 +2571,41 @@ components:
       - owner
       type: object
     SnykReferenceResource:
+      description: |-
+        SnykReferenceResources contain references to source code,
+        containers, SBOMs, and other testable content that has already
+        been provided to Snyk to create a Project or Target.
+
+        If the intended content to test is already known to Snyk as a
+        Project, Target, or otherwise, this SnykReferenceResource can
+        be used to initiate a Test with the appropriate ID.
+
+        Currently no scans are supported through the Test API for
+        SnykReferenceResources.
+      example:
+        ref_id: 00000000-0000-0000-0000-000000000000
+        reference_type: project
+        type: snyk_ref
       properties:
         ref_id:
+          description: ID referring the contents already known by Snyk.
           format: uuid
           type: string
         reference_type:
+          description: |-
+            Kind of Snyk reference contained in Ref ID.
+
+            Targets and Projects exist in Snyk currently.
+
+            Assets are a feature in-development, and are listed
+            here for future-forward compatibility.
           enum:
           - target
           - project
           - asset
           type: string
+        scm_context:
+          $ref: '#/components/schemas/ScmContext'
         type:
           enum:
           - snyk_ref
@@ -2618,6 +2995,15 @@ components:
             blocking an outcome).
           readOnly: true
         resources:
+          description: |-
+            The units of testable content to be scanned by Snyk.
+
+            Resources are provided in conjunction with the ScanConfiguration,
+            and appropriate scans to run are determined from that combination.
+
+            There is a "best-fit" approach taken, and not all Resources will be
+            scanned by all requested scanners. E.g. Container resources cannot be
+            scanned by the SAST scanner.
           example:
           - resource:
               content_type: source
@@ -2635,6 +3021,10 @@ components:
           items:
             $ref: '#/components/schemas/TestResource'
           type: array
+        sdlc_stage:
+          allOf:
+          - $ref: '#/components/schemas/SdlcStage'
+          description: SDLC stage where the test was initiated.
         state:
           allOf:
           - $ref: '#/components/schemas/TestState'
@@ -2643,9 +3033,21 @@ components:
         subject:
           allOf:
           - $ref: '#/components/schemas/TestSubject'
-          description: The subject of a test.
+          description: |-
+            **Deprecated**
+
+            Use an equivalent combination of Resources and
+            Scan Configurations instead. See Subject descriptions
+            for appropriate replacements.
+
+            The subject of a test.
         subject_locators:
           description: |-
+            **Deprecated**
+
+            Metadata about testable content is located on
+            Resources directly.
+
             Additional locators which may help locate the test subject across test workflows.
 
             Test subjects generally will have a primary locator. Additional locators
@@ -2664,6 +3066,10 @@ components:
             $ref: '#/components/schemas/TestFact'
           readOnly: true
           type: array
+        user_public_id:
+          description: Public identifier of the user who initiated the test.
+          maxLength: 64
+          type: string
       required:
       - created_at
       - state
@@ -2678,6 +3084,15 @@ components:
             The test configuration. If not specified, caller accepts test configuration
             defaults within the calling scope (org, group or tenant settings, etc).
         resources:
+          description: |-
+            The units of testable content to be scanned by Snyk.
+
+            Resources are provided in conjunction with the ScanConfiguration,
+            and appropriate scans to run are determined from that combination.
+
+            There is a "best-fit" approach taken, and not all Resources will be
+            scanned by all requested scanners. E.g. Container resources cannot be
+            scanned by the SAST scanner.
           example:
           - resource:
               content_type: source
@@ -2695,12 +3110,28 @@ components:
           items:
             $ref: '#/components/schemas/TestResourceCreateItem'
           type: array
+        sdlc_stage:
+          allOf:
+          - $ref: '#/components/schemas/SdlcStage'
+          description: SDLC stage where the test was initiated.
         subject:
           allOf:
           - $ref: '#/components/schemas/TestSubjectCreate'
-          description: The subject of a test.
+          description: |-
+            **Deprecated**
+
+            Use an equivalent combination of Resources and
+            Scan Configurations instead. See Subject descriptions
+            for appropriate replacements.
+
+            The subject of a test.
         subject_locators:
           description: |-
+            **Deprecated**
+
+            Metadata about testable content is located on
+            Resources directly.
+
             Additional locators which may help locate the test subject across test workflows.
 
             Test subjects generally will have a primary locator. Additional locators
@@ -2713,6 +3144,10 @@ components:
           items:
             $ref: '#/components/schemas/TestSubjectLocator'
           type: array
+        user_public_id:
+          description: Public identifier of the user who initiated the test.
+          maxLength: 64
+          type: string
       type: object
     TestConfiguration:
       description: Test configuration.
@@ -2855,6 +3290,9 @@ components:
       anyOf:
       - $ref: '#/components/schemas/BaseResource'
       - $ref: '#/components/schemas/DiffResource'
+      description: |-
+        TestResources contain single instances of testable content
+        to be provided to Snyk scanners.
       discriminator:
         mapping:
           base: '#/components/schemas/BaseResource'
@@ -2864,6 +3302,9 @@ components:
       anyOf:
       - $ref: '#/components/schemas/BaseResourceCreateItem'
       - $ref: '#/components/schemas/DiffResourceCreateItem'
+      description: |-
+        TestResources contain single instances of testable content
+        to be provided to Snyk scanners.
       discriminator:
         mapping:
           base: '#/components/schemas/BaseResourceCreateItem'
@@ -3025,30 +3466,87 @@ components:
       - is_drop
       type: object
     UploadResource:
+      description: |-
+        Resource referring to an Upload Revision created through the
+        File Upload API (currently in Closed Beta).
+
+        Revisions contain collections of files uploaded by clients to
+        Snyk for testing.
+
+        UploadResources can be marked either as SBOM or Source to
+        indicate the contents of the Revision.
+
+        SBOM UploadResources should provide the following fields:
+        - type
+        - revision_id
+        - name
+        - file_patterns (may be empty)
+
+        Source UploadResources should provide the following fields:
+        - type
+        - revision_id
+        - repository_url
+        - root_folder_id
+        - file_patterns (may be empty)
+
+        Currently supported scans utilizing UploadResources are:
+        - SBOM (SCA): (1) UploadResource containing an SBOM
+        - SBOM + Reachability Analysis (SCA): (1) UploadResource containing an SBOM, (1) UploadResource containing Source files.
+        - Secrets: (1) UploadResource containing Source files
+      example:
+        content_type: source
+        file_patterns: []
+        repository_url: https://github.com/example/repo
+        revision_id: 00000000-0000-0000-0000-000000000000
+        root_folder_id: .
+        type: upload
       properties:
         content_type:
+          description: |-
+            Content present in the Upload Revision.
+
+            Currently only SBOMs and Source files are accepted
+            content types.
           enum:
           - sbom
           - source
           type: string
         file_patterns:
+          description: |-
+            File Patterns to include in the scan.
+
+            Currently unsupported. Provide an empty list.
           items:
             type: string
           maxItems: 20
           type: array
         name:
+          description: |-
+            A name to assign to the SBOM contained in the UploadRevision.
+
+            Overrides the filename in the UploadRevision.
           maxLength: 256
           type: string
         repository_url:
-          format: url
+          description: Repository URL at which the Source files are stored.
           maxLength: 1024
           type: string
         revision_id:
+          description: |-
+            The ID returned from the File Upload API for a given Revision.
+            The File Upload API is released in Closed Beta.
+            Customers with access may view the preview documentation for
+            information on its usage.
+          example: 5025c59b-c4dd-48e3-b98a-e98d838f4c9b
           maxLength: 1024
           type: string
         root_folder_id:
+          description: Folder inside the UploadRevision at which the Source files
+            are located.
           maxLength: 1024
           type: string
+        scm_context:
+          $ref: '#/components/schemas/ScmContext'
         type:
           enum:
           - upload
@@ -3700,7 +4198,20 @@ paths:
       - OpenAPI
   /orgs/{org_id}/test_jobs/{job_id}:
     get:
-      description: Get a test job.
+      description: |-
+        Get a test job.
+
+        The Test API is Asynchronous, and Tests begun through the API
+        are assigned a Job ID which references the in-progress Test. The
+        Job ID is provided in a successful response from the CreateTest
+        endpoint.
+
+        This endpoint is used to poll for the status of a Test using its
+        associated Job ID.
+
+        When the Job is Finished and the Test is ready for consumption,
+        the Related link will be populated in the response with a link
+        to the finished Test entity.
       operationId: getJob
       parameters:
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
@@ -3842,7 +4353,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
-      - '@cmars'
+      - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -3851,7 +4362,20 @@ paths:
       x-stability-level: beta
   /orgs/{org_id}/tests:
     post:
-      description: Create a new test.
+      description: |-
+        Create a new test.
+
+        Provide the items to be tested by Snyk as well as any configuration
+        parameters for the test to be run.
+
+        Currently, scans using the Open Source (SCA) and Code Analysis (SAST)
+        scanners can be run using the Test API.
+
+        Tests begun through the Test API yield lists of Findings when
+        finished. These Findings can be retrieved using the ListFindings endpoint.
+
+        Successfully creating a new Test will yield a Job ID that can be used
+        to poll for the Test's completion via the GetJob endpoint.
       operationId: createTest
       parameters:
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
@@ -3971,7 +4495,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
-      - '@cmars'
+      - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -3980,7 +4504,26 @@ paths:
       x-stability-level: beta
   /orgs/{org_id}/tests/{test_id}:
     get:
-      description: Get a test.
+      description: |-
+        Get a test.
+
+        A Test returned through this endpoint is intended to
+        be a completed Test with results. The data returned through
+        this endpoint does not contain the Findings for the Test, but
+        a description of the Test that was run and its status.
+
+        Tests that completed successfully are marked with an appropriate
+        outcome according to the configured Thresholds.
+
+        Facts about the Test (e.g. how many dependencies were present in
+        a Tested SBOM) are attached to this response as well as a summary
+        of the Findings uncovered during the Test.
+
+        Any Errors or Warnings that occurred during the Test will be present in the
+        response from this endpoint.
+
+        The response will also contain a link to the first page of the Test's
+        Findings.
       operationId: getTest
       parameters:
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
@@ -4073,7 +4616,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
-      - '@cmars'
+      - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -4082,7 +4625,25 @@ paths:
       x-stability-level: beta
   /orgs/{org_id}/tests/{test_id}/findings:
     get:
-      description: List findings for a test.
+      description: |-
+        List findings for a test.
+
+        Test Findings are scanner-agnostic representations of
+        vulnerabilities and organization-level policy breaches.
+        When Snyk runs a Test, the results of that Test are
+        formatted into Findings.
+
+        This endpoint returns pages of Findings associated with
+        a given Test ID. Findings are returned in sorted order by
+        ID, with page size equal to the provided Limit query parameter.
+        Page size is 10 Findings by default if no parameter is provided.
+
+        Note that the Findings returned from this endpoint are only the
+        Findings that are _not_ suppressed by policy and are _not_
+        in violation of a set Test threshold (like Severity or Risk Score).
+
+        To retrieve the next (or previous) page of Findings, utilize the
+        Next and Prev links returned in the response.
       operationId: listFindings
       parameters:
       - $ref: '#/components/parameters/io.snyk.api.request.SnykApiRequest.request_id'
@@ -4173,7 +4734,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
-      - '@cmars'
+      - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests

@@ -86,17 +86,9 @@ func getDefaultWriter(config configuration.Configuration, outputDestination iUti
 		writer: &newLineCloser{
 			writer: outputDestination.GetWriter(),
 		},
-		mimeType:        DEFAULT_MIME_TYPE,
+		mimeType:        getDefaultWriterMimeType(config),
 		renderEmptyData: true,
 		name:            DEFAULT_WRITER,
-	}
-
-	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
-		writer.mimeType = SARIF_MIME_TYPE
-	}
-
-	if config.GetBool(OUTPUT_CONFIG_KEY_JSON) {
-		writer.mimeType = JSON_MIME_TYPE
 	}
 
 	if config.IsSet(OUTPUT_CONFIG_TEMPLATE_FILE) {
@@ -186,4 +178,21 @@ func applyTemplatesToWriters(supportedMimeTypes []MimeType2Template, writers Wri
 		}
 	}
 	return writerMap
+}
+
+func getDefaultWriterMimeType(config configuration.Configuration) string {
+	if config.GetBool(OUTPUT_CONFIG_KEY_SARIF) {
+		return SARIF_MIME_TYPE
+	}
+
+	if config.GetBool(OUTPUT_CONFIG_KEY_JSON) {
+		return JSON_MIME_TYPE
+	}
+
+	return DEFAULT_MIME_TYPE
+}
+
+func DefaultOutputIsStructured(config configuration.Configuration) bool {
+	mimetype := getDefaultWriterMimeType(config)
+	return slices.Contains(structuredContent, mimetype)
 }

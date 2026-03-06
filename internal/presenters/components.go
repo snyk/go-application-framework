@@ -47,6 +47,12 @@ type SarifPresenter struct {
 
 const valueStyleWidth = 80
 
+var urlPattern = regexp.MustCompile(`https?://[^\s]+`)
+
+func containsURL(text string) bool {
+	return urlPattern.MatchString(text)
+}
+
 func errorLevelToStyle(errLevel string) lipgloss.Style {
 	style := lipgloss.NewStyle().
 		PaddingLeft(1).
@@ -92,9 +98,12 @@ func RenderError(err snyk_errors.Error, ctx context.Context) string {
 
 	if len(err.Detail) > 0 {
 		detailValue := lipgloss.NewStyle().PaddingLeft(3).PaddingRight(1)
+		if !containsURL(err.Detail) {
+			detailValue = detailValue.Width(valueStyleWidth)
+		}
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
 			label.Render("\n"),
-			detailValue.Copy().Width(valueStyleWidth).Render("\n"+err.Detail),
+			detailValue.Render("\n"+err.Detail),
 		))
 	}
 

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-
+	"github.com/snyk/go-application-framework/internal/ufm_helpers"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
@@ -271,7 +271,7 @@ func getSarifTemplateFuncMap() template.FuncMap {
 	fnMap["buildRuleTags"] = sarif.BuildRuleTags
 	fnMap["getRuleCVSSScore"] = sarif.GetRuleCVSSScore
 	fnMap["buildLocationFromIssue"] = sarif.BuildLocation
-	fnMap["buildFixesFromIssue"] = sarif.BuildFixesFromIssue
+	fnMap["buildFixFromIssue"] = sarif.BuildFixFromIssue
 	fnMap["formatIssueMessage"] = sarif.FormatIssueMessage
 	return fnMap
 }
@@ -283,6 +283,9 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["toLowerCase"] = strings.ToLower
 	fnMap["list"] = func(args ...testapi.FindingType) []testapi.FindingType { return args }
 	fnMap["renderInSeverityColor"] = renderSeverityColor
+	fnMap["colorBySeverity"] = renderInSeverityColor // 2-arg version from styles.go
+	fnMap["renderGreen"] = renderGreen
+	fnMap["renderGray"] = renderGray
 	fnMap["bold"] = renderBold
 	fnMap["tip"] = func(s string) string {
 		return RenderTip(s + "\n")
@@ -354,6 +357,7 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["convertTypeToIssueName"] = convertTypeToIssueName
 	defaultMap["sortAndFilterIssues"] = sortAndFilterIssues(config)
 	defaultMap["determineProductNameFromFindingTypes"] = determineProductNameFromFindingTypes
+	defaultMap["getRemediationSummary"] = ufm_helpers.GetRemediationSummary
 	defaultMap["getSeverities"] = func() []string {
 		return json_schemas.DEFAULT_SEVERITIES
 	}
@@ -503,18 +507,18 @@ func formatDatetime(input string, inputFormat string, outputFormat string) strin
 func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.FindingType {
 	findingTypes := map[testapi.FindingType]bool{}
 
-	// todo: this is potentially an expensive intermediate conversion to issues, which we could cache or optimize differently.
-	issues, err := testapi.NewIssuesFromTestResult(context.Background(), testResults)
-	if err != nil {
-		return []testapi.FindingType{}
+	// Add finding types from ScanConfiguration
+	for _, t := range getDefaultFindingTypesFromConfig(testResults) {
+		findingTypes[t] = true
 	}
 
-	for _, i := range issues {
-		t := i.GetFindingType()
-		if _, ok := findingTypes[t]; ok {
-			continue
+	// Add finding types derived from actual findings
+	// todo: this is potentially an expensive intermediate conversion to issues, which we could cache or optimize differently.
+	issues, err := testapi.NewIssuesFromTestResult(context.Background(), testResults)
+	if err == nil {
+		for _, i := range issues {
+			findingTypes[i.GetFindingType()] = true
 		}
-		findingTypes[t] = true
 	}
 
 	findingTypesList := slices.Collect(maps.Keys(findingTypes))
@@ -526,4 +530,15 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 	slices.Reverse(findingTypesList)
 
 	return findingTypesList
+}
+
+func getDefaultFindingTypesFromConfig(testResults testapi.TestResult) []testapi.FindingType {
+	if testResults == nil {
+		return nil
+	}
+	config := testResults.GetTestConfiguration()
+	if config == nil || config.ScanConfig == nil {
+		return nil
+	}
+	return config.ScanConfig.GetDefaultFindingTypes()
 }

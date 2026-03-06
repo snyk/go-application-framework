@@ -79,4 +79,72 @@ func Test_RenderError(t *testing.T) {
 		assert.Contains(t, output, "ID:")
 		snaps.MatchSnapshot(t, output)
 	})
+
+	t.Run("detail with URL should not break URL", func(t *testing.T) {
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		lipgloss.SetHasDarkBackground(false)
+		err := snyk.NewBadRequestError("Error description")
+		err.Detail = "For more information see https://docs.snyk.io/getting-started/supported-languages-frameworks-and-feature-availability-overview#code-analysis-snyk-code-with-a-very-long-url-that-would-normally-wrap"
+		output := RenderError(err, defaultContext)
+
+		// URL should be on a single line without breaking
+		assert.Contains(t, output, "https://docs.snyk.io/getting-started/supported-languages-frameworks-and-feature-availability-overview#code-analysis-snyk-code-with-a-very-long-url-that-would-normally-wrap")
+		snaps.MatchSnapshot(t, output)
+	})
+
+	t.Run("detail without URL should apply width constraint", func(t *testing.T) {
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		lipgloss.SetHasDarkBackground(false)
+		err := snyk.NewBadRequestError("Error description")
+		err.Detail = "This is a long detail message without any URLs that should be wrapped according to the normal width constraints for better readability in the terminal"
+		output := RenderError(err, defaultContext)
+
+		snaps.MatchSnapshot(t, output)
+	})
+}
+
+func Test_containsURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		expected bool
+	}{
+		{
+			name:     "contains http URL",
+			text:     "Visit http://example.com for more info",
+			expected: true,
+		},
+		{
+			name:     "contains https URL",
+			text:     "See https://docs.snyk.io/some/path for details",
+			expected: true,
+		},
+		{
+			name:     "no URL",
+			text:     "This is just plain text without any links",
+			expected: false,
+		},
+		{
+			name:     "URL with query parameters",
+			text:     "Check https://example.com?param=value&other=123",
+			expected: true,
+		},
+		{
+			name:     "URL with fragment",
+			text:     "See https://example.com/path#section",
+			expected: true,
+		},
+		{
+			name:     "empty string",
+			text:     "",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := containsURL(tt.text)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

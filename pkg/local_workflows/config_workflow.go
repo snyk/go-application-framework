@@ -38,7 +38,7 @@ func InitConfigWorkflow(engine workflow.Engine) error {
 	engine.GetConfiguration().AddAlternativeKeys(environmentAlias, []string{configuration.INPUT_DIRECTORY})
 
 	// register workflow with engine
-	flags := pflag.NewFlagSet(codeWorkflowName, pflag.ExitOnError)
+	flags := pflag.NewFlagSet(configEnvWorkflowName, pflag.ExitOnError)
 	flags.Bool(noCheckFlag, false, "use to disable sanity checks")
 	_, err := engine.Register(WORKFLOWID_CONFIG_ENVIRONMENT, workflow.ConfigurationOptionsFromFlagset(flags), configEnvironmentWorkflowEntryPoint)
 	return err

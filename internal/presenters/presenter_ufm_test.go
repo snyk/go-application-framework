@@ -548,6 +548,12 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			testResultPath:     "testdata/ufm/secrets.testresult.json",
 			ignoreSuppressions: true,
 		},
+		{
+			name:               "secrets",
+			expectedSarifPath:  "testdata/ufm/secrets.0findings.sarif.json",
+			testResultPath:     "testdata/ufm/secrets.0findings.testresult.json",
+			ignoreSuppressions: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1100,16 +1106,32 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
 	testCases := []struct {
-		name               string
-		expectedPath       string
-		testResultPath     string
-		ignoreSuppressions bool
+		name              string
+		expectedPath      string
+		testResultPath    string
+		includeIgnores    bool
+		severityThreshold string
 	}{
 		{
-			name:               "cli",
-			expectedPath:       "testdata/ufm/webgoat.ignore.human.readable",
-			testResultPath:     "testdata/ufm/webgoat.ignore.testresult.json",
-			ignoreSuppressions: true,
+			name:              "cli",
+			expectedPath:      "testdata/ufm/webgoat.ignore.human.readable",
+			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "medium",
+		},
+		{
+			name:              "secrets",
+			expectedPath:      "testdata/ufm/secrets.human.readable",
+			testResultPath:    "testdata/ufm/secrets.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "",
+		},
+		{
+			name:              "multi_project",
+			expectedPath:      "testdata/ufm/multi_project.human.readable",
+			testResultPath:    "testdata/ufm/multi_project.testresult.json",
+			includeIgnores:    false,
+			severityThreshold: "",
 		},
 	}
 
@@ -1126,7 +1148,10 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 			config := configuration.NewWithOpts()
 			config.Set(configuration.ORGANIZATION_SLUG, "My Org")
-			config.Set(configuration.FLAG_SEVERITY_THRESHOLD, "medium")
+			if tc.severityThreshold != "" {
+				config.Set(configuration.FLAG_SEVERITY_THRESHOLD, tc.severityThreshold)
+			}
+			config.Set(configuration.FLAG_INCLUDE_IGNORES, tc.includeIgnores)
 
 			writer := &bytes.Buffer{}
 
