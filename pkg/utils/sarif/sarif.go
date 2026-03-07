@@ -493,28 +493,35 @@ func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 	}
 }
 
-// BuildLocation constructs a SARIF location object from issue data
-//
-//nolint:gocyclo // needs the global state for package name and version
-func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{} {
-	// Extract first finding from issue
-	findings := issue.GetFindings()
-	if len(findings) == 0 {
+// GetElementAtIndex returns an item from a slice at the given index
+func GetElementAtIndex(slice []map[string]any, index int) map[string]any {
+	if index < 0 || index >= len(slice) {
 		return nil
 	}
-	finding := findings[0]
+	return slice[index]
+}
 
+// BuildLocations constructs a list of SARIF locations from issue data
+func BuildLocations(issue testapi.Issue, targetFile string) []map[string]any {
+	packageName, packageVersion := getPackageNameAndVersionFromIssue(issue)
+	locations := []map[string]any{}
+	for _, finding := range issue.GetFindings() {
+		locations = append(locations, buildLocation(finding, targetFile, packageName, packageVersion))
+	}
+	return locations
+}
+
+// buildLocation constructs a SARIF location object from issue data
+func buildLocation(issue *testapi.FindingData, targetFile string, packageName, packageVersion string) map[string]any {
 	// Default to line 1 for manifest files
 	uri := targetFile
-	region := map[string]interface{}{
+	region := map[string]any{
 		"startLine": 1,
 	}
 
-	packageName, packageVersion := getPackageNameAndVersionFromIssue(issue)
-
 	// Try to extract actual file path and package version from locations
-	if finding.Attributes != nil && len(finding.Attributes.Locations) > 0 && uri == "" {
-		loc := finding.Attributes.Locations[0]
+	if issue.Attributes != nil && len(issue.Attributes.Locations) > 0 && uri == "" {
+		loc := issue.Attributes.Locations[0]
 
 		// Try source location first
 		sourceLoc, err := loc.AsSourceLocation()
@@ -543,11 +550,11 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 		}
 	}
 
-	location := map[string]interface{}{}
+	location := map[string]any{}
 
 	if len(uri) > 0 {
-		location["physicalLocation"] = map[string]interface{}{
-			"artifactLocation": map[string]interface{}{
+		location["physicalLocation"] = map[string]any{
+			"artifactLocation": map[string]any{
 				"uri": uri,
 			},
 			"region": region,
@@ -555,8 +562,8 @@ func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{
 	}
 
 	if packageName != "" || packageVersion != "" {
-		location["logicalLocations"] = []interface{}{
-			map[string]interface{}{
+		location["logicalLocations"] = []any{
+			map[string]any{
 				"fullyQualifiedName": fmt.Sprintf("%s@%s", packageName, packageVersion),
 			},
 		}
