@@ -100,7 +100,7 @@ func (f *FakeSealableClient) UploadFiles(_ context.Context, orgID OrgID, revisio
 	}
 
 	for _, file := range files {
-		bts, err := io.ReadAll(file.File)
+		bts, err := io.ReadAll(&crlfNormReader{r: file.File})
 		if err != nil {
 			return err
 		}
