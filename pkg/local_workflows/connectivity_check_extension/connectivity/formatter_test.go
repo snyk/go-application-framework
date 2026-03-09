@@ -65,6 +65,17 @@ type parsedFormatterOutput struct {
 	orgResults   []parsedOrgRow
 }
 
+func (o parsedFormatterOutput) assertDoesNotContainSubstring(t *testing.T, substring string) {
+	t.Helper()
+	for section := range o.sectionLines {
+		for _, line := range o.sectionLines[section] {
+			if strings.Contains(line, substring) {
+				assert.Fail(t, "Output contains substring", "Unexpectedly found: '%s', within line: '%s', within section: '%s'", substring, line, sectionLabel(section))
+			}
+		}
+	}
+}
+
 func parseFormatterOutput(t *testing.T, buf *bytes.Buffer, expectOrgSection bool) parsedFormatterOutput {
 	t.Helper()
 
@@ -72,8 +83,8 @@ func parseFormatterOutput(t *testing.T, buf *bytes.Buffer, expectOrgSection bool
 
 	parsed := parsedFormatterOutput{
 		sectionLines: sectionLines,
-		envResults:   parseEnvVars(sectionLines[sectionProxyConfig]),
-		hostResults:  parseHostResults(sectionLines[sectionHostResults]),
+		envResults:   parseEnvVars(t, sectionLines[sectionProxyConfig]),
+		hostResults:  parseHostResults(t, sectionLines[sectionHostResults]),
 	}
 
 	if expectOrgSection {
@@ -128,7 +139,8 @@ func processOutputIntoSections(t *testing.T, buf *bytes.Buffer, expectOrgSection
 	return sectionLines
 }
 
-func parseEnvVars(lines []string) map[string]string {
+func parseEnvVars(t *testing.T, lines []string) map[string]string {
+	t.Helper()
 	envVars := make(map[string]string)
 	for _, line := range lines {
 		colonIdx := strings.Index(line, ":")
@@ -140,12 +152,15 @@ func parseEnvVars(lines []string) map[string]string {
 		if key == "" || key == "Environment variables" {
 			continue
 		}
+
+		require.NotContains(t, envVars, key, "Duplicate environment variable key in output")
 		envVars[key] = val
 	}
 	return envVars
 }
 
-func parseHostResults(lines []string) map[string]string {
+func parseHostResults(t *testing.T, lines []string) map[string]string {
+	t.Helper()
 	results := make(map[string]string)
 	for _, normalized := range lines {
 		if strings.Contains(normalized, "---") || strings.Contains(normalized, "──") {
@@ -162,6 +177,7 @@ func parseHostResults(lines []string) map[string]string {
 			continue
 		}
 
+		require.NotContains(t, results, host, "Duplicate host key in output")
 		results[host] = strings.Join(fields[1:], " ")
 	}
 	return results
@@ -228,6 +244,9 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				}
 				assert.Contains(t, parsed.sectionLines[sectionProxyConfig], "✓ Proxy detected via HTTPS_PROXY: http://proxy.example.com:8080")
 				assert.Contains(t, parsed.sectionLines[sectionProxyConfig], "Testing connectivity through proxy...")
+
+				parsed.assertDoesNotContainSubstring(t, "No proxy detected")
+				parsed.assertDoesNotContainSubstring(t, "Testing direct connection...")
 			},
 		},
 		{
@@ -239,6 +258,8 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				t.Helper()
 				assert.Contains(t, parsed.sectionLines[sectionProxyConfig],
 					"ℹ No proxy detected - Testing direct connection...")
+
+				parsed.assertDoesNotContainSubstring(t, "Proxy detected via")
 			},
 		},
 
@@ -256,9 +277,10 @@ func Test_Formatter_FormatResult(t *testing.T) {
 			},
 			assertions: func(t *testing.T, parsed parsedFormatterOutput) {
 				t.Helper()
-				assert.NotContains(t, parsed.hostResults, "api.eu.snyk.io")
 				require.Contains(t, parsed.hostResults, "api.snyk.io")
 				assert.Equal(t, "OK (HTTP 200)", parsed.hostResults["api.snyk.io"])
+
+				assert.NotContains(t, parsed.hostResults, "api.eu.snyk.io")
 			},
 		},
 		{
@@ -327,7 +349,6 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				t.Helper()
 				require.Contains(t, parsed.hostResults, "api.snyk.io")
 				assert.Equal(t, "TIMEOUT", parsed.hostResults["api.snyk.io"])
-				assert.NotContains(t, parsed.hostResults["api.snyk.io"], "HTTP")
 			},
 		},
 
@@ -341,6 +362,8 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				t.Helper()
 				assert.Contains(t, parsed.sectionLines[sectionTODOs],
 					"All checks passed. Your network configuration appears to be compatible with Snyk CLI.")
+
+				parsed.assertDoesNotContainSubstring(t, "FAIL:")
 			},
 		},
 		{
@@ -355,8 +378,10 @@ func Test_Formatter_FormatResult(t *testing.T) {
 			},
 			assertions: func(t *testing.T, parsed parsedFormatterOutput) {
 				t.Helper()
-				assert.NotContains(t, parsed.sectionLines[sectionTODOs], "All checks passed. Your network configuration appears to be compatible with Snyk CLI.")
 				assert.Contains(t, parsed.sectionLines[sectionTODOs], "FAIL: DNS resolution failed for 'api.snyk.io'")
+
+				parsed.assertDoesNotContainSubstring(t, "All checks passed.")
+				parsed.assertDoesNotContainSubstring(t, "Your network configuration appears to be compatible with Snyk CLI.")
 			},
 		},
 		{
@@ -394,6 +419,9 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				assert.Contains(t, parsed.sectionLines[sectionTODOs], "INFO: informational note")
 				assert.Contains(t, parsed.sectionLines[sectionTODOs], "WARN: warning note")
 				assert.Contains(t, parsed.sectionLines[sectionTODOs], "FAIL: failure note")
+
+				parsed.assertDoesNotContainSubstring(t, "All checks passed.")
+				parsed.assertDoesNotContainSubstring(t, "Your network configuration appears to be compatible with Snyk CLI.")
 			},
 		},
 
@@ -403,6 +431,12 @@ func Test_Formatter_FormatResult(t *testing.T) {
 			result: &ConnectivityCheckResult{
 				TokenPresent:  false,
 				OrgCheckError: nil,
+			},
+			assertions: func(t *testing.T, parsed parsedFormatterOutput) {
+				t.Helper()
+				assert.NotContains(t, parsed.sectionLines, sectionOrganizations) // Just to double check.
+
+				parsed.assertDoesNotContainSubstring(t, "Authentication token is configured")
 			},
 		},
 		{
@@ -424,6 +458,9 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				t.Helper()
 				assert.Contains(t, parsed.sectionLines[sectionOrganizations], "✓ Authentication token is configured")
 				assert.Contains(t, parsed.sectionLines[sectionOrganizations], "Found 1 organizations:")
+
+				parsed.assertDoesNotContainSubstring(t, "No organizations found")
+
 				require.Len(t, parsed.orgResults, 1)
 				assert.Equal(t, "group-1", parsed.orgResults[0].GroupID)
 				assert.Equal(t, "org-1", parsed.orgResults[0].OrgID)
@@ -443,6 +480,8 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				t.Helper()
 				assert.Contains(t, parsed.sectionLines[sectionOrganizations], "✓ Authentication token is configured")
 				assert.Contains(t, parsed.sectionLines[sectionOrganizations], "✗ Failed to fetch organizations: 401 Unauthorized")
+
+				parsed.assertDoesNotContainSubstring(t, "Found 1 organizations:")
 			},
 		},
 		{
@@ -456,6 +495,8 @@ func Test_Formatter_FormatResult(t *testing.T) {
 				t.Helper()
 				assert.Contains(t, parsed.sectionLines[sectionOrganizations], "✓ Authentication token is configured")
 				assert.Contains(t, parsed.sectionLines[sectionOrganizations], "No organizations found")
+
+				parsed.assertDoesNotContainSubstring(t, "Found 1 organizations:")
 			},
 		},
 		{
@@ -471,6 +512,9 @@ func Test_Formatter_FormatResult(t *testing.T) {
 			assertions: func(t *testing.T, parsed parsedFormatterOutput) {
 				t.Helper()
 				assert.Contains(t, parsed.sectionLines[sectionOrganizations], "Found 2 organizations:")
+
+				parsed.assertDoesNotContainSubstring(t, "No organizations found")
+
 				require.Len(t, parsed.orgResults, 2)
 
 				assert.Equal(t, "org-1", parsed.orgResults[0].OrgID)
