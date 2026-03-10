@@ -1,6 +1,7 @@
 package configresolver
 
 import (
+	"reflect"
 	"strconv"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -47,24 +48,29 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSo
 
 // ResolveBool is a typed convenience wrapper around Resolve.
 // Handles native bool, string representations ("true", "1", etc.),
-// and numeric types (e.g. float64 from JSON unmarshal where 1 is true and 0 is false).
+// and all Go numeric types (int*, uint*, float*) where non-zero means true.
 func (r *Resolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 	val, _ := r.Resolve(name, effectiveOrg, folderPath)
-	switch v := val.(type) {
-	case bool:
-		return v
-	case string:
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return false
-		}
-		return b
-	case int:
-		return v != 0
-	case int64:
-		return v != 0
-	case float64:
-		return v != 0
+	if val == nil {
+		return false
+	}
+	return anyToBool(val)
+}
+
+func anyToBool(val any) bool {
+	rv := reflect.ValueOf(val)
+	switch rv.Kind() {
+	case reflect.Bool:
+		return rv.Bool()
+	case reflect.String:
+		b, err := strconv.ParseBool(rv.String())
+		return err == nil && b
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return rv.Int() != 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return rv.Uint() != 0
+	case reflect.Float32, reflect.Float64:
+		return rv.Float() != 0
 	default:
 		return false
 	}

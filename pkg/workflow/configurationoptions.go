@@ -143,22 +143,31 @@ func (s *ConfigurationOptionsStore) Add(opt ConfigurationOptions) {
 	s.opts = append(s.opts, opt)
 }
 
-// Last-registered option wins, consistent with Viper's BindPFlags overwrite semantics.
+// ownerOf returns the index of the last-registered option that defines the named flag, or -1.
+// In pflag every flag has a type, so GetFlagType is a reliable existence check.
+// Must be called under s.mu (read-locked).
+func (s *ConfigurationOptionsStore) ownerOf(name string) int {
+	for i := len(s.opts) - 1; i >= 0; i-- {
+		if s.opts[i].GetFlagType(name) != "" {
+			return i
+		}
+	}
+	return -1
+}
+
+// Last-registered option that contains the flag wins completely — no metadata merging
+// across registrations. Consistent with Viper's BindPFlags overwrite semantics.
 func (s *ConfigurationOptionsStore) GetFlagAnnotation(name, annotation string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for i := len(s.opts) - 1; i >= 0; i-- {
-		if val, found := s.opts[i].GetFlagAnnotation(name, annotation); found {
-			return val, true
-		}
+	if idx := s.ownerOf(name); idx >= 0 {
+		return s.opts[idx].GetFlagAnnotation(name, annotation)
 	}
 	return "", false
 }
 
-// FlagsByAnnotation returns flags whose effective annotation matches the given value.
-// A flag is only included if its last-registered annotation equals value,
-// consistent with the "last-registered wins" rule used by GetFlagAnnotation.
+// FlagsByAnnotation returns flags whose owning (last-registered) option has the given annotation value.
 func (s *ConfigurationOptionsStore) FlagsByAnnotation(annotation, value string) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -174,61 +183,52 @@ func (s *ConfigurationOptionsStore) FlagsByAnnotation(annotation, value string) 
 		}
 	}
 
-	// Filter out flags whose effective annotation has been overridden by a later registration.
+	// Keep only flags whose owning option actually has this annotation value.
 	filtered := result[:0]
 	for _, name := range result {
-		if effective, found := s.getEffectiveAnnotation(name, annotation); found && effective == value {
-			filtered = append(filtered, name)
+		if idx := s.ownerOf(name); idx >= 0 {
+			if val, found := s.opts[idx].GetFlagAnnotation(name, annotation); found && val == value {
+				filtered = append(filtered, name)
+			}
 		}
 	}
 	return filtered
 }
 
-// getEffectiveAnnotation returns the annotation value from the last-registered option (unlocked, no mutex).
-func (s *ConfigurationOptionsStore) getEffectiveAnnotation(name, annotation string) (string, bool) {
-	for i := len(s.opts) - 1; i >= 0; i-- {
-		if val, found := s.opts[i].GetFlagAnnotation(name, annotation); found {
-			return val, true
-		}
-	}
-	return "", false
-}
-
-// Last-registered option wins, consistent with Viper's BindPFlags overwrite semantics.
+// Last-registered option that contains the flag wins — only returns a match if
+// the owning option carries the requested annotation value.
 func (s *ConfigurationOptionsStore) FlagNameByAnnotation(annotation, value string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for i := len(s.opts) - 1; i >= 0; i-- {
 		if name, found := s.opts[i].FlagNameByAnnotation(annotation, value); found {
-			return name, true
+			if s.ownerOf(name) == i {
+				return name, true
+			}
 		}
 	}
 	return "", false
 }
 
-// Last-registered option wins, consistent with Viper's BindPFlags overwrite semantics.
+// Last-registered option that contains the flag wins completely.
 func (s *ConfigurationOptionsStore) GetFlagType(name string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for i := len(s.opts) - 1; i >= 0; i-- {
-		if t := s.opts[i].GetFlagType(name); t != "" {
-			return t
-		}
+	if idx := s.ownerOf(name); idx >= 0 {
+		return s.opts[idx].GetFlagType(name)
 	}
 	return ""
 }
 
-// Last-registered option wins, consistent with Viper's BindPFlags overwrite semantics.
+// Last-registered option that contains the flag wins completely.
 func (s *ConfigurationOptionsStore) GetFlagUsage(name string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for i := len(s.opts) - 1; i >= 0; i-- {
-		if u := s.opts[i].GetFlagUsage(name); u != "" {
-			return u
-		}
+	if idx := s.ownerOf(name); idx >= 0 {
+		return s.opts[idx].GetFlagUsage(name)
 	}
 	return ""
 }

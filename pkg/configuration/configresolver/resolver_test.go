@@ -436,6 +436,27 @@ func Test_ResolveBool(t *testing.T) {
 		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), float64(0))
 		assert.False(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
 	})
+
+	t.Run("treats int32 1 as true", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), int32(1))
+		assert.True(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
+	})
+
+	t.Run("treats uint 1 as true", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), uint(1))
+		assert.True(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
+	})
+
+	t.Run("treats uint 0 as false", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), uint(0))
+		assert.False(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
+	})
 }
 
 // --- Cross-scope ---

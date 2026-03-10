@@ -201,3 +201,49 @@ func TestStore_LastRegisteredWins_GetFlagUsage(t *testing.T) {
 
 	assert.Equal(t, "second usage", store.GetFlagUsage("shared_flag"), "last-registered should win")
 }
+
+func TestStore_NoMetadataMerging_AnnotationDropped(t *testing.T) {
+	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
+	fs1.Bool("shared_flag", false, "first usage")
+	fs1.Lookup("shared_flag").Annotations = map[string][]string{
+		"config.scope":     {"org"},
+		"config.remoteKey": {"shared_flag"},
+	}
+
+	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
+	fs2.Bool("shared_flag", true, "second usage")
+	// fs2 intentionally omits all annotations
+
+	store := workflow.NewConfigurationOptionsStore(
+		workflow.ConfigurationOptionsFromFlagset(fs1),
+		workflow.ConfigurationOptionsFromFlagset(fs2),
+	)
+
+	_, found := store.GetFlagAnnotation("shared_flag", "config.scope")
+	assert.False(t, found, "annotation from earlier registration must not leak through")
+
+	_, found = store.GetFlagAnnotation("shared_flag", "config.remoteKey")
+	assert.False(t, found, "annotation from earlier registration must not leak through")
+
+	assert.Empty(t, store.FlagsByAnnotation("config.scope", "org"),
+		"flag should not appear under dropped annotation")
+
+	_, found = store.FlagNameByAnnotation("config.remoteKey", "shared_flag")
+	assert.False(t, found, "reverse lookup must not find dropped annotation")
+}
+
+func TestStore_NoMetadataMerging_UsageEmptyInOwner(t *testing.T) {
+	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
+	fs1.Bool("shared_flag", false, "first usage")
+
+	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
+	fs2.Bool("shared_flag", true, "")
+
+	store := workflow.NewConfigurationOptionsStore(
+		workflow.ConfigurationOptionsFromFlagset(fs1),
+		workflow.ConfigurationOptionsFromFlagset(fs2),
+	)
+
+	assert.Equal(t, "", store.GetFlagUsage("shared_flag"),
+		"empty usage from owner must not fall back to earlier registration")
+}
