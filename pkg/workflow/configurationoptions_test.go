@@ -1,6 +1,9 @@
 package workflow_test
 
 import (
+	"bytes"
+	"log"
+	"os"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -248,13 +251,17 @@ func TestStore_NoMetadataMerging_UsageEmptyInOwner(t *testing.T) {
 		"empty usage from owner must not fall back to earlier registration")
 }
 
-func TestConfigurationOptionsFromFlagset_PanicsOnColonInFlagName(t *testing.T) {
+func TestConfigurationOptionsFromFlagset_WarnsOnColonInFlagName(t *testing.T) {
 	fs := pflag.NewFlagSet("bad", pflag.ContinueOnError)
 	fs.Bool("has:colon", false, "bad flag name")
 
-	assert.Panics(t, func() {
-		workflow.ConfigurationOptionsFromFlagset(fs)
-	}, "flag names containing colons must be rejected")
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	opts := workflow.ConfigurationOptionsFromFlagset(fs)
+	assert.NotNil(t, opts, "must still return a valid ConfigurationOptions")
+	assert.Contains(t, buf.String(), `flag name "has:colon"`)
 }
 
 func TestConfigurationOptionsFromFlagset_AcceptsValidNames(t *testing.T) {
@@ -262,7 +269,11 @@ func TestConfigurationOptionsFromFlagset_AcceptsValidNames(t *testing.T) {
 	fs.Bool("valid_flag", false, "ok")
 	fs.String("another-flag", "", "also ok")
 
-	assert.NotPanics(t, func() {
-		workflow.ConfigurationOptionsFromFlagset(fs)
-	})
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	opts := workflow.ConfigurationOptionsFromFlagset(fs)
+	assert.NotNil(t, opts)
+	assert.Empty(t, buf.String(), "no warnings expected for valid flag names")
 }

@@ -1,7 +1,7 @@
 package workflow
 
 import (
-	"fmt"
+	"log"
 	"strings"
 	"sync"
 
@@ -38,11 +38,11 @@ type ConfigurationOptionsImpl struct {
 }
 
 // ConfigurationOptionsFromFlagset creates a ConfigurationOptions backed by the given pflag.FlagSet.
-// Panics if any flag name contains a colon, which would collide with the prefix key delimiter.
+// Logs a warning if any flag name contains a colon, which could collide with the prefix key delimiter.
 func ConfigurationOptionsFromFlagset(flagset *pflag.FlagSet) ConfigurationOptions {
 	flagset.VisitAll(func(f *pflag.Flag) {
 		if strings.Contains(f.Name, ":") {
-			panic(fmt.Sprintf("flag name %q contains a colon, which is reserved as key delimiter", f.Name))
+			log.Printf("WARNING: flag name %q contains a colon, which may collide with the internal key delimiter", f.Name)
 		}
 	})
 	return ConfigurationOptionsImpl{flagset: flagset}
