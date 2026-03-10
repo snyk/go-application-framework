@@ -203,7 +203,7 @@ func TestLoadConfiguredEnvironmentWithOptions(t *testing.T) {
 		var logsBuffer bytes.Buffer
 		logger := zerolog.New(&logsBuffer).Level(zerolog.DebugLevel)
 
-		// Use a cancaled context so we skip the actual loading, it isn't relevant for this test.
+		// Use a canceled context so we skip the actual loading, it isn't relevant for this test.
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		// Don't allow Bash, so we skip the shell loading (although in theory we shouldn't hit it anyway), it isn't relevant for this test.

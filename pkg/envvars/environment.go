@@ -78,25 +78,26 @@ func LoadConfiguredEnvironmentWithOptions(opts ...loadConfiguredEnvironmentOptio
 	}
 	logger := options.logger.With().Str("method", "LoadConfiguredEnvironment").Logger()
 
-	ctx, cancelFunc := context.WithTimeout(options.ctx, 15*time.Second)
-	defer cancelFunc()
-
 	mu.Lock()
 	defer func() {
 		mu.Unlock()
-		logger.Trace().Msg("Loaded configured environment")
+		if options.ctx.Err() == nil {
+			logger.Trace().Msg("Loaded configured environment")
+		} else {
+			logger.Trace().Err(options.ctx.Err()).Msg("Loading configured environment was canceled")
+		}
 	}()
 	logger.Debug().Msg("Loading configured environment")
 
 	// Check the context hasn't been canceled before loading the environment.
-	if ctxErr := ctx.Err(); ctxErr != nil {
+	if ctxErr := options.ctx.Err(); ctxErr != nil {
 		return
 	}
 
-	bashOutput := getEnvFromShell(ctx, options.logger, "bash")
+	bashOutput := getEnvFromShell(options.ctx, options.logger, "bash")
 
 	// Check the context hadn't been canceled while loading the Bash environment.
-	if ctxErr := ctx.Err(); ctxErr != nil {
+	if ctxErr := options.ctx.Err(); ctxErr != nil {
 		return
 	}
 
@@ -116,10 +117,10 @@ func LoadConfiguredEnvironmentWithOptions(opts ...loadConfiguredEnvironmentOptio
 
 	specificShell, ok := bashEnv[ShellEnvVarName]
 	if ok {
-		fromSpecificShell := getEnvFromShell(ctx, options.logger, specificShell)
+		fromSpecificShell := getEnvFromShell(options.ctx, options.logger, specificShell)
 
 		// Check the context hadn't been canceled while loading the user's preferred shell environment.
-		if ctxErr := ctx.Err(); ctxErr != nil {
+		if ctxErr := options.ctx.Err(); ctxErr != nil {
 			return
 		}
 
@@ -136,6 +137,10 @@ func LoadConfiguredEnvironmentWithOptions(opts ...loadConfiguredEnvironmentOptio
 
 	// process config files
 	for _, file := range options.customConfigFiles {
+		// Check the context hadn't been canceled while loading config files.
+		if options.ctx.Err() != nil {
+			return
+		}
 		loadFile(file)
 	}
 }
