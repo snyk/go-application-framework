@@ -44,8 +44,8 @@ func newTestConfigOpts() workflow.ConfigurationOptions {
 	return workflow.ConfigurationOptionsFromFlagset(newTestFlagSet())
 }
 
-func TestNewFlagMetadata(t *testing.T) {
-	fm := workflow.NewFlagMetadata(newTestConfigOpts())
+func TestNewConfigurationOptionsStore(t *testing.T) {
+	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
 
 	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, fm.FlagsByAnnotation("config.scope", "org"))
 	assert.ElementsMatch(t, []string{"api_endpoint"}, fm.FlagsByAnnotation("config.scope", "machine"))
@@ -53,7 +53,7 @@ func TestNewFlagMetadata(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	fm := workflow.NewFlagMetadata()
+	fm := workflow.NewConfigurationOptionsStore()
 
 	fm.Add(newTestConfigOpts())
 
@@ -63,7 +63,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestGetFlagAnnotation(t *testing.T) {
-	fm := workflow.NewFlagMetadata(newTestConfigOpts())
+	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
 
 	val, found := fm.GetFlagAnnotation("snyk_code_enabled", "config.scope")
 	assert.True(t, found)
@@ -78,7 +78,7 @@ func TestGetFlagAnnotation(t *testing.T) {
 }
 
 func TestFlagsByAnnotation_Scope(t *testing.T) {
-	fm := workflow.NewFlagMetadata(newTestConfigOpts())
+	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
 
 	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, fm.FlagsByAnnotation("config.scope", "org"))
 	assert.ElementsMatch(t, []string{"api_endpoint"}, fm.FlagsByAnnotation("config.scope", "machine"))
@@ -87,7 +87,7 @@ func TestFlagsByAnnotation_Scope(t *testing.T) {
 }
 
 func TestFlagNameByAnnotation_RemoteKey(t *testing.T) {
-	fm := workflow.NewFlagMetadata(newTestConfigOpts())
+	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
 
 	name, found := fm.FlagNameByAnnotation("config.remoteKey", "snyk_code_enabled")
 	assert.True(t, found)
@@ -102,7 +102,7 @@ func TestFlagNameByAnnotation_RemoteKey(t *testing.T) {
 }
 
 func TestGetFlagType_And_Usage(t *testing.T) {
-	fm := workflow.NewFlagMetadata(newTestConfigOpts())
+	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
 
 	assert.Equal(t, "bool", fm.GetFlagType("snyk_code_enabled"))
 	assert.Equal(t, "string", fm.GetFlagType("api_endpoint"))
@@ -119,7 +119,65 @@ func TestConfigurationOptionsImpl_ImplementsFlagMetadata(t *testing.T) {
 	require.True(t, true)
 }
 
-func TestFlagMetadataStore_ImplementsFlagMetadata(t *testing.T) {
-	var _ workflow.FlagMetadata = workflow.NewFlagMetadata()
+func TestConfigurationOptionsStore_ImplementsFlagMetadata(t *testing.T) {
+	var _ workflow.FlagMetadata = workflow.NewConfigurationOptionsStore()
 	require.True(t, true)
+}
+
+func TestStore_LastRegisteredWins_GetFlagAnnotation(t *testing.T) {
+	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
+	fs1.Bool("shared_flag", false, "first usage")
+	fs1.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"org"}}
+
+	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
+	fs2.Bool("shared_flag", true, "second usage")
+	fs2.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"machine"}}
+
+	store := workflow.NewConfigurationOptionsStore(
+		workflow.ConfigurationOptionsFromFlagset(fs1),
+		workflow.ConfigurationOptionsFromFlagset(fs2),
+	)
+
+	val, found := store.GetFlagAnnotation("shared_flag", "config.scope")
+	assert.True(t, found)
+	assert.Equal(t, "machine", val, "last-registered option should win")
+}
+
+func TestStore_FlagsByAnnotation_Deduplicates(t *testing.T) {
+	opts := newTestConfigOpts()
+	store := workflow.NewConfigurationOptionsStore(opts, opts)
+
+	result := store.FlagsByAnnotation("config.scope", "org")
+	assert.Equal(t, 1, len(result), "duplicate flag names must be deduplicated")
+	assert.Equal(t, "snyk_code_enabled", result[0])
+}
+
+func TestStore_LastRegisteredWins_GetFlagType(t *testing.T) {
+	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
+	fs1.Bool("shared_flag", false, "first usage")
+
+	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
+	fs2.String("shared_flag", "", "second usage")
+
+	store := workflow.NewConfigurationOptionsStore(
+		workflow.ConfigurationOptionsFromFlagset(fs1),
+		workflow.ConfigurationOptionsFromFlagset(fs2),
+	)
+
+	assert.Equal(t, "string", store.GetFlagType("shared_flag"), "last-registered should win")
+}
+
+func TestStore_LastRegisteredWins_GetFlagUsage(t *testing.T) {
+	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
+	fs1.Bool("shared_flag", false, "first usage")
+
+	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
+	fs2.Bool("shared_flag", true, "second usage")
+
+	store := workflow.NewConfigurationOptionsStore(
+		workflow.ConfigurationOptionsFromFlagset(fs1),
+		workflow.ConfigurationOptionsFromFlagset(fs2),
+	)
+
+	assert.Equal(t, "second usage", store.GetFlagUsage("shared_flag"), "last-registered should win")
 }
