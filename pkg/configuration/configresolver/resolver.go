@@ -1,6 +1,8 @@
 package configresolver
 
 import (
+	"strconv"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -44,19 +46,40 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSo
 }
 
 // ResolveBool is a typed convenience wrapper around Resolve.
+// Handles both native bool and string representations ("true", "1", etc.).
 func (r *Resolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 	val, _ := r.Resolve(name, effectiveOrg, folderPath)
-	b, ok := val.(bool)
-	if !ok {
+	switch v := val.(type) {
+	case bool:
+		return v
+	case string:
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return false
+		}
+		return b
+	default:
 		return false
 	}
-	return b
 }
 
 // IsLocked reports whether the setting is locked in the remote config.
-// For org-scope flags, pass the effective org ID. For machine-scope flags,
-// pass any value — the lookup uses RemoteMachineKey when the scope annotation is "machine".
-func (r *Resolver) IsLocked(name, effectiveOrg string) bool {
+// For org-scope flags it checks both folder-level and org-level remote keys.
+// For machine-scope flags, folderPath is ignored.
+func (r *Resolver) IsLocked(name, effectiveOrg string, folderPath ...string) bool {
+	fp := ""
+	if len(folderPath) > 0 {
+		fp = folderPath[0]
+	}
+
+	if fp != "" && r.fm != nil {
+		if scope, found := r.fm.GetFlagAnnotation(name, AnnotationScope); found && scope != "machine" {
+			if f := r.remoteField(RemoteOrgFolderKey(effectiveOrg, fp, name)); f != nil && f.IsLocked {
+				return true
+			}
+		}
+	}
+
 	f := r.remoteField(r.remoteKeyForName(name, effectiveOrg))
 	return f != nil && f.IsLocked
 }
@@ -100,11 +123,17 @@ func (r *Resolver) resolveMachine(name, _ string) (any, ConfigSource) {
 }
 
 // resolveOrg applies: locked remote > user folder override > user global > remote > default
+// Remote config is checked at both folder-level (RemoteOrgFolderKey) and org-level (RemoteOrgKey),
+// with folder-level taking precedence over org-level.
 func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, ConfigSource) {
-	remote := r.remoteField(RemoteOrgKey(effectiveOrg, name))
+	remoteFolder := r.remoteFolderField(effectiveOrg, folderPath, name)
+	remoteOrg := r.remoteField(RemoteOrgKey(effectiveOrg, name))
 
-	if remote != nil && remote.IsLocked {
-		return remote.Value, ConfigSourceRemoteLocked
+	if remoteFolder != nil && remoteFolder.IsLocked {
+		return remoteFolder.Value, ConfigSourceRemoteLocked
+	}
+	if remoteOrg != nil && remoteOrg.IsLocked {
+		return remoteOrg.Value, ConfigSourceRemoteLocked
 	}
 
 	if folderPath != "" {
@@ -120,8 +149,11 @@ func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, Confi
 		return r.conf.Get(UserGlobalKey(name)), ConfigSourceUserGlobal
 	}
 
-	if remote != nil {
-		return remote.Value, ConfigSourceRemote
+	if remoteFolder != nil {
+		return remoteFolder.Value, ConfigSourceRemote
+	}
+	if remoteOrg != nil {
+		return remoteOrg.Value, ConfigSourceRemote
 	}
 
 	return r.conf.Get(name), ConfigSourceDefault
@@ -154,6 +186,14 @@ func (r *Resolver) remoteField(key string) *RemoteConfigField {
 	}
 
 	return f
+}
+
+// remoteFolderField retrieves a *RemoteConfigField from the folder-level remote key, or nil.
+func (r *Resolver) remoteFolderField(effectiveOrg, folderPath, name string) *RemoteConfigField {
+	if folderPath == "" {
+		return nil
+	}
+	return r.remoteField(RemoteOrgFolderKey(effectiveOrg, folderPath, name))
 }
 
 // localField retrieves a *LocalConfigField stored at key, or nil if not present/wrong type.
