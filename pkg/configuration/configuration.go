@@ -54,17 +54,6 @@ type Configuration interface {
 	GetUrl(key string) *url.URL
 	GetWithError(key string) (interface{}, error)
 
-	// Resolve returns the effective value for settingName by reading ORGANIZATION and
-	// INPUT_DIRECTORY from the configuration object and applying the ConfigResolver
-	// precedence chain.
-	//
-	// Rules:
-	//   - INPUT_DIRECTORY with exactly one entry → used as folderPath
-	//   - INPUT_DIRECTORY with more than one entry → falls back to plain Get (ConfigSourceDefault)
-	//   - org-scoped setting + missing ORGANIZATION → ErrMissingOrganization
-	//   - org- or folder-scoped setting + empty INPUT_DIRECTORY → ErrMissingInputDirectory
-	Resolve(settingName string) (any, ConfigSource, error)
-
 	AddFlagSet(flagset *pflag.FlagSet) error
 	AllKeys() []string
 	AddDefaultValue(key string, defaultValue DefaultValueFunction)
@@ -120,18 +109,6 @@ type extendedViper struct {
 	supportedEnvVars []string
 
 	interkeyDependencies map[string][]string
-
-	// scopeIndex maps annotation scope value -> flag names (e.g. "org" -> ["snyk_code_enabled"]).
-	// Populated during AddFlagSet for fast FlagsByAnnotation lookups.
-	scopeIndex map[string][]string
-
-	// remoteKeyIndex maps remote key annotation value -> flag name for fast reverse lookup.
-	// Populated during AddFlagSet.
-	remoteKeyIndex map[string]string
-
-	// resolving tracks keys currently inside Resolve to prevent recursive calls that can
-	// occur when ResolveDefaultFunc is registered as the DefaultValueFunction for the same key.
-	resolving sync.Map
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -272,8 +249,6 @@ func createViperDefaultConfig(opts ...Opts) *extendedViper {
 		defaultValues:        make(map[string]DefaultValueFunction),
 		persistedKeys:        make(map[string]bool),
 		interkeyDependencies: make(map[string][]string),
-		scopeIndex:           make(map[string][]string),
-		remoteKeyIndex:       make(map[string]string),
 	}
 	config.viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
@@ -650,89 +625,12 @@ func (ev *extendedViper) GetUrl(key string) *url.URL {
 	}
 }
 
-// Resolve returns the effective value for settingName applying the ConfigResolver
-// precedence chain. org and folderPath are read from the configuration itself.
-//
-// Multi-directory handling: if INPUT_DIRECTORY contains more than one entry, resolution
-// is ambiguous and falls back to plain Get (ConfigSourceDefault).
-//
-// Recursion safety: if Resolve is called again for the same key while already resolving it
-// (which can happen when ResolveDefaultFunc is registered as the default for the same key),
-// it returns the raw viper value with ConfigSourceDefault instead of looping.
-func (ev *extendedViper) Resolve(settingName string) (any, ConfigSource, error) {
-	// Guard against recursive calls for the same key (e.g. via ResolveDefaultFunc).
-	if _, alreadyResolving := ev.resolving.LoadOrStore(settingName, true); alreadyResolving {
-		ev.mutex.RLock()
-		raw := ev.viper.Get(settingName)
-		ev.mutex.RUnlock()
-		return raw, ConfigSourceDefault, nil
-	}
-	defer ev.resolving.Delete(settingName)
-
-	dirs := ev.GetStringSlice(INPUT_DIRECTORY)
-
-	// Multi-directory: resolution is ambiguous — fall back to plain Get.
-	if len(dirs) > 1 {
-		return ev.Get(settingName), ConfigSourceDefault, nil
-	}
-
-	folderPath := ""
-	if len(dirs) == 1 {
-		folderPath = dirs[0]
-	}
-
-	org := ev.GetString(ORGANIZATION)
-
-	// Validate scope-specific requirements via the FlagMetadata interface,
-	// which extendedViper implements via its pointer receiver.
-	fm, hasMeta := any(ev).(FlagMetadata)
-	if hasMeta {
-		if scope, found := fm.GetFlagAnnotation(settingName, AnnotationScope); found {
-			switch scope {
-			case "org":
-				if org == "" {
-					return nil, ConfigSourceDefault, ErrMissingOrganization
-				}
-				if folderPath == "" {
-					return nil, ConfigSourceDefault, ErrMissingInputDirectory
-				}
-			case "folder":
-				if folderPath == "" {
-					return nil, ConfigSourceDefault, ErrMissingInputDirectory
-				}
-			}
-		}
-	}
-
-	val, src := NewConfigResolver(ev).Resolve(settingName, org, folderPath)
-	return val, src, nil
-}
-
-// AddFlagSet adds a flag set to the configuration and indexes flag annotations for fast metadata lookups.
+// AddFlagSet adds a flag set to the configuration.
 func (ev *extendedViper) AddFlagSet(flagset *pflag.FlagSet) error {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 	ev.flagsets = append(ev.flagsets, flagset)
-	ev.indexFlagAnnotations(flagset)
 	return ev.viper.BindPFlags(flagset)
-}
-
-// indexFlagAnnotations iterates the flagset and populates scopeIndex and remoteKeyIndex.
-// Duplicate entries are skipped so that adding the same flagset twice (e.g. via Clone) is idempotent.
-// Caller must hold the write lock.
-func (ev *extendedViper) indexFlagAnnotations(flagset *pflag.FlagSet) {
-	flagset.VisitAll(func(f *pflag.Flag) {
-		if scopeVals, ok := f.Annotations[AnnotationScope]; ok && len(scopeVals) > 0 {
-			scope := scopeVals[0]
-			if !slices.Contains(ev.scopeIndex[scope], f.Name) {
-				ev.scopeIndex[scope] = append(ev.scopeIndex[scope], f.Name)
-			}
-		}
-
-		if remoteVals, ok := f.Annotations[AnnotationRemoteKey]; ok && len(remoteVals) > 0 {
-			ev.remoteKeyIndex[remoteVals[0]] = f.Name
-		}
-	})
 }
 
 // GetStringSlice returns a configuration value as []string.

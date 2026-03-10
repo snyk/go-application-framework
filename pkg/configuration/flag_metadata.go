@@ -49,11 +49,6 @@ func (ev *extendedViper) FlagsByAnnotation(annotation, value string) []string {
 	ev.mutex.RLock()
 	defer ev.mutex.RUnlock()
 
-	if annotation == AnnotationScope {
-		return append([]string(nil), ev.scopeIndex[value]...)
-	}
-
-	// Generic fallback: iterate all registered flagsets
 	var result []string
 	for _, fs := range ev.flagsets {
 		fs.VisitAll(func(f *pflag.Flag) {
@@ -78,12 +73,6 @@ func (ev *extendedViper) FlagNameByAnnotation(annotation, value string) (string,
 	ev.mutex.RLock()
 	defer ev.mutex.RUnlock()
 
-	if annotation == AnnotationRemoteKey {
-		name, ok := ev.remoteKeyIndex[value]
-		return name, ok
-	}
-
-	// Generic fallback
 	for _, fs := range ev.flagsets {
 		var found string
 		fs.VisitAll(func(f *pflag.Flag) {

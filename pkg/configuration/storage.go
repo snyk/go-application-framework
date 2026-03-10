@@ -44,6 +44,11 @@ func (*EmptyStorage) Unlock() error {
 // stored configuration.
 var keyDeleted = struct{}{}
 
+// IsKeyDeleted reports whether val is the internal key-deleted marker used by Unset().
+func IsKeyDeleted(val any) bool {
+	return val == keyDeleted
+}
+
 type JsonStorage struct {
 	path     string
 	config   Configuration

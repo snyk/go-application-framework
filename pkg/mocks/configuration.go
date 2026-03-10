@@ -465,22 +465,6 @@ func (mr *MockConfigurationMockRecorder) ReloadConfig() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadConfig", reflect.TypeOf((*MockConfiguration)(nil).ReloadConfig))
 }
 
-// Resolve mocks base method.
-func (m *MockConfiguration) Resolve(settingName string) (any, configuration.ConfigSource, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Resolve", settingName)
-	ret0, _ := ret[0].(any)
-	ret1, _ := ret[1].(configuration.ConfigSource)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// Resolve indicates an expected call of Resolve.
-func (mr *MockConfigurationMockRecorder) Resolve(settingName interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resolve", reflect.TypeOf((*MockConfiguration)(nil).Resolve), settingName)
-}
-
 // Set mocks base method.
 func (m *MockConfiguration) Set(key string, value interface{}) {
 	m.ctrl.T.Helper()

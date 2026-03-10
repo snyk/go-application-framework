@@ -35,7 +35,7 @@ type ConfigSource int
 const (
 	ConfigSourceDefault      ConfigSource = iota // default value from flag registration
 	ConfigSourceUserGlobal                       // user:global:<name>
-	ConfigSourceUserOverride                     // user:folder:<folderPath>:<name> (org-scope override)
+	ConfigSourceUserFolderOverride                // user:folder:<folderPath>:<name> (org-scope override)
 	ConfigSourceFolder                           // user:folder:<folderPath>:<name> (folder-scope)
 	ConfigSourceRemote                           // remote:<orgId>:<name> — regular
 	ConfigSourceRemoteLocked                     // remote:<orgId>:<name> — locked
