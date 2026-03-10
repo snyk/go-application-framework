@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -28,26 +27,26 @@ var mu sync.Mutex
 type loadConfiguredEnvironmentOptions struct {
 	ctx               context.Context
 	customConfigFiles []string
-	workingDirectory  string
 	logger            *zerolog.Logger
 }
 
-type LoadConfiguredEnvironmentOptions func(opts *loadConfiguredEnvironmentOptions)
+type loadConfiguredEnvironmentOption func(opts *loadConfiguredEnvironmentOptions)
 
-func WithContext(ctx context.Context) LoadConfiguredEnvironmentOptions {
+func WithContext(ctx context.Context) loadConfiguredEnvironmentOption {
 	return func(opts *loadConfiguredEnvironmentOptions) {
 		opts.ctx = ctx
 	}
 }
 
-func WithCustomConfigFiles(customConfigFiles []string, workingDirectory string) LoadConfiguredEnvironmentOptions {
+// WithCustomConfigFiles sets the list of custom config files to load.
+// All paths must be absolute; use [utils.MakeRelativePathsAbsolute] to resolve relative paths before calling.
+func WithCustomConfigFiles(absoluteFilePaths []string) loadConfiguredEnvironmentOption {
 	return func(opts *loadConfiguredEnvironmentOptions) {
-		opts.customConfigFiles = customConfigFiles
-		opts.workingDirectory = workingDirectory
+		opts.customConfigFiles = absoluteFilePaths
 	}
 }
 
-func WithLogger(logger *zerolog.Logger) LoadConfiguredEnvironmentOptions {
+func WithLogger(logger *zerolog.Logger) loadConfiguredEnvironmentOption {
 	return func(opts *loadConfiguredEnvironmentOptions) {
 		if logger == nil {
 			return
@@ -59,15 +58,17 @@ func WithLogger(logger *zerolog.Logger) LoadConfiguredEnvironmentOptions {
 // LoadConfiguredEnvironment updates the environment with user and local configuration.
 // First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
 // The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
-// Deprecated use LoadConfiguredEnvironmentWithOptions instead.
+//
+// Deprecated: Use LoadConfiguredEnvironmentWithOptions instead.
 func LoadConfiguredEnvironment(customConfigFiles []string, workingDirectory string) {
-	LoadConfiguredEnvironmentWithOptions(WithCustomConfigFiles(customConfigFiles, workingDirectory))
+	absoluteFilePaths := utils.MakeRelativePathsAbsolute(workingDirectory, customConfigFiles)
+	LoadConfiguredEnvironmentWithOptions(WithCustomConfigFiles(absoluteFilePaths))
 }
 
 // LoadConfiguredEnvironmentWithOptions updates the environment with user and local configuration.
 // First Bash's env is read (as a fallback), then the user's preferred SHELL's env is read, then the configuration files.
 // The Bash env PATH is appended to the existing PATH (as a fallback), any other new PATH read is prepended (preferential).
-func LoadConfiguredEnvironmentWithOptions(opts ...LoadConfiguredEnvironmentOptions) {
+func LoadConfiguredEnvironmentWithOptions(opts ...loadConfiguredEnvironmentOption) {
 	options := loadConfiguredEnvironmentOptions{
 		ctx:    context.Background(),
 		logger: utils.Ptr(zerolog.Nop()),
@@ -77,6 +78,9 @@ func LoadConfiguredEnvironmentWithOptions(opts ...LoadConfiguredEnvironmentOptio
 	}
 	logger := options.logger.With().Str("method", "LoadConfiguredEnvironment").Logger()
 
+	ctx, cancelFunc := context.WithTimeout(options.ctx, 15*time.Second)
+	defer cancelFunc()
+
 	mu.Lock()
 	defer func() {
 		mu.Unlock()
@@ -85,14 +89,14 @@ func LoadConfiguredEnvironmentWithOptions(opts ...LoadConfiguredEnvironmentOptio
 	logger.Debug().Msg("Loading configured environment")
 
 	// Check the context hasn't been canceled before loading the environment.
-	if ctxErr := options.ctx.Err(); ctxErr != nil {
+	if ctxErr := ctx.Err(); ctxErr != nil {
 		return
 	}
 
-	bashOutput := getEnvFromShell(options.ctx, options.logger, "bash")
+	bashOutput := getEnvFromShell(ctx, options.logger, "bash")
 
 	// Check the context hadn't been canceled while loading the Bash environment.
-	if ctxErr := options.ctx.Err(); ctxErr != nil {
+	if ctxErr := ctx.Err(); ctxErr != nil {
 		return
 	}
 
@@ -112,10 +116,10 @@ func LoadConfiguredEnvironmentWithOptions(opts ...LoadConfiguredEnvironmentOptio
 
 	specificShell, ok := bashEnv[ShellEnvVarName]
 	if ok {
-		fromSpecificShell := getEnvFromShell(options.ctx, options.logger, specificShell)
+		fromSpecificShell := getEnvFromShell(ctx, options.logger, specificShell)
 
 		// Check the context hadn't been canceled while loading the user's preferred shell environment.
-		if ctxErr := options.ctx.Err(); ctxErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
 			return
 		}
 
@@ -132,9 +136,6 @@ func LoadConfiguredEnvironmentWithOptions(opts ...LoadConfiguredEnvironmentOptio
 
 	// process config files
 	for _, file := range options.customConfigFiles {
-		if !filepath.IsAbs(file) {
-			file = filepath.Join(options.workingDirectory, file)
-		}
 		loadFile(file)
 	}
 }

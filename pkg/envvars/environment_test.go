@@ -161,19 +161,17 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 }
 
 func TestLoadConfiguredEnvironmentWithOptions(t *testing.T) {
-	t.Run("should load custom config files for relative path", func(t *testing.T) {
+	t.Run("should load custom config files", func(t *testing.T) {
 		// Ensure we clean up the PATH back to how it was after the test.
 		t.Setenv("PATH", os.Getenv("PATH"))
 
 		dir := t.TempDir()
 		uniqueEnvVar, absEnvVarConfigFile := setupTestFile(t, ".custom.env", dir)
-		relativeEnvVarConfigFile, err := filepath.Rel(dir, absEnvVarConfigFile)
-		require.NoError(t, err)
 
 		// Don't allow Bash, so we skip the shell loading, it isn't relevant for this test.
 		setShellAllowedForTest(t, "bash", false)
 
-		LoadConfiguredEnvironmentWithOptions(WithCustomConfigFiles([]string{relativeEnvVarConfigFile}, dir))
+		LoadConfiguredEnvironmentWithOptions(WithCustomConfigFiles([]string{absEnvVarConfigFile}))
 
 		require.Equal(t, uniqueEnvVar, os.Getenv(uniqueEnvVar))
 	})
@@ -192,7 +190,7 @@ func TestLoadConfiguredEnvironmentWithOptions(t *testing.T) {
 
 		LoadConfiguredEnvironmentWithOptions(
 			WithContext(ctx),
-			WithCustomConfigFiles([]string{absEnvVarConfigFile}, dir),
+			WithCustomConfigFiles([]string{absEnvVarConfigFile}),
 		)
 
 		require.Empty(t, os.Getenv(uniqueEnvVar))
