@@ -13,7 +13,7 @@ import (
 // Precedence rules:
 //   - Machine: locked remote > user global > remote > default
 //   - Org:     locked remote > user folder override > user global > remote > default
-//   - Folder:  folder value > default
+//   - Folder:  locked remote > folder value > remote > default
 type Resolver struct {
 	conf configuration.Configuration
 	fm   workflow.FlagMetadata
@@ -39,14 +39,15 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSo
 	case "org":
 		return r.resolveOrg(name, effectiveOrg, folderPath)
 	case "folder":
-		return r.resolveFolder(name, folderPath)
+		return r.resolveFolder(name, effectiveOrg, folderPath)
 	default:
 		return r.conf.Get(name), ConfigSourceDefault
 	}
 }
 
 // ResolveBool is a typed convenience wrapper around Resolve.
-// Handles both native bool and string representations ("true", "1", etc.).
+// Handles native bool, string representations ("true", "1", etc.),
+// and numeric types (e.g. float64 from JSON unmarshal where 1 is true and 0 is false).
 func (r *Resolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 	val, _ := r.Resolve(name, effectiveOrg, folderPath)
 	switch v := val.(type) {
@@ -58,6 +59,12 @@ func (r *Resolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 			return false
 		}
 		return b
+	case int:
+		return v != 0
+	case int64:
+		return v != 0
+	case float64:
+		return v != 0
 	default:
 		return false
 	}
@@ -159,8 +166,18 @@ func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, Confi
 	return r.conf.Get(name), ConfigSourceDefault
 }
 
-// resolveFolder applies: folder value > default
-func (r *Resolver) resolveFolder(name, folderPath string) (any, ConfigSource) {
+// resolveFolder applies: locked remote > folder value > remote > default
+func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, ConfigSource) {
+	remoteFolder := r.remoteFolderField(effectiveOrg, folderPath, name)
+	remoteOrg := r.remoteField(RemoteOrgKey(effectiveOrg, name))
+
+	if remoteFolder != nil && remoteFolder.IsLocked {
+		return remoteFolder.Value, ConfigSourceRemoteLocked
+	}
+	if remoteOrg != nil && remoteOrg.IsLocked {
+		return remoteOrg.Value, ConfigSourceRemoteLocked
+	}
+
 	if folderPath != "" {
 		key := UserFolderKey(folderPath, name)
 		if r.conf.IsSet(key) {
@@ -168,6 +185,13 @@ func (r *Resolver) resolveFolder(name, folderPath string) (any, ConfigSource) {
 				return lf.Value, ConfigSourceFolder
 			}
 		}
+	}
+
+	if remoteFolder != nil {
+		return remoteFolder.Value, ConfigSourceRemote
+	}
+	if remoteOrg != nil {
+		return remoteOrg.Value, ConfigSourceRemote
 	}
 
 	return r.conf.Get(name), ConfigSourceDefault

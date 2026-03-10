@@ -246,22 +246,74 @@ func Test_Resolve_OrgScope(t *testing.T) {
 // --- Folder-scope resolution ---
 
 func Test_Resolve_FolderScope(t *testing.T) {
-	conf, fm := setupConf(t)
-	resolver := cr.New(conf, fm)
 	const name = "reference_branch"
+	const orgID = "org123"
 	const folderPath = "/workspace/project"
 
 	t.Run("default when nothing set", func(t *testing.T) {
-		val, src := resolver.Resolve(name, "", folderPath)
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		val, src := resolver.Resolve(name, orgID, folderPath)
 		assert.Equal(t, cr.ConfigSourceDefault, src)
 		assert.Equal(t, "", val)
 	})
 
 	t.Run("folder value applied", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
 		conf.Set(cr.UserFolderKey(folderPath, name), &cr.LocalConfigField{Value: "main", Changed: true})
-		val, src := resolver.Resolve(name, "", folderPath)
+		val, src := resolver.Resolve(name, orgID, folderPath)
 		assert.Equal(t, cr.ConfigSourceFolder, src)
 		assert.Equal(t, "main", val)
+	})
+
+	t.Run("remote org value applied when no folder value", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.RemoteOrgKey(orgID, name), &cr.RemoteConfigField{Value: "develop"})
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceRemote, src)
+		assert.Equal(t, "develop", val)
+	})
+
+	t.Run("remote folder value takes precedence over remote org value", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.RemoteOrgKey(orgID, name), &cr.RemoteConfigField{Value: "develop"})
+		conf.Set(cr.RemoteOrgFolderKey(orgID, folderPath, name), &cr.RemoteConfigField{Value: "release"})
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceRemote, src)
+		assert.Equal(t, "release", val)
+	})
+
+	t.Run("folder value overrides non-locked remote", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.RemoteOrgKey(orgID, name), &cr.RemoteConfigField{Value: "develop"})
+		conf.Set(cr.UserFolderKey(folderPath, name), &cr.LocalConfigField{Value: "main", Changed: true})
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceFolder, src)
+		assert.Equal(t, "main", val)
+	})
+
+	t.Run("locked remote org overrides folder value", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.RemoteOrgKey(orgID, name), &cr.RemoteConfigField{Value: "develop", IsLocked: true})
+		conf.Set(cr.UserFolderKey(folderPath, name), &cr.LocalConfigField{Value: "main", Changed: true})
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceRemoteLocked, src)
+		assert.Equal(t, "develop", val)
+	})
+
+	t.Run("locked remote folder overrides locked remote org", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.RemoteOrgKey(orgID, name), &cr.RemoteConfigField{Value: "develop", IsLocked: true})
+		conf.Set(cr.RemoteOrgFolderKey(orgID, folderPath, name), &cr.RemoteConfigField{Value: "release", IsLocked: true})
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceRemoteLocked, src)
+		assert.Equal(t, "release", val)
 	})
 }
 
@@ -355,6 +407,34 @@ func Test_ResolveBool(t *testing.T) {
 		resolver := cr.New(conf, fm)
 		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), "1")
 		assert.True(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
+	})
+
+	t.Run("treats int 1 as true", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), 1)
+		assert.True(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
+	})
+
+	t.Run("treats int 0 as false", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), 0)
+		assert.False(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
+	})
+
+	t.Run("treats float64 1 as true (JSON unmarshal)", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), float64(1))
+		assert.True(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
+	})
+
+	t.Run("treats float64 0 as false", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey("snyk_code_enabled"), float64(0))
+		assert.False(t, resolver.ResolveBool("snyk_code_enabled", "org123", "/workspace/project"))
 	})
 }
 

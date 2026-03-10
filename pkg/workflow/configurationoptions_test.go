@@ -152,6 +152,26 @@ func TestStore_FlagsByAnnotation_Deduplicates(t *testing.T) {
 	assert.Equal(t, "snyk_code_enabled", result[0])
 }
 
+func TestStore_FlagsByAnnotation_RespectsLastRegisteredWins(t *testing.T) {
+	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
+	fs1.Bool("shared_flag", false, "first usage")
+	fs1.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"org"}}
+
+	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
+	fs2.Bool("shared_flag", true, "second usage")
+	fs2.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"machine"}}
+
+	store := workflow.NewConfigurationOptionsStore(
+		workflow.ConfigurationOptionsFromFlagset(fs1),
+		workflow.ConfigurationOptionsFromFlagset(fs2),
+	)
+
+	assert.NotContains(t, store.FlagsByAnnotation("config.scope", "org"), "shared_flag",
+		"flag whose scope was overridden to machine should not appear under org")
+	assert.Contains(t, store.FlagsByAnnotation("config.scope", "machine"), "shared_flag",
+		"flag should appear under its effective scope")
+}
+
 func TestStore_LastRegisteredWins_GetFlagType(t *testing.T) {
 	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
 	fs1.Bool("shared_flag", false, "first usage")

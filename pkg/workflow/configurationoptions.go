@@ -30,25 +30,22 @@ type FlagMetadata interface {
 }
 
 // ConfigurationOptionsImpl is a wrapper around a pflag.FlagSet.
+// The flagset is stored as a pointer to avoid copying the embedded sync.Mutex.
 type ConfigurationOptionsImpl struct {
-	flagset pflag.FlagSet
+	flagset *pflag.FlagSet
 }
 
 // ConfigurationOptionsFromFlagset creates a ConfigurationOptions backed by the given pflag.FlagSet.
 func ConfigurationOptionsFromFlagset(flagset *pflag.FlagSet) ConfigurationOptions {
-	result := ConfigurationOptionsImpl{
-		flagset: *flagset,
-	}
-	return result
+	return ConfigurationOptionsImpl{flagset: flagset}
 }
 
 // FlagsetFromConfigurationOptions extracts the pflag.FlagSet from a ConfigurationOptions implementation.
 func FlagsetFromConfigurationOptions(param ConfigurationOptions) *pflag.FlagSet {
-	var result *pflag.FlagSet
 	if impl, ok := param.(ConfigurationOptionsImpl); ok {
-		result = &impl.flagset
+		return impl.flagset
 	}
-	return result
+	return nil
 }
 
 func ConfigurationOptionsFromJson(bytes []byte) ConfigurationOptions {
@@ -159,6 +156,9 @@ func (s *ConfigurationOptionsStore) GetFlagAnnotation(name, annotation string) (
 	return "", false
 }
 
+// FlagsByAnnotation returns flags whose effective annotation matches the given value.
+// A flag is only included if its last-registered annotation equals value,
+// consistent with the "last-registered wins" rule used by GetFlagAnnotation.
 func (s *ConfigurationOptionsStore) FlagsByAnnotation(annotation, value string) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -173,7 +173,25 @@ func (s *ConfigurationOptionsStore) FlagsByAnnotation(annotation, value string) 
 			}
 		}
 	}
-	return result
+
+	// Filter out flags whose effective annotation has been overridden by a later registration.
+	filtered := result[:0]
+	for _, name := range result {
+		if effective, found := s.getEffectiveAnnotation(name, annotation); found && effective == value {
+			filtered = append(filtered, name)
+		}
+	}
+	return filtered
+}
+
+// getEffectiveAnnotation returns the annotation value from the last-registered option (unlocked, no mutex).
+func (s *ConfigurationOptionsStore) getEffectiveAnnotation(name, annotation string) (string, bool) {
+	for i := len(s.opts) - 1; i >= 0; i-- {
+		if val, found := s.opts[i].GetFlagAnnotation(name, annotation); found {
+			return val, true
+		}
+	}
+	return "", false
 }
 
 // Last-registered option wins, consistent with Viper's BindPFlags overwrite semantics.
