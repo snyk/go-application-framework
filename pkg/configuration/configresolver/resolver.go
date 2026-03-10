@@ -58,21 +58,30 @@ func (r *Resolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 }
 
 func anyToBool(val any) bool {
-	rv := reflect.ValueOf(val)
-	switch rv.Kind() {
-	case reflect.Bool:
-		return rv.Bool()
-	case reflect.String:
-		b, err := strconv.ParseBool(rv.String())
+	switch v := val.(type) {
+	case bool:
+		return v
+	case string:
+		b, err := strconv.ParseBool(v)
 		return err == nil && b
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return rv.Int() != 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return rv.Uint() != 0
-	case reflect.Float32, reflect.Float64:
-		return rv.Float() != 0
+	case int:
+		return v != 0
+	case int64:
+		return v != 0
+	case float64:
+		return v != 0
 	default:
-		return false
+		rv := reflect.ValueOf(val)
+		switch rv.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return rv.Int() != 0
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return rv.Uint() != 0
+		case reflect.Float32, reflect.Float64:
+			return rv.Float() != 0
+		default:
+			return false
+		}
 	}
 }
 
@@ -124,8 +133,9 @@ func (r *Resolver) resolveMachine(name, _ string) (any, ConfigSource) {
 		return remote.Value, ConfigSourceRemoteLocked
 	}
 
-	if r.isUserSet(UserGlobalKey(name)) {
-		return r.conf.Get(UserGlobalKey(name)), ConfigSourceUserGlobal
+	ugk := UserGlobalKey(name)
+	if r.isUserSet(ugk) {
+		return r.conf.Get(ugk), ConfigSourceUserGlobal
 	}
 
 	if remote != nil {
@@ -150,16 +160,17 @@ func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, Confi
 	}
 
 	if folderPath != "" {
-		key := UserFolderKey(folderPath, name)
-		if r.conf.IsSet(key) {
-			if lf := r.localField(key); lf != nil && lf.Changed {
+		ufk := UserFolderKey(folderPath, name)
+		if r.conf.IsSet(ufk) {
+			if lf := r.localField(ufk); lf != nil && lf.Changed {
 				return lf.Value, ConfigSourceUserFolderOverride
 			}
 		}
 	}
 
-	if r.isUserSet(UserGlobalKey(name)) {
-		return r.conf.Get(UserGlobalKey(name)), ConfigSourceUserGlobal
+	ugk := UserGlobalKey(name)
+	if r.isUserSet(ugk) {
+		return r.conf.Get(ugk), ConfigSourceUserGlobal
 	}
 
 	if remoteFolder != nil {
@@ -185,9 +196,9 @@ func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, Co
 	}
 
 	if folderPath != "" {
-		key := UserFolderKey(folderPath, name)
-		if r.conf.IsSet(key) {
-			if lf := r.localField(key); lf != nil && lf.Changed {
+		ufk := UserFolderKey(folderPath, name)
+		if r.conf.IsSet(ufk) {
+			if lf := r.localField(ufk); lf != nil && lf.Changed {
 				return lf.Value, ConfigSourceFolder
 			}
 		}
