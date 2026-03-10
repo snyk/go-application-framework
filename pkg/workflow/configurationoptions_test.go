@@ -247,3 +247,22 @@ func TestStore_NoMetadataMerging_UsageEmptyInOwner(t *testing.T) {
 	assert.Equal(t, "", store.GetFlagUsage("shared_flag"),
 		"empty usage from owner must not fall back to earlier registration")
 }
+
+func TestConfigurationOptionsFromFlagset_PanicsOnColonInFlagName(t *testing.T) {
+	fs := pflag.NewFlagSet("bad", pflag.ContinueOnError)
+	fs.Bool("has:colon", false, "bad flag name")
+
+	assert.Panics(t, func() {
+		workflow.ConfigurationOptionsFromFlagset(fs)
+	}, "flag names containing colons must be rejected")
+}
+
+func TestConfigurationOptionsFromFlagset_AcceptsValidNames(t *testing.T) {
+	fs := pflag.NewFlagSet("good", pflag.ContinueOnError)
+	fs.Bool("valid_flag", false, "ok")
+	fs.String("another-flag", "", "also ok")
+
+	assert.NotPanics(t, func() {
+		workflow.ConfigurationOptionsFromFlagset(fs)
+	})
+}
