@@ -211,6 +211,8 @@ func ToProductCodename(product string) string {
 		return "iac"
 	case "Snyk Container":
 		return "container"
+	case "Snyk Secrets":
+		return "secrets"
 	default:
 		return ""
 	}
