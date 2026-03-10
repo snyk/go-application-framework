@@ -1,6 +1,9 @@
 package configresolver
 
-import "github.com/snyk/go-application-framework/pkg/configuration"
+import (
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+)
 
 // Resolver is a stateless resolver that applies the precedence chain for each configuration
 // scope (machine, org, folder). effectiveOrg and folderPath are parameters, never stored state.
@@ -22,13 +25,13 @@ func New(conf configuration.Configuration) *Resolver {
 
 // Resolve returns the effective value and its source for the named setting given an effective
 // organization ID and folder path. Both effectiveOrg and folderPath are stateless parameters.
-func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, configuration.ConfigSource) {
-	fm, ok := r.conf.(configuration.FlagMetadata)
+func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSource) {
+	fm, ok := r.conf.(workflow.FlagMetadata)
 	if !ok {
-		return r.conf.Get(name), configuration.ConfigSourceDefault
+		return r.conf.Get(name), ConfigSourceDefault
 	}
 
-	scope, _ := fm.GetFlagAnnotation(name, configuration.AnnotationScope)
+	scope, _ := fm.GetFlagAnnotation(name, AnnotationScope)
 
 	switch scope {
 	case "machine":
@@ -38,7 +41,7 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, configur
 	case "folder":
 		return r.resolveFolder(name, folderPath)
 	default:
-		return r.conf.Get(name), configuration.ConfigSourceDefault
+		return r.conf.Get(name), ConfigSourceDefault
 	}
 }
 
@@ -62,12 +65,12 @@ func (r *Resolver) IsLocked(name, effectiveOrg string) bool {
 
 // remoteKeyForName returns the correct remote config key for the named setting based on its scope annotation.
 func (r *Resolver) remoteKeyForName(name, effectiveOrg string) string {
-	if fm, ok := r.conf.(configuration.FlagMetadata); ok {
-		if scope, found := fm.GetFlagAnnotation(name, configuration.AnnotationScope); found && scope == "machine" {
-			return configuration.RemoteMachineKey(name)
+	if fm, ok := r.conf.(workflow.FlagMetadata); ok {
+		if scope, found := fm.GetFlagAnnotation(name, AnnotationScope); found && scope == "machine" {
+			return RemoteMachineKey(name)
 		}
 	}
-	return configuration.RemoteOrgKey(effectiveOrg, name)
+	return RemoteOrgKey(effectiveOrg, name)
 }
 
 // isUserSet returns true only when the key is explicitly set to a real value (not the keyDeleted marker).
@@ -80,74 +83,74 @@ func (r *Resolver) isUserSet(key string) bool {
 
 // resolveMachine applies: locked remote > user global > remote > default
 // Machine-scope remote config is stored under RemoteMachineKey (remote:machine:<name>), not per-org.
-func (r *Resolver) resolveMachine(name, _ string) (any, configuration.ConfigSource) {
-	remote := r.remoteField(configuration.RemoteMachineKey(name))
+func (r *Resolver) resolveMachine(name, _ string) (any, ConfigSource) {
+	remote := r.remoteField(RemoteMachineKey(name))
 
 	if remote != nil && remote.IsLocked {
-		return remote.Value, configuration.ConfigSourceRemoteLocked
+		return remote.Value, ConfigSourceRemoteLocked
 	}
 
-	if r.isUserSet(configuration.UserGlobalKey(name)) {
-		return r.conf.Get(configuration.UserGlobalKey(name)), configuration.ConfigSourceUserGlobal
+	if r.isUserSet(UserGlobalKey(name)) {
+		return r.conf.Get(UserGlobalKey(name)), ConfigSourceUserGlobal
 	}
 
 	if remote != nil {
-		return remote.Value, configuration.ConfigSourceRemote
+		return remote.Value, ConfigSourceRemote
 	}
 
-	return r.conf.Get(name), configuration.ConfigSourceDefault
+	return r.conf.Get(name), ConfigSourceDefault
 }
 
 // resolveOrg applies: locked remote > user folder override > user global > remote > default
-func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, configuration.ConfigSource) {
-	remote := r.remoteField(configuration.RemoteOrgKey(effectiveOrg, name))
+func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, ConfigSource) {
+	remote := r.remoteField(RemoteOrgKey(effectiveOrg, name))
 
 	if remote != nil && remote.IsLocked {
-		return remote.Value, configuration.ConfigSourceRemoteLocked
+		return remote.Value, ConfigSourceRemoteLocked
 	}
 
 	if folderPath != "" {
-		key := configuration.UserFolderKey(folderPath, name)
+		key := UserFolderKey(folderPath, name)
 		if r.conf.IsSet(key) {
 			if lf := r.localField(key); lf != nil && lf.Changed {
-				return lf.Value, configuration.ConfigSourceUserFolderOverride
+				return lf.Value, ConfigSourceUserFolderOverride
 			}
 		}
 	}
 
-	if r.isUserSet(configuration.UserGlobalKey(name)) {
-		return r.conf.Get(configuration.UserGlobalKey(name)), configuration.ConfigSourceUserGlobal
+	if r.isUserSet(UserGlobalKey(name)) {
+		return r.conf.Get(UserGlobalKey(name)), ConfigSourceUserGlobal
 	}
 
 	if remote != nil {
-		return remote.Value, configuration.ConfigSourceRemote
+		return remote.Value, ConfigSourceRemote
 	}
 
-	return r.conf.Get(name), configuration.ConfigSourceDefault
+	return r.conf.Get(name), ConfigSourceDefault
 }
 
 // resolveFolder applies: folder value > default
-func (r *Resolver) resolveFolder(name, folderPath string) (any, configuration.ConfigSource) {
+func (r *Resolver) resolveFolder(name, folderPath string) (any, ConfigSource) {
 	if folderPath != "" {
-		key := configuration.UserFolderKey(folderPath, name)
+		key := UserFolderKey(folderPath, name)
 		if r.conf.IsSet(key) {
 			if lf := r.localField(key); lf != nil && lf.Changed {
-				return lf.Value, configuration.ConfigSourceFolder
+				return lf.Value, ConfigSourceFolder
 			}
 		}
 	}
 
-	return r.conf.Get(name), configuration.ConfigSourceDefault
+	return r.conf.Get(name), ConfigSourceDefault
 }
 
 // remoteField retrieves a *RemoteConfigField stored at key, or nil if not present/wrong type.
-func (r *Resolver) remoteField(key string) *configuration.RemoteConfigField {
+func (r *Resolver) remoteField(key string) *RemoteConfigField {
 	v := r.conf.Get(key)
 	if v == nil {
 		return nil
 	}
 
-	f, ok := v.(*configuration.RemoteConfigField)
+	f, ok := v.(*RemoteConfigField)
 	if !ok {
 		return nil
 	}
@@ -156,13 +159,13 @@ func (r *Resolver) remoteField(key string) *configuration.RemoteConfigField {
 }
 
 // localField retrieves a *LocalConfigField stored at key, or nil if not present/wrong type.
-func (r *Resolver) localField(key string) *configuration.LocalConfigField {
+func (r *Resolver) localField(key string) *LocalConfigField {
 	v := r.conf.Get(key)
 	if v == nil {
 		return nil
 	}
 
-	f, ok := v.(*configuration.LocalConfigField)
+	f, ok := v.(*LocalConfigField)
 	if !ok {
 		return nil
 	}
