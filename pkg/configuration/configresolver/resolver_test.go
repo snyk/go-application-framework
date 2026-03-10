@@ -36,16 +36,18 @@ func newFlagSetWithAnnotations() *pflag.FlagSet {
 	return fs
 }
 
-func setupConf(t *testing.T) configuration.Configuration {
+func setupConf(t *testing.T) (configuration.Configuration, workflow.FlagMetadata) {
 	t.Helper()
+	fs := newFlagSetWithAnnotations()
 	conf := configuration.NewInMemory()
-	require.NoError(t, conf.AddFlagSet(newFlagSetWithAnnotations()))
-	return conf
+	require.NoError(t, conf.AddFlagSet(fs))
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	return conf, fm
 }
 
 func Test_Resolve_MachineScope_Precedence(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "api_endpoint"
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
@@ -71,8 +73,8 @@ func Test_Resolve_MachineScope_Precedence(t *testing.T) {
 }
 
 func Test_Resolve_OrgScope_Precedence(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "snyk_code_enabled"
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
@@ -103,8 +105,8 @@ func Test_Resolve_OrgScope_Precedence(t *testing.T) {
 }
 
 func Test_Resolve_FolderScope(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "reference_branch"
 	const folderPath = "/workspace/project"
 
@@ -119,8 +121,8 @@ func Test_Resolve_FolderScope(t *testing.T) {
 }
 
 func Test_Resolve_Stateless_OrgParameter(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "snyk_code_enabled"
 	const folderPath = "/workspace/project"
 
@@ -135,8 +137,8 @@ func Test_Resolve_Stateless_OrgParameter(t *testing.T) {
 }
 
 func Test_IsLocked_ReadsRemote(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "snyk_code_enabled"
 	const orgID = "org123"
 
@@ -147,8 +149,8 @@ func Test_IsLocked_ReadsRemote(t *testing.T) {
 }
 
 func Test_LocalConfigField_ChangedRequired(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "snyk_code_enabled"
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
@@ -159,8 +161,8 @@ func Test_LocalConfigField_ChangedRequired(t *testing.T) {
 }
 
 func Test_ResolveBool(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
 
@@ -171,8 +173,8 @@ func Test_ResolveBool(t *testing.T) {
 }
 
 func Test_ResolveMachine_UsesMachineKey(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "api_endpoint"
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
@@ -190,8 +192,8 @@ func Test_ResolveMachine_UsesMachineKey(t *testing.T) {
 }
 
 func Test_IsLocked_MachineScope(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "api_endpoint"
 
 	conf.Set(cr.RemoteMachineKey(name), &cr.RemoteConfigField{Value: "https://locked.example.com", IsLocked: true})
@@ -199,8 +201,8 @@ func Test_IsLocked_MachineScope(t *testing.T) {
 }
 
 func Test_FolderOverride_FromPrefixKeys(t *testing.T) {
-	conf := setupConf(t)
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const name = "snyk_code_enabled"
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
@@ -213,24 +215,18 @@ func Test_FolderOverride_FromPrefixKeys(t *testing.T) {
 }
 
 func Test_Resolver_WithClonedConfig(t *testing.T) {
-	conf := setupConf(t)
+	conf, fm := setupConf(t)
 	clone := conf.Clone()
 
-	resolver := cr.New(clone)
+	resolver := cr.New(clone, fm)
 	val, src := resolver.Resolve("snyk_code_enabled", "org123", "/workspace/project")
 	assert.Equal(t, cr.ConfigSourceDefault, src)
 	assert.Equal(t, false, val)
 }
 
 func Test_Resolve_AllSettingsCorrect(t *testing.T) {
-	conf := configuration.NewInMemory()
-	fm, ok := conf.(workflow.FlagMetadata)
-	require.True(t, ok)
-
-	fs := newFlagSetWithAnnotations()
-	require.NoError(t, conf.AddFlagSet(fs))
-
-	resolver := cr.New(conf)
+	conf, fm := setupConf(t)
+	resolver := cr.New(conf, fm)
 	const orgID = "org123"
 	const folderPath = "/workspace/project"
 

@@ -14,24 +14,22 @@ import (
 //   - Folder:  folder value > default
 type Resolver struct {
 	conf configuration.Configuration
+	fm   workflow.FlagMetadata
 }
 
-// New creates a Resolver backed by the given Configuration instance.
-// The Configuration must implement FlagMetadata (i.e. be created via New/NewInMemory/NewWithOpts
-// and have had AddFlagSet called with annotated flags).
-func New(conf configuration.Configuration) *Resolver {
-	return &Resolver{conf: conf}
+// New creates a Resolver backed by the given Configuration and FlagMetadata.
+func New(conf configuration.Configuration, fm workflow.FlagMetadata) *Resolver {
+	return &Resolver{conf: conf, fm: fm}
 }
 
 // Resolve returns the effective value and its source for the named setting given an effective
 // organization ID and folder path. Both effectiveOrg and folderPath are stateless parameters.
 func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSource) {
-	fm, ok := r.conf.(workflow.FlagMetadata)
-	if !ok {
+	if r.fm == nil {
 		return r.conf.Get(name), ConfigSourceDefault
 	}
 
-	scope, _ := fm.GetFlagAnnotation(name, AnnotationScope)
+	scope, _ := r.fm.GetFlagAnnotation(name, AnnotationScope)
 
 	switch scope {
 	case "machine":
@@ -65,8 +63,8 @@ func (r *Resolver) IsLocked(name, effectiveOrg string) bool {
 
 // remoteKeyForName returns the correct remote config key for the named setting based on its scope annotation.
 func (r *Resolver) remoteKeyForName(name, effectiveOrg string) string {
-	if fm, ok := r.conf.(workflow.FlagMetadata); ok {
-		if scope, found := fm.GetFlagAnnotation(name, AnnotationScope); found && scope == "machine" {
+	if r.fm != nil {
+		if scope, found := r.fm.GetFlagAnnotation(name, AnnotationScope); found && scope == "machine" {
 			return RemoteMachineKey(name)
 		}
 	}

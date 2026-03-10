@@ -53,7 +53,9 @@ type InvocationContext interface {
 }
 
 // ConfigurationOptions is an interface that can be implemented by any type that can be used to pass configuration options to a workflow.
+// It embeds FlagMetadata so registered options expose annotation lookups without coupling callers to pflag.
 type ConfigurationOptions interface {
+	FlagMetadata
 }
 
 // Entry is an interface that wraps the methods that are used to manage workflow entries.

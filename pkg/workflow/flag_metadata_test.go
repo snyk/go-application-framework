@@ -1,4 +1,4 @@
-package configuration_test
+package workflow_test
 
 import (
 	"testing"
@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -41,32 +40,30 @@ func newTestFlagSet() *pflag.FlagSet {
 	return fs
 }
 
-func Test_AddFlagSet_FlagsResolvable(t *testing.T) {
-	conf := configuration.NewInMemory()
-	fm, ok := conf.(workflow.FlagMetadata)
-	require.True(t, ok)
+func newTestConfigOpts() workflow.ConfigurationOptions {
+	return workflow.ConfigurationOptionsFromFlagset(newTestFlagSet())
+}
 
-	require.NoError(t, conf.AddFlagSet(newTestFlagSet()))
+func TestNewFlagMetadata(t *testing.T) {
+	fm := workflow.NewFlagMetadata(newTestConfigOpts())
 
 	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, fm.FlagsByAnnotation("config.scope", "org"))
 	assert.ElementsMatch(t, []string{"api_endpoint"}, fm.FlagsByAnnotation("config.scope", "machine"))
 	assert.ElementsMatch(t, []string{"reference_branch"}, fm.FlagsByAnnotation("config.scope", "folder"))
+}
+
+func TestAdd(t *testing.T) {
+	fm := workflow.NewFlagMetadata()
+
+	fm.Add(newTestConfigOpts())
 
 	name, found := fm.FlagNameByAnnotation("config.remoteKey", "snyk_code_enabled")
 	assert.True(t, found)
 	assert.Equal(t, "snyk_code_enabled", name)
-
-	name, found = fm.FlagNameByAnnotation("config.remoteKey", "api_endpoint")
-	assert.True(t, found)
-	assert.Equal(t, "api_endpoint", name)
 }
 
-func Test_GetFlagAnnotation(t *testing.T) {
-	conf := configuration.NewInMemory()
-	fm, ok := conf.(workflow.FlagMetadata)
-	require.True(t, ok)
-
-	require.NoError(t, conf.AddFlagSet(newTestFlagSet()))
+func TestGetFlagAnnotation(t *testing.T) {
+	fm := workflow.NewFlagMetadata(newTestConfigOpts())
 
 	val, found := fm.GetFlagAnnotation("snyk_code_enabled", "config.scope")
 	assert.True(t, found)
@@ -80,12 +77,8 @@ func Test_GetFlagAnnotation(t *testing.T) {
 	assert.False(t, found)
 }
 
-func Test_FlagsByAnnotation_Scope(t *testing.T) {
-	conf := configuration.NewInMemory()
-	fm, ok := conf.(workflow.FlagMetadata)
-	require.True(t, ok)
-
-	require.NoError(t, conf.AddFlagSet(newTestFlagSet()))
+func TestFlagsByAnnotation_Scope(t *testing.T) {
+	fm := workflow.NewFlagMetadata(newTestConfigOpts())
 
 	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, fm.FlagsByAnnotation("config.scope", "org"))
 	assert.ElementsMatch(t, []string{"api_endpoint"}, fm.FlagsByAnnotation("config.scope", "machine"))
@@ -93,12 +86,8 @@ func Test_FlagsByAnnotation_Scope(t *testing.T) {
 	assert.Empty(t, fm.FlagsByAnnotation("config.scope", "nonexistent"))
 }
 
-func Test_FlagNameByAnnotation_RemoteKey(t *testing.T) {
-	conf := configuration.NewInMemory()
-	fm, ok := conf.(workflow.FlagMetadata)
-	require.True(t, ok)
-
-	require.NoError(t, conf.AddFlagSet(newTestFlagSet()))
+func TestFlagNameByAnnotation_RemoteKey(t *testing.T) {
+	fm := workflow.NewFlagMetadata(newTestConfigOpts())
 
 	name, found := fm.FlagNameByAnnotation("config.remoteKey", "snyk_code_enabled")
 	assert.True(t, found)
@@ -112,12 +101,8 @@ func Test_FlagNameByAnnotation_RemoteKey(t *testing.T) {
 	assert.False(t, found)
 }
 
-func Test_GetFlagType_And_Usage(t *testing.T) {
-	conf := configuration.NewInMemory()
-	fm, ok := conf.(workflow.FlagMetadata)
-	require.True(t, ok)
-
-	require.NoError(t, conf.AddFlagSet(newTestFlagSet()))
+func TestGetFlagType_And_Usage(t *testing.T) {
+	fm := workflow.NewFlagMetadata(newTestConfigOpts())
 
 	assert.Equal(t, "bool", fm.GetFlagType("snyk_code_enabled"))
 	assert.Equal(t, "string", fm.GetFlagType("api_endpoint"))
@@ -128,25 +113,13 @@ func Test_GetFlagType_And_Usage(t *testing.T) {
 	assert.Equal(t, "", fm.GetFlagUsage("nonexistent_flag"))
 }
 
-func Test_ClonePreservesFlagMetadata(t *testing.T) {
-	conf := configuration.NewInMemory()
-	require.NoError(t, conf.AddFlagSet(newTestFlagSet()))
+func TestConfigurationOptionsImpl_ImplementsFlagMetadata(t *testing.T) {
+	var opts workflow.ConfigurationOptions = workflow.ConfigurationOptionsFromFlagset(newTestFlagSet())
+	var _ workflow.FlagMetadata = opts
+	require.True(t, true)
+}
 
-	clone := conf.Clone()
-	fm, ok := clone.(workflow.FlagMetadata)
-	require.True(t, ok, "Clone must implement FlagMetadata")
-
-	val, found := fm.GetFlagAnnotation("snyk_code_enabled", "config.scope")
-	assert.True(t, found)
-	assert.Equal(t, "org", val)
-
-	orgFlags := fm.FlagsByAnnotation("config.scope", "org")
-	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, orgFlags)
-
-	name, found := fm.FlagNameByAnnotation("config.remoteKey", "api_endpoint")
-	assert.True(t, found)
-	assert.Equal(t, "api_endpoint", name)
-
-	assert.Equal(t, "bool", fm.GetFlagType("snyk_code_enabled"))
-	assert.Equal(t, "Enable Snyk Code analysis", fm.GetFlagUsage("snyk_code_enabled"))
+func TestFlagMetadataStore_ImplementsFlagMetadata(t *testing.T) {
+	var _ workflow.FlagMetadata = workflow.NewFlagMetadata()
+	require.True(t, true)
 }
