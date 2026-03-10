@@ -8,7 +8,8 @@ import (
 )
 
 func Test_MakeRelativePathsAbsolute(t *testing.T) {
-	baseDir := filepath.Join("/", "home", "user", "project")
+	baseDir := t.TempDir()
+	differentAbsDir := t.TempDir()
 
 	t.Run("resolves relative paths", func(t *testing.T) {
 		input := []string{".snyk.env", ".envrc"}
@@ -21,7 +22,7 @@ func Test_MakeRelativePathsAbsolute(t *testing.T) {
 	})
 
 	t.Run("leaves absolute paths unchanged", func(t *testing.T) {
-		absPath := filepath.Join("/", "etc", "config.env")
+		absPath := filepath.Join(differentAbsDir, "config.env")
 		input := []string{absPath}
 		result := MakeRelativePathsAbsolute(baseDir, input)
 
@@ -29,7 +30,7 @@ func Test_MakeRelativePathsAbsolute(t *testing.T) {
 	})
 
 	t.Run("handles mix of relative and absolute", func(t *testing.T) {
-		absPath := filepath.Join("/", "etc", "config.env")
+		absPath := filepath.Join(differentAbsDir, "config.env")
 		input := []string{absPath, ".snyk.env"}
 		result := MakeRelativePathsAbsolute(baseDir, input)
 
