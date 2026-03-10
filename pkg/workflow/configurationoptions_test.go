@@ -264,6 +264,10 @@ func TestConfigurationOptionsFromFlagset_WarnsOnColonInFlagName(t *testing.T) {
 	assert.Contains(t, buf.String(), `flag name "has:colon"`)
 }
 
+func TestConfigurationOptionsFromFlagset_NilFlagset(t *testing.T) {
+	assert.Nil(t, workflow.ConfigurationOptionsFromFlagset(nil))
+}
+
 func TestConfigurationOptionsFromFlagset_AcceptsValidNames(t *testing.T) {
 	fs := pflag.NewFlagSet("good", pflag.ContinueOnError)
 	fs.Bool("valid_flag", false, "ok")

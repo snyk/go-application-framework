@@ -14,7 +14,7 @@ import (
 // Precedence rules:
 //   - Machine: locked remote > user global > remote > default
 //   - Org:     locked remote > user folder override > user global > remote > default
-//   - Folder:  locked remote > folder value > remote > default
+//   - Folder:  locked remote > folder value > remote > user global > default
 type Resolver struct {
 	conf configuration.Configuration
 	fm   workflow.FlagMetadata
@@ -183,7 +183,7 @@ func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, Confi
 	return r.conf.Get(name), ConfigSourceDefault
 }
 
-// resolveFolder applies: locked remote > folder value > remote > default
+// resolveFolder applies: locked remote > folder value > remote > user global > default
 func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, ConfigSource) {
 	remoteFolder := r.remoteFolderField(effectiveOrg, folderPath, name)
 	remoteOrg := r.remoteField(RemoteOrgKey(effectiveOrg, name))
@@ -209,6 +209,11 @@ func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, Co
 	}
 	if remoteOrg != nil {
 		return remoteOrg.Value, ConfigSourceRemote
+	}
+
+	ugk := UserGlobalKey(name)
+	if r.isUserSet(ugk) {
+		return r.conf.Get(ugk), ConfigSourceUserGlobal
 	}
 
 	return r.conf.Get(name), ConfigSourceDefault

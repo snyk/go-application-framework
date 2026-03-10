@@ -315,6 +315,35 @@ func Test_Resolve_FolderScope(t *testing.T) {
 		assert.Equal(t, cr.ConfigSourceRemoteLocked, src)
 		assert.Equal(t, "release", val)
 	})
+
+	t.Run("user global applied when no folder value or remote", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey(name), "main")
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceUserGlobal, src)
+		assert.Equal(t, "main", val)
+	})
+
+	t.Run("remote overrides user global", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey(name), "main")
+		conf.Set(cr.RemoteOrgKey(orgID, name), &cr.RemoteConfigField{Value: "develop"})
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceRemote, src)
+		assert.Equal(t, "develop", val)
+	})
+
+	t.Run("folder value overrides user global", func(t *testing.T) {
+		conf, fm := setupConf(t)
+		resolver := cr.New(conf, fm)
+		conf.Set(cr.UserGlobalKey(name), "main")
+		conf.Set(cr.UserFolderKey(folderPath, name), &cr.LocalConfigField{Value: "release", Changed: true})
+		val, src := resolver.Resolve(name, orgID, folderPath)
+		assert.Equal(t, cr.ConfigSourceFolder, src)
+		assert.Equal(t, "release", val)
+	})
 }
 
 // --- IsLocked ---

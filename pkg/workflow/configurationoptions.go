@@ -38,8 +38,12 @@ type ConfigurationOptionsImpl struct {
 }
 
 // ConfigurationOptionsFromFlagset creates a ConfigurationOptions backed by the given pflag.FlagSet.
+// Returns nil when flagset is nil.
 // Logs a warning if any flag name contains a colon, which could collide with the prefix key delimiter.
 func ConfigurationOptionsFromFlagset(flagset *pflag.FlagSet) ConfigurationOptions {
+	if flagset == nil {
+		return nil
+	}
 	flagset.VisitAll(func(f *pflag.Flag) {
 		if strings.Contains(f.Name, ":") {
 			log.Printf("WARNING: flag name %q contains a colon, which may collide with the internal key delimiter", f.Name)
