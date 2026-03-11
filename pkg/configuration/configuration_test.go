@@ -900,8 +900,7 @@ func Test_extendedViper_cacheSettings(t *testing.T) {
 
 	ev, ok := config.(*extendedViper)
 	assert.True(t, ok)
-	enabled, duration, err := ev.getCacheSettings()
-	assert.NoError(t, err)
+	enabled, duration := ev.getCacheSettings()
 	assert.True(t, enabled)
 	assert.Equal(t, cacheDuration, duration)
 }

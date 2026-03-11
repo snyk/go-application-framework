@@ -472,11 +472,7 @@ func (ev *extendedViper) GetWithError(key string) (interface{}, error) {
 	defaultFunc = ev.defaultValues[key]
 
 	// if enabled use cache
-	cacheEnabled, cacheDuration, err = ev.getCacheSettings()
-	if err != nil {
-		ev.mutex.Unlock()
-		return nil, fmt.Errorf("failed to read cache settings %w", err)
-	}
+	cacheEnabled, cacheDuration = ev.getCacheSettings()
 
 	if cacheEnabled {
 		localDefaultCache = ev.defaultCache
@@ -868,11 +864,18 @@ func (ev *extendedViper) setCache(c *cache.Cache) {
 
 // getCacheSettings returns the cached cache-settings fields.
 // The fields are kept in sync by updateCacheSettings, called from Set.
-func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
+// An env var override for CONFIG_CACHE_DISABLED is checked directly to
+// allow runtime cache disabling without requiring a Set() call.
+func (ev *extendedViper) getCacheSettings() (bool, time.Duration) {
 	if ev.defaultCache == nil {
-		return false, 0, nil
+		return false, 0
 	}
-	return ev.cacheEnabled, ev.cacheDuration, nil
+	if envVal, ok := os.LookupEnv(strings.ToUpper(CONFIG_CACHE_DISABLED)); ok {
+		if disabled, err := strconv.ParseBool(envVal); err == nil && disabled {
+			return false, 0
+		}
+	}
+	return ev.cacheEnabled, ev.cacheDuration
 }
 
 // updateCacheSettings keeps the struct-level cache-setting fields in sync

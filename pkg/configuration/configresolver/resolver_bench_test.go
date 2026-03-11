@@ -36,7 +36,9 @@ func setupBenchWithCache(b *testing.B) (configuration.Configuration, workflow.Fl
 	return conf, fm
 }
 
-func addRemoteConfig(conf configuration.Configuration, orgID, folderPath string) {
+func addRemoteConfig(conf configuration.Configuration) {
+	const orgID = "org123"
+	const folderPath = "/workspace/project"
 	conf.Set(cr.RemoteOrgKey(orgID, "snyk_code_enabled"), &cr.RemoteConfigField{Value: true})
 	conf.Set(cr.RemoteMachineKey("api_endpoint"), &cr.RemoteConfigField{Value: "https://api.snyk.io"})
 	conf.Set(cr.RemoteOrgFolderKey(orgID, folderPath, "reference_branch"), &cr.RemoteConfigField{Value: "main"})
@@ -55,7 +57,7 @@ func addManyFlags(fs *pflag.FlagSet, n int) {
 
 func BenchmarkResolve_OrgScope(b *testing.B) {
 	conf, fm := setupBench(b)
-	addRemoteConfig(conf, "org123", "/workspace/project")
+	addRemoteConfig(conf)
 	resolver := cr.New(conf, fm)
 
 	b.ResetTimer()
@@ -67,7 +69,7 @@ func BenchmarkResolve_OrgScope(b *testing.B) {
 
 func BenchmarkResolve_OrgScope_WithCache(b *testing.B) {
 	conf, fm := setupBenchWithCache(b)
-	addRemoteConfig(conf, "org123", "/workspace/project")
+	addRemoteConfig(conf)
 	resolver := cr.New(conf, fm)
 
 	b.ResetTimer()
@@ -79,7 +81,7 @@ func BenchmarkResolve_OrgScope_WithCache(b *testing.B) {
 
 func BenchmarkResolve_FolderScope(b *testing.B) {
 	conf, fm := setupBench(b)
-	addRemoteConfig(conf, "org123", "/workspace/project")
+	addRemoteConfig(conf)
 	resolver := cr.New(conf, fm)
 
 	b.ResetTimer()
@@ -91,7 +93,7 @@ func BenchmarkResolve_FolderScope(b *testing.B) {
 
 func BenchmarkResolve_MachineScope(b *testing.B) {
 	conf, fm := setupBench(b)
-	addRemoteConfig(conf, "org123", "/workspace/project")
+	addRemoteConfig(conf)
 	resolver := cr.New(conf, fm)
 
 	b.ResetTimer()
@@ -110,7 +112,7 @@ func BenchmarkResolve_ManyFlags(b *testing.B) {
 	)
 	require.NoError(b, conf.AddFlagSet(fs))
 	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
-	addRemoteConfig(conf, "org123", "/workspace/project")
+	addRemoteConfig(conf)
 	resolver := cr.New(conf, fm)
 
 	b.ResetTimer()
