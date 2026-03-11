@@ -63,7 +63,7 @@ func BenchmarkGetWithError_CachingEnabled(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = config.GetWithError("bench_key")
+		_, _ = config.GetWithError("bench_key") //nolint:errcheck // benchmark intentionally discards error
 	}
 }
 

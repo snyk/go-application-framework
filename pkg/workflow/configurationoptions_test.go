@@ -86,7 +86,8 @@ func newTestConfigOpts() workflow.ConfigurationOptions {
 
 func TestGetConfigurationOptionAnnotation(t *testing.T) {
 	opts := newTestConfigOpts()
-	md := opts.(workflow.ConfigurationOptionsMetaData)
+	md, ok := opts.(workflow.ConfigurationOptionsMetaData)
+	assert.True(t, ok)
 
 	tests := []struct {
 		name       string
@@ -112,7 +113,8 @@ func TestGetConfigurationOptionAnnotation(t *testing.T) {
 
 func TestConfigurationOptionsByAnnotation(t *testing.T) {
 	opts := newTestConfigOpts()
-	md := opts.(workflow.ConfigurationOptionsMetaData)
+	md, ok := opts.(workflow.ConfigurationOptionsMetaData)
+	assert.True(t, ok)
 
 	tests := []struct {
 		name       string
@@ -137,7 +139,8 @@ func TestConfigurationOptionsByAnnotation(t *testing.T) {
 
 func TestConfigurationOptionNameByAnnotation(t *testing.T) {
 	opts := newTestConfigOpts()
-	md := opts.(workflow.ConfigurationOptionsMetaData)
+	md, ok := opts.(workflow.ConfigurationOptionsMetaData)
+	assert.True(t, ok)
 
 	tests := []struct {
 		name       string
@@ -163,7 +166,8 @@ func TestConfigurationOptionNameByAnnotation(t *testing.T) {
 
 func TestGetConfigurationOptionType(t *testing.T) {
 	opts := newTestConfigOpts()
-	md := opts.(workflow.ConfigurationOptionsMetaData)
+	md, ok := opts.(workflow.ConfigurationOptionsMetaData)
+	assert.True(t, ok)
 
 	tests := []struct {
 		name     string
@@ -184,7 +188,8 @@ func TestGetConfigurationOptionType(t *testing.T) {
 
 func TestGetConfigurationOptionUsage(t *testing.T) {
 	opts := newTestConfigOpts()
-	md := opts.(workflow.ConfigurationOptionsMetaData)
+	md, ok := opts.(workflow.ConfigurationOptionsMetaData)
+	assert.True(t, ok)
 
 	tests := []struct {
 		name     string

@@ -41,7 +41,7 @@ func TestAnalyticsWrapper_DelegatedMethods(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send (will fail since no real server, but exercises the code path)
-	_, _ = wrapper.Send()
+	_, _ = wrapper.Send() //nolint:errcheck // exercises code path; no real server
 
 	// GetInstrumentation
 	ic := wrapper.GetInstrumentation()

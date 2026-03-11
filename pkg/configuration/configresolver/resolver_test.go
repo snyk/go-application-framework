@@ -39,7 +39,7 @@ func newTestFlagSet() *pflag.FlagSet {
 
 func newResolver(conf configuration.Configuration, fs *pflag.FlagSet) *configresolver.Resolver {
 	opts := workflow.ConfigurationOptionsFromFlagset(fs)
-	md, _ := opts.(workflow.ConfigurationOptionsMetaData)
+	md, _ := opts.(workflow.ConfigurationOptionsMetaData) //nolint:errcheck // test helper; panics on failure
 	return configresolver.New(conf, md)
 }
 

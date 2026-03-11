@@ -858,7 +858,7 @@ func (ev *extendedViper) setCache(c *cache.Cache) {
 
 // getCacheSettings reads the cache-disabled and cache-TTL values through
 // Viper so that values from any source (Set(), config files, SetDefault,
-// AutomaticEnv-bound env vars) are honoured.
+// AutomaticEnv-bound env vars) are honored.
 // It uses ev.viper.Get() directly instead of ev.get() because the two
 // internal cache keys have no alternative keys and no prefix-based env-var
 // binding, so the extra bindEnv / IsSet / alternative-key overhead of

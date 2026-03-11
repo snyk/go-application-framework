@@ -1179,7 +1179,7 @@ func Test_EmptyStorage(t *testing.T) {
 	s := &EmptyStorage{}
 	assert.NoError(t, s.Set("k", "v"))
 	assert.NoError(t, s.Refresh(nil, "k"))
-	assert.NoError(t, s.Lock(nil, 0))
+	assert.NoError(t, s.Lock(context.TODO(), 0))
 	assert.NoError(t, s.Unlock())
 }
 
@@ -1193,7 +1193,8 @@ func Test_getCacheSettings(t *testing.T) {
 	t.Run("enabled with TTL via WithCachingEnabled", func(t *testing.T) {
 		cacheDuration := 10 * time.Minute
 		config := NewWithOpts(WithCachingEnabled(cacheDuration))
-		ev := config.(*extendedViper)
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
 
 		enabled, dur := ev.getCacheSettings()
 		assert.True(t, enabled)
@@ -1202,7 +1203,8 @@ func Test_getCacheSettings(t *testing.T) {
 
 	t.Run("disabled via Set()", func(t *testing.T) {
 		config := NewWithOpts(WithCachingEnabled(10 * time.Minute))
-		ev := config.(*extendedViper)
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
 
 		config.Set(CONFIG_CACHE_DISABLED, true)
 		enabled, _ := ev.getCacheSettings()
@@ -1212,7 +1214,8 @@ func Test_getCacheSettings(t *testing.T) {
 	t.Run("disabled via env var with AutomaticEnv", func(t *testing.T) {
 		t.Setenv("INTERNAL_CONFIG_CACHE_DISABLED", "true")
 		config := NewWithOpts(WithAutomaticEnv(), WithCachingEnabled(5*time.Minute))
-		ev := config.(*extendedViper)
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
 
 		enabled, _ := ev.getCacheSettings()
 		assert.False(t, enabled)
@@ -1220,7 +1223,8 @@ func Test_getCacheSettings(t *testing.T) {
 
 	t.Run("TTL read from Set()", func(t *testing.T) {
 		config := NewWithOpts(WithCachingEnabled(5 * time.Minute))
-		ev := config.(*extendedViper)
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
 
 		config.Set(CONFIG_CACHE_TTL, 20*time.Minute)
 		_, dur := ev.getCacheSettings()
@@ -1229,7 +1233,8 @@ func Test_getCacheSettings(t *testing.T) {
 
 	t.Run("nil cache returns disabled", func(t *testing.T) {
 		config := NewWithOpts()
-		ev := config.(*extendedViper)
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
 
 		enabled, dur := ev.getCacheSettings()
 		assert.False(t, enabled)
