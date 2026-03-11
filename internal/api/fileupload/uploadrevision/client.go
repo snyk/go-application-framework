@@ -167,18 +167,32 @@ func streamFilesToPipe(pipeWriter *io.PipeWriter, mpartWriter *multipart.Writer,
 	}()
 
 	for _, file := range files {
-		// Create form file part
 		part, err := mpartWriter.CreateFormFile(file.Path, file.Path)
 		if err != nil {
 			streamError = NewMultipartError(file.Path, err)
 			return
 		}
 
-		if _, err := io.Copy(part, file.File); err != nil {
+		if _, err := io.Copy(part, &crlfNormReader{r: file.File}); err != nil {
 			streamError = fmt.Errorf("failed to copy file content for %s: %w", file.Path, err)
 			return
 		}
 	}
+}
+
+// crlfNormReader wraps an io.Reader and replaces \r\n with \n during Read.
+type crlfNormReader struct {
+	r io.Reader
+}
+
+func (c *crlfNormReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	if n > 0 {
+		normalized := bytes.ReplaceAll(p[:n], []byte("\r\n"), []byte("\n"))
+		copy(p, normalized)
+		n = len(normalized)
+	}
+	return n, err
 }
 
 // validateFiles validates the files before upload.
