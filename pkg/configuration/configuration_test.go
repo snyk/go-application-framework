@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
@@ -903,6 +904,42 @@ func Test_extendedViper_cacheSettings(t *testing.T) {
 	enabled, duration := ev.getCacheSettings()
 	assert.True(t, enabled)
 	assert.Equal(t, cacheDuration, duration)
+}
+
+func Test_extendedViper_cacheEnabledByDefault(t *testing.T) {
+	t.Run("caching enabled by default when cache is provided", func(t *testing.T) {
+		config := NewWithOpts()
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
+
+		localCache := cache.New(5*time.Minute, defaultCacheCleanupInterval)
+		ev.setCache(localCache)
+
+		enabled, _ := ev.getCacheSettings()
+		assert.True(t, enabled, "caching should be enabled by default when a cache is provided")
+	})
+
+	t.Run("caching disabled when explicitly set", func(t *testing.T) {
+		config := NewWithOpts()
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
+
+		localCache := cache.New(5*time.Minute, defaultCacheCleanupInterval)
+		ev.setCache(localCache)
+		config.Set(CONFIG_CACHE_DISABLED, true)
+
+		enabled, _ := ev.getCacheSettings()
+		assert.False(t, enabled, "caching should be disabled when CONFIG_CACHE_DISABLED is set to true")
+	})
+
+	t.Run("caching disabled without cache", func(t *testing.T) {
+		config := NewWithOpts()
+		ev, ok := config.(*extendedViper)
+		assert.True(t, ok)
+
+		enabled, _ := ev.getCacheSettings()
+		assert.False(t, enabled, "caching should be disabled when no cache is provided")
+	})
 }
 
 func Test_toDuration(t *testing.T) {

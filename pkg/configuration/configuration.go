@@ -112,7 +112,9 @@ type extendedViper struct {
 
 	// Cached cache-settings to avoid expensive ev.get() round-trips on every Get call.
 	// Updated via Set when CONFIG_CACHE_DISABLED or CONFIG_CACHE_TTL is written.
-	cacheEnabled  bool
+	// cacheDisabled uses inverted sense so the zero-value (false) means "enabled",
+	// matching the original behavior where caching was on by default when a cache existed.
+	cacheDisabled bool
 	cacheDuration time.Duration
 }
 
@@ -875,7 +877,7 @@ func (ev *extendedViper) getCacheSettings() (bool, time.Duration) {
 			return false, 0
 		}
 	}
-	return ev.cacheEnabled, ev.cacheDuration
+	return !ev.cacheDisabled, ev.cacheDuration
 }
 
 // updateCacheSettings keeps the struct-level cache-setting fields in sync
@@ -884,7 +886,7 @@ func (ev *extendedViper) updateCacheSettings(key string, value interface{}) {
 	switch key {
 	case CONFIG_CACHE_DISABLED:
 		if b, err := toBool(value); err == nil {
-			ev.cacheEnabled = !b
+			ev.cacheDisabled = b
 		}
 	case CONFIG_CACHE_TTL:
 		if d, err := toDuration(value); err == nil {
