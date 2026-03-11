@@ -109,6 +109,11 @@ type extendedViper struct {
 	supportedEnvVars []string
 
 	interkeyDependencies map[string][]string
+
+	// Cached cache-settings to avoid expensive ev.get() round-trips on every Get call.
+	// Updated via Set when CONFIG_CACHE_DISABLED or CONFIG_CACHE_TTL is written.
+	cacheEnabled  bool
+	cacheDuration time.Duration
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -362,6 +367,7 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	isPersisted := ev.persistedKeys[key]
 	ev.viper.Set(key, value)
 	ev.clearCache(key)
+	ev.updateCacheSettings(key, value)
 
 	ev.mutex.Unlock()
 
@@ -391,13 +397,16 @@ func (ev *extendedViper) get(key string) (result interface{}, err error) {
 	return result, err
 }
 
-// bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var
+// bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var.
+// Short-circuits before calling AllKeys() when the key cannot be an env var, avoiding
+// Viper's expensive internal map rebuild on every lookup.
 func (ev *extendedViper) bindEnv(key string) error {
-	isEnvVarKeyType := ev.getKeyType(key) == EnvVarKeyType
-	isInAllKeys := slices.Contains(ev.viper.AllKeys(), key)
+	if ev.automaticEnvEnabled || ev.getKeyType(key) != EnvVarKeyType {
+		return nil
+	}
 
 	// Viper's BindEnv implementation will bind the same env var multiple times, this check avoids potential duplication issues
-	if !isEnvVarKeyType || isInAllKeys || ev.automaticEnvEnabled {
+	if slices.Contains(ev.viper.AllKeys(), key) {
 		return nil
 	}
 
@@ -857,42 +866,28 @@ func (ev *extendedViper) setCache(c *cache.Cache) {
 	ev.defaultCache = c
 }
 
-// return true if enabled and a caching duration
+// getCacheSettings returns the cached cache-settings fields.
+// The fields are kept in sync by updateCacheSettings, called from Set.
 func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
 	if ev.defaultCache == nil {
 		return false, 0, nil
 	}
+	return ev.cacheEnabled, ev.cacheDuration, nil
+}
 
-	disabledRaw, err := ev.get(CONFIG_CACHE_DISABLED)
-	if err != nil {
-		return false, 0, err
-	}
-
-	durationRaw, err := ev.get(CONFIG_CACHE_TTL)
-	if err != nil {
-		return false, 0, err
-	}
-
-	enabled := true
-	duration := time.Duration(0)
-	if disabledRaw != nil {
-		disabled, boolError := toBool(disabledRaw)
-		if boolError != nil {
-			return false, 0, boolError
+// updateCacheSettings keeps the struct-level cache-setting fields in sync
+// whenever CONFIG_CACHE_DISABLED or CONFIG_CACHE_TTL is written via Set.
+func (ev *extendedViper) updateCacheSettings(key string, value interface{}) {
+	switch key {
+	case CONFIG_CACHE_DISABLED:
+		if b, err := toBool(value); err == nil {
+			ev.cacheEnabled = !b
 		}
-
-		enabled = !disabled
-	}
-
-	if durationRaw != nil {
-		tmp, durError := toDuration(durationRaw)
-		if durError != nil {
-			return false, 0, durError
+	case CONFIG_CACHE_TTL:
+		if d, err := toDuration(value); err == nil {
+			ev.cacheDuration = d
 		}
-		duration = tmp
 	}
-
-	return enabled, duration, nil
 }
 
 func (ev *extendedViper) detectCircularDependency(key string, dependencyKey string) error {
