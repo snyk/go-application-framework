@@ -78,7 +78,7 @@ func TestResolve_NilFieldMap(t *testing.T) {
 	r := configresolver.New(conf, nil)
 	val, src := r.Resolve("k", "org1", "/proj")
 	assert.Equal(t, "default-val", val)
-	assert.Equal(t, configresolver.ConfigSourceDefault, src)
+	assert.Equal(t, configresolver.ConfigSourceLocal, src)
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ func TestResolve_UnscopedFlag(t *testing.T) {
 	r := newResolver(conf, fs)
 	val, src := r.Resolve("unscoped_flag", "org1", "/proj")
 	assert.Equal(t, "plain", val)
-	assert.Equal(t, configresolver.ConfigSourceDefault, src)
+	assert.Equal(t, configresolver.ConfigSourceLocal, src)
 }
 
 // ---------------------------------------------------------------------------
@@ -499,6 +499,58 @@ func TestIsLocked(t *testing.T) {
 
 			got := r.IsLocked(flagName, org, tc.folderPath...)
 			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// fallback — ConfigSourceLocal vs ConfigSourceDefault
+// ---------------------------------------------------------------------------
+
+func TestResolve_FallbackSourceLocal(t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      func(conf configuration.Configuration)
+		wantVal    any
+		wantSource configresolver.ConfigSource
+	}{
+		{
+			name:       "unset key returns ConfigSourceDefault",
+			setup:      func(conf configuration.Configuration) {},
+			wantVal:    nil,
+			wantSource: configresolver.ConfigSourceDefault,
+		},
+		{
+			name: "explicitly Set key returns ConfigSourceLocal",
+			setup: func(conf configuration.Configuration) {
+				conf.Set("api_endpoint", "https://custom.api")
+			},
+			wantVal:    "https://custom.api",
+			wantSource: configresolver.ConfigSourceLocal,
+		},
+		{
+			name: "env var via AutomaticEnv returns ConfigSourceLocal",
+			setup: func(conf configuration.Configuration) {
+				// AutomaticEnv is already enabled via NewInMemory
+			},
+			wantVal:    "https://env.api",
+			wantSource: configresolver.ConfigSourceLocal,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "env var via AutomaticEnv returns ConfigSourceLocal" {
+				t.Setenv("API_ENDPOINT", "https://env.api")
+			}
+			fs := newTestFlagSet()
+			conf := configuration.NewInMemory()
+			tc.setup(conf)
+			r := newResolver(conf, fs)
+
+			val, src := r.Resolve("api_endpoint", "org1", "")
+			assert.Equal(t, tc.wantVal, val)
+			assert.Equal(t, tc.wantSource, src)
 		})
 	}
 }

@@ -29,7 +29,7 @@ func New(conf configuration.Configuration, fm workflow.ConfigurationOptionsMetaD
 // organization ID and folder path. Both effectiveOrg and folderPath are stateless parameters.
 func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSource) {
 	if r.fm == nil {
-		return r.conf.Get(name), ConfigSourceDefault
+		return r.fallback(name)
 	}
 
 	scope, _ := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope)
@@ -42,7 +42,7 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSo
 	case "folder":
 		return r.resolveFolder(name, effectiveOrg, folderPath)
 	default:
-		return r.conf.Get(name), ConfigSourceDefault
+		return r.fallback(name)
 	}
 }
 
@@ -142,7 +142,7 @@ func (r *Resolver) resolveMachine(name, _ string) (any, ConfigSource) {
 		return remote.Value, ConfigSourceRemote
 	}
 
-	return r.conf.Get(name), ConfigSourceDefault
+	return r.fallback(name)
 }
 
 // resolveOrg applies: locked remote > user folder override > user global > remote > default
@@ -180,7 +180,7 @@ func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, Confi
 		return remoteOrg.Value, ConfigSourceRemote
 	}
 
-	return r.conf.Get(name), ConfigSourceDefault
+	return r.fallback(name)
 }
 
 // resolveFolder applies: locked remote > folder value > remote > user global > default
@@ -216,7 +216,7 @@ func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, Co
 		return r.conf.Get(ugk), ConfigSourceUserGlobal
 	}
 
-	return r.conf.Get(name), ConfigSourceDefault
+	return r.fallback(name)
 }
 
 // remoteField retrieves a *RemoteConfigField stored at key, or nil if not present/wrong type.
@@ -240,6 +240,16 @@ func (r *Resolver) remoteFolderField(effectiveOrg, folderPath, name string) *Rem
 		return nil
 	}
 	return r.remoteField(RemoteOrgFolderKey(effectiveOrg, folderPath, name))
+}
+
+// fallback returns the value from the underlying configuration for name along with the
+// appropriate source: ConfigSourceLocal when the key is actively set (env var, CLI flag,
+// config file, explicit Set), ConfigSourceDefault when it is truly a flag default.
+func (r *Resolver) fallback(name string) (any, ConfigSource) {
+	if r.conf.IsSet(name) {
+		return r.conf.Get(name), ConfigSourceLocal
+	}
+	return r.conf.Get(name), ConfigSourceDefault
 }
 
 // localField retrieves a *LocalConfigField stored at key, or nil if not present/wrong type.

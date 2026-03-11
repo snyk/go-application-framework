@@ -34,6 +34,7 @@ type ConfigSource int
 
 const (
 	ConfigSourceDefault            ConfigSource = iota // default value from flag registration
+	ConfigSourceLocal                                  // set locally (env var, CLI flag, config file, or explicit Set)
 	ConfigSourceUserGlobal                             // user:global:<name>
 	ConfigSourceUserFolderOverride                     // user:folder:<folderPath>:<name> (org-scope override)
 	ConfigSourceFolder                                 // user:folder:<folderPath>:<name> (folder-scope)
