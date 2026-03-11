@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+
 	"github.com/snyk/go-application-framework/internal/presenters"
 )
 
@@ -73,23 +74,14 @@ func (f *Formatter) formatProxyConfig(config ProxyConfig) error {
 	f.output("")
 	f.output("Environment variables:")
 
-	proxyVars := []struct {
-		name  string
-		value string
-	}{
-		{"HTTPS_PROXY", getEnvOrEmpty("HTTPS_PROXY")},
-		{"https_proxy", getEnvOrEmpty("https_proxy")},
-		{"HTTP_PROXY", getEnvOrEmpty("HTTP_PROXY")},
-		{"http_proxy", getEnvOrEmpty("http_proxy")},
-		{"NO_PROXY", getEnvOrEmpty("NO_PROXY")},
-		{"no_proxy", getEnvOrEmpty("no_proxy")},
-	}
-
-	for _, pv := range proxyVars {
-		if pv.value != "" {
-			f.output(fmt.Sprintf("  %-12s %s", pv.name+":", f.renderHTML(fmt.Sprintf(`<span class="warning">%s</span>`, pv.value))))
-		} else {
-			f.output(fmt.Sprintf("  %-12s %s", pv.name+":", f.renderHTML(`<span class="prompt-help">(not set)</span>`)))
+	for _, spec := range envVarSpecs {
+		for _, envVarName := range spec.names {
+			envVarValue := getEnvOrEmpty(envVarName)
+			if envVarValue != "" {
+				f.output(fmt.Sprintf("  %-21s %s", envVarName+":", f.renderHTML(fmt.Sprintf(`<span class="warning">%s</span>`, envVarValue))))
+			} else {
+				f.output(fmt.Sprintf("  %-21s %s", envVarName+":", f.renderHTML(`<span class="prompt-help">(not set)</span>`)))
+			}
 		}
 	}
 
@@ -181,7 +173,8 @@ func (f *Formatter) formatOrganizations(result *ConnectivityCheckResult) error {
 	if result.OrgCheckError != nil {
 		errMsg := fmt.Sprintf(`<span class="error">✗</span> Failed to fetch organizations: %v`, result.OrgCheckError)
 		f.output(f.renderHTML(errMsg))
-		return result.OrgCheckError
+		//nolint:nilerr // Organization fetch error is displayed to user; not a formatter error, continue formatting
+		return nil
 	}
 
 	if len(result.Organizations) == 0 {

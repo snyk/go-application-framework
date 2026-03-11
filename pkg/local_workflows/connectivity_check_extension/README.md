@@ -30,6 +30,10 @@ The tool respects standard proxy environment variables:
 For custom certificates:
 - `NODE_EXTRA_CA_CERTS` - Path to additional CA certificates bundle
 
+For proxy authentication (Kerberos on Linux/macOS):
+- `KRB5_CONFIG` - Kerberos configuration file path
+- `KRB5CCNAME` - Kerberos credential cache
+
 ### Authentication
 
 The tool uses Snyk authentication from the go-application-framework configuration:
@@ -54,12 +58,15 @@ When authenticated, the tool will display your organizations with their IDs. The
 Checking for proxy configuration...
 
 Environment variables:
-  HTTPS_PROXY: (not set)
-  https_proxy: (not set)
-  HTTP_PROXY:  (not set)
-  http_proxy:  (not set)
-  NO_PROXY:    (not set)
-  no_proxy:    (not set)
+  HTTPS_PROXY:          (not set)
+  https_proxy:          (not set)
+  HTTP_PROXY:           (not set)
+  http_proxy:           (not set)
+  NO_PROXY:             (not set)
+  no_proxy:             (not set)
+  NODE_EXTRA_CA_CERTS:  (not set)
+  KRB5_CONFIG:          (not set)
+  KRB5CCNAME:           (not set)
 
 ℹ No proxy detected - Testing direct connection...
 
@@ -113,7 +120,10 @@ snyk tools connectivity-check --json --experimental
     "detected": false,
     "url": "",
     "variable": "",
-    "noProxy": ""
+    "noProxy": "",
+    "nodeExtraCACerts": "",
+    "krb5Config": "",
+    "krb5CCName": ""
   },
   "hostResults": [
     {

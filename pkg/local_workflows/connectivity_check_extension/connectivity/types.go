@@ -61,10 +61,13 @@ func (s ConnectionStatus) String() string {
 
 // ProxyConfig represents proxy configuration detected from environment
 type ProxyConfig struct {
-	Detected bool   `json:"detected"`
-	URL      string `json:"url,omitempty"`
-	Variable string `json:"variable,omitempty"`
-	NoProxy  string `json:"noProxy,omitempty"`
+	Detected         bool   `json:"detected"`
+	URL              string `json:"url,omitempty"`
+	Variable         string `json:"variable,omitempty"`
+	NoProxy          string `json:"noProxy,omitempty"`
+	NodeExtraCACerts string `json:"nodeExtraCACerts,omitempty"`
+	KRB5Config       string `json:"krb5Config,omitempty"`
+	KRB5CCName       string `json:"krb5CCName,omitempty"`
 }
 
 // TODO represents an actionable item from the connectivity check
