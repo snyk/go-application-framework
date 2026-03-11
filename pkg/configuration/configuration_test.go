@@ -1131,3 +1131,227 @@ func Test_Configuration_IsSet(t *testing.T) {
 	t.Setenv(key, value)
 	assert.True(t, config.IsSet(key))
 }
+
+func Test_GetAutomaticEnv(t *testing.T) {
+	config := NewWithOpts()
+	assert.False(t, config.GetAutomaticEnv())
+
+	config2 := NewWithOpts(WithAutomaticEnv())
+	assert.True(t, config2.GetAutomaticEnv())
+}
+
+func Test_GetSupportedEnvVars(t *testing.T) {
+	config := NewWithOpts(WithSupportedEnvVars("NODE_EXTRA_CA_CERTS", "ORG"))
+	vars := config.GetSupportedEnvVars()
+	assert.Contains(t, vars, "NODE_EXTRA_CA_CERTS")
+	assert.Contains(t, vars, "ORG")
+}
+
+func Test_GetSupportedEnvVarPrefixes(t *testing.T) {
+	config := NewWithOpts(WithSupportedEnvVarPrefixes("snyk_", "internal_"))
+	prefixes := config.GetSupportedEnvVarPrefixes()
+	assert.Contains(t, prefixes, "snyk_")
+	assert.Contains(t, prefixes, "internal_")
+}
+
+func Test_GetFiles(t *testing.T) {
+	config := NewWithOpts(WithFiles("file1", "file2"))
+	files := config.GetFiles()
+	assert.Contains(t, files, "file1")
+	assert.Contains(t, files, "file2")
+}
+
+func Test_ReloadConfig(t *testing.T) {
+	assert.Nil(t, prepareConfigstore(`{"api": "mytoken"}`))
+	config := NewFromFiles(TEST_FILENAME)
+
+	assert.Equal(t, "mytoken", config.GetString("api"))
+
+	// ReloadConfig re-reads the file
+	err := config.ReloadConfig()
+	assert.NoError(t, err)
+	assert.Equal(t, "mytoken", config.GetString("api"))
+
+	cleanupConfigstore(t)
+}
+
+func Test_EmptyStorage(t *testing.T) {
+	s := &EmptyStorage{}
+	assert.NoError(t, s.Set("k", "v"))
+	assert.NoError(t, s.Refresh(nil, "k"))
+	assert.NoError(t, s.Lock(nil, 0))
+	assert.NoError(t, s.Unlock())
+}
+
+func Test_IsKeyDeleted(t *testing.T) {
+	assert.False(t, IsKeyDeleted("hello"))
+	assert.False(t, IsKeyDeleted(nil))
+	assert.False(t, IsKeyDeleted(42))
+}
+
+func Test_getCacheSettings(t *testing.T) {
+	t.Run("enabled with TTL via WithCachingEnabled", func(t *testing.T) {
+		cacheDuration := 10 * time.Minute
+		config := NewWithOpts(WithCachingEnabled(cacheDuration))
+		ev := config.(*extendedViper)
+
+		enabled, dur := ev.getCacheSettings()
+		assert.True(t, enabled)
+		assert.Equal(t, cacheDuration, dur)
+	})
+
+	t.Run("disabled via Set()", func(t *testing.T) {
+		config := NewWithOpts(WithCachingEnabled(10 * time.Minute))
+		ev := config.(*extendedViper)
+
+		config.Set(CONFIG_CACHE_DISABLED, true)
+		enabled, _ := ev.getCacheSettings()
+		assert.False(t, enabled)
+	})
+
+	t.Run("disabled via env var with AutomaticEnv", func(t *testing.T) {
+		t.Setenv("INTERNAL_CONFIG_CACHE_DISABLED", "true")
+		config := NewWithOpts(WithAutomaticEnv(), WithCachingEnabled(5*time.Minute))
+		ev := config.(*extendedViper)
+
+		enabled, _ := ev.getCacheSettings()
+		assert.False(t, enabled)
+	})
+
+	t.Run("TTL read from Set()", func(t *testing.T) {
+		config := NewWithOpts(WithCachingEnabled(5 * time.Minute))
+		ev := config.(*extendedViper)
+
+		config.Set(CONFIG_CACHE_TTL, 20*time.Minute)
+		_, dur := ev.getCacheSettings()
+		assert.Equal(t, 20*time.Minute, dur)
+	})
+
+	t.Run("nil cache returns disabled", func(t *testing.T) {
+		config := NewWithOpts()
+		ev := config.(*extendedViper)
+
+		enabled, dur := ev.getCacheSettings()
+		assert.False(t, enabled)
+		assert.Equal(t, time.Duration(0), dur)
+	})
+}
+
+func Test_toBool_edgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   interface{}
+		want    bool
+		wantErr bool
+	}{
+		{"bool true", true, true, false},
+		{"bool false", false, false, false},
+		{"string true", "true", true, false},
+		{"string false", "false", false, false},
+		{"string invalid", "notabool", false, true},
+		{"int", 42, false, true},
+		{"nil", nil, false, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := toBool(tc.input)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.want, got)
+			}
+		})
+	}
+}
+
+func Test_toDuration_unsupported(t *testing.T) {
+	_, err := toDuration(true)
+	assert.Error(t, err)
+}
+
+func Test_GetInt_typeBranches(t *testing.T) {
+	config := NewInMemory()
+
+	config.Set("float32val", float32(42.5))
+	assert.Equal(t, 42, config.GetInt("float32val"))
+
+	config.Set("intval", 99)
+	assert.Equal(t, 99, config.GetInt("intval"))
+
+	// unsupported type returns 0
+	config.Set("boolval", true)
+	assert.Equal(t, 0, config.GetInt("boolval"))
+}
+
+func Test_GetFloat64_typeBranches(t *testing.T) {
+	config := NewInMemory()
+
+	config.Set("float32val", float32(3.14))
+	assert.InDelta(t, 3.14, config.GetFloat64("float32val"), 0.01)
+
+	config.Set("intval", 42)
+	assert.Equal(t, 42.0, config.GetFloat64("intval"))
+
+	// unsupported type returns 0
+	config.Set("boolval", true)
+	assert.Equal(t, 0.0, config.GetFloat64("boolval"))
+}
+
+func Test_GetUrl_emptyKey(t *testing.T) {
+	config := NewInMemory()
+	u := config.GetUrl("nonexistent")
+	// Empty string parses to empty URL
+	assert.NotNil(t, u)
+	assert.Empty(t, u.String())
+}
+
+func Test_GetStringWithError_nonStringType(t *testing.T) {
+	config := NewInMemory()
+	config.Set("intkey", 123)
+
+	_, err := config.GetStringWithError("intkey")
+	assert.Error(t, err)
+}
+
+func Test_GetStringSlice_nilValue(t *testing.T) {
+	config := NewInMemory()
+	// Accessing a key that was never set should return empty slice
+	result := config.GetStringSlice("neversetkey")
+	assert.Equal(t, []string{}, result)
+}
+
+func Test_SetSupportedEnvVars_dedup(t *testing.T) {
+	config := NewWithOpts(WithSupportedEnvVars("VAR1"))
+	config.SetSupportedEnvVars("VAR1") // duplicate, should not add again
+	vars := config.GetSupportedEnvVars()
+	count := 0
+	for _, v := range vars {
+		if v == "VAR1" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count)
+}
+
+func Test_SetSupportedEnvVarPrefixes_dedup(t *testing.T) {
+	config := NewWithOpts(WithSupportedEnvVarPrefixes("snyk_"))
+	config.SetSupportedEnvVarPrefixes("snyk_") // duplicate
+	prefixes := config.GetSupportedEnvVarPrefixes()
+	count := 0
+	for _, p := range prefixes {
+		if p == "snyk_" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count)
+}
+
+func Test_GetAllKeysThatContainValues_noAlternateKeys(t *testing.T) {
+	config := NewInMemory()
+	config.Set("lonely", "value")
+
+	keys := config.GetAllKeysThatContainValues("lonely")
+	assert.Contains(t, keys, "lonely")
+}

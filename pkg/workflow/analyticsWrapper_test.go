@@ -25,6 +25,30 @@ func TestNewAnalyticsWrapper(t *testing.T) {
 	assert.Equal(t, 2, int(extension["MyPrefix::num"].(float64))) //nolint:errcheck // there is a bit of type confusion in this test, as an internal json representation loses track of the exact type and assumes float
 }
 
+func TestAnalyticsWrapper_DelegatedMethods(t *testing.T) {
+	baseAnalytics := analytics.New()
+	wrapper := NewAnalyticsWrapper(baseAnalytics, "Prefix")
+
+	// SetClient
+	wrapper.SetClient(func() *http.Client { return http.DefaultClient })
+
+	// IsCiEnvironment
+	_ = wrapper.IsCiEnvironment()
+
+	// GetRequest
+	req, err := wrapper.GetRequest()
+	assert.NotNil(t, req)
+	assert.NoError(t, err)
+
+	// Send (will fail since no real server, but exercises the code path)
+	_, _ = wrapper.Send()
+
+	// GetInstrumentation
+	ic := wrapper.GetInstrumentation()
+	assert.NotNil(t, ic)
+	assert.Equal(t, baseAnalytics.GetInstrumentation(), ic)
+}
+
 func TestAnalyticsWrapper_Setter(t *testing.T) {
 	originalAnalytics := analytics.New()
 	wrappedAnalytics := analytics.New()

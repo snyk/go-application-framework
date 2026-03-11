@@ -43,212 +43,10 @@ func newTestFlagSet() *pflag.FlagSet {
 	return fs
 }
 
-func newTestConfigOpts() workflow.ConfigurationOptions {
-	return workflow.ConfigurationOptionsFromFlagset(newTestFlagSet())
-}
-
-func TestNewConfigurationOptionsStore(t *testing.T) {
-	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
-
-	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, fm.FlagsByAnnotation("config.scope", "org"))
-	assert.ElementsMatch(t, []string{"api_endpoint"}, fm.FlagsByAnnotation("config.scope", "machine"))
-	assert.ElementsMatch(t, []string{"reference_branch"}, fm.FlagsByAnnotation("config.scope", "folder"))
-}
-
-func TestAdd(t *testing.T) {
-	fm := workflow.NewConfigurationOptionsStore()
-
-	fm.Add(newTestConfigOpts())
-
-	name, found := fm.FlagNameByAnnotation("config.remoteKey", "snyk_code_enabled")
-	assert.True(t, found)
-	assert.Equal(t, "snyk_code_enabled", name)
-}
-
-func TestGetFlagAnnotation(t *testing.T) {
-	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
-
-	val, found := fm.GetFlagAnnotation("snyk_code_enabled", "config.scope")
-	assert.True(t, found)
-	assert.Equal(t, "org", val)
-
-	val, found = fm.GetFlagAnnotation("api_endpoint", "config.remoteKey")
-	assert.True(t, found)
-	assert.Equal(t, "api_endpoint", val)
-
-	_, found = fm.GetFlagAnnotation("nonexistent_flag", "config.scope")
-	assert.False(t, found)
-}
-
-func TestFlagsByAnnotation_Scope(t *testing.T) {
-	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
-
-	assert.ElementsMatch(t, []string{"snyk_code_enabled"}, fm.FlagsByAnnotation("config.scope", "org"))
-	assert.ElementsMatch(t, []string{"api_endpoint"}, fm.FlagsByAnnotation("config.scope", "machine"))
-	assert.ElementsMatch(t, []string{"reference_branch"}, fm.FlagsByAnnotation("config.scope", "folder"))
-	assert.Empty(t, fm.FlagsByAnnotation("config.scope", "nonexistent"))
-}
-
-func TestFlagNameByAnnotation_RemoteKey(t *testing.T) {
-	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
-
-	name, found := fm.FlagNameByAnnotation("config.remoteKey", "snyk_code_enabled")
-	assert.True(t, found)
-	assert.Equal(t, "snyk_code_enabled", name)
-
-	name, found = fm.FlagNameByAnnotation("config.remoteKey", "api_endpoint")
-	assert.True(t, found)
-	assert.Equal(t, "api_endpoint", name)
-
-	_, found = fm.FlagNameByAnnotation("config.remoteKey", "no_such_key")
-	assert.False(t, found)
-}
-
-func TestGetFlagType_And_Usage(t *testing.T) {
-	fm := workflow.NewConfigurationOptionsStore(newTestConfigOpts())
-
-	assert.Equal(t, "bool", fm.GetFlagType("snyk_code_enabled"))
-	assert.Equal(t, "string", fm.GetFlagType("api_endpoint"))
-	assert.Equal(t, "", fm.GetFlagType("nonexistent_flag"))
-
-	assert.Equal(t, "Enable Snyk Code analysis", fm.GetFlagUsage("snyk_code_enabled"))
-	assert.Equal(t, "API endpoint URL", fm.GetFlagUsage("api_endpoint"))
-	assert.Equal(t, "", fm.GetFlagUsage("nonexistent_flag"))
-}
-
-func TestConfigurationOptionsImpl_ImplementsFlagMetadata(t *testing.T) {
+func TestConfigurationOptionsImpl_ImplementsConfigurationOptionsMetaData(t *testing.T) {
 	var opts workflow.ConfigurationOptions = workflow.ConfigurationOptionsFromFlagset(newTestFlagSet())
-	var _ workflow.FlagMetadata = opts
+	var _ workflow.ConfigurationOptionsMetaData = opts
 	require.True(t, true)
-}
-
-func TestConfigurationOptionsStore_ImplementsFlagMetadata(t *testing.T) {
-	var _ workflow.FlagMetadata = workflow.NewConfigurationOptionsStore()
-	require.True(t, true)
-}
-
-func TestStore_LastRegisteredWins_GetFlagAnnotation(t *testing.T) {
-	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
-	fs1.Bool("shared_flag", false, "first usage")
-	fs1.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"org"}}
-
-	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
-	fs2.Bool("shared_flag", true, "second usage")
-	fs2.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"machine"}}
-
-	store := workflow.NewConfigurationOptionsStore(
-		workflow.ConfigurationOptionsFromFlagset(fs1),
-		workflow.ConfigurationOptionsFromFlagset(fs2),
-	)
-
-	val, found := store.GetFlagAnnotation("shared_flag", "config.scope")
-	assert.True(t, found)
-	assert.Equal(t, "machine", val, "last-registered option should win")
-}
-
-func TestStore_FlagsByAnnotation_Deduplicates(t *testing.T) {
-	opts := newTestConfigOpts()
-	store := workflow.NewConfigurationOptionsStore(opts, opts)
-
-	result := store.FlagsByAnnotation("config.scope", "org")
-	assert.Equal(t, 1, len(result), "duplicate flag names must be deduplicated")
-	assert.Equal(t, "snyk_code_enabled", result[0])
-}
-
-func TestStore_FlagsByAnnotation_RespectsLastRegisteredWins(t *testing.T) {
-	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
-	fs1.Bool("shared_flag", false, "first usage")
-	fs1.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"org"}}
-
-	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
-	fs2.Bool("shared_flag", true, "second usage")
-	fs2.Lookup("shared_flag").Annotations = map[string][]string{"config.scope": {"machine"}}
-
-	store := workflow.NewConfigurationOptionsStore(
-		workflow.ConfigurationOptionsFromFlagset(fs1),
-		workflow.ConfigurationOptionsFromFlagset(fs2),
-	)
-
-	assert.NotContains(t, store.FlagsByAnnotation("config.scope", "org"), "shared_flag",
-		"flag whose scope was overridden to machine should not appear under org")
-	assert.Contains(t, store.FlagsByAnnotation("config.scope", "machine"), "shared_flag",
-		"flag should appear under its effective scope")
-}
-
-func TestStore_LastRegisteredWins_GetFlagType(t *testing.T) {
-	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
-	fs1.Bool("shared_flag", false, "first usage")
-
-	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
-	fs2.String("shared_flag", "", "second usage")
-
-	store := workflow.NewConfigurationOptionsStore(
-		workflow.ConfigurationOptionsFromFlagset(fs1),
-		workflow.ConfigurationOptionsFromFlagset(fs2),
-	)
-
-	assert.Equal(t, "string", store.GetFlagType("shared_flag"), "last-registered should win")
-}
-
-func TestStore_LastRegisteredWins_GetFlagUsage(t *testing.T) {
-	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
-	fs1.Bool("shared_flag", false, "first usage")
-
-	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
-	fs2.Bool("shared_flag", true, "second usage")
-
-	store := workflow.NewConfigurationOptionsStore(
-		workflow.ConfigurationOptionsFromFlagset(fs1),
-		workflow.ConfigurationOptionsFromFlagset(fs2),
-	)
-
-	assert.Equal(t, "second usage", store.GetFlagUsage("shared_flag"), "last-registered should win")
-}
-
-func TestStore_NoMetadataMerging_AnnotationDropped(t *testing.T) {
-	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
-	fs1.Bool("shared_flag", false, "first usage")
-	fs1.Lookup("shared_flag").Annotations = map[string][]string{
-		"config.scope":     {"org"},
-		"config.remoteKey": {"shared_flag"},
-	}
-
-	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
-	fs2.Bool("shared_flag", true, "second usage")
-	// fs2 intentionally omits all annotations
-
-	store := workflow.NewConfigurationOptionsStore(
-		workflow.ConfigurationOptionsFromFlagset(fs1),
-		workflow.ConfigurationOptionsFromFlagset(fs2),
-	)
-
-	_, found := store.GetFlagAnnotation("shared_flag", "config.scope")
-	assert.False(t, found, "annotation from earlier registration must not leak through")
-
-	_, found = store.GetFlagAnnotation("shared_flag", "config.remoteKey")
-	assert.False(t, found, "annotation from earlier registration must not leak through")
-
-	assert.Empty(t, store.FlagsByAnnotation("config.scope", "org"),
-		"flag should not appear under dropped annotation")
-
-	_, found = store.FlagNameByAnnotation("config.remoteKey", "shared_flag")
-	assert.False(t, found, "reverse lookup must not find dropped annotation")
-}
-
-func TestStore_NoMetadataMerging_UsageEmptyInOwner(t *testing.T) {
-	fs1 := pflag.NewFlagSet("first", pflag.ContinueOnError)
-	fs1.Bool("shared_flag", false, "first usage")
-
-	fs2 := pflag.NewFlagSet("second", pflag.ContinueOnError)
-	fs2.Bool("shared_flag", true, "")
-
-	store := workflow.NewConfigurationOptionsStore(
-		workflow.ConfigurationOptionsFromFlagset(fs1),
-		workflow.ConfigurationOptionsFromFlagset(fs2),
-	)
-
-	assert.Equal(t, "", store.GetFlagUsage("shared_flag"),
-		"empty usage from owner must not fall back to earlier registration")
 }
 
 func TestConfigurationOptionsFromFlagset_WarnsOnColonInFlagName(t *testing.T) {
@@ -280,4 +78,140 @@ func TestConfigurationOptionsFromFlagset_AcceptsValidNames(t *testing.T) {
 	opts := workflow.ConfigurationOptionsFromFlagset(fs)
 	assert.NotNil(t, opts)
 	assert.Empty(t, buf.String(), "no warnings expected for valid flag names")
+}
+
+func newTestConfigOpts() workflow.ConfigurationOptions {
+	return workflow.ConfigurationOptionsFromFlagset(newTestFlagSet())
+}
+
+func TestGetConfigurationOptionAnnotation(t *testing.T) {
+	opts := newTestConfigOpts()
+	md := opts.(workflow.ConfigurationOptionsMetaData)
+
+	tests := []struct {
+		name       string
+		flagName   string
+		annotation string
+		wantVal    string
+		wantFound  bool
+	}{
+		{"existing annotation", "snyk_code_enabled", "config.scope", "org", true},
+		{"missing annotation key", "snyk_code_enabled", "config.nonexistent", "", false},
+		{"missing flag", "no_such_flag", "config.scope", "", false},
+		{"flag without annotations", "reference_branch", "config.remoteKey", "", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			val, found := md.GetConfigurationOptionAnnotation(tc.flagName, tc.annotation)
+			assert.Equal(t, tc.wantVal, val)
+			assert.Equal(t, tc.wantFound, found)
+		})
+	}
+}
+
+func TestConfigurationOptionsByAnnotation(t *testing.T) {
+	opts := newTestConfigOpts()
+	md := opts.(workflow.ConfigurationOptionsMetaData)
+
+	tests := []struct {
+		name       string
+		annotation string
+		value      string
+		wantLen    int
+	}{
+		{"match org scope", "config.scope", "org", 1},
+		{"match machine scope", "config.scope", "machine", 1},
+		{"match folder scope", "config.scope", "folder", 1},
+		{"no match", "config.scope", "nonexistent", 0},
+		{"no such annotation", "config.bogus", "anything", 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := md.ConfigurationOptionsByAnnotation(tc.annotation, tc.value)
+			assert.Equal(t, tc.wantLen, len(result))
+		})
+	}
+}
+
+func TestConfigurationOptionNameByAnnotation(t *testing.T) {
+	opts := newTestConfigOpts()
+	md := opts.(workflow.ConfigurationOptionsMetaData)
+
+	tests := []struct {
+		name       string
+		annotation string
+		value      string
+		wantName   string
+		wantFound  bool
+	}{
+		{"find by ideKey", "config.ideKey", "activateSnykCode", "snyk_code_enabled", true},
+		{"find by ideKey endpoint", "config.ideKey", "endpoint", "api_endpoint", true},
+		{"no match", "config.ideKey", "nonexistent", "", false},
+		{"no such annotation", "config.bogus", "anything", "", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			name, found := md.ConfigurationOptionNameByAnnotation(tc.annotation, tc.value)
+			assert.Equal(t, tc.wantName, name)
+			assert.Equal(t, tc.wantFound, found)
+		})
+	}
+}
+
+func TestGetConfigurationOptionType(t *testing.T) {
+	opts := newTestConfigOpts()
+	md := opts.(workflow.ConfigurationOptionsMetaData)
+
+	tests := []struct {
+		name     string
+		flagName string
+		wantType string
+	}{
+		{"bool flag", "snyk_code_enabled", "bool"},
+		{"string flag", "api_endpoint", "string"},
+		{"nonexistent flag", "no_such_flag", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.wantType, md.GetConfigurationOptionType(tc.flagName))
+		})
+	}
+}
+
+func TestGetConfigurationOptionUsage(t *testing.T) {
+	opts := newTestConfigOpts()
+	md := opts.(workflow.ConfigurationOptionsMetaData)
+
+	tests := []struct {
+		name     string
+		flagName string
+		wantUsge string
+	}{
+		{"existing flag", "snyk_code_enabled", "Enable Snyk Code analysis"},
+		{"nonexistent flag", "no_such_flag", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.wantUsge, md.GetConfigurationOptionUsage(tc.flagName))
+		})
+	}
+}
+
+func TestConfigurationOptionsFromJson(t *testing.T) {
+	assert.Nil(t, workflow.ConfigurationOptionsFromJson([]byte(`{}`)))
+}
+
+func TestJsonFromConfigurationOptions(t *testing.T) {
+	opts := newTestConfigOpts()
+	assert.Nil(t, workflow.JsonFromConfigurationOptions(opts))
+}
+
+func TestFlagsetFromConfigurationOptions_NonImpl(t *testing.T) {
+	// Passing nil should return nil
+	assert.Nil(t, workflow.FlagsetFromConfigurationOptions(nil))
 }

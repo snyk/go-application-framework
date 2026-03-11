@@ -278,6 +278,214 @@ func Test_Engine_ClonedNetworkAccess(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func Test_GetCommandFromWorkflowIdentifier(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       Identifier
+		expected string
+	}{
+		{"valid workflow id", NewWorkflowIdentifier("snyk test"), "snyk test"},
+		{"single word", NewWorkflowIdentifier("analyze"), "analyze"},
+		{"nil id", nil, ""},
+		{"non-flw scheme", &url.URL{Scheme: "http", Host: "example"}, ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, GetCommandFromWorkflowIdentifier(tc.id))
+		})
+	}
+}
+
+func Test_GetGlobalConfiguration(t *testing.T) {
+	opts := GetGlobalConfiguration()
+	assert.NotNil(t, opts)
+
+	fs := FlagsetFromConfigurationOptions(opts)
+	assert.NotNil(t, fs)
+	assert.NotNil(t, fs.Lookup(configuration.ORGANIZATION))
+	assert.NotNil(t, fs.Lookup(configuration.DEBUG))
+	assert.NotNil(t, fs.Lookup(configuration.INSECURE_HTTPS))
+}
+
+func Test_EngineImpl_InvokeWithConfig(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("cfgtest")
+	flagset := pflag.NewFlagSet("cfg", pflag.ContinueOnError)
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	output, err := engine.Invoke(wfId, WithConfig(configuration.NewInMemory()))
+	assert.NoError(t, err)
+	assert.Nil(t, output)
+}
+
+func Test_EngineImpl_InvokeWithInputAndConfig(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("iactest")
+	flagset := pflag.NewFlagSet("iac", pflag.ContinueOnError)
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return input, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	inputData := []Data{NewData(NewTypeIdentifier(wfId, "d"), "text/plain", nil)}
+	output, err := engine.Invoke(wfId, WithInput(inputData), WithConfig(configuration.NewInMemory()))
+	assert.NoError(t, err)
+	assert.Equal(t, inputData, output)
+}
+
+func Test_EngineImpl_AddExtensionInitializer(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	initCalled := false
+	engine.AddExtensionInitializer(func(e Engine) error {
+		initCalled = true
+		return nil
+	})
+
+	err := engine.Init()
+	assert.NoError(t, err)
+	assert.True(t, initCalled)
+}
+
+func Test_EngineImpl_AddExtensionInitializer_Error(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	engine.AddExtensionInitializer(func(e Engine) error {
+		return fmt.Errorf("init failed")
+	})
+
+	err := engine.Init()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "init failed")
+}
+
+func Test_EngineImpl_InvokeBeforeInit(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("noinit")
+	flagset := pflag.NewFlagSet("ni", pflag.ContinueOnError)
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	_, err = engine.Invoke(wfId)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "initialized")
+}
+
+func Test_EntryImpl_Methods(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("entrytest")
+	flagset := pflag.NewFlagSet("e", pflag.ContinueOnError)
+	cfgOpts := ConfigurationOptionsFromFlagset(flagset)
+
+	entry, err := engine.Register(wfId, cfgOpts, func(invocation InvocationContext, input []Data) ([]Data, error) {
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	// GetConfigurationOptions
+	assert.Equal(t, cfgOpts, entry.GetConfigurationOptions())
+
+	// IsVisible (default true)
+	assert.True(t, entry.IsVisible())
+
+	// SetVisibility
+	entry.SetVisibility(false)
+	assert.False(t, entry.IsVisible())
+
+	entry.SetVisibility(true)
+	assert.True(t, entry.IsVisible())
+
+	// GetEntryPoint
+	assert.NotNil(t, entry.GetEntryPoint())
+}
+
+func Test_InvocationContext_AllMethods(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("ictxtest")
+	flagset := pflag.NewFlagSet("ic", pflag.ContinueOnError)
+
+	ri := runtimeinfo.New(runtimeinfo.WithName("test-app"))
+	engine.SetRuntimeInfo(ri)
+
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		// Context
+		ctx := invocation.Context()
+		assert.NotNil(t, ctx)
+
+		// GetEnhancedLogger
+		assert.NotNil(t, invocation.GetEnhancedLogger())
+
+		// GetUserInterface
+		assert.NotNil(t, invocation.GetUserInterface())
+
+		// GetRuntimeInfo
+		assert.Equal(t, ri, invocation.GetRuntimeInfo())
+
+		// GetWorkflowIdentifier
+		assert.Equal(t, wfId.String(), invocation.GetWorkflowIdentifier().String())
+
+		// GetConfiguration
+		assert.NotNil(t, invocation.GetConfiguration())
+
+		// GetEngine
+		assert.NotNil(t, invocation.GetEngine())
+
+		// GetAnalytics
+		assert.NotNil(t, invocation.GetAnalytics())
+
+		// GetNetworkAccess
+		assert.NotNil(t, invocation.GetNetworkAccess())
+
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	_, err = engine.Invoke(wfId)
+	assert.NoError(t, err)
+}
+
+func Test_EngineWrapper_AddExtensionInitializer(t *testing.T) {
+	engine := NewWorkFlowEngine(configuration.NewWithOpts())
+	wrapper := &engineWrapper{WrappedEngine: engine}
+
+	initCalled := false
+	wrapper.AddExtensionInitializer(func(e Engine) error {
+		initCalled = true
+		return nil
+	})
+
+	err := wrapper.Init()
+	assert.NoError(t, err)
+	assert.True(t, initCalled)
+}
+
 func Test_EngineInvocationConcurrent(t *testing.T) {
 	config := configuration.NewInMemory()
 	engine := NewWorkFlowEngine(config)

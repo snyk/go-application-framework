@@ -109,13 +109,6 @@ type extendedViper struct {
 	supportedEnvVars []string
 
 	interkeyDependencies map[string][]string
-
-	// Cached cache-settings to avoid expensive ev.get() round-trips on every Get call.
-	// Updated via Set when CONFIG_CACHE_DISABLED or CONFIG_CACHE_TTL is written.
-	// cacheDisabled uses inverted sense so the zero-value (false) means "enabled",
-	// matching the original behavior where caching was on by default when a cache existed.
-	cacheDisabled bool
-	cacheDuration time.Duration
 }
 
 // StandardDefaultValueFunction is a default value function that returns the default value if the existing value is nil.
@@ -203,8 +196,8 @@ func WithCachingEnabled(cacheDuration time.Duration) Opts {
 
 		localCache := cache.New(cacheDuration, defaultCacheCleanupInterval)
 		ev.setCache(localCache)
-		ev.Set(CONFIG_CACHE_DISABLED, false)
-		ev.Set(CONFIG_CACHE_TTL, cacheDuration)
+		ev.viper.SetDefault(CONFIG_CACHE_DISABLED, false)
+		ev.viper.SetDefault(CONFIG_CACHE_TTL, cacheDuration)
 	}
 }
 
@@ -369,7 +362,6 @@ func (ev *extendedViper) Set(key string, value interface{}) {
 	isPersisted := ev.persistedKeys[key]
 	ev.viper.Set(key, value)
 	ev.clearCache(key)
-	ev.updateCacheSettings(key, value)
 
 	ev.mutex.Unlock()
 
@@ -864,35 +856,29 @@ func (ev *extendedViper) setCache(c *cache.Cache) {
 	ev.defaultCache = c
 }
 
-// getCacheSettings returns the cached cache-settings fields.
-// The fields are kept in sync by updateCacheSettings, called from Set.
-// An env var override for CONFIG_CACHE_DISABLED is checked directly to
-// allow runtime cache disabling without requiring a Set() call.
+// getCacheSettings reads the cache-disabled and cache-TTL values through
+// Viper so that values from any source (Set(), config files, SetDefault,
+// AutomaticEnv-bound env vars) are honoured.
+// It uses ev.viper.Get() directly instead of ev.get() because the two
+// internal cache keys have no alternative keys and no prefix-based env-var
+// binding, so the extra bindEnv / IsSet / alternative-key overhead of
+// ev.get() is unnecessary.
 func (ev *extendedViper) getCacheSettings() (bool, time.Duration) {
 	if ev.defaultCache == nil {
 		return false, 0
 	}
-	if envVal, ok := os.LookupEnv(strings.ToUpper(CONFIG_CACHE_DISABLED)); ok {
-		if disabled, err := strconv.ParseBool(envVal); err == nil && disabled {
-			return false, 0
-		}
-	}
-	return !ev.cacheDisabled, ev.cacheDuration
-}
 
-// updateCacheSettings keeps the struct-level cache-setting fields in sync
-// whenever CONFIG_CACHE_DISABLED or CONFIG_CACHE_TTL is written via Set.
-func (ev *extendedViper) updateCacheSettings(key string, value interface{}) {
-	switch key {
-	case CONFIG_CACHE_DISABLED:
-		if b, err := toBool(value); err == nil {
-			ev.cacheDisabled = b
-		}
-	case CONFIG_CACHE_TTL:
-		if d, err := toDuration(value); err == nil {
-			ev.cacheDuration = d
-		}
+	raw := ev.viper.Get(CONFIG_CACHE_DISABLED)
+	if disabled, err := toBool(raw); err == nil && disabled {
+		return false, 0
 	}
+
+	raw = ev.viper.Get(CONFIG_CACHE_TTL)
+	dur, err := toDuration(raw)
+	if err != nil {
+		return true, 0
+	}
+	return true, dur
 }
 
 func (ev *extendedViper) detectCircularDependency(key string, dependencyKey string) error {

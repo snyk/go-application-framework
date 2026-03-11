@@ -17,11 +17,11 @@ import (
 //   - Folder:  locked remote > folder value > remote > user global > default
 type Resolver struct {
 	conf configuration.Configuration
-	fm   workflow.FlagMetadata
+	fm   workflow.ConfigurationOptionsMetaData
 }
 
-// New creates a Resolver backed by the given Configuration and FlagMetadata.
-func New(conf configuration.Configuration, fm workflow.FlagMetadata) *Resolver {
+// New creates a Resolver backed by the given Configuration and ConfigurationOptionsMetaData.
+func New(conf configuration.Configuration, fm workflow.ConfigurationOptionsMetaData) *Resolver {
 	return &Resolver{conf: conf, fm: fm}
 }
 
@@ -32,7 +32,7 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSo
 		return r.conf.Get(name), ConfigSourceDefault
 	}
 
-	scope, _ := r.fm.GetFlagAnnotation(name, AnnotationScope)
+	scope, _ := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope)
 
 	switch scope {
 	case "machine":
@@ -95,7 +95,7 @@ func (r *Resolver) IsLocked(name, effectiveOrg string, folderPath ...string) boo
 	}
 
 	if fp != "" && r.fm != nil {
-		if scope, found := r.fm.GetFlagAnnotation(name, AnnotationScope); found && scope != "machine" {
+		if scope, found := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope); found && scope != "machine" {
 			if f := r.remoteField(RemoteOrgFolderKey(effectiveOrg, fp, name)); f != nil && f.IsLocked {
 				return true
 			}
@@ -109,7 +109,7 @@ func (r *Resolver) IsLocked(name, effectiveOrg string, folderPath ...string) boo
 // remoteKeyForName returns the correct remote config key for the named setting based on its scope annotation.
 func (r *Resolver) remoteKeyForName(name, effectiveOrg string) string {
 	if r.fm != nil {
-		if scope, found := r.fm.GetFlagAnnotation(name, AnnotationScope); found && scope == "machine" {
+		if scope, found := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope); found && scope == "machine" {
 			return RemoteMachineKey(name)
 		}
 	}
