@@ -806,7 +806,7 @@ func (b *issueBuilder) deduplicate() {
 // build constructs the final Issue from collected data
 func (b *issueBuilder) build() *issue {
 	metadata := b.buildMetadata()
-	activeIgnoreDetail := determineActiveIgnoreDetail(b.ignoreDetails)
+	ignoreDetail := determineIgnoreDetail(b.ignoreDetails)
 
 	return &issue{
 		findings:          b.findings,
@@ -826,23 +826,23 @@ func (b *issueBuilder) build() *issue {
 		riskScore:         b.riskScore,
 		reachability:      b.reachability,
 		metadata:          metadata,
-		ignoreDetail:      activeIgnoreDetail,
+		ignoreDetail:      ignoreDetail,
 	}
 }
 
-func determineActiveIgnoreDetail(ignoreDetails []IssueIgnoreDetails) IssueIgnoreDetails {
-	activeIgnores := 0
-	var firstIgnoreDetail IssueIgnoreDetails
-	for _, detail := range ignoreDetails {
-		if detail != nil && detail.IsActive() {
-			firstIgnoreDetail = detail
-			activeIgnores++
-		}
+func determineIgnoreDetail(ignoreDetails []IssueIgnoreDetails) IssueIgnoreDetails {
+	statusPriority := []SuppressionStatus{
+		SuppressionStatusIgnored,
+		SuppressionStatusPendingIgnoreApproval,
+		SuppressionStatusOther,
 	}
 
-	// if all findings are ignored, return the first ignore details
-	if activeIgnores == len(ignoreDetails) {
-		return firstIgnoreDetail
+	for _, status := range statusPriority {
+		for _, detail := range ignoreDetails {
+			if detail != nil && detail.GetStatus() == status {
+				return detail
+			}
+		}
 	}
 
 	return nil
