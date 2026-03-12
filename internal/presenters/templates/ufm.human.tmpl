@@ -13,7 +13,9 @@
 {{- end }} {{/* end issueHeader */}}
 
 {{- define "issueBody" }}
+    {{- if not (hasPrefix .GetID "UNDEFINED-") }}
    Finding ID: {{ .GetID }}
+    {{- end }}
     {{- $findingType := .GetFindingType }}
     {{- if or (eq $findingType "license") (eq $findingType "sca") }}
    Info: https://snyk.io/vuln/{{ .GetID }}
