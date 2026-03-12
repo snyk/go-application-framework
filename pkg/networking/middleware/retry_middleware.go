@@ -16,22 +16,22 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
-const defaultRetryCount uint = 1 // Per default retries (=1) are disabled and need to be enabled via the configuration
+const defaultMaxAttemptsCount = 1 // Per default max network attempts (=1) this means retries are disabled and need to be enabled via the configuration
 const defaultRetryAfterSeconds = 5
 const maxRetryAfter = 10 * time.Minute
-const ConfigurationKeyRetryAttempts = "internal_network_request_max_attempts"
+const ConfigurationKeyRequestAttempts = "internal_network_request_max_attempts"
 const configurationKeyRetryAfter = "internal_network_request_retry_after_seconds"
 const retryCountHeaderKey = "Snyk-Request-Attempt-Count"
 
-type RetryLogic struct {
+type retryLogic struct {
 	shouldRetry      bool
-	maxRetryOverride *uint
+	maxRetryOverride *int
 }
 
-var attemptThreeNetworkRequests uint = 3
+var attemptThreeNetworkRequests int = 3
 
 // This lookup table defines the response status codes that should be retried and the ability to override the default retry count
-var statusCodesToRetryLUT = map[int]RetryLogic{
+var statusCodesToRetryLUT = map[int]retryLogic{
 	http.StatusTooManyRequests:     {true, &attemptThreeNetworkRequests},
 	http.StatusTooEarly:            {true, nil},
 	http.StatusRequestTimeout:      {true, nil},
@@ -62,12 +62,12 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	var finalResponse *http.Response
 	var finalError error
 	var localBodyBuffer []byte
-	var maxAttempts = defaultRetryCount
+	var maxAttempts = defaultMaxAttemptsCount
 	var retryAfterSeconds = defaultRetryAfterSeconds
-	var actualAttempts uint = 0
-	var cachedMaxRetries *uint = nil // Per-request cached max retries
+	var actualAttempts int = 0
+	var cachedMaxRetries *int = nil // Per-request cached max retries
 
-	if tmp := (uint)(rm.config.GetInt(ConfigurationKeyRetryAttempts)); tmp > 0 {
+	if tmp := rm.config.GetInt(ConfigurationKeyRequestAttempts); tmp > 0 {
 		maxAttempts = tmp
 	}
 
@@ -142,7 +142,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	return finalResponse, finalError
 }
 
-func getMaxRetryAttempts(response *http.Response, maxAttempts uint) uint {
+func getMaxRetryAttempts(response *http.Response, maxAttempts int) int {
 	attempts := statusCodesToRetryLUT[response.StatusCode].maxRetryOverride
 	if attempts != nil {
 		return max(*attempts, maxAttempts)
@@ -150,7 +150,7 @@ func getMaxRetryAttempts(response *http.Response, maxAttempts uint) uint {
 	return maxAttempts
 }
 
-func shouldRetry(response *http.Response, attempts uint, maxAttempts uint) error {
+func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 	// if the Snyk API is in maintenance mode, we should not retry
 	if response.StatusCode == http.StatusServiceUnavailable {
 		errorList := getErrorList(response)
