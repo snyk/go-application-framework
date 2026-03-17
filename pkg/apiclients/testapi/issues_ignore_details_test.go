@@ -171,6 +171,59 @@ func TestIssueIgnoreDetails_SuppressionFields(t *testing.T) {
 	assert.Equal(t, skipIfFixable, *details.SkipIfFixable())
 }
 
+func TestIssueIgnoreDetails_GetIgnoreDetails_BasedOnSuppressionStatus(t *testing.T) {
+	testCases := []struct {
+		name                string
+		suppressionStatuses []testapi.SuppressionStatus
+		expectedStatus      testapi.SuppressionStatus
+		expectNilDetails    bool
+	}{
+		{name: "single ignored", suppressionStatuses: []testapi.SuppressionStatus{testapi.SuppressionStatusIgnored}, expectedStatus: testapi.SuppressionStatusIgnored},
+		{name: "single pending", suppressionStatuses: []testapi.SuppressionStatus{testapi.SuppressionStatusPendingIgnoreApproval}, expectedStatus: testapi.SuppressionStatusPendingIgnoreApproval},
+		{name: "single other", suppressionStatuses: []testapi.SuppressionStatus{testapi.SuppressionStatusOther}, expectedStatus: testapi.SuppressionStatusOther},
+		{name: "ignored wins over pending and other", suppressionStatuses: []testapi.SuppressionStatus{testapi.SuppressionStatusOther, testapi.SuppressionStatusPendingIgnoreApproval, testapi.SuppressionStatusIgnored}, expectedStatus: testapi.SuppressionStatusIgnored},
+		{name: "pending wins over other", suppressionStatuses: []testapi.SuppressionStatus{testapi.SuppressionStatusOther, testapi.SuppressionStatusPendingIgnoreApproval}, expectedStatus: testapi.SuppressionStatusPendingIgnoreApproval},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			findings := make([]*testapi.FindingData, len(tt.suppressionStatuses))
+			for i, status := range tt.suppressionStatuses {
+				findings[i] = &testapi.FindingData{
+					Attributes: &testapi.FindingAttributes{Suppression: &testapi.Suppression{Status: status}},
+					Id:         func() *openapi_types.UUID { id := uuid.New(); return &id }(),
+				}
+			}
+
+			issue, err := testapi.NewIssueFromFindings(findings)
+			require.NoError(t, err)
+
+			details := issue.GetIgnoreDetails()
+			if tt.expectNilDetails {
+				assert.Nil(t, details)
+			} else {
+				require.NotNil(t, details)
+				assert.Equal(t, tt.expectedStatus, details.GetStatus())
+			}
+		})
+	}
+
+	t.Run("empty suppression status yields nil", func(t *testing.T) {
+		findings := []*testapi.FindingData{
+			{
+				Attributes: &testapi.FindingAttributes{Suppression: &testapi.Suppression{}},
+				Id:         func() *openapi_types.UUID { id := uuid.New(); return &id }(),
+			},
+		}
+
+		issue, err := testapi.NewIssueFromFindings(findings)
+		require.NoError(t, err)
+
+		details := issue.GetIgnoreDetails()
+		assert.Nil(t, details)
+	})
+}
+
 func TestIssueIgnoreDetails_IsActive(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -179,7 +232,7 @@ func TestIssueIgnoreDetails_IsActive(t *testing.T) {
 		expectActive    bool
 	}{
 		{"ignored status", testapi.SuppressionStatusIgnored, false, true},
-		{"pending status", testapi.SuppressionStatusPendingIgnoreApproval, true, false},
+		{"pending status", testapi.SuppressionStatusPendingIgnoreApproval, false, false},
 		{"empty status", "", true, false},
 	}
 
