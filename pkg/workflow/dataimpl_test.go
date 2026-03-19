@@ -48,6 +48,65 @@ func Test_NewDataFromInput(t *testing.T) {
 	fmt.Println(output)
 }
 
+func Test_DataImpl_SetPayload_GetPayload(t *testing.T) {
+	t.Run("in-memory payload round-trip", func(t *testing.T) {
+		expectedConfig := configuration.NewInMemory()
+		expectedConfig.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, -1)
+		logger := zerolog.Nop()
+
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "dtype")
+		data := NewData(id, "text/plain", []byte("initial"),
+			WithConfiguration(expectedConfig), WithLogger(&logger))
+
+		// SetPayload replaces the payload
+		data.SetPayload([]byte("updated"))
+		result := data.GetPayload()
+		assert.Equal(t, []byte("updated"), result)
+	})
+
+	t.Run("on-disk payload via GetPayload", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		expectedConfig := configuration.NewInMemory()
+		expectedConfig.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+		expectedConfig.Set(configuration.TEMP_DIR_PATH, tmpDir)
+		logger := zerolog.Nop()
+
+		payloadBytes := []byte("data that goes to disk")
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "disktype")
+		data := NewData(id, "application/octet-stream", payloadBytes,
+			WithConfiguration(expectedConfig), WithLogger(&logger))
+
+		// in-memory payload should have been nil'd out
+		rawPayload := reflect.ValueOf(data).Elem().FieldByName("payload")
+		assert.True(t, rawPayload.IsNil())
+
+		// GetPayload reads from disk
+		result := data.GetPayload()
+		assert.Equal(t, payloadBytes, result)
+	})
+
+	t.Run("GetPayload from missing file returns nil", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		expectedConfig := configuration.NewInMemory()
+		expectedConfig.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+		expectedConfig.Set(configuration.TEMP_DIR_PATH, tmpDir)
+		logger := zerolog.Nop()
+
+		payloadBytes := []byte("will be on disk")
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "missingfile")
+		data := NewData(id, "application/octet-stream", payloadBytes,
+			WithConfiguration(expectedConfig), WithLogger(&logger))
+
+		// Delete the file on disk to simulate missing file
+		loc := reflect.ValueOf(data).Elem().FieldByName("payloadLocation").FieldByName("Path")
+		err := os.Remove(loc.String())
+		assert.NoError(t, err)
+
+		result := data.GetPayload()
+		assert.Nil(t, result)
+	})
+}
+
 func Test_NewData(t *testing.T) {
 	t.Run("with options", func(t *testing.T) {
 		expectedConfig := configuration.NewInMemory()

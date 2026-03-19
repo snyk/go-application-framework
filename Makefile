@@ -3,7 +3,7 @@ GOOS = $(shell go env GOOS)
 GOARCH = $(shell go env GOARCH)
 
 GO_BIN := $(shell pwd)/.bin
-OVERRIDE_GOCI_LINT_V := v1.64.8
+OVERRIDE_GOCI_LINT_V := v2.10.1
 SHELL := env PATH=$(GO_BIN):$(shell go env GOROOT)/bin:$(PATH) $(SHELL)
 
 .PHONY: format
@@ -47,7 +47,7 @@ generate:
 tools: $(GO_BIN)/golangci-lint
 
 $(GO_BIN)/golangci-lint:
-	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${OVERRIDE_GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
+	curl -sSfL 'https://golangci-lint.run/install.sh' | sh -s -- -b ${GO_BIN} ${OVERRIDE_GOCI_LINT_V}
 
 .PHONY: update-dragonfly
 update-dragonfly:

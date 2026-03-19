@@ -52,8 +52,33 @@ type InvocationContext interface {
 	GetRuntimeInfo() runtimeinfo.RuntimeInfo
 }
 
+// ConfigurationOptionsMetaData provides read access to Annotations on registered Configuration Options.
+type ConfigurationOptionsMetaData interface {
+	// GetConfigurationOptionAnnotation returns the first value for the given annotation on the named ConfigurationOption.
+	// Returns ("", false) when the ConfigurationOption or annotation does not exist.
+	GetConfigurationOptionAnnotation(name, annotation string) (string, bool)
+
+	// ConfigurationOptionsByAnnotation returns all ConfigurationOption names whose annotation matches the given value.
+	ConfigurationOptionsByAnnotation(annotation, value string) []string
+
+	// ConfigurationOptionNameByAnnotation returns the ConfigurationOption name whose annotation equals value.
+	// Useful for reverse-lookup: given a remote key, find the canonical ConfigurationOption name.
+	// Returns ("", false) when no ConfigurationOption matches.
+	ConfigurationOptionNameByAnnotation(annotation, value string) (string, bool)
+
+	// GetConfigurationOptionType returns the pConfigurationOption type string (e.g. "bool", "string", "int") for the named ConfigurationOption.
+	// Returns "" when the ConfigurationOption does not exist.
+	GetConfigurationOptionType(name string) string
+
+	// GetConfigurationOptionUsage returns the usage string for the named ConfigurationOption.
+	// Returns "" when the ConfigurationOption does not exist.
+	GetConfigurationOptionUsage(name string) string
+}
+
 // ConfigurationOptions is an interface that can be implemented by any type that can be used to pass configuration options to a workflow.
+// It embeds ConfigurationOptionsMetaData so registered options expose annotation lookups without coupling callers to pflag.
 type ConfigurationOptions interface {
+	ConfigurationOptionsMetaData
 }
 
 // Entry is an interface that wraps the methods that are used to manage workflow entries.

@@ -196,8 +196,8 @@ func WithCachingEnabled(cacheDuration time.Duration) Opts {
 
 		localCache := cache.New(cacheDuration, defaultCacheCleanupInterval)
 		ev.setCache(localCache)
-		ev.Set(CONFIG_CACHE_DISABLED, false)
-		ev.Set(CONFIG_CACHE_TTL, cacheDuration)
+		ev.viper.SetDefault(CONFIG_CACHE_DISABLED, false)
+		ev.viper.SetDefault(CONFIG_CACHE_TTL, cacheDuration)
 	}
 }
 
@@ -326,7 +326,7 @@ func (ev *extendedViper) Clone() Configuration {
 
 	for _, v := range ev.flagsets {
 		//nolint:errcheck // breaking api change needed to fix this
-		clone.AddFlagSet(v)
+		_ = clone.AddFlagSet(v)
 	}
 
 	if ev.defaultCache != nil {
@@ -391,13 +391,16 @@ func (ev *extendedViper) get(key string) (result interface{}, err error) {
 	return result, err
 }
 
-// bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var
+// bindEnv extends Viper's BindEnv and will bind env vars to a key if it is a compatible GAF env var.
+// Short-circuits before calling AllKeys() when the key cannot be an env var, avoiding
+// Viper's expensive internal map rebuild on every lookup.
 func (ev *extendedViper) bindEnv(key string) error {
-	isEnvVarKeyType := ev.getKeyType(key) == EnvVarKeyType
-	isInAllKeys := slices.Contains(ev.viper.AllKeys(), key)
+	if ev.automaticEnvEnabled || ev.getKeyType(key) != EnvVarKeyType {
+		return nil
+	}
 
 	// Viper's BindEnv implementation will bind the same env var multiple times, this check avoids potential duplication issues
-	if !isEnvVarKeyType || isInAllKeys || ev.automaticEnvEnabled {
+	if slices.Contains(ev.viper.AllKeys(), key) {
 		return nil
 	}
 
@@ -463,11 +466,7 @@ func (ev *extendedViper) GetWithError(key string) (interface{}, error) {
 	defaultFunc = ev.defaultValues[key]
 
 	// if enabled use cache
-	cacheEnabled, cacheDuration, err = ev.getCacheSettings()
-	if err != nil {
-		ev.mutex.Unlock()
-		return nil, fmt.Errorf("failed to read cache settings %w", err)
-	}
+	cacheEnabled, cacheDuration = ev.getCacheSettings()
 
 	if cacheEnabled {
 		localDefaultCache = ev.defaultCache
@@ -857,42 +856,29 @@ func (ev *extendedViper) setCache(c *cache.Cache) {
 	ev.defaultCache = c
 }
 
-// return true if enabled and a caching duration
-func (ev *extendedViper) getCacheSettings() (bool, time.Duration, error) {
+// getCacheSettings reads the cache-disabled and cache-TTL values through
+// Viper so that values from any source (Set(), config files, SetDefault,
+// AutomaticEnv-bound env vars) are honored.
+// It uses ev.viper.Get() directly instead of ev.get() because the two
+// internal cache keys have no alternative keys and no prefix-based env-var
+// binding, so the extra bindEnv / IsSet / alternative-key overhead of
+// ev.get() is unnecessary.
+func (ev *extendedViper) getCacheSettings() (bool, time.Duration) {
 	if ev.defaultCache == nil {
-		return false, 0, nil
+		return false, 0
 	}
 
-	disabledRaw, err := ev.get(CONFIG_CACHE_DISABLED)
+	raw := ev.viper.Get(CONFIG_CACHE_DISABLED)
+	if disabled, err := toBool(raw); err == nil && disabled {
+		return false, 0
+	}
+
+	raw = ev.viper.Get(CONFIG_CACHE_TTL)
+	dur, err := toDuration(raw)
 	if err != nil {
-		return false, 0, err
+		return true, 0
 	}
-
-	durationRaw, err := ev.get(CONFIG_CACHE_TTL)
-	if err != nil {
-		return false, 0, err
-	}
-
-	enabled := true
-	duration := time.Duration(0)
-	if disabledRaw != nil {
-		disabled, boolError := toBool(disabledRaw)
-		if boolError != nil {
-			return false, 0, boolError
-		}
-
-		enabled = !disabled
-	}
-
-	if durationRaw != nil {
-		tmp, durError := toDuration(durationRaw)
-		if durError != nil {
-			return false, 0, durError
-		}
-		duration = tmp
-	}
-
-	return enabled, duration, nil
+	return true, dur
 }
 
 func (ev *extendedViper) detectCircularDependency(key string, dependencyKey string) error {
