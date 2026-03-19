@@ -16,20 +16,23 @@ func newTestFlagSet() *pflag.FlagSet {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
 	fs.Bool("snyk_code_enabled", false, "Enable Snyk Code analysis")
+	folderScope := string(configresolver.FolderScope)
+	machineScope := string(configresolver.MachineScope)
+
 	fs.Lookup("snyk_code_enabled").Annotations = map[string][]string{
-		configresolver.AnnotationScope:     {"org"},
+		configresolver.AnnotationScope:     {folderScope},
 		configresolver.AnnotationRemoteKey: {"snyk_code_enabled"},
 	}
 
 	fs.String("api_endpoint", "", "API endpoint URL")
 	fs.Lookup("api_endpoint").Annotations = map[string][]string{
-		configresolver.AnnotationScope:     {"machine"},
+		configresolver.AnnotationScope:     {machineScope},
 		configresolver.AnnotationRemoteKey: {"api_endpoint"},
 	}
 
 	fs.String("reference_branch", "", "Reference branch for delta findings")
 	fs.Lookup("reference_branch").Annotations = map[string][]string{
-		configresolver.AnnotationScope: {"folder"},
+		configresolver.AnnotationScope: {folderScope},
 	}
 
 	fs.String("unscoped_flag", "", "Flag without scope annotation")
@@ -72,7 +75,7 @@ func TestPrefixKeys(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolve_NilFieldMap(t *testing.T) {
-	conf := configuration.NewInMemory()
+	conf := configuration.NewWithOpts()
 	conf.Set("k", "default-val")
 
 	r := configresolver.New(conf, nil)
@@ -87,7 +90,7 @@ func TestResolve_NilFieldMap(t *testing.T) {
 
 func TestResolve_UnscopedFlag(t *testing.T) {
 	fs := newTestFlagSet()
-	conf := configuration.NewInMemory()
+	conf := configuration.NewWithOpts()
 	conf.Set("unscoped_flag", "plain")
 
 	r := newResolver(conf, fs)
@@ -146,7 +149,7 @@ func TestResolveMachine(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := newTestFlagSet()
-			conf := configuration.NewInMemory()
+			conf := configuration.NewWithOpts()
 			tc.setup(conf)
 			r := newResolver(conf, fs)
 
@@ -257,7 +260,7 @@ func TestResolveOrg(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := newTestFlagSet()
-			conf := configuration.NewInMemory()
+			conf := configuration.NewWithOpts()
 			tc.setup(conf)
 			r := newResolver(conf, fs)
 
@@ -318,7 +321,7 @@ func TestResolveFolder(t *testing.T) {
 			},
 			folder:     folder,
 			wantVal:    "my-branch",
-			wantSource: configresolver.ConfigSourceFolder,
+			wantSource: configresolver.ConfigSourceUserFolderOverride,
 		},
 		{
 			name: "folder value Changed=false is skipped, falls to remote",
@@ -374,7 +377,7 @@ func TestResolveFolder(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := newTestFlagSet()
-			conf := configuration.NewInMemory()
+			conf := configuration.NewWithOpts()
 			tc.setup(conf)
 			r := newResolver(conf, fs)
 
@@ -420,7 +423,7 @@ func TestResolveBool(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := newTestFlagSet()
-			conf := configuration.NewInMemory()
+			conf := configuration.NewWithOpts()
 			name := "snyk_code_enabled"
 			if tc.value != nil {
 				conf.Set(configresolver.RemoteOrgKey("org1", name), &configresolver.RemoteConfigField{Value: tc.value, IsLocked: false})
@@ -488,7 +491,7 @@ func TestIsLocked(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := newTestFlagSet()
-			conf := configuration.NewInMemory()
+			conf := configuration.NewWithOpts()
 			tc.setup(conf)
 			r := newResolver(conf, fs)
 
@@ -544,7 +547,7 @@ func TestResolve_FallbackSourceLocal(t *testing.T) {
 				t.Setenv("API_ENDPOINT", "https://env.api")
 			}
 			fs := newTestFlagSet()
-			conf := configuration.NewInMemory()
+			conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 			tc.setup(conf)
 			r := newResolver(conf, fs)
 
@@ -561,7 +564,7 @@ func TestResolve_FallbackSourceLocal(t *testing.T) {
 
 func TestResolve_WrongTypeStoredAtRemoteKey(t *testing.T) {
 	fs := newTestFlagSet()
-	conf := configuration.NewInMemory()
+	conf := configuration.NewWithOpts()
 	// Store a plain string where a *RemoteConfigField is expected
 	conf.Set(configresolver.RemoteOrgKey("org1", "snyk_code_enabled"), "not-a-remote-field")
 	r := newResolver(conf, fs)
@@ -573,7 +576,7 @@ func TestResolve_WrongTypeStoredAtRemoteKey(t *testing.T) {
 
 func TestResolve_WrongTypeStoredAtLocalKey(t *testing.T) {
 	fs := newTestFlagSet()
-	conf := configuration.NewInMemory()
+	conf := configuration.NewWithOpts()
 	// Store a plain string where a *LocalConfigField is expected at the user folder key
 	conf.Set(configresolver.UserFolderKey("/proj", "snyk_code_enabled"), "not-a-local-field")
 	r := newResolver(conf, fs)
@@ -589,7 +592,7 @@ func TestResolve_WrongTypeStoredAtLocalKey(t *testing.T) {
 
 func TestResolve_LocalFieldNilValue(t *testing.T) {
 	fs := newTestFlagSet()
-	conf := configuration.NewInMemory()
+	conf := configuration.NewWithOpts()
 	// UserFolderKey is set but the value is nil — localField should return nil
 	conf.Set(configresolver.UserFolderKey("/proj", "reference_branch"), nil)
 	r := newResolver(conf, fs)
@@ -601,7 +604,7 @@ func TestResolve_LocalFieldNilValue(t *testing.T) {
 
 func TestResolve_UserGlobalKeyDeleted(t *testing.T) {
 	fs := newTestFlagSet()
-	conf := configuration.NewInMemory()
+	conf := configuration.NewWithOpts()
 	// Unset marks with keyDeleted internally; simulate by using Unset
 	conf.Set(configresolver.UserGlobalKey("api_endpoint"), "val")
 	conf.Unset(configresolver.UserGlobalKey("api_endpoint"))

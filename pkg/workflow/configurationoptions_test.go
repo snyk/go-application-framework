@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,8 +17,9 @@ import (
 func newTestFlagSet() *pflag.FlagSet {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	fs.Bool("snyk_code_enabled", false, "Enable Snyk Code analysis")
+	folderScope := string(configresolver.FolderScope)
 	fs.Lookup("snyk_code_enabled").Annotations = map[string][]string{
-		"config.scope":       {"org"},
+		"config.scope":       {folderScope},
 		"config.remoteKey":   {"snyk_code_enabled"},
 		"config.displayName": {"Snyk Code"},
 		"config.description": {"Enable Snyk Code security analysis"},
@@ -25,8 +27,9 @@ func newTestFlagSet() *pflag.FlagSet {
 	}
 
 	fs.String("api_endpoint", "", "API endpoint URL")
+	machineScope := string(configresolver.MachineScope)
 	fs.Lookup("api_endpoint").Annotations = map[string][]string{
-		"config.scope":       {"machine"},
+		"config.scope":       {machineScope},
 		"config.remoteKey":   {"api_endpoint"},
 		"config.displayName": {"API Endpoint"},
 		"config.description": {"Snyk API endpoint URL"},
@@ -35,7 +38,7 @@ func newTestFlagSet() *pflag.FlagSet {
 
 	fs.String("reference_branch", "", "Reference branch for delta findings")
 	fs.Lookup("reference_branch").Annotations = map[string][]string{
-		"config.scope":       {"folder"},
+		"config.scope":       {folderScope},
 		"config.displayName": {"Reference Branch"},
 		"config.description": {"Branch used as baseline for net-new findings"},
 	}
@@ -96,7 +99,7 @@ func TestGetConfigurationOptionAnnotation(t *testing.T) {
 		wantVal    string
 		wantFound  bool
 	}{
-		{"existing annotation", "snyk_code_enabled", "config.scope", "org", true},
+		{"existing annotation", "snyk_code_enabled", "config.scope", "folder", true},
 		{"missing annotation key", "snyk_code_enabled", "config.nonexistent", "", false},
 		{"missing flag", "no_such_flag", "config.scope", "", false},
 		{"flag without annotations", "reference_branch", "config.remoteKey", "", false},
@@ -122,9 +125,8 @@ func TestConfigurationOptionsByAnnotation(t *testing.T) {
 		value      string
 		wantLen    int
 	}{
-		{"match org scope", "config.scope", "org", 1},
 		{"match machine scope", "config.scope", "machine", 1},
-		{"match folder scope", "config.scope", "folder", 1},
+		{"match folder scope", "config.scope", "folder", 2},
 		{"no match", "config.scope", "nonexistent", 0},
 		{"no such annotation", "config.bogus", "anything", 0},
 	}

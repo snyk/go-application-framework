@@ -9,12 +9,7 @@ import (
 )
 
 // Resolver is a stateless resolver that applies the precedence chain for each configuration
-// scope (machine, org, folder). effectiveOrg and folderPath are parameters, never stored state.
-//
-// Precedence rules:
-//   - Machine: locked remote > user global > remote > default
-//   - Org:     locked remote > user folder override > user global > remote > default
-//   - Folder:  locked remote > folder value > remote > user global > default
+// scope (machine, folder). effectiveOrg and folderPath are parameters, never stored state.
 type Resolver struct {
 	conf configuration.Configuration
 	fm   workflow.ConfigurationOptionsMetaData
@@ -25,8 +20,17 @@ func New(conf configuration.Configuration, fm workflow.ConfigurationOptionsMetaD
 	return &Resolver{conf: conf, fm: fm}
 }
 
+type Scope string
+
+const MachineScope Scope = "machine"
+const FolderScope Scope = "folder"
+
 // Resolve returns the effective value and its source for the named setting given an effective
 // organization ID and folder path. Both effectiveOrg and folderPath are stateless parameters.
+//
+// Precedence rules (org can have both machine and folder level settings):
+//   - Machine: locked remote > user global > remote > default
+//   - Folder:  locked remote > folder value > remote > user global > default
 func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSource) {
 	if r.fm == nil {
 		return r.fallback(name)
@@ -34,12 +38,10 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSo
 
 	scope, _ := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope)
 
-	switch scope {
-	case "machine":
+	switch Scope(scope) {
+	case MachineScope:
 		return r.resolveMachine(name, effectiveOrg)
-	case "org":
-		return r.resolveOrg(name, effectiveOrg, folderPath)
-	case "folder":
+	case FolderScope:
 		return r.resolveFolder(name, effectiveOrg, folderPath)
 	default:
 		return r.fallback(name)
@@ -51,13 +53,13 @@ func (r *Resolver) Resolve(name, effectiveOrg, folderPath string) (any, ConfigSo
 // and all Go numeric types (int*, uint*, float*) where non-zero means true.
 func (r *Resolver) ResolveBool(name, effectiveOrg, folderPath string) bool {
 	val, _ := r.Resolve(name, effectiveOrg, folderPath)
-	if val == nil {
-		return false
-	}
 	return anyToBool(val)
 }
 
 func anyToBool(val any) bool {
+	if val == nil {
+		return false
+	}
 	switch v := val.(type) {
 	case bool:
 		return v
@@ -86,8 +88,8 @@ func anyToBool(val any) bool {
 }
 
 // IsLocked reports whether the setting is locked in the remote config.
-// For org-scope flags it checks both folder-level and org-level remote keys.
 // For machine-scope flags, folderPath is ignored.
+// The folderPath parameter is only used for folder level scope and thus optional.
 func (r *Resolver) IsLocked(name, effectiveOrg string, folderPath ...string) bool {
 	fp := ""
 	if len(folderPath) > 0 {
@@ -95,7 +97,7 @@ func (r *Resolver) IsLocked(name, effectiveOrg string, folderPath ...string) boo
 	}
 
 	if fp != "" && r.fm != nil {
-		if scope, found := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope); found && scope != "machine" {
+		if scope, found := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope); found && scope != string(MachineScope) {
 			if f := r.remoteField(RemoteOrgFolderKey(effectiveOrg, fp, name)); f != nil && f.IsLocked {
 				return true
 			}
@@ -109,7 +111,7 @@ func (r *Resolver) IsLocked(name, effectiveOrg string, folderPath ...string) boo
 // remoteKeyForName returns the correct remote config key for the named setting based on its scope annotation.
 func (r *Resolver) remoteKeyForName(name, effectiveOrg string) string {
 	if r.fm != nil {
-		if scope, found := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope); found && scope == "machine" {
+		if scope, found := r.fm.GetConfigurationOptionAnnotation(name, AnnotationScope); found && scope == string(MachineScope) {
 			return RemoteMachineKey(name)
 		}
 	}
@@ -145,10 +147,9 @@ func (r *Resolver) resolveMachine(name, _ string) (any, ConfigSource) {
 	return r.fallback(name)
 }
 
-// resolveOrg applies: locked remote > user folder override > user global > remote > default
-// Remote config is checked at both folder-level (RemoteOrgFolderKey) and org-level (RemoteOrgKey),
 // with folder-level taking precedence over org-level.
-func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, ConfigSource) {
+// resolveFolder applies: locked remote > folder value > remote folder > user global > remote global > default
+func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, ConfigSource) {
 	remoteFolder := r.remoteFolderField(effectiveOrg, folderPath, name)
 	remoteOrg := r.remoteField(RemoteOrgKey(effectiveOrg, name))
 
@@ -168,52 +169,17 @@ func (r *Resolver) resolveOrg(name, effectiveOrg, folderPath string) (any, Confi
 		}
 	}
 
+	if remoteFolder != nil {
+		return remoteFolder.Value, ConfigSourceRemote
+	}
+
 	ugk := UserGlobalKey(name)
 	if r.isUserSet(ugk) {
 		return r.conf.Get(ugk), ConfigSourceUserGlobal
 	}
 
-	if remoteFolder != nil {
-		return remoteFolder.Value, ConfigSourceRemote
-	}
 	if remoteOrg != nil {
 		return remoteOrg.Value, ConfigSourceRemote
-	}
-
-	return r.fallback(name)
-}
-
-// resolveFolder applies: locked remote > folder value > remote > user global > default
-func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, ConfigSource) {
-	remoteFolder := r.remoteFolderField(effectiveOrg, folderPath, name)
-	remoteOrg := r.remoteField(RemoteOrgKey(effectiveOrg, name))
-
-	if remoteFolder != nil && remoteFolder.IsLocked {
-		return remoteFolder.Value, ConfigSourceRemoteLocked
-	}
-	if remoteOrg != nil && remoteOrg.IsLocked {
-		return remoteOrg.Value, ConfigSourceRemoteLocked
-	}
-
-	if folderPath != "" {
-		ufk := UserFolderKey(folderPath, name)
-		if r.conf.IsSet(ufk) {
-			if lf := r.localField(ufk); lf != nil && lf.Changed {
-				return lf.Value, ConfigSourceFolder
-			}
-		}
-	}
-
-	if remoteFolder != nil {
-		return remoteFolder.Value, ConfigSourceRemote
-	}
-	if remoteOrg != nil {
-		return remoteOrg.Value, ConfigSourceRemote
-	}
-
-	ugk := UserGlobalKey(name)
-	if r.isUserSet(ugk) {
-		return r.conf.Get(ugk), ConfigSourceUserGlobal
 	}
 
 	return r.fallback(name)

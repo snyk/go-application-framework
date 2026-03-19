@@ -6,7 +6,6 @@ const (
 	AnnotationRemoteKey   = "config.remoteKey"
 	AnnotationDisplayName = "config.displayName"
 	AnnotationDescription = "config.description"
-	AnnotationIdeKey      = "config.ideKey"
 	AnnotationWriteOnly   = "config.writeOnly"
 )
 
@@ -37,7 +36,6 @@ const (
 	ConfigSourceLocal                                  // set locally (env var, CLI flag, config file, or explicit Set)
 	ConfigSourceUserGlobal                             // user:global:<name>
 	ConfigSourceUserFolderOverride                     // user:folder:<folderPath>:<name> (org-scope override)
-	ConfigSourceFolder                                 // user:folder:<folderPath>:<name> (folder-scope)
-	ConfigSourceRemote                                 // remote:<orgId>:<name> — regular
-	ConfigSourceRemoteLocked                           // remote:<orgId>:<name> — locked
+	ConfigSourceRemote                                 // remote:<orgId>:*
+	ConfigSourceRemoteLocked                           // remote:<orgId>:*
 )

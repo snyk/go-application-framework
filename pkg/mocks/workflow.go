@@ -339,6 +339,101 @@ func (mr *MockInvocationContextMockRecorder) GetWorkflowIdentifier() *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkflowIdentifier", reflect.TypeOf((*MockInvocationContext)(nil).GetWorkflowIdentifier))
 }
 
+// MockConfigurationOptionsMetaData is a mock of ConfigurationOptionsMetaData interface.
+type MockConfigurationOptionsMetaData struct {
+	ctrl     *gomock.Controller
+	recorder *MockConfigurationOptionsMetaDataMockRecorder
+}
+
+// MockConfigurationOptionsMetaDataMockRecorder is the mock recorder for MockConfigurationOptionsMetaData.
+type MockConfigurationOptionsMetaDataMockRecorder struct {
+	mock *MockConfigurationOptionsMetaData
+}
+
+// NewMockConfigurationOptionsMetaData creates a new mock instance.
+func NewMockConfigurationOptionsMetaData(ctrl *gomock.Controller) *MockConfigurationOptionsMetaData {
+	mock := &MockConfigurationOptionsMetaData{ctrl: ctrl}
+	mock.recorder = &MockConfigurationOptionsMetaDataMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockConfigurationOptionsMetaData) EXPECT() *MockConfigurationOptionsMetaDataMockRecorder {
+	return m.recorder
+}
+
+// ConfigurationOptionNameByAnnotation mocks base method.
+func (m *MockConfigurationOptionsMetaData) ConfigurationOptionNameByAnnotation(annotation, value string) (string, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigurationOptionNameByAnnotation", annotation, value)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// ConfigurationOptionNameByAnnotation indicates an expected call of ConfigurationOptionNameByAnnotation.
+func (mr *MockConfigurationOptionsMetaDataMockRecorder) ConfigurationOptionNameByAnnotation(annotation, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigurationOptionNameByAnnotation", reflect.TypeOf((*MockConfigurationOptionsMetaData)(nil).ConfigurationOptionNameByAnnotation), annotation, value)
+}
+
+// ConfigurationOptionsByAnnotation mocks base method.
+func (m *MockConfigurationOptionsMetaData) ConfigurationOptionsByAnnotation(annotation, value string) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigurationOptionsByAnnotation", annotation, value)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// ConfigurationOptionsByAnnotation indicates an expected call of ConfigurationOptionsByAnnotation.
+func (mr *MockConfigurationOptionsMetaDataMockRecorder) ConfigurationOptionsByAnnotation(annotation, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigurationOptionsByAnnotation", reflect.TypeOf((*MockConfigurationOptionsMetaData)(nil).ConfigurationOptionsByAnnotation), annotation, value)
+}
+
+// GetConfigurationOptionAnnotation mocks base method.
+func (m *MockConfigurationOptionsMetaData) GetConfigurationOptionAnnotation(name, annotation string) (string, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfigurationOptionAnnotation", name, annotation)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetConfigurationOptionAnnotation indicates an expected call of GetConfigurationOptionAnnotation.
+func (mr *MockConfigurationOptionsMetaDataMockRecorder) GetConfigurationOptionAnnotation(name, annotation interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigurationOptionAnnotation", reflect.TypeOf((*MockConfigurationOptionsMetaData)(nil).GetConfigurationOptionAnnotation), name, annotation)
+}
+
+// GetConfigurationOptionType mocks base method.
+func (m *MockConfigurationOptionsMetaData) GetConfigurationOptionType(name string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfigurationOptionType", name)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetConfigurationOptionType indicates an expected call of GetConfigurationOptionType.
+func (mr *MockConfigurationOptionsMetaDataMockRecorder) GetConfigurationOptionType(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigurationOptionType", reflect.TypeOf((*MockConfigurationOptionsMetaData)(nil).GetConfigurationOptionType), name)
+}
+
+// GetConfigurationOptionUsage mocks base method.
+func (m *MockConfigurationOptionsMetaData) GetConfigurationOptionUsage(name string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfigurationOptionUsage", name)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetConfigurationOptionUsage indicates an expected call of GetConfigurationOptionUsage.
+func (mr *MockConfigurationOptionsMetaDataMockRecorder) GetConfigurationOptionUsage(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigurationOptionUsage", reflect.TypeOf((*MockConfigurationOptionsMetaData)(nil).GetConfigurationOptionUsage), name)
+}
+
 // MockConfigurationOptions is a mock of ConfigurationOptions interface.
 type MockConfigurationOptions struct {
 	ctrl     *gomock.Controller
@@ -360,6 +455,78 @@ func NewMockConfigurationOptions(ctrl *gomock.Controller) *MockConfigurationOpti
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockConfigurationOptions) EXPECT() *MockConfigurationOptionsMockRecorder {
 	return m.recorder
+}
+
+// ConfigurationOptionNameByAnnotation mocks base method.
+func (m *MockConfigurationOptions) ConfigurationOptionNameByAnnotation(annotation, value string) (string, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigurationOptionNameByAnnotation", annotation, value)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// ConfigurationOptionNameByAnnotation indicates an expected call of ConfigurationOptionNameByAnnotation.
+func (mr *MockConfigurationOptionsMockRecorder) ConfigurationOptionNameByAnnotation(annotation, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigurationOptionNameByAnnotation", reflect.TypeOf((*MockConfigurationOptions)(nil).ConfigurationOptionNameByAnnotation), annotation, value)
+}
+
+// ConfigurationOptionsByAnnotation mocks base method.
+func (m *MockConfigurationOptions) ConfigurationOptionsByAnnotation(annotation, value string) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigurationOptionsByAnnotation", annotation, value)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// ConfigurationOptionsByAnnotation indicates an expected call of ConfigurationOptionsByAnnotation.
+func (mr *MockConfigurationOptionsMockRecorder) ConfigurationOptionsByAnnotation(annotation, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigurationOptionsByAnnotation", reflect.TypeOf((*MockConfigurationOptions)(nil).ConfigurationOptionsByAnnotation), annotation, value)
+}
+
+// GetConfigurationOptionAnnotation mocks base method.
+func (m *MockConfigurationOptions) GetConfigurationOptionAnnotation(name, annotation string) (string, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfigurationOptionAnnotation", name, annotation)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetConfigurationOptionAnnotation indicates an expected call of GetConfigurationOptionAnnotation.
+func (mr *MockConfigurationOptionsMockRecorder) GetConfigurationOptionAnnotation(name, annotation interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigurationOptionAnnotation", reflect.TypeOf((*MockConfigurationOptions)(nil).GetConfigurationOptionAnnotation), name, annotation)
+}
+
+// GetConfigurationOptionType mocks base method.
+func (m *MockConfigurationOptions) GetConfigurationOptionType(name string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfigurationOptionType", name)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetConfigurationOptionType indicates an expected call of GetConfigurationOptionType.
+func (mr *MockConfigurationOptionsMockRecorder) GetConfigurationOptionType(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigurationOptionType", reflect.TypeOf((*MockConfigurationOptions)(nil).GetConfigurationOptionType), name)
+}
+
+// GetConfigurationOptionUsage mocks base method.
+func (m *MockConfigurationOptions) GetConfigurationOptionUsage(name string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfigurationOptionUsage", name)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetConfigurationOptionUsage indicates an expected call of GetConfigurationOptionUsage.
+func (mr *MockConfigurationOptionsMockRecorder) GetConfigurationOptionUsage(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigurationOptionUsage", reflect.TypeOf((*MockConfigurationOptions)(nil).GetConfigurationOptionUsage), name)
 }
 
 // MockEntry is a mock of Entry interface.
