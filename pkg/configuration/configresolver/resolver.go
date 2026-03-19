@@ -137,7 +137,13 @@ func (r *Resolver) resolveMachine(name, _ string) (any, ConfigSource) {
 
 	ugk := UserGlobalKey(name)
 	if r.isUserSet(ugk) {
-		return r.conf.Get(ugk), ConfigSourceUserGlobal
+		if lf := r.localField(ugk); lf != nil {
+			if lf.Changed {
+				return lf.Value, ConfigSourceUserGlobal
+			}
+		} else {
+			return r.conf.Get(ugk), ConfigSourceUserGlobal
+		}
 	}
 
 	if remote != nil {
@@ -175,7 +181,13 @@ func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, Co
 
 	ugk := UserGlobalKey(name)
 	if r.isUserSet(ugk) {
-		return r.conf.Get(ugk), ConfigSourceUserGlobal
+		if lf := r.localField(ugk); lf != nil {
+			if lf.Changed {
+				return lf.Value, ConfigSourceUserGlobal
+			}
+		} else {
+			return r.conf.Get(ugk), ConfigSourceUserGlobal
+		}
 	}
 
 	if remoteOrg != nil {

@@ -602,6 +602,110 @@ func TestResolve_LocalFieldNilValue(t *testing.T) {
 	assert.Nil(t, val)
 }
 
+func TestResolve_UserGlobalAsLocalConfigField(t *testing.T) {
+	tests := []struct {
+		name       string
+		flagName   string
+		setup      func(conf configuration.Configuration)
+		org        string
+		folder     string
+		wantVal    any
+		wantSource configresolver.ConfigSource
+	}{
+		{
+			name:     "machine scope: LocalConfigField Changed=true returns Value",
+			flagName: "api_endpoint",
+			setup: func(conf configuration.Configuration) {
+				conf.Set(configresolver.UserGlobalKey("api_endpoint"), &configresolver.LocalConfigField{Value: "user-ep", Changed: true})
+			},
+			org:        "org1",
+			folder:     "",
+			wantVal:    "user-ep",
+			wantSource: configresolver.ConfigSourceUserGlobal,
+		},
+		{
+			name:     "machine scope: LocalConfigField Changed=false falls through to default",
+			flagName: "api_endpoint",
+			setup: func(conf configuration.Configuration) {
+				conf.Set(configresolver.UserGlobalKey("api_endpoint"), &configresolver.LocalConfigField{Value: "ignored", Changed: false})
+			},
+			org:        "org1",
+			folder:     "",
+			wantVal:    nil,
+			wantSource: configresolver.ConfigSourceDefault,
+		},
+		{
+			name:     "machine scope: LocalConfigField Changed=false falls through to remote",
+			flagName: "api_endpoint",
+			setup: func(conf configuration.Configuration) {
+				conf.Set(configresolver.UserGlobalKey("api_endpoint"), &configresolver.LocalConfigField{Value: "ignored", Changed: false})
+				conf.Set(configresolver.RemoteMachineKey("api_endpoint"), &configresolver.RemoteConfigField{Value: "remote-ep", IsLocked: false})
+			},
+			org:        "org1",
+			folder:     "",
+			wantVal:    "remote-ep",
+			wantSource: configresolver.ConfigSourceRemote,
+		},
+		{
+			name:     "folder scope: LocalConfigField Changed=true returns Value",
+			flagName: "snyk_code_enabled",
+			setup: func(conf configuration.Configuration) {
+				conf.Set(configresolver.UserGlobalKey("snyk_code_enabled"), &configresolver.LocalConfigField{Value: true, Changed: true})
+			},
+			org:        "org1",
+			folder:     "/proj",
+			wantVal:    true,
+			wantSource: configresolver.ConfigSourceUserGlobal,
+		},
+		{
+			name:     "folder scope: LocalConfigField Changed=false falls through to default",
+			flagName: "snyk_code_enabled",
+			setup: func(conf configuration.Configuration) {
+				conf.Set(configresolver.UserGlobalKey("snyk_code_enabled"), &configresolver.LocalConfigField{Value: true, Changed: false})
+			},
+			org:        "org1",
+			folder:     "/proj",
+			wantVal:    nil,
+			wantSource: configresolver.ConfigSourceDefault,
+		},
+		{
+			name:     "folder scope: LocalConfigField Changed=false falls through to remote org",
+			flagName: "snyk_code_enabled",
+			setup: func(conf configuration.Configuration) {
+				conf.Set(configresolver.UserGlobalKey("snyk_code_enabled"), &configresolver.LocalConfigField{Value: true, Changed: false})
+				conf.Set(configresolver.RemoteOrgKey("org1", "snyk_code_enabled"), &configresolver.RemoteConfigField{Value: false, IsLocked: false})
+			},
+			org:        "org1",
+			folder:     "/proj",
+			wantVal:    false,
+			wantSource: configresolver.ConfigSourceRemote,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := newTestFlagSet()
+			conf := configuration.NewWithOpts()
+			tc.setup(conf)
+			r := newResolver(conf, fs)
+
+			val, src := r.Resolve(tc.flagName, tc.org, tc.folder)
+			assert.Equal(t, tc.wantVal, val)
+			assert.Equal(t, tc.wantSource, src)
+		})
+	}
+}
+
+func TestResolveBool_UserGlobalAsLocalConfigField(t *testing.T) {
+	fs := newTestFlagSet()
+	conf := configuration.NewWithOpts()
+	name := "snyk_code_enabled"
+	conf.Set(configresolver.UserGlobalKey(name), &configresolver.LocalConfigField{Value: true, Changed: true})
+	r := newResolver(conf, fs)
+	got := r.ResolveBool(name, "org1", "/proj")
+	assert.True(t, got, "ResolveBool must unwrap LocalConfigField.Value, not see the struct pointer")
+}
+
 func TestResolve_UserGlobalKeyDeleted(t *testing.T) {
 	fs := newTestFlagSet()
 	conf := configuration.NewWithOpts()
