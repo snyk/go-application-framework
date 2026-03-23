@@ -114,8 +114,8 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	// create pattern matcher used to match filesToFilter to glob patterns
 	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 
-	// get git-tracked files to avoid filtering them out
-	gitTrackedFiles := fw.getGitTrackedFiles()
+	// get git-tracked files (relative paths) and repo root to avoid filtering them out
+	gitTrackedFiles, repoRoot := fw.getGitTrackedFiles()
 
 	go func() {
 		ctx := context.Background()
@@ -131,13 +131,8 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			}
 			go func(f string) {
 				defer availableThreads.Release(1)
-				// normalize path to absolute for consistent comparison
-				absPath, err := filepath.Abs(f)
-				if err != nil {
-					absPath = filepath.Clean(f)
-				}
 				// files tracked in git should not be filtered, even if they match gitignore patterns
-				if gitTrackedFiles[absPath] {
+				if fw.isGitTracked(f, gitTrackedFiles, repoRoot) {
 					filteredFilesCh <- f
 					return
 				}
@@ -158,8 +153,34 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	return filteredFilesCh
 }
 
-// getGitTrackedFiles returns a map of absolute file paths that are tracked in git (in the index/staging area)
-func (fw *FileFilter) getGitTrackedFiles() map[string]bool {
+// isGitTracked checks if a file path is tracked in git by computing its path relative to the repo root
+func (fw *FileFilter) isGitTracked(filePath string, trackedFiles map[string]bool, repoRoot string) bool {
+	if len(trackedFiles) == 0 || repoRoot == "" {
+		return false
+	}
+
+	// convert file path to absolute to ensure consistent comparison
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return false
+	}
+
+	// compute path relative to repo root
+	relPath, err := filepath.Rel(repoRoot, absPath)
+	if err != nil {
+		return false
+	}
+
+	// normalize to forward slashes (git index uses forward slashes)
+	relPath = filepath.ToSlash(relPath)
+
+	// check if this relative path is in the tracked files
+	return trackedFiles[relPath]
+}
+
+// getGitTrackedFiles returns a map of relative file paths (using forward slashes) that are tracked in git,
+// along with the repository root path. Using relative paths reduces memory usage in large repos.
+func (fw *FileFilter) getGitTrackedFiles() (map[string]bool, string) {
 	trackedFiles := make(map[string]bool)
 
 	// open the git repository
@@ -168,14 +189,14 @@ func (fw *FileFilter) getGitTrackedFiles() map[string]bool {
 	})
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
-		return trackedFiles
+		return trackedFiles, ""
 	}
 
 	// get the worktree to find the root path and access the index
 	worktree, err := repo.Worktree()
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
-		return trackedFiles
+		return trackedFiles, ""
 	}
 	repoRoot := worktree.Filesystem.Root()
 
@@ -184,21 +205,16 @@ func (fw *FileFilter) getGitTrackedFiles() map[string]bool {
 	idx, err := repo.Storer.Index()
 	if err != nil {
 		fw.logger.Debug().Msgf("failed to get git index: %v", err)
-		return trackedFiles
+		return trackedFiles, ""
 	}
 
-	// iterate through all entries in the index
+	// store relative paths (as they appear in git index) - uses forward slashes
+	// this reduces memory usage compared to storing full absolute paths
 	for _, entry := range idx.Entries {
-		absolutePath := filepath.Join(repoRoot, entry.Name)
-		// ensure the path is absolute and cleaned for consistent comparison
-		absolutePath, err = filepath.Abs(absolutePath)
-		if err != nil {
-			absolutePath = filepath.Clean(filepath.Join(repoRoot, entry.Name))
-		}
-		trackedFiles[absolutePath] = true
+		trackedFiles[entry.Name] = true
 	}
 
-	return trackedFiles
+	return trackedFiles, repoRoot
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
