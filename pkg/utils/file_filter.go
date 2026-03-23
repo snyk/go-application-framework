@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
@@ -112,6 +113,10 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 
 	// create pattern matcher used to match filesToFilter to glob patterns
 	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+
+	// get git-tracked files to avoid filtering them out
+	gitTrackedFiles := fw.getGitTrackedFiles()
+
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
@@ -126,6 +131,16 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			}
 			go func(f string) {
 				defer availableThreads.Release(1)
+				// normalize path to absolute for consistent comparison
+				absPath, err := filepath.Abs(f)
+				if err != nil {
+					absPath = filepath.Clean(f)
+				}
+				// files tracked in git should not be filtered, even if they match gitignore patterns
+				if gitTrackedFiles[absPath] {
+					filteredFilesCh <- f
+					return
+				}
 				// filesToFilter that do not match the glob pattern are filtered
 				if !globPatternMatcher.MatchesPath(f) {
 					filteredFilesCh <- f
@@ -141,6 +156,49 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	}()
 
 	return filteredFilesCh
+}
+
+// getGitTrackedFiles returns a map of absolute file paths that are tracked in git (in the index/staging area)
+func (fw *FileFilter) getGitTrackedFiles() map[string]bool {
+	trackedFiles := make(map[string]bool)
+
+	// open the git repository
+	repo, err := git.PlainOpenWithOptions(fw.path, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to open git repository: %v", err)
+		return trackedFiles
+	}
+
+	// get the worktree to find the root path and access the index
+	worktree, err := repo.Worktree()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get worktree: %v", err)
+		return trackedFiles
+	}
+	repoRoot := worktree.Filesystem.Root()
+
+	// get the index (staging area) - this contains all tracked files
+	// A file is tracked in git once it's added to the index, even before commit
+	idx, err := repo.Storer.Index()
+	if err != nil {
+		fw.logger.Debug().Msgf("failed to get git index: %v", err)
+		return trackedFiles
+	}
+
+	// iterate through all entries in the index
+	for _, entry := range idx.Entries {
+		absolutePath := filepath.Join(repoRoot, entry.Name)
+		// ensure the path is absolute and cleaned for consistent comparison
+		absolutePath, err = filepath.Abs(absolutePath)
+		if err != nil {
+			absolutePath = filepath.Clean(filepath.Join(repoRoot, entry.Name))
+		}
+		trackedFiles[absolutePath] = true
+	}
+
+	return trackedFiles
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
