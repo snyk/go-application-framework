@@ -73,14 +73,13 @@ const missingFieldsPayload string = `{
 	  }
 	}`
 
-func setupMockContext(t *testing.T, payload string, experimental bool, json bool, statusCode int, mockClient bool) *mocks.MockInvocationContext {
+func setupMockContext(t *testing.T, payload string, json bool, statusCode int) *mocks.MockInvocationContext {
 	// This method is a helper
 	t.Helper()
 
 	// setup
 	logger := zerolog.Logger{}
 	config := configuration.New()
-	config.Set("experimental", experimental)
 	config.Set("json", json)
 
 	// setup mocks
@@ -88,23 +87,19 @@ func setupMockContext(t *testing.T, payload string, experimental bool, json bool
 	networkAccessMock := mocks.NewMockNetworkAccess(ctrl)
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 
-	var httpClient *http.Client = http.DefaultClient
+	httpClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
+		// Test request parameters
+		assert.Equal(t, referenceUrl, req.URL.String())
+		assert.Equal(t, "GET", req.Method)
 
-	if mockClient {
-		httpClient = testutils.NewTestClient(func(req *http.Request) *http.Response {
-			// Test request parameters
-			assert.Equal(t, referenceUrl, req.URL.String())
-			assert.Equal(t, "GET", req.Method)
-
-			return &http.Response{
-				StatusCode: statusCode,
-				// Send response to be tested
-				Body: io.NopCloser(bytes.NewBufferString(payload)),
-				// Must be set to non-nil value or it panics
-				Header: make(http.Header),
-			}
-		})
-	}
+		return &http.Response{
+			StatusCode: statusCode,
+			// Send response to be tested
+			Body: io.NopCloser(bytes.NewBufferString(payload)),
+			// Must be set to non-nil value or it panics
+			Header: make(http.Header),
+		}
+	})
 
 	// setup invocation context
 	invocationContextMock.EXPECT().GetConfiguration().Return(config)
@@ -113,18 +108,6 @@ func setupMockContext(t *testing.T, payload string, experimental bool, json bool
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 
 	return invocationContextMock
-}
-
-func Test_WhoAmI_whoAmIWorkflowEntryPoint_requireExperimentalFlag(t *testing.T) {
-	// Setup test environment
-	invocationContextMock := setupMockContext(t, "", false, false, http.StatusOK, false)
-
-	// Assert - whoami is only available with --experiimental flag
-	expectedError := errors.New("set `--experimental` flag to enable whoAmI command")
-
-	// run test
-	_, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
-	assert.Equal(t, expectedError.Error(), err.Error())
 }
 
 func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathRegularUser(t *testing.T) {
@@ -138,7 +121,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathRegularUser(t *testing.T) {
 
 	t.Run("returns user name", func(t *testing.T) {
 		// Setup test environment
-		invocationContextMock := setupMockContext(t, happyPayloadRegularUser, true, false, http.StatusOK, true)
+		invocationContextMock := setupMockContext(t, happyPayloadRegularUser, false, http.StatusOK)
 		// Expected response is the username
 		expectedResponse := "jane.doe@snyk.io"
 
@@ -153,7 +136,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathRegularUser(t *testing.T) {
 
 	t.Run("json flag returns full json response", func(t *testing.T) {
 		// Setup test environment
-		invocationContextMock := setupMockContext(t, happyPayloadRegularUser, true, true, http.StatusOK, true)
+		invocationContextMock := setupMockContext(t, happyPayloadRegularUser, true, http.StatusOK)
 
 		// execute
 		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
@@ -186,7 +169,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathServiceUser(t *testing.T) {
 
 	t.Run("returns user name", func(t *testing.T) {
 		// Setup test environment
-		invocationContextMock := setupMockContext(t, happyPayloadServiceUser, true, false, http.StatusOK, true)
+		invocationContextMock := setupMockContext(t, happyPayloadServiceUser, false, http.StatusOK)
 
 		// For a service account returns the name given when creating the token
 		expectedResponse := "development"
@@ -202,7 +185,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathServiceUser(t *testing.T) {
 
 	t.Run("json flag returns full json response", func(t *testing.T) {
 		// Setup test environment
-		invocationContextMock := setupMockContext(t, happyPayloadServiceUser, true, true, http.StatusOK, true)
+		invocationContextMock := setupMockContext(t, happyPayloadServiceUser, true, http.StatusOK)
 
 		// execute
 		output, err := whoAmIWorkflowEntryPoint(invocationContextMock, nil)
@@ -227,7 +210,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_happyPathServiceUser(t *testing.T) {
 func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 	t.Run("handles unauthorized access", func(t *testing.T) {
 		// Setup test environment
-		invocationContextMock := setupMockContext(t, "", true, true, http.StatusUnauthorized, true)
+		invocationContextMock := setupMockContext(t, "", true, http.StatusUnauthorized)
 
 		// Should throw this error when res is 401
 		expectedError := errors.New("error fetching user data: error while fetching self data: API request failed (status: 401)")
@@ -241,7 +224,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 
 	t.Run("handles unknown statusCode", func(t *testing.T) {
 		// Setup test environment
-		invocationContextMock := setupMockContext(t, "", true, true, http.StatusInternalServerError, true)
+		invocationContextMock := setupMockContext(t, "", true, http.StatusInternalServerError)
 
 		// Should throw this error when res is 500
 		expectedError := errors.New("error fetching user data: error while fetching self data: API request failed (status: 500)")
@@ -256,7 +239,7 @@ func Test_WhoAmI_whoAmIWorkflowEntryPoint_fetchUserFailures(t *testing.T) {
 
 func Test_WhoAmI_whoAmIWorkflowEntryPoint_extractUserFailures(t *testing.T) {
 	// Setup test environment
-	invocationContextMock := setupMockContext(t, missingFieldsPayload, true, true, http.StatusOK, true)
+	invocationContextMock := setupMockContext(t, missingFieldsPayload, true, http.StatusOK)
 
 	// Expected error, the response is missing all of the fields name/email/username
 	expectedError := errors.New("error fetching user data: error while extracting user: missing properties username/name")
