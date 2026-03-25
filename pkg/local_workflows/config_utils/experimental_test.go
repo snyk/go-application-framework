@@ -94,6 +94,9 @@ func TestMarkAsExperimental(t *testing.T) {
 
 		// Should make empty flagset experimental
 		assert.True(t, IsExperimental(result), "empty flagset should be experimental after marking")
+
+		result = MarkAsUsedToBeExperimental(result)
+		assert.False(t, IsExperimental(result), "empty flagset should be experimental after marking")
 	})
 
 	t.Run("preserves existing experimental flag", func(t *testing.T) {
@@ -121,5 +124,13 @@ func TestMarkAsExperimental(t *testing.T) {
 
 		// Should remain experimental
 		assert.True(t, IsExperimental(result2), "should remain experimental")
+	})
+
+	t.Run("nil handling", func(t *testing.T) {
+		var nilFlagSet *pflag.FlagSet
+		result := MarkAsExperimental(nilFlagSet)
+		assert.Nil(t, result, "should return nil")
+		result = MarkAsUsedToBeExperimental(nilFlagSet)
+		assert.Nil(t, result, "should return nil")
 	})
 }

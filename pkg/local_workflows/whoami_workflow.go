@@ -16,7 +16,6 @@ import (
 
 const (
 	whoAmIworkflowName = "whoami"
-	experimentalFlag   = configuration.FLAG_EXPERIMENTAL
 	jsonFlag           = "json"
 )
 
@@ -31,7 +30,7 @@ func InitWhoAmIWorkflow(engine workflow.Engine) error {
 	whoAmIConfig.Bool(jsonFlag, false, "output in json format")
 
 	// register workflow with engine
-	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsExperimental(whoAmIConfig)), whoAmIWorkflowEntryPoint)
+	_, err := engine.Register(WORKFLOWID_WHOAMI, workflow.ConfigurationOptionsFromFlagset(config_utils.MarkAsUsedToBeExperimental(whoAmIConfig)), whoAmIWorkflowEntryPoint)
 	return err
 }
 
@@ -45,11 +44,6 @@ func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []work
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	var a = api.NewApi(url, httpClient)
-
-	// only run if experimental flag is set
-	if !config.GetBool(experimentalFlag) {
-		return nil, fmt.Errorf("set `--experimental` flag to enable whoAmI command")
-	}
 
 	userMe, err := a.GetUserMe()
 	if err != nil {

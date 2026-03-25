@@ -8,6 +8,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
+// IsExperimental checks if the flagset requires the experimental flag
 func IsExperimental(flags *pflag.FlagSet) bool {
 	result := false
 
@@ -25,6 +26,7 @@ func IsExperimental(flags *pflag.FlagSet) bool {
 	return result
 }
 
+// MarkAsExperimental ensures that the flagset requires the experimental flag
 func MarkAsExperimental(flags *pflag.FlagSet) *pflag.FlagSet {
 	if flags == nil {
 		return nil
@@ -33,6 +35,19 @@ func MarkAsExperimental(flags *pflag.FlagSet) *pflag.FlagSet {
 	result := *flags
 	if result.Lookup(configuration.FLAG_EXPERIMENTAL) == nil {
 		result.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental command")
+	}
+	return &result
+}
+
+// MarkAsUsedToBeExperimental ensures that the flagset accepts the experimental flag but marks it as deprecated
+func MarkAsUsedToBeExperimental(flags *pflag.FlagSet) *pflag.FlagSet {
+	if flags == nil {
+		return nil
+	}
+
+	result := *flags
+	if tmp := result.Lookup(configuration.FLAG_EXPERIMENTAL); tmp != nil {
+		tmp.Deprecated = "no longer experimental"
 	}
 	return &result
 }

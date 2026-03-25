@@ -28,7 +28,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	orgId := "orgId"
 
 	config.Set(configuration.ORGANIZATION, orgId)
-	config.Set(experimentalFlag, true)
+	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 	config.Set(configuration.INPUT_DIRECTORY, "/my/file")
 
 	// setup mocks
@@ -155,7 +155,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	a := analytics.New()
 
 	config.Set(configuration.ORGANIZATION, orgId)
-	config.Set(experimentalFlag, true)
+	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 
 	// setup mocks
 	ctrl := gomock.NewController(t)
