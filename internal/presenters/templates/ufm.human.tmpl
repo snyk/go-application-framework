@@ -296,6 +296,34 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- end }}
 {{- end }}
 
+{{- define "overallTestSummary"}}{{ "Overall Test Summary" | bold }}
+{{- "\n" }}
+{{- $findingTypes := getFindingTypesFromTestResults .TestResults }}
+  Organization:      {{ getValueFromConfig "internal_org_slug" }}
+  Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
+  Projects tested:   {{ len .TestResults }} projects
+
+{{- range $findingType := $findingTypes }}
+  {{- $issuesForType := getIssuesFromTestResults $.TestResults $findingType }}
+  {{- if gt (len $issuesForType) 0 }}
+  {{- $summaries := getSummariesFromIssues $issuesForType }}
+  {{- $effectiveSummary := index $summaries "effective" }}
+  {{- $rawSummary := index $summaries "raw" }}
+  {{- $ignoredSummary := index $summaries "ignored" }}
+  {{- $effectiveSeverities := index $effectiveSummary.CountBy "severity" }}
+  {{- $ignoredSeverities := index $ignoredSummary.CountBy "severity" }}
+  {{- $totalIssueCount := $rawSummary.Count }}
+  {{- $openIssueCount := $effectiveSummary.Count }}
+  {{- $ignoredIssueCount := $ignoredSummary.Count }}
+
+  Total {{ convertTypeToIssueName $findingType | toLowerCase }} issues: {{ $totalIssueCount }}
+  {{- if gt $totalIssueCount 0}}
+  Ignored: {{ print $ignoredIssueCount | bold }} [{{- range $severity := getSeverities | reverse }}{{- $ignoredCount := index $ignoredSeverities $severity }}{{- print " " $ignoredCount " " $severity " " | renderInSeverityColor }}{{- end}}]
+  Open   : {{ print $openIssueCount | bold }} [{{- range $severity := getSeverities | reverse }}{{- $countFound := index $effectiveSeverities $severity }}{{- print " " $countFound " " $severity " " | renderInSeverityColor }}{{- end}}]{{- end}}
+  {{- end }}
+{{- end}}
+{{- end }} {{/* end overallTestSummary */}}
+
 {{- /* Main template */}}
 {{- define "main" }}
     {{- $totalResults := len $.TestResults }}
@@ -307,6 +335,12 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
         {{- if lt (add $resultIndex 1) $totalResults }}
             {{- "\n" }}{{- divider }}{{- "\n" }}
         {{- end }}
+    {{- end }}
+
+    {{- /* Render overall summary for multi-project scans */}}
+    {{- if gt $totalResults 1 }}
+        {{- "\n" }}{{- divider }}{{- "\n" }}
+        {{- box (renderToString "overallTestSummary" $) }}
     {{- end }}
 
     {{- /* Show hint if results are filtered */}}
