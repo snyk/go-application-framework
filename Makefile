@@ -63,9 +63,11 @@ update-local-findings:
 .PHONY: help
 help:
 	@echo "Main targets:"
+	@echo "$(LOG_PREFIX) tools                      Installs the tools required for development and testing"
 	@echo "$(LOG_PREFIX) format"
 	@echo "$(LOG_PREFIX) lint"
 	@echo "$(LOG_PREFIX) build"
+	@echo "$(LOG_PREFIX) generate                   Regenerates generated files (e.g. mocks)"
 	@echo "$(LOG_PREFIX) test"
 	@echo "$(LOG_PREFIX) testv                      Test versbosely"
 	@echo "$(LOG_PREFIX) GOOS                       Specify Operating System to compile for (see golang GOOS, default=$(GOOS))"
