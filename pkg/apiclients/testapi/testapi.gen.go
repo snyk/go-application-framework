@@ -511,10 +511,10 @@ type BundleResource struct {
 	// content types.
 	ContentType BundleResourceContentType `json:"content_type"`
 
-	// FilePatterns File Patterns to include in the scan.
+	// FilePatterns File Patterns to include in the scan. Elements must be less than 256 characters.
 	//
 	// Currently unsupported. Provide an empty list.
-	FilePatterns []string `json:"file_patterns"`
+	FilePatterns []String256 `json:"file_patterns"`
 
 	// Name A name to assign to the SBOM contained in the BundleRevision.
 	//
@@ -951,6 +951,14 @@ type FindingData struct {
 			Meta *IoSnykApiCommonMeta `json:"meta,omitempty"`
 		} `json:"policy,omitempty"`
 
+		// Project Snyk Project in which the Finding was discovered
+		Project *struct {
+			Data *struct {
+				Id   openapi_types.UUID `json:"id"`
+				Type string             `json:"type"`
+			} `json:"data,omitempty"`
+		} `json:"project,omitempty"`
+
 		// Test Test in which this finding was discovered.
 		Test *struct {
 			Data *struct {
@@ -1236,8 +1244,8 @@ type LocalIgnore struct {
 // LocalPathLocator LocalPathLocator locates a test subject by local file paths, relative to the
 // working copy top-level directory of the source code.
 type LocalPathLocator struct {
-	// Paths Local file paths.
-	Paths []string             `json:"paths"`
+	// Paths Local file paths. Limited to 256 characters.
+	Paths []String256          `json:"paths"`
 	Type  LocalPathLocatorType `json:"type"`
 }
 
@@ -1645,10 +1653,10 @@ type ScmResource struct {
 	// Commit Commit hash to reference specifically.
 	Commit *string `json:"commit,omitempty"`
 
-	// FilePatterns File Patterns to include in the scan.
+	// FilePatterns File Patterns to include in the scan. Elements must be less than 256 characters.
 	//
 	// Currently unsupported. Provide an empty list.
-	FilePatterns *[]string `json:"file_patterns,omitempty"`
+	FilePatterns *[]String256 `json:"file_patterns,omitempty"`
 
 	// IntegrationId Integration ID assigned to the specific SCM.
 	// This ID can be found in the Snyk UI by navigating to
@@ -2057,6 +2065,9 @@ type SourceLocation struct {
 // SourceLocationType defines model for SourceLocation.Type.
 type SourceLocationType string
 
+// String256 defines model for String256.
+type String256 = string
+
 // Suppression Details about a finding's suppression in test results.
 //
 // Suppressed findings do not contribute to the test outcome, but they are still
@@ -2421,10 +2432,10 @@ type UploadResource struct {
 	// content types.
 	ContentType UploadResourceContentType `json:"content_type"`
 
-	// FilePatterns File Patterns to include in the scan.
+	// FilePatterns File Patterns to include in the scan. Elements must be less than 256 characters.
 	//
 	// Currently unsupported. Provide an empty list.
-	FilePatterns []string `json:"file_patterns"`
+	FilePatterns []String256 `json:"file_patterns"`
 
 	// Name A name to assign to the SBOM contained in the UploadRevision.
 	//
