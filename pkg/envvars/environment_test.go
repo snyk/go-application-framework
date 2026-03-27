@@ -1,6 +1,8 @@
 package envvars
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -8,6 +10,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -129,6 +132,9 @@ func TestLoadFile(t *testing.T) {
 
 func TestLoadConfiguredEnvironment(t *testing.T) {
 	t.Run("should load default config files", func(t *testing.T) {
+		// Ensure we clean up the PATH back to how it was after the test.
+		t.Setenv("PATH", os.Getenv("PATH"))
+
 		dir := t.TempDir()
 		uniqueEnvVarConfigFile, absEnvVarConfigFile := setupTestFile(t, "1", dir)
 		uniqueEnvVarDotSnykEnv, absEnvVarDotSnykEnvFile := setupTestFile(t, ".snyk.env", dir)
@@ -140,6 +146,9 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 		err = os.Chdir(dir)
 		require.NoError(t, err)
 
+		// Don't allow Bash, so we skip the shell loading, it isn't relevant for this test.
+		setShellAllowedForTest(t, "bash", false)
+
 		LoadConfiguredEnvironment(files, dir)
 
 		require.Equal(t, uniqueEnvVarConfigFile, os.Getenv(uniqueEnvVarConfigFile))
@@ -148,6 +157,90 @@ func TestLoadConfiguredEnvironment(t *testing.T) {
 
 		err = os.Chdir(currentDir)
 		require.NoError(t, err)
+	})
+}
+
+func TestLoadConfiguredEnvironmentWithOptions(t *testing.T) {
+	t.Run("should load custom config files", func(t *testing.T) {
+		// Ensure we clean up the PATH back to how it was after the test.
+		t.Setenv("PATH", os.Getenv("PATH"))
+
+		dir := t.TempDir()
+		uniqueEnvVar, absEnvVarConfigFile := setupTestFile(t, ".custom.env", dir)
+
+		// Don't allow Bash, so we skip the shell loading, it isn't relevant for this test.
+		setShellAllowedForTest(t, "bash", false)
+
+		LoadConfiguredEnvironmentWithOptions(WithCustomConfigFiles([]string{absEnvVarConfigFile}))
+
+		require.Equal(t, uniqueEnvVar, os.Getenv(uniqueEnvVar))
+	})
+
+	t.Run("should return early when context is canceled", func(t *testing.T) {
+		// Ensure we clean up the PATH back to how it was after the test.
+		t.Setenv("PATH", os.Getenv("PATH"))
+
+		dir := t.TempDir()
+		uniqueEnvVar, absEnvVarConfigFile := setupTestFile(t, ".custom.env", dir)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		// Don't allow Bash, so we skip the shell loading (although in theory we shouldn't hit it anyway), it isn't relevant for this test.
+		setShellAllowedForTest(t, "bash", false)
+
+		LoadConfiguredEnvironmentWithOptions(
+			WithContext(ctx),
+			WithCustomConfigFiles([]string{absEnvVarConfigFile}),
+		)
+
+		require.Empty(t, os.Getenv(uniqueEnvVar))
+	})
+
+	t.Run("should use the passed logger", func(t *testing.T) {
+		// Ensure we clean up the PATH back to how it was after the test.
+		t.Setenv("PATH", os.Getenv("PATH"))
+
+		var logsBuffer bytes.Buffer
+		logger := zerolog.New(&logsBuffer).Level(zerolog.DebugLevel)
+
+		// Use a canceled context so we skip the actual loading, it isn't relevant for this test.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// Don't allow Bash, so we skip the shell loading (although in theory we shouldn't hit it anyway), it isn't relevant for this test.
+		setShellAllowedForTest(t, "bash", false)
+
+		LoadConfiguredEnvironmentWithOptions(WithContext(ctx), WithLogger(&logger))
+
+		require.NotEmpty(t, logsBuffer.String(), "Expected something to be logged.")
+	})
+}
+
+func TestGetEnvFromShell(t *testing.T) {
+	t.Run("should return empty for non-allowlisted shell", func(t *testing.T) {
+		// Ensure we clean up the PATH back to how it was after the test.
+		t.Setenv("PATH", os.Getenv("PATH"))
+
+		logger := zerolog.Nop()
+
+		env := getEnvFromShell(context.Background(), &logger, "not-allowlisted-shell")
+
+		require.Empty(t, env)
+	})
+}
+
+//nolint:unparam // Parameterized shell support keeps helper reusable when future tests need other allowlisted shells.
+func setShellAllowedForTest(t *testing.T, shell string, allowed bool) {
+	t.Helper()
+	originalValue, hasOriginalValue := shellWhiteList[shell]
+	shellWhiteList[shell] = allowed
+
+	t.Cleanup(func() {
+		if hasOriginalValue {
+			shellWhiteList[shell] = originalValue
+			return
+		}
+
+		delete(shellWhiteList, shell)
 	})
 }
 
