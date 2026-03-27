@@ -46,8 +46,12 @@ func MarkAsUsedToBeExperimental(flags *pflag.FlagSet) *pflag.FlagSet {
 	}
 
 	result := *flags
-	if tmp := result.Lookup(configuration.FLAG_EXPERIMENTAL); tmp != nil {
-		tmp.Deprecated = "no longer experimental"
+	tmp := result.Lookup(configuration.FLAG_EXPERIMENTAL)
+	if tmp == nil {
+		result.Bool(configuration.FLAG_EXPERIMENTAL, false, "enable experimental command")
+		tmp = result.Lookup(configuration.FLAG_EXPERIMENTAL)
 	}
+
+	tmp.Usage = tmp.Usage + " (deprecated)"
 	return &result
 }
