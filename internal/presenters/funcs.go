@@ -344,8 +344,18 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
+	defaultMap["getFindingTypesFromTestResults"] = func(testResults []testapi.TestResult) []testapi.FindingType {
+		return getFindingTypesFromTestResults(testResults)
+	}
 	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
+	}
+	defaultMap["getIssuesFromTestResults"] = func(testResults []testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
+		var allIssues []testapi.Issue
+		for _, result := range testResults {
+			allIssues = append(allIssues, utils.ValueOf(testapi.GetIssuesFromTestResult(result, findingType))...)
+		}
+		return allIssues
 	}
 	defaultMap["getIssueMetadata"] = func(issue testapi.Issue, key string) interface{} {
 		value, found := issue.GetData(key)
@@ -529,6 +539,22 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 	slices.Sort(findingTypesList)
 	slices.Reverse(findingTypesList)
 
+	return findingTypesList
+}
+
+func getFindingTypesFromTestResults(testResults []testapi.TestResult) []testapi.FindingType {
+	findingTypes := map[testapi.FindingType]bool{}
+	for _, result := range testResults {
+		for _, ft := range getFindingTypesFromTestResult(result) {
+			findingTypes[ft] = true
+		}
+	}
+	findingTypesList := slices.Collect(maps.Keys(findingTypes))
+	if len(findingTypesList) == 0 {
+		return []testapi.FindingType{"no findings type found"}
+	}
+	slices.Sort(findingTypesList)
+	slices.Reverse(findingTypesList)
 	return findingTypesList
 }
 
