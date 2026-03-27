@@ -134,3 +134,27 @@ func TestMarkAsExperimental(t *testing.T) {
 		assert.Nil(t, result, "should return nil")
 	})
 }
+
+func TestMarkAsUsedToBeExperimental(t *testing.T) {
+	t.Run("adds deprecated experimental flag when flag is absent", func(t *testing.T) {
+		original := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		original.Bool("json", false, "output in json format")
+
+		result := MarkAsUsedToBeExperimental(original)
+
+		assert.False(t, IsExperimental(result), "should not be considered experimental")
+		err := result.Parse([]string{"--experimental"})
+		assert.NoError(t, err, "--experimental should be accepted without error")
+	})
+
+	t.Run("marks existing experimental flag as deprecated", func(t *testing.T) {
+		original := MarkAsExperimental(pflag.NewFlagSet("test", pflag.ContinueOnError))
+		assert.True(t, IsExperimental(original))
+
+		result := MarkAsUsedToBeExperimental(original)
+
+		assert.False(t, IsExperimental(result), "should no longer be experimental")
+		err := result.Parse([]string{"--experimental"})
+		assert.NoError(t, err, "--experimental should be accepted without error")
+	})
+}
