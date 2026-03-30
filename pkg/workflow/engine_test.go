@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"testing"
@@ -523,4 +524,63 @@ func Test_EngineInvocationConcurrent(t *testing.T) {
 			return
 		}
 	}
+}
+
+func Test_EngineImpl_InvokeWithContext_CustomContext(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("ctxtest")
+	flagset := pflag.NewFlagSet("ctx", pflag.ContinueOnError)
+
+	var receivedCtx context.Context
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		receivedCtx = invocation.Context()
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	// Create a context with a specific value and deadline to verify it's passed through
+	type ctxKey string
+	testKey := ctxKey("test-key")
+	testValue := "test-value"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ctx = context.WithValue(ctx, testKey, testValue)
+
+	_, err = engine.Invoke(wfId, WithContext(ctx))
+	assert.NoError(t, err)
+	assert.NotNil(t, receivedCtx)
+	assert.Equal(t, testValue, receivedCtx.Value(testKey))
+
+	// Verify deadline is propagated
+	deadline, hasDeadline := receivedCtx.Deadline()
+	assert.True(t, hasDeadline, "context should have a deadline")
+	assert.False(t, deadline.IsZero(), "deadline should not be zero")
+}
+
+func Test_EngineImpl_InvokeWithContext_DefaultContext(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("ctxdefault")
+	flagset := pflag.NewFlagSet("cd", pflag.ContinueOnError)
+
+	var receivedCtx context.Context
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		receivedCtx = invocation.Context()
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	err = engine.Init()
+	assert.NoError(t, err)
+
+	// Invoke without WithContext - should get a non-nil default context
+	_, err = engine.Invoke(wfId)
+	assert.NoError(t, err)
+	assert.NotNil(t, receivedCtx)
 }
