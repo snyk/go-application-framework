@@ -370,6 +370,12 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return json_schemas.DEFAULT_SEVERITIES
 	}
 	defaultMap["getSummariesFromIssues"] = testapi.GetSummariesFromIssues
+	defaultMap["newFindingTypeSummary"] = func(ft testapi.FindingType, issues []testapi.Issue) interface{} {
+		return struct {
+			FindingType testapi.FindingType
+			Issues      []testapi.Issue
+		}{FindingType: ft, Issues: issues}
+	}
 	defaultMap["getSortedIssuesFromSummary"] = func(summary *testapi.IssueSummary) []testapi.Issue {
 		if summary == nil {
 			return []testapi.Issue{}
