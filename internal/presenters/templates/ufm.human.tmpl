@@ -298,13 +298,13 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 
 {{- define "overallTestSummary"}}{{ "Overall Test Summary" | bold }}
 {{- "\n" }}
-{{- $findingTypes := getFindingTypesFromTestResults .TestResults }}
+{{- $findingTypes := getFindingTypesFromMultipleTestResults .TestResults }}
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
   Projects tested:   {{ len .TestResults }} projects
 
 {{- range $findingType := $findingTypes }}
-  {{- $issuesForType := getIssuesFromTestResults $.TestResults $findingType }}
+  {{- $issuesForType := getIssuesFromMultipleTestResults $.TestResults $findingType }}
   {{- if gt (len $issuesForType) 0 }}
   {{- $summaries := getSummariesFromIssues $issuesForType }}
   {{- $effectiveSummary := index $summaries "effective" }}

@@ -344,13 +344,11 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 		return strings.ReplaceAll(str, old, replaceWith)
 	}
 	defaultMap["getFindingTypesFromTestResult"] = getFindingTypesFromTestResult
-	defaultMap["getFindingTypesFromTestResults"] = func(testResults []testapi.TestResult) []testapi.FindingType {
-		return getFindingTypesFromTestResults(testResults)
-	}
+	defaultMap["getFindingTypesFromMultipleTestResults"] = getFindingTypesFromMultipleTestResults
 	defaultMap["getIssuesFromTestResult"] = func(testResults testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		return utils.ValueOf(testapi.GetIssuesFromTestResult(testResults, findingType))
 	}
-	defaultMap["getIssuesFromTestResults"] = func(testResults []testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
+	defaultMap["getIssuesFromMultipleTestResults"] = func(testResults []testapi.TestResult, findingType ...testapi.FindingType) []testapi.Issue {
 		var allIssues []testapi.Issue
 		for _, result := range testResults {
 			allIssues = append(allIssues, utils.ValueOf(testapi.GetIssuesFromTestResult(result, findingType))...)
@@ -542,7 +540,7 @@ func getFindingTypesFromTestResult(testResults testapi.TestResult) []testapi.Fin
 	return findingTypesList
 }
 
-func getFindingTypesFromTestResults(testResults []testapi.TestResult) []testapi.FindingType {
+func getFindingTypesFromMultipleTestResults(testResults []testapi.TestResult) []testapi.FindingType {
 	findingTypes := map[testapi.FindingType]bool{}
 	for _, result := range testResults {
 		for _, ft := range getFindingTypesFromTestResult(result) {
