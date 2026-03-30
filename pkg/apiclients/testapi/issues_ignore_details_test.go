@@ -352,6 +352,12 @@ func TestIssueIgnoreDetails_IgnoreData(t *testing.T) {
 					Links testapi.IoSnykApiCommonRelatedLink `json:"links"`
 					Meta  *testapi.IoSnykApiCommonMeta       `json:"meta,omitempty"`
 				} `json:"policy,omitempty"`
+				Project *struct {
+					Data *struct {
+						Id   openapi_types.UUID `json:"id"`
+						Type string             `json:"type"`
+					} `json:"data,omitempty"`
+				} `json:"project,omitempty"`
 				Test *struct {
 					Data *struct {
 						Id   openapi_types.UUID `json:"id"`
@@ -551,6 +557,12 @@ func TestIssueIgnoreDetails_PolicySearchEdgeCases(t *testing.T) {
 						Links testapi.IoSnykApiCommonRelatedLink `json:"links"`
 						Meta  *testapi.IoSnykApiCommonMeta       `json:"meta,omitempty"`
 					} `json:"policy,omitempty"`
+					Project *struct {
+						Data *struct {
+							Id   openapi_types.UUID `json:"id"`
+							Type string             `json:"type"`
+						} `json:"data,omitempty"`
+					} `json:"project,omitempty"`
 					Test *struct {
 						Data *struct {
 							Id   openapi_types.UUID `json:"id"`

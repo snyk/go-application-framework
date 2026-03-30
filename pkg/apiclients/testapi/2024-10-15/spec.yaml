@@ -364,11 +364,11 @@ components:
           type: string
         file_patterns:
           description: |-
-            File Patterns to include in the scan.
+            File Patterns to include in the scan. Elements must be less than 256 characters.
 
             Currently unsupported. Provide an empty list.
           items:
-            type: string
+            $ref: '#/components/schemas/String256'
           maxItems: 20
           type: array
         name:
@@ -1143,6 +1143,22 @@ components:
               required:
               - links
               type: object
+            project:
+              description: Snyk Project in which the Finding was discovered
+              properties:
+                data:
+                  properties:
+                    id:
+                      format: uuid
+                      type: string
+                    type:
+                      pattern: ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$
+                      type: string
+                  required:
+                  - type
+                  - id
+                  type: object
+              type: object
             test:
               description: Test in which this finding was discovered.
               properties:
@@ -1633,9 +1649,9 @@ components:
         working copy top-level directory of the source code.
       properties:
         paths:
-          description: Local file paths.
+          description: Local file paths. Limited to 256 characters.
           items:
-            type: string
+            $ref: '#/components/schemas/String256'
           minItems: 1
           type: array
         type:
@@ -2269,11 +2285,11 @@ components:
           type: string
         file_patterns:
           description: |-
-            File Patterns to include in the scan.
+            File Patterns to include in the scan. Elements must be less than 256 characters.
 
             Currently unsupported. Provide an empty list.
           items:
-            type: string
+            $ref: '#/components/schemas/String256'
           maxItems: 20
           type: array
         integration_id:
@@ -2899,6 +2915,9 @@ components:
       - file_path
       - from_line
       type: object
+    String256:
+      maxLength: 256
+      type: string
     Suppression:
       description: |-
         Details about a finding's suppression in test results.
@@ -3513,11 +3532,11 @@ components:
           type: string
         file_patterns:
           description: |-
-            File Patterns to include in the scan.
+            File Patterns to include in the scan. Elements must be less than 256 characters.
 
             Currently unsupported. Provide an empty list.
           items:
-            type: string
+            $ref: '#/components/schemas/String256'
           maxItems: 20
           type: array
         name:
