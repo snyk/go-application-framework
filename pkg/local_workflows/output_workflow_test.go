@@ -190,6 +190,7 @@ func setupTest(t *testing.T) *testSetup {
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("Random Application Name"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 
 	outputDestination := &testOutputDestination{writer: writer}
 
@@ -550,6 +551,7 @@ func Test_Output_outputWorkflowEntryPoint(t *testing.T) {
 				invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 				invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 				invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
+				invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 
 				byteBuffer := &bytes.Buffer{}
 				outputDestination := &testOutputDestination{writer: byteBuffer, writeRealFiles: true}
@@ -628,6 +630,7 @@ func TestLocalFindingsHandling_renderFilesAndUI(t *testing.T) {
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 
 	byteBuffer := &bytes.Buffer{}
 	outputDestination := &testOutputDestination{writer: byteBuffer, writeRealFiles: true}
@@ -687,6 +690,7 @@ func BenchmarkTransformationAndOutputWorkflow(b *testing.B) {
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(logger).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("SnykCode"), runtimeinfo.WithVersion("1.0.0"))).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 
 	outputDestination := &testOutputDestination{writer: writer}
 

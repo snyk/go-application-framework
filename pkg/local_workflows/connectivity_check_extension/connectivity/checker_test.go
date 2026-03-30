@@ -602,8 +602,8 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 		mockNA.EXPECT().GetUnauthorizedHttpClient().Return(httpClient).AnyTimes()
 
 		// Expect GetOrganizations to be called with limit from config
-		mockApiClient.EXPECT().GetOrganizations(25).Return(createTestOrgResponse(), nil)
-		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+		mockApiClient.EXPECT().GetOrganizations(gomock.Any(), 25).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return("org-1", nil)
 
 		// Create checker
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
@@ -637,8 +637,8 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 		mockNA.EXPECT().GetUnauthorizedHttpClient().Return(httpClient).AnyTimes()
 
 		// Expect GetOrganizations to be called with default limit of 100
-		mockApiClient.EXPECT().GetOrganizations(100).Return(createTestOrgResponse(), nil)
-		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+		mockApiClient.EXPECT().GetOrganizations(gomock.Any(), 100).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return("org-1", nil)
 
 		// Create checker
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
@@ -673,8 +673,8 @@ func TestCheckConnectivityWithMaxOrgCount(t *testing.T) {
 		mockNA.EXPECT().GetUnauthorizedHttpClient().Return(httpClient).AnyTimes()
 
 		// Expect GetOrganizations to be called with default limit of 100 (since -5 is invalid)
-		mockApiClient.EXPECT().GetOrganizations(100).Return(createTestOrgResponse(), nil)
-		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+		mockApiClient.EXPECT().GetOrganizations(gomock.Any(), 100).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return("org-1", nil)
 
 		// Create checker
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
@@ -755,8 +755,8 @@ func TestCheckOrganizations(t *testing.T) {
 		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 
 		// Set expectations
-		mockApiClient.EXPECT().GetOrganizations(100).Return(createTestOrgResponse(), nil)
-		mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+		mockApiClient.EXPECT().GetOrganizations(gomock.Any(), 100).Return(createTestOrgResponse(), nil)
+		mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return("org-1", nil)
 
 		// Create checker with mock API client
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
@@ -788,8 +788,8 @@ func TestCheckOrganizations(t *testing.T) {
 		}
 
 		// Set expectations - GetDefaultOrgId returns an error
-		mockApiClient.EXPECT().GetOrganizations(100).Return(mockResponse, nil)
-		mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("failed to get default org"))
+		mockApiClient.EXPECT().GetOrganizations(gomock.Any(), 100).Return(mockResponse, nil)
+		mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return("", errors.New("failed to get default org"))
 
 		// Create checker with mock API client
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
@@ -838,7 +838,7 @@ func TestCheckOrganizations(t *testing.T) {
 		config.Set(configuration.AUTHENTICATION_TOKEN, "test-token")
 
 		// Set expectations for error case
-		mockApiClient.EXPECT().GetOrganizations(100).Return(nil, errors.New("API error"))
+		mockApiClient.EXPECT().GetOrganizations(gomock.Any(), 100).Return(nil, errors.New("API error"))
 
 		checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
 
@@ -872,8 +872,8 @@ func TestCheckOrganizations(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				// Set expectations with the specific limit
-				mockApiClient.EXPECT().GetOrganizations(tc.limit).Return(createTestOrgResponse(), nil)
-				mockApiClient.EXPECT().GetDefaultOrgId().Return("org-1", nil)
+				mockApiClient.EXPECT().GetOrganizations(gomock.Any(), tc.limit).Return(createTestOrgResponse(), nil)
+				mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return("org-1", nil)
 
 				// Create checker with mock API client
 				checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)
@@ -918,7 +918,7 @@ func TestCheckConnectivityHandlesOrgError(t *testing.T) {
 
 	// Mock GetOrganizations to return an error
 	expectedError := errors.New("organization fetch error")
-	mockApiClient.EXPECT().GetOrganizations(100).Return(nil, expectedError)
+	mockApiClient.EXPECT().GetOrganizations(gomock.Any(), 100).Return(nil, expectedError)
 
 	// Create checker with mocked API client
 	checker := NewCheckerWithApiClient(mockNA, &logger, config, mockApiClient)

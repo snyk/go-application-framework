@@ -1,7 +1,6 @@
 package output_workflow
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -117,7 +116,7 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
 
 	// iterate over all writers and render for each of them
-	ctx := context.Background()
+	ctx := invocation.Context()
 	availableThreads := semaphore.NewWeighted(threadCount)
 	for k, v := range writerMap {
 		err = availableThreads.Acquire(ctx, 1)

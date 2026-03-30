@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/fips140"
 	"io"
 	"log"
@@ -46,7 +47,7 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 		if len(orgId) == 0 {
 			return existingValue, nil
 		}
-		slugName, err := apiClient.GetSlugFromOrgId(orgId)
+		slugName, err := apiClient.GetSlugFromOrgId(context.Background(), orgId)
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
 		}
@@ -72,7 +73,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			_, err := uuid.Parse(orgId)
 			isSlugName := err != nil
 			if isSlugName {
-				orgId, err = apiClient.GetOrgIdFromSlug(existingString)
+				orgId, err = apiClient.GetOrgIdFromSlug(context.Background(), existingString)
 				if err != nil {
 					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 				} else {
@@ -83,7 +84,7 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			}
 		}
 
-		orgId, err := apiClient.GetDefaultOrgId()
+		orgId, err := apiClient.GetDefaultOrgId(context.Background())
 		if err != nil {
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}

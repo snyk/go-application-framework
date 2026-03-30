@@ -57,7 +57,7 @@ func ResolveOrganization(config configuration.Configuration, engine workflow.Eng
 }
 
 // resolveOrgIdToUUID resolves a non-empty organization ID (UUID or slug) to a UUID
-func resolveOrgIdToUUID(orgId string, engine workflow.Engine, config configuration.Configuration) (*uuid.UUID, error) {
+func resolveOrgIdToUUID(ctx context.Context, orgId string, engine workflow.Engine, config configuration.Configuration) (*uuid.UUID, error) {
 	// Try to parse as UUID first to determine if it's a slug
 	parsedUUID, err := uuid.Parse(orgId)
 	if err == nil {
@@ -67,7 +67,7 @@ func resolveOrgIdToUUID(orgId string, engine workflow.Engine, config configurati
 
 	// Not a UUID, try to resolve as slug
 	apiClient := newApiClient(engine, config)
-	resolvedOrgId, err := apiClient.GetOrgIdFromSlug(orgId)
+	resolvedOrgId, err := apiClient.GetOrgIdFromSlug(ctx, orgId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve organization slug: %w", err)
 	}
@@ -106,7 +106,7 @@ func GetMergedConfigForFolder(ctx context.Context, engine workflow.Engine, dir s
 
 	if orgId != "" {
 		var orgUUID *uuid.UUID
-		orgUUID, err = resolveOrgIdToUUID(orgId, engine, config)
+		orgUUID, err = resolveOrgIdToUUID(ctx, orgId, engine, config)
 		if err != nil {
 			return LdxSyncConfigResult{Error: err}
 		}
@@ -182,7 +182,7 @@ func ResolveOrgFromUserConfig(engine workflow.Engine, cfgResult LdxSyncConfigRes
 }
 
 func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (Organization, error) {
-	defaultOrgId, err := apiClient.GetDefaultOrgId()
+	defaultOrgId, err := apiClient.GetDefaultOrgId(context.Background())
 	if err != nil {
 		logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		return Organization{}, err

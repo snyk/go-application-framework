@@ -348,7 +348,7 @@ func sendCreateIgnore(invocationCtx workflow.InvocationContext, input policyApi.
 		return nil, err
 	}
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), policyApiTimeout)
+	ctx, cancelFunc := context.WithTimeout(invocationCtx.Context(), policyApiTimeout)
 	defer cancelFunc()
 
 	resp, err := client.CreateOrgPolicyWithApplicationVndAPIPlusJSONBody(ctx, orgUuid, &params, input)

@@ -151,7 +151,8 @@ func callEndpoint(invocationCtx workflow.InvocationContext, input workflow.Data,
 		return fmt.Errorf("invalid payload type: %T", input.GetPayload())
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(byteData))
+	// Use context from invocation to respect timeout/cancellation
+	req, err := http.NewRequestWithContext(invocationCtx.Context(), http.MethodPost, url, bytes.NewBuffer(byteData))
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}

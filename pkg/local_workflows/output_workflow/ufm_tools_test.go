@@ -112,6 +112,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
+		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
 		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
@@ -142,6 +143,7 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 		ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 		ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New()).AnyTimes()
+		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
 
 		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
 		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)

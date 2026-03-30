@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -102,9 +103,10 @@ func setupMockContext(t *testing.T, payload string, json bool, statusCode int) *
 	})
 
 	// setup invocation context
-	invocationContextMock.EXPECT().GetConfiguration().Return(config)
-	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger)
-	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock)
+	invocationContextMock.EXPECT().Context().Return(context.Background()).AnyTimes()
+	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 
 	return invocationContextMock
