@@ -329,7 +329,7 @@ func (e *EngineImpl) Invoke(
 			e.mu.Unlock()
 
 			// create a context object for the invocation
-			invocationCtx := NewInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
+			invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
 
 			// invoke workflow through its callback
 			localLogger.Printf("Workflow Start")

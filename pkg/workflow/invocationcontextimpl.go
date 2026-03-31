@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -13,7 +14,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
-func NewInvocationContext(
+// newInvocationContext creates a new invocation context.
+func newInvocationContext(
 	ctxFunc func() context.Context,
 	id Identifier,
 	config configuration.Configuration,
