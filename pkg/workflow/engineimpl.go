@@ -66,7 +66,9 @@ func WithInstrumentationCollector(ic analytics.InstrumentationCollector) EngineI
 
 func WithContext(ctx context.Context) EngineInvokeOption {
 	return func(e *engineRuntimeConfig) {
-		e.ctxFunc = func() context.Context { return ctx }
+		if ctx != nil {
+			e.ctxFunc = func() context.Context { return ctx }
+		}
 	}
 }
 
