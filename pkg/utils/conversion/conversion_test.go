@@ -225,9 +225,15 @@ func TestToInt(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "large string value beyond 32-bit range",
-			input:       "3000000000",
-			expected:    func() int { i, _ := strconv.Atoi("3000000000"); return i }(),
+			name:  "large string value beyond 32-bit range",
+			input: "3000000000",
+			expected: func() int {
+				i, err := strconv.Atoi("3000000000")
+				if err != nil {
+					return 0
+				}
+				return i
+			}(),
 			expectError: strconv.IntSize == 32,
 		},
 		{
