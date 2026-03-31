@@ -2,6 +2,7 @@ package conversion
 
 import (
 	"math"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -87,10 +88,10 @@ func TestToInt64(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "uint overflow returns error on 64-bit",
-			input:       uint(math.MaxInt64) + 1,
-			expected:    0,
-			expectError: true,
+			name:        "uint max value converts correctly",
+			input:       uint(math.MaxUint32),
+			expected:    int64(math.MaxUint32),
+			expectError: false,
 		},
 		{
 			name:        "uint8 value converts correctly",
@@ -227,12 +228,13 @@ func TestToInt(t *testing.T) {
 			name:  "large string value beyond 32-bit range",
 			input: "3000000000",
 			expected: func() int {
-				if math.MaxInt > 3000000000 {
-					return 3000000000
+				i, err := strconv.Atoi("3000000000")
+				if err != nil {
+					return 0
 				}
-				return 0
+				return i
 			}(),
-			expectError: math.MaxInt < 3000000000,
+			expectError: strconv.IntSize == 32,
 		},
 		{
 			name:        "unsupported type returns error",

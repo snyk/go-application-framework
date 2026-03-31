@@ -36,7 +36,7 @@ func ToInt64(value interface{}) (int64, error) {
 	case int64:
 		return v, nil
 	case uint:
-		if v > math.MaxInt64 {
+		if uint64(v) > math.MaxInt64 {
 			return 0, fmt.Errorf("value %d overflows int64", v)
 		}
 		return int64(v), nil
