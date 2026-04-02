@@ -92,6 +92,8 @@ func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 		summary.Pins = append(summary.Pins, pins...)
 	}
 
+	summary.Unresolved = filterUnresolvedCoveredByPins(summary.Unresolved, summary.Pins)
+
 	sort.Slice(summary.Upgrades, func(i, j int) bool {
 		return summary.Upgrades[i].FromPackage.Name < summary.Upgrades[j].FromPackage.Name
 	})
@@ -175,14 +177,23 @@ func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvi
 				continue
 			}
 
-			matchedPaths++
 			fromPkg := depPath[1]
 			toPkg := upgradePath.DependencyPath[1]
+
+			if fromPkg.Name == toPkg.Name && fromPkg.Version == toPkg.Version {
+				continue
+			}
+
+			matchedPaths++
 			key := fmt.Sprintf("%s@%s", fromPkg.Name, fromPkg.Version)
 
 			addOrUpdateUpgradeGroup(upgradeMap, key, fromPkg, toPkg, issue)
 			break
 		}
+	}
+
+	if matchedPaths == 0 {
+		return false
 	}
 
 	hasUnmatchedPaths := matchedPaths < len(paths)
@@ -318,4 +329,35 @@ func compareVersions(v1, v2 string) int {
 		v2 = "v" + v2
 	}
 	return semver.Compare(v1, v2)
+}
+
+func filterUnresolvedCoveredByPins(unresolved []testapi.Issue, pins []*PinGroup) []testapi.Issue {
+	if len(unresolved) == 0 || len(pins) == 0 {
+		return unresolved
+	}
+
+	pinnedIssueIDs := map[string]struct{}{}
+	for _, pin := range pins {
+		for _, fixedIssue := range pin.FixedIssues {
+			issueID := fixedIssue.GetID()
+			if issueID == "" {
+				continue
+			}
+			pinnedIssueIDs[issueID] = struct{}{}
+		}
+	}
+
+	if len(pinnedIssueIDs) == 0 {
+		return unresolved
+	}
+
+	filtered := make([]testapi.Issue, 0, len(unresolved))
+	for _, issue := range unresolved {
+		if _, coveredByPin := pinnedIssueIDs[issue.GetID()]; coveredByPin {
+			continue
+		}
+		filtered = append(filtered, issue)
+	}
+
+	return filtered
 }

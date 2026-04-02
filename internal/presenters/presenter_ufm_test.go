@@ -1114,6 +1114,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 	}{
 		{
 			name:              "cli",
+			expectedPath:      "testdata/ufm/cli.human.readable",
+			testResultPath:    "testdata/ufm/testresult_cli.json",
+			includeIgnores:    false,
+			severityThreshold: "",
+		},
+		{
+			name:              "webgoat",
 			expectedPath:      "testdata/ufm/webgoat.ignore.human.readable",
 			testResultPath:    "testdata/ufm/webgoat.ignore.testresult.json",
 			includeIgnores:    true,
