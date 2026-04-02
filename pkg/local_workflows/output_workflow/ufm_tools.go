@@ -1,7 +1,6 @@
 package output_workflow
 
 import (
-	"context"
 	"errors"
 	"sync"
 
@@ -111,7 +110,7 @@ func HandleContentTypeUnifiedModel(input []workflow.Data, invocation workflow.In
 	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)
 
 	// iterate over all writers and render for each of them
-	ctx := context.Background()
+	ctx := invocation.Context()
 	availableThreads := semaphore.NewWeighted(threadCount)
 	var errMu sync.Mutex
 	var errs []error

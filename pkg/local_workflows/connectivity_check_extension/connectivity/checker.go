@@ -1,6 +1,7 @@
 package connectivity
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -118,12 +119,12 @@ func (c *Checker) CheckOrganizations(limit int) ([]Organization, error) {
 		return nil, nil
 	}
 
-	response, err := c.apiClient.GetOrganizations(limit)
+	response, err := c.apiClient.GetOrganizations(context.Background(), limit)
 	if err != nil {
 		return nil, err
 	}
 
-	defaultOrgId, err := c.apiClient.GetDefaultOrgId()
+	defaultOrgId, err := c.apiClient.GetDefaultOrgId(context.Background())
 	if err != nil {
 		// default org is optional, don't fail the entire operation
 		c.logger.Debug().Err(err).Msg("Failed to get default organization ID")

@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -13,7 +14,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
-func NewInvocationContext(
+// newInvocationContext creates a new invocation context.
+func newInvocationContext(
+	ctxFunc func() context.Context,
 	id Identifier,
 	config configuration.Configuration,
 	engine Engine,
@@ -22,7 +25,11 @@ func NewInvocationContext(
 	analyticsImpl analytics.Analytics,
 	ui ui.UserInterface,
 ) InvocationContext {
+	if ctxFunc == nil {
+		ctxFunc = context.Background
+	}
 	return &invocationContextImpl{
+		ctxFunc:        ctxFunc,
 		WorkflowID:     id,
 		Configuration:  config,
 		WorkflowEngine: engine,
@@ -35,6 +42,7 @@ func NewInvocationContext(
 
 // invocationContextImpl is the default implementation of the InvocationContext interface.
 type invocationContextImpl struct {
+	ctxFunc        func() context.Context
 	WorkflowID     Identifier
 	WorkflowEngine Engine
 	Configuration  configuration.Configuration
@@ -47,10 +55,8 @@ type invocationContextImpl struct {
 var _ InvocationContext = (*invocationContextImpl)(nil)
 
 // Context returns the context of the workflow that is being invoked.
-func (*invocationContextImpl) Context() context.Context {
-	// TODO: This is using context.Background() as a placeholder. Ideally this returns
-	// the context representing the lifecycle of the workflow that is being invoked.
-	return context.Background()
+func (ici *invocationContextImpl) Context() context.Context {
+	return ici.ctxFunc()
 }
 
 // GetWorkflowIdentifier returns the identifier of the workflow that is being invoked.

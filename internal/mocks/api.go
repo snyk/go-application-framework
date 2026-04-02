@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	http "net/http"
 	reflect "reflect"
 
@@ -36,123 +37,123 @@ func (m *MockApiClient) EXPECT() *MockApiClientMockRecorder {
 }
 
 // GetDefaultOrgId mocks base method.
-func (m *MockApiClient) GetDefaultOrgId() (string, error) {
+func (m *MockApiClient) GetDefaultOrgId(ctx context.Context) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDefaultOrgId")
+	ret := m.ctrl.Call(m, "GetDefaultOrgId", ctx)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDefaultOrgId indicates an expected call of GetDefaultOrgId.
-func (mr *MockApiClientMockRecorder) GetDefaultOrgId() *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetDefaultOrgId(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDefaultOrgId", reflect.TypeOf((*MockApiClient)(nil).GetDefaultOrgId))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDefaultOrgId", reflect.TypeOf((*MockApiClient)(nil).GetDefaultOrgId), ctx)
 }
 
 // GetFeatureFlag mocks base method.
-func (m *MockApiClient) GetFeatureFlag(flagname, origId string) (bool, error) {
+func (m *MockApiClient) GetFeatureFlag(ctx context.Context, flagname, origId string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFeatureFlag", flagname, origId)
+	ret := m.ctrl.Call(m, "GetFeatureFlag", ctx, flagname, origId)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetFeatureFlag indicates an expected call of GetFeatureFlag.
-func (mr *MockApiClientMockRecorder) GetFeatureFlag(flagname, origId interface{}) *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetFeatureFlag(ctx, flagname, origId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeatureFlag", reflect.TypeOf((*MockApiClient)(nil).GetFeatureFlag), flagname, origId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeatureFlag", reflect.TypeOf((*MockApiClient)(nil).GetFeatureFlag), ctx, flagname, origId)
 }
 
 // GetOrgIdFromSlug mocks base method.
-func (m *MockApiClient) GetOrgIdFromSlug(slugName string) (string, error) {
+func (m *MockApiClient) GetOrgIdFromSlug(ctx context.Context, slugName string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrgIdFromSlug", slugName)
+	ret := m.ctrl.Call(m, "GetOrgIdFromSlug", ctx, slugName)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetOrgIdFromSlug indicates an expected call of GetOrgIdFromSlug.
-func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(slugName interface{}) *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetOrgIdFromSlug(ctx, slugName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgIdFromSlug", reflect.TypeOf((*MockApiClient)(nil).GetOrgIdFromSlug), slugName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgIdFromSlug", reflect.TypeOf((*MockApiClient)(nil).GetOrgIdFromSlug), ctx, slugName)
 }
 
 // GetOrgSettings mocks base method.
-func (m *MockApiClient) GetOrgSettings(orgId string) (*contract.OrgSettingsResponse, error) {
+func (m *MockApiClient) GetOrgSettings(ctx context.Context, orgId string) (*contract.OrgSettingsResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrgSettings", orgId)
+	ret := m.ctrl.Call(m, "GetOrgSettings", ctx, orgId)
 	ret0, _ := ret[0].(*contract.OrgSettingsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetOrgSettings indicates an expected call of GetOrgSettings.
-func (mr *MockApiClientMockRecorder) GetOrgSettings(orgId interface{}) *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetOrgSettings(ctx, orgId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgSettings", reflect.TypeOf((*MockApiClient)(nil).GetOrgSettings), orgId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgSettings", reflect.TypeOf((*MockApiClient)(nil).GetOrgSettings), ctx, orgId)
 }
 
 // GetOrganizations mocks base method.
-func (m *MockApiClient) GetOrganizations(limit int) (*contract.OrganizationsResponse, error) {
+func (m *MockApiClient) GetOrganizations(ctx context.Context, limit int) (*contract.OrganizationsResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrganizations", limit)
+	ret := m.ctrl.Call(m, "GetOrganizations", ctx, limit)
 	ret0, _ := ret[0].(*contract.OrganizationsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetOrganizations indicates an expected call of GetOrganizations.
-func (mr *MockApiClientMockRecorder) GetOrganizations(limit interface{}) *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetOrganizations(ctx, limit interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizations", reflect.TypeOf((*MockApiClient)(nil).GetOrganizations), limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizations", reflect.TypeOf((*MockApiClient)(nil).GetOrganizations), ctx, limit)
 }
 
 // GetSelf mocks base method.
-func (m *MockApiClient) GetSelf() (contract.SelfResponse, error) {
+func (m *MockApiClient) GetSelf(ctx context.Context) (contract.SelfResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSelf")
+	ret := m.ctrl.Call(m, "GetSelf", ctx)
 	ret0, _ := ret[0].(contract.SelfResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetSelf indicates an expected call of GetSelf.
-func (mr *MockApiClientMockRecorder) GetSelf() *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetSelf(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSelf", reflect.TypeOf((*MockApiClient)(nil).GetSelf))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSelf", reflect.TypeOf((*MockApiClient)(nil).GetSelf), ctx)
 }
 
 // GetSlugFromOrgId mocks base method.
-func (m *MockApiClient) GetSlugFromOrgId(orgID string) (string, error) {
+func (m *MockApiClient) GetSlugFromOrgId(ctx context.Context, orgID string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSlugFromOrgId", orgID)
+	ret := m.ctrl.Call(m, "GetSlugFromOrgId", ctx, orgID)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetSlugFromOrgId indicates an expected call of GetSlugFromOrgId.
-func (mr *MockApiClientMockRecorder) GetSlugFromOrgId(orgID interface{}) *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetSlugFromOrgId(ctx, orgID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlugFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetSlugFromOrgId), orgID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlugFromOrgId", reflect.TypeOf((*MockApiClient)(nil).GetSlugFromOrgId), ctx, orgID)
 }
 
 // GetUserMe mocks base method.
-func (m *MockApiClient) GetUserMe() (string, error) {
+func (m *MockApiClient) GetUserMe(ctx context.Context) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUserMe")
+	ret := m.ctrl.Call(m, "GetUserMe", ctx)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetUserMe indicates an expected call of GetUserMe.
-func (mr *MockApiClientMockRecorder) GetUserMe() *gomock.Call {
+func (mr *MockApiClientMockRecorder) GetUserMe(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMe", reflect.TypeOf((*MockApiClient)(nil).GetUserMe))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMe", reflect.TypeOf((*MockApiClient)(nil).GetUserMe), ctx)
 }
 
 // Init mocks base method.

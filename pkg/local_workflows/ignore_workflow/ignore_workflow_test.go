@@ -2,6 +2,7 @@ package ignore_workflow
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,6 +83,7 @@ func setupMockIgnoreContext(t *testing.T, payload string, statusCode int) *mocks
 	invocationContextMock.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
 	invocationContextMock.EXPECT().GetUserInterface().Return(mockUserInterface).AnyTimes()
 	invocationContextMock.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier(ignoreCreateWorkflowName)).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(context.Background()).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 	mockData := []workflow.Data{workflow.NewData(
 		workflow.NewTypeIdentifier(localworkflows.WORKFLOWID_WHOAMI, "whoami"),
@@ -362,6 +364,7 @@ func setupInteractiveMockContext(t *testing.T, mockApiResponse string, mockApiSt
 	invocationContextMock.EXPECT().GetEngine().Return(mockEngine).AnyTimes()
 	invocationContextMock.EXPECT().GetUserInterface().Return(mockUserInterface).AnyTimes()
 	invocationContextMock.EXPECT().GetWorkflowIdentifier().Return(WORKFLOWID_IGNORE_CREATE).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(context.Background()).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(httpClient).AnyTimes()
 
 	mockWhoamiData := []workflow.Data{workflow.NewData(

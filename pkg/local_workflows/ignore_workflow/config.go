@@ -1,6 +1,7 @@
 package ignore_workflow
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -66,7 +67,7 @@ func getOrgIgnoreApprovalEnabled(engine workflow.Engine) configuration.DefaultVa
 
 		apiClient := api.NewApi(url, client)
 
-		settings, err := apiClient.GetOrgSettings(org)
+		settings, err := apiClient.GetOrgSettings(context.Background(), org)
 		if err != nil {
 			engine.GetLogger().Err(err).Msg("Failed to access settings.")
 			return nil, err

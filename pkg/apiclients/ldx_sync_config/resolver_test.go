@@ -41,8 +41,10 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 		cfgResult     LdxSyncConfigResult
 	}{
 		{
-			name:          "error in config result",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "error in config result",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("no input directory specified")},
 		},
@@ -82,8 +84,10 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 			},
 		},
 		{
-			name:          "no preferred or default org, fallback to api",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "no preferred or default org, fallback to api",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult: LdxSyncConfigResult{
 				Config: makeUserConfigResponse([]v20241015.Organization{
@@ -96,8 +100,10 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 			},
 		},
 		{
-			name:          "no organizations in response, fallback to API",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "no organizations in response, fallback to API",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult: LdxSyncConfigResult{
 				Config:      makeUserConfigResponse([]v20241015.Organization{}),
@@ -106,8 +112,10 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 			},
 		},
 		{
-			name:          "nil organizations in response, fallback to API",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "nil organizations in response, fallback to API",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult: LdxSyncConfigResult{
 				Config:      &v20241015.UserConfigResponse{},
@@ -116,32 +124,42 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 			},
 		},
 		{
-			name:          "API error, fallback to api",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "API error, fallback to api",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: errors.New("API error")},
 		},
 		{
-			name:          "API returns 404, fallback to api",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "API returns 404, fallback to api",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("404 API error occurred")},
 		},
 		{
-			name:          "API returns 200 with no data, fallback to api",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "API returns 200 with no data, fallback to api",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("no configuration data in response, status code: 200")},
 		},
 		{
-			name:          "git remote detection fails, fallback to api",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "git remote detection fails, fallback to api",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("git remote detection failed: git command failed")},
 		},
 		{
-			name:          "client creation fails, fallback to api",
-			setupApiMock:  func(mock *api_mocks.MockApiClient) { mock.EXPECT().GetDefaultOrgId().Return("default-org", nil) },
+			name: "client creation fails, fallback to api",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("default-org", nil)
+			},
 			expectedOrgId: "default-org",
 			cfgResult:     LdxSyncConfigResult{Error: fmt.Errorf("failed to create LDX-Sync client: client creation failed")},
 		},
@@ -192,7 +210,7 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 		{
 			name: "LDX fails, fallback to API default org fails",
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetDefaultOrgId().Return("", errors.New("api is down"))
+				mock.EXPECT().GetDefaultOrgId(gomock.Any()).Return("", errors.New("api is down"))
 			},
 			expectedOrgId: "",
 			expectedErr:   errors.New("api is down"),
@@ -303,7 +321,7 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 			dir:   tempDir,
 			orgId: "invalid-org-id",
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetOrgIdFromSlug("invalid-org-id").Return("", fmt.Errorf("slug not found"))
+				mock.EXPECT().GetOrgIdFromSlug(gomock.Any(), "invalid-org-id").Return("", fmt.Errorf("slug not found"))
 			},
 			expectedError: "failed to resolve organization slug",
 		},
@@ -472,7 +490,7 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 			dir:   tempDir,
 			orgId: "my-org-slug",
 			setupApiMock: func(mock *api_mocks.MockApiClient) {
-				mock.EXPECT().GetOrgIdFromSlug("my-org-slug").Return("123e4567-e89b-12d3-a456-426614174000", nil)
+				mock.EXPECT().GetOrgIdFromSlug(gomock.Any(), "my-org-slug").Return("123e4567-e89b-12d3-a456-426614174000", nil)
 			},
 			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
 				mock.EXPECT().GetUserConfigWithResponse(
