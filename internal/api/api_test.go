@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,7 +26,7 @@ func Test_GetDefaultOrgId_ReturnsCorrectOrgId(t *testing.T) {
 	client := api.NewApi(server.URL, http.DefaultClient)
 
 	// Act
-	orgId, err := client.GetDefaultOrgId()
+	orgId, err := client.GetDefaultOrgId(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
@@ -46,7 +47,7 @@ func Test_GetSlugFromOrgId_ReturnsCorrectSlug(t *testing.T) {
 	client := api.NewApi(server.URL, http.DefaultClient)
 
 	// Act
-	actualSlug, err := client.GetSlugFromOrgId(orgID)
+	actualSlug, err := client.GetSlugFromOrgId(context.Background(), orgID)
 	if err != nil {
 		t.Error(err)
 	}
@@ -66,7 +67,7 @@ func Test_GetOrganizations_ReturnsOrganizations(t *testing.T) {
 	client := api.NewApi(server.URL, http.DefaultClient)
 
 	// Act
-	response, err := client.GetOrganizations(limit)
+	response, err := client.GetOrganizations(context.Background(), limit)
 	if err != nil {
 		t.Error(err)
 	}
@@ -93,7 +94,7 @@ func Test_GetOrgIdFromSlug_ReturnsCorrectOrgId(t *testing.T) {
 		apiClient := api.NewApi(server.URL, http.DefaultClient)
 
 		// Act
-		orgId, err := apiClient.GetOrgIdFromSlug(slugName)
+		orgId, err := apiClient.GetOrgIdFromSlug(context.Background(), slugName)
 		if err != nil {
 			t.Error(err)
 		}
@@ -115,11 +116,11 @@ func Test_GetFeatureFlag_false(t *testing.T) {
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
 	client := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := client.GetFeatureFlag(featureFlagName, org)
+	actual, err := client.GetFeatureFlag(context.Background(), featureFlagName, org)
 	assert.NoError(t, err)
 	assert.False(t, actual)
 
-	actual, err = client.GetFeatureFlag("unknownFF", org)
+	actual, err = client.GetFeatureFlag(context.Background(), "unknownFF", org)
 	assert.Error(t, err)
 	assert.False(t, actual)
 }
@@ -137,7 +138,7 @@ func Test_GetFeatureFlag_true(t *testing.T) {
 	server := setupSingleReponseServer(t, "/v1/cli-config/feature-flags/"+featureFlagName+"?org="+org, featureFlagResponse)
 	client := api.NewApi(server.URL, http.DefaultClient)
 
-	actual, err := client.GetFeatureFlag(featureFlagName, org)
+	actual, err := client.GetFeatureFlag(context.Background(), featureFlagName, org)
 	assert.NoError(t, err)
 	assert.True(t, actual)
 }

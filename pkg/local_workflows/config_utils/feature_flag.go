@@ -1,6 +1,7 @@
 package config_utils
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -33,6 +34,6 @@ func GetFeatureFlagValue(featureFlagName string, config configuration.Configurat
 	url := config.GetString(configuration.API_URL)
 	org := config.GetString(configuration.ORGANIZATION)
 	apiClient := api.NewApi(url, httpClient)
-	result, err := apiClient.GetFeatureFlag(featureFlagName, org)
+	result, err := apiClient.GetFeatureFlag(context.Background(), featureFlagName, org)
 	return result, err
 }

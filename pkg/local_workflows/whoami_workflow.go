@@ -39,20 +39,21 @@ func InitWhoAmIWorkflow(engine workflow.Engine) error {
 // it can optionally return the full `/user/me` payload response if the json flag is set
 func whoAmIWorkflowEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	// get necessary objects from invocation context
+	ctx := invocationCtx.Context()
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	httpClient := invocationCtx.GetNetworkAccess().GetHttpClient()
 	url := config.GetString(configuration.API_URL)
 	var a = api.NewApi(url, httpClient)
 
-	userMe, err := a.GetUserMe()
+	userMe, err := a.GetUserMe(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching user data: %w", err)
 	}
 
 	// return full payload if json flag is set
 	if config.GetBool(jsonFlag) {
-		selfRes, err := a.GetSelf()
+		selfRes, err := a.GetSelf(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching user data: %w", err)
 		}
