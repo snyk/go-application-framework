@@ -1555,8 +1555,7 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary)
-	require.NotNil(t, result.GetBreachedPolicies())
-	assert.Equal(t, expectedBreachedPolicies, result.GetBreachedPolicies())
+	assert.Equal(t, expectedBreachedPolicies, result.GetMetadataValue(testapi.MetadataKeyBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
 }
 
@@ -1645,8 +1644,7 @@ func Test_Wait_WithResources_Synchronous_Finished_With_ErrorsAndWarnings(t *test
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary)
-	require.NotNil(t, result.GetBreachedPolicies())
-	assert.Equal(t, expectedBreachedPolicies, result.GetBreachedPolicies())
+	assert.Equal(t, expectedBreachedPolicies, result.GetMetadataValue(testapi.MetadataKeyBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
 }
 
@@ -1676,20 +1674,23 @@ func assertCommonTestResultFields(
 	assert.False(t, result.GetCreatedAt().IsZero())
 
 	if expectedSubject != nil {
-		require.NotNil(t, result.GetTestSubject())
-		assert.Equal(t, expectedSubject, result.GetTestSubject())
+		got, ok := result.GetMetadataValue(testapi.MetadataKeyTestSubject).(*testapi.TestSubject)
+		require.True(t, ok, "metadata should contain test subject")
+		assert.Equal(t, expectedSubject, got)
 	}
 
 	if expectedResources != nil {
-		require.NotNil(t, result.GetTestResources())
-		assert.Equal(t, expectedResources, result.GetTestResources()) //test equals ignoring order
+		got, ok := result.GetMetadataValue(testapi.MetadataKeyTestResources).(*[]testapi.TestResource)
+		require.True(t, ok, "metadata should contain test resources")
+		assert.Equal(t, expectedResources, got)
 	}
 
 	if expectedLocators != nil {
-		require.NotNil(t, result.GetSubjectLocators())
-		assert.Equal(t, *expectedLocators, *result.GetSubjectLocators())
+		got, ok := result.GetMetadataValue(testapi.MetadataKeySubjectLocators).(*[]testapi.TestSubjectLocator)
+		require.True(t, ok, "metadata should contain subject locators")
+		assert.Equal(t, *expectedLocators, *got)
 	} else {
-		assert.Nil(t, result.GetSubjectLocators())
+		assert.Nil(t, result.GetMetadataValue(testapi.MetadataKeySubjectLocators))
 	}
 
 	if expectedEffectiveSummary != nil {
@@ -1700,10 +1701,11 @@ func assertCommonTestResultFields(
 	}
 
 	if expectedRawSummary != nil {
-		require.NotNil(t, result.GetRawSummary())
-		assert.Equal(t, expectedRawSummary, result.GetRawSummary())
+		got, ok := result.GetMetadataValue(testapi.MetadataKeyRawSummary).(*testapi.FindingSummary)
+		require.True(t, ok, "metadata should contain raw summary")
+		assert.Equal(t, expectedRawSummary, got)
 	} else {
-		assert.Nil(t, result.GetRawSummary())
+		assert.Nil(t, result.GetMetadataValue(testapi.MetadataKeyRawSummary))
 	}
 }
 
@@ -1718,7 +1720,7 @@ func assertTestOutcomePass(t *testing.T, result testapi.TestResult, expectedTest
 	assert.Nil(t, result.GetOutcomeReason())
 	assert.Nil(t, result.GetErrors())
 	assert.Nil(t, result.GetWarnings())
-	assert.Nil(t, result.GetBreachedPolicies())
+	assert.Nil(t, result.GetMetadataValue(testapi.MetadataKeyBreachedPolicies))
 }
 
 // Test_NewTestClient_LoggerOption verifies that a custom logger is used when provided.
@@ -1866,7 +1868,7 @@ func assertTestOutcomeFail(t *testing.T, result testapi.TestResult, expectedTest
 	assert.Equal(t, expectedReason, *result.GetOutcomeReason())
 	assert.Nil(t, result.GetErrors())
 	assert.Nil(t, result.GetWarnings())
-	assert.Nil(t, result.GetBreachedPolicies())
+	assert.Nil(t, result.GetMetadataValue(testapi.MetadataKeyBreachedPolicies))
 }
 
 // Helper function to assert that there are no findings.

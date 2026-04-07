@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -18,18 +19,12 @@ type jsonTestResult struct {
 	TestID            *uuid.UUID                      `json:"testId,omitempty"`
 	TestConfiguration *testapi.TestConfiguration      `json:"testConfiguration,omitempty"`
 	CreatedAt         *time.Time                      `json:"createdAt,omitempty"`
-	TestSubject       *testapi.TestSubject            `json:"testSubject,omitempty"`
-	SubjectLocators   *[]testapi.TestSubjectLocator   `json:"subjectLocators,omitempty"`
-	TestResources     *[]testapi.TestResource         `json:"testResources,omitempty"`
 	ExecutionState    testapi.TestExecutionStates     `json:"executionState"`
 	Errors            *[]testapi.IoSnykApiCommonError `json:"errors,omitempty"`
 	Warnings          *[]testapi.IoSnykApiCommonError `json:"warnings,omitempty"`
 	PassFail          *testapi.PassFail               `json:"passFail,omitempty"`
 	OutcomeReason     *testapi.TestOutcomeReason      `json:"outcomeReason,omitempty"`
-	BreachedPolicies  *testapi.PolicyRefSet           `json:"breachedPolicies,omitempty"`
 	EffectiveSummary  *testapi.FindingSummary         `json:"effectiveSummary,omitempty"`
-	RawSummary        *testapi.FindingSummary         `json:"rawSummary,omitempty"`
-	TestFacts         *[]testapi.TestFact             `json:"testFacts,omitempty"`
 	FindingsComplete  bool                            `json:"findingsComplete"`
 	Metadata          map[string]interface{}          `json:"metadata,omitempty"`
 	// Optimized wire format: central problem store (optional, for serialization)
@@ -60,21 +55,6 @@ func (j *jsonTestResult) GetCreatedAt() *time.Time {
 	return j.CreatedAt
 }
 
-// GetTestSubject returns the test subject.
-func (j *jsonTestResult) GetTestSubject() *testapi.TestSubject {
-	return j.TestSubject
-}
-
-// GetSubjectLocators returns the subject locators.
-func (j *jsonTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
-	return j.SubjectLocators
-}
-
-// GetResources returns the test resources.
-func (j *jsonTestResult) GetTestResources() *[]testapi.TestResource {
-	return j.TestResources
-}
-
 // GetExecutionState returns the execution state.
 func (j *jsonTestResult) GetExecutionState() testapi.TestExecutionStates {
 	return j.ExecutionState
@@ -100,24 +80,9 @@ func (j *jsonTestResult) GetOutcomeReason() *testapi.TestOutcomeReason {
 	return j.OutcomeReason
 }
 
-// GetBreachedPolicies returns breached policies.
-func (j *jsonTestResult) GetBreachedPolicies() *testapi.PolicyRefSet {
-	return j.BreachedPolicies
-}
-
 // GetEffectiveSummary returns the effective summary (excluding suppressed findings).
 func (j *jsonTestResult) GetEffectiveSummary() *testapi.FindingSummary {
 	return j.EffectiveSummary
-}
-
-// GetRawSummary returns the raw summary (including suppressed findings).
-func (j *jsonTestResult) GetRawSummary() *testapi.FindingSummary {
-	return j.RawSummary
-}
-
-// GetTestFacts returns the facts computed during test execution.
-func (j *jsonTestResult) GetTestFacts() *[]testapi.TestFact {
-	return j.TestFacts
 }
 
 // SetMetadata sets the metadata for the given key.
@@ -129,14 +94,17 @@ func (j *jsonTestResult) SetMetadata(key string, value interface{}) {
 	j.Metadata[key] = value
 }
 
-// GetMetadata returns the metadata for the given key.
-func (j *jsonTestResult) GetMetadata() map[string]interface{} {
-	return j.Metadata
-}
-
 // GetMetadataValue returns the metadata value for the given key.
 func (j *jsonTestResult) GetMetadataValue(key string) interface{} {
 	return j.Metadata[key]
+}
+
+// ShallowMetadataCopy returns a shallow copy of metadata for re-serialization.
+func (j *jsonTestResult) ShallowMetadataCopy() map[string]interface{} {
+	if j.Metadata == nil {
+		return make(map[string]interface{})
+	}
+	return maps.Clone(j.Metadata)
 }
 
 // Findings returns the stored findings without making any API calls.
@@ -181,28 +149,28 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 	// Build optimized format
 	problemStore, problemRefs, optimizedFindings := BuildOptimizedFormat(findings)
 
+	meta := tr.ShallowMetadataCopy()
+	if meta == nil {
+		meta = make(map[string]interface{})
+	}
+
 	// Create the JSON-serializable result
 	result := &jsonTestResult{
 		TestID:            tr.GetTestID(),
 		TestConfiguration: tr.GetTestConfiguration(),
 		CreatedAt:         tr.GetCreatedAt(),
-		TestSubject:       tr.GetTestSubject(),
-		SubjectLocators:   tr.GetSubjectLocators(),
 		ExecutionState:    tr.GetExecutionState(),
 		Errors:            tr.GetErrors(),
 		Warnings:          tr.GetWarnings(),
 		PassFail:          tr.GetPassFail(),
 		OutcomeReason:     tr.GetOutcomeReason(),
-		BreachedPolicies:  tr.GetBreachedPolicies(),
 		EffectiveSummary:  tr.GetEffectiveSummary(),
-		RawSummary:        tr.GetRawSummary(),
-		TestFacts:         tr.GetTestFacts(),
 		FindingsComplete:  complete,
 		ProblemStore:      problemStore,
 		ProblemRefs:       problemRefs,
 		FindingsData:      optimizedFindings,
 		fullFindings:      findings, // Keep original for Findings() method
-		Metadata:          tr.GetMetadata(),
+		Metadata:          meta,
 	}
 
 	return result, nil

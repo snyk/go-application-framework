@@ -53,20 +53,6 @@ func (mr *MockTestResultMockRecorder) Findings(ctx interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Findings", reflect.TypeOf((*MockTestResult)(nil).Findings), ctx)
 }
 
-// GetBreachedPolicies mocks base method.
-func (m *MockTestResult) GetBreachedPolicies() *testapi.PolicyRefSet {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBreachedPolicies")
-	ret0, _ := ret[0].(*testapi.PolicyRefSet)
-	return ret0
-}
-
-// GetBreachedPolicies indicates an expected call of GetBreachedPolicies.
-func (mr *MockTestResultMockRecorder) GetBreachedPolicies() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBreachedPolicies", reflect.TypeOf((*MockTestResult)(nil).GetBreachedPolicies))
-}
-
 // GetCreatedAt mocks base method.
 func (m *MockTestResult) GetCreatedAt() *time.Time {
 	m.ctrl.T.Helper()
@@ -123,20 +109,6 @@ func (mr *MockTestResultMockRecorder) GetExecutionState() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionState", reflect.TypeOf((*MockTestResult)(nil).GetExecutionState))
 }
 
-// GetMetadata mocks base method.
-func (m *MockTestResult) GetMetadata() map[string]interface{} {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMetadata")
-	ret0, _ := ret[0].(map[string]interface{})
-	return ret0
-}
-
-// GetMetadata indicates an expected call of GetMetadata.
-func (mr *MockTestResultMockRecorder) GetMetadata() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetadata", reflect.TypeOf((*MockTestResult)(nil).GetMetadata))
-}
-
 // GetMetadataValue mocks base method.
 func (m *MockTestResult) GetMetadataValue(key string) interface{} {
 	m.ctrl.T.Helper()
@@ -179,34 +151,6 @@ func (mr *MockTestResultMockRecorder) GetPassFail() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPassFail", reflect.TypeOf((*MockTestResult)(nil).GetPassFail))
 }
 
-// GetRawSummary mocks base method.
-func (m *MockTestResult) GetRawSummary() *testapi.FindingSummary {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRawSummary")
-	ret0, _ := ret[0].(*testapi.FindingSummary)
-	return ret0
-}
-
-// GetRawSummary indicates an expected call of GetRawSummary.
-func (mr *MockTestResultMockRecorder) GetRawSummary() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRawSummary", reflect.TypeOf((*MockTestResult)(nil).GetRawSummary))
-}
-
-// GetSubjectLocators mocks base method.
-func (m *MockTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSubjectLocators")
-	ret0, _ := ret[0].(*[]testapi.TestSubjectLocator)
-	return ret0
-}
-
-// GetSubjectLocators indicates an expected call of GetSubjectLocators.
-func (mr *MockTestResultMockRecorder) GetSubjectLocators() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubjectLocators", reflect.TypeOf((*MockTestResult)(nil).GetSubjectLocators))
-}
-
 // GetTestConfiguration mocks base method.
 func (m *MockTestResult) GetTestConfiguration() *testapi.TestConfiguration {
 	m.ctrl.T.Helper()
@@ -221,20 +165,6 @@ func (mr *MockTestResultMockRecorder) GetTestConfiguration() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestConfiguration", reflect.TypeOf((*MockTestResult)(nil).GetTestConfiguration))
 }
 
-// GetTestFacts mocks base method.
-func (m *MockTestResult) GetTestFacts() *[]testapi.TestFact {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTestFacts")
-	ret0, _ := ret[0].(*[]testapi.TestFact)
-	return ret0
-}
-
-// GetTestFacts indicates an expected call of GetTestFacts.
-func (mr *MockTestResultMockRecorder) GetTestFacts() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestFacts", reflect.TypeOf((*MockTestResult)(nil).GetTestFacts))
-}
-
 // GetTestID mocks base method.
 func (m *MockTestResult) GetTestID() *uuid.UUID {
 	m.ctrl.T.Helper()
@@ -247,34 +177,6 @@ func (m *MockTestResult) GetTestID() *uuid.UUID {
 func (mr *MockTestResultMockRecorder) GetTestID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestID", reflect.TypeOf((*MockTestResult)(nil).GetTestID))
-}
-
-// GetTestResources mocks base method.
-func (m *MockTestResult) GetTestResources() *[]testapi.TestResource {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTestResources")
-	ret0, _ := ret[0].(*[]testapi.TestResource)
-	return ret0
-}
-
-// GetTestResources indicates an expected call of GetTestResources.
-func (mr *MockTestResultMockRecorder) GetTestResources() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestResources", reflect.TypeOf((*MockTestResult)(nil).GetTestResources))
-}
-
-// GetTestSubject mocks base method.
-func (m *MockTestResult) GetTestSubject() *testapi.TestSubject {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTestSubject")
-	ret0, _ := ret[0].(*testapi.TestSubject)
-	return ret0
-}
-
-// GetTestSubject indicates an expected call of GetTestSubject.
-func (mr *MockTestResultMockRecorder) GetTestSubject() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTestSubject", reflect.TypeOf((*MockTestResult)(nil).GetTestSubject))
 }
 
 // GetWarnings mocks base method.
@@ -301,6 +203,20 @@ func (m *MockTestResult) SetMetadata(key string, value interface{}) {
 func (mr *MockTestResultMockRecorder) SetMetadata(key, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMetadata", reflect.TypeOf((*MockTestResult)(nil).SetMetadata), key, value)
+}
+
+// ShallowMetadataCopy mocks base method.
+func (m *MockTestResult) ShallowMetadataCopy() map[string]interface{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ShallowMetadataCopy")
+	ret0, _ := ret[0].(map[string]interface{})
+	return ret0
+}
+
+// ShallowMetadataCopy indicates an expected call of ShallowMetadataCopy.
+func (mr *MockTestResultMockRecorder) ShallowMetadataCopy() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShallowMetadataCopy", reflect.TypeOf((*MockTestResult)(nil).ShallowMetadataCopy))
 }
 
 // MockTestHandle is a mock of TestHandle interface.

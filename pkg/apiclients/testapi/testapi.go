@@ -107,9 +107,6 @@ type TestResult interface {
 	GetTestID() *uuid.UUID
 	GetTestConfiguration() *TestConfiguration
 	GetCreatedAt() *time.Time
-	GetTestSubject() *TestSubject
-	GetSubjectLocators() *[]TestSubjectLocator
-	GetTestResources() *[]TestResource
 
 	GetExecutionState() TestExecutionStates
 	GetErrors() *[]IoSnykApiCommonError
@@ -117,15 +114,14 @@ type TestResult interface {
 
 	GetPassFail() *PassFail
 	GetOutcomeReason() *TestOutcomeReason
-	GetBreachedPolicies() *PolicyRefSet
 
 	GetEffectiveSummary() *FindingSummary
-	GetRawSummary() *FindingSummary
-	GetTestFacts() *[]TestFact
 
 	SetMetadata(key string, value interface{})
 	GetMetadataValue(key string) interface{}
-	GetMetadata() map[string]interface{}
+	// ShallowMetadataCopy returns a shallow copy of metadata for persistence (e.g. UFM workflow data).
+	// Implementations that do not store metadata may return nil.
+	ShallowMetadataCopy() map[string]interface{}
 
 	Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error)
 }
@@ -255,46 +251,31 @@ func (r *testResult) GetPassFail() *PassFail { return r.PassFail }
 // GetOutcomeReason returns the reason for the test outcome.
 func (r *testResult) GetOutcomeReason() *TestOutcomeReason { return r.OutcomeReason }
 
-// GetBreachedPolicies returns the policies that were breached.
-func (r *testResult) GetBreachedPolicies() *PolicyRefSet { return r.BreachedPolicies }
-
 // GetTestConfiguration returns the test configuration.
 func (r *testResult) GetTestConfiguration() *TestConfiguration { return r.TestConfiguration }
 
 // GetCreatedAt returns the creation timestamp of the test.
 func (r *testResult) GetCreatedAt() *time.Time { return r.CreatedAt }
 
-// GetTestSubject returns the test subject.
-func (r *testResult) GetTestSubject() *TestSubject { return r.TestSubject }
-
-// GetSubjectLocators returns the subject locators.
-func (r *testResult) GetSubjectLocators() *[]TestSubjectLocator { return r.SubjectLocators }
-
-// GetTestResources returns the test resources.
-func (r *testResult) GetTestResources() *[]TestResource { return r.TestResources }
-
 // GetEffectiveSummary returns the summary excluding suppressed findings.
 func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveSummary }
-
-// GetRawSummary returns the summary including suppressed findings.
-func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
-
-// GetTestFacts returns the facts computed during test execution.
-func (r *testResult) GetTestFacts() *[]TestFact { return r.TestFacts }
 
 // SetMetadata sets the metadata for the given key.
 func (r *testResult) SetMetadata(key string, value interface{}) {
 	r.metadata[key] = value
 }
 
-// GetMetadata returns the metadata for the given key.
-func (r *testResult) GetMetadata() map[string]interface{} {
-	return r.metadata
-}
-
 // GetMetadataValue returns the metadata value for the given key.
 func (r *testResult) GetMetadataValue(key string) interface{} {
 	return r.metadata[key]
+}
+
+// ShallowMetadataCopy returns a shallow copy of metadata for UFM serialization.
+func (r *testResult) ShallowMetadataCopy() map[string]interface{} {
+	if r.metadata == nil {
+		return make(map[string]interface{})
+	}
+	return cloneMetadataMap(r.metadata)
 }
 
 // NewTestClient returns a new instance of the test client, configured with the provided options.
@@ -637,6 +618,8 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		result.OutcomeReason = attrs.Outcome.Reason
 		result.BreachedPolicies = attrs.Outcome.BreachedPolicies
 	}
+
+	populateCanonicalMetadata(result)
 
 	return result, nil
 }

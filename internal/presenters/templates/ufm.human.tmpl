@@ -97,7 +97,7 @@
 
 {{- define "testSummary"}}{{ "Test Summary" | bold }}
 {{- "\n" }}
-{{- $metadata := .GetMetadata }}
+{{- $metadata := .ShallowMetadataCopy }}
 {{- $targetDirectory := index $metadata "target-directory" }}
 {{- if not $targetDirectory }}
 {{- $targetDirectory = getValueFromConfig "targetDirectory" }}
@@ -114,7 +114,7 @@
 {{- end }} {{/* end testSummary */}}
 
 {{- define "resultHeader" }}
-   {{- $metadata := .GetMetadata }}
+   {{- $metadata := .ShallowMetadataCopy }}
    {{- $testingSubject := getValueFromConfig "targetDirectory" }}
    {{- $targetFile := index $metadata "display-target-file" }}
    {{- if $targetFile }} {{- $testingSubject = $targetFile }} {{- end }}
