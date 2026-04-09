@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -386,8 +387,38 @@ func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinf
 	defaultMap["getTargetId"] = func(path string) (string, error) {
 		return target.GetTargetId(path, target.AutoDetectedTargetId, target.WithConfiguredRepository(config))
 	}
+	defaultMap["deduplicateIssues"] = deduplicateIssues
 
 	return defaultMap
+}
+
+type issueDedupeKey string
+
+const (
+	DedupeByProblemID issueDedupeKey = "problemID"
+	DedupeByID        issueDedupeKey = "id"
+)
+
+// deduplicateIssues returns a subset of issues with unique keys, preserving order (first-wins).
+func deduplicateIssues(issues []testapi.Issue, key issueDedupeKey) []testapi.Issue {
+	seen := make(map[string]bool)
+	result := make([]testapi.Issue, 0, len(issues))
+	for _, issue := range issues {
+		var field string
+		switch key {
+		case DedupeByProblemID:
+			field = issue.GetProblemID()
+		case DedupeByID:
+			field = issue.GetID()
+		default:
+			fmt.Fprintf(os.Stderr, "warning: unsupported issueDedupeKey %q, skipping deduplication for issue\n", key)
+		}
+		if field != "" && !seen[field] {
+			seen[field] = true
+			result = append(result, issue)
+		}
+	}
+	return result
 }
 
 func convertTypeToIssueName(findingType testapi.FindingType) string {

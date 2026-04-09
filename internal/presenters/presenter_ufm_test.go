@@ -131,7 +131,11 @@ func sortByID(arr []interface{}) {
 	})
 }
 
-// sortByRuleID sorts an array of results by their "ruleId" field
+// sortByRuleID sorts results for stable comparison. Tiebreakers (in order):
+//  1. ruleId — primary key
+//  2. artifact URI — needed when multiple findings share the same rule but differ in file
+//  3. fingerprint identity — needed when findings share both rule and file (e.g. same secret
+//     rule detected at different locations in the same file)
 func sortByRuleID(arr []interface{}) {
 	sort.Slice(arr, func(i, j int) bool {
 		iMap, iOk := arr[i].(map[string]interface{})
@@ -141,8 +145,51 @@ func sortByRuleID(arr []interface{}) {
 		}
 		iID, _ := iMap["ruleId"].(string) //nolint:errcheck // test helper, ok to ignore
 		jID, _ := jMap["ruleId"].(string) //nolint:errcheck // test helper, ok to ignore
-		return iID < jID
+		if iID != jID {
+			return iID < jID
+		}
+		iURI := extractArtifactURI(iMap)
+		jURI := extractArtifactURI(jMap)
+		if iURI != jURI {
+			return iURI < jURI
+		}
+		return extractFingerprint(iMap) < extractFingerprint(jMap)
 	})
+}
+
+func extractFingerprint(result map[string]interface{}) string {
+	fps, ok := result["fingerprints"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	if id, ok := fps["identity"].(string); ok {
+		return id
+	}
+	return ""
+}
+
+func extractArtifactURI(result map[string]interface{}) string {
+	locations, ok := result["locations"].([]interface{})
+	if !ok || len(locations) == 0 {
+		return ""
+	}
+	loc, ok := locations[0].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	physLoc, ok := loc["physicalLocation"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	artLoc, ok := physLoc["artifactLocation"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	uri, ok := artLoc["uri"].(string)
+	if !ok {
+		return ""
+	}
+	return uri
 }
 
 // normalizeHelpContent removes help.markdown content to avoid comparing test data descriptions
@@ -552,6 +599,12 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			name:               "secrets",
 			expectedSarifPath:  "testdata/ufm/secrets.0findings.sarif.json",
 			testResultPath:     "testdata/ufm/secrets.0findings.testresult.json",
+			ignoreSuppressions: true,
+		},
+		{
+			name:               "secrets_duplicated_rules",
+			expectedSarifPath:  "testdata/ufm/secrets.duplicated-sarif-rules.sarif.json",
+			testResultPath:     "testdata/ufm/secrets.duplicated-sarif-rules.testresult.json",
 			ignoreSuppressions: true,
 		},
 	}
@@ -1131,6 +1184,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			expectedPath:      "testdata/ufm/multi_project.human.readable",
 			testResultPath:    "testdata/ufm/multi_project.testresult.json",
 			includeIgnores:    false,
+			severityThreshold: "",
+		},
+		{
+			name:              "secrets_duplicated_rules",
+			expectedPath:      "testdata/ufm/secrets.duplicated-sarif-rules.human.readable",
+			testResultPath:    "testdata/ufm/secrets.duplicated-sarif-rules.testresult.json",
+			includeIgnores:    true,
 			severityThreshold: "",
 		},
 	}
