@@ -489,6 +489,69 @@ func TestGetRemediationSummary(t *testing.T) {
 	})
 }
 
+func TestRemediationSummary_HasMethods(t *testing.T) {
+	summary := &RemediationSummary{}
+	require.False(t, summary.HasUpgrades())
+	require.False(t, summary.HasPins())
+	require.False(t, summary.HasUnresolved())
+
+	summary.Upgrades = []*UpgradeGroup{{
+		FromPackage: testapi.Package{Name: "pkg", Version: "1.0"},
+		ToPackage:   testapi.Package{Name: "pkg", Version: "2.0"},
+		FixedIssues: []testapi.Issue{newTestIssue(t, "VULN", "pkg@1.0.0")},
+	}}
+	require.True(t, summary.HasUpgrades())
+
+	summary.Pins = []*PinGroup{{
+		FromPackage: testapi.Package{Name: "pkg", Version: "1.0"},
+		ToPackage:   testapi.Package{Name: "pkg", Version: "2.0"},
+		FixedIssues: []testapi.Issue{newTestIssue(t, "VULN", "pkg@1.0.0")},
+	}}
+	require.True(t, summary.HasPins())
+
+	summary.Unresolved = []testapi.Issue{newTestIssue(t, "VULN", "pkg@1.0.0")}
+	require.True(t, summary.HasUnresolved())
+}
+
+func TestGetDirectPackageTargets(t *testing.T) {
+	t.Run("nil attributes", func(t *testing.T) {
+		name, version := GetDirectPackageUpgradeTarget(nil)
+		require.Empty(t, name)
+		require.Empty(t, version)
+
+		name, version = GetDirectPackagePinTarget(nil)
+		require.Empty(t, name)
+		require.Empty(t, version)
+	})
+
+	t.Run("empty action", func(t *testing.T) {
+		attrs := &testapi.FixAttributes{}
+		name, version := GetDirectPackageUpgradeTarget(attrs)
+		require.Empty(t, name)
+		require.Empty(t, version)
+
+		name, version = GetDirectPackagePinTarget(attrs)
+		require.Empty(t, name)
+		require.Empty(t, version)
+	})
+
+	t.Run("upgrade target", func(t *testing.T) {
+		issue := newTestIssue(t, "VULN", "pkg@1.0.0", withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0", "direct@2.0", "pkg@1.1"}))
+		attrs := GetFixAttributes(issue)
+		name, version := GetDirectPackageUpgradeTarget(attrs)
+		require.Equal(t, "direct", name)
+		require.Equal(t, "2.0", version)
+	})
+
+	t.Run("pin target", func(t *testing.T) {
+		issue := newTestIssue(t, "VULN", "pkg@1.0.0", withPinFix(t, testapi.FullyResolved, "pkg", "1.1"))
+		attrs := GetFixAttributes(issue)
+		name, version := GetDirectPackagePinTarget(attrs)
+		require.Equal(t, "pkg", name)
+		require.Equal(t, "1.1", version)
+	})
+}
+
 // Test helpers
 
 type issueOption func(*testapi.FindingData)

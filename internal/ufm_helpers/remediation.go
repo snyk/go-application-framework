@@ -92,6 +92,7 @@ func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 		summary.Pins = append(summary.Pins, pins...)
 	}
 
+	// Filter out unresolved issues that are already covered by a pin.
 	summary.Unresolved = filterUnresolvedCoveredByPins(summary.Unresolved, summary.Pins)
 
 	sort.Slice(summary.Upgrades, func(i, j int) bool {
@@ -173,6 +174,7 @@ func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvi
 		}
 
 		for _, depPath := range paths {
+			// If the upgrade path does not match the dependency path, skip it.
 			if len(depPath) < 2 || !pathsMatch(upgradePath.DependencyPath, depPath) {
 				continue
 			}
@@ -180,6 +182,8 @@ func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvi
 			fromPkg := depPath[1]
 			toPkg := upgradePath.DependencyPath[1]
 
+			// If the advised upgrade leaves the direct dependency at the exact same package version,
+			// the fix is transitive-only, so we skip it since it's not a direct upgrade the user can apply.
 			if fromPkg.Name == toPkg.Name && fromPkg.Version == toPkg.Version {
 				continue
 			}
@@ -192,10 +196,12 @@ func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvi
 		}
 	}
 
+	// If no paths matched, the issue is not resolved.
 	if matchedPaths == 0 {
 		return false
 	}
 
+	// If the number of matched paths is less than the number of vulnerable paths, the issue is partially resolved.
 	hasUnmatchedPaths := matchedPaths < len(paths)
 	return outcome == testapi.FullyResolved || !hasUnmatchedPaths
 }
@@ -224,12 +230,14 @@ func processPinAdvice(issue testapi.Issue, advice testapi.PinPackageAdvice, pinM
 
 	existingPins, exists := pinMap[key]
 	if exists {
+		// 1. Ensure all pins for this package point to the highest recommended target version.
 		for _, pin := range existingPins {
 			if compareVersions(toPkg.Version, pin.ToPackage.Version) > 0 {
 				pin.ToPackage.Version = toPkg.Version
 			}
 		}
 
+		// 2. Check if we already have a pin group for this specific vulnerable version.
 		versionFound := false
 		for _, pin := range existingPins {
 			if pin.FromPackage.Version == vulnerablePkg.Version {
@@ -241,6 +249,7 @@ func processPinAdvice(issue testapi.Issue, advice testapi.PinPackageAdvice, pinM
 			}
 		}
 
+		// 3. If no pin group exists for this vulnerable version, create one using the highest known target version.
 		if !versionFound {
 			highestToVersion := toPkg.Version
 			for _, pin := range existingPins {
@@ -297,6 +306,7 @@ func pathsMatch(upgradePath, depPath []testapi.Package) bool {
 	if len(upgradePath) > len(depPath) {
 		return false
 	}
+
 	for i, pkg := range upgradePath {
 		if pkg.Name != depPath[i].Name {
 			return false
