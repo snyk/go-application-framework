@@ -753,8 +753,7 @@ components:
       additionalProperties: false
       description: |
         Input for creating a folder configuration.
-        All folder-level configuration (reference_branch, organization, etc.) should be
-        stored as settings, not as dedicated fields. This keeps the API flexible.
+        Folder-specific options (for example pre_assigned_org_id) are expressed as folder-level settings.
       properties:
         folder_path:
           description: Path within the repository
@@ -767,7 +766,7 @@ components:
         settings:
           description: |
             Folder-level settings (only FolderSettingName allowed). Distinct from global; no overlap.
-            Examples: reference_branch, reference_folder, pre_assigned_org_id, additional_parameters, additional_environment.
+            Example: pre_assigned_org_id.
           items:
             $ref: '#/components/schemas/FolderSettingInput'
           type: array
@@ -796,7 +795,7 @@ components:
           $ref: '#/components/schemas/FolderSettingName'
         value:
           description: Setting value (type depends on the setting; validated server-side)
-          example: main
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
       required:
       - name
       - value
@@ -805,10 +804,6 @@ components:
       description: Setting names allowed at folder level only. Must not be used in
         top-level settings.
       enum:
-      - reference_folder
-      - reference_branch
-      - additional_parameters
-      - additional_environment
       - pre_assigned_org_id
       type: string
     GlobalSettingInput:
@@ -828,7 +823,7 @@ components:
           $ref: '#/components/schemas/GlobalSettingName'
         value:
           description: Setting value (type depends on the setting; validated server-side)
-          example: https://api.snyk.io
+          example: true
       required:
       - name
       - value
@@ -837,28 +832,20 @@ components:
       description: Setting names allowed at global level only. Must not be used in
         folder_configs[].settings.
       enum:
-      - api_endpoint
-      - code_endpoint
-      - authentication_method
-      - proxy_http
-      - proxy_https
-      - proxy_no_proxy
-      - proxy_insecure
-      - enabled_severities
+      - severity_critical_enabled
+      - severity_high_enabled
+      - severity_medium_enabled
+      - severity_low_enabled
       - risk_score_threshold
-      - cwe_ids
-      - cve_ids
-      - rule_ids
-      - enabled_products
+      - product_oss_enabled
+      - product_code_enabled
+      - product_iac_enabled
+      - product_container_enabled
+      - product_secrets_enabled
       - scan_automatic
       - scan_net_new
       - issue_view_open_issues
       - issue_view_ignored_issues
-      - auto_configure_mcp_server
-      - secure_at_inception_execution_frequency
-      - trust_enabled
-      - binary_base_url
-      - cli_path
       - automatic_download
       - cli_release_channel
       type: string
