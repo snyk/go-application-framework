@@ -59,39 +59,27 @@ const (
 
 // Defines values for FolderSettingName.
 const (
-	AdditionalEnvironment FolderSettingName = "additional_environment"
-	AdditionalParameters  FolderSettingName = "additional_parameters"
-	PreAssignedOrgId      FolderSettingName = "pre_assigned_org_id"
-	ReferenceBranch       FolderSettingName = "reference_branch"
-	ReferenceFolder       FolderSettingName = "reference_folder"
+	PreAssignedOrgId FolderSettingName = "pre_assigned_org_id"
 )
 
 // Defines values for GlobalSettingName.
 const (
-	ApiEndpoint                         GlobalSettingName = "api_endpoint"
-	AuthenticationMethod                GlobalSettingName = "authentication_method"
-	AutoConfigureMcpServer              GlobalSettingName = "auto_configure_mcp_server"
-	AutomaticDownload                   GlobalSettingName = "automatic_download"
-	BinaryBaseUrl                       GlobalSettingName = "binary_base_url"
-	CliPath                             GlobalSettingName = "cli_path"
-	CliReleaseChannel                   GlobalSettingName = "cli_release_channel"
-	CodeEndpoint                        GlobalSettingName = "code_endpoint"
-	CveIds                              GlobalSettingName = "cve_ids"
-	CweIds                              GlobalSettingName = "cwe_ids"
-	EnabledProducts                     GlobalSettingName = "enabled_products"
-	EnabledSeverities                   GlobalSettingName = "enabled_severities"
-	IssueViewIgnoredIssues              GlobalSettingName = "issue_view_ignored_issues"
-	IssueViewOpenIssues                 GlobalSettingName = "issue_view_open_issues"
-	ProxyHttp                           GlobalSettingName = "proxy_http"
-	ProxyHttps                          GlobalSettingName = "proxy_https"
-	ProxyInsecure                       GlobalSettingName = "proxy_insecure"
-	ProxyNoProxy                        GlobalSettingName = "proxy_no_proxy"
-	RiskScoreThreshold                  GlobalSettingName = "risk_score_threshold"
-	RuleIds                             GlobalSettingName = "rule_ids"
-	ScanAutomatic                       GlobalSettingName = "scan_automatic"
-	ScanNetNew                          GlobalSettingName = "scan_net_new"
-	SecureAtInceptionExecutionFrequency GlobalSettingName = "secure_at_inception_execution_frequency"
-	TrustEnabled                        GlobalSettingName = "trust_enabled"
+	AutomaticDownload       GlobalSettingName = "automatic_download"
+	CliReleaseChannel       GlobalSettingName = "cli_release_channel"
+	IssueViewIgnoredIssues  GlobalSettingName = "issue_view_ignored_issues"
+	IssueViewOpenIssues     GlobalSettingName = "issue_view_open_issues"
+	ProductCodeEnabled      GlobalSettingName = "product_code_enabled"
+	ProductContainerEnabled GlobalSettingName = "product_container_enabled"
+	ProductIacEnabled       GlobalSettingName = "product_iac_enabled"
+	ProductOssEnabled       GlobalSettingName = "product_oss_enabled"
+	ProductSecretsEnabled   GlobalSettingName = "product_secrets_enabled"
+	RiskScoreThreshold      GlobalSettingName = "risk_score_threshold"
+	ScanAutomatic           GlobalSettingName = "scan_automatic"
+	ScanNetNew              GlobalSettingName = "scan_net_new"
+	SeverityCriticalEnabled GlobalSettingName = "severity_critical_enabled"
+	SeverityHighEnabled     GlobalSettingName = "severity_high_enabled"
+	SeverityLowEnabled      GlobalSettingName = "severity_low_enabled"
+	SeverityMediumEnabled   GlobalSettingName = "severity_medium_enabled"
 )
 
 // Defines values for SettingMetadataOrigin.
@@ -431,8 +419,7 @@ type FolderConfig struct {
 }
 
 // FolderConfigInput Input for creating a folder configuration.
-// All folder-level configuration (reference_branch, organization, etc.) should be
-// stored as settings, not as dedicated fields. This keeps the API flexible.
+// Folder-specific options (for example pre_assigned_org_id) are expressed as folder-level settings.
 type FolderConfigInput struct {
 	// FolderPath Path within the repository
 	FolderPath string `json:"folder_path"`
@@ -441,7 +428,7 @@ type FolderConfigInput struct {
 	RemoteUrl string `json:"remote_url"`
 
 	// Settings Folder-level settings (only FolderSettingName allowed). Distinct from global; no overlap.
-	// Examples: reference_branch, reference_folder, pre_assigned_org_id, additional_parameters, additional_environment.
+	// Example: pre_assigned_org_id.
 	Settings *[]FolderSettingInput `json:"settings,omitempty"`
 }
 
