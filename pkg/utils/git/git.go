@@ -2,6 +2,8 @@ package git
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -52,6 +54,138 @@ func RepoFromDir(inputDir string) (*git.Repository, *config.RemoteConfig, error)
 		return repo, nil, fmt.Errorf("no remote url found")
 	}
 	return repo, remoteConfig, nil
+}
+
+// StripGitCredentials removes userinfo (username, password, token) from a git URL.
+// For SCP-style URLs (user@host:path), the user@ portion is stripped since it may
+// contain tokens used as usernames. For scheme:// URLs, the standard userinfo is
+// removed. If url.Parse fails (e.g., malformed port), a pattern-based fallback
+// strips credentials from the raw string to prevent leakage.
+func StripGitCredentials(rawUrl string) string {
+	if rawUrl == "" {
+		return rawUrl
+	}
+
+	return stripGitCredentials(rawUrl, isSCPStyle(rawUrl))
+}
+
+func stripGitCredentials(rawUrl string, scpStyle bool) string {
+	if rawUrl == "" {
+		return rawUrl
+	}
+
+	// SCP-style URLs (user@host:path) — strip the user@ portion.
+	// The result is used for logging/API calls, not SSH connections,
+	// so removing the username is safe and prevents token-as-username leakage.
+	if scpStyle {
+		atIdx := strings.Index(rawUrl, "@")
+		colonIdx := strings.Index(rawUrl, ":")
+		if atIdx < 0 || colonIdx < 0 || atIdx > colonIdx {
+			return rawUrl
+		}
+		return rawUrl[atIdx+1:]
+	}
+
+	u, err := url.Parse(rawUrl)
+	if err != nil {
+		// url.Parse failed (e.g., invalid port) — fall back to pattern-based stripping
+		return stripCredentialsByPattern(rawUrl)
+	}
+
+	if u.User != nil {
+		u.User = nil
+		return u.String()
+	}
+
+	return rawUrl
+}
+
+// stripCredentialsByPattern removes user[:pass]@ from a URL string using pattern matching.
+// Used as a fallback when url.Parse fails on malformed URLs that still contain credentials.
+func stripCredentialsByPattern(rawUrl string) string {
+	schemeEnd := strings.Index(rawUrl, "://")
+	if schemeEnd < 0 {
+		return rawUrl
+	}
+	rest := rawUrl[schemeEnd+3:]
+
+	authorityEnd := strings.Index(rest, "/")
+	if authorityEnd < 0 {
+		authorityEnd = len(rest)
+	}
+	authority := rest[:authorityEnd]
+	atIdx := strings.LastIndex(authority, "@")
+	if atIdx < 0 {
+		return rawUrl
+	}
+
+	return rawUrl[:schemeEnd+3] + authority[atIdx+1:] + rest[authorityEnd:]
+}
+
+// NormalizeGitURL converts any git remote URL format (SSH, SCP-style, git://, http://)
+// into a consistent https:// URL with credentials removed and .git suffix stripped.
+// If the URL cannot be parsed, the credential-stripped input is returned as-is.
+func NormalizeGitURL(rawUrl string) string {
+	if rawUrl == "" {
+		return rawUrl
+	}
+
+	scpStyle := isSCPStyle(rawUrl)
+
+	// Handle SCP-style on the original input before credential stripping.
+	// StripGitCredentials turns user@host:path into host:path, which url.Parse
+	// would misinterpret as scheme:path. So we extract host and path directly.
+	if scpStyle {
+		atIdx := strings.Index(rawUrl, "@")
+		colonIdx := strings.Index(rawUrl, ":")
+		host := rawUrl[atIdx+1 : colonIdx]
+		path := strings.TrimSuffix(rawUrl[colonIdx+1:], ".git")
+		return "https://" + host + "/" + path
+	}
+
+	sanitized := stripGitCredentials(rawUrl, scpStyle)
+
+	u, err := url.Parse(sanitized)
+	if err != nil {
+		return sanitized
+	}
+
+	u.User = nil
+
+	switch u.Scheme {
+	case "ssh", "git+ssh", "ssh+git":
+		u.Scheme = "https"
+		// Strip SSH port — it's protocol-specific (e.g., 22, 7999) and doesn't map
+		// to the HTTPS port. HTTP/HTTPS ports are preserved in their respective cases
+		// because they represent the actual service port for that protocol.
+		u.Host = u.Hostname()
+		u.Path = strings.TrimSuffix(u.Path, ".git")
+		return u.String()
+	case "git", "http", "git+http":
+		u.Scheme = "https"
+		u.Path = strings.TrimSuffix(u.Path, ".git")
+		return u.String()
+	case "https", "git+https":
+		u.Scheme = "https"
+		u.Path = strings.TrimSuffix(u.Path, ".git")
+		return u.String()
+	default:
+		return sanitized
+	}
+}
+
+// isSCPStyle returns true if the URL uses SCP-style syntax (e.g., git@github.com:org/repo.git).
+// Detects user@host:path patterns without a scheme prefix ("://"), where userinfo
+// appears before the host/path separator ":".
+func isSCPStyle(rawUrl string) bool {
+	if strings.Contains(rawUrl, "://") {
+		return false
+	}
+
+	atIdx := strings.Index(rawUrl, "@")
+	colonIdx := strings.Index(rawUrl, ":")
+
+	return atIdx >= 0 && colonIdx >= 0 && atIdx < colonIdx
 }
 
 // GetRemoteUrl retrieves the appropriate remote URL for LDX-Sync resolution.
