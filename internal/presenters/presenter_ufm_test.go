@@ -602,7 +602,7 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			ignoreSuppressions: true,
 		},
 		{
-			name:               "secrets_duplicated_rules",
+			name:               "secrets_duplicated_rules_and_multiple_findings",
 			expectedSarifPath:  "testdata/ufm/secrets.duplicated-sarif-rules.sarif.json",
 			testResultPath:     "testdata/ufm/secrets.duplicated-sarif-rules.testresult.json",
 			ignoreSuppressions: true,
