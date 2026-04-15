@@ -17,10 +17,17 @@ func Test_isValidAuthHost(t *testing.T) {
 		{"api.snyk.io", true},
 		{"api.snykgov.io", true},
 		{"api.pre-release.snykgov.io", true},
+		{"api.a.b.c.snyk.io", true},
 		{"snyk.io", false},
 		{"api.example.com", false},
 		{"api.snyk.evil.com", false},
 		{"evilsnykgov.io", false},
+		{"api.example.snyk.io.evil.com", false},
+		{"api.snyk.io.attacker.com", false},
+		{"api.snyk.io/haha", false},
+		{"api.attacker.io/haha.snyk.io", false},
+		{"token@api.snyk.io", false},
+		{"api.something api.snyk.io", false},
 	}
 
 	for _, tc := range testCases {
