@@ -346,14 +346,14 @@ func filterUnresolvedCoveredByPins(unresolved []testapi.Issue, pins []*PinGroup)
 		return unresolved
 	}
 
-	pinnedIssueIDs := map[string]struct{}{}
+	pinnedIssueIDs := make(map[string]bool)
 	for _, pin := range pins {
 		for _, fixedIssue := range pin.FixedIssues {
 			issueID := fixedIssue.GetID()
 			if issueID == "" {
 				continue
 			}
-			pinnedIssueIDs[issueID] = struct{}{}
+			pinnedIssueIDs[issueID] = true
 		}
 	}
 
@@ -363,7 +363,7 @@ func filterUnresolvedCoveredByPins(unresolved []testapi.Issue, pins []*PinGroup)
 
 	filtered := make([]testapi.Issue, 0, len(unresolved))
 	for _, issue := range unresolved {
-		if _, coveredByPin := pinnedIssueIDs[issue.GetID()]; coveredByPin {
+		if pinnedIssueIDs[issue.GetID()] {
 			continue
 		}
 		filtered = append(filtered, issue)
