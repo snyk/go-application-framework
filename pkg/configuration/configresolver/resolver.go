@@ -210,8 +210,10 @@ func (r *Resolver) remoteField(key string) *RemoteConfigField {
 	case map[string]any:
 		locked, ok := v["islocked"].(bool)
 		if !ok {
+			//nolint:errcheck // zero-value fallback on type mismatch is intentional
 			locked, _ = v["isLocked"].(bool)
 		}
+		//nolint:errcheck // zero-value fallback on type mismatch is intentional
 		origin, _ := v["origin"].(string)
 		return &RemoteConfigField{Value: v["value"], IsLocked: locked, Origin: origin}
 	}
@@ -247,6 +249,7 @@ func (r *Resolver) localField(key string) *LocalConfigField {
 	case *LocalConfigField:
 		return v
 	case map[string]any:
+		//nolint:errcheck // zero-value fallback on type mismatch is intentional
 		changed, _ := v["changed"].(bool)
 		return &LocalConfigField{Value: v["value"], Changed: changed}
 	}
