@@ -92,6 +92,9 @@ func GetRemediationSummary(issues []testapi.Issue) *RemediationSummary {
 		summary.Pins = append(summary.Pins, pins...)
 	}
 
+	// Filter out unresolved issues that are already covered by a pin.
+	summary.Unresolved = filterUnresolvedCoveredByPins(summary.Unresolved, summary.Pins)
+
 	sort.Slice(summary.Upgrades, func(i, j int) bool {
 		return summary.Upgrades[i].FromPackage.Name < summary.Upgrades[j].FromPackage.Name
 	})
@@ -171,13 +174,21 @@ func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvi
 		}
 
 		for _, depPath := range paths {
+			// If the upgrade path does not match the dependency path, skip it.
 			if len(depPath) < 2 || !pathsMatch(upgradePath.DependencyPath, depPath) {
 				continue
 			}
 
-			matchedPaths++
 			fromPkg := depPath[1]
 			toPkg := upgradePath.DependencyPath[1]
+
+			// If the advised upgrade leaves the direct dependency at the exact same package version,
+			// the fix is transitive-only, so we skip it since it's not a direct upgrade the user can apply.
+			if fromPkg.Name == toPkg.Name && fromPkg.Version == toPkg.Version {
+				continue
+			}
+
+			matchedPaths++
 			key := fmt.Sprintf("%s@%s", fromPkg.Name, fromPkg.Version)
 
 			addOrUpdateUpgradeGroup(upgradeMap, key, fromPkg, toPkg, issue)
@@ -185,6 +196,12 @@ func processUpgradeAdvice(issue testapi.Issue, advice testapi.UpgradePackageAdvi
 		}
 	}
 
+	// If no paths matched, the issue is not resolved.
+	if matchedPaths == 0 {
+		return false
+	}
+
+	// If the number of matched paths is less than the number of vulnerable paths, the issue is partially resolved.
 	hasUnmatchedPaths := matchedPaths < len(paths)
 	return outcome == testapi.FullyResolved || !hasUnmatchedPaths
 }
@@ -213,12 +230,14 @@ func processPinAdvice(issue testapi.Issue, advice testapi.PinPackageAdvice, pinM
 
 	existingPins, exists := pinMap[key]
 	if exists {
+		// 1. Ensure all pins for this package point to the highest recommended target version.
 		for _, pin := range existingPins {
 			if compareVersions(toPkg.Version, pin.ToPackage.Version) > 0 {
 				pin.ToPackage.Version = toPkg.Version
 			}
 		}
 
+		// 2. Check if we already have a pin group for this specific vulnerable version.
 		versionFound := false
 		for _, pin := range existingPins {
 			if pin.FromPackage.Version == vulnerablePkg.Version {
@@ -230,6 +249,7 @@ func processPinAdvice(issue testapi.Issue, advice testapi.PinPackageAdvice, pinM
 			}
 		}
 
+		// 3. If no pin group exists for this vulnerable version, create one using the highest known target version.
 		if !versionFound {
 			highestToVersion := toPkg.Version
 			for _, pin := range existingPins {
@@ -286,6 +306,7 @@ func pathsMatch(upgradePath, depPath []testapi.Package) bool {
 	if len(upgradePath) > len(depPath) {
 		return false
 	}
+
 	for i, pkg := range upgradePath {
 		if pkg.Name != depPath[i].Name {
 			return false
@@ -318,4 +339,35 @@ func compareVersions(v1, v2 string) int {
 		v2 = "v" + v2
 	}
 	return semver.Compare(v1, v2)
+}
+
+func filterUnresolvedCoveredByPins(unresolved []testapi.Issue, pins []*PinGroup) []testapi.Issue {
+	if len(unresolved) == 0 || len(pins) == 0 {
+		return unresolved
+	}
+
+	pinnedIssueIDs := make(map[string]bool)
+	for _, pin := range pins {
+		for _, fixedIssue := range pin.FixedIssues {
+			issueID := fixedIssue.GetID()
+			if issueID == "" {
+				continue
+			}
+			pinnedIssueIDs[issueID] = true
+		}
+	}
+
+	if len(pinnedIssueIDs) == 0 {
+		return unresolved
+	}
+
+	filtered := make([]testapi.Issue, 0, len(unresolved))
+	for _, issue := range unresolved {
+		if pinnedIssueIDs[issue.GetID()] {
+			continue
+		}
+		filtered = append(filtered, issue)
+	}
+
+	return filtered
 }

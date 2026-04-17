@@ -287,6 +287,7 @@ func getCliTemplateFuncMap(tmpl *template.Template) template.FuncMap {
 	fnMap["colorBySeverity"] = renderInSeverityColor // 2-arg version from styles.go
 	fnMap["renderGreen"] = renderGreen
 	fnMap["renderGray"] = renderGray
+	fnMap["renderCyan"] = renderCyan
 	fnMap["bold"] = renderBold
 	fnMap["tip"] = func(s string) string {
 		return RenderTip(s + "\n")

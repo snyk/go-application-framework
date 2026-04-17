@@ -1,0 +1,131 @@
+[1mTesting  (package.json) ...[0m
+
+Tested 552 dependencies for known issues, found 9 issues, 111 vulnerable paths.
+
+[1mOpen Security issues: 9[0m
+
+ ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-BRACEEXPANSION-9789073
+   Info: https://snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073
+   Introduced by: brace-expansion
+   Introduced through: snyk@1.0.0-monorepo > glob@7.2.3 > minimatch@3.1.2 > brace-expansion@1.1.11
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary Code Injection[0m
+   Finding ID: SNYK-JS-COOKIE-13271683
+   Info: https://snyk.io/vuln/SNYK-JS-COOKIE-13271683
+   Introduced by: cookie
+   Introduced through: snyk@1.0.0-monorepo > @sentry/node@7.34.0 > cookie@0.4.2
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-DEBUG-13283909
+   Info: https://snyk.io/vuln/SNYK-JS-DEBUG-13283909
+   Introduced by: debug
+   Introduced through: snyk@1.0.0-monorepo > debug@4.3.4
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m
+   Finding ID: SNYK-JS-DEBUG-14214893
+   Info: https://snyk.io/vuln/SNYK-JS-DEBUG-14214893
+   Introduced by: debug
+   Introduced through: snyk@1.0.0-monorepo > debug@4.3.4
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mOpen Redirect[0m
+   Finding ID: SNYK-JS-GOT-2932019
+   Info: https://snyk.io/vuln/SNYK-JS-GOT-2932019
+   Introduced by: got
+   Introduced through: snyk@1.0.0-monorepo > snyk-nodejs-lockfile-parser@2.3.1 > @yarnpkg/core@4.4.1 > got@11.8.2
+   Reachability: No Path Found
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-2342073
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-2342073
+   Introduced by: marked
+   Introduced through: snyk@1.0.0-monorepo > marked@4.0.1
+   Reachability: Reachable
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-2342082
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-2342082
+   Introduced by: marked
+   Introduced through: snyk@1.0.0-monorepo > marked@4.0.1
+   Reachability: Reachable
+
+ ✗ [31m[HIGH][0m [1mDirectory Traversal[0m
+   Finding ID: SNYK-JS-ASYNC-12239908
+   Info: https://snyk.io/vuln/SNYK-JS-ASYNC-12239908
+   Introduced by: async
+   Introduced through: snyk@1.0.0-monorepo > snyk-config@5.2.0 > async@3.2.4
+   Reachability: No Path Found
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-LODASH-12239302
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-12239302
+   Introduced by: lodash
+   Introduced through: snyk@1.0.0-monorepo > snyk-nodejs-plugin@1.4.4 > lodash@4.17.21
+   Reachability: No Path Found
+
+[32m[1mIssues to fix by upgrading:[0m[0m
+
+  Upgrade [1m@sentry/node@7.34.0[0m to [1m@sentry/node@7.94.1[0m to fix
+  ✗ [33m[1mArbitrary Code Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-13271683] in [1mcookie@0.4.2[0m
+    introduced by snyk@1.0.0-monorepo > @sentry/node@7.34.0 > cookie@0.4.2
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m40[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m40[0m other paths
+
+  Upgrade [1m@snyk/fix@1.0.0-monorepo[0m to [1m@snyk/fix@1.471.0[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m40[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m40[0m other paths
+
+  Upgrade [1mglob@7.2.3[0m to [1mglob@9.0.0[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073] in [1mbrace-expansion@1.1.11[0m
+    introduced by snyk@1.0.0-monorepo > glob@7.2.3 > minimatch@3.1.2 > brace-expansion@1.1.11 and [36m7[0m other paths
+
+  Upgrade [1mmarked@4.0.1[0m to [1mmarked@4.0.10[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342073] in [1mmarked@4.0.1[0m
+    introduced by snyk@1.0.0-monorepo > marked@4.0.1
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342082] in [1mmarked@4.0.1[0m
+    introduced by snyk@1.0.0-monorepo > marked@4.0.1
+
+  Upgrade [1mrimraf@2.7.1[0m to [1mrimraf@4.3.1[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073] in [1mbrace-expansion@1.1.11[0m
+    introduced by snyk@1.0.0-monorepo > glob@7.2.3 > minimatch@3.1.2 > brace-expansion@1.1.11 and [36m7[0m other paths
+
+  Upgrade [1msnyk-go-plugin@1.23.0[0m to [1msnyk-go-plugin@1.24.0[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073] in [1mbrace-expansion@1.1.11[0m
+    introduced by snyk@1.0.0-monorepo > glob@7.2.3 > minimatch@3.1.2 > brace-expansion@1.1.11 and [36m7[0m other paths
+
+  Upgrade [1msnyk-resolve-deps@4.8.0[0m to [1msnyk-resolve-deps@4.9.1[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m40[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m40[0m other paths
+
+[90m[1mIssues with no direct upgrade or patch:[0m[0m
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073] in [1mbrace-expansion@1.1.11[0m
+    introduced by snyk@1.0.0-monorepo > glob@7.2.3 > minimatch@3.1.2 > brace-expansion@1.1.11 and [36m7[0m other paths
+  This issue was fixed in: [1m1.1.12, 2.0.2, 3.0.1, 4.0.1[0m
+
+╭─────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                            │
+│                                                         │
+│   Organization:      My Org                             │
+│   Test type:         Software Composition Analysis      │
+│   Project path:      test-project                       │
+│                                                         │
+│   Total security issues: 9                              │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]    │
+│   Open   : [1m9[0m [[35m 0 CRITICAL [0m[31m 2 HIGH [0m[33m 6 MEDIUM [0m 1 LOW ]    │
+╰─────────────────────────────────────────────────────────╯
+
+
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            

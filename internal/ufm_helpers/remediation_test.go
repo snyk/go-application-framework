@@ -355,9 +355,71 @@ func TestGetRemediationSummary(t *testing.T) {
 			require.Len(t, summary.Upgrades[0].FixedIssues, 1)
 			require.Empty(t, summary.Pins)
 		})
+
+		t.Run("upgrade matching should continue after same-version direct dep path", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					// First path has the same direct dependency version as the target upgrade path.
+					// If matching stops here, the valid upgrade on the second path is missed.
+					withDepPaths(t, "root@1.0.0", "direct@1.2.3", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.PartiallyResolved,
+						[]string{"root@1.0.0", "direct@1.2.3", "vulnerable@1.0.1"},
+					),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Upgrades, 1, "should capture upgrade from the second matching path")
+			require.Equal(t, "direct", summary.Upgrades[0].FromPackage.Name)
+			require.Equal(t, "1.0.0", summary.Upgrades[0].FromPackage.Version)
+			require.Equal(t, "1.2.3", summary.Upgrades[0].ToPackage.Version)
+			require.Empty(t, summary.Pins)
+			require.Len(t, summary.Unresolved, 1, "partially resolved upgrade should remain unresolved for unmatched paths")
+		})
 	})
 
 	t.Run("unresolved", func(t *testing.T) {
+		t.Run("unresolved issues covered by pin remediation are filtered out by issue ID", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.PartiallyResolved, "vulnerable", "1.0.1"),
+				),
+				newTestIssue(t, "VULN_ID", "vulnerable@2.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@2.0.0", "vulnerable@2.0.0"),
+					withUnresolvedFix(),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Pins, 1)
+			require.Empty(t, summary.Upgrades)
+			require.Empty(t, summary.Unresolved, "same issue ID should be removed from unresolved when covered by pin")
+		})
+
+		t.Run("unresolved issues NOT covered by pin remediation remain unresolved", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.PartiallyResolved, "vulnerable", "1.0.1"),
+				),
+				newTestIssue(t, "VULN_ID_2", "vulnerable@2.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@2.0.0", "vulnerable@2.0.0"),
+					withUnresolvedFix(),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Pins, 1)
+			require.Empty(t, summary.Upgrades)
+			require.Len(t, summary.Unresolved, 1, "different issue ID should remain in unresolved")
+			require.Equal(t, "VULN_ID_2", summary.Unresolved[0].GetID())
+		})
+
 		t.Run("an issue containing an unresolved fix action returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
@@ -372,6 +434,141 @@ func TestGetRemediationSummary(t *testing.T) {
 			require.Empty(t, summary.Pins)
 			require.Len(t, summary.Unresolved, 1)
 		})
+
+		t.Run("upgrade path where only transitive dep changes is treated as unresolved (PartiallyResolved)", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.PartiallyResolved, []string{"root@1.0.0", "direct@1.0.0", "vulnerable@1.0.1"}),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Empty(t, summary.Upgrades, "transitive-only fix should not appear as a direct upgrade")
+			require.Empty(t, summary.Pins)
+			require.Len(t, summary.Unresolved, 1)
+		})
+
+		t.Run("upgrade path where only transitive dep changes is treated as unresolved (FullyResolved)", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0.0", "direct@1.0.0", "vulnerable@1.0.1"}),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Empty(t, summary.Upgrades, "transitive-only fix should not appear as a direct upgrade")
+			require.Empty(t, summary.Pins)
+			require.Len(t, summary.Unresolved, 1, "should be unresolved even with FullyResolved outcome when no direct dep changes")
+		})
+
+		t.Run("multiple same-version upgrade paths with FullyResolved goes to unresolved", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-2@2.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-3@3.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.FullyResolved,
+						[]string{"root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.1"},
+						[]string{"root@1.0.0", "direct-2@2.0.0", "vulnerable@1.0.1"},
+						[]string{"root@1.0.0", "direct-3@3.0.0", "vulnerable@1.0.1"},
+					),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Empty(t, summary.Upgrades, "all paths are transitive-only, no direct upgrades")
+			require.Empty(t, summary.Pins)
+			require.Len(t, summary.Unresolved, 1, "issue must be unresolved when all paths are transitive-only")
+		})
+
+		t.Run("mixed paths with real upgrade and transitive-only fix results in both upgrade and unresolved", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct-1@1.0.0", "vulnerable@1.0.0"),
+					withDepPaths(t, "root@1.0.0", "direct-2@2.0.0", "vulnerable@1.0.0"),
+					withUpgradeFix(t, testapi.PartiallyResolved,
+						[]string{"root@1.0.0", "direct-1@1.2.3", "vulnerable@1.0.1"},
+						[]string{"root@1.0.0", "direct-2@2.0.0", "vulnerable@1.0.1"},
+					),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Upgrades, 1, "real direct upgrade should be present")
+			require.Equal(t, "direct-1", summary.Upgrades[0].FromPackage.Name)
+			require.Equal(t, "1.2.3", summary.Upgrades[0].ToPackage.Version)
+			require.Empty(t, summary.Pins)
+			require.Len(t, summary.Unresolved, 1, "issue should also be unresolved due to transitive-only path")
+		})
+	})
+}
+
+func TestRemediationSummary_HasMethods(t *testing.T) {
+	summary := &RemediationSummary{}
+	require.False(t, summary.HasUpgrades())
+	require.False(t, summary.HasPins())
+	require.False(t, summary.HasUnresolved())
+
+	summary.Upgrades = []*UpgradeGroup{{
+		FromPackage: testapi.Package{Name: "pkg", Version: "1.0"},
+		ToPackage:   testapi.Package{Name: "pkg", Version: "2.0"},
+		FixedIssues: []testapi.Issue{newTestIssue(t, "VULN", "pkg@1.0.0")},
+	}}
+	require.True(t, summary.HasUpgrades())
+
+	summary.Pins = []*PinGroup{{
+		FromPackage: testapi.Package{Name: "pkg", Version: "1.0"},
+		ToPackage:   testapi.Package{Name: "pkg", Version: "2.0"},
+		FixedIssues: []testapi.Issue{newTestIssue(t, "VULN", "pkg@1.0.0")},
+	}}
+	require.True(t, summary.HasPins())
+
+	summary.Unresolved = []testapi.Issue{newTestIssue(t, "VULN", "pkg@1.0.0")}
+	require.True(t, summary.HasUnresolved())
+}
+
+func TestGetDirectPackageTargets(t *testing.T) {
+	t.Run("nil attributes", func(t *testing.T) {
+		name, version := GetDirectPackageUpgradeTarget(nil)
+		require.Empty(t, name)
+		require.Empty(t, version)
+
+		name, version = GetDirectPackagePinTarget(nil)
+		require.Empty(t, name)
+		require.Empty(t, version)
+	})
+
+	t.Run("empty action", func(t *testing.T) {
+		attrs := &testapi.FixAttributes{}
+		name, version := GetDirectPackageUpgradeTarget(attrs)
+		require.Empty(t, name)
+		require.Empty(t, version)
+
+		name, version = GetDirectPackagePinTarget(attrs)
+		require.Empty(t, name)
+		require.Empty(t, version)
+	})
+
+	t.Run("upgrade target", func(t *testing.T) {
+		issue := newTestIssue(t, "VULN", "pkg@1.0.0", withUpgradeFix(t, testapi.FullyResolved, []string{"root@1.0", "direct@2.0", "pkg@1.1"}))
+		attrs := GetFixAttributes(issue)
+		name, version := GetDirectPackageUpgradeTarget(attrs)
+		require.Equal(t, "direct", name)
+		require.Equal(t, "2.0", version)
+	})
+
+	t.Run("pin target", func(t *testing.T) {
+		issue := newTestIssue(t, "VULN", "pkg@1.0.0", withPinFix(t, testapi.FullyResolved, "pkg", "1.1"))
+		attrs := GetFixAttributes(issue)
+		name, version := GetDirectPackagePinTarget(attrs)
+		require.Equal(t, "pkg", name)
+		require.Equal(t, "1.1", version)
 	})
 }
 

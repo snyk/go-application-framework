@@ -35,3 +35,8 @@ func renderGray(str string) string {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	return style.Render(str)
 }
+
+func renderCyan(str string) string {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	return style.Render(str)
+}
