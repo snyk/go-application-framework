@@ -202,43 +202,43 @@ Tested 23 dependencies for known issues, found 19 issues, 27 vulnerable paths.
 [32m[1mIssues to fix by upgrading:[0m[0m
 
   Upgrade [1mexpress@4.0.0[0m to [1mexpress@4.21.2[0m to fix
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SEND-7926862] in [1msend[0m
-    introduced by package.json@ > express@4.0.0 > send@0.2.0 and 1 other path
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865] in [1mserve-static[0m
+  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SEND-7926862] in [1msend@0.2.0[0m
+    introduced by package.json@ > express@4.0.0 > send@0.2.0 and [36m1[0m other path
+  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865] in [1mserve-static@1.0.1[0m
     introduced by package.json@ > express@4.0.0 > serve-static@1.0.1
-  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime[0m
-    introduced by package.json@ > express@4.0.0 > accepts@1.0.0 > mime@1.2.11 and 3 other paths
-  ✗ [1mOpen Redirect[0m [LOW] [https://security.snyk.io/vuln/npm:serve-static:20150113] in [1mserve-static[0m
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime@1.2.11[0m
+    introduced by package.json@ > express@4.0.0 > accepts@1.0.0 > mime@1.2.11 and [36m3[0m other paths
+  ✗ [1mOpen Redirect[0m [LOW] [https://security.snyk.io/vuln/npm:serve-static:20150113] in [1mserve-static@1.0.1[0m
     introduced by package.json@ > express@4.0.0 > serve-static@1.0.1
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-8163060] in [1mcookie[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-8163060] in [1mcookie@0.1.0[0m
     introduced by package.json@ > express@4.0.0 > cookie@0.1.0
-  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-6474509] in [1mexpress[0m
+  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-6474509] in [1mexpress@4.0.0[0m
     introduced by package.json@ > express@4.0.0
-  ✗ [33m[1mCross-site Scripting[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-7926867] in [1mexpress[0m
+  ✗ [33m[1mCross-site Scripting[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-7926867] in [1mexpress@4.0.0[0m
     introduced by package.json@ > express@4.0.0
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106] in [1mpath-to-regexp[0m
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106] in [1mpath-to-regexp@0.1.2[0m
     introduced by package.json@ > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416] in [1mpath-to-regexp[0m
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416] in [1mpath-to-regexp@0.1.2[0m
     introduced by package.json@ > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mNon-Constant Time String Comparison[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:cookie-signature:20160804] in [1mcookie-signature[0m
+  ✗ [33m[1mNon-Constant Time String Comparison[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:cookie-signature:20160804] in [1mcookie-signature@1.0.3[0m
     introduced by package.json@ > express@4.0.0 > cookie-signature@1.0.3
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:express:20140912] in [1mexpress[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:express:20140912] in [1mexpress@4.0.0[0m
     introduced by package.json@ > express@4.0.0
-  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:qs:20140806-1] in [1mqs[0m
+  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:qs:20140806-1] in [1mqs@0.6.6[0m
     introduced by package.json@ > express@4.0.0 > qs@0.6.6
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20140912] in [1msend[0m
-    introduced by package.json@ > express@4.0.0 > send@0.2.0 and 1 other path
-  ✗ [33m[1mRoot Path Disclosure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20151103] in [1msend[0m
-    introduced by package.json@ > express@4.0.0 > send@0.2.0 and 1 other path
-  ✗ [31m[1mPrototype Poisoning[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-QS-3153490] in [1mqs[0m
+  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20140912] in [1msend@0.2.0[0m
+    introduced by package.json@ > express@4.0.0 > send@0.2.0 and [36m1[0m other path
+  ✗ [33m[1mRoot Path Disclosure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20151103] in [1msend@0.2.0[0m
+    introduced by package.json@ > express@4.0.0 > send@0.2.0 and [36m1[0m other path
+  ✗ [31m[1mPrototype Poisoning[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-QS-3153490] in [1mqs@0.6.6[0m
     introduced by package.json@ > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:fresh:20170908] in [1mfresh[0m
-    introduced by package.json@ > express@4.0.0 > fresh@0.2.2 and 2 other paths
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator[0m
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:fresh:20170908] in [1mfresh@0.2.2[0m
+    introduced by package.json@ > express@4.0.0 > fresh@0.2.2 and [36m2[0m other paths
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator@0.3.0[0m
     introduced by package.json@ > express@4.0.0 > accepts@1.0.0 > negotiator@0.3.0
-  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20140806] in [1mqs[0m
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20140806] in [1mqs@0.6.6[0m
     introduced by package.json@ > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs[0m
+  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs@0.6.6[0m
     introduced by package.json@ > express@4.0.0 > qs@0.6.6
 
 ╭───────────────────────────────────────────────────────────╮
@@ -386,30 +386,30 @@ Tested 7 dependencies for known issues, found 11 issues, 22 vulnerable paths.
 [32m[1mIssues to fix by upgrading:[0m[0m
 
   Upgrade [1mjinja2@2.7.2[0m to [1mjinja2@3.1.6[0m to fix
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mImproper Neutralization[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [31m[1mSandbox Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-455616] in [1mjinja2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and 1 other path
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mImproper Neutralization[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [31m[1mSandbox Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-455616] in [1mjinja2@2.7.2[0m
+    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
 
   Upgrade [1mwerkzeug@3.0.1[0m to [1mwerkzeug@3.0.6[0m to fix
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091] in [1mwerkzeug[0m
-    introduced by not-python@0.0.0 > werkzeug@3.0.1 and 1 other path
-  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092] in [1mwerkzeug[0m
-    introduced by not-python@0.0.0 > werkzeug@3.0.1 and 1 other path
-  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933] in [1mwerkzeug[0m
-    introduced by not-python@0.0.0 > werkzeug@3.0.1 and 1 other path
+  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091] in [1mwerkzeug@3.0.1[0m
+    introduced by not-python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
+  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092] in [1mwerkzeug@3.0.1[0m
+    introduced by not-python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
+  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933] in [1mwerkzeug@3.0.1[0m
+    introduced by not-python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
 
 ╭──────────────────────────────────────────────────────────╮
 │ [1mTest Summary[0m                                             │
@@ -511,30 +511,30 @@ Tested 7 dependencies for known issues, found 11 issues, 22 vulnerable paths.
 [32m[1mIssues to fix by upgrading:[0m[0m
 
   Upgrade [1mjinja2@2.7.2[0m to [1mjinja2@3.1.6[0m to fix
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mImproper Neutralization[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
-  ✗ [31m[1mSandbox Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-455616] in [1mjinja2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and 1 other path
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mImproper Neutralization[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
+  ✗ [31m[1mSandbox Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-455616] in [1mjinja2@2.7.2[0m
+    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
 
   Upgrade [1mwerkzeug@3.0.1[0m to [1mwerkzeug@3.0.6[0m to fix
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091] in [1mwerkzeug[0m
-    introduced by python@0.0.0 > werkzeug@3.0.1 and 1 other path
-  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092] in [1mwerkzeug[0m
-    introduced by python@0.0.0 > werkzeug@3.0.1 and 1 other path
-  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933] in [1mwerkzeug[0m
-    introduced by python@0.0.0 > werkzeug@3.0.1 and 1 other path
+  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091] in [1mwerkzeug@3.0.1[0m
+    introduced by python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
+  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092] in [1mwerkzeug@3.0.1[0m
+    introduced by python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
+  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933] in [1mwerkzeug@3.0.1[0m
+    introduced by python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
 
 ╭──────────────────────────────────────────────────────────╮
 │ [1mTest Summary[0m                                             │
@@ -692,43 +692,43 @@ Tested 23 dependencies for known issues, found 19 issues, 27 vulnerable paths.
 [32m[1mIssues to fix by upgrading:[0m[0m
 
   Upgrade [1mexpress@4.0.0[0m to [1mexpress@4.21.2[0m to fix
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SEND-7926862] in [1msend[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and 1 other path
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865] in [1mserve-static[0m
+  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SEND-7926862] in [1msend@0.2.0[0m
+    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and [36m1[0m other path
+  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865] in [1mserve-static@1.0.1[0m
     introduced by tsc@1.0.0 > express@4.0.0 > serve-static@1.0.1
-  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > accepts@1.0.0 > mime@1.2.11 and 3 other paths
-  ✗ [1mOpen Redirect[0m [LOW] [https://security.snyk.io/vuln/npm:serve-static:20150113] in [1mserve-static[0m
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime@1.2.11[0m
+    introduced by tsc@1.0.0 > express@4.0.0 > accepts@1.0.0 > mime@1.2.11 and [36m3[0m other paths
+  ✗ [1mOpen Redirect[0m [LOW] [https://security.snyk.io/vuln/npm:serve-static:20150113] in [1mserve-static@1.0.1[0m
     introduced by tsc@1.0.0 > express@4.0.0 > serve-static@1.0.1
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-8163060] in [1mcookie[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-8163060] in [1mcookie@0.1.0[0m
     introduced by tsc@1.0.0 > express@4.0.0 > cookie@0.1.0
-  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-6474509] in [1mexpress[0m
+  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-6474509] in [1mexpress@4.0.0[0m
     introduced by tsc@1.0.0 > express@4.0.0
-  ✗ [33m[1mCross-site Scripting[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-7926867] in [1mexpress[0m
+  ✗ [33m[1mCross-site Scripting[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-7926867] in [1mexpress@4.0.0[0m
     introduced by tsc@1.0.0 > express@4.0.0
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106] in [1mpath-to-regexp[0m
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106] in [1mpath-to-regexp@0.1.2[0m
     introduced by tsc@1.0.0 > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416] in [1mpath-to-regexp[0m
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416] in [1mpath-to-regexp@0.1.2[0m
     introduced by tsc@1.0.0 > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mNon-Constant Time String Comparison[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:cookie-signature:20160804] in [1mcookie-signature[0m
+  ✗ [33m[1mNon-Constant Time String Comparison[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:cookie-signature:20160804] in [1mcookie-signature@1.0.3[0m
     introduced by tsc@1.0.0 > express@4.0.0 > cookie-signature@1.0.3
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:express:20140912] in [1mexpress[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:express:20140912] in [1mexpress@4.0.0[0m
     introduced by tsc@1.0.0 > express@4.0.0
-  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:qs:20140806-1] in [1mqs[0m
+  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:qs:20140806-1] in [1mqs@0.6.6[0m
     introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20140912] in [1msend[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and 1 other path
-  ✗ [33m[1mRoot Path Disclosure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20151103] in [1msend[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and 1 other path
-  ✗ [31m[1mPrototype Poisoning[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-QS-3153490] in [1mqs[0m
+  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20140912] in [1msend@0.2.0[0m
+    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and [36m1[0m other path
+  ✗ [33m[1mRoot Path Disclosure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20151103] in [1msend@0.2.0[0m
+    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and [36m1[0m other path
+  ✗ [31m[1mPrototype Poisoning[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-QS-3153490] in [1mqs@0.6.6[0m
     introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:fresh:20170908] in [1mfresh[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > fresh@0.2.2 and 2 other paths
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator[0m
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:fresh:20170908] in [1mfresh@0.2.2[0m
+    introduced by tsc@1.0.0 > express@4.0.0 > fresh@0.2.2 and [36m2[0m other paths
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator@0.3.0[0m
     introduced by tsc@1.0.0 > express@4.0.0 > accepts@1.0.0 > negotiator@0.3.0
-  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20140806] in [1mqs[0m
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20140806] in [1mqs@0.6.6[0m
     introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs[0m
+  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs@0.6.6[0m
     introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
 
 ╭───────────────────────────────────────────────────────────╮

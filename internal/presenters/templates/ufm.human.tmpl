@@ -183,11 +183,12 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
 {{- define "issueRemediationDetails" }}
     {{- $issue := . }}
     {{- $componentName := getIssueMetadata $issue "component-name" }}
+    {{- $componentVersion := getIssueMetadata $issue "component-version" }}
     {{- $severity := $issue.GetEffectiveSeverity }}
     {{- $title := colorBySeverity $severity ($issue.GetTitle | bold) }}
     {{- $severityBadge := colorBySeverity $severity (printf "[%s]" ($severity | toUpperCase)) }}
     {{- $url := printf "[https://security.snyk.io/vuln/%s]" $issue.GetID }}
-    {{- $pkgDisplay := $componentName | bold }}
+    {{- $pkgDisplay := printf "%s@%s" $componentName $componentVersion | bold }}
     {{- printf "  ✗ %s %s %s in %s" $title $severityBadge $url $pkgDisplay }}
     {{- "\n" }}
 
@@ -221,9 +222,9 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
                 {{- end }}
                 {{- if gt $pathCount 1 }}
                     {{- if eq (sub $pathCount 1) 1 }}
-                        {{- printf "    introduced by %s and %d other path\n" $pathStr (sub $pathCount 1) }}
+                        {{- printf "    introduced by %s and %s other path\n" $pathStr (print (sub $pathCount 1) | renderCyan) }}
                     {{- else }}
-                        {{- printf "    introduced by %s and %d other paths\n" $pathStr (sub $pathCount 1) }}
+                        {{- printf "    introduced by %s and %s other paths\n" $pathStr (print (sub $pathCount 1) | renderCyan) }}
                     {{- end }}
                 {{- else }}
                     {{- printf "    introduced by %s\n" $pathStr }}
