@@ -400,6 +400,26 @@ func TestGetRemediationSummary(t *testing.T) {
 			require.Empty(t, summary.Unresolved, "same issue ID should be removed from unresolved when covered by pin")
 		})
 
+		t.Run("unresolved issues NOT covered by pin remediation remain unresolved", func(t *testing.T) {
+			issues := []testapi.Issue{
+				newTestIssue(t, "VULN_ID_1", "vulnerable@1.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@1.0.0", "vulnerable@1.0.0"),
+					withPinFix(t, testapi.PartiallyResolved, "vulnerable", "1.0.1"),
+				),
+				newTestIssue(t, "VULN_ID_2", "vulnerable@2.0.0",
+					withDepPaths(t, "root@1.0.0", "direct@2.0.0", "vulnerable@2.0.0"),
+					withUnresolvedFix(),
+				),
+			}
+
+			summary := GetRemediationSummary(issues)
+
+			require.Len(t, summary.Pins, 1)
+			require.Empty(t, summary.Upgrades)
+			require.Len(t, summary.Unresolved, 1, "different issue ID should remain in unresolved")
+			require.Equal(t, "VULN_ID_2", summary.Unresolved[0].GetID())
+		})
+
 		t.Run("an issue containing an unresolved fix action returns valid summary", func(t *testing.T) {
 			issues := []testapi.Issue{
 				newTestIssue(t, "VULN_ID", "vulnerable@1.0.0",
