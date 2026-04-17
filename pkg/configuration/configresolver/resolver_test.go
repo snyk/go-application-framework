@@ -706,6 +706,126 @@ func TestResolveBool_UserGlobalAsLocalConfigField(t *testing.T) {
 	assert.True(t, got, "ResolveBool must unwrap LocalConfigField.Value, not see the struct pointer")
 }
 
+// TestResolve_DeserializedMap covers the case where values stored in the configuration
+// have been round-tripped through JSON (e.g. loaded from on-disk config via viper) and
+// therefore come back as map[string]interface{} rather than the original struct pointer.
+// remoteField/localField must decode those maps back into *RemoteConfigField /
+// *LocalConfigField; otherwise precedence is silently broken.
+func TestResolve_DeserializedMap(t *testing.T) {
+	t.Run("machine remote from map (unlocked) is honored", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		conf.Set(configresolver.RemoteMachineKey("api_endpoint"), map[string]any{
+			"value":    "remote-ep",
+			"isLocked": false,
+			"origin":   "test",
+		})
+		r := newResolver(conf, fs)
+		val, src := r.Resolve("api_endpoint", "org1", "")
+		assert.Equal(t, "remote-ep", val)
+		assert.Equal(t, configresolver.ConfigSourceRemote, src)
+	})
+
+	t.Run("machine remote from map (locked) wins over user global", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		conf.Set(configresolver.RemoteMachineKey("api_endpoint"), map[string]any{
+			"value":    "locked-ep",
+			"isLocked": true,
+		})
+		conf.Set(configresolver.UserGlobalKey("api_endpoint"), &configresolver.LocalConfigField{Value: "user-ep", Changed: true})
+		r := newResolver(conf, fs)
+		val, src := r.Resolve("api_endpoint", "org1", "")
+		assert.Equal(t, "locked-ep", val)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, src)
+	})
+
+	t.Run("machine remote from map with uppercase keys (legacy payload) still decodes", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		conf.Set(configresolver.RemoteMachineKey("api_endpoint"), map[string]any{
+			"Value":    "legacy-ep",
+			"IsLocked": true,
+		})
+		r := newResolver(conf, fs)
+		val, src := r.Resolve("api_endpoint", "org1", "")
+		assert.Equal(t, "legacy-ep", val)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, src)
+	})
+
+	t.Run("user global from map is unwrapped (not returned as map)", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		conf.Set(configresolver.UserGlobalKey("api_endpoint"), map[string]any{
+			"value":   "user-ep",
+			"changed": true,
+		})
+		r := newResolver(conf, fs)
+		val, src := r.Resolve("api_endpoint", "org1", "")
+		assert.Equal(t, "user-ep", val)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, src)
+	})
+
+	t.Run("user global from map with changed=false is ignored", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		conf.Set(configresolver.UserGlobalKey("api_endpoint"), map[string]any{
+			"value":   "ignored",
+			"changed": false,
+		})
+		conf.Set(configresolver.RemoteMachineKey("api_endpoint"), map[string]any{
+			"value":    "remote-ep",
+			"isLocked": false,
+		})
+		r := newResolver(conf, fs)
+		val, src := r.Resolve("api_endpoint", "org1", "")
+		assert.Equal(t, "remote-ep", val)
+		assert.Equal(t, configresolver.ConfigSourceRemote, src)
+	})
+
+	t.Run("folder user override from map wins over remote org", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		org := "org1"
+		folder := "/proj"
+		name := "reference_branch"
+		conf.Set(configresolver.RemoteOrgKey(org, name), map[string]any{
+			"value":    "main",
+			"isLocked": false,
+		})
+		conf.Set(configresolver.UserFolderKey(folder, name), map[string]any{
+			"value":   "my-branch",
+			"changed": true,
+		})
+		r := newResolver(conf, fs)
+		val, src := r.Resolve(name, org, folder)
+		assert.Equal(t, "my-branch", val)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, src)
+	})
+
+	t.Run("IsLocked honored for remote map", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		conf.Set(configresolver.RemoteOrgKey("org1", "snyk_code_enabled"), map[string]any{
+			"value":    true,
+			"isLocked": true,
+		})
+		r := newResolver(conf, fs)
+		assert.True(t, r.IsLocked("snyk_code_enabled", "org1"))
+	})
+
+	t.Run("ResolveBool unwraps LocalConfigField from map", func(t *testing.T) {
+		fs := newTestFlagSet()
+		conf := configuration.NewWithOpts()
+		conf.Set(configresolver.UserGlobalKey("snyk_code_enabled"), map[string]any{
+			"value":   true,
+			"changed": true,
+		})
+		r := newResolver(conf, fs)
+		assert.True(t, r.ResolveBool("snyk_code_enabled", "org1", "/proj"))
+	})
+}
+
 func TestResolve_UserGlobalKeyDeleted(t *testing.T) {
 	fs := newTestFlagSet()
 	conf := configuration.NewWithOpts()
