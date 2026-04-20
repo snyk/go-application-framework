@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -37,9 +38,10 @@ type EngineImpl struct {
 var _ Engine = (*EngineImpl)(nil)
 
 type engineRuntimeConfig struct {
-	config configuration.Configuration
-	input  []Data
-	ic     analytics.InstrumentationCollector
+	config  configuration.Configuration
+	input   []Data
+	ic      analytics.InstrumentationCollector
+	ctxFunc func() context.Context
 }
 
 type EngineInvokeOption func(*engineRuntimeConfig)
@@ -59,6 +61,14 @@ func WithInput(input []Data) EngineInvokeOption {
 func WithInstrumentationCollector(ic analytics.InstrumentationCollector) EngineInvokeOption {
 	return func(e *engineRuntimeConfig) {
 		e.ic = ic
+	}
+}
+
+func WithContext(ctx context.Context) EngineInvokeOption {
+	return func(e *engineRuntimeConfig) {
+		if ctx != nil {
+			e.ctxFunc = func() context.Context { return ctx }
+		}
 	}
 }
 
@@ -321,11 +331,11 @@ func (e *EngineImpl) Invoke(
 			e.mu.Unlock()
 
 			// create a context object for the invocation
-			context := NewInvocationContext(id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
+			invocationCtx := newInvocationContext(options.ctxFunc, id, options.config, localEngine, localNetworkAccess, localLogger, localAnalytics, localUi)
 
 			// invoke workflow through its callback
 			localLogger.Printf("Workflow Start")
-			output, err = callback(context, options.input)
+			output, err = callback(invocationCtx, options.input)
 			localLogger.Printf("Workflow End")
 		}
 	} else {
