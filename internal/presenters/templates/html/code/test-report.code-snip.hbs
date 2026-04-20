@@ -1,0 +1,88 @@
+<div class="card card--vuln disclosure--not-new severity--{{severitytext}}" {{#if suppression}}suppressed{{/if}} data-snyk-test="{{severitytext}}">
+    <input type="radio" name="tab-view-{{@index}}" id="tab-dataflow-{{@index}}" value="dataflow" class="card__tab__radio" checked>
+    <input type="radio" name="tab-view-{{@index}}" id="tab-fix-{{@index}}" value="fix" class="card__tab__radio" >
+
+    <header class="card__header">
+        <div class="card__header__main">
+            <div class="severity-icon severity-icon--{{severitytext}}"></div>
+            <h2 class="card__title">{{ruleiddesc.shortDescription.text}}</h2>
+            <div class="card__actions">
+                <label for="tab-dataflow-{{@index}}" class="card__action">Data Flow</label>
+                <label for="tab-fix-{{@index}}" class="card__action">Fix Analysis</label>
+            </div>
+        </div>
+        <ul class="card__meta">
+            <li class="card__meta__item">SNYK-CODE</li>
+            <li class="card__meta__item">{{ruleiddesc.properties.cwe}}</li>
+            <li class="card__meta__item">{{ruleiddesc.name}}</li>
+        </ul>
+    </header>
+    <div class="card__section">
+    {{#unless @root.showSummaryOnly}}
+        <div class="card__summary severity--{{severitytext}}">
+            <p>{{message.text}}</p>
+            <div class="file-location">Found in: <strong>{{locations.[0].physicalLocation.artifactLocation.uri}} (line : {{locations.[0].physicalLocation.region.startLine}})</strong></div>
+        </div>
+        <div class="card__panel dataflow">
+            <h2 class="card__panel__heading"><span class="heading-char">⇣</span> Data Flow</h2>
+            {{#each codeFlows.[0].threadFlows.[0].locations}}
+            {{#if location.physicalLocation.isshowfilename }}<div class="dataflow__filename"> {{location.physicalLocation.artifactLocation.uri}}</div>{{/if}}
+            <div class="dataflow__item">
+                <span class="dataflow__lineno" title="line:column">{{ location.physicalLocation.codeString.[0].codelineno }}:{{location.physicalLocation.region.startColumn}}</span>
+                <div class="dataflow__code"><span class="dataflow__codeprefix">{{ location.physicalLocation.codeString.[0].codepremarker }}<br /></span>{{#if location.physicalLocation.codeString.[0].block}}<span class="marker block">{{else}}<span class="marker">{{/if}}{{ location.physicalLocation.codeString.[0].codemarker }}</span><span class="dataflow__codesuffix">{{ location.physicalLocation.codeString.[0].codepostmarker }}</span></div>
+                {{#if @first}}<span class="dataflow__badge" title="Data is 'tainted' if it comes from an insecure source such as a file, the network, or the user. This tainted data is passed to a sensitive sink, as described below.">Source</span>{{/if}}{{#if @last}}<span class="dataflow__badge" title="Sinks are the operations that must receive clean data and that you wouldn't want an attacker to be able to manipulate.">Sink</span>{{/if}}
+                <span class="dataflow__step">{{ @index }}</span>
+            </div>
+            {{/each}}
+        </div>
+        <div class="card__panel fix-analysis">
+            <h2 class="card__panel__heading"><span class="heading-char">✓</span> Fix Analysis</h2>
+            <div class="card__panel__markdown">{{{markdown ruleiddesc.help.markdown}}}</div>
+        </div>
+        {{#if suppression}}
+          <div class="suppression-card">
+            <div class="suppression-card__container">
+              <ul class="suppression-card__items">
+                <li class="suppression-card__item">
+                  <div class="suppression-card__item__key">Ignored at</div>
+                  <div class="suppression-card__item__value">
+                    {{#if suppression.ignoredOn}}{{formatDate suppression.ignoredOn}}{{else}}Unknown{{/if}}
+                  </div>
+                </li>
+                {{#if suppression.status}}
+                <li class="suppression-card__item">
+                  <div class="suppression-card__item__key">Ignored status</div>
+                  <div class="suppression-card__item__value">
+                    {{suppression.status}}
+                  </div>
+                </li>
+                {{/if}}
+                <li class="suppression-card__item">
+                  <div class="suppression-card__item__key">Ignored by</div>
+                  <div class="suppression-card__item__value">
+                    <span class="suppression-card__user-initial">{{firstInitial suppression.ignoredBy.name}}</span>
+                    {{#if suppression.ignoredBy.name}}{{suppression.ignoredBy.name}}{{/if}}
+                    {{#if suppression.ignoredBy.email}} &lt;{{suppression.ignoredBy.email}}&gt;{{/if}}
+                  </div>
+                </li>
+                <li class="suppression-card__item">
+                  <div class="suppression-card__item__key">Type</div>
+                  <div class="suppression-card__item__value">{{suppression.category}}</div>
+                </li>
+                <li class="suppression-card__item">
+                  <div class="suppression-card__item__key">Reason</div>
+                  <div class="suppression-card__item__value">{{suppression.justification}}</div>
+                </li>
+                <li class="suppression-card__item">
+                  <div class="suppression-card__item__key">Expires</div>
+                  <div class="suppression-card__item__value">
+                    {{#if suppression.expiration}}{{formatDate suppression.expiration}}{{else}}Never{{/if}}
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        {{/if}}
+    {{/unless}}
+    </div>
+</div>

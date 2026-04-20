@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "vulnerabilities": [],
+  "dependencyCount": 140,
+  "packageManager": "maven",
+  "summary": "0 vulnerable dependency paths",
+  "uniqueCount": 0,
+  "path": "/project",
+  "displayTargetFile": "pom.xml",
+  "projectName": "test-proj"
+}

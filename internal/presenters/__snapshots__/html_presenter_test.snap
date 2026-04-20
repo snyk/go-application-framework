@@ -1,0 +1,1235 @@
+
+[TestHTMLReportRenderer_CodeNoIssues - 1]
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Language" content="en-us">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Snyk test report</title>
+  <meta name="description" content="No issues found">
+  <base target="_blank">
+  <link rel="icon" type="image/png" href="https://res.cloudinary.com/snyk/image/upload/v1468845142/favicon/favicon.png"
+    sizes="194x194">
+  <link rel="shortcut icon" href="https://res.cloudinary.com/snyk/image/upload/v1468845142/favicon/favicon.ico">
+  <style type="text/css">
+  
+    body {
+      -moz-font-feature-settings: "pnum";
+      -webkit-font-feature-settings: "pnum";
+      font-variant-numeric: proportional-nums;
+      display: flex;
+      flex-direction: column;
+      font-feature-settings: "pnum";
+      font-size: 100%;
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-text-size-adjust: 100%;
+      margin: 0;
+      padding: 0;
+      color: #393842;
+      font-family: -apple-system, BlinkMacSystemFont, avenir next, avenir, segoe ui, helvetica neue, helvetica, Ubuntu, roboto, noto, arial, sans-serif;
+    }
+  
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-weight: 500;
+    }
+  
+    a,
+    a:link,
+    a:visited {
+      border-bottom: 1px solid #4b45a9;
+      text-decoration: none;
+      color: #4b45a9;
+    }
+  
+    a:hover,
+    a:focus,
+    a:active {
+      border-bottom: 1px solid #4b45a9;
+    }
+  
+    hr {
+      border: none;
+      margin: 1em 0;
+      border-top: 1px solid #c5c5c5;
+    }
+  
+    ul {
+      padding: 0 1em;
+      margin: 1em 0;
+    }
+  
+    code {
+      background-color: #EEE;
+      color: #333;
+      padding: 0.25em 0.5em;
+      border-radius: 0.25em;
+    }
+  
+    pre {
+      font-size: 14px;
+    }
+  
+    pre code {
+      padding: 10px;
+      font-family: monospace;
+      background-color: #393842;
+      border-radius: 4px;
+      color: #fff;
+      display: block;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      max-width: 100%;
+      min-width: 100px;
+    }
+  
+    a code {
+      border-radius: .125rem .125rem 0 0;
+      padding-bottom: 0;
+      color: #4b45a9;
+    }
+  
+    a[href^="http://"]:after,
+    a[href^="https://"]:after:not(.brand) {
+      background-image: linear-gradient(transparent,transparent),url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20112%20109%22%3E%3Cg%20id%3D%22Page-1%22%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20id%3D%22link-external%22%3E%3Cg%20id%3D%22arrow%22%3E%3Cpath%20id%3D%22Line%22%20stroke%3D%22%234B45A9%22%20stroke-width%3D%2215%22%20d%3D%22M88.5%2021l-43%2042.5%22%20stroke-linecap%3D%22square%22%2F%3E%3Cpath%20id%3D%22Triangle%22%20fill%3D%22%234B45A9%22%20d%3D%22M111.2%200v50L61%200z%22%2F%3E%3C%2Fg%3E%3Cpath%20id%3D%22square%22%20fill%3D%22%234B45A9%22%20d%3D%22M66%2015H0v94h94V44L79%2059v35H15V30h36z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+      background-repeat: no-repeat;
+      background-size: .75rem;
+      content: "";
+      display: inline-block;
+      height: .75rem;
+      margin-left: .25rem;
+      width: .75rem;
+    }
+  
+    .suppressed {
+      border-left: 5px solid #888;
+    }
+  
+    .suppression-card {
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 10px;
+      background-color: #fff7e6;
+    }
+  
+    .suppression-card__container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+  
+    .suppression-card__items {
+      flex: 1 1 50%;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+  
+    .suppression-card__item {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+  
+    .suppression-card__item__key {
+      flex: 0 0 40%;
+      color: #a55c09;
+      font-weight: 500;
+      margin-bottom: 2px;
+      flex-shrink: 0;
+      padding-right: 32px;
+      white-space: nowrap;
+      width: 180px;
+    }
+  
+    .suppression-card__item__value {
+      flex: 1 1 60%;
+      text-align: left;
+      color: #a55c09;
+      padding-right: 32px;
+      word-break: break-all;
+    }
+  
+    .suppression-card__user-initial {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: #6666cc;
+      color: white;
+      text-align: center;
+      line-height: 24px;
+      margin-right: 5px;
+      font-weight: bold;
+    }
+  
+    .suppression-card strong {
+      color: #b35900;
+    }
+  
+  /* Layout */
+  
+    [class*=layout-container] {
+      margin: 0 auto;
+      max-width: 71.25em;
+      padding: 20px;
+      position: relative;
+    }
+    .layout-container--short {
+      padding-top: 0;
+      padding-bottom: 0;
+      max-width: 48.75em;
+    }
+  
+    .layout-container--short:after {
+      display: block;
+      content: "";
+      clear: both;
+    }
+  
+  /* Header */
+  
+    .header {
+      padding-bottom: 1px;
+    }
+  
+    .paths {
+      margin-left: 8px;
+      font-size:14px;
+    }
+  
+    .project__header {
+      background-color: #030328;
+      color: #fff;
+      }
+  
+    .project__header__title {
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      word-break: break-all;
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+  
+    .meta-count {
+      display: inline-block;
+      margin: 0 12px 6px 0;
+      padding-right: 12px;
+      font-size:14px;
+    }
+  
+  /* Card */
+  
+    .card {
+      background-color: #fff;
+      border: 1px solid #c5c5c5;
+      border-radius: .25rem;
+      margin: 0 0 2em 0;
+      position: relative;
+      min-height: 40px;
+      padding: 0;
+    }
+  
+    .card .label {
+      background-color: #767676;
+      border: 2px solid #767676;
+      color: white;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      display: inline-block;
+      margin: 0;
+      border-radius: 0.25rem;
+    }
+  
+    .card .label__text {
+      vertical-align: text-top;
+        font-weight: bold;
+    }
+  
+    .card .label--critical {
+      background-color: #AB1A1A;
+      border-color: #AB1A1A;
+    }
+  
+    .card .label--high {
+      background-color: #CE5019;
+      border-color: #CE5019;
+    }
+  
+    .card .label--medium {
+      background-color: #D68000;
+      border-color: #D68000;
+    }
+  
+    .card .label--low {
+      background-color: #88879E;
+      border-color: #88879E;
+    }
+  
+    .severity--low {
+      border-color: #88879E;
+    }
+  
+    .severity--medium {
+      border-color: #D68000;
+    }
+  
+    .severity--high {
+      border-color: #CE5019;
+    }
+  
+    .severity--critical {
+      border-color: #AB1A1A;
+    }
+  
+    .card--vuln {
+      padding-top: 4em;
+    }
+  
+    .card--vuln .label {
+      left: 0;
+      position: absolute;
+      top: 1.1em;
+      padding-left: 1.9em;
+      padding-right: 1.9em;
+      border-radius: 0 0.25rem 0.25rem 0;
+    }
+  
+    .card__section {
+      background-color: #faf9fa
+    }
+  
+    .card__section h2 {
+      font-size: 22px;
+      margin-bottom: 0.5em;
+    }
+  
+    .card__section p {
+      margin: 0 0 12px 0;
+    }
+  
+    .card__meta {
+      padding: 0;
+      margin-top: 10px;
+      font-size: 1.1em;
+    }
+  
+    .card__meta__item {
+      display: inline-block;
+    }
+  
+    .card .card__meta__paths {
+      font-size: 0.9em;
+    }
+  
+    .card__title {
+      font-size: 28px;
+      margin-top: 0;
+    }
+  
+    .card__cta p {
+      margin: 0;
+      text-align: right;
+    }
+  
+  /* Styles by Andy */
+  
+  .brand, .brand:link, .brand:visited { display:inline-block; border:none; }
+  .brand::after { background:none; }
+  
+  .test-meta { float:right; max-width:500px; opacity:.75; font-size:12px; text-align: right; }
+  .test-meta .filepath { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .test-meta .timestamp { margin:0 0 6px }
+  
+  .report-summary { display:flex; justify-content: space-between; margin-bottom: 24px; }
+  .header-wrap, .source-panel { align-self: center; }
+  .severity-icon { display:inline-block; width:32px; height: 32px;  }
+  .severity-icon.severity-icon--critical { background:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0iI0FCMUExQSIvPgo8cGF0aCBkPSJNMTkuNTYyNSAxOC4zMzk4SDIzLjA2NjRDMjIuOTk2MSAxOS40ODgzIDIyLjY3OTcgMjAuNTA3OCAyMi4xMTcyIDIxLjM5ODRDMjEuNTYyNSAyMi4yODkxIDIwLjc4NTIgMjIuOTg0NCAxOS43ODUyIDIzLjQ4NDRDMTguNzkzIDIzLjk4NDQgMTcuNTk3NyAyNC4yMzQ0IDE2LjE5OTIgMjQuMjM0NEMxNS4xMDU1IDI0LjIzNDQgMTQuMTI1IDI0LjA0NjkgMTMuMjU3OCAyMy42NzE5QzEyLjM5MDYgMjMuMjg5MSAxMS42NDg0IDIyLjc0MjIgMTEuMDMxMiAyMi4wMzEyQzEwLjQyMTkgMjEuMzIwMyA5Ljk1NzAzIDIwLjQ2MDkgOS42MzY3MiAxOS40NTMxQzkuMzE2NDEgMTguNDQ1MyA5LjE1NjI1IDE3LjMxNjQgOS4xNTYyNSAxNi4wNjY0VjE0Ljg4MjhDOS4xNTYyNSAxMy42MzI4IDkuMzIwMzEgMTIuNTAzOSA5LjY0ODQ0IDExLjQ5NjFDOS45ODQzOCAxMC40ODA1IDEwLjQ2MDkgOS42MTcxOSAxMS4wNzgxIDguOTA2MjVDMTEuNzAzMSA4LjE5NTMxIDEyLjQ0OTIgNy42NDg0NCAxMy4zMTY0IDcuMjY1NjJDMTQuMTgzNiA2Ljg4MjgxIDE1LjE1MjMgNi42OTE0MSAxNi4yMjI3IDYuNjkxNDFDMTcuNjQ0NSA2LjY5MTQxIDE4Ljg0MzggNi45NDkyMiAxOS44MjAzIDcuNDY0ODRDMjAuODA0NyA3Ljk4MDQ3IDIxLjU2NjQgOC42OTE0MSAyMi4xMDU1IDkuNTk3NjZDMjIuNjUyMyAxMC41MDM5IDIyLjk4MDUgMTEuNTM1MiAyMy4wODk4IDEyLjY5MTRIMTkuNTc0MkMxOS41MzUyIDEyLjAwMzkgMTkuMzk4NCAxMS40MjE5IDE5LjE2NDEgMTAuOTQ1M0MxOC45Mjk3IDEwLjQ2MDkgMTguNTc0MiAxMC4wOTc3IDE4LjA5NzcgOS44NTU0N0MxNy42Mjg5IDkuNjA1NDcgMTcuMDAzOSA5LjQ4MDQ3IDE2LjIyMjcgOS40ODA0N0MxNS42MzY3IDkuNDgwNDcgMTUuMTI1IDkuNTg5ODQgMTQuNjg3NSA5LjgwODU5QzE0LjI1IDEwLjAyNzMgMTMuODgyOCAxMC4zNTk0IDEzLjU4NTkgMTAuODA0N0MxMy4yODkxIDExLjI1IDEzLjA2NjQgMTEuODEyNSAxMi45MTggMTIuNDkyMkMxMi43NzczIDEzLjE2NDEgMTIuNzA3IDEzLjk1MzEgMTIuNzA3IDE0Ljg1OTRWMTYuMDY2NEMxMi43MDcgMTYuOTQ5MiAxMi43NzM0IDE3LjcyNjYgMTIuOTA2MiAxOC4zOTg0QzEzLjAzOTEgMTkuMDYyNSAxMy4yNDIyIDE5LjYyNSAxMy41MTU2IDIwLjA4NTlDMTMuNzk2OSAyMC41MzkxIDE0LjE1NjIgMjAuODgyOCAxNC41OTM4IDIxLjExNzJDMTUuMDM5MSAyMS4zNDM4IDE1LjU3NDIgMjEuNDU3IDE2LjE5OTIgMjEuNDU3QzE2LjkzMzYgMjEuNDU3IDE3LjUzOTEgMjEuMzM5OCAxOC4wMTU2IDIxLjEwNTVDMTguNDkyMiAyMC44NzExIDE4Ljg1NTUgMjAuNTIzNCAxOS4xMDU1IDIwLjA2MjVDMTkuMzYzMyAxOS42MDE2IDE5LjUxNTYgMTkuMDI3MyAxOS41NjI1IDE4LjMzOThaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K) }
+  .severity-icon.severity-icon--high { background:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0iI0NFNTAxOSIvPgo8cGF0aCBkPSJNMjAuNDI5NyAxMy44ODY3VjE2LjYyODlIMTEuNTIzNFYxMy44ODY3SDIwLjQyOTdaTTEyLjU2NjQgNi45Mzc1VjI0SDkuMDUwNzhWNi45Mzc1SDEyLjU2NjRaTTIyLjkzNzUgNi45Mzc1VjI0SDE5LjQzMzZWNi45Mzc1SDIyLjkzNzVaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K) }
+  .severity-icon.severity-icon--medium { background:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0iI0Q2ODAwMCIvPgo8cGF0aCBkPSJNOC42MTcxOSA2LjkzNzVIMTEuNTkzOEwxNS45NzY2IDE5LjQ2NDhMMjAuMzU5NCA2LjkzNzVIMjMuMzM1OUwxNy4xNzE5IDI0SDE0Ljc4MTJMOC42MTcxOSA2LjkzNzVaTTcuMDExNzIgNi45Mzc1SDkuOTc2NTZMMTAuNTE1NiAxOS4xNDg0VjI0SDcuMDExNzJWNi45Mzc1Wk0yMS45NzY2IDYuOTM3NUgyNC45NTMxVjI0SDIxLjQzNzVWMTkuMTQ4NEwyMS45NzY2IDYuOTM3NVoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=) }
+  .severity-icon.severity-icon--low { background:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0iIzg4ODc5RSIvPgo8cGF0aCBkPSJNMjIgMjEuMjU3OFYyNEgxMy40MTAyVjIxLjI1NzhIMjJaTTE0LjU0NjkgNi45Mzc1VjI0SDExLjAzMTJWNi45Mzc1SDE0LjU0NjlaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K) }
+  .meta-count .severity-icon { float:left; width:24px; height:24px; margin-right:6px; background-size: 24px 24px; }
+  
+  .source-panel { text-align: right; }
+  .source-panel__heading { display:block; margin-top:6px; text-transform:uppercase; color:#727184; font-size:12px; }
+  .scan-coverage { max-width: 400px; padding:0; margin:12px 0 0; font-size:14px; }
+  .scan-coverage .type { display:inline-block; list-style-type: none; padding:3px; margin:0 0 0 10px; }
+  
+  .card.severity--low { --severity-color: #88879E; }
+  .card.severity--medium { --severity-color: #D68000; }
+  .card.severity--high { --severity-color: #CE5019; }
+  .card.severity--critical { --severity-color: #AB1A1A; }
+  .card {
+    padding:0;
+    border-width:4px 1px 1px;
+    border-color:#d3d3d9;
+    border-top-color: var(--severity-color);
+    border-radius: 4px 4px 0 0;
+  }
+  
+  .card__tab__radio { display: none; pointer-events: none; }
+  .dataflow, .fix-analysis { display: none; }
+  
+  .card input[id^="tab-dataflow"]:checked ~ .card__header .card__action[for^="tab-dataflow"] {
+    background-color: var(--severity-color);
+    color: #fff;
+    border-radius: 20px;
+  }
+  
+  .card input[id^="tab-fix"]:checked ~ .card__header .card__action[for^="tab-fix"] {
+    background-color: #4b45a1;
+    color: #fff;
+    border-radius: 20px;
+  }
+  
+  .card input[id^="tab-dataflow"]:checked ~ .card__section .dataflow,
+  .card input[id^="tab-fix"]:checked ~ .card__section .fix-analysis {
+    display: block;
+  }
+  
+  .card__header { padding:24px }
+  .card__header__main { display:flex; }
+  .card__header__main .severity-icon { margin-right:12px; }
+  .card__meta { display:flex; align-items:flex-start; margin:0; list-style:none; }
+  .card__meta__item { display:inline-block; padding-right:8px; border-right:1px solid #eee; margin-right: 8px; font-size:12px; color:#727184 }
+  .card__meta__item:last-child { border:none; }
+  .card .card__title { display:inline-block; margin:0; font-size:22px; font-weight:600; vertical-align: top;}
+  
+  .card__actions { display:flex; padding:2px; border:1px solid #d3d3d9; border-radius:20px; background-color:#fff;  margin-left: auto; }
+  .card__action { align-self: center; padding:5px 15px; font-size:14px; cursor: pointer; transition: all .2s; }
+  .card__action:hover { color: #4b45a1; }
+  
+  .card__section {padding:24px; border-top: 1px solid #d3d3d9}
+  
+  .card__snippet { background-color: transparent; font-family: monospace; white-space: pre; margin: 1em 0px;  }
+  
+  .card__summary { position: relative; padding: 16px 24px; border: 1px solid #d3d3d9; border-left-width:4px; border-radius:2px; background-color:#fff; color:#393842; word-break: break-word; }
+  .card__summary.severity--critical { border-left-color:#AB1A1A ; }
+  .card__summary.severity--high { border-left-color:#CE5019 ; }
+  .card__summary.severity--medium { border-left-color:#D68000 ; }
+  .card__summary.severity--low { border-left-color:#88879E; }
+  .card__summary .file-location { margin-top:12px; font-size:13px; color:#727184 }
+  
+  .dataflow { margin:12px 0 }
+  .dataflow__item, .code-source { display: flex; padding:4px 8px; border:1px solid transparent; border-width: 1px 0; font-family: monospace; color:#393842; font-size:14px }
+  .dataflow__item:hover { cursor:pointer; border-color: #eee; background-color:#fff; }
+  .dataflow__item:hover .marker { background-color: #ffc905; }
+  .dataflow__step, .dataflow__lineno, .code-lineno { align-self: flex-start; flex:0 0 50px; width: 50px; text-align: right; color:#727184; font-size:12px; }
+  .dataflow__step  { flex:0 0 30px; width: 30px; }
+  .dataflow__lineno { flex:0 0 60px;  padding:0 20px 0 0; }
+  .dataflow__code { display:flex; align-self: flex-start; align-content: flex-start; flex-grow: 1; margin-right:40px; line-height:1; overflow:auto; }
+  .dataflow__code h1, .dataflow__code h2, .dataflow__code h3, .dataflow__code h4, .dataflow__code h5, .dataflow__code h6, .dataflow__code strong, .dataflow__code b, .dataflow__code em, .dataflow__code i, .dataflow__code p  { padding:0; margin:0; font-family: monospace; color:#393842; font-size:14px; font-weight:400; font-style: normal;  } /* overriding html default styling within the code */
+  .dataflow__code br { display:none  } /* overriding html default styling within the code */
+  .dataflow__code .dataflow__codeprefix, .dataflow__code .dataflow__codesuffix { display:inline-block; margin:0; white-space:nowrap }
+  .dataflow__badge { align-self:flex-start; padding:2px 3px; border:1px solid #d3d3d9; border-radius:2px; margin-top:2px; background-color:#f4f4f6; font-size:11px; line-height:1; font-family: sans-serif; text-transform: uppercase; color:#646374 }
+  .dataflow__filename { padding:6px 12px; border:1px solid #eee; border-radius: 4px; margin:20px 0 10px; font-size:13px; color:#393842; background-color: #fff; }
+  
+  .marker { padding:2px 6px; border-radius:4px; background-color: rgba(0,0,0,.1); word-break: break-all; white-space: nowrap; }
+  .marker.block { white-space: pre; line-height: 1.5; }
+  
+  .card .card__section h2, .card .card__section h3 { font-size:18px; }
+  .card__panel__heading { padding:5px 0; font-size:22px; font-weight: 600; }
+  .heading-char { display: inline-block; width:22px; height:22px; border:1px solid #d3d3d9; border-radius:15px; margin-right:5px; color:#727184; font-size:14px; background-color:#fff; text-align: center; }
+  
+  .card__panel__markdown { font-size:14px; color:#393842; }
+  .card__panel__markdown table { border-collapse: collapse; border:1px solid #d3d3d9; border-radius:3px; }
+  .card__panel__markdown tbody { display: table-row-group; vertical-align: top; }
+  .card__panel__markdown table td, .card__panel__markdown table th { min-width: 100px; padding:2px 5px; text-align: left; border-top:1px solid #d3d3d9; }
+  .card__panel__markdown table td { background-color:#fff; font-size:14px; line-height: 1.4; }
+  
+  .is-hidden { display:none; }
+  
+  @media print {
+    /* All your print styles go here */
+     .card .fix-analysis { display:block; }
+     .card__section { background-color: none; }
+     .project__header, .card__actions, .severity-icon { display: none; }
+     .marker { border:1px solid #555; margin:-1px 0; background: transparent }
+  }
+  
+  </style>
+  <style type="text/css">
+  .metatable {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    margin: 0;
+    outline: none;
+    padding: 0;
+    text-align: left;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+    margin-top: 12px;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    max-width: 51.75em;
+  }
+
+  tbody {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    margin: 0;
+    outline: none;
+    padding: 0;
+    text-align: left;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .meta-row {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    outline: none;
+    text-align: left;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+    display: flex;
+    align-items: start;
+    border-top: 1px solid #d3d3d9;
+    padding: 8px 0 0 0;
+    border-bottom: none;
+    margin: 8px;
+    width: 47.75%;
+  }
+
+  .meta-row-label {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    color: #4c4a73;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    margin: 0;
+    outline: none;
+    text-decoration: none;
+    z-index: auto;
+    align-self: start;
+    flex: 1;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    padding: 0;
+    text-align: left;
+    vertical-align: top;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .meta-row-value {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    word-break: break-word;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    margin: 0;
+    outline: none;
+    padding: 0;
+    text-align: right;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+  }
+</style>
+
+</head>
+
+<body class="section-projects">
+  <main class="layout-stacked">
+    <header class="project__header">
+      <div class="layout-container">
+        <a class="brand" href="https://snyk.io" title="Snyk">
+          <svg width="100" height="46" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <title>Snyk - Snyk Code</title>
+            <path d="M89.7 24.95h-.4v6.95h-5V14.6l5-7.8v16.15c.99-1.22 4.33-5.84 4.33-5.84h6.17l-5.85 6.18 6.05 8.63h-6.3l-4-6.96ZM75.77 23.8l2.05-6.67h4.94l-5.8 14.71c-1.72 4.43-4.2 7.42-7.89 7.42a7.02 7.02 0 0 1-3.24-.72l1.99-3.08c.3.04.6.05.91.05 1.7 0 2.98-1.66 3.81-3.62l-6.08-14.76h5.6l2.18 6.59c.43 1.25.74 3.64.74 3.64s.39-2.3.79-3.56Zm-15.09-.34c0-1.93-.85-2.84-2.47-2.84-.8 0-1.62.23-2.19.57v10.7h-4.99V17.28l4.89-.4-.12 2.4h.16a6.2 6.2 0 0 1 4.97-2.5c2.56 0 4.77 1.58 4.77 5.33v9.8H60.7v-8.44Zm-23.94 7.67.45-3.4c1.56.77 3.32 1.13 4.8 1.13 1.08 0 1.79-.36 1.79-1.01 0-1.87-6.73-1.42-6.73-6.3 0-3.13 2.86-4.77 6.44-4.77 1.79 0 3.64.48 4.83.9l-.48 3.35a13.22 13.22 0 0 0-4.38-.93c-.88 0-1.59.3-1.59.88 0 1.84 6.88 1.47 6.88 6.24 0 3.17-2.82 4.99-6.68 4.99-2.13 0-3.85-.37-5.33-1.08Z" fill="#fff"/>
+            <g clip-path="url(#a)" fill="#fff">
+              <path d="M25.86 10c.27.73.42 1.5.47 2.28v.24l-1.7 4.53c.4 3.58.77 8 .35 9.06-.2.53-.81 1.48-1.81 2.81l1.08 10.04 4.3-3.08a1.7 1.7 0 0 0 .7-1.37V12.17a1.7 1.7 0 0 0-1.22-1.63 33.9 33.9 0 0 0-2.17-.54ZM11.53 12.29a9.74 9.74 0 0 1 6.22 0l.52-.86.35-2.42s-2.43-.13-3.96-.13c-1.43 0-2.76.05-4 .14l.35 2.42.52.85ZM4.27 26.11c-.41-1.06-.04-5.48.35-9.06l-1.68-4.53v-.24c.04-.78.2-1.55.46-2.28-.9.2-1.62.39-2.18.54A1.7 1.7 0 0 0 0 12.17v22.34a1.7 1.7 0 0 0 .71 1.37l4.32 3.1L6.1 28.95c-1-1.35-1.62-2.3-1.83-2.84Z"/>
+              <path d="M20.7.97a.11.11 0 0 1 .11.06l.57 1.07c1.53 2.84 4.12 8.18 4.12 10.17v.1l-1.7 4.57V17c.54 4.82.7 8.1.42 8.8-.24.62-1.2 1.94-2 3l1.18 9.57-.71.5-7.07 5.07a1.7 1.7 0 0 1-1.98 0l-5.71-4.11-.87-.63-1.16-.83 1.16-9.56a19 19 0 0 1-2.02-3.02c-.27-.7-.11-3.98.42-8.8v-.07l-1.7-4.57v-.1c0-1.99 2.59-7.33 4.12-10.17l.57-1.06a.11.11 0 0 1 .1-.07.12.12 0 0 1 .13.1l1.53 10.67.95 1.56.24-.08c1.04-.37 2.13-.57 3.24-.6 1.1.03 2.2.24 3.25.6l.24.08.93-1.56L20.6 1.07a.12.12 0 0 1 .12-.1Zm0-.97a1.08 1.08 0 0 0-1.07.94l-1.5 10.45-.45.73c-1-.3-2.02-.47-3.05-.49a11 11 0 0 0-3.04.49l-.45-.73L9.64.94A1.08 1.08 0 0 0 8.56 0a1.1 1.1 0 0 0-.97.57l-.57 1.07c-.7 1.31-4.23 8-4.23 10.64v.26l.06.17 1.62 4.36c-.56 5.16-.68 8.22-.34 9.1.08.2.32.82 1.91 2.94l-1.12 9.16-.07.57.47.34 1.16.83.87.62 5.72 4.1a2.66 2.66 0 0 0 3.1 0l7.07-5.06.7-.5.47-.34-.07-.57-1.12-9.18c1.57-2.09 1.82-2.7 1.9-2.9.34-.88.22-3.95-.34-9.1l1.62-4.37.06-.16v-.27c0-2.64-3.53-9.32-4.23-10.64L21.66.58a1.09 1.09 0 0 0-.97-.57L20.7 0Z"/>
+              <path d="m7.76 27.3 2.08-.61a.22.22 0 0 0 .11-.08l1.99-2.26a.24.24 0 0 1 .37.02c.03.04.05.08.05.13l.35 6.48c0 .05-.02.1-.04.15-.14.2-.54.81-.54 1.2 0 .48.73 1.11 1.42 1.62l.03-.06c.24-.44.57-.52.72-.18.06.25.08.5.06.76h.01v.6c0 .03 0 .07-.02.1-.13.26-.75 1.37-2.08 1.37-.57 0-1.96-.18-2.58-1.88a18 18 0 0 1-.78-5.2v-.2l-.13-.15c-.33-.41-.72-.92-1.13-1.46a.24.24 0 0 1 .11-.36ZM20.52 29.11l-.12.16v.2c0 .13 0 3.08-.78 5.2a2.67 2.67 0 0 1-2.58 1.88c-1.33 0-1.94-1.1-2.08-1.37a.24.24 0 0 1-.02-.1v-.6c-.02-.26 0-.52.06-.77.14-.34.46-.26.72.18l.03.07c.7-.51 1.42-1.15 1.42-1.63 0-.38-.4-1-.54-1.2a.26.26 0 0 1-.04-.14l.35-6.48a.24.24 0 0 1 .3-.23c.05.02.09.04.12.08l1.98 2.26c.03.04.07.06.12.07l2.07.6a.24.24 0 0 1 .13.39c-.4.53-.8 1.03-1.14 1.43ZM10.26 22.31a.37.37 0 0 1-.36.32.61.61 0 0 0 .95.36.6.6 0 0 0-.04-1h1.04v.03a1.37 1.37 0 1 1-2.74.02V22h1.06-.02a.37.37 0 0 1 .1.32ZM9.59 20.92a.24.24 0 0 1-.19-.09c-.3-.35-1.2-1.55.37-1.55 1.17 0 2.1.71 2.62 1.22a.24.24 0 0 1-.17.42H9.59ZM19.11 22h-.01 1.06v.05a1.37 1.37 0 1 1-2.75-.02V22h1.05a.6.6 0 0 0-.25.73.6.6 0 0 0 .49.37.6.6 0 0 0 .68-.47.37.37 0 0 1-.27-.63ZM17.04 20.92a.24.24 0 0 1-.17-.42 3.88 3.88 0 0 1 2.63-1.22c1.56 0 .66 1.2.36 1.55a.24.24 0 0 1-.19.09h-2.63Z"/>
+              <path d="M17.02 37.48a2 2 0 0 1-.49-.06.24.24 0 0 0-.24.1 2 2 0 0 1-3.29 0 .24.24 0 0 0-.24-.1c-.15.03-.3.05-.46.05h-.14a.24.24 0 0 0-.26.23c0 .05 0 .09.03.13a3.1 3.1 0 0 0 5.45 0 .24.24 0 0 0-.1-.34.24.24 0 0 0-.13-.02h-.13Zm-1.72-2.72c.17.06.33.14.48.25-.15-.25-.35-.34-.48-.25Zm-1.77.22c.14-.1.3-.17.46-.22-.13-.08-.3-.01-.46.23v-.01ZM13.91 34.26c-.17.06-.35.14-.5.25.17-.25.36-.34.5-.25ZM15.92 34.54a2.26 2.26 0 0 0-.55-.28c.15-.1.37 0 .55.28Z"/>
+              <path d="M13.68 37.12a.1.1 0 0 0-.06.17 1.67 1.67 0 0 0 2.03 0 .1.1 0 0 0 .03-.1.1.1 0 0 0-.1-.07h-1.9ZM5.44 11.62c.1-.97 1-3.12 1.94-5.08a.2.2 0 0 1 .37.06l.18 1.28v.06c-.1.73-.54 3.25-1.67 5.02a.2.2 0 0 1-.35-.04l-.45-1.21a.22.22 0 0 1-.02-.1ZM23.04 12.96a14.32 14.32 0 0 1-1.67-5.08l.19-1.28a.2.2 0 0 1 .36-.06c.94 1.96 1.84 4.1 1.94 5.08v.08l-.45 1.21a.2.2 0 0 1-.28.13.2.2 0 0 1-.09-.08Z"/>
+            </g>
+            <defs>
+              <clipPath id="a">
+                <path fill="#fff" d="M0 0h29.27v45.23H0z"/>
+              </clipPath>
+            </defs>
+          </svg>
+        </a>
+        <div class="test-meta">
+          <p class="timestamp"><TIME></p>
+          <div class="filepath" title="/Users/catalin.iuga/code/go-application-framework/internal/presenters">Source: /Users/catalin.iuga/code/go-application-framework/internal/presenters</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout-container">
+      <div class="report-summary">
+        <div class="header-wrap">
+            <h1 class="project__header__title">Snyk Code Report</h1>
+
+          <div class="meta-counts">
+            <div class="meta-count">
+              <span class="severity-icon severity-icon--high"></span> <span><strong>0</strong> high issues</span>
+              
+            </div>
+            <div class="meta-count">
+              <span class="severity-icon severity-icon--medium"></span> <span><strong>0</strong> medium issues</span>
+              
+            </div>
+            <div class="meta-count">
+              <span class="severity-icon severity-icon--low"></span> <span><strong>0</strong> low issues</span>
+              
+            </div>
+          </div>
+        </div>
+        <div class="source-panel">
+          <span class="source-panel__heading">Scan Coverage</span>
+          <ul class="scan-coverage">
+            <li class="type">JavaScript files: <strong>1</strong></li>
+          </ul>            
+        
+        </div>
+      </div>
+        </div>
+  </main>
+</body>
+<script>
+  // collapse vulns in remediations
+  const remediations = document.querySelectorAll(".js-remediation");
+  remediations.forEach((remediation) => {
+    remediation.parentElement.classList.toggle("shown");
+    remediation.addEventListener("click", remediationClick);
+  })
+
+  // hide all panes
+  const allPanes = document.querySelectorAll(`[data-pane]`);
+  allPanes.forEach((pane) => {
+    pane.classList.remove('shown');
+  });
+  // set first nav item as active & un-hide it's pane
+  const remediationNav = document.querySelectorAll(".js-nav");
+  remediationNav.forEach((nav) => {
+    nav.addEventListener("click", navClick);
+  })
+  if (remediationNav && remediationNav.length > 0) {
+    remediationNav[0].classList.add('active');
+    const targetPaneData = remediationNav[0].dataset && remediationNav[0].dataset.toggle;
+    if (targetPaneData) {
+      showPane(targetPaneData);
+    }
+  }
+
+  function remediationClick() {
+    this.parentElement.classList.toggle("shown");
+  }
+
+  function navClick() {
+    const remediationNav = document.querySelectorAll(".js-nav");
+    remediationNav.forEach((nav) => {
+      nav.classList.remove('active');
+    });
+    this.classList.toggle('active');
+    const targetPaneData = this.dataset && this.dataset.toggle;
+    if (targetPaneData) {
+      showPane(targetPaneData);
+    }
+  }
+
+  function showPane(targetPaneData) {
+    const targetPanes = document.querySelectorAll(`[data-pane='${targetPaneData}']`);
+    if (targetPanes) {
+      const allPanes = document.querySelectorAll(`[data-pane]`);
+      allPanes.forEach((pane) => {
+        pane.classList.remove('shown');
+      });
+      targetPanes[0].classList.add('shown');
+    }
+  }
+</script>
+</html>
+---
+
+[TestHTMLReportRenderer_SCA_noVulns - 1]
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Language" content="en-us">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Snyk test report</title>
+  <meta name="description" content="0 known vulnerabilities found in 0 vulnerable dependency paths.">
+  <base target="_blank">
+  <link rel="icon" type="image/png" href="https://res.cloudinary.com/snyk/image/upload/v1468845142/favicon/favicon.png"
+    sizes="194x194">
+  <link rel="shortcut icon" href="https://res.cloudinary.com/snyk/image/upload/v1468845142/favicon/favicon.ico">
+  <style type="text/css">
+  
+    body {
+      -moz-font-feature-settings: "pnum";
+      -webkit-font-feature-settings: "pnum";
+      font-variant-numeric: proportional-nums;
+      display: flex;
+      flex-direction: column;
+      font-feature-settings: "pnum";
+      font-size: 100%;
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-text-size-adjust: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #F5F5F5;
+      font-family: 'Arial', 'Helvetica', Calibri, sans-serif;
+    }
+  
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-weight: 500;
+    }
+  
+    a,
+    a:link,
+    a:visited {
+      border-bottom: 1px solid #4b45a9;
+      text-decoration: none;
+      color: #4b45a9;
+    }
+  
+    a:hover,
+    a:focus,
+    a:active {
+      border-bottom: 1px solid #4b45a9;
+    }
+  
+    hr {
+      border: none;
+      margin: 1em 0;
+      border-top: 1px solid #c5c5c5;
+    }
+  
+    ul {
+      padding: 0 1em;
+      margin: 1em 0;
+    }
+  
+    code {
+      background-color: #EEE;
+      color: #333;
+      padding: 0.25em 0.5em;
+      border-radius: 0.25em;
+    }
+  
+    pre {
+      background-color: #333;
+      font-family: monospace;
+      padding: 0.5em 1em 0.75em;
+      border-radius: 0.25em;
+      font-size: 14px;
+    }
+  
+    pre code {
+      padding: 0;
+      background-color: transparent;
+      color: #fff;
+    }
+  
+    a code {
+      border-radius: .125rem .125rem 0 0;
+      padding-bottom: 0;
+      color: #4b45a9;
+    }
+  
+    a[href^="http://"]:after,
+    a[href^="https://"]:after {
+      background-image: linear-gradient(transparent,transparent),url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20112%20109%22%3E%3Cg%20id%3D%22Page-1%22%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20id%3D%22link-external%22%3E%3Cg%20id%3D%22arrow%22%3E%3Cpath%20id%3D%22Line%22%20stroke%3D%22%234B45A9%22%20stroke-width%3D%2215%22%20d%3D%22M88.5%2021l-43%2042.5%22%20stroke-linecap%3D%22square%22%2F%3E%3Cpath%20id%3D%22Triangle%22%20fill%3D%22%234B45A9%22%20d%3D%22M111.2%200v50L61%200z%22%2F%3E%3C%2Fg%3E%3Cpath%20id%3D%22square%22%20fill%3D%22%234B45A9%22%20d%3D%22M66%2015H0v94h94V44L79%2059v35H15V30h36z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+      background-repeat: no-repeat;
+      background-size: .75rem;
+      content: "";
+      display: inline-block;
+      height: .75rem;
+      margin-left: .25rem;
+      width: .75rem;
+    }
+  
+  
+  /* Layout */
+  
+    [class*=layout-container] {
+      margin: 0 auto;
+      max-width: 71.25em;
+      padding: 1.9em 1.3em;
+      position: relative;
+    }
+    .layout-container--short {
+      padding-top: 0;
+      padding-bottom: 0;
+      max-width: 48.75em;
+    }
+  
+    .layout-container--short:after {
+      display: block;
+      content: "";
+      clear: both;
+    }
+  
+  /* Header */
+  
+    .header {
+      padding-bottom: 1px;
+    }
+  
+    .paths {
+      margin-left: 8px;
+    }
+    .header-wrap {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      padding-top: 2em;
+    }
+    .project__header {
+      background-color: #030328;
+      color: #fff;
+      margin-bottom: -1px;
+      padding-top: 1em;
+      padding-bottom: 0.25em;
+      border-bottom: 2px solid #BBB;
+    }
+  
+    .project__header__title {
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      word-break: break-all;
+      margin-bottom: .1em;
+      margin-top: 0;
+    }
+  
+    .timestamp {
+      float: right;
+      clear: none;
+      margin-bottom: 0;
+    }
+  
+    .meta-counts {
+      clear: both;
+      display: block;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      margin: 0 0 1.5em;
+      color: #fff;
+      clear: both;
+      font-size: 1.1em;
+    }
+  
+    .meta-count {
+      display: block;
+      flex-basis: 100%;
+      margin: 0 1em 1em 0;
+      float: left;
+      padding-right: 1em;
+      border-right: 2px solid #fff;
+    }
+  
+    .meta-count:last-child {
+      border-right: 0;
+      padding-right: 0;
+      margin-right: 0;
+    }
+  
+  /* Card */
+  
+    .card {
+      background-color: #fff;
+      border: 1px solid #c5c5c5;
+      border-radius: .25rem;
+      margin: 0 0 2em 0;
+      position: relative;
+      min-height: 40px;
+      padding: 1.5em;
+    }
+  
+    .card__labels {
+      position: absolute;
+      top: 1.1em;
+      left: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  
+    .card .label {
+      background-color: #767676;
+      border: 2px solid #767676;
+      color: white;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      display: inline-block;
+      margin: 0;
+      border-radius: 0.25rem;
+    }
+  
+    .card .label__text {
+      vertical-align: text-top;
+        font-weight: bold;
+    }
+  
+    .card .label--critical {
+      background-color: #AB1A1A;
+      border-color: #AB1A1A;
+    }
+  
+    .card .label--high {
+      background-color: #CE5019;
+      border-color: #CE5019;
+    }
+  
+    .card .label--medium {
+      background-color: #D68000;
+      border-color: #D68000;
+    }
+  
+    .card .label--low {
+      background-color: #88879E;
+      border-color: #88879E;
+    }
+  
+    .severity--low {
+      border-color: #88879E;
+    }
+  
+    .severity--medium {
+      border-color: #D68000;
+    }
+  
+    .severity--high {
+      border-color: #CE5019;
+    }
+  
+    .severity--critical {
+      border-color: #AB1A1A;
+    }
+  
+    .card--vuln {
+      padding-top: 4em;
+    }
+  
+    .card--vuln .card__labels > .label:first-child {
+      padding-left: 1.9em;
+      padding-right: 1.9em;
+      border-radius: 0 0.25rem 0.25rem 0;
+    }
+  
+    .card--vuln .card__section h2 {
+      font-size: 22px;
+      margin-bottom: 0.5em;
+    }
+  
+    .card--vuln .card__section p {
+      margin: 0 0 0.5em 0;
+    }
+  
+    .card--vuln .card__meta {
+      padding: 0 0 0 1em;
+      margin: 0;
+      font-size: 1.1em;
+    }
+  
+    .card .card__meta__paths {
+      font-size: 0.9em;
+    }
+  
+    .card--vuln .card__title {
+      font-size: 28px;
+      margin-top: 0;
+      margin-right: 100px; /* Ensure space for the risk score */
+    }
+  
+    .card--vuln .card__cta p {
+      margin: 0;
+      text-align: right;
+    }
+  
+    .risk-score-display {
+      position: absolute;
+      top: 1.5em;
+      right: 1.5em;
+      text-align: right;
+      z-index: 10;
+    }
+  
+    .risk-score-display__label {
+      font-size: 0.7em;
+      font-weight: bold;
+      color: #586069;
+      text-transform: uppercase;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+  
+    .risk-score-display__value {
+      font-size: 1.9em;
+      font-weight: 600;
+      color: #24292e;
+      line-height: 1;
+    }
+  
+    .source-panel {
+      clear: both;
+      display: flex;
+      justify-content: flex-start;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 0.5em 0;
+      width: fit-content;
+    }
+  
+  
+  
+  </style>
+  <style type="text/css">
+  .metatable {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    margin: 0;
+    outline: none;
+    padding: 0;
+    text-align: left;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+    margin-top: 12px;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    max-width: 51.75em;
+  }
+
+  tbody {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    margin: 0;
+    outline: none;
+    padding: 0;
+    text-align: left;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .meta-row {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    outline: none;
+    text-align: left;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+    display: flex;
+    align-items: start;
+    border-top: 1px solid #d3d3d9;
+    padding: 8px 0 0 0;
+    border-bottom: none;
+    margin: 8px;
+    width: 47.75%;
+  }
+
+  .meta-row-label {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    color: #4c4a73;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    margin: 0;
+    outline: none;
+    text-decoration: none;
+    z-index: auto;
+    align-self: start;
+    flex: 1;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    padding: 0;
+    text-align: left;
+    vertical-align: top;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .meta-row-value {
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-box-direction: normal;
+    color: inherit;
+    font-feature-settings: "pnum";
+    border-collapse: collapse;
+    border-spacing: 0;
+    word-break: break-word;
+    box-sizing: border-box;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 100%;
+    margin: 0;
+    outline: none;
+    padding: 0;
+    text-align: right;
+    text-decoration: none;
+    vertical-align: baseline;
+    z-index: auto;
+  }
+</style>
+
+</head>
+
+<body class="section-projects">
+  <main class="layout-stacked">
+        <div class="layout-stacked__header header">
+          <header class="project__header">
+            <div class="layout-container">
+              <a class="brand" href="https://snyk.io" title="Snyk">
+                <svg width="68px" height="35px" viewBox="0 0 68 35" version="1.1" xmlns="http://www.w3.org/2000/svg" role="img">
+                  <title>Snyk - Open Source Security</title>
+                  <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+                    <g fill="#fff">
+                      <path d="M5.732,27.278 C3.445,27.278 1.589,26.885 0,26.124 L0.483,22.472 C2.163,23.296 4.056,23.689 5.643,23.689 C6.801,23.689 7.563,23.295 7.563,22.599 C7.563,20.594 0.333,21.076 0.333,15.839 C0.333,12.491 3.407,10.729 7.259,10.729 C9.179,10.729 11.161,11.249 12.444,11.704 L11.924,15.294 C10.577,14.774 8.747,14.291 7.222,14.291 C6.282,14.291 5.518,14.621 5.518,15.231 C5.518,17.208 12.903,16.815 12.903,21.925 C12.903,25.325 9.877,27.277 5.733,27.277 L5.732,27.278 Z M25.726,26.936 L25.726,17.894 C25.726,15.827 24.811,14.85 23.069,14.85 C22.219,14.85 21.329,15.09 20.719,15.46 L20.719,26.936 L15.352,26.936 L15.352,11.262 L20.602,10.83 L20.474,13.392 L20.652,13.392 C21.784,11.87 23.702,10.716 25.992,10.716 C28.736,10.716 31.112,12.416 31.112,16.436 L31.112,26.936 L25.724,26.936 L25.726,26.936 Z M61.175,26.936 L56.879,19.479 L56.446,19.479 L56.446,26.935 L51.082,26.935 L51.082,8.37 L56.447,0 L56.447,17.323 C57.515,16.017 61.112,11.059 61.112,11.059 L67.732,11.059 L61.454,17.689 L67.949,26.95 L61.175,26.95 L61.175,26.938 L61.175,26.936 Z M44.13,11.11 L41.93,18.262 C41.5,19.606 41.08,22.079 41.08,22.079 C41.08,22.079 40.75,19.516 40.292,18.172 L37.94,11.108 L31.928,11.108 L38.462,26.935 C37.572,29.04 36.199,30.815 34.369,30.815 C34.039,30.815 33.709,30.802 33.389,30.765 L31.255,34.061 C31.928,34.441 33.212,34.835 34.737,34.835 C38.703,34.835 41.359,31.627 43.215,26.885 L49.443,11.108 L44.132,11.108 L44.13,11.11 Z"></path>
+                    </g>
+                  </g>
+                </svg>
+              </a>
+              <div class="header-wrap">
+                  <h1 class="project__header__title">Snyk test report</h1>
+    
+                <p class="timestamp"><TIME></p>
+              </div>
+              
+              <div class="source-panel">
+                <span>Scanned the following path:</span>
+                <ul>
+                  <li class="paths">/project/pom.xml (maven)</li>
+                </ul>
+              </div>
+    
+              <div class="meta-counts">
+                <div class="meta-count"><span>0</span> <span>known vulnerabilities</span></div>
+                <div class="meta-count"><span>0 vulnerable dependency paths</span></div>
+                <div class="meta-count"><span>140</span> <span>dependencies</span></div>
+              </div><!-- .meta-counts -->
+            </div><!-- .layout-container--short -->
+          </header><!-- .project__header -->
+        </div><!-- .layout-stacked__header -->
+    
+      <section class="layout-container">
+          <table class="metatable">
+              <tbody>
+              <tr class="meta-row"><th class="meta-row-label">Project</th> <td class="meta-row-value">test-proj</td></tr>
+              <tr class="meta-row"><th class="meta-row-label">Path</th> <td class="meta-row-value">/project</td></tr>
+              <tr class="meta-row"><th class="meta-row-label">Package Manager</th> <td class="meta-row-value">maven</td></tr>
+              <tr class="meta-row"><th class="meta-row-label">Manifest</th> <td class="meta-row-value">pom.xml</td></tr>
+              </tbody>
+          </table>
+      </section>    
+
+    <div class="layout-container" style="padding-top: 35px;">
+      No known vulnerabilities detected.
+    </div>
+  </main><!-- .layout-stacked__content -->
+</body>
+
+</html>
+
+---

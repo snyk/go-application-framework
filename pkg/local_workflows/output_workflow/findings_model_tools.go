@@ -1,6 +1,7 @@
 package output_workflow
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -72,6 +73,35 @@ func useRendererWith(name string, wEntry *WriterEntry, findings []*local_models.
 	}()
 
 	config := invocation.GetConfiguration()
+
+	if wEntry.mimeType == HTML_MIME_TYPE {
+		var sarifBuf bytes.Buffer
+		renderer := presenters.NewLocalFindingsRenderer(
+			findings,
+			config,
+			&sarifBuf,
+			presenters.WithRuntimeInfo(invocation.GetRuntimeInfo()),
+		)
+		debugLogger.Info().Msgf("LFM - [%s] Rendering SARIF for HTML with %s", name, wEntry.templates)
+		err := renderer.RenderTemplate(ApplicationSarifTemplates, SARIF_MIME_TYPE)
+		if err != nil {
+			debugLogger.Warn().Err(err).Msgf("LFM - [%s] Failed to render SARIF for HTML", name)
+			return
+		}
+		htmlRenderer, err := presenters.NewHTMLReportRenderer(presenters.HTMLReportKindCode)
+		if err != nil {
+			debugLogger.Warn().Err(err).Msgf("LFM - [%s] Failed to init HTML report renderer", name)
+			return
+		}
+		debugLogger.Info().Msgf("LFM - [%s] Rendering HTML report", name)
+		if err := htmlRenderer.Render(wEntry.writer, sarifBuf.Bytes()); err != nil {
+			debugLogger.Warn().Err(err).Msgf("LFM - [%s] Failed to render HTML report", name)
+			return
+		}
+		debugLogger.Info().Msgf("LFM - [%s] Rendering done", name)
+		return
+	}
+
 	renderer := presenters.NewLocalFindingsRenderer(
 		findings,
 		config,
@@ -111,6 +141,10 @@ func HandleContentTypeFindingsModel(input []workflow.Data, invocation workflow.I
 		{
 			mimetype:  DEFAULT_MIME_TYPE,
 			templates: DefaultTemplateFiles,
+		},
+		{
+			mimetype:  HTML_MIME_TYPE,
+			templates: []string{},
 		},
 	}
 	writerMap := applyTemplatesToWriters(supportedMimeTypes, writers)

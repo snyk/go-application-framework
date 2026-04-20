@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -17,6 +18,37 @@ var ignoredMimetypes = []string{
 }
 
 var supportedMimeTypes = []string{"sarif", "json", DEFAULT_MIME_TYPE}
+
+// appendDataToMatchingWriters maps one workflow.Data row to writer queues by fuzzy mimetype and legacy-cli HTML.
+func appendDataToMatchingWriters(data workflow.Data, writers WriterMap, dataToMimeTypeMap map[string][]workflow.Data) {
+	dataMimetype := data.GetContentType()
+	dataMapped := false
+
+	for _, fuzzyType := range supportedMimeTypes {
+		if !strings.Contains(dataMimetype, fuzzyType) {
+			continue
+		}
+		for _, writerMimetype := range writers.AvailableMimetypes() {
+			if strings.Contains(writerMimetype, fuzzyType) {
+				dataToMimeTypeMap[writerMimetype] = append(dataToMimeTypeMap[writerMimetype], data)
+				dataMapped = true
+			}
+		}
+	}
+
+	if strings.HasPrefix(dataMimetype, content_type.LEGACY_CLI) {
+		for _, wm := range writers.AvailableMimetypes() {
+			if wm == HTML_MIME_TYPE {
+				dataToMimeTypeMap[wm] = append(dataToMimeTypeMap[wm], data)
+				dataMapped = true
+			}
+		}
+	}
+
+	if !dataMapped {
+		dataToMimeTypeMap[DEFAULT_MIME_TYPE] = append(dataToMimeTypeMap[DEFAULT_MIME_TYPE], data)
+	}
+}
 
 func HandleContentTypeOther(input []workflow.Data, invocation workflow.InvocationContext, writers WriterMap) ([]workflow.Data, error) {
 	var finalError error
@@ -39,28 +71,7 @@ func HandleContentTypeOther(input []workflow.Data, invocation workflow.Invocatio
 
 		debugLogger.Printf("Other - Processing '%s' based on '%s' of type '%s'", data.GetIdentifier().String(), contentLocation, data.GetContentType())
 
-		dataMimetype := data.GetContentType()
-		dataMapped := false
-
-		// filter data based on supportedMimeTypes
-		for _, fuzzyType := range supportedMimeTypes {
-			if !strings.Contains(dataMimetype, fuzzyType) {
-				continue
-			}
-
-			// determine writer mimetype based on fuzzy type
-			writerMimetypes := writers.AvailableMimetypes()
-			for _, writerMimetype := range writerMimetypes {
-				if strings.Contains(writerMimetype, fuzzyType) {
-					dataToMimeTypeMap[writerMimetype] = append(dataToMimeTypeMap[writerMimetype], data)
-					dataMapped = true
-				}
-			}
-		}
-
-		if !dataMapped {
-			dataToMimeTypeMap[DEFAULT_MIME_TYPE] = append(dataToMimeTypeMap[DEFAULT_MIME_TYPE], data)
-		}
+		appendDataToMatchingWriters(data, writers, dataToMimeTypeMap)
 	}
 
 	// render data based on mimetype
@@ -131,9 +142,25 @@ func useWriterWithOther(debugLogger *zerolog.Logger, data workflow.Data, writerM
 		debugLogger.Info().Msgf("Other - Using '%s' writer for: %s", name, mimeType)
 
 		debugLogger.Info().Msgf("Other - [%s] Rendering %s", name, writer.mimeType)
-		_, err := fmt.Fprint(writer.GetWriter(), singleDataAsString)
-		if err != nil {
-			finalError = errors.Join(finalError, err)
+		if writer.mimeType == HTML_MIME_TYPE && strings.HasPrefix(mimeType, content_type.LEGACY_CLI) {
+			htmlRenderer, err := presenters.NewHTMLReportRenderer(presenters.HTMLReportKindSCA)
+			if err != nil {
+				finalError = errors.Join(finalError, err)
+				continue
+			}
+			raw := singleData
+			if raw == nil {
+				raw = []byte(singleDataAsString)
+			}
+			err = htmlRenderer.Render(writer.GetWriter(), raw)
+			if err != nil {
+				finalError = errors.Join(finalError, err)
+			}
+		} else {
+			_, err := fmt.Fprint(writer.GetWriter(), singleDataAsString)
+			if err != nil {
+				finalError = errors.Join(finalError, err)
+			}
 		}
 		dataWasWritten = true
 		debugLogger.Info().Msgf("Other - [%s] Rendering done", name)
