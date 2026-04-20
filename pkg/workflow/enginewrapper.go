@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"context"
+
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -10,9 +12,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
 
+// engineWrapper is used to cache values that are not global for an engine but for an Invoke Chain. This way values can be preserved
+// for subsequent invocations without explicitly specifying them
 type engineWrapper struct {
 	WrappedEngine                   Engine
 	defaultInstrumentationCollector analytics.InstrumentationCollector
+	defaultCtxFunc                  func() context.Context
 }
 
 var _ Engine = (*engineWrapper)(nil)
@@ -47,6 +52,11 @@ func (e *engineWrapper) Invoke(id Identifier, opts ...EngineInvokeOption) ([]Dat
 	// if no InstrumentationCollector is specified, and a default is available, the default be used
 	if options.ic == nil && e.defaultInstrumentationCollector != nil {
 		opts = append(opts, WithInstrumentationCollector(e.defaultInstrumentationCollector))
+	}
+
+	// if no context is specified, and a context is available, the default is used.
+	if options.ctxFunc == nil && e.defaultCtxFunc != nil {
+		opts = append(opts, WithContext(e.defaultCtxFunc()))
 	}
 
 	return e.WrappedEngine.Invoke(id, opts...)
