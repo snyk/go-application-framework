@@ -327,6 +327,7 @@ func (e *EngineImpl) Invoke(
 			localEngine := &engineWrapper{
 				WrappedEngine:                   e,
 				defaultInstrumentationCollector: options.ic,
+				defaultCtxFunc:                  options.ctxFunc,
 			}
 			e.mu.Unlock()
 

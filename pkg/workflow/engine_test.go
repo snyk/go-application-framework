@@ -531,11 +531,22 @@ func Test_EngineImpl_InvokeWithContext_CustomContext(t *testing.T) {
 	engine := NewWorkFlowEngine(config)
 
 	wfId := NewWorkflowIdentifier("ctxtest")
+	wfIdNested := NewWorkflowIdentifier("ctxtest-nested")
 	flagset := pflag.NewFlagSet("ctx", pflag.ContinueOnError)
 
 	var receivedCtx context.Context
+	// register entry workflow
 	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		output, localError := invocation.GetEngine().Invoke(wfIdNested)
 		receivedCtx = invocation.Context()
+		return output, localError
+	})
+	assert.NoError(t, err)
+
+	var receivedCtxNested context.Context
+	// register nested workflow
+	_, err = engine.Register(wfIdNested, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		receivedCtxNested = invocation.Context()
 		return nil, nil
 	})
 	assert.NoError(t, err)
@@ -556,8 +567,11 @@ func Test_EngineImpl_InvokeWithContext_CustomContext(t *testing.T) {
 	assert.NotNil(t, receivedCtx)
 	assert.Equal(t, testValue, receivedCtx.Value(testKey))
 
+	assert.NotNil(t, receivedCtxNested)
+	assert.Equal(t, testValue, receivedCtxNested.Value(testKey))
+
 	// Verify deadline is propagated
-	deadline, hasDeadline := receivedCtx.Deadline()
+	deadline, hasDeadline := receivedCtxNested.Deadline()
 	assert.True(t, hasDeadline, "context should have a deadline")
 	assert.False(t, deadline.IsZero(), "deadline should not be zero")
 }
