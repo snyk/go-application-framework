@@ -348,8 +348,8 @@ func Test_initConfiguration_updateDefaultOrgId(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return(orgId, nil).AnyTimes()
-	mockApiClient.EXPECT().GetSlugFromOrgId(orgId).Return(orgName, nil).AnyTimes()
+	mockApiClient.EXPECT().GetOrgIdFromSlug(gomock.Any(), orgName).Return(orgId, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(gomock.Any(), orgId).Return(orgName, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -376,8 +376,8 @@ func Test_initConfiguration_useDefaultOrg(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
-	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(defaultOrgSlug, nil).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return(defaultOrgId, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(gomock.Any(), defaultOrgId).Return(defaultOrgSlug, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -400,8 +400,8 @@ func Test_initConfiguration_failDefaultOrgLookup(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetDefaultOrgId().Return("", errors.New("error")).Times(2)
-	mockApiClient.EXPECT().GetDefaultOrgId().Return(orgId, nil).Times(1)
+	mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return("", errors.New("error")).Times(2)
+	mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return(orgId, nil).Times(1)
 
 	config := configuration.NewWithOpts(configuration.WithCachingEnabled(10 * time.Second))
 	engine := workflow.NewWorkFlowEngine(config)
@@ -434,9 +434,9 @@ func Test_initConfiguration_useDefaultOrgAsFallback(t *testing.T) {
 
 	// mock assertion
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetOrgIdFromSlug(orgName).Return("", errors.New("Failed to fetch org id from slug")).AnyTimes()
-	mockApiClient.EXPECT().GetDefaultOrgId().Return(defaultOrgId, nil).AnyTimes()
-	mockApiClient.EXPECT().GetSlugFromOrgId(defaultOrgId).Return(orgName, nil).AnyTimes()
+	mockApiClient.EXPECT().GetOrgIdFromSlug(gomock.Any(), orgName).Return("", errors.New("Failed to fetch org id from slug")).AnyTimes()
+	mockApiClient.EXPECT().GetDefaultOrgId(gomock.Any()).Return(defaultOrgId, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(gomock.Any(), defaultOrgId).Return(orgName, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -791,8 +791,8 @@ func Test_defaultFuncOrganizationSlug_UsesClonedConfig(t *testing.T) {
 
 	// mock assertions
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetSlugFromOrgId(org1Id).Return(org1Slug, nil).AnyTimes()
-	mockApiClient.EXPECT().GetSlugFromOrgId(org2Id).Return(org2Slug, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(gomock.Any(), org1Id).Return(org1Slug, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(gomock.Any(), org2Id).Return(org2Slug, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	engine := workflow.NewWorkFlowEngine(config)
@@ -833,7 +833,7 @@ func Test_defaultFuncOrganizationSlug_UsesClonedNetworkAccess(t *testing.T) {
 	mockApiClient := mocks.NewMockApiClient(ctrl)
 
 	mockApiClient.EXPECT().Init(gomock.Any(), gomock.Any()).AnyTimes()
-	mockApiClient.EXPECT().GetSlugFromOrgId(orgId).Return(orgSlug, nil).AnyTimes()
+	mockApiClient.EXPECT().GetSlugFromOrgId(gomock.Any(), orgId).Return(orgSlug, nil).AnyTimes()
 
 	config := configuration.NewInMemory()
 	config.Set(configuration.API_URL, globalAPIEndpoint)

@@ -46,6 +46,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_shouldReportV2AnalyticsPaylo
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
@@ -84,6 +85,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpStatusError(t *te
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
@@ -112,6 +114,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_reportsHttpError(t *testing.
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{testPayload(requestPayload)})
@@ -172,6 +175,7 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_usesCLIInput(t *testing.T) {
 	invocationContextMock.EXPECT().GetNetworkAccess().Return(networkAccessMock).AnyTimes()
 	invocationContextMock.EXPECT().GetEngine().Return(engineMock).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1233.0"))).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(t.Context()).AnyTimes()
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
 	networkAccessMock.EXPECT().GetHttpClient().Return(mockClient).AnyTimes()
 
