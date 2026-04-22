@@ -52,11 +52,11 @@ func TestScanConfiguration_GetDefaultFindingTypes(t *testing.T) {
 			expected: []FindingType{FindingTypeSca},
 		},
 		{
-			name: "Secrets configuration returns secret",
+			name: "Secrets configuration returns secrets",
 			config: &ScanConfiguration{
 				Secrets: &SecretsScanConfiguration{},
 			},
-			expected: []FindingType{FindingTypeSecret},
+			expected: []FindingType{FindingTypeSecrets},
 		},
 		{
 			name: "multiple configurations returns multiple types",
@@ -65,7 +65,7 @@ func TestScanConfiguration_GetDefaultFindingTypes(t *testing.T) {
 				Sast:    &SastScanConfiguration{},
 				Secrets: &SecretsScanConfiguration{},
 			},
-			expected: []FindingType{FindingTypeSca, FindingTypeSast, FindingTypeSecret},
+			expected: []FindingType{FindingTypeSca, FindingTypeSast, FindingTypeSecrets},
 		},
 	}
 
