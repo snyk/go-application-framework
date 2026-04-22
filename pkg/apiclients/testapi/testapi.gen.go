@@ -112,12 +112,13 @@ const (
 
 // Defines values for FindingType.
 const (
-	FindingTypeConfig FindingType = "config"
-	FindingTypeDast   FindingType = "dast"
-	FindingTypeOther  FindingType = "other"
-	FindingTypeSast   FindingType = "sast"
-	FindingTypeSca    FindingType = "sca"
-	FindingTypeSecret FindingType = "secret"
+	FindingTypeConfig  FindingType = "config"
+	FindingTypeDast    FindingType = "dast"
+	FindingTypeOther   FindingType = "other"
+	FindingTypeSast    FindingType = "sast"
+	FindingTypeSca     FindingType = "sca"
+	FindingTypeSecret  FindingType = "secret"
+	FindingTypeSecrets FindingType = "secrets"
 )
 
 // Defines values for FixAppliedOutcome.
