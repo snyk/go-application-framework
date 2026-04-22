@@ -23,7 +23,7 @@ func (s *ScanConfiguration) GetDefaultFindingTypes() []FindingType {
 		types = append(types, FindingTypeSca)
 	}
 	if s.Secrets != nil {
-		types = append(types, FindingTypeSecret)
+		types = append(types, FindingTypeSecrets)
 	}
 
 	return types

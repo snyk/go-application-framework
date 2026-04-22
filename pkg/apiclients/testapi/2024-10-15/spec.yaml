@@ -1247,6 +1247,7 @@ components:
       - other
       - config
       - secret
+      - secrets
       type: string
     FixAction:
       description: |-
@@ -4372,6 +4373,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_devsec-governance-platform'
       - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
@@ -4514,6 +4516,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_devsec-governance-platform'
       - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
@@ -4635,6 +4638,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_devsec-governance-platform'
       - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
@@ -4753,6 +4757,7 @@ paths:
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
       - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_devsec-governance-platform'
       - '@jbowes'
       x-snyk-api-releases:
       - 2024-10-15~beta
