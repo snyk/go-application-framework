@@ -401,7 +401,7 @@ func convertTypeToIssueName(findingType testapi.FindingType) string {
 		return "Code"
 	case testapi.FindingTypeDast:
 		return "DAST"
-	case testapi.FindingTypeSecret:
+	case testapi.FindingTypeSecrets:
 		return "Secrets"
 	default:
 		return string(findingType)
@@ -455,7 +455,7 @@ func determineProductNameFromFindingTypes(findingTypes []testapi.FindingType) st
 		return "Static Code Analysis"
 	}
 
-	if slices.Contains(findingTypes, testapi.FindingTypeSecret) {
+	if slices.Contains(findingTypes, testapi.FindingTypeSecrets) {
 		return "Secret Detection"
 	}
 
