@@ -5,6 +5,7 @@ TEST_API_DIR=$(realpath ./pkg/apiclients/testapi)
 # Data source
 API_SPEC_PATH=$(mktemp -d)
 API_SPEC_BRANCH=${API_SPEC_BRANCH:-main}
+API_SPEC_COMMIT=${API_SPEC_COMMIT:-}
 trap "rm -rf $API_SPEC_PATH" EXIT
 
 # Outputs
@@ -16,6 +17,9 @@ echo Updating local spec from unified test repo!
 echo
 echo Path:   $API_SPEC_PATH
 echo Branch: $API_SPEC_BRANCH
+if [ -n "$API_SPEC_COMMIT" ]; then
+  echo Commit: $API_SPEC_COMMIT
+fi
 echo Date:   $GENERATE_DATE
 echo --------------------------------------------------------
 
@@ -24,8 +28,11 @@ git clone git@github.com:snyk/test-api-shim.git $API_SPEC_PATH
 
 cd $API_SPEC_PATH
 git checkout $API_SPEC_BRANCH
-API_COMMIT=$(git rev-parse HEAD)
 git pull
+if [ -n "$API_SPEC_COMMIT" ]; then
+  git checkout $API_SPEC_COMMIT
+fi
+API_COMMIT=$(git rev-parse HEAD)
 
 # Return to project directory
 cd -
