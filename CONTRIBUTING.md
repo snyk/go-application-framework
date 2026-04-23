@@ -193,3 +193,85 @@ func MainWithErrorCode() int {
 As you can see, adding our extension to the CLI is as simple as calling the `engine.AddExtensionInitializer()` function and passing our extension's `Init()` in as a parameter.
 
 That's it!
+
+# UFM test fixtures
+
+The presenter tests in `internal/presenters/` compare rendered output against expected files stored under `internal/presenters/testdata/ufm/`. There are several workflows for keeping these up to date.
+
+## Generating a fixture (recommended)
+
+Use the helper target to run a scan, dump workflow payloads to disk, pick the latest `workflow.TestResult.*`, add a `.json` extension, and optionally redact in one flow:
+
+```bash
+# Defaults:
+# - SNYK_BIN=snyk
+# - OUT_DIR=./dumps
+# - DUMP_DIR=<OUT_DIR>/raw
+# - default scan: secrets test . (override with SCAN_CMD="...")
+# - REPORT=0 (set REPORT=1 to append --report, only for commands that support it)
+# - REDACT=1
+make generate-fixture \
+  PROJECT=/path/to/scanned-repo \
+  ORG=my-org \
+  NAME=secrets_with_report \
+  REPORT=1
+```
+
+Output files:
+
+- `./dumps/<name>.testresult.raw.json` (non-redacted dump copy)
+- `./dumps/<name>.testresult.json` (redacted, when `REDACT=1`)
+
+Useful overrides:
+
+```bash
+# Use a custom CLI binary and disable redaction
+make generate-fixture \
+  PROJECT=/path/to/scanned-repo \
+  ORG=my-org \
+  NAME=secrets_with_report \
+  SNYK_BIN=/path/to/snyk-macos-arm64 \
+  REDACT=0
+
+# Customize where dump files and final outputs are written
+make generate-fixture \
+  PROJECT=/path/to/scanned-repo \
+  ORG=my-org \
+  NAME=secrets_with_report \
+  DUMP_DIR=/tmp/my-dump-dir \
+  OUT_DIR=/tmp/my-fixtures
+```
+
+The dump command uses these internal settings by default:
+
+- `SNYK_TMP_PATH=<DUMP_DIR>`
+- `INTERNAL_IN_MEMORY_THRESHOLD_BYTES=1`
+- `INTERNAL_CLEANUP_GLOBAL_TEMP_DIR_ENABLED=false`
+
+If the printed command shows `snyk test .` instead of `snyk secrets test .`, your shell may have `SCAN_CMD` exported. Run `unset SCAN_CMD` or pass `SCAN_CMD="secrets test ."` explicitly.
+
+## Redacting a dump into a stable fixture
+
+To redact an existing dump file manually:
+
+```bash
+go run ./cmd/ufm-fixture-tool \
+  --input=./dumps/raw/workflow.TestResult.12345 \
+  --output=./internal/presenters/testdata/ufm/my_fixture.testresult.json
+
+# Or via make (OUTPUT is optional)
+make redact-fixture INPUT=./dumps/raw/workflow.TestResult.12345 OUTPUT=./path/to/fixture.testresult.json
+```
+
+If `OUTPUT` is omitted, the redaction tool writes `<input>_redacted.json` next to the input path.
+
+
+## Regenerating expected files from existing fixtures
+
+If you changed a presenter template and need to update the expected SARIF / human-readable output without re-fetching from the API:
+
+```bash
+make regenerate-expected
+```
+
+This runs the presenter tests with `UFM_REGEN=1`, which overwrites the expected files with the current presenter output and skips the comparison. Review the diff before committing.
