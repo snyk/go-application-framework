@@ -98,6 +98,9 @@
 {{- define "testSummary"}}{{ "Test Summary" | bold }}
 {{- "\n" }}
 {{- $metadata := .GetMetadata }}
+{{- $testingSubject := getValueFromConfig "targetDirectory" }}
+{{- $targetFile := index $metadata "display-target-file" }}
+{{- if $targetFile }} {{- $testingSubject = $targetFile }} {{- end }}
 {{- $targetDirectory := index $metadata "target-directory" }}
 {{- if not $targetDirectory }}
 {{- $targetDirectory = getValueFromConfig "targetDirectory" }}
@@ -106,6 +109,9 @@
   Organization:      {{ getValueFromConfig "internal_org_slug" }}
   Test type:         {{ determineProductNameFromFindingTypes $findingTypes }}
   Project path:      {{ $targetDirectory }}
+  {{- if and $testingSubject (ne $testingSubject $targetDirectory) }}
+  Target file:       {{ $testingSubject }}
+  {{- end }}
 
 {{- range $findingType := $findingTypes }}
   {{- $issuesForType := getIssuesFromTestResult $ $findingType }}
