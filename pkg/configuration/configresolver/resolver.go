@@ -198,18 +198,26 @@ func (r *Resolver) resolveFolder(name, effectiveOrg, folderPath string) (any, Co
 }
 
 // remoteField retrieves a *RemoteConfigField stored at key, or nil if not present/wrong type.
+// Values persisted through JSON storage come back as map[string]interface{}, so we reconstruct
+// the struct from that map in that case. Keys match the lowercase json tags; viper also
+// lowercases map keys on Set.
 func (r *Resolver) remoteField(key string) *RemoteConfigField {
-	v := r.conf.Get(key)
-	if v == nil {
+	switch v := r.conf.Get(key).(type) {
+	case nil:
 		return nil
+	case *RemoteConfigField:
+		return v
+	case map[string]any:
+		locked, ok := v["islocked"].(bool)
+		if !ok {
+			//nolint:errcheck // zero-value fallback on type mismatch is intentional
+			locked, _ = v["isLocked"].(bool)
+		}
+		//nolint:errcheck // zero-value fallback on type mismatch is intentional
+		origin, _ := v["origin"].(string)
+		return &RemoteConfigField{Value: v["value"], IsLocked: locked, Origin: origin}
 	}
-
-	f, ok := v.(*RemoteConfigField)
-	if !ok {
-		return nil
-	}
-
-	return f
+	return nil
 }
 
 // remoteFolderField retrieves a *RemoteConfigField from the folder-level remote key, or nil.
@@ -231,16 +239,19 @@ func (r *Resolver) fallback(name string) (any, ConfigSource) {
 }
 
 // localField retrieves a *LocalConfigField stored at key, or nil if not present/wrong type.
+// Values persisted through JSON storage come back as map[string]interface{}, so we reconstruct
+// the struct from that map in that case. Keys match the lowercase json tags; viper also
+// lowercases map keys on Set.
 func (r *Resolver) localField(key string) *LocalConfigField {
-	v := r.conf.Get(key)
-	if v == nil {
+	switch v := r.conf.Get(key).(type) {
+	case nil:
 		return nil
+	case *LocalConfigField:
+		return v
+	case map[string]any:
+		//nolint:errcheck // zero-value fallback on type mismatch is intentional
+		changed, _ := v["changed"].(bool)
+		return &LocalConfigField{Value: v["value"], Changed: changed}
 	}
-
-	f, ok := v.(*LocalConfigField)
-	if !ok {
-		return nil
-	}
-
-	return f
+	return nil
 }
