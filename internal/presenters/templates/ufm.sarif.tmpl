@@ -63,11 +63,7 @@
 				{{- $targetFile := "" }}
 				{{- if $displayTargetFile }} {{- $targetFile = $displayTargetFile }} {{- end }}
 				{{- range $index, $issue := $issues }}
-				{{- $location := buildLocationFromIssue $issue $targetFile }}
-				{{- $physicalLoc := index $location "physicalLocation" }}
-				{{- $logicalLocs := index $location "logicalLocations" }}
-				{{- $region := index $physicalLoc "region" }}
-				{{- $artifactLocation := index $physicalLoc "artifactLocation" }}
+				{{- $locations := buildLocationsFromIssue $issue $targetFile }}
 				{{- $fix := buildFixFromIssue $issue }}
 				{{- $ignoreDetails := $issue.GetIgnoreDetails }}
 				{{- $problemID := $issue.GetProblemID }}
@@ -79,23 +75,26 @@
 						"text": {{ getQuotedString (formatIssueMessage $issue) }}
 					},
 					"locations": [
+						{{- range $locIndex, $location := $locations }}
+						{{- $logicalLocs := $location.LogicalLocations }}
+						{{- $physicalLoc := $location.PhysicalLocation }}
 						{{- if $location }}
 						{
 							{{- if $physicalLoc }}
 							"physicalLocation": {
 								"artifactLocation": {
-									"uri": {{ getQuotedString (index $artifactLocation "uri") }}
+									"uri": {{ getQuotedString $physicalLoc.ArtifactLocation.URI }}
 								},
 								"region": {
-									"startLine": {{ index $region "startLine" }}{{if index $region "startColumn"}},{{end}}
-									{{- if index $region "startColumn" }}
-									"startColumn": {{ index $region "startColumn" }}{{if index $region "endLine"}},{{end}}
+									"startLine": {{ $physicalLoc.Region.StartLine }}{{if $physicalLoc.Region.StartColumn}},{{end}}
+									{{- if $physicalLoc.Region.StartColumn }}
+									"startColumn": {{ $physicalLoc.Region.StartColumn }}{{if $physicalLoc.Region.EndLine}},{{end}}
 									{{- end }}
-									{{- if index $region "endLine" }}
-									"endLine": {{ index $region "endLine" }}{{if index $region "endColumn"}},{{end}}
+									{{- if $physicalLoc.Region.EndLine }}
+									"endLine": {{ $physicalLoc.Region.EndLine }}{{if $physicalLoc.Region.EndColumn}},{{end}}
 									{{- end }}
-									{{- if index $region "endColumn" }}
-									"endColumn": {{ index $region "endColumn" }}
+									{{- if $physicalLoc.Region.EndColumn }}
+									"endColumn": {{ $physicalLoc.Region.EndColumn }}
 									{{- end }}
 								}
 							}
@@ -105,12 +104,14 @@
 							"logicalLocations": [
 								{{- range $logLoc := $logicalLocs }}
 								{
-									"fullyQualifiedName": {{ getQuotedString (index $logLoc "fullyQualifiedName") }}
+									"fullyQualifiedName": {{ getQuotedString $logLoc.FullyQualifiedName }}
 								}
 								{{- end }}
 							]
 							{{- end }}
 						}
+						{{- end }}
+						{{if lt $locIndex (sub (len $locations) 1)}},{{end}}
 						{{- end }}
 					]
 					{{- if and (ne (printf "%s" $issue.GetFindingType) "sca") (ne (printf "%s" $issue.GetFindingType) "license") }},
@@ -121,6 +122,10 @@
 					{{- end }}
 					{{- if $fix }},
 					"fixes": [
+						{{- if gt (len $locations) 0 }}
+						{{- $firstLoc := index $locations 0 }}
+						{{- if $firstLoc.PhysicalLocation }}
+						{{- $firstPhysicalLoc := $firstLoc.PhysicalLocation }}
 						{
 							"description": {
 								"text": {{ getQuotedString (index $fix "description") }}
@@ -128,12 +133,12 @@
 							"artifactChanges": [
 								{
 									"artifactLocation": {
-										"uri": {{ getQuotedString (index $artifactLocation "uri") }}
+										"uri": {{ getQuotedString $firstPhysicalLoc.ArtifactLocation.URI }}
 									},
 									"replacements": [
 										{
 											"deletedRegion": {
-												"startLine": {{ index $region "startLine" }}
+												"startLine": {{ $firstPhysicalLoc.Region.StartLine }}
 											},
 											"insertedContent": {
 												"text": {{ getQuotedString (index $fix "packageVersion") }}
@@ -143,6 +148,8 @@
 								}
 							]
 						}
+						{{- end }}
+						{{- end }}
 					]
 					{{- end }}
 					{{- if $ignoreDetails }},
@@ -198,7 +205,7 @@
 					]
 					{{- end }}
 				}{{if lt $index $issuesSize}},{{end}}
-				{{- end}}
+				{{- end }}
 			],
 				{{- /* TODO: Add properties section for SAST (coverage) and upload results
 				"properties": {

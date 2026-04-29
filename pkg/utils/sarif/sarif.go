@@ -493,82 +493,204 @@ func appendDescriptionSection(sb *strings.Builder, issue testapi.Issue) {
 	}
 }
 
-// BuildLocation constructs a SARIF location object from issue data
-//
-//nolint:gocyclo // needs the global state for package name and version
-func BuildLocation(issue testapi.Issue, targetFile string) map[string]interface{} {
-	// Extract first finding from issue
+type regionData struct {
+	StartLine   int  `json:"startLine"`
+	StartColumn *int `json:"startColumn,omitempty"`
+	EndLine     *int `json:"endLine,omitempty"`
+	EndColumn   *int `json:"endColumn,omitempty"`
+}
+
+type artifactLocation struct {
+	URI string `json:"uri"`
+}
+
+type physicalLocation struct {
+	ArtifactLocation artifactLocation `json:"artifactLocation"`
+	Region           regionData       `json:"region"`
+}
+
+type logicalLocation struct {
+	FullyQualifiedName string `json:"fullyQualifiedName"`
+}
+
+type sarifLocation struct {
+	PhysicalLocation *physicalLocation `json:"physicalLocation,omitempty"`
+	LogicalLocations []logicalLocation `json:"logicalLocations,omitempty"`
+}
+
+// BuildLocations constructs SARIF location objects from issue finding data
+// Returns a slice of location objects, each containing physical and logical locations
+func BuildLocations(issue testapi.Issue, targetFile string) []sarifLocation {
+	packageName, packageVersion := getPackageNameAndVersionFromIssue(issue)
 	findings := issue.GetFindings()
+	findingType := issue.GetFindingType()
 	if len(findings) == 0 {
 		return nil
 	}
-	finding := findings[0]
 
-	// Default to line 1 for manifest files
-	uri := targetFile
-	region := map[string]interface{}{
-		"startLine": 1,
+	// SCA findings have only one location, so we can return it immediately
+	if findingType == testapi.FindingTypeSca {
+		scaFindingLocation := sarifLocation{
+			LogicalLocations: []logicalLocation{buildLogicalLocation(packageName, packageVersion)},
+		}
+		if targetFile != "" {
+			pLocation := buildPhysicalLocation(targetFile, regionData{StartLine: 1})
+			scaFindingLocation.PhysicalLocation = &pLocation
+		}
+		return []sarifLocation{scaFindingLocation}
 	}
 
-	packageName, packageVersion := getPackageNameAndVersionFromIssue(issue)
+	// track seen locations to prevent duplicates
+	var locations []sarifLocation
+	seen := make(map[string]bool)
 
-	// Try to extract actual file path and package version from locations
-	if finding.Attributes != nil && len(finding.Attributes.Locations) > 0 && uri == "" {
-		loc := finding.Attributes.Locations[0]
+	for _, finding := range findings {
+		sLocations := buildSarifLocations(*finding, targetFile, packageName, packageVersion)
 
-		// Try source location first
-		sourceLoc, err := loc.AsSourceLocation()
-		if err == nil && sourceLoc.FilePath != "" {
-			uri = sourceLoc.FilePath
-			region["startLine"] = sourceLoc.FromLine
-			if sourceLoc.FromColumn != nil {
-				region["startColumn"] = *sourceLoc.FromColumn
-			}
-			if sourceLoc.ToLine != nil {
-				region["endLine"] = *sourceLoc.ToLine
-			}
-			if sourceLoc.ToColumn != nil {
-				region["endColumn"] = *sourceLoc.ToColumn
-			}
-		}
+		for _, sLoc := range sLocations {
+			key := ""
 
-		pkgLoc, err := loc.AsPackageLocation()
-		if err == nil {
-			if pkgLoc.Package.Name != "" {
-				packageName = pkgLoc.Package.Name
+			if len(sLoc.LogicalLocations) > 0 {
+				key += fmt.Sprintf("log:%s", sLoc.LogicalLocations[0].FullyQualifiedName)
 			}
-			if pkgLoc.Package.Version != "" {
-				packageVersion = pkgLoc.Package.Version
+
+			if sLoc.PhysicalLocation != nil {
+				key += fmt.Sprintf("phys:%s:%d", sLoc.PhysicalLocation.ArtifactLocation.URI, sLoc.PhysicalLocation.Region.StartLine)
+				if sLoc.PhysicalLocation.Region.EndLine != nil {
+					key += fmt.Sprintf(":%d", *sLoc.PhysicalLocation.Region.EndLine)
+				}
+				if sLoc.PhysicalLocation.Region.StartColumn != nil {
+					key += fmt.Sprintf(":%d", *sLoc.PhysicalLocation.Region.StartColumn)
+				}
+				if sLoc.PhysicalLocation.Region.EndColumn != nil {
+					key += fmt.Sprintf(":%d", *sLoc.PhysicalLocation.Region.EndColumn)
+				}
+			}
+
+			if !seen[key] {
+				seen[key] = true
+				locations = append(locations, sLoc)
 			}
 		}
 	}
 
-	location := map[string]interface{}{}
+	return locations
+}
 
-	if len(uri) > 0 {
-		location["physicalLocation"] = map[string]interface{}{
-			"artifactLocation": map[string]interface{}{
-				"uri": uri,
-			},
-			"region": region,
+// buildSarifLocations extracts physical and logical locations from finding data
+// Returns a slice of location objects, each containing physical and logical locations
+func buildSarifLocations(finding testapi.FindingData, targetFile string, packageName string, packageVersion string) []sarifLocation {
+	var sLocations []sarifLocation
+
+	// try to extract actual file path and package version from locations
+	hasLocations := finding.Attributes != nil && len(finding.Attributes.Locations) > 0
+
+	if hasLocations && targetFile == "" {
+		for _, loc := range finding.Attributes.Locations {
+			sLoc := buildSarifLocationFromLoc(loc, packageName, packageVersion)
+			if sLoc.PhysicalLocation != nil {
+				sLocations = append(sLocations, sLoc)
+			}
 		}
+	}
+
+	// if no locations were generated
+	if len(sLocations) == 0 {
+		if fallback := buildFallbackSarifLocation(targetFile, packageName, packageVersion); fallback != nil {
+			sLocations = append(sLocations, *fallback)
+		}
+	}
+
+	return sLocations
+}
+
+// buildSarifLocationFromLoc extracts location data from a finding location
+// Returns a location object with physical and logical locations
+func buildSarifLocationFromLoc(loc testapi.FindingLocation, packageName string, packageVersion string) sarifLocation {
+	pName, pVersion := packageName, packageVersion
+
+	pkgLoc, err := loc.AsPackageLocation()
+	if err == nil {
+		if pkgLoc.Package.Name != "" {
+			pName = pkgLoc.Package.Name
+		}
+		if pkgLoc.Package.Version != "" {
+			pVersion = pkgLoc.Package.Version
+		}
+	}
+
+	if pName != "" || pVersion != "" {
+		return sarifLocation{LogicalLocations: []logicalLocation{buildLogicalLocation(pName, pVersion)}}
+	}
+
+	return buildSarifLocationFromSourceLoc(loc)
+}
+
+// buildSarifLocationFromSourceLoc extracts location data from a source location
+// Returns a location object with physical location only
+func buildSarifLocationFromSourceLoc(loc testapi.FindingLocation) sarifLocation {
+	region := regionData{StartLine: 1}
+
+	sourceLoc, err := loc.AsSourceLocation()
+	if err != nil || sourceLoc.FilePath == "" {
+		return sarifLocation{}
+	}
+
+	region.StartLine = sourceLoc.FromLine
+	if sourceLoc.FromColumn != nil {
+		region.StartColumn = sourceLoc.FromColumn
+	}
+	if sourceLoc.ToLine != nil {
+		region.EndLine = sourceLoc.ToLine
+	}
+	if sourceLoc.ToColumn != nil {
+		region.EndColumn = sourceLoc.ToColumn
+	}
+
+	pLocation := buildPhysicalLocation(sourceLoc.FilePath, region)
+	return sarifLocation{PhysicalLocation: &pLocation}
+}
+
+// buildFallbackSarifLocation creates a fallback location when no specific locations are found
+// Returns a location object with either physical or logical location, or nil if neither is provided
+func buildFallbackSarifLocation(targetFile string, packageName string, packageVersion string) *sarifLocation {
+	var pLoc *physicalLocation
+	var lLocs []logicalLocation
+
+	if len(targetFile) > 0 {
+		pLocation := buildPhysicalLocation(targetFile, regionData{StartLine: 1})
+		pLoc = &pLocation
 	}
 
 	if packageName != "" || packageVersion != "" {
-		location["logicalLocations"] = []interface{}{
-			map[string]interface{}{
-				"fullyQualifiedName": fmt.Sprintf("%s@%s", packageName, packageVersion),
-			},
-		}
+		lLocs = []logicalLocation{buildLogicalLocation(packageName, packageVersion)}
 	}
 
-	if len(location) > 0 {
-		return location
+	if pLoc != nil || len(lLocs) > 0 {
+		return &sarifLocation{PhysicalLocation: pLoc, LogicalLocations: lLocs}
 	}
-
 	return nil
 }
 
+// buildPhysicalLocation creates a physical location object with the given URI and region
+func buildPhysicalLocation(uri string, region regionData) physicalLocation {
+	return physicalLocation{
+		ArtifactLocation: artifactLocation{
+			URI: uri,
+		},
+		Region: region,
+	}
+}
+
+// buildLogicalLocation creates a logical location object with the given package name and version
+func buildLogicalLocation(packageName string, packageVersion string) logicalLocation {
+	return logicalLocation{
+		FullyQualifiedName: fmt.Sprintf("%s@%s", packageName, packageVersion),
+	}
+}
+
+// getPackageNameAndVersionFromIssue extracts package name and version from issue data
+// Returns the package name and version, or empty strings if not found
 func getPackageNameAndVersionFromIssue(issue testapi.Issue) (packageName, packageVersion string) {
 	if val, ok := issue.GetData(testapi.DataKeyComponentName); ok {
 		if str, ok := val.(string); ok {
