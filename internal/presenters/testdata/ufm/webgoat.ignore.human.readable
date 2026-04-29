@@ -494,6 +494,7 @@ Tested 163 dependencies for known issues, found 42 issues, 42 vulnerable paths.
 │   Organization:      My Org                                    │
 │   Test type:         Software Composition Analysis             │
 │   Project path:      /Users/catalin.iuga/code/goofs/WebGoat    │
+│   Target file:       pom.xml                                   │
 │                                                                │
 │   Total security issues: 42                                    │
 │   Ignored: [1m4[0m [[35m 0 CRITICAL [0m[31m 2 HIGH [0m[33m 2 MEDIUM [0m 0 LOW ]           │
