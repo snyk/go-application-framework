@@ -292,6 +292,15 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
     {{- /* Render test summary */}}
     {{- box (renderToString "testSummary" $) }}
 
+    {{- /* Render report link when available */ -}}
+    {{- with $.GetMetadataValue "report-url" }}
+        {{- "\n\n" }}
+        {{- "Report" | bold }}
+        {{- "\n\n" }}
+        {{- "  Your test results are available at:\n" }}
+        {{- printf "  %s" ( . | bold ) }}
+    {{- end -}}
+
     {{- "\n" }}
     {{- with $.GetMetadataValue "target-directory" }}
 	    {{- $targetId := getTargetId . }}

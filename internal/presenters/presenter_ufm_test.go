@@ -607,6 +607,12 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			testResultPath:     "testdata/ufm/secrets.duplicated-sarif-rules.testresult.json",
 			ignoreSuppressions: true,
 		},
+		{
+			name:               "secrets_with_report",
+			expectedSarifPath:  "testdata/ufm/secrets.with-report.sarif.json",
+			testResultPath:     "testdata/ufm/secrets.with-report.testresult.json",
+			ignoreSuppressions: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1200,6 +1206,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			includeIgnores:    true,
 			severityThreshold: "",
 		},
+		{
+			name:              "secrets_with_report",
+			expectedPath:      "testdata/ufm/secrets.with-report.human.readable",
+			testResultPath:    "testdata/ufm/secrets.with-report.testresult.json",
+			includeIgnores:    true,
+			severityThreshold: "",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1228,6 +1241,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 			actualBytes := writer.Bytes()
 			assert.NotEmpty(t, actualBytes)
+
 			assert.NotEmpty(t, expectedBytes)
 			assert.Equal(t, string(expectedBytes), string(actualBytes))
 		})
