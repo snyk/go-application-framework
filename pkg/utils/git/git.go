@@ -123,7 +123,7 @@ func stripCredentialsByPattern(rawUrl string) string {
 }
 
 // NormalizeGitURL converts any git remote URL format (SSH, SCP-style, git://, http://)
-// into a consistent https:// URL with credentials removed and .git suffix stripped.
+// into a consistent https:// URL with credentials removed.
 // If the URL cannot be parsed, the credential-stripped input is returned as-is.
 func NormalizeGitURL(rawUrl string) string {
 	if rawUrl == "" {
@@ -139,7 +139,8 @@ func NormalizeGitURL(rawUrl string) string {
 		atIdx := strings.Index(rawUrl, "@")
 		colonIdx := strings.Index(rawUrl, ":")
 		host := rawUrl[atIdx+1 : colonIdx]
-		path := strings.TrimSuffix(rawUrl[colonIdx+1:], ".git")
+		path := rawUrl[colonIdx+1:]
+		path = normalizeURLPath(path)
 		return "https://" + host + "/" + path
 	}
 
@@ -151,6 +152,7 @@ func NormalizeGitURL(rawUrl string) string {
 	}
 
 	u.User = nil
+	u.Path = normalizeURLPath(u.Path)
 
 	switch u.Scheme {
 	case "ssh", "git+ssh", "ssh+git":
@@ -159,19 +161,26 @@ func NormalizeGitURL(rawUrl string) string {
 		// to the HTTPS port. HTTP/HTTPS ports are preserved in their respective cases
 		// because they represent the actual service port for that protocol.
 		u.Host = u.Hostname()
-		u.Path = strings.TrimSuffix(u.Path, ".git")
 		return u.String()
 	case "git", "http", "git+http":
 		u.Scheme = "https"
-		u.Path = strings.TrimSuffix(u.Path, ".git")
 		return u.String()
 	case "https", "git+https":
 		u.Scheme = "https"
-		u.Path = strings.TrimSuffix(u.Path, ".git")
 		return u.String()
 	default:
 		return sanitized
 	}
+}
+
+// normalizeURLPath normalizes the path of a URL by adding a ".git" suffix if it doesn't exist
+// and removing any leading "/" characters.
+func normalizeURLPath(path string) string {
+	if !strings.HasSuffix(path, ".git") {
+		path = path + ".git"
+	}
+	path = strings.TrimPrefix(path, "/")
+	return path
 }
 
 // isSCPStyle returns true if the URL uses SCP-style syntax (e.g., git@github.com:org/repo.git).
