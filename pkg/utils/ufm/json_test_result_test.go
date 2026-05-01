@@ -32,7 +32,6 @@ func TestNewSerializableTestResult(t *testing.T) {
 	mock.EXPECT().GetCreatedAt().Return(&createdAt).AnyTimes()
 	mock.EXPECT().GetTestSubject().Return(nil).AnyTimes()
 	mock.EXPECT().GetSubjectLocators().Return(nil).AnyTimes()
-	mock.EXPECT().GetTestResources().Return(nil).AnyTimes()
 	mock.EXPECT().GetExecutionState().Return(testapi.TestExecutionStatesFinished).AnyTimes()
 	mock.EXPECT().GetErrors().Return(nil).AnyTimes()
 	mock.EXPECT().GetWarnings().Return(nil).AnyTimes()

@@ -8,7 +8,7 @@
 			{{- $findingType := index $findingTypes 0 }}
 			{{- $issues := getIssuesFromTestResult $result }}
 			{{- $issuesSize := sub (len $issues) 1 }}
-			{{- $metadata := $result.GetMetadata }}
+			{{- $metadata := $result.Get "metadata" }}
 			{
 				"tool": {
 					"driver" : {
@@ -59,7 +59,7 @@
 					}
 				},
 			"results": [
-				{{- $displayTargetFile := index $result.GetMetadata "display-target-file" }}
+				{{- $displayTargetFile := $result.GetMetadataValue "display-target-file" }}
 				{{- $targetFile := "" }}
 				{{- if $displayTargetFile }} {{- $targetFile = $displayTargetFile }} {{- end }}
 				{{- range $index, $issue := $issues }}

@@ -1555,8 +1555,8 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary)
-	require.NotNil(t, result.GetBreachedPolicies())
-	assert.Equal(t, expectedBreachedPolicies, result.GetBreachedPolicies())
+	require.NotNil(t, result.Get(testapi.TestResultBreachedPolicies))
+	assert.Equal(t, expectedBreachedPolicies, result.Get(testapi.TestResultBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
 }
 
@@ -1645,8 +1645,8 @@ func Test_Wait_WithResources_Synchronous_Finished_With_ErrorsAndWarnings(t *test
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary)
-	require.NotNil(t, result.GetBreachedPolicies())
-	assert.Equal(t, expectedBreachedPolicies, result.GetBreachedPolicies())
+	require.NotNil(t, result.Get(testapi.TestResultBreachedPolicies))
+	assert.Equal(t, expectedBreachedPolicies, result.Get(testapi.TestResultBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
 }
 
@@ -1676,20 +1676,22 @@ func assertCommonTestResultFields(
 	assert.False(t, result.GetCreatedAt().IsZero())
 
 	if expectedSubject != nil {
-		require.NotNil(t, result.GetTestSubject())
-		assert.Equal(t, expectedSubject, result.GetTestSubject())
+		require.NotNil(t, result.Get(testapi.TestResultTestSubject))
+		assert.Equal(t, expectedSubject, result.Get(testapi.TestResultTestSubject))
 	}
 
 	if expectedResources != nil {
-		require.NotNil(t, result.GetTestResources())
-		assert.Equal(t, expectedResources, result.GetTestResources()) //test equals ignoring order
+		require.NotNil(t, result.Get(testapi.TestResultTestResources))
+		assert.Equal(t, expectedResources, result.Get(testapi.TestResultTestResources)) //test equals ignoring order
 	}
 
 	if expectedLocators != nil {
-		require.NotNil(t, result.GetSubjectLocators())
-		assert.Equal(t, *expectedLocators, *result.GetSubjectLocators())
+		require.NotNil(t, result.Get(testapi.TestResultSubjectLocators))
+		locators, ok := result.Get(testapi.TestResultSubjectLocators).(*[]testapi.TestSubjectLocator)
+		require.True(t, ok)
+		assert.Equal(t, *expectedLocators, *locators)
 	} else {
-		assert.Nil(t, result.GetSubjectLocators())
+		assert.Nil(t, result.Get(testapi.TestResultSubjectLocators))
 	}
 
 	if expectedEffectiveSummary != nil {
@@ -1700,10 +1702,10 @@ func assertCommonTestResultFields(
 	}
 
 	if expectedRawSummary != nil {
-		require.NotNil(t, result.GetRawSummary())
-		assert.Equal(t, expectedRawSummary, result.GetRawSummary())
+		require.NotNil(t, result.Get(testapi.TestResultRawSummary))
+		assert.Equal(t, expectedRawSummary, result.Get(testapi.TestResultRawSummary))
 	} else {
-		assert.Nil(t, result.GetRawSummary())
+		assert.Nil(t, result.Get(testapi.TestResultRawSummary))
 	}
 }
 
@@ -1866,7 +1868,7 @@ func assertTestOutcomeFail(t *testing.T, result testapi.TestResult, expectedTest
 	assert.Equal(t, expectedReason, *result.GetOutcomeReason())
 	assert.Nil(t, result.GetErrors())
 	assert.Nil(t, result.GetWarnings())
-	assert.Nil(t, result.GetBreachedPolicies())
+	assert.Nil(t, result.Get(testapi.TestResultBreachedPolicies))
 }
 
 // Helper function to assert that there are no findings.
