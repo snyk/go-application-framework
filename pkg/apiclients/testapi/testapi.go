@@ -20,6 +20,19 @@ import (
 
 //go:generate go tool github.com/golang/mock/mockgen -source=testapi.go -destination ../mocks/testapi.go -package mocks -imports testapi=github.com/snyk/go-application-framework/pkg/apiclients/testapi
 
+// TestResultKeys represents the keys for accessing test result data.
+type TestResultKeys string
+
+const (
+	TestResultTestSubject      TestResultKeys = "subject"
+	TestResultSubjectLocators  TestResultKeys = "subject_locators"
+	TestResultTestResources    TestResultKeys = "resources"
+	TestResultRawSummary       TestResultKeys = "raw_summary"
+	TestResultTestFacts        TestResultKeys = "test_facts"
+	TestResultBreachedPolicies TestResultKeys = "breached_policies"
+	TestResultMetadata         TestResultKeys = "metadata"
+)
+
 // config holds configuration for the test API client, set using ConfigOption functions.
 type config struct {
 	PollInterval          time.Duration // Default: 2000ms, Min: 1000ms
@@ -107,8 +120,14 @@ type TestResult interface {
 	GetTestID() *uuid.UUID
 	GetTestConfiguration() *TestConfiguration
 	GetCreatedAt() *time.Time
+
+	Get(key TestResultKeys) interface{}
+
+	// Deprecated: Use Get(testapi.TestResultTestSubject) instead.
 	GetTestSubject() *TestSubject
+	// Deprecated: Use Get(testapi.TestResultSubjectLocators) instead.
 	GetSubjectLocators() *[]TestSubjectLocator
+	// Deprecated: Use Get(testapi.TestResultTestResources) instead.
 	GetTestResources() *[]TestResource
 
 	GetExecutionState() TestExecutionStates
@@ -117,14 +136,18 @@ type TestResult interface {
 
 	GetPassFail() *PassFail
 	GetOutcomeReason() *TestOutcomeReason
+	// Deprecated: Use Get(testapi.TestResultBreachedPolicies) instead.
 	GetBreachedPolicies() *PolicyRefSet
 
 	GetEffectiveSummary() *FindingSummary
+	// Deprecated: Use Get(testapi.TestResultRawSummary) instead.
 	GetRawSummary() *FindingSummary
+	// Deprecated: Use Get(testapi.TestResultTestFacts) instead.
 	GetTestFacts() *[]TestFact
 
 	SetMetadata(key string, value interface{})
 	GetMetadataValue(key string) interface{}
+	// Deprecated: Use Get(testapi.TestResultMetadata) instead.
 	GetMetadata() map[string]interface{}
 
 	Findings(ctx context.Context) (resultFindings []FindingData, complete bool, err error)
@@ -255,6 +278,8 @@ func (r *testResult) GetPassFail() *PassFail { return r.PassFail }
 // GetOutcomeReason returns the reason for the test outcome.
 func (r *testResult) GetOutcomeReason() *TestOutcomeReason { return r.OutcomeReason }
 
+// Deprecated: Use Get(testapi.TestResultBreachedPolicies) instead
+//
 // GetBreachedPolicies returns the policies that were breached.
 func (r *testResult) GetBreachedPolicies() *PolicyRefSet { return r.BreachedPolicies }
 
@@ -264,21 +289,54 @@ func (r *testResult) GetTestConfiguration() *TestConfiguration { return r.TestCo
 // GetCreatedAt returns the creation timestamp of the test.
 func (r *testResult) GetCreatedAt() *time.Time { return r.CreatedAt }
 
+// Get returns a TestResult field value by key.
+// Returns nil if the key is not found.
+func (r *testResult) Get(key TestResultKeys) interface{} {
+	switch key {
+	case TestResultTestSubject:
+		return r.TestSubject
+	case TestResultSubjectLocators:
+		return r.SubjectLocators
+	case TestResultTestResources:
+		return r.TestResources
+	case TestResultRawSummary:
+		return r.RawSummary
+	case TestResultTestFacts:
+		return r.TestFacts
+	case TestResultBreachedPolicies:
+		return r.BreachedPolicies
+	case TestResultMetadata:
+		return r.metadata
+	default:
+		return nil
+	}
+}
+
+// Deprecated: Use Get(testapi.TestResultTestSubject) instead
+//
 // GetTestSubject returns the test subject.
 func (r *testResult) GetTestSubject() *TestSubject { return r.TestSubject }
 
+// Deprecated: Use Get(testapi.TestResultSubjectLocators) instead
+//
 // GetSubjectLocators returns the subject locators.
 func (r *testResult) GetSubjectLocators() *[]TestSubjectLocator { return r.SubjectLocators }
 
+// Deprecated: Use Get(testapi.TestResultTestResources) instead
+//
 // GetTestResources returns the test resources.
 func (r *testResult) GetTestResources() *[]TestResource { return r.TestResources }
 
 // GetEffectiveSummary returns the summary excluding suppressed findings.
 func (r *testResult) GetEffectiveSummary() *FindingSummary { return r.EffectiveSummary }
 
+// Deprecated: Use Get(testapi.TestResultRawSummary) instead
+//
 // GetRawSummary returns the summary including suppressed findings.
 func (r *testResult) GetRawSummary() *FindingSummary { return r.RawSummary }
 
+// Deprecated: Use Get(testapi.TestResultTestFacts) instead
+//
 // GetTestFacts returns the facts computed during test execution.
 func (r *testResult) GetTestFacts() *[]TestFact { return r.TestFacts }
 
@@ -287,6 +345,8 @@ func (r *testResult) SetMetadata(key string, value interface{}) {
 	r.metadata[key] = value
 }
 
+// Deprecated: Use Get(testapi.TestResultMetadata) instead
+//
 // GetMetadata returns the metadata for the given key.
 func (r *testResult) GetMetadata() map[string]interface{} {
 	return r.metadata

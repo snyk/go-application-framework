@@ -45,6 +45,28 @@ type jsonTestResult struct {
 	mutex sync.Mutex
 }
 
+// Get returns a TestResult field value by key.
+func (j *jsonTestResult) Get(key testapi.TestResultKeys) interface{} {
+	switch key {
+	case testapi.TestResultTestSubject:
+		return j.TestSubject
+	case testapi.TestResultSubjectLocators:
+		return j.SubjectLocators
+	case testapi.TestResultTestResources:
+		return j.TestResources
+	case testapi.TestResultRawSummary:
+		return j.RawSummary
+	case testapi.TestResultTestFacts:
+		return j.TestFacts
+	case testapi.TestResultBreachedPolicies:
+		return j.BreachedPolicies
+	case testapi.TestResultMetadata:
+		return j.Metadata
+	default:
+		return nil
+	}
+}
+
 // GetTestID returns the test ID.
 func (j *jsonTestResult) GetTestID() *uuid.UUID {
 	return j.TestID
@@ -60,16 +82,22 @@ func (j *jsonTestResult) GetCreatedAt() *time.Time {
 	return j.CreatedAt
 }
 
+// Deprecated: use Get(testapi.TestResultTestSubject) instead
+//
 // GetTestSubject returns the test subject.
 func (j *jsonTestResult) GetTestSubject() *testapi.TestSubject {
 	return j.TestSubject
 }
 
+// Deprecated: use Get(testapi.TestResultSubjectLocators) instead
+//
 // GetSubjectLocators returns the subject locators.
 func (j *jsonTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
 	return j.SubjectLocators
 }
 
+// Deprecated: use Get(testapi.TestResultTestResources) instead
+//
 // GetResources returns the test resources.
 func (j *jsonTestResult) GetTestResources() *[]testapi.TestResource {
 	return j.TestResources
@@ -110,11 +138,15 @@ func (j *jsonTestResult) GetEffectiveSummary() *testapi.FindingSummary {
 	return j.EffectiveSummary
 }
 
+// Deprecated: use Get(testapi.TestResultRawSummary) instead
+//
 // GetRawSummary returns the raw summary (including suppressed findings).
 func (j *jsonTestResult) GetRawSummary() *testapi.FindingSummary {
 	return j.RawSummary
 }
 
+// Deprecated: use Get(testapi.TestResultTestFacts) instead
+//
 // GetTestFacts returns the facts computed during test execution.
 func (j *jsonTestResult) GetTestFacts() *[]testapi.TestFact {
 	return j.TestFacts
@@ -129,6 +161,8 @@ func (j *jsonTestResult) SetMetadata(key string, value interface{}) {
 	j.Metadata[key] = value
 }
 
+// Deprecated: use Get(testapi.TestResultMetadata) instead
+//
 // GetMetadata returns the metadata for the given key.
 func (j *jsonTestResult) GetMetadata() map[string]interface{} {
 	return j.Metadata

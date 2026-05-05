@@ -53,6 +53,20 @@ func (mr *MockTestResultMockRecorder) Findings(ctx interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Findings", reflect.TypeOf((*MockTestResult)(nil).Findings), ctx)
 }
 
+// Get mocks base method.
+func (m *MockTestResult) Get(key testapi.TestResultKeys) interface{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", key)
+	ret0, _ := ret[0].(interface{})
+	return ret0
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockTestResultMockRecorder) Get(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockTestResult)(nil).Get), key)
+}
+
 // GetBreachedPolicies mocks base method.
 func (m *MockTestResult) GetBreachedPolicies() *testapi.PolicyRefSet {
 	m.ctrl.T.Helper()
