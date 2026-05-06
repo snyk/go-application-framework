@@ -32,7 +32,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 7.5,
-                "security-severity": "7.5"
+                "security-severity": "7.5",
+                "severity": "high"
               }
             },
             {
@@ -54,7 +55,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 2.3,
-                "security-severity": "2.3"
+                "security-severity": "2.3",
+                "severity": "low"
               }
             },
             {
@@ -76,7 +78,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 6.9,
-                "security-severity": "6.9"
+                "security-severity": "6.9",
+                "severity": "medium"
               }
             },
             {
@@ -98,7 +101,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 6.9,
-                "security-severity": "6.9"
+                "security-severity": "6.9",
+                "severity": "medium"
               }
             },
             {
@@ -120,7 +124,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 6.9,
-                "security-severity": "6.9"
+                "security-severity": "6.9",
+                "severity": "medium"
               }
             },
             {
@@ -142,7 +147,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 5.4,
-                "security-severity": "5.4"
+                "security-severity": "5.4",
+                "severity": "medium"
               }
             },
             {
@@ -164,7 +170,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 7.5,
-                "security-severity": "7.5"
+                "security-severity": "7.5",
+                "severity": "high"
               }
             },
             {
@@ -186,7 +193,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 5.3,
-                "security-severity": "5.3"
+                "security-severity": "5.3",
+                "severity": "medium"
               }
             },
             {
@@ -208,7 +216,8 @@
                   "npm"
                 ],
                 "cvssv3_baseScore": 5.3,
-                "security-severity": "5.3"
+                "security-severity": "5.3",
+                "severity": "medium"
               }
             }
           ]
@@ -240,7 +249,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "high"
+          }
         },
         {
           "ruleId": "SNYK-JS-BRACEEXPANSION-9789073",
@@ -288,7 +300,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "low"
+          }
         },
         {
           "ruleId": "SNYK-JS-COOKIE-13271683",
@@ -336,7 +351,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "medium"
+          }
         },
         {
           "ruleId": "SNYK-JS-DEBUG-13283909",
@@ -360,7 +378,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "medium"
+          }
         },
         {
           "ruleId": "SNYK-JS-DEBUG-14214893",
@@ -384,7 +405,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "medium"
+          }
         },
         {
           "ruleId": "SNYK-JS-GOT-2932019",
@@ -408,7 +432,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "medium"
+          }
         },
         {
           "ruleId": "SNYK-JS-LODASH-12239302",
@@ -432,7 +459,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "high"
+          }
         },
         {
           "ruleId": "SNYK-JS-MARKED-2342073",
@@ -480,7 +510,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "medium"
+          }
         },
         {
           "ruleId": "SNYK-JS-MARKED-2342082",
@@ -528,7 +561,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "properties": {
+            "severity": "medium"
+          }
         }
       ]
     }
