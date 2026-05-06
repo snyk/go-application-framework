@@ -220,26 +220,59 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 		TestID:            tr.GetTestID(),
 		TestConfiguration: tr.GetTestConfiguration(),
 		CreatedAt:         tr.GetCreatedAt(),
-		TestSubject:       tr.GetTestSubject(),
-		SubjectLocators:   tr.GetSubjectLocators(),
 		ExecutionState:    tr.GetExecutionState(),
 		Errors:            tr.GetErrors(),
 		Warnings:          tr.GetWarnings(),
 		PassFail:          tr.GetPassFail(),
 		OutcomeReason:     tr.GetOutcomeReason(),
-		BreachedPolicies:  tr.GetBreachedPolicies(),
 		EffectiveSummary:  tr.GetEffectiveSummary(),
-		RawSummary:        tr.GetRawSummary(),
-		TestFacts:         tr.GetTestFacts(),
 		FindingsComplete:  complete,
 		ProblemStore:      problemStore,
 		ProblemRefs:       problemRefs,
 		FindingsData:      optimizedFindings,
-		fullFindings:      findings, // Keep original for Findings() method
-		Metadata:          tr.GetMetadata(),
+		fullFindings:      findings,
+	}
+
+	result.TestSubject, err = getResultProperty[*testapi.TestSubject](tr.Get(testapi.TestResultTestSubject), testapi.TestResultTestSubject)
+	if err != nil {
+		return nil, err
+	}
+	result.SubjectLocators, err = getResultProperty[*[]testapi.TestSubjectLocator](tr.Get(testapi.TestResultSubjectLocators), testapi.TestResultSubjectLocators)
+	if err != nil {
+		return nil, err
+	}
+	result.BreachedPolicies, err = getResultProperty[*testapi.PolicyRefSet](tr.Get(testapi.TestResultBreachedPolicies), testapi.TestResultBreachedPolicies)
+	if err != nil {
+		return nil, err
+	}
+	result.RawSummary, err = getResultProperty[*testapi.FindingSummary](tr.Get(testapi.TestResultRawSummary), testapi.TestResultRawSummary)
+	if err != nil {
+		return nil, err
+	}
+	result.TestFacts, err = getResultProperty[*[]testapi.TestFact](tr.Get(testapi.TestResultTestFacts), testapi.TestResultTestFacts)
+	if err != nil {
+		return nil, err
+	}
+	result.Metadata, err = getResultProperty[map[string]any](tr.Get(testapi.TestResultMetadata), testapi.TestResultMetadata)
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
+}
+
+// getResultProperty extracts a property from the test result and returns it with proper type checking.
+// This is a generic helper function that safely extracts typed values from interface{}.
+func getResultProperty[T any](raw any, property testapi.TestResultKeys) (T, error) {
+	var zero T
+	if raw == nil {
+		return zero, nil
+	}
+	v, ok := raw.(T)
+	if !ok {
+		return zero, fmt.Errorf("unexpected type for %s: %T", property, raw)
+	}
+	return v, nil
 }
 
 // BuildOptimizedFormat extracts problems into a central store and creates references.
