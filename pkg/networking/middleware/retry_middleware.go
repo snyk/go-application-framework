@@ -43,6 +43,7 @@ var statusCodesToRetryLUT = map[int]retryLogic{
 
 var errRetryNecessary = errors.New("retry with backoff")
 var errRetryAfterHeaderError = errors.New("retry-after is too much in the future")
+var errXRateLimitResetHeaderError = errors.New("X-RateLimit-Reset is too far in the future")
 
 type RetryMiddleware struct {
 	nextRoundtripper http.RoundTripper
@@ -109,7 +110,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			response.Header.Set(retryCountHeaderKey, fmt.Sprintf("%d", actualAttempts))
 		}
 
-		// errors from the next round tripper cannot not be retried
+		// errors from the next round tripper cannot be retried
 		if err != nil {
 			return response, backoff.Permanent(err)
 		}
@@ -172,12 +173,23 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 
 		// try to read retry-after header if available
 		if headerRetryAfterValue := response.Header.Get("Retry-After"); len(headerRetryAfterValue) > 0 {
-			fixRetryDelay = parseRetryAfterHeader(headerRetryAfterValue)
+			fixRetryDelay = parseRetryDelay(headerRetryAfterValue)
+
+			// if the fix retry delay is too big, we rather fail permanently than blocking too long
+			if fixRetryDelay > maxRetryAfter {
+				return backoff.Permanent(errRetryAfterHeaderError)
+			}
 		}
 
-		// if the fix retry delay is too big, we rather fail permanently than blocking too long
-		if fixRetryDelay > maxRetryAfter {
-			return backoff.Permanent(errRetryAfterHeaderError)
+		if fixRetryDelay == 0 {
+			// try to read X-RateLimit-Reset header if available
+			// according to envoy docs: number of seconds until reset of the current time-window
+			if headerXRateLimitResetValue := response.Header.Get("X-RateLimit-Reset"); len(headerXRateLimitResetValue) > 0 {
+				fixRetryDelay = parseRetryDelay(headerXRateLimitResetValue)
+			}
+			if fixRetryDelay > maxRetryAfter {
+				return backoff.Permanent(errXRateLimitResetHeaderError)
+			}
 		}
 
 		// if a retry after is defined, this is the time to wait for
@@ -192,7 +204,7 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 	return nil
 }
 
-func parseRetryAfterHeader(headerRetryAfterValue string) time.Duration {
+func parseRetryDelay(headerRetryAfterValue string) time.Duration {
 	// Retry-After: 1230
 	if tmp, err := strconv.ParseInt(headerRetryAfterValue, 10, 64); err == nil {
 		return time.Duration(tmp) * time.Second
