@@ -12,7 +12,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/oapi-codegen/runtime/types"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	v20260507 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2026-05-07"
 )
 
 // MockHttpRequestDoer is a mock of HttpRequestDoer interface.
@@ -77,7 +77,7 @@ func (m *MockClientInterface) EXPECT() *MockClientInterfaceMockRecorder {
 }
 
 // CreateConfig mocks base method.
-func (m *MockClientInterface) CreateConfig(ctx context.Context, params *v20241015.CreateConfigParams, body v20241015.CreateConfigJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateConfig(ctx context.Context, params *v20260507.CreateConfigParams, body v20260507.CreateConfigJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
@@ -97,7 +97,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateConfig(ctx, params, body interf
 }
 
 // CreateConfigWithBody mocks base method.
-func (m *MockClientInterface) CreateConfigWithBody(ctx context.Context, params *v20241015.CreateConfigParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateConfigWithBody(ctx context.Context, params *v20260507.CreateConfigParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, contentType, body}
 	for _, a := range reqEditors {
@@ -117,7 +117,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateConfigWithBody(ctx, params, con
 }
 
 // CreateUserConfig mocks base method.
-func (m *MockClientInterface) CreateUserConfig(ctx context.Context, params *v20241015.CreateUserConfigParams, body v20241015.CreateUserConfigJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateUserConfig(ctx context.Context, params *v20260507.CreateUserConfigParams, body v20260507.CreateUserConfigJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
@@ -137,7 +137,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateUserConfig(ctx, params, body in
 }
 
 // CreateUserConfigWithApplicationVndAPIPlusJSONBody mocks base method.
-func (m *MockClientInterface) CreateUserConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *v20241015.CreateUserConfigParams, body v20241015.CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateUserConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *v20260507.CreateUserConfigParams, body v20260507.CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
@@ -157,7 +157,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateUserConfigWithApplicationVndAPI
 }
 
 // CreateUserConfigWithBody mocks base method.
-func (m *MockClientInterface) CreateUserConfigWithBody(ctx context.Context, params *v20241015.CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateUserConfigWithBody(ctx context.Context, params *v20260507.CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, contentType, body}
 	for _, a := range reqEditors {
@@ -177,7 +177,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateUserConfigWithBody(ctx, params,
 }
 
 // DeleteConfig mocks base method.
-func (m *MockClientInterface) DeleteConfig(ctx context.Context, params *v20241015.DeleteConfigParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) DeleteConfig(ctx context.Context, params *v20260507.DeleteConfigParams, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params}
 	for _, a := range reqEditors {
@@ -197,7 +197,7 @@ func (mr *MockClientInterfaceMockRecorder) DeleteConfig(ctx, params interface{},
 }
 
 // DeleteConfigById mocks base method.
-func (m *MockClientInterface) DeleteConfigById(ctx context.Context, id types.UUID, params *v20241015.DeleteConfigByIdParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) DeleteConfigById(ctx context.Context, id types.UUID, params *v20260507.DeleteConfigByIdParams, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params}
 	for _, a := range reqEditors {
@@ -217,7 +217,7 @@ func (mr *MockClientInterfaceMockRecorder) DeleteConfigById(ctx, id, params inte
 }
 
 // GetAPIVersion mocks base method.
-func (m *MockClientInterface) GetAPIVersion(ctx context.Context, version string, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetAPIVersion(ctx context.Context, version string, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, version}
 	for _, a := range reqEditors {
@@ -237,7 +237,7 @@ func (mr *MockClientInterfaceMockRecorder) GetAPIVersion(ctx, version interface{
 }
 
 // GetConfig mocks base method.
-func (m *MockClientInterface) GetConfig(ctx context.Context, params *v20241015.GetConfigParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetConfig(ctx context.Context, params *v20260507.GetConfigParams, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params}
 	for _, a := range reqEditors {
@@ -257,7 +257,7 @@ func (mr *MockClientInterfaceMockRecorder) GetConfig(ctx, params interface{}, re
 }
 
 // GetConfigById mocks base method.
-func (m *MockClientInterface) GetConfigById(ctx context.Context, id types.UUID, params *v20241015.GetConfigByIdParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetConfigById(ctx context.Context, id types.UUID, params *v20260507.GetConfigByIdParams, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params}
 	for _, a := range reqEditors {
@@ -277,7 +277,7 @@ func (mr *MockClientInterfaceMockRecorder) GetConfigById(ctx, id, params interfa
 }
 
 // GetUserConfig mocks base method.
-func (m *MockClientInterface) GetUserConfig(ctx context.Context, params *v20241015.GetUserConfigParams, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetUserConfig(ctx context.Context, params *v20260507.GetUserConfigParams, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params}
 	for _, a := range reqEditors {
@@ -297,7 +297,7 @@ func (mr *MockClientInterfaceMockRecorder) GetUserConfig(ctx, params interface{}
 }
 
 // ListAPIVersions mocks base method.
-func (m *MockClientInterface) ListAPIVersions(ctx context.Context, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) ListAPIVersions(ctx context.Context, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx}
 	for _, a := range reqEditors {
@@ -317,7 +317,7 @@ func (mr *MockClientInterfaceMockRecorder) ListAPIVersions(ctx interface{}, reqE
 }
 
 // UpdateConfig mocks base method.
-func (m *MockClientInterface) UpdateConfig(ctx context.Context, params *v20241015.UpdateConfigParams, body v20241015.UpdateConfigJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) UpdateConfig(ctx context.Context, params *v20260507.UpdateConfigParams, body v20260507.UpdateConfigJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
@@ -337,7 +337,7 @@ func (mr *MockClientInterfaceMockRecorder) UpdateConfig(ctx, params, body interf
 }
 
 // UpdateConfigById mocks base method.
-func (m *MockClientInterface) UpdateConfigById(ctx context.Context, id types.UUID, params *v20241015.UpdateConfigByIdParams, body v20241015.UpdateConfigByIdJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) UpdateConfigById(ctx context.Context, id types.UUID, params *v20260507.UpdateConfigByIdParams, body v20260507.UpdateConfigByIdJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params, body}
 	for _, a := range reqEditors {
@@ -357,7 +357,7 @@ func (mr *MockClientInterfaceMockRecorder) UpdateConfigById(ctx, id, params, bod
 }
 
 // UpdateConfigByIdWithApplicationVndAPIPlusJSONBody mocks base method.
-func (m *MockClientInterface) UpdateConfigByIdWithApplicationVndAPIPlusJSONBody(ctx context.Context, id types.UUID, params *v20241015.UpdateConfigByIdParams, body v20241015.UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) UpdateConfigByIdWithApplicationVndAPIPlusJSONBody(ctx context.Context, id types.UUID, params *v20260507.UpdateConfigByIdParams, body v20260507.UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params, body}
 	for _, a := range reqEditors {
@@ -377,7 +377,7 @@ func (mr *MockClientInterfaceMockRecorder) UpdateConfigByIdWithApplicationVndAPI
 }
 
 // UpdateConfigByIdWithBody mocks base method.
-func (m *MockClientInterface) UpdateConfigByIdWithBody(ctx context.Context, id types.UUID, params *v20241015.UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) UpdateConfigByIdWithBody(ctx context.Context, id types.UUID, params *v20260507.UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params, contentType, body}
 	for _, a := range reqEditors {
@@ -397,7 +397,7 @@ func (mr *MockClientInterfaceMockRecorder) UpdateConfigByIdWithBody(ctx, id, par
 }
 
 // UpdateConfigWithBody mocks base method.
-func (m *MockClientInterface) UpdateConfigWithBody(ctx context.Context, params *v20241015.UpdateConfigParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) UpdateConfigWithBody(ctx context.Context, params *v20260507.UpdateConfigParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, contentType, body}
 	for _, a := range reqEditors {
@@ -440,14 +440,14 @@ func (m *MockClientWithResponsesInterface) EXPECT() *MockClientWithResponsesInte
 }
 
 // CreateConfigWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateConfigWithBodyWithResponse(ctx context.Context, params *v20241015.CreateConfigParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateConfigWithBodyWithResponse(ctx context.Context, params *v20260507.CreateConfigParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*v20260507.CreateConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, contentType, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateConfigWithBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.CreateConfigResponse)
+	ret0, _ := ret[0].(*v20260507.CreateConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -460,14 +460,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateConfigWithBodyWith
 }
 
 // CreateConfigWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateConfigWithResponse(ctx context.Context, params *v20241015.CreateConfigParams, body v20241015.CreateConfigJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateConfigWithResponse(ctx context.Context, params *v20260507.CreateConfigParams, body v20260507.CreateConfigJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*v20260507.CreateConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateConfigWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.CreateConfigResponse)
+	ret0, _ := ret[0].(*v20260507.CreateConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -480,14 +480,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateConfigWithResponse
 }
 
 // CreateUserConfigWithApplicationVndAPIPlusJSONBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateUserConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *v20241015.CreateUserConfigParams, body v20241015.CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateUserConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateUserConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *v20260507.CreateUserConfigParams, body v20260507.CreateUserConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*v20260507.CreateUserConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateUserConfigWithApplicationVndAPIPlusJSONBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.CreateUserConfigResponse)
+	ret0, _ := ret[0].(*v20260507.CreateUserConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -500,14 +500,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateUserConfigWithAppl
 }
 
 // CreateUserConfigWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateUserConfigWithBodyWithResponse(ctx context.Context, params *v20241015.CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateUserConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateUserConfigWithBodyWithResponse(ctx context.Context, params *v20260507.CreateUserConfigParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*v20260507.CreateUserConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, contentType, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateUserConfigWithBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.CreateUserConfigResponse)
+	ret0, _ := ret[0].(*v20260507.CreateUserConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -520,14 +520,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateUserConfigWithBody
 }
 
 // CreateUserConfigWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateUserConfigWithResponse(ctx context.Context, params *v20241015.CreateUserConfigParams, body v20241015.CreateUserConfigJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.CreateUserConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateUserConfigWithResponse(ctx context.Context, params *v20260507.CreateUserConfigParams, body v20260507.CreateUserConfigJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*v20260507.CreateUserConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateUserConfigWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.CreateUserConfigResponse)
+	ret0, _ := ret[0].(*v20260507.CreateUserConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -540,14 +540,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateUserConfigWithResp
 }
 
 // DeleteConfigByIdWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) DeleteConfigByIdWithResponse(ctx context.Context, id types.UUID, params *v20241015.DeleteConfigByIdParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.DeleteConfigByIdResponse, error) {
+func (m *MockClientWithResponsesInterface) DeleteConfigByIdWithResponse(ctx context.Context, id types.UUID, params *v20260507.DeleteConfigByIdParams, reqEditors ...v20260507.RequestEditorFn) (*v20260507.DeleteConfigByIdResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DeleteConfigByIdWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.DeleteConfigByIdResponse)
+	ret0, _ := ret[0].(*v20260507.DeleteConfigByIdResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -560,14 +560,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) DeleteConfigByIdWithResp
 }
 
 // DeleteConfigWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) DeleteConfigWithResponse(ctx context.Context, params *v20241015.DeleteConfigParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.DeleteConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) DeleteConfigWithResponse(ctx context.Context, params *v20260507.DeleteConfigParams, reqEditors ...v20260507.RequestEditorFn) (*v20260507.DeleteConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DeleteConfigWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.DeleteConfigResponse)
+	ret0, _ := ret[0].(*v20260507.DeleteConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -580,14 +580,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) DeleteConfigWithResponse
 }
 
 // GetAPIVersionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...v20241015.RequestEditorFn) (*v20241015.GetAPIVersionResponse, error) {
+func (m *MockClientWithResponsesInterface) GetAPIVersionWithResponse(ctx context.Context, version string, reqEditors ...v20260507.RequestEditorFn) (*v20260507.GetAPIVersionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, version}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAPIVersionWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.GetAPIVersionResponse)
+	ret0, _ := ret[0].(*v20260507.GetAPIVersionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -600,14 +600,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAPIVersionWithRespons
 }
 
 // GetConfigByIdWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetConfigByIdWithResponse(ctx context.Context, id types.UUID, params *v20241015.GetConfigByIdParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.GetConfigByIdResponse, error) {
+func (m *MockClientWithResponsesInterface) GetConfigByIdWithResponse(ctx context.Context, id types.UUID, params *v20260507.GetConfigByIdParams, reqEditors ...v20260507.RequestEditorFn) (*v20260507.GetConfigByIdResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetConfigByIdWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.GetConfigByIdResponse)
+	ret0, _ := ret[0].(*v20260507.GetConfigByIdResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -620,14 +620,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetConfigByIdWithRespons
 }
 
 // GetConfigWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetConfigWithResponse(ctx context.Context, params *v20241015.GetConfigParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.GetConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) GetConfigWithResponse(ctx context.Context, params *v20260507.GetConfigParams, reqEditors ...v20260507.RequestEditorFn) (*v20260507.GetConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetConfigWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.GetConfigResponse)
+	ret0, _ := ret[0].(*v20260507.GetConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -640,14 +640,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetConfigWithResponse(ct
 }
 
 // GetUserConfigWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetUserConfigWithResponse(ctx context.Context, params *v20241015.GetUserConfigParams, reqEditors ...v20241015.RequestEditorFn) (*v20241015.GetUserConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) GetUserConfigWithResponse(ctx context.Context, params *v20260507.GetUserConfigParams, reqEditors ...v20260507.RequestEditorFn) (*v20260507.GetUserConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetUserConfigWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.GetUserConfigResponse)
+	ret0, _ := ret[0].(*v20260507.GetUserConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -660,14 +660,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetUserConfigWithRespons
 }
 
 // ListAPIVersionsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...v20241015.RequestEditorFn) (*v20241015.ListAPIVersionsResponse, error) {
+func (m *MockClientWithResponsesInterface) ListAPIVersionsWithResponse(ctx context.Context, reqEditors ...v20260507.RequestEditorFn) (*v20260507.ListAPIVersionsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ListAPIVersionsWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.ListAPIVersionsResponse)
+	ret0, _ := ret[0].(*v20260507.ListAPIVersionsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -680,14 +680,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) ListAPIVersionsWithRespo
 }
 
 // UpdateConfigByIdWithApplicationVndAPIPlusJSONBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UpdateConfigByIdWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id types.UUID, params *v20241015.UpdateConfigByIdParams, body v20241015.UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.UpdateConfigByIdResponse, error) {
+func (m *MockClientWithResponsesInterface) UpdateConfigByIdWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id types.UUID, params *v20260507.UpdateConfigByIdParams, body v20260507.UpdateConfigByIdApplicationVndAPIPlusJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*v20260507.UpdateConfigByIdResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UpdateConfigByIdWithApplicationVndAPIPlusJSONBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.UpdateConfigByIdResponse)
+	ret0, _ := ret[0].(*v20260507.UpdateConfigByIdResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -700,14 +700,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) UpdateConfigByIdWithAppl
 }
 
 // UpdateConfigByIdWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UpdateConfigByIdWithBodyWithResponse(ctx context.Context, id types.UUID, params *v20241015.UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*v20241015.UpdateConfigByIdResponse, error) {
+func (m *MockClientWithResponsesInterface) UpdateConfigByIdWithBodyWithResponse(ctx context.Context, id types.UUID, params *v20260507.UpdateConfigByIdParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*v20260507.UpdateConfigByIdResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params, contentType, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UpdateConfigByIdWithBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.UpdateConfigByIdResponse)
+	ret0, _ := ret[0].(*v20260507.UpdateConfigByIdResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -720,14 +720,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) UpdateConfigByIdWithBody
 }
 
 // UpdateConfigByIdWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UpdateConfigByIdWithResponse(ctx context.Context, id types.UUID, params *v20241015.UpdateConfigByIdParams, body v20241015.UpdateConfigByIdJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.UpdateConfigByIdResponse, error) {
+func (m *MockClientWithResponsesInterface) UpdateConfigByIdWithResponse(ctx context.Context, id types.UUID, params *v20260507.UpdateConfigByIdParams, body v20260507.UpdateConfigByIdJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*v20260507.UpdateConfigByIdResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, id, params, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UpdateConfigByIdWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.UpdateConfigByIdResponse)
+	ret0, _ := ret[0].(*v20260507.UpdateConfigByIdResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -740,14 +740,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) UpdateConfigByIdWithResp
 }
 
 // UpdateConfigWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UpdateConfigWithBodyWithResponse(ctx context.Context, params *v20241015.UpdateConfigParams, contentType string, body io.Reader, reqEditors ...v20241015.RequestEditorFn) (*v20241015.UpdateConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) UpdateConfigWithBodyWithResponse(ctx context.Context, params *v20260507.UpdateConfigParams, contentType string, body io.Reader, reqEditors ...v20260507.RequestEditorFn) (*v20260507.UpdateConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, contentType, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UpdateConfigWithBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.UpdateConfigResponse)
+	ret0, _ := ret[0].(*v20260507.UpdateConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -760,14 +760,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) UpdateConfigWithBodyWith
 }
 
 // UpdateConfigWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UpdateConfigWithResponse(ctx context.Context, params *v20241015.UpdateConfigParams, body v20241015.UpdateConfigJSONRequestBody, reqEditors ...v20241015.RequestEditorFn) (*v20241015.UpdateConfigResponse, error) {
+func (m *MockClientWithResponsesInterface) UpdateConfigWithResponse(ctx context.Context, params *v20260507.UpdateConfigParams, body v20260507.UpdateConfigJSONRequestBody, reqEditors ...v20260507.RequestEditorFn) (*v20260507.UpdateConfigResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, params, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UpdateConfigWithResponse", varargs...)
-	ret0, _ := ret[0].(*v20241015.UpdateConfigResponse)
+	ret0, _ := ret[0].(*v20260507.UpdateConfigResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

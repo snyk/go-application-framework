@@ -10,7 +10,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/go-application-framework/internal/api"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	v20260507 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2026-05-07"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -18,7 +18,7 @@ import (
 
 // LdxSyncConfigResult contains the result of LDX-Sync config retrieval
 type LdxSyncConfigResult struct {
-	Config      *v20241015.UserConfigResponse
+	Config      *v20260507.UserConfigResponse
 	RemoteUrl   string
 	ProjectRoot string
 	Error       error
@@ -27,7 +27,7 @@ type LdxSyncConfigResult struct {
 // Organization is the struct we return to consumers. We redefine it so that consumers don't need to be aware of the
 // LDX-Sync api version.
 // For the initial release pf LDX-Sync they are identical so we use an alias.
-type Organization v20241015.Organization
+type Organization v20260507.Organization
 
 // newClient is a variable that holds the function to create a new LDX-Sync client.
 // It can be replaced in tests to inject a mock client.
@@ -36,13 +36,13 @@ var (
 	newApiClient = newApiClientImpl
 )
 
-func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20241015.ClientWithResponsesInterface, error) {
+func newClientImpl(engine workflow.Engine, config configuration.Configuration) (v20260507.ClientWithResponsesInterface, error) {
 	client := engine.GetNetworkAccess().GetHttpClient()
 	url, err := url2.JoinPath(config.GetString(configuration.API_URL), "rest")
 	if err != nil {
 		return nil, err
 	}
-	return v20241015.NewClientWithResponses(url, v20241015.WithHTTPClient(client))
+	return v20260507.NewClientWithResponses(url, v20260507.WithHTTPClient(client))
 }
 
 func newApiClientImpl(engine workflow.Engine, config configuration.Configuration) api.ApiClient {
@@ -98,8 +98,8 @@ func GetMergedConfigForFolder(ctx context.Context, engine workflow.Engine, dir s
 	}
 
 	merged := true
-	params := &v20241015.GetUserConfigParams{
-		Version:   "2024-10-15",
+	params := &v20260507.GetUserConfigParams{
+		Version:   "2026-05-07",
 		Merged:    &merged,
 		RemoteUrl: &remoteUrl,
 	}
@@ -123,7 +123,7 @@ func GetMergedConfigForFolder(ctx context.Context, engine workflow.Engine, dir s
 		return LdxSyncConfigResult{Error: fmt.Errorf("%d API error occurred", response.HTTPResponse.StatusCode)}
 	}
 
-	var configResponse *v20241015.UserConfigResponse
+	var configResponse *v20260507.UserConfigResponse
 	if response.JSON200 != nil {
 		configResponse = response.JSON200
 	} else if response.ApplicationvndApiJSON200 != nil {
@@ -191,7 +191,7 @@ func getDefaultOrganization(apiClient api.ApiClient, logger *zerolog.Logger) (Or
 	return Organization{Id: defaultOrgId, IsDefault: utils.Ptr(true)}, nil
 }
 
-func fallbackOrganization(organizations *[]v20241015.Organization, apiClient api.ApiClient, remoteUrl string, logger *zerolog.Logger) (Organization, error) {
+func fallbackOrganization(organizations *[]v20260507.Organization, apiClient api.ApiClient, remoteUrl string, logger *zerolog.Logger) (Organization, error) {
 	// Fallback to default user organization from LDX-Sync response
 	if organizations != nil {
 		for _, org := range *organizations {

@@ -234,17 +234,6 @@ components:
             type: string
           type: array
       type: object
-    BinaryManagementConfig:
-      properties:
-        automatic_download:
-          default: true
-          description: Whether to automatically download CLI updates
-          type: boolean
-        cli_path:
-          description: Path to the Snyk CLI binary
-          example: /usr/local/bin/snyk
-          type: string
-      type: object
     CodeAction:
       additionalProperties: false
       properties:
@@ -294,15 +283,6 @@ components:
     ConfigData:
       additionalProperties: false
       properties:
-        authentication_method:
-          description: Authentication method to use
-          enum:
-          - oauth
-          - token
-          - pat
-          type: string
-        endpoints:
-          $ref: '#/components/schemas/Endpoints'
         filter_config:
           $ref: '#/components/schemas/FilterConfig'
         folder_configs:
@@ -313,8 +293,7 @@ components:
           description: |
             This list includes all organizations the user has access to.
           example:
-          - asset_id: asset-123
-            id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+          - id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
             is_default: false
             name: Primary Organization
             preferred_by_algorithm: true
@@ -323,8 +302,6 @@ components:
           items:
             $ref: '#/components/schemas/Organization'
           type: array
-        proxy_config:
-          $ref: '#/components/schemas/ProxyConfig'
       type: object
     ConfigResource:
       additionalProperties: false
@@ -445,19 +422,6 @@ components:
           items:
             $ref: '#/components/schemas/GlobalSettingInput'
           type: array
-      type: object
-    Endpoints:
-      properties:
-        api_endpoint:
-          description: Snyk API endpoint
-          example: https://api.snyk.io
-          format: uri
-          type: string
-        code_endpoint:
-          description: Snyk Code API endpoint
-          example: https://deeproxy.snyk.io
-          format: uri
-          type: string
       type: object
     Error:
       additionalProperties: false
@@ -627,33 +591,14 @@ components:
           $ref: '#/components/schemas/LinkProperty'
       type: object
     FilterConfig:
+      additionalProperties: false
       properties:
-        cve:
-          description: CVE IDs to filter
-          example:
-          - CVE-2021-44228
-          items:
-            type: string
-          type: array
-        cwe:
-          description: CWE IDs to filter
-          example:
-          - CWE-79
-          - CWE-89
-          items:
-            type: string
-          type: array
         risk_score_threshold:
           description: Minimum risk score to display
           example: 400
           maximum: 1000
           minimum: 0
           type: integer
-        rule:
-          description: Rule IDs to filter
-          items:
-            type: string
-          type: array
         severities:
           properties:
             critical:
@@ -671,17 +616,8 @@ components:
           type: object
       type: object
     FolderConfig:
+      additionalProperties: false
       properties:
-        additional_environment:
-          description: Additional environment variables
-          items:
-            type: string
-          type: array
-        additional_parameters:
-          description: Additional CLI parameters
-          items:
-            type: string
-          type: array
         folder_path:
           description: Folder path relative to remote_url
           example: src/main
@@ -693,8 +629,7 @@ components:
             is set, that organization will be used for\nconfiguration resolution regardless
             of this list.\n"
           example:
-          - asset_id: asset-123
-            id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+          - id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
             is_default: false
             name: Primary Organization
             preferred_by_algorithm: true
@@ -729,14 +664,6 @@ components:
             On GET: Returns the pre-assigned org if one exists.
           example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
           format: uuid
-          type: string
-        reference_branch:
-          description: Git reference branch
-          example: main
-          type: string
-        reference_folder:
-          description: Reference folder path relative to remote_url
-          example: src/test
           type: string
         remote_url:
           description: |
@@ -783,13 +710,9 @@ components:
       description: A folder-level setting. Name must be one of FolderSettingName;
         use only in folder_configs[].settings.
       properties:
-        enforced:
-          default: false
-          description: If true, this setting cannot be overridden by lower scopes
-          type: boolean
         locked:
           default: false
-          description: If true, this setting cannot be changed by the user
+          description: If true, this setting cannot be overridden by lower scopes
           type: boolean
         name:
           $ref: '#/components/schemas/FolderSettingName'
@@ -811,13 +734,9 @@ components:
       description: A global-level setting. Name must be one of GlobalSettingName;
         use only in top-level settings.
       properties:
-        enforced:
-          default: false
-          description: If true, this setting cannot be overridden by lower scopes
-          type: boolean
         locked:
           default: false
-          description: If true, this setting cannot be changed by the user
+          description: If true, this setting cannot be overridden by lower scopes
           type: boolean
         name:
           $ref: '#/components/schemas/GlobalSettingName'
@@ -840,7 +759,6 @@ components:
       - product_oss_enabled
       - product_code_enabled
       - product_iac_enabled
-      - product_container_enabled
       - product_secrets_enabled
       - scan_automatic
       - scan_net_new
@@ -850,13 +768,8 @@ components:
       - cli_release_channel
       type: string
     IdeConfig:
+      additionalProperties: false
       properties:
-        auto_configure_mcp_server:
-          default: false
-          description: Configure Snyk MCP server
-          type: boolean
-        binary_management_config:
-          $ref: '#/components/schemas/BinaryManagementConfig'
         code_actions:
           properties:
             open_browser:
@@ -885,14 +798,8 @@ components:
           type: boolean
         product_config:
           $ref: '#/components/schemas/ProductConfig'
-        publish_security_at_inception_rules:
-          default: false
-          description: Publish Security at Inception rules
-          type: boolean
         scan_config:
           $ref: '#/components/schemas/ScanConfig'
-        trust_config:
-          $ref: '#/components/schemas/TrustConfig'
       type: object
     IdeConfigs:
       additionalProperties:
@@ -955,6 +862,7 @@ components:
         - array_value2
       type: object
     Organization:
+      additionalProperties: false
       properties:
         id:
           description: Organization UUID
@@ -993,20 +901,11 @@ components:
     Policy:
       additionalProperties: false
       properties:
-        enforced_attributes:
-          description: Attributes that will override local settings (but may be allowed
-            to edit)
-          example:
-          - filter_config.severities.critical
-          - product_config.oss
-          items:
-            type: string
-          type: array
         locked_attributes:
           description: List of attributes that cannot be overridden locally
           example:
-          - proxy_config.http
           - scan_config.automatic
+          - issue_view_config.open_issues
           items:
             type: string
           type: array
@@ -1018,10 +917,6 @@ components:
           default: true
           description: Enable Code (SAST) scanning
           type: boolean
-        container:
-          default: true
-          description: Enable Container scanning
-          type: boolean
         iac:
           default: true
           description: Enable Infrastructure as Code scanning
@@ -1030,25 +925,10 @@ components:
           default: true
           description: Enable Open Source Software scanning
           type: boolean
-      type: object
-    ProxyConfig:
-      properties:
-        http:
-          description: HTTP proxy URL
-          example: http://proxy.company.com:8080
-          type: string
-        https:
-          description: HTTPS proxy URL
-          example: https://proxy.company.com:8443
-          type: string
-        insecure:
-          default: false
-          description: Whether to skip SSL certificate validation
+        secrets:
+          default: true
+          description: Enable Secrets scanning
           type: boolean
-        no_proxy:
-          description: Comma-separated list of hosts to bypass proxy
-          example: localhost,127.0.0.1,.company.internal
-          type: string
       type: object
     QueryVersion:
       description: Requested API version
@@ -1064,6 +944,7 @@ components:
           type: string
       type: object
     ScanConfig:
+      additionalProperties: false
       properties:
         automatic:
           default: true
@@ -1078,17 +959,10 @@ components:
       additionalProperties: false
       description: Metadata for a configuration setting when merged=true
       properties:
-        enforced:
-          default: false
-          description: |
-            When true, this setting value overrides all lower-scope settings.
-            Enforced settings from higher scopes take precedence over user settings.
-          type: boolean
         locked:
           default: false
           description: |
-            When true, this setting cannot be edited by the user.
-            Locked settings are read-only in the UI.
+            If true, this setting cannot be overridden by lower scopes.
           type: boolean
         origin:
           description: The scope from which this setting value originates
@@ -1105,22 +979,6 @@ components:
       required:
       - value
       - origin
-      type: object
-    TrustConfig:
-      properties:
-        enable:
-          default: false
-          description: Enable trust configuration
-          type: boolean
-        trusted_folders:
-          description: List of trusted folder paths (relative to target)
-          example:
-          - src
-          - lib
-          - test
-          items:
-            type: string
-          type: array
       type: object
     UserConfigResponse:
       additionalProperties: false
@@ -1176,7 +1034,7 @@ components:
                     $ref: '#/components/schemas/SettingMetadata'
                   description: |
                     Global-level settings with per-setting metadata.
-                    Each setting has value, locked, enforced, and origin fields.
+                    Each setting has value, locked, and origin fields.
                   type: object
               type: object
             id:
@@ -1206,7 +1064,7 @@ components:
           properties:
             self:
               description: Link to this resource
-              example: https://api.snyk.io/rest/remote_client_connector/config?version=2024-10-15
+              example: https://api.snyk.io/rest/remote_client_connector/config?version=2026-05-07
               format: uri
               type: string
           type: object
@@ -1231,7 +1089,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       - description: Endpoint address for tenant scope
@@ -1301,9 +1159,10 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
     get:
       description: |
@@ -1331,7 +1190,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2025-07-29"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       - description: Organization ID
@@ -1469,9 +1328,10 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
     patch:
       description: |
@@ -1480,10 +1340,10 @@ paths:
         The scope is determined by the provided query parameters.
 
         ## Folder Configuration
-        When updating folder configurations (via `folder_configs`), you can optionally specify
-        or modify the `preferred_org_id` for each folder. This pre-assigns an organization to the folder,
+        When updating folder configurations (via `folder_configs`), you can optionally set
+        or modify `pre_assigned_org_id` in each folder's `settings`. This pre-assigns an organization to the folder,
         which will be used for configuration resolution instead of the auto-selection algorithm.
-        Set to null to remove the pre-assigned organization.
+        Removing a pre-assigned organization is not supported in this version (tracked in IDE-1951).
       operationId: updateConfig
       parameters:
       - description: API version in format YYYY-MM-DD
@@ -1491,7 +1351,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       - description: Endpoint address for tenant scope
@@ -1576,17 +1436,18 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
     post:
       description: "Create a new configuration at the specified scope level. \nThe
         scope is determined by the provided query parameters.\n\n## Folder Configuration\nWhen
         creating folder configurations (via `folder_configs`), you can optionally
-        specify\na `preferred_org_id` for each folder. This pre-assigns an organization
-        to the folder,\nwhich will be used for configuration resolution instead of
-        the auto-selection algorithm.\n"
+        set\n`pre_assigned_org_id` in each folder's `settings`. This pre-assigns an
+        organization to the folder,\nwhich will be used for configuration resolution
+        instead of the auto-selection algorithm.\n"
       operationId: createConfig
       parameters:
       - description: API version in format YYYY-MM-DD
@@ -1594,7 +1455,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       - description: Endpoint address for tenant scope
@@ -1685,9 +1546,10 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
   /openapi:
     get:
@@ -1763,7 +1625,7 @@ paths:
         header\n- Returns 404 if no configuration exists for the user\n\n## Merged
         Mode\nWhen `merged=true` is provided:\n- Configurations are merged from all
         applicable scopes down to the requested scope\n- Each setting includes metadata
-        (`locked`, `enforced`, `origin`)\n- Auto-org selection is performed when `remote_url`
+        (`locked`, `origin`)\n- Auto-org selection is performed when `remote_url`
         is provided\n\nWhen `merged=false` (default):\n- Returns raw database values
         for the requested scope's configuration only\n- No inheritance or precedence
         is applied\n- No per-setting metadata is included\n"
@@ -1774,7 +1636,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       - description: |
@@ -1886,9 +1748,10 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
     post:
       description: |
@@ -1916,7 +1779,7 @@ paths:
 
         ## Folder Configuration
         Each folder config can optionally specify:
-        - `organization` - Pre-assigned organization for this folder
+        - `preferred_org_id` on the folder row (optional shortcut) or `pre_assigned_org_id` in `settings`
         - `settings` - Folder-level settings (distinct from global; apply only to that folder and do not override global settings)
       operationId: createUserConfig
       parameters:
@@ -1925,7 +1788,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       - description: Tenant identifier for tenant-scope configuration
@@ -2008,9 +1871,10 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
   /remote_client_connector/config/{id}:
     delete:
@@ -2032,7 +1896,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       responses:
@@ -2073,19 +1937,20 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
     get:
       description: "Retrieve a specific configuration by its ID. Authorization is
         checked \nto ensure the user has permission to access the configuration's
         scope.\n\n## Merged Mode\nWhen `merged=true` is provided:\n- Configurations
         are merged from all applicable scopes up to and including this config's scope\n-
-        Each setting includes metadata (`locked`, `enforced`, `origin`)\n- Auto-org
-        selection is performed when `remote_url` is provided\n\nWhen `merged=false`
-        (default):\n- Returns raw database values for this configuration only\n- No
-        inheritance or precedence is applied\n- No per-setting metadata is included\n"
+        Each setting includes metadata (`locked`, `origin`)\n- Auto-org selection
+        is performed when `remote_url` is provided\n\nWhen `merged=false` (default):\n-
+        Returns raw database values for this configuration only\n- No inheritance
+        or precedence is applied\n- No per-setting metadata is included\n"
       operationId: getConfigById
       parameters:
       - description: Configuration UUID
@@ -2101,7 +1966,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       - description: |
@@ -2171,9 +2036,10 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
     patch:
       description: |
@@ -2194,7 +2060,7 @@ paths:
         name: version
         required: true
         schema:
-          example: "2024-10-15"
+          example: "2026-05-07"
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
       requestBody:
@@ -2251,9 +2117,10 @@ paths:
       - '@snyk/ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
+      - 2026-05-07~beta
       x-snyk-api-resource: config
       x-snyk-api-stability: beta
-      x-snyk-api-version: 2024-10-15~beta
+      x-snyk-api-version: 2026-05-07~beta
       x-stability-level: beta
 servers:
 - description: ldx-sync
@@ -2265,4 +2132,4 @@ x-cerberus:
   authentication:
     strategies:
     - InternalJWT: {}
-x-snyk-api-version: "2024-10-15"
+x-snyk-api-version: "2026-05-07"
