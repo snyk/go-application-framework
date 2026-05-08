@@ -845,6 +845,12 @@ type FindingAttributes struct {
 	// CauseOfFailure Did this finding cause the test outcome to fail?
 	CauseOfFailure bool `json:"cause_of_failure"`
 
+	// ComponentKey A test-scoped key referring to the component in which the Finding
+	// originated.
+	//
+	// Component keys are unique only within a Test.
+	ComponentKey *String256 `json:"component_key,omitempty"`
+
 	// Description A longer human-readable text description for this finding.
 	Description string `json:"description"`
 
@@ -1650,6 +1656,8 @@ type ScmRepoLocatorType string
 // Currently supported scans utilizing ScmResources are:
 // - SAST scans on (1) ScmResource that references a repo already
 // imported into Snyk
+// - Secrets scans on (1) ScmResource that references a repo already
+// imported into Snyk
 type ScmResource struct {
 	// Commit Commit hash to reference specifically.
 	Commit *string `json:"commit,omitempty"`
@@ -2104,6 +2112,12 @@ type SuppressionStatus string
 
 // TestAttributes TestAttributes represents the attributes of a Test resource.
 type TestAttributes struct {
+	// Components Scanned Components of the tested content.
+	//
+	// Unique on a per-test basis, originating from a single Scan type
+	// though a single Scan may identify multiple Components.
+	Components *[]TestComponent `json:"components,omitempty"`
+
 	// Config The test configuration. If not specified, caller accepts test configuration
 	// defaults within the calling scope (org, group or tenant settings, etc).
 	Config *TestConfiguration `json:"config,omitempty"`
@@ -2220,6 +2234,22 @@ type TestAttributesCreate struct {
 
 	// UserPublicId Public identifier of the user who initiated the test.
 	UserPublicId *string `json:"user_public_id,omitempty"`
+}
+
+// TestComponent TestComponent represents a Test Component.
+type TestComponent struct {
+	// AssetId ID of Asset associated with Component.
+	AssetId *Uuid `json:"asset_id,omitempty"`
+
+	// Key Key identifying the component within the Test.
+	Key String256 `json:"key"`
+
+	// ProjectId ID of Project associated with Component.
+	ProjectId *Uuid `json:"project_id,omitempty"`
+
+	// ScanType Type of Scanner producing Findings associated with this
+	// Component.
+	ScanType FindingType `json:"scan_type"`
 }
 
 // TestConfiguration Test configuration.

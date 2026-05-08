@@ -31,6 +31,7 @@ const (
 	TestResultTestFacts        TestResultKeys = "test_facts"
 	TestResultBreachedPolicies TestResultKeys = "breached_policies"
 	TestResultMetadata         TestResultKeys = "metadata"
+	TestResultComponents       TestResultKeys = "components"
 )
 
 // config holds configuration for the test API client, set using ConfigOption functions.
@@ -236,6 +237,7 @@ type testResult struct {
 	TestSubject       *TestSubject
 	SubjectLocators   *[]TestSubjectLocator
 	TestResources     *[]TestResource
+	TestComponents    *[]TestComponent
 
 	ExecutionState TestExecutionStates // e.g., "finished", "errored"
 	Errors         *[]IoSnykApiCommonError
@@ -307,6 +309,8 @@ func (r *testResult) Get(key TestResultKeys) interface{} {
 		return r.BreachedPolicies
 	case TestResultMetadata:
 		return r.metadata
+	case TestResultComponents:
+		return r.TestComponents
 	default:
 		return nil
 	}
@@ -676,6 +680,7 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		EffectiveSummary:  attrs.EffectiveSummary,
 		RawSummary:        attrs.RawSummary,
 		TestFacts:         attrs.TestFacts,
+		TestComponents:    attrs.Components,
 		handle:            h,
 		metadata:          make(map[string]interface{}),
 	}

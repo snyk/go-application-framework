@@ -42,6 +42,7 @@ type JobPollResponseConfig struct {
 // Defines the response for GET /tests/{testID}.
 type FinalTestResultConfig struct {
 	Outcome           testapi.PassFail
+	TestComponents    *[]testapi.TestComponent
 	OutcomeReason     *testapi.TestOutcomeReason
 	ApiErrors         *[]testapi.IoSnykApiCommonError
 	ApiWarnings       *[]testapi.IoSnykApiCommonError
@@ -175,6 +176,7 @@ func handleTestResultRequest(t *testing.T, w http.ResponseWriter, r *http.Reques
 		config.FinalTestResult.BreachedPolicies,
 		config.FinalTestResult.EffectiveSummary,
 		config.FinalTestResult.RawSummary,
+		config.FinalTestResult.TestComponents,
 	)
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write(resultResp)
@@ -498,6 +500,7 @@ func mockTestResultResponse(
 	breachedPolicies *testapi.PolicyRefSet,
 	effectiveSummary *testapi.FindingSummary,
 	rawSummary *testapi.FindingSummary,
+	testComponents *[]testapi.TestComponent,
 ) []byte {
 	t.Helper()
 	attributes := testapi.TestAttributes{
@@ -508,6 +511,7 @@ func mockTestResultResponse(
 		Resources:        testResources,
 		EffectiveSummary: effectiveSummary,
 		RawSummary:       rawSummary,
+		Components:       testComponents,
 		Outcome: &testapi.TestOutcome{
 			Result:           outcomeResult,
 			Reason:           outcomeReason,
