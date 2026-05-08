@@ -26,23 +26,24 @@ func Test_CreateAndRetrieveDataFromUFM(t *testing.T) {
 			},
 		},
 	}
-	// Set up expectations for all TestResult interface methods that will be called during serialization
+	// Expectations follow NewSerializableTestResult call order (gomock matches Get calls in registration order).
+	singleResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
 	singleResult.EXPECT().GetTestID().Return(&testID).AnyTimes()
 	singleResult.EXPECT().GetTestConfiguration().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetCreatedAt().Return(nil).AnyTimes()
-	singleResult.EXPECT().Get(testapi.TestResultTestSubject).Return(nil).AnyTimes()
-	singleResult.EXPECT().Get(testapi.TestResultSubjectLocators).Return(nil).AnyTimes()
 	singleResult.EXPECT().GetExecutionState().Return(testapi.TestExecutionStatesFinished).AnyTimes()
 	singleResult.EXPECT().GetErrors().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetWarnings().Return(nil).AnyTimes()
 	singleResult.EXPECT().GetPassFail().Return(&passFail).AnyTimes()
 	singleResult.EXPECT().GetOutcomeReason().Return(nil).AnyTimes()
-	singleResult.EXPECT().Get(testapi.TestResultBreachedPolicies).Return(nil).AnyTimes()
 	singleResult.EXPECT().GetEffectiveSummary().Return(nil).AnyTimes()
+	singleResult.EXPECT().Get(testapi.TestResultTestSubject).Return(nil).AnyTimes()
+	singleResult.EXPECT().Get(testapi.TestResultSubjectLocators).Return(nil).AnyTimes()
+	singleResult.EXPECT().Get(testapi.TestResultBreachedPolicies).Return(nil).AnyTimes()
 	singleResult.EXPECT().Get(testapi.TestResultRawSummary).Return(nil).AnyTimes()
 	singleResult.EXPECT().Get(testapi.TestResultTestFacts).Return(nil).AnyTimes()
 	singleResult.EXPECT().Get(testapi.TestResultMetadata).Return(nil).AnyTimes()
-	singleResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
+	singleResult.EXPECT().Get(testapi.TestResultComponents).Return(nil).AnyTimes()
 
 	results := []testapi.TestResult{singleResult}
 
