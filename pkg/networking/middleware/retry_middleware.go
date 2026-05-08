@@ -42,8 +42,7 @@ var statusCodesToRetryLUT = map[int]retryLogic{
 }
 
 var errRetryNecessary = errors.New("retry with backoff")
-var errRetryAfterHeaderError = errors.New("retry-after is too much in the future")
-var errXRateLimitResetHeaderError = errors.New("X-RateLimit-Reset is too far in the future")
+var errRetryDelayMaxExceeded = errors.New("suggested retry delay exceeds maximum allowed wait")
 
 type RetryMiddleware struct {
 	nextRoundtripper http.RoundTripper
@@ -177,7 +176,7 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 
 			// if the fix retry delay is too big, we rather fail permanently than blocking too long
 			if fixRetryDelay > maxRetryAfter {
-				return backoff.Permanent(errRetryAfterHeaderError)
+				return backoff.Permanent(errRetryDelayMaxExceeded)
 			}
 		}
 
@@ -188,7 +187,7 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 				fixRetryDelay = parseRetryDelay(headerXRateLimitResetValue)
 			}
 			if fixRetryDelay > maxRetryAfter {
-				return backoff.Permanent(errXRateLimitResetHeaderError)
+				return backoff.Permanent(errRetryDelayMaxExceeded)
 			}
 		}
 

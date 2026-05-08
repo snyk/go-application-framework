@@ -282,7 +282,7 @@ func Test_shouldRetry(t *testing.T) {
 		{
 			name:            "Retryable status code (429) with Retry-After header too far in the future (4years)",
 			response:        newResponse(http.StatusTooManyRequests, http.Header{"Retry-After": []string{"126144000"}}),
-			expectedErrorIs: &backoff.PermanentError{Err: errRetryAfterHeaderError},
+			expectedErrorIs: &backoff.PermanentError{Err: errRetryDelayMaxExceeded},
 			attempts:        0,
 			maxAttempts:     1,
 		},
@@ -427,7 +427,7 @@ func Test_shouldRetry_rateLimitResetHeaders(t *testing.T) {
 				h.Set("X-RateLimit-Reset", "126144000")
 				return newResponse(http.StatusTooManyRequests, h)
 			}(),
-			expectedErrorIs: &backoff.PermanentError{Err: errXRateLimitResetHeaderError},
+			expectedErrorIs: &backoff.PermanentError{Err: errRetryDelayMaxExceeded},
 			attempts:        0,
 			maxAttempts:     1,
 		},
