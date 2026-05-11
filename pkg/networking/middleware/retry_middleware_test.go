@@ -427,7 +427,7 @@ func Test_shouldRetry_rateLimitResetHeaders(t *testing.T) {
 				h.Set("X-RateLimit-Reset", "126144000")
 				return newResponse(http.StatusTooManyRequests, h)
 			}(),
-			expectedErrorIs: &backoff.PermanentError{Err: errRetryDelayMaxExceeded},
+			expectedErrorIs: errRetryDelayMaxExceeded,
 			attempts:        0,
 			maxAttempts:     1,
 		},
@@ -441,7 +441,7 @@ func Test_shouldRetry_rateLimitResetHeaders(t *testing.T) {
 
 			assert.NotNil(t, err)
 			if tt.expectedErrorIs != nil {
-				require.Equal(t, tt.expectedErrorIs.Error(), err.Error(), "Expected error to be of type %T, got %T (%v)", tt.expectedErrorIs, err, err)
+				require.True(t, errors.Is(err, tt.expectedErrorIs), `Expected error to be equal to "%v" (%T), got "%v" (%T)`, tt.expectedErrorIs, tt.expectedErrorIs, err, err)
 			}
 			if tt.expectedRetryable != nil {
 				var actualRetryableErr *backoff.RetryAfterError
