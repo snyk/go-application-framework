@@ -338,6 +338,15 @@ func (e *EngineImpl) Invoke(
 			localLogger.Printf("Workflow Start")
 			output, err = callback(invocationCtx, options.input)
 			localLogger.Printf("Workflow End")
+
+			// Apply the engine's configuration to output data so that
+			// IN_MEMORY_THRESHOLD_BYTES and TEMP_DIR_PATH are respected
+			// even when workflows create Data without WithConfiguration.
+			for _, d := range output {
+				if di, ok := d.(*DataImpl); ok {
+					di.applyConfiguration(options.config)
+				}
+			}
 		}
 	} else {
 		err = fmt.Errorf("workflow '%v' not found", id)
