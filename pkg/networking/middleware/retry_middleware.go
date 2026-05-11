@@ -133,13 +133,20 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
 	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod))
 
-	// if retries fail to resolve the issue, we need to unset the locally used error type to not return it from the RoundTripper
-	if errors.Is(finalError, errRetryNecessary) {
-		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
-		finalError = nil
-	}
+	return finalResponse, rm.maskInternalRetryError(finalError, actualAttempts)
+}
 
-	return finalResponse, finalError
+// maskInternalRetryError strips sentinel errors used only inside the retry loop so callers receive the last HTTP response.
+func (rm RetryMiddleware) maskInternalRetryError(err error, actualAttempts int) error {
+	if errors.Is(err, errRetryNecessary) {
+		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
+		return nil
+	}
+	if errors.Is(err, errRetryDelayMaxExceeded) {
+		rm.logger.Warn().Msg("Suggested retry delay from Retry-After or X-RateLimit-Reset exceeds maximum allowed wait; returning last HTTP response")
+		return nil
+	}
+	return err
 }
 
 func getMaxRetryAttempts(response *http.Response, maxAttempts int) int {

@@ -196,6 +196,62 @@ func TestNewRetryMiddleware(t *testing.T) {
 		require.GreaterOrEqual(t, attemptCount, 2)
 	})
 
+	t.Run("429 with Retry-After beyond max wait returns response without leaking internal error", func(t *testing.T) {
+		const hugeRetryAfter = "126144000" // 4 years in seconds; exceeds maxRetryAfter
+
+		//nolint:unparam // error is always nil but signature must match http.RoundTripper
+		customRTFn := func(req *http.Request) (*http.Response, error) {
+			h := http.Header{}
+			h.Set("Retry-After", hugeRetryAfter)
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     h,
+				Request:    req,
+			}, nil
+		}
+
+		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 3)
+		config.Set(configurationKeyRetryAfter, 1)
+
+		sut := NewRetryMiddleware(config, &logger, rt)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		require.Equal(t, hugeRetryAfter, resp.Header.Get("Retry-After"))
+	})
+
+	t.Run("429 with X-RateLimit-Reset beyond max wait returns response without leaking internal error", func(t *testing.T) {
+		const hugeReset = "126144000"
+
+		//nolint:unparam // error is always nil but signature must match http.RoundTripper
+		customRTFn := func(req *http.Request) (*http.Response, error) {
+			h := http.Header{}
+			h.Set("X-RateLimit-Reset", hugeReset)
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     h,
+				Request:    req,
+			}, nil
+		}
+
+		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 3)
+		config.Set(configurationKeyRetryAfter, 1)
+
+		sut := NewRetryMiddleware(config, &logger, rt)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		require.Equal(t, hugeReset, resp.Header.Get("X-RateLimit-Reset"))
+	})
+
 	t.Run("Unhappy path, retries didn't resolve the issue", func(t *testing.T) {
 		var expectedAttempts = 3
 		failureRoundtripper := &failRoundtripper{
