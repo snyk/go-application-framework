@@ -21,6 +21,7 @@ type jsonTestResult struct {
 	TestSubject       *testapi.TestSubject            `json:"testSubject,omitempty"`
 	SubjectLocators   *[]testapi.TestSubjectLocator   `json:"subjectLocators,omitempty"`
 	TestResources     *[]testapi.TestResource         `json:"testResources,omitempty"`
+	TestComponents    *[]testapi.TestComponent        `json:"testComponents,omitempty"`
 	ExecutionState    testapi.TestExecutionStates     `json:"executionState"`
 	Errors            *[]testapi.IoSnykApiCommonError `json:"errors,omitempty"`
 	Warnings          *[]testapi.IoSnykApiCommonError `json:"warnings,omitempty"`
@@ -62,6 +63,8 @@ func (j *jsonTestResult) Get(key testapi.TestResultKeys) interface{} {
 		return j.BreachedPolicies
 	case testapi.TestResultMetadata:
 		return j.Metadata
+	case testapi.TestResultComponents:
+		return j.TestComponents
 	default:
 		return nil
 	}
@@ -254,6 +257,10 @@ func NewSerializableTestResult(ctx context.Context, tr testapi.TestResult) (test
 		return nil, err
 	}
 	result.Metadata, err = getResultProperty[map[string]any](tr.Get(testapi.TestResultMetadata), testapi.TestResultMetadata)
+	if err != nil {
+		return nil, err
+	}
+	result.TestComponents, err = getResultProperty[*[]testapi.TestComponent](tr.Get(testapi.TestResultComponents), testapi.TestResultComponents)
 	if err != nil {
 		return nil, err
 	}

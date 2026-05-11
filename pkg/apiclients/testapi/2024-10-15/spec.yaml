@@ -922,6 +922,14 @@ components:
           default: false
           description: Did this finding cause the test outcome to fail?
           type: boolean
+        component_key:
+          allOf:
+          - $ref: '#/components/schemas/String256'
+          description: |-
+            A test-scoped key referring to the component in which the Finding
+            originated.
+
+            Component keys are unique only within a Test.
         description:
           description: A longer human-readable text description for this finding.
           type: string
@@ -2272,6 +2280,8 @@ components:
         Currently supported scans utilizing ScmResources are:
         - SAST scans on (1) ScmResource that references a repo already
         imported into Snyk
+        - Secrets scans on (1) ScmResource that references a repo already
+        imported into Snyk
       example:
         commit: 8dbd1ea7201a0d49603467981075a633d91e40b9
         file_patterns: []
@@ -2971,6 +2981,16 @@ components:
     TestAttributes:
       description: TestAttributes represents the attributes of a Test resource.
       properties:
+        components:
+          description: |-
+            Scanned Components of the tested content.
+
+            Unique on a per-test basis, originating from a single Scan type
+            though a single Scan may identify multiple Components.
+          items:
+            $ref: '#/components/schemas/TestComponent'
+          readOnly: true
+          type: array
         config:
           allOf:
           - $ref: '#/components/schemas/TestConfiguration'
@@ -3168,6 +3188,31 @@ components:
           description: Public identifier of the user who initiated the test.
           maxLength: 64
           type: string
+      type: object
+    TestComponent:
+      description: TestComponent represents a Test Component.
+      properties:
+        asset_id:
+          allOf:
+          - $ref: '#/components/schemas/Uuid'
+          description: ID of Asset associated with Component.
+        key:
+          allOf:
+          - $ref: '#/components/schemas/String256'
+          description: Key identifying the component within the Test.
+        project_id:
+          allOf:
+          - $ref: '#/components/schemas/Uuid'
+          description: ID of Project associated with Component.
+        scan_type:
+          allOf:
+          - $ref: '#/components/schemas/FindingType'
+          description: |-
+            Type of Scanner producing Findings associated with this
+            Component.
+      required:
+      - key
+      - scan_type
       type: object
     TestConfiguration:
       description: Test configuration.
