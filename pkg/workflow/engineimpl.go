@@ -31,7 +31,7 @@ type EngineImpl struct {
 	ui                   ui.UserInterface
 	runtimeInfo          runtimeinfo.RuntimeInfo
 
-	mu                sync.Mutex
+	mu                sync.RWMutex
 	invocationCounter int
 }
 
@@ -73,6 +73,8 @@ func WithContext(ctx context.Context) EngineInvokeOption {
 }
 
 func (e *EngineImpl) GetLogger() *zerolog.Logger {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.logger
 }
 
