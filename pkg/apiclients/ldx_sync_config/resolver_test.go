@@ -15,7 +15,7 @@ import (
 
 	"github.com/snyk/go-application-framework/internal/api"
 	api_mocks "github.com/snyk/go-application-framework/internal/mocks"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2026-05-07"
 	ldx_mocks "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/mocks"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -417,7 +417,7 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
 				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
 					// Verify params
-					assert.Equal(t, "2024-10-15", params.Version)
+					assert.Equal(t, "2026-05-07", params.Version)
 					assert.NotNil(t, params.Merged)
 					assert.True(t, *params.Merged)
 					assert.NotNil(t, params.RemoteUrl)
@@ -442,7 +442,7 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
 				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
 					// Verify params
-					assert.Equal(t, "2024-10-15", params.Version)
+					assert.Equal(t, "2026-05-07", params.Version)
 					assert.NotNil(t, params.Merged)
 					assert.True(t, *params.Merged)
 					assert.NotNil(t, params.RemoteUrl)
@@ -468,7 +468,7 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
 				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
 					// Verify params
-					assert.Equal(t, "2024-10-15", params.Version)
+					assert.Equal(t, "2026-05-07", params.Version)
 					assert.NotNil(t, params.Merged)
 					assert.True(t, *params.Merged)
 					assert.NotNil(t, params.RemoteUrl)
@@ -498,7 +498,7 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
 				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
 					// Verify params including resolved orgId
-					assert.Equal(t, "2024-10-15", params.Version)
+					assert.Equal(t, "2026-05-07", params.Version)
 					assert.NotNil(t, params.Merged)
 					assert.True(t, *params.Merged)
 					assert.NotNil(t, params.RemoteUrl)
