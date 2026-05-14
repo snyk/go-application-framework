@@ -42,7 +42,7 @@ var statusCodesToRetryLUT = map[int]retryLogic{
 }
 
 var errRetryNecessary = errors.New("retry with backoff")
-var errRetryAfterHeaderError = errors.New("retry-after is too much in the future")
+var errRetryDelayMaxExceeded = errors.New("suggested retry delay exceeds maximum allowed wait")
 
 type RetryMiddleware struct {
 	nextRoundtripper http.RoundTripper
@@ -109,7 +109,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			response.Header.Set(retryCountHeaderKey, fmt.Sprintf("%d", actualAttempts))
 		}
 
-		// errors from the next round tripper cannot not be retried
+		// errors from the next round tripper cannot be retried
 		if err != nil {
 			return response, backoff.Permanent(err)
 		}
@@ -133,13 +133,21 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
 	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod))
 
-	// if retries fail to resolve the issue, we need to unset the locally used error type to not return it from the RoundTripper
-	if errors.Is(finalError, errRetryNecessary) {
-		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
-		finalError = nil
-	}
-
+	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError
+}
+
+// filterRetryError strips sentinel errors used only inside the retry loop so callers receive the last HTTP response.
+func (rm RetryMiddleware) filterRetryError(err error, actualAttempts int) error {
+	if errors.Is(err, errRetryNecessary) {
+		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
+		return nil
+	}
+	if errors.Is(err, errRetryDelayMaxExceeded) {
+		rm.logger.Warn().Msg("Suggested retry delay from Retry-After or X-RateLimit-Reset exceeds maximum allowed wait; returning last HTTP response")
+		return nil
+	}
+	return err
 }
 
 func getMaxRetryAttempts(response *http.Response, maxAttempts int) int {
@@ -172,12 +180,23 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 
 		// try to read retry-after header if available
 		if headerRetryAfterValue := response.Header.Get("Retry-After"); len(headerRetryAfterValue) > 0 {
-			fixRetryDelay = parseRetryAfterHeader(headerRetryAfterValue)
+			fixRetryDelay = parseRetryDelay(headerRetryAfterValue)
+
+			// if the fix retry delay is too big, we rather fail permanently than blocking too long
+			if fixRetryDelay > maxRetryAfter {
+				return backoff.Permanent(errRetryDelayMaxExceeded)
+			}
 		}
 
-		// if the fix retry delay is too big, we rather fail permanently than blocking too long
-		if fixRetryDelay > maxRetryAfter {
-			return backoff.Permanent(errRetryAfterHeaderError)
+		if fixRetryDelay == 0 {
+			// try to read X-RateLimit-Reset header if available
+			// according to envoy docs: number of seconds until reset of the current time-window
+			if headerXRateLimitResetValue := response.Header.Get("X-RateLimit-Reset"); len(headerXRateLimitResetValue) > 0 {
+				fixRetryDelay = parseRetryDelay(headerXRateLimitResetValue)
+			}
+			if fixRetryDelay > maxRetryAfter {
+				return backoff.Permanent(errRetryDelayMaxExceeded)
+			}
 		}
 
 		// if a retry after is defined, this is the time to wait for
@@ -192,7 +211,7 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 	return nil
 }
 
-func parseRetryAfterHeader(headerRetryAfterValue string) time.Duration {
+func parseRetryDelay(headerRetryAfterValue string) time.Duration {
 	// Retry-After: 1230
 	if tmp, err := strconv.ParseInt(headerRetryAfterValue, 10, 64); err == nil {
 		return time.Duration(tmp) * time.Second
