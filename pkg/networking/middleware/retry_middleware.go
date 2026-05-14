@@ -133,11 +133,12 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
 	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod))
 
-	return finalResponse, rm.maskInternalRetryError(finalError, actualAttempts)
+	finalError = rm.filterRetryError(finalError, actualAttempts)
+	return finalResponse, finalError
 }
 
-// maskInternalRetryError strips sentinel errors used only inside the retry loop so callers receive the last HTTP response.
-func (rm RetryMiddleware) maskInternalRetryError(err error, actualAttempts int) error {
+// filterRetryError strips sentinel errors used only inside the retry loop so callers receive the last HTTP response.
+func (rm RetryMiddleware) filterRetryError(err error, actualAttempts int) error {
 	if errors.Is(err, errRetryNecessary) {
 		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
 		return nil
