@@ -29,15 +29,12 @@ func TestFixture_UUIDs_are_deterministic(t *testing.T) {
 	first, err := Fixture([]byte(input))
 	require.NoError(t, err)
 
-	// Run 20 times — every run must produce byte-identical output.
 	for i := 1; i < 20; i++ {
 		out, err := Fixture([]byte(input))
 		require.NoError(t, err, "iteration %d", i)
 		assert.Equal(t, string(first), string(out), "iteration %d produced different output (non-deterministic)", i)
 	}
 
-	// Verify the exact sequential counter: array position 0 gets counter
-	// 1, position 1 gets counter 2, etc.
 	var result []map[string]interface{}
 	require.NoError(t, json.Unmarshal(first, &result))
 
@@ -45,7 +42,7 @@ func TestFixture_UUIDs_are_deterministic(t *testing.T) {
 	require.True(t, ok, `expected []interface{} at result[0]["uuids"]`)
 
 	for i, v := range uuids {
-		want := fmt.Sprintf("11112222-3333-4444-5555-%012x", i+1)
+		want := fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1)
 		got, ok := v.(string)
 		require.True(t, ok, "uuids[%d]: expected string, got %T", i, v)
 		assert.Equal(t, want, got, "uuids[%d]", i)
@@ -63,8 +60,8 @@ func TestFixture_same_UUID_maps_to_same_replacement(t *testing.T) {
 	assert.Equal(t, result[0]["a"], result[0]["b"], "same source UUID should map to the same replacement")
 }
 
-func TestFixture_email_field_replaced(t *testing.T) {
-	input := `[{"email":"alice@example.com","author":"bob@example.com"}]`
+func TestFixture_emails_replaced_anywhere(t *testing.T) {
+	input := `[{"email":"alice@example.com","author":"bob@example.com","name":"set by carol@snyk.io"}]`
 	out, err := Fixture([]byte(input))
 	require.NoError(t, err)
 
@@ -72,7 +69,8 @@ func TestFixture_email_field_replaced(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out, &result))
 
 	assert.Equal(t, stableEmail, result[0]["email"])
-	assert.Equal(t, "bob@example.com", result[0]["author"], "author is not the 'email' key, should pass through")
+	assert.Equal(t, stableEmail, result[0]["author"])
+	assert.Equal(t, "set by "+stableEmail, result[0]["name"])
 }
 
 func TestFixture_email_field_in_nested_object(t *testing.T) {
@@ -90,8 +88,55 @@ func TestFixture_email_field_in_nested_object(t *testing.T) {
 	assert.Equal(t, "Alice", user["name"], "non-email fields should pass through")
 }
 
-func TestFixture_UUIDs_in_URLs_remapped(t *testing.T) {
-	input := `[{"url":"https://app.snyk.io/org/foo/project/aaaaaaaa-1111-2222-3333-444444444444/report"}]`
+// Markdown descriptions for OSS findings often contain "package@1.2.3"
+// strings (sometimes with exotic version suffixes like Maven's `.RELEASE`,
+// pre-release tags, or build metadata). The email pattern match must skip
+// all of these — its domain anchor requires a leading letter, ruling out
+// digit-led version suffixes.
+func TestFixture_package_at_version_not_redacted(t *testing.T) {
+	cases := []string{
+		// Semver-ish: numeric TLD, never email-shaped.
+		"got@11.8.5",
+		"lodash@4.17.21",
+		"requests@2.31.0",
+		// Maven-style suffixes — all-alpha "TLD" looks like an email TLD.
+		"org.springframework.boot@2.7.0.RELEASE",
+		"com.fasterxml.jackson.core@2.13.0.Final",
+		"javax.inject@1.0.0.GA",
+		"org.hibernate@5.4.0.SR1",
+		// Pre-release / build-metadata tags.
+		"react@18.2.0-alpha",
+		"vue@3.0.0-rc.1",
+		"webpack@5.0.0-beta.1",
+		"libfoo@1.0.0-SNAPSHOT",
+		"gem@1.0.0+build.123",
+		// Architecture/platform suffixes.
+		"nokogiri@1.13.4-x86_64-linux",
+		// Operators / globs commonly seen in advisories.
+		"lodash@^4.17.21",
+		"package@~1.2.3",
+		"foo@1.x",
+		"@scope/package@1.0.0",
+	}
+	for _, c := range cases {
+		t.Run(c, func(t *testing.T) {
+			input := fmt.Sprintf(`[{"description":"Upgrade %s for the fix."}]`, c)
+			out, err := Fixture([]byte(input))
+			require.NoError(t, err)
+
+			var result []map[string]interface{}
+			require.NoError(t, json.Unmarshal(out, &result))
+
+			desc, ok := result[0]["description"].(string)
+			assert.True(t, ok)
+			assert.Contains(t, desc, c, "package@version must be left untouched, got %q", desc)
+			assert.NotContains(t, desc, stableEmail)
+		})
+	}
+}
+
+func TestFixture_UUIDs_in_strings_remapped(t *testing.T) {
+	input := `[{"url":"https://snyk.io/projects/aaaaaaaa-1111-2222-3333-444444444444/report"}]`
 	out, err := Fixture([]byte(input))
 	require.NoError(t, err)
 
@@ -99,14 +144,48 @@ func TestFixture_UUIDs_in_URLs_remapped(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out, &result))
 
 	url, ok := result[0]["url"].(string)
-	require.True(t, ok, `expected string at result[0]["url"]`)
-
-	assert.NotEqual(t, input, url, "URL should have been transformed")
-	assert.False(t, strings.Contains(url, "aaaaaaaa-1111-2222-3333-444444444444"), "original UUID still present in URL")
+	assert.True(t, ok)
+	assert.NotContains(t, url, "aaaaaaaa-1111-2222-3333-444444444444", "original UUID still present")
+	matches := uuidRE.FindAllString(url, -1)
+	require.Len(t, matches, 1)
+	assert.True(t, strings.HasPrefix(matches[0], "00000000-0000-0000-0000-"), "expected placeholder UUID, got %q", matches[0])
 }
 
-func TestFixture_metadata_redacted(t *testing.T) {
-	input := `[{"metadata":{"project-id":"aaaaaaaa-1111-2222-3333-444444444444","snapshot-id":"bbbbbbbb-1111-2222-3333-444444444444","project-page-link":"https://example.com","report-url":"https://old","kept":"value"}}]`
+func TestFixture_snyk_org_slug_swapped(t *testing.T) {
+	// Covers every Snyk app subdomain (production, regional, internal envs)
+	// so the redacted fixture doesn't leak the originating org slug.
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"app", "https://app.snyk.io/org/real-org-slug/project", "https://app.snyk.io/org/my-org/project"},
+		{"dev", "https://app.dev.snyk.io/org/another-slug/project/x", "https://app.snyk.io/org/my-org/project/x"},
+		{"eu", "https://app.eu.snyk.io/org/eu-team/dashboard", "https://app.snyk.io/org/my-org/dashboard"},
+		{"path_only", "https://app.snyk.io/org/slug-with-dashes-123", "https://app.snyk.io/org/my-org"},
+		{"project_with_uuid", "https://app.dev.snyk.io/org/real-org/project/aaaaaaaa-1111-2222-3333-444444444444/report", "https://app.snyk.io/org/my-org/project/00000000-0000-0000-0000-000000000001/report"},
+		{"non_snyk_left_alone", "https://github.com/org/some-org/repo", "https://github.com/org/some-org/repo"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := fmt.Sprintf(`[{"link":%q}]`, tc.in)
+			out, err := Fixture([]byte(input))
+			require.NoError(t, err)
+
+			var result []map[string]interface{}
+			require.NoError(t, json.Unmarshal(out, &result))
+
+			link, ok := result[0]["link"].(string)
+			assert.True(t, ok)
+			assert.Equal(t, tc.want, link)
+		})
+	}
+}
+
+func TestFixture_metadata_project_id_remapped_as_uuid(t *testing.T) {
+	// project-id used to have a hard-coded placeholder. Now it's just a
+	// UUID-valued string and should be handled by the generic UUID remapper.
+	input := `[{"metadata":{"project-id":"aaaaaaaa-1111-2222-3333-444444444444","snapshot-id":"bbbbbbbb-1111-2222-3333-444444444444","report-url":"https://app.snyk.io/org/real-org/project/aaaaaaaa-1111-2222-3333-444444444444","kept":"value"}}]`
 	out, err := Fixture([]byte(input))
 	require.NoError(t, err)
 
@@ -114,29 +193,21 @@ func TestFixture_metadata_redacted(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out, &result))
 
 	meta, ok := result[0]["metadata"].(map[string]interface{})
-	require.True(t, ok, `expected map at result[0]["metadata"]`)
+	assert.True(t, ok)
 
-	wantPage := fmt.Sprintf("https://app.snyk.io/org/my-org/project/%s", stableMetadataProjectID)
+	projectID, ok := meta["project-id"].(string)
+	assert.True(t, ok)
+	assert.True(t, strings.HasPrefix(projectID, "00000000-0000-0000-0000-"), "project-id should be remapped, got %q", projectID)
 
-	assert.Equal(t, stableMetadataProjectID, meta["project-id"])
-	assert.Equal(t, stableMetadataSnapshotID, meta["snapshot-id"])
-	assert.Equal(t, wantPage, meta["project-page-link"])
-	assert.Equal(t, wantPage, meta["report-url"])
-	assert.Equal(t, "value", meta["kept"])
-}
+	snapshotID, ok := meta["snapshot-id"].(string)
+	assert.True(t, ok)
+	assert.True(t, strings.HasPrefix(snapshotID, "00000000-0000-0000-0000-"), "snapshot-id should be remapped, got %q", snapshotID)
+	assert.NotEqual(t, projectID, snapshotID)
 
-func TestFixture_metadata_without_report_url(t *testing.T) {
-	input := `[{"metadata":{"kept":"value"}}]`
-	out, err := Fixture([]byte(input))
-	require.NoError(t, err)
-
-	var result []map[string]interface{}
-	require.NoError(t, json.Unmarshal(out, &result))
-
-	meta, ok := result[0]["metadata"].(map[string]interface{})
-	require.True(t, ok, `expected map at result[0]["metadata"]`)
-
-	assert.NotContains(t, meta, "report-url", "report-url should not be injected when absent from input")
+	reportURL, ok := meta["report-url"].(string)
+	assert.True(t, ok)
+	wantURL := "https://app.snyk.io/org/" + stableOrgSlug + "/project/" + projectID
+	assert.Equal(t, wantURL, reportURL, "URL keeps domain, swaps org slug, reuses remapped project-id")
 	assert.Equal(t, "value", meta["kept"])
 }
 
@@ -149,21 +220,21 @@ func TestFixture_nested_arrays(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out, &result))
 
 	items, ok := result[0]["items"].([]interface{})
-	require.True(t, ok, `expected []interface{} at result[0]["items"]`)
+	assert.True(t, ok)
 	require.Len(t, items, 2)
 
 	item0, ok := items[0].(map[string]interface{})
-	require.True(t, ok, "expected map at items[0]")
+	assert.True(t, ok)
 	item1, ok := items[1].(map[string]interface{})
-	require.True(t, ok, "expected map at items[1]")
+	assert.True(t, ok)
 
 	id1, ok := item0["id"].(string)
-	require.True(t, ok, `expected string at items[0]["id"]`)
+	assert.True(t, ok)
 	id2, ok := item1["id"].(string)
-	require.True(t, ok, `expected string at items[1]["id"]`)
+	assert.True(t, ok)
 
-	assert.NotEqual(t, "aaaaaaaa-1111-2222-3333-444444444444", id1, "nested UUID should be remapped")
-	assert.NotEqual(t, "bbbbbbbb-1111-2222-3333-444444444444", id2, "nested UUID should be remapped")
+	assert.True(t, strings.HasPrefix(id1, "00000000-0000-0000-0000-"), "nested UUID should use placeholder prefix, got %q", id1)
+	assert.True(t, strings.HasPrefix(id2, "00000000-0000-0000-0000-"), "nested UUID should use placeholder prefix, got %q", id2)
 	assert.NotEqual(t, id1, id2, "different UUIDs should map to different replacements")
 }
 
@@ -188,35 +259,48 @@ func TestFixture_problem_ref_map_keys_share_UUID_mapping_with_values(t *testing.
 
 	root := result[0]
 	refs, ok := root["_problemRefs"].(map[string]interface{})
-	require.True(t, ok, "expected map at _problemRefs")
-
+	assert.True(t, ok)
 	problems, ok := root["problems"].([]interface{})
-	require.True(t, ok, "expected []interface{} at problems")
+	assert.True(t, ok)
 	require.Len(t, problems, 2)
 
 	p0, ok := problems[0].(map[string]interface{})
-	require.True(t, ok, "problems[0] should be an object")
+	assert.True(t, ok)
 	p1, ok := problems[1].(map[string]interface{})
-	require.True(t, ok, "problems[1] should be an object")
+	assert.True(t, ok)
 	id0, ok := p0["id"].(string)
-	require.True(t, ok, "problems[0].id should be a string")
+	assert.True(t, ok)
 	id1, ok := p1["id"].(string)
-	require.True(t, ok, "problems[1].id should be a string")
-	require.NotEmpty(t, id0, "problems[0].id")
-	require.NotEmpty(t, id1, "problems[1].id")
+	assert.True(t, ok)
+	require.NotEmpty(t, id0)
+	require.NotEmpty(t, id1)
 
 	assert.Contains(t, refs, id0, "_problemRefs should contain key matching first problem id")
 	assert.Contains(t, refs, id1, "_problemRefs should contain key matching second problem id")
 }
 
-func TestFixture_invalid_json(t *testing.T) {
-	_, err := Fixture([]byte(`not json`))
-	assert.Error(t, err)
-}
-
-func TestFixture_non_array_json(t *testing.T) {
-	_, err := Fixture([]byte(`{"key":"value"}`))
-	assert.Error(t, err)
+func TestFixture_input_validation(t *testing.T) {
+	cases := []struct {
+		name        string
+		input       string
+		wantOutput  string
+		wantErrText string
+	}{
+		{"invalid_json", "not json", "", "expected top-level JSON array"},
+		{"object_not_array", `{"key":"value"}`, "", "expected top-level JSON array"},
+		{"empty_array", `[]`, "[]\n", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := Fixture([]byte(tc.input))
+			if tc.wantErrText != "" {
+				assert.ErrorContains(t, err, tc.wantErrText)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantOutput, string(out))
+		})
+	}
 }
 
 func TestUUIDRemapper_incremental(t *testing.T) {
@@ -225,8 +309,8 @@ func TestUUIDRemapper_incremental(t *testing.T) {
 	b := r.Remap("bbbbbbbb-1111-2222-3333-444444444444")
 
 	assert.NotEqual(t, a, b, "different inputs should produce different outputs")
-	assert.Equal(t, "11112222-3333-4444-5555-000000000001", a)
-	assert.Equal(t, "11112222-3333-4444-5555-000000000002", b)
+	assert.Equal(t, "00000000-0000-0000-0000-000000000001", a)
+	assert.Equal(t, "00000000-0000-0000-0000-000000000002", b)
 
 	a2 := r.Remap("AAAAAAAA-1111-2222-3333-444444444444")
 	assert.Equal(t, a, a2, "case-insensitive lookup should return the same mapped UUID")

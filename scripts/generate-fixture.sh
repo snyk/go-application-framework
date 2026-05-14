@@ -94,10 +94,9 @@ if [[ "${REDACT}" == "1" ]]; then
   echo ""
   printf "Redacting:\n"
   printf "  cd %q\n" "${REPO_ROOT}"
-  printf "  go run ./cmd/ufm-fixture-tool --input=%q --output=%qZ\n" "${raw_output}" "${redacted_output}"
+  printf "  go run ./cmd/ufm-fixture-tool --input=%q --output=%q\n" "${raw_output}" "${redacted_output}"
   (
     cd "${REPO_ROOT}"
     go run ./cmd/ufm-fixture-tool --input="${raw_output}" --output="${redacted_output}"
   )
 fi
-

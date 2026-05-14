@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
@@ -622,9 +623,7 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := os.Stat(tc.testResultPath); os.IsNotExist(err) {
-				t.Skipf("fixture not yet generated: %s (see README for dump+redact workflow)", tc.testResultPath)
-			}
+			require.FileExists(t, tc.testResultPath, "fixture missing — regenerate via `make generate-fixture` (see CONTRIBUTING.md)")
 
 			expectedSarifBytes, err := os.ReadFile(tc.expectedSarifPath)
 			if os.IsNotExist(err) && regenerateExpectedFiles {
@@ -1236,9 +1235,7 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := os.Stat(tc.testResultPath); os.IsNotExist(err) {
-				t.Skipf("fixture not yet generated: %s (see README for dump+redact workflow)", tc.testResultPath)
-			}
+			require.FileExists(t, tc.testResultPath, "fixture missing — regenerate via `make generate-fixture` (see CONTRIBUTING.md)")
 
 			expectedBytes, err := os.ReadFile(tc.expectedPath)
 			if os.IsNotExist(err) && regenerateExpectedFiles {
