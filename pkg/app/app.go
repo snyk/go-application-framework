@@ -22,6 +22,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
@@ -30,6 +31,47 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils/conversion"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+// OrgLookup records how the ORGANIZATION value was resolved.
+type OrgLookup string
+
+const (
+	// orgLookupSourceKey is the instrumentation extension key for the OrgLookup value.
+	orgLookupSourceKey = "gaf.app.defaultfunc.organization.lookup"
+
+	// Values for orgLookupSourceKey.
+	orgLookupProvidedID         OrgLookup = "provided_id"
+	orgLookupProvidedSlug       OrgLookup = "provided_slug"
+	orgLookupProvidedSlugFailed OrgLookup = "provided_slug_failed"
+	orgLookupDefault            OrgLookup = "default"
+	orgLookupDefaultFailed      OrgLookup = "default_failed"
+)
+
+type instrumentationRecorder struct {
+	collector analytics.InstrumentationCollector
+	logger    *zerolog.Logger
+}
+
+// newInstrumentationRecorder wraps the analytics.InstrumentationCollector to prevent nil-check panics
+// (e.g. during engine Init, before e.analytics is assigned).
+func newInstrumentationRecorder(engine workflow.Engine, logger *zerolog.Logger) instrumentationRecorder {
+	r := instrumentationRecorder{
+		logger: logger,
+	}
+	if a := engine.GetAnalytics(); a != nil {
+		r.collector = a.GetInstrumentation()
+	}
+	return r
+}
+
+//nolint:unparam // the method is general-purpose and can receive any key, value
+func (r instrumentationRecorder) addExtension(key string, value any) {
+	if r.collector == nil {
+		r.logger.Debug().Msgf("Instrumentation collector is nil, skipping extension for key: %s, value: %v", key, value)
+		return
+	}
+	r.collector.AddExtension(key, value)
+}
 
 func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Configuration, logger *zerolog.Logger, apiClientFactory func(url string, client *http.Client) api.ApiClient) configuration.DefaultValueFunction {
 	err := config.AddKeyDependency(configuration.ORGANIZATION_SLUG, configuration.ORGANIZATION)
@@ -49,7 +91,7 @@ func defaultFuncOrganizationSlug(engine workflow.Engine, config configuration.Co
 		}
 		slugName, err := apiClient.GetSlugFromOrgId(context.Background(), orgId)
 		if err != nil {
-			logger.Print("Failed to determine default value for \"ORGANIZATION_SLUG\":", err)
+			logger.Print("Failed to determine slugname for \"ORGANIZATION_SLUG\":", err)
 		}
 		return slugName, nil
 	}
@@ -65,6 +107,8 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 	callback := func(_ configuration.Configuration, existingValue interface{}) (interface{}, error) {
 		// TODO - This function uses the outer (global) config and network access, so will not respect values set in the closures' (potentially cloned) configs.
 		client := engine.GetNetworkAccess().GetHttpClient()
+		instrumentation := newInstrumentationRecorder(engine, logger)
+		instrumentation.addExtension(orgLookupSourceKey, orgLookupDefault)
 		url := config.GetString(configuration.API_URL)
 		apiClient := apiClientFactory(url, client)
 		existingString, ok := existingValue.(string)
@@ -75,20 +119,25 @@ func defaultFuncOrganization(engine workflow.Engine, config configuration.Config
 			if isSlugName {
 				orgId, err = apiClient.GetOrgIdFromSlug(context.Background(), existingString)
 				if err != nil {
-					logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
+					instrumentation.addExtension(orgLookupSourceKey, orgLookupProvidedSlugFailed)
+					logger.Print("Failed to lookup \"ORGANIZATION\" id from slugname :", err)
 				} else {
+					instrumentation.addExtension(orgLookupSourceKey, orgLookupProvidedSlug)
 					return orgId, nil
 				}
 			} else {
+				// TODO [CLI-436] - we always return the org ID here, even if it is not valid, which is not what we do for slugs
+				// it makes this datapoint a bit ambiguous as a result
+				instrumentation.addExtension(orgLookupSourceKey, orgLookupProvidedID)
 				return orgId, nil
 			}
 		}
 
 		orgId, err := apiClient.GetDefaultOrgId(context.Background())
 		if err != nil {
+			instrumentation.addExtension(orgLookupSourceKey, orgLookupDefaultFailed)
 			logger.Print("Failed to determine default value for \"ORGANIZATION\":", err)
 		}
-
 		return orgId, err
 	}
 	return callback
