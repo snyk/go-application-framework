@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
@@ -56,6 +57,8 @@ type NetworkAccess interface {
 	GetLogger() *zerolog.Logger
 	GetConfiguration() configuration.Configuration
 
+	SetUserInterface(ui uitypes.UserInterface)
+
 	Clone() NetworkAccess
 }
 
@@ -70,6 +73,7 @@ type networkImpl struct {
 	errorHandler   networktypes.ErrorHandlerFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
+	ui             uitypes.UserInterface
 }
 
 // defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -188,11 +192,15 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	}
 }
 
+func (n *networkImpl) SetUserInterface(ui uitypes.UserInterface) {
+	n.ui = ui
+}
+
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 	//nolint:errcheck // breaking api change needed to fix this
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
 	var crt http.RoundTripper = n.configureRoundTripper(transport)
-	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt)
+	crt = middleware.NewRetryMiddlewareWithUI(n.config, n.logger, crt, n.ui)
 
 	if n.errorHandler != nil {
 		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
@@ -278,6 +286,7 @@ func (n *networkImpl) Clone() NetworkAccess {
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
+		ui:             n.ui,
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {

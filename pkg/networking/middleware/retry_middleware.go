@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 const defaultMaxAttemptsCount = 1 // Per default max network attempts (=1) this means retries are disabled and need to be enabled via the configuration
@@ -48,6 +49,7 @@ type RetryMiddleware struct {
 	nextRoundtripper http.RoundTripper
 	config           configuration.Configuration
 	logger           *zerolog.Logger
+	ui               uitypes.UserInterface
 }
 
 func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper) *RetryMiddleware {
@@ -55,6 +57,15 @@ func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logg
 		nextRoundtripper: roundTripper,
 		config:           config,
 		logger:           logger,
+	}
+}
+
+func NewRetryMiddlewareWithUI(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, ui uitypes.UserInterface) *RetryMiddleware {
+	return &RetryMiddleware{
+		nextRoundtripper: roundTripper,
+		config:           config,
+		logger:           logger,
+		ui:               ui,
 	}
 }
 
@@ -66,6 +77,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	var retryAfterSeconds = defaultRetryAfterSeconds
 	var actualAttempts int = 0
 	var cachedMaxRetries *int = nil // Per-request cached max retries
+	var lastStatusCode int = 0
 
 	if tmp := rm.config.GetInt(ConfigurationKeyRequestAttempts); tmp > 0 {
 		maxAttempts = tmp
@@ -114,6 +126,8 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			return response, backoff.Permanent(err)
 		}
 
+		lastStatusCode = response.StatusCode
+
 		// Cache max retry attempts for the current request
 		if cachedMaxRetries == nil {
 			calculated := getMaxRetryAttempts(response, maxAttempts)
@@ -129,9 +143,14 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		return response, nil
 	}
 
+	notify := rm.rateLimitNotifyFunc(&lastStatusCode, &actualAttempts, &cachedMaxRetries, maxAttempts)
+
 	backoffMethod := backoff.NewExponentialBackOff()
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
-	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod))
+	finalResponse, finalError = backoff.Retry(req.Context(), op,
+		backoff.WithBackOff(backoffMethod),
+		backoff.WithNotify(notify),
+	)
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError

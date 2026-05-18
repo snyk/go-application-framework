@@ -14,6 +14,7 @@ import (
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
+	uitypes "github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -237,6 +238,18 @@ func (m *MockNetworkAccess) SetConfiguration(configuration configuration.Configu
 func (mr *MockNetworkAccessMockRecorder) SetConfiguration(configuration interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConfiguration", reflect.TypeOf((*MockNetworkAccess)(nil).SetConfiguration), configuration)
+}
+
+// SetUserInterface mocks base method.
+func (m *MockNetworkAccess) SetUserInterface(ui uitypes.UserInterface) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetUserInterface", ui)
+}
+
+// SetUserInterface indicates an expected call of SetUserInterface.
+func (mr *MockNetworkAccessMockRecorder) SetUserInterface(ui interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserInterface", reflect.TypeOf((*MockNetworkAccess)(nil).SetUserInterface), ui)
 }
 
 // SetLogger mocks base method.

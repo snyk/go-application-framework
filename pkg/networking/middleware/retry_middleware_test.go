@@ -9,17 +9,20 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cenkalti/backoff/v5"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 // Helper to create a response
@@ -549,4 +552,263 @@ func Test_parseRetryDelay(t *testing.T) {
 			assert.Equal(t, 0.0, math.Abs(float64(timeDistance)))
 		})
 	}
+}
+
+func Test_filterRetryError(t *testing.T) {
+	logger := zerolog.Nop()
+	rm := RetryMiddleware{logger: &logger}
+
+	t.Run("retry exhausted returns nil", func(t *testing.T) {
+		err := rm.filterRetryError(backoff.Permanent(errRetryNecessary), 3)
+		assert.NoError(t, err)
+	})
+
+	t.Run("delay max exceeded returns nil", func(t *testing.T) {
+		err := rm.filterRetryError(backoff.Permanent(errRetryDelayMaxExceeded), 1)
+		assert.NoError(t, err)
+	})
+
+	t.Run("non-sentinel error passes through unchanged", func(t *testing.T) {
+		originalErr := errors.New("some other error")
+		err := rm.filterRetryError(originalErr, 1)
+		assert.Equal(t, originalErr, err)
+	})
+}
+
+func Test_retryMiddleware_429_exhausted_returns_last_response(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	always429 := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{},
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &always429}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 1)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	assert.Equal(t, 3, attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
+}
+
+func Test_retryMiddleware_429_maxAttempts1_overridden_to_3(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+	trackingUI := &trackingUserInterface{}
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	always429 := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{"Retry-After": []string{"1"}},
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &always429}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 1)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddlewareWithUI(config, &logger, rt, trackingUI)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	assert.Equal(t, 3, attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
+
+	trackingUI.mu.Lock()
+	defer trackingUI.mu.Unlock()
+	assert.NotEmpty(t, trackingUI.warnErrors, "Rate-limit warning should appear since 429 override causes retries")
+}
+
+func Test_retryMiddleware_500_exhausted_returns_nil_error(t *testing.T) {
+	logger := zerolog.Nop()
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	always500 := func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Header:     http.Header{},
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &always500}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 2)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func Test_retryMiddleware_nil_UI_works_without_panic(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount < 2 {
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 2, attemptCount)
+}
+
+func Test_retryMiddleware_UI_feedback_shown_during_429_retry(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	trackingUI := &trackingUserInterface{}
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount < 2 {
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddlewareWithUI(config, &logger, rt, trackingUI)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 2, attemptCount)
+
+	trackingUI.mu.Lock()
+	defer trackingUI.mu.Unlock()
+
+	assert.NotEmpty(t, trackingUI.warnErrors, "Expected rate-limit wait warning via OutputError")
+	for _, warnErr := range trackingUI.warnErrors {
+		assert.Equal(t, "warn", warnErr.Level)
+		assert.Equal(t, "Rate limited", warnErr.Title)
+		assert.Contains(t, warnErr.Description, "Waiting")
+		assert.Contains(t, warnErr.Description, "before retry")
+		assert.Empty(t, warnErr.ErrorCode)
+		assert.Zero(t, warnErr.StatusCode)
+	}
+}
+
+func Test_retryMiddleware_UI_with_noop_indicator(t *testing.T) {
+	logger := zerolog.Nop()
+	attemptCount := 0
+
+	fakeUI := &fakeUserInterface{}
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		if attemptCount < 2 {
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddlewareWithUI(config, &logger, rt, fakeUI)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+type fakeUserInterface struct{}
+
+func (f *fakeUserInterface) Output(string) error                                 { return nil }
+func (f *fakeUserInterface) OutputError(error, ...uitypes.Opts) error            { return nil }
+func (f *fakeUserInterface) NewProgressBar() uitypes.ProgressBar                 { return uitypes.EmptyProgressBar{} }
+func (f *fakeUserInterface) Input(string) (string, error)                        { return "", nil }
+func (f *fakeUserInterface) SelectOptions(string, []string) (int, string, error) { return 0, "", nil }
+
+type trackingUserInterface struct {
+	mu         sync.Mutex
+	warnErrors []snyk_errors.Error
+}
+
+func (t *trackingUserInterface) Output(string) error { return nil }
+func (t *trackingUserInterface) OutputError(err error, _ ...uitypes.Opts) error {
+	var catalogErr snyk_errors.Error
+	if errors.As(err, &catalogErr) {
+		t.mu.Lock()
+		t.warnErrors = append(t.warnErrors, catalogErr)
+		t.mu.Unlock()
+	}
+	return nil
+}
+func (t *trackingUserInterface) Input(string) (string, error) { return "", nil }
+func (t *trackingUserInterface) SelectOptions(string, []string) (int, string, error) {
+	return 0, "", nil
+}
+func (t *trackingUserInterface) NewProgressBar() uitypes.ProgressBar {
+	return uitypes.EmptyProgressBar{}
 }

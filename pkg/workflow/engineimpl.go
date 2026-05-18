@@ -356,6 +356,9 @@ func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
 	if e.networkAccess == nil {
 		e.networkAccess = networking.NewNetworkAccess(e.config)
 		e.networkAccess.SetLogger(e.logger)
+		if e.ui != nil {
+			e.networkAccess.SetUserInterface(e.ui)
+		}
 	}
 
 	return e.networkAccess
