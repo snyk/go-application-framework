@@ -137,15 +137,15 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	return finalResponse, finalError
 }
 
-// filterRetryError strips sentinel errors used only inside the retry loop so callers receive the last HTTP response.
+// filterRetryError maps sentinel retry-loop errors to catalog errors while callers still receive the last HTTP response.
 func (rm RetryMiddleware) filterRetryError(err error, actualAttempts int) error {
 	if errors.Is(err, errRetryNecessary) {
 		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
-		return nil
+		return snyk.NewTooManyRequestsError(fmt.Sprintf("Retry ultimately failed after %d attempts", actualAttempts))
 	}
 	if errors.Is(err, errRetryDelayMaxExceeded) {
 		rm.logger.Warn().Msg("Suggested retry delay from Retry-After or X-RateLimit-Reset exceeds maximum allowed wait; returning last HTTP response")
-		return nil
+		return snyk.NewTooManyRequestsError("Suggested retry delay from Retry-After or X-RateLimit-Reset exceeds maximum allowed wait")
 	}
 	return err
 }

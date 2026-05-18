@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	snyk_errors "github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,6 +22,14 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
+
+func assertSNYK0001(t *testing.T, err error) {
+	t.Helper()
+	require.Error(t, err)
+	var catalogErr snyk_errors.Error
+	require.True(t, errors.As(err, &catalogErr))
+	require.Equal(t, "SNYK-0001", catalogErr.ErrorCode)
+}
 
 // Helper to create a response
 func newResponse(statusCode int, headers http.Header) *http.Response {
@@ -113,7 +122,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		sut := NewRetryMiddleware(config, &logger, failRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-		assert.NoError(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 
 		assert.Equal(t, 3, attemptCount, "Should use cached max attempts from first 429 response")
@@ -196,7 +205,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		require.GreaterOrEqual(t, attemptCount, 2)
 	})
 
-	t.Run("429 with Retry-After beyond max wait returns response without leaking internal error", func(t *testing.T) {
+	t.Run("429 with Retry-After beyond max wait returns SNYK-0001 and last response", func(t *testing.T) {
 		const hugeRetryAfter = "126144000" // 4 years in seconds; exceeds maxRetryAfter
 
 		//nolint:unparam // error is always nil but signature must match http.RoundTripper
@@ -218,13 +227,13 @@ func TestNewRetryMiddleware(t *testing.T) {
 		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-		require.NoError(t, err)
+		assertSNYK0001(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		require.Equal(t, hugeRetryAfter, resp.Header.Get("Retry-After"))
 	})
 
-	t.Run("429 with X-RateLimit-Reset beyond max wait returns response without leaking internal error", func(t *testing.T) {
+	t.Run("429 with X-RateLimit-Reset beyond max wait returns SNYK-0001 and last response", func(t *testing.T) {
 		const hugeReset = "126144000"
 
 		//nolint:unparam // error is always nil but signature must match http.RoundTripper
@@ -246,7 +255,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-		require.NoError(t, err)
+		assertSNYK0001(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		require.Equal(t, hugeReset, resp.Header.Get("X-RateLimit-Reset"))
@@ -265,7 +274,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assert.NoError(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
@@ -283,7 +292,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assert.NoError(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
@@ -301,7 +310,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assert.NoError(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
