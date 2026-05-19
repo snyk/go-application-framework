@@ -141,7 +141,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 func (rm RetryMiddleware) filterRetryError(err error, actualAttempts int) error {
 	if errors.Is(err, errRetryNecessary) {
 		rm.logger.Warn().Msgf("Retry ultimately failed after %d attempts", actualAttempts)
-		return nil
+		return snyk.NewTooManyRequestsError(fmt.Sprintf("Retry ultimately failed after %d attempts", actualAttempts))
 	}
 	if errors.Is(err, errRetryDelayMaxExceeded) {
 		rm.logger.Warn().Msg("Suggested retry delay from Retry-After or X-RateLimit-Reset exceeds maximum allowed wait; returning last HTTP response")

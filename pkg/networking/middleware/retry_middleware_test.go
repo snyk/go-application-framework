@@ -122,7 +122,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		sut := NewRetryMiddleware(config, &logger, failRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-		assert.Nil(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 
 		assert.Equal(t, 3, attemptCount, "Should use cached max attempts from first 429 response")
@@ -274,7 +274,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assert.Nil(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
@@ -292,7 +292,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assert.Nil(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
@@ -310,7 +310,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assert.Nil(t, err)
+		assertSNYK0001(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
