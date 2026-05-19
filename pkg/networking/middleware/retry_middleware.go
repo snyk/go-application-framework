@@ -188,11 +188,6 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 		// try to read retry-after header if available
 		if headerRetryAfterValue := response.Header.Get("Retry-After"); len(headerRetryAfterValue) > 0 {
 			fixRetryDelay = parseRetryDelay(headerRetryAfterValue)
-
-			// if the fix retry delay is too big, we rather fail permanently than blocking too long
-			if fixRetryDelay > maxRetryAfter {
-				return backoff.Permanent(errRetryDelayMaxExceeded)
-			}
 		}
 
 		if fixRetryDelay == 0 {
@@ -201,9 +196,10 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			if headerXRateLimitResetValue := response.Header.Get("X-RateLimit-Reset"); len(headerXRateLimitResetValue) > 0 {
 				fixRetryDelay = parseRetryDelay(headerXRateLimitResetValue)
 			}
-			if fixRetryDelay > maxRetryAfter {
-				return backoff.Permanent(errRetryDelayMaxExceeded)
-			}
+		}
+
+		if fixRetryDelay > maxRetryAfter {
+			return backoff.Permanent(errRetryDelayMaxExceeded)
 		}
 
 		// if a retry after is defined, this is the time to wait for
