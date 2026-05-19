@@ -133,6 +133,8 @@ func errFromStatusCode(code int) error {
 		return snyk.NewBadRequestError("The request cannot be processed.")
 	case http.StatusInternalServerError:
 		return snyk.NewServerError("Internal server error.")
+	case http.StatusTooManyRequests:
+		return snyk.NewTooManyRequestsError("Too many requests.")
 	default:
 		return nil
 	}

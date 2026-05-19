@@ -14,7 +14,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
-	snyk_errors "github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,14 +21,6 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
-
-func assertSNYK0001(t *testing.T, err error) {
-	t.Helper()
-	require.Error(t, err)
-	var catalogErr snyk_errors.Error
-	require.True(t, errors.As(err, &catalogErr))
-	require.Equal(t, "SNYK-0001", catalogErr.ErrorCode)
-}
 
 // Helper to create a response
 func newResponse(statusCode int, headers http.Header) *http.Response {
@@ -122,7 +113,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		sut := NewRetryMiddleware(config, &logger, failRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-		assertSNYK0001(t, err)
+		assert.Nil(t, err)
 		assert.NotNil(t, response)
 
 		assert.Equal(t, 3, attemptCount, "Should use cached max attempts from first 429 response")
@@ -227,7 +218,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-		assertSNYK0001(t, err)
+		assert.Nil(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		require.Equal(t, hugeRetryAfter, resp.Header.Get("Retry-After"))
@@ -255,7 +246,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-		assertSNYK0001(t, err)
+		assert.Nil(t, err)
 		require.NotNil(t, resp)
 		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		require.Equal(t, hugeReset, resp.Header.Get("X-RateLimit-Reset"))
@@ -274,7 +265,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assertSNYK0001(t, err)
+		assert.Nil(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
@@ -292,7 +283,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assertSNYK0001(t, err)
+		assert.Nil(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
@@ -310,7 +301,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
-		assertSNYK0001(t, err)
+		assert.Nil(t, err)
 		assert.NotNil(t, response)
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
