@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -320,6 +321,7 @@ func testInitReportAnalyticsWorkflow(ctrl *gomock.Controller) error {
 
 func testGetMockHTTPClient(t *testing.T, orgId string, requestPayload string) *http.Client {
 	t.Helper()
+	configtest.IsolateEnvironmentForTest(t)
 	mockClient := testutils.NewTestClient(func(req *http.Request) *http.Response {
 		// Test request parameters
 		require.Equal(t, "/hidden/orgs/"+orgId+"/analytics?version=2024-03-07~experimental", req.URL.String())

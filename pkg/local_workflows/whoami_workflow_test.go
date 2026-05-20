@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	testutils "github.com/snyk/go-application-framework/pkg/local_workflows/test_utils"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -77,6 +78,8 @@ const missingFieldsPayload string = `{
 func setupMockContext(t *testing.T, payload string, json bool, statusCode int) *mocks.MockInvocationContext {
 	// This method is a helper
 	t.Helper()
+
+	configtest.IsolateEnvironmentForTest(t)
 
 	// setup
 	logger := zerolog.Logger{}

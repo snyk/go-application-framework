@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
@@ -269,6 +270,8 @@ func Test_ConfigurationGet_Url(t *testing.T) {
 }
 
 func Test_ConfigurationGet_StringSlice(t *testing.T) {
+	configtest.IsolateEnvironmentForTest(t)
+
 	config := New()
 
 	expectedDefault := []string{}
