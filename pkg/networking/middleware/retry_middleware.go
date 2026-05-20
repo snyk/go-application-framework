@@ -198,13 +198,14 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			fixXRateLimitReset = parseRetryDelay(headerXRateLimitResetValue)
 		}
 
-		if max(fixRetryDelay, fixXRateLimitReset) > maxRetryAfter {
+		timeToWait := max(fixRetryDelay, fixXRateLimitReset)
+		if timeToWait > maxRetryAfter {
 			return backoff.Permanent(errRetryDelayMaxExceeded)
 		}
 
 		// if a retry after is defined, this is the time to wait for
-		if fixRetryDelay > 0 {
-			return &backoff.RetryAfterError{Duration: fixRetryDelay}
+		if timeToWait > 0 {
+			return &backoff.RetryAfterError{Duration: timeToWait}
 		}
 
 		// if no retry after is defined, the backoff strategy determines the time to wait for
