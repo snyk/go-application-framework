@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
@@ -26,6 +27,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 )
+
+// regenerateExpectedFiles controls whether the test loops overwrite expected
+// files with the current presenter output instead of comparing.
+// Flip to true here, or set UFM_REGEN=1 env var.
+var regenerateExpectedFiles = os.Getenv("UFM_REGEN") == "1" || false
 
 func validateSarifData(t *testing.T, data []byte) {
 	t.Helper()
@@ -617,15 +623,20 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			require.FileExists(t, tc.testResultPath, "fixture missing — regenerate via `make generate-fixture` (see CONTRIBUTING.md)")
+
 			expectedSarifBytes, err := os.ReadFile(tc.expectedSarifPath)
-			assert.NoError(t, err)
+			if os.IsNotExist(err) && regenerateExpectedFiles {
+				expectedSarifBytes = nil
+			} else {
+				assert.NoError(t, err)
+			}
 
 			testResultBytes, err := os.ReadFile(tc.testResultPath)
 			assert.NoError(t, err)
 
 			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
 			assert.NoError(t, err)
-			// assert.Equal(t, 1, len(testResult))
 
 			config := configuration.NewWithOpts()
 
@@ -636,6 +647,13 @@ func Test_UfmPresenter_Sarif(t *testing.T) {
 			assert.NoError(t, err)
 
 			validateSarifData(t, writer.Bytes())
+
+			if regenerateExpectedFiles {
+				if writeErr := os.WriteFile(tc.expectedSarifPath, writer.Bytes(), 0o644); writeErr != nil {
+					t.Fatalf("failed to regenerate %s: %v", tc.expectedSarifPath, writeErr)
+				}
+				t.Skipf("regenerated %s", tc.expectedSarifPath)
+			}
 
 			// Normalize both expected and actual SARIF to ignore known gaps while testing implemented features
 			expectedNormalized := normalizeSarifForComparison(t, string(expectedSarifBytes), tc.ignoreSuppressions)
@@ -1217,8 +1235,14 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			require.FileExists(t, tc.testResultPath, "fixture missing — regenerate via `make generate-fixture` (see CONTRIBUTING.md)")
+
 			expectedBytes, err := os.ReadFile(tc.expectedPath)
-			assert.NoError(t, err)
+			if os.IsNotExist(err) && regenerateExpectedFiles {
+				expectedBytes = nil
+			} else {
+				assert.NoError(t, err)
+			}
 
 			testResultBytes, err := os.ReadFile(tc.testResultPath)
 			assert.NoError(t, err)
@@ -1240,6 +1264,14 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			assert.NoError(t, err)
 
 			actualBytes := writer.Bytes()
+
+			if regenerateExpectedFiles {
+				if writeErr := os.WriteFile(tc.expectedPath, actualBytes, 0o644); writeErr != nil {
+					t.Fatalf("failed to regenerate %s: %v", tc.expectedPath, writeErr)
+				}
+				t.Skipf("regenerated %s", tc.expectedPath)
+			}
+
 			assert.NotEmpty(t, actualBytes)
 
 			assert.NotEmpty(t, expectedBytes)

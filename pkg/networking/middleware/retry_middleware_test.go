@@ -475,7 +475,7 @@ func Test_shouldRetry_rateLimitResetHeaders(t *testing.T) {
 				h.Set("X-RateLimit-Reset", "10")
 				return newResponse(http.StatusTooManyRequests, h)
 			}(),
-			expectedRetryable: &backoff.RetryAfterError{Duration: 3 * time.Second},
+			expectedRetryable: &backoff.RetryAfterError{Duration: 10 * time.Second},
 			attempts:          0,
 			maxAttempts:       1,
 		},
