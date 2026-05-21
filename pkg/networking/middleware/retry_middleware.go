@@ -76,7 +76,8 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	var maxAttempts = defaultMaxAttemptsCount
 	var retryAfterSeconds = defaultRetryAfterSeconds
 	var actualAttempts int = 0
-	var cachedMaxRetries *int = nil // Per-request cached max retries
+	var cachedMaxRetries int
+	var maxRetriesCached bool
 	var statusCode int = 0
 
 	if tmp := rm.config.GetInt(ConfigurationKeyRequestAttempts); tmp > 0 {
@@ -129,13 +130,13 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		statusCode = response.StatusCode
 
 		// Cache max retry attempts for the current request
-		if cachedMaxRetries == nil {
-			calculated := getMaxRetryAttempts(response, maxAttempts)
-			cachedMaxRetries = &calculated
+		if !maxRetriesCached {
+			cachedMaxRetries = getMaxRetryAttempts(response, maxAttempts)
+			maxRetriesCached = true
 		}
 
 		// depending on the response determine if we should retry
-		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
+		if retryError := shouldRetry(response, actualAttempts, cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
 			return response, retryError
 		}
@@ -144,7 +145,11 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	notify := func(_ error, duration time.Duration) {
-		rm.notifyRateLimit(duration, statusCode, actualAttempts, maxAttempts, cachedMaxRetries)
+		resolvedMax := maxAttempts
+		if maxRetriesCached {
+			resolvedMax = cachedMaxRetries
+		}
+		rm.notifyRateLimit(duration, statusCode, actualAttempts, resolvedMax)
 	}
 
 	backoffMethod := backoff.NewExponentialBackOff()
