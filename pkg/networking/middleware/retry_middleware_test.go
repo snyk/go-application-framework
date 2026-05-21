@@ -575,42 +575,11 @@ func Test_filterRetryError(t *testing.T) {
 	})
 }
 
-func Test_retryMiddleware_429_exhausted_returns_last_response(t *testing.T) {
+func Test_retryMiddleware_429_exhausted(t *testing.T) {
 	logger := zerolog.Nop()
-	attemptCount := 0
 
 	//nolint:unparam // error is always nil but signature must match http.RoundTripper
 	always429 := func(req *http.Request) (*http.Response, error) {
-		attemptCount++
-		return &http.Response{
-			StatusCode: http.StatusTooManyRequests,
-			Header:     http.Header{},
-			Request:    req,
-		}, nil
-	}
-
-	rt := &failRoundtripper{t: t, roundTripFn: &always429}
-	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, 1)
-	config.Set(configurationKeyRetryAfter, 1)
-
-	sut := NewRetryMiddleware(config, &logger, rt)
-	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
-
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
-	assert.Equal(t, 3, attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
-}
-
-func Test_retryMiddleware_429_maxAttempts1_overridden_to_3(t *testing.T) {
-	logger := zerolog.Nop()
-	attemptCount := 0
-	trackingUI := &trackingUserInterface{}
-
-	//nolint:unparam // error is always nil but signature must match http.RoundTripper
-	always429 := func(req *http.Request) (*http.Response, error) {
-		attemptCount++
 		return &http.Response{
 			StatusCode: http.StatusTooManyRequests,
 			Header:     http.Header{"Retry-After": []string{"1"}},
@@ -618,177 +587,148 @@ func Test_retryMiddleware_429_maxAttempts1_overridden_to_3(t *testing.T) {
 		}, nil
 	}
 
-	rt := &failRoundtripper{t: t, roundTripFn: &always429}
-	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, 1)
-	config.Set(configurationKeyRetryAfter, 1)
-
-	sut := NewRetryMiddlewareWithUI(config, &logger, rt, trackingUI)
-	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
-
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
-	assert.Equal(t, 3, attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
-
-	trackingUI.mu.Lock()
-	defer trackingUI.mu.Unlock()
-	assert.NotEmpty(t, trackingUI.warnErrors, "Rate-limit warning should appear since 429 override causes retries")
-}
-
-func Test_retryMiddleware_500_exhausted_returns_nil_error(t *testing.T) {
-	logger := zerolog.Nop()
-
-	//nolint:unparam // error is always nil but signature must match http.RoundTripper
-	always500 := func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusInternalServerError,
-			Header:     http.Header{},
-			Request:    req,
-		}, nil
+	newSUT := func(t *testing.T, ui uitypes.UserInterface) (*RetryMiddleware, *int) {
+		t.Helper()
+		attemptCount := 0
+		wrappedFn := func(req *http.Request) (*http.Response, error) {
+			attemptCount++
+			return always429(req)
+		}
+		rt := &failRoundtripper{t: t, roundTripFn: &wrappedFn}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 1)
+		config.Set(configurationKeyRetryAfter, 1)
+		if ui != nil {
+			return NewRetryMiddlewareWithUI(config, &logger, rt, ui), &attemptCount
+		}
+		return NewRetryMiddleware(config, &logger, rt), &attemptCount
 	}
 
-	rt := &failRoundtripper{t: t, roundTripFn: &always500}
-	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, 2)
-	config.Set(configurationKeyRetryAfter, 1)
+	t.Run("returns last 429 response and nil error", func(t *testing.T) {
+		sut, attemptCount := newSUT(t, nil)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-	sut := NewRetryMiddleware(config, &logger, rt)
-	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		assert.Equal(t, 3, *attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
+	})
 
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	t.Run("shows rate-limit warnings during retries", func(t *testing.T) {
+		trackingUI := &trackingUserInterface{}
+		sut, attemptCount := newSUT(t, trackingUI)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		assert.Equal(t, 3, *attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
+
+		trackingUI.mu.Lock()
+		defer trackingUI.mu.Unlock()
+		assert.NotEmpty(t, trackingUI.warnErrors, "Rate-limit warning should appear since 429 override causes retries")
+	})
 }
 
-func Test_retryMiddleware_nil_UI_works_without_panic(t *testing.T) {
+func Test_retryMiddleware_429_then_success(t *testing.T) {
 	logger := zerolog.Nop()
-	attemptCount := 0
 
 	//nolint:unparam // error is always nil but signature must match http.RoundTripper
-	customRTFn := func(req *http.Request) (*http.Response, error) {
-		attemptCount++
-		if attemptCount < 2 {
+	once429ThenOK := func(count *int) func(req *http.Request) (*http.Response, error) {
+		return func(req *http.Request) (*http.Response, error) {
+			*count++
+			if *count < 2 {
+				return &http.Response{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     http.Header{},
+					Request:    req,
+				}, nil
+			}
 			return &http.Response{
-				StatusCode: http.StatusTooManyRequests,
+				StatusCode: http.StatusOK,
 				Header:     http.Header{},
 				Request:    req,
 			}, nil
 		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     http.Header{},
-			Request:    req,
-		}, nil
 	}
 
-	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
-	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+	newSUT := func(t *testing.T, ui uitypes.UserInterface) (*RetryMiddleware, *int) {
+		t.Helper()
+		attemptCount := 0
+		fn := once429ThenOK(&attemptCount)
+		rt := &failRoundtripper{t: t, roundTripFn: &fn}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 3)
+		config.Set(configurationKeyRetryAfter, 1)
+		if ui != nil {
+			return NewRetryMiddlewareWithUI(config, &logger, rt, ui), &attemptCount
+		}
+		return NewRetryMiddleware(config, &logger, rt), &attemptCount
+	}
 
-	sut := NewRetryMiddleware(config, &logger, rt)
-	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+	t.Run("nil UI does not panic", func(t *testing.T) {
+		sut, attemptCount := newSUT(t, nil)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, 2, attemptCount)
-}
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, 2, *attemptCount)
+	})
 
-func Test_retryMiddleware_UI_feedback_shown_during_429_retry(t *testing.T) {
-	logger := zerolog.Nop()
-	attemptCount := 0
+	t.Run("UI receives warn with correct payload", func(t *testing.T) {
+		trackingUI := &trackingUserInterface{}
+		sut, attemptCount := newSUT(t, trackingUI)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-	trackingUI := &trackingUserInterface{}
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, 2, *attemptCount)
 
-	//nolint:unparam // error is always nil but signature must match http.RoundTripper
-	customRTFn := func(req *http.Request) (*http.Response, error) {
-		attemptCount++
-		if attemptCount < 2 {
+		trackingUI.mu.Lock()
+		defer trackingUI.mu.Unlock()
+
+		assert.NotEmpty(t, trackingUI.warnErrors, "Expected rate-limit wait warning via OutputError")
+		for _, warnErr := range trackingUI.warnErrors {
+			assert.Equal(t, "warn", warnErr.Level)
+			assert.Equal(t, "Rate limited", warnErr.Title)
+			assert.Contains(t, warnErr.Description, "Waiting")
+			assert.Contains(t, warnErr.Description, "before retry")
+			assert.Empty(t, warnErr.ErrorCode)
+			assert.Zero(t, warnErr.StatusCode)
+		}
+	})
+
+	t.Run("500 exhaustion does not show rate-limit warning", func(t *testing.T) {
+		trackingUI := &trackingUserInterface{}
+
+		//nolint:unparam // error is always nil but signature must match http.RoundTripper
+		always500 := func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
-				StatusCode: http.StatusTooManyRequests,
+				StatusCode: http.StatusInternalServerError,
 				Header:     http.Header{},
 				Request:    req,
 			}, nil
 		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     http.Header{},
-			Request:    req,
-		}, nil
-	}
 
-	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
-	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
+		rt := &failRoundtripper{t: t, roundTripFn: &always500}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 2)
+		config.Set(configurationKeyRetryAfter, 1)
 
-	sut := NewRetryMiddlewareWithUI(config, &logger, rt, trackingUI)
-	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+		sut := NewRetryMiddlewareWithUI(config, &logger, rt, trackingUI)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, 2, attemptCount)
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 
-	trackingUI.mu.Lock()
-	defer trackingUI.mu.Unlock()
-
-	assert.NotEmpty(t, trackingUI.warnErrors, "Expected rate-limit wait warning via OutputError")
-	for _, warnErr := range trackingUI.warnErrors {
-		assert.Equal(t, "warn", warnErr.Level)
-		assert.Equal(t, "Rate limited", warnErr.Title)
-		assert.Contains(t, warnErr.Description, "Waiting")
-		assert.Contains(t, warnErr.Description, "before retry")
-		assert.Empty(t, warnErr.ErrorCode)
-		assert.Zero(t, warnErr.StatusCode)
-	}
+		trackingUI.mu.Lock()
+		defer trackingUI.mu.Unlock()
+		assert.Empty(t, trackingUI.warnErrors, "500 retries should not produce rate-limit warnings")
+	})
 }
-
-func Test_retryMiddleware_UI_with_noop_indicator(t *testing.T) {
-	logger := zerolog.Nop()
-	attemptCount := 0
-
-	fakeUI := &fakeUserInterface{}
-
-	//nolint:unparam // error is always nil but signature must match http.RoundTripper
-	customRTFn := func(req *http.Request) (*http.Response, error) {
-		attemptCount++
-		if attemptCount < 2 {
-			return &http.Response{
-				StatusCode: http.StatusTooManyRequests,
-				Header:     http.Header{},
-				Request:    req,
-			}, nil
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     http.Header{},
-			Request:    req,
-		}, nil
-	}
-
-	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
-	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, 3)
-	config.Set(configurationKeyRetryAfter, 1)
-
-	sut := NewRetryMiddlewareWithUI(config, &logger, rt, fakeUI)
-	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
-
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-type fakeUserInterface struct{}
-
-func (f *fakeUserInterface) Output(string) error                                 { return nil }
-func (f *fakeUserInterface) OutputError(error, ...uitypes.Opts) error            { return nil }
-func (f *fakeUserInterface) NewProgressBar() uitypes.ProgressBar                 { return uitypes.EmptyProgressBar{} }
-func (f *fakeUserInterface) Input(string) (string, error)                        { return "", nil }
-func (f *fakeUserInterface) SelectOptions(string, []string) (int, string, error) { return 0, "", nil }
 
 type trackingUserInterface struct {
 	mu         sync.Mutex
