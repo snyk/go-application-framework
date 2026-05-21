@@ -29,7 +29,8 @@ Run `make help` to see all available targets.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for extension authoring, UFM test fixture generation, and other contributor workflows.
+1. See [Extension Architect Guide](docs/extension-architecture-guide.md) for more information on how to design extensions. 
+2. See [CONTRIBUTING.md](CONTRIBUTING.md) for extension authoring, UFM test fixture generation, and other contributor workflows.
 
 ## Security
 
