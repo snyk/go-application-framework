@@ -9,26 +9,15 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
 
-func (rm RetryMiddleware) shouldShowRateLimitWarning(lastStatusCode int) bool {
-	return rm.ui != nil && lastStatusCode == http.StatusTooManyRequests
-}
-
-func (rm RetryMiddleware) rateLimitNotifyFunc(
-	lastStatusCode *int,
-	actualAttempts *int,
-	cachedMaxRetries **int,
-	maxAttempts int,
-) func(error, time.Duration) {
-	return func(_ error, duration time.Duration) {
-		if !rm.shouldShowRateLimitWarning(*lastStatusCode) {
-			return
-		}
-		resolvedMax := maxAttempts
-		if *cachedMaxRetries != nil {
-			resolvedMax = **cachedMaxRetries
-		}
-		rm.showRateLimitWaitWarning(duration, *actualAttempts, resolvedMax)
+func (rm RetryMiddleware) notifyRateLimit(duration time.Duration, statusCode int, attempt int, maxAttempts int, cachedMaxRetries *int) {
+	if rm.ui == nil || statusCode != http.StatusTooManyRequests {
+		return
 	}
+	resolvedMax := maxAttempts
+	if cachedMaxRetries != nil {
+		resolvedMax = *cachedMaxRetries
+	}
+	rm.showRateLimitWaitWarning(duration, attempt, resolvedMax)
 }
 
 func (rm RetryMiddleware) showRateLimitWaitWarning(duration time.Duration, attempt int, maxAttempts int) {
