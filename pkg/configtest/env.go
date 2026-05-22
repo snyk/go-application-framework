@@ -2,13 +2,13 @@ package configtest
 
 import "testing"
 
-// APIURLViperEnvironmentKey is the AutomaticEnv name for configuration.API_URL (viper key "snyk_api").
+// snykAPIKey is the AutomaticEnv name for configuration.API_URL (viper key "snyk_api").
 // Keep aligned with pkg/configuration/constants.go.
-const APIURLViperEnvironmentKey = "SNYK_API"
+const snykAPIKey = "SNYK_API"
 
 // KnownLeakEnvironmentKeys is cleared when [IsolateEnvironmentForTest] is called with no arguments.
 var KnownLeakEnvironmentKeys = []string{
-	APIURLViperEnvironmentKey,
+	snykAPIKey,
 }
 
 // IsolateEnvironmentForTest runs t.Setenv(k, "") for each key. With no keys it clears [KnownLeakEnvironmentKeys].
