@@ -28,6 +28,8 @@ func Test_ResponseMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 		case "/500":
 			w.WriteHeader(http.StatusInternalServerError)
+		case "/429":
+			w.WriteHeader(http.StatusTooManyRequests)
 		case "/jsonapi-SNYK-0003":
 			w.WriteHeader(http.StatusBadRequest)
 			_, err := w.Write([]byte(`{"jsonapi":{"version":"1.0"},"errors":[{"status":"400","detail":"project found but does not contain a target id","id":"6b86a7a8-9efb-4ed1-b3a2-1ed78ced78a9","title":"Not Found","meta":{"created":"2025-02-21T03:14:00.318931623Z"}}]}`))
@@ -73,7 +75,7 @@ func Test_ResponseMiddleware(t *testing.T) {
 		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
 		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
 
-		codes := []int{400, 401, 500}
+		codes := []int{400, 401, 429, 500}
 		for _, code := range codes {
 			snykErr := snyk_errors.Error{}
 			url := fmt.Sprintf("%s/%d", server.URL, code)
@@ -83,6 +85,10 @@ func Test_ResponseMiddleware(t *testing.T) {
 			assert.NotNil(t, res)
 			assert.ErrorAs(t, err, &snykErr)
 			assert.Equal(t, code, snykErr.StatusCode)
+			if code == http.StatusTooManyRequests {
+				assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
+				assert.Equal(t, "error", snykErr.Level)
+			}
 
 			// observability metadata
 			assert.Equal(t, snykErr.Meta["request-id"], "1234")

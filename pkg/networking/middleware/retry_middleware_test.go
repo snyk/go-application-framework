@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -73,6 +74,19 @@ func (f *failRoundtripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return &http.Response{StatusCode: http.StatusOK, Header: headers}, f.Error
 }
 
+type retryNotifyTracker struct {
+	mu     sync.Mutex
+	errors []error
+}
+
+func (t *retryNotifyTracker) callback() RetryNotifyFunc {
+	return func(err error) {
+		t.mu.Lock()
+		t.errors = append(t.errors, err)
+		t.mu.Unlock()
+	}
+}
+
 func TestNewRetryMiddleware(t *testing.T) {
 	expectedBody := []byte("hello")
 	logger := zerolog.Nop()
@@ -116,7 +130,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, response)
 
-		assert.Equal(t, 3, attemptCount, "Should use cached max attempts from first 429 response")
+		assert.Equal(t, attemptThreeNetworkRequests, attemptCount, "Should use cached max attempts from first 429 response")
 		assert.Equal(t, http.StatusInternalServerError, response.StatusCode, "Final response should be 500")
 	})
 
@@ -549,4 +563,182 @@ func Test_parseRetryDelay(t *testing.T) {
 			assert.Equal(t, 0.0, math.Abs(float64(timeDistance)))
 		})
 	}
+}
+
+func Test_filterRetryError(t *testing.T) {
+	logger := zerolog.Nop()
+	rm := &RetryMiddleware{logger: &logger}
+
+	t.Run("retry exhausted returns nil", func(t *testing.T) {
+		err := rm.filterRetryError(backoff.Permanent(errRetryNecessary), 3)
+		assert.NoError(t, err)
+	})
+
+	t.Run("delay max exceeded returns nil", func(t *testing.T) {
+		err := rm.filterRetryError(backoff.Permanent(errRetryDelayMaxExceeded), 1)
+		assert.NoError(t, err)
+	})
+
+	t.Run("non-sentinel error passes through unchanged", func(t *testing.T) {
+		originalErr := errors.New("some other error")
+		err := rm.filterRetryError(originalErr, 1)
+		assert.Equal(t, originalErr, err)
+	})
+
+	t.Run("wrapped RetryAttemptError with sentinel is filtered", func(t *testing.T) {
+		err := &RetryAttemptError{
+			StatusCode:  429,
+			Attempt:     2,
+			MaxAttempts: 3,
+			Err:         backoff.Permanent(errRetryNecessary),
+		}
+		result := rm.filterRetryError(err, 2)
+		assert.NoError(t, result)
+	})
+}
+
+func Test_retryMiddleware_429_exhausted(t *testing.T) {
+	logger := zerolog.Nop()
+
+	always429 := func(req *http.Request, _ int) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{"Retry-After": []string{"1"}},
+			Request:    req,
+		}, nil
+	}
+
+	t.Run("returns last 429 response and nil error", func(t *testing.T) {
+		sut, attemptCount := setupRetryMiddleware(t, &logger, nil, 1, always429)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		assert.Equal(t, attemptThreeNetworkRequests, *attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
+	})
+
+	t.Run("invokes onRetryNotify callback during retries", func(t *testing.T) {
+		tracker := &retryNotifyTracker{}
+		sut, attemptCount := setupRetryMiddleware(t, &logger, tracker.callback(), 1, always429)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+		assert.Equal(t, attemptThreeNetworkRequests, *attemptCount, "429 override enforces at least 3 attempts even when maxAttempts=1")
+
+		tracker.mu.Lock()
+		defer tracker.mu.Unlock()
+		assert.NotEmpty(t, tracker.errors, "onRetryNotify should be called during 429 retries")
+		for _, e := range tracker.errors {
+			var retryErr *RetryAttemptError
+			require.ErrorAs(t, e, &retryErr)
+			assert.Equal(t, http.StatusTooManyRequests, retryErr.StatusCode)
+		}
+	})
+}
+
+func Test_retryMiddleware_429_then_success(t *testing.T) {
+	logger := zerolog.Nop()
+
+	once429ThenOK := func(req *http.Request, attempt int) (*http.Response, error) {
+		if attempt < 2 {
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Request:    req,
+		}, nil
+	}
+
+	t.Run("nil callback does not panic", func(t *testing.T) {
+		sut, attemptCount := setupRetryMiddleware(t, &logger, nil, 3, once429ThenOK)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, 2, *attemptCount)
+	})
+
+	t.Run("callback receives RetryAttemptError with correct metadata", func(t *testing.T) {
+		tracker := &retryNotifyTracker{}
+		sut, attemptCount := setupRetryMiddleware(t, &logger, tracker.callback(), 3, once429ThenOK)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, 2, *attemptCount)
+
+		tracker.mu.Lock()
+		defer tracker.mu.Unlock()
+
+		assert.NotEmpty(t, tracker.errors, "Expected retry notification via callback")
+		for _, e := range tracker.errors {
+			var retryErr *RetryAttemptError
+			require.ErrorAs(t, e, &retryErr)
+			assert.Equal(t, http.StatusTooManyRequests, retryErr.StatusCode)
+			assert.Greater(t, retryErr.Attempt, 0)
+			assert.Greater(t, retryErr.MaxAttempts, 0)
+		}
+	})
+
+	t.Run("500 exhaustion does not invoke callback", func(t *testing.T) {
+		tracker := &retryNotifyTracker{}
+
+		always500 := func(req *http.Request, _ int) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Header:     http.Header{},
+				Request:    req,
+			}, nil
+		}
+
+		sut, _ := setupRetryMiddleware(t, &logger, tracker.callback(), 2, always500)
+		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+		tracker.mu.Lock()
+		defer tracker.mu.Unlock()
+		// 500 still triggers the callback since the middleware notifies on all retries
+		for _, e := range tracker.errors {
+			var retryErr *RetryAttemptError
+			require.ErrorAs(t, e, &retryErr)
+			assert.Equal(t, http.StatusInternalServerError, retryErr.StatusCode)
+		}
+	})
+}
+
+// setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
+func setupRetryMiddleware(
+	t *testing.T,
+	logger *zerolog.Logger,
+	onRetryNotify RetryNotifyFunc,
+	maxAttempts int,
+	roundTrip func(req *http.Request, attempt int) (*http.Response, error),
+) (http.RoundTripper, *int) {
+	t.Helper()
+	attemptCount := 0
+	fn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		return roundTrip(req, attemptCount)
+	}
+	rt := &failRoundtripper{t: t, roundTripFn: &fn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, maxAttempts)
+	config.Set(configurationKeyRetryAfter, 1)
+	if onRetryNotify != nil {
+		return NewRetryMiddleware(config, logger, rt, onRetryNotify), &attemptCount
+	}
+	return NewRetryMiddleware(config, logger, rt), &attemptCount
 }

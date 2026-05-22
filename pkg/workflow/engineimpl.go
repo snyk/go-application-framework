@@ -325,6 +325,15 @@ func (e *EngineImpl) Invoke(
 			// prepare networkAccess
 			localNetworkAccess := e.networkAccess.Clone()
 			localNetworkAccess.SetConfiguration(options.config)
+			if ext, ok := localNetworkAccess.(networking.RetryFeedbackNetworkAccess); ok {
+				// Capture this invocation's analytics; the callback runs later during retries.
+				localAnalyticsReference := localAnalytics
+				ext.SetRetryNotify(func(err error) {
+					if catalogErr, ok := networking.CatalogNotificationFromRetryAttempt(err); ok {
+						localAnalyticsReference.AddError(catalogErr)
+					}
+				})
+			}
 
 			localEngine := &engineWrapper{
 				WrappedEngine:                   e,
@@ -358,6 +367,9 @@ func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
 	if e.networkAccess == nil {
 		e.networkAccess = networking.NewNetworkAccess(e.config)
 		e.networkAccess.SetLogger(e.logger)
+		if ext, ok := e.networkAccess.(networking.RetryFeedbackNetworkAccess); ok {
+			ext.SetUserInterface(e.ui)
+		}
 	}
 
 	return e.networkAccess
@@ -379,6 +391,9 @@ func (e *EngineImpl) GetUserInterface() ui.UserInterface {
 
 func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
 	e.ui = userInterface
+	if ext, ok := e.networkAccess.(networking.RetryFeedbackNetworkAccess); ok {
+		ext.SetUserInterface(userInterface)
+	}
 }
 
 func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {

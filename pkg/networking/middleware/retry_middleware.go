@@ -44,17 +44,41 @@ var statusCodesToRetryLUT = map[int]retryLogic{
 var errRetryNecessary = errors.New("retry with backoff")
 var errRetryDelayMaxExceeded = errors.New("suggested retry delay exceeds maximum allowed wait")
 
+type RetryAttemptError struct {
+	StatusCode  int
+	Attempt     int
+	MaxAttempts int
+	Duration    time.Duration
+	Err         error
+}
+
+func (e *RetryAttemptError) Error() string {
+	return fmt.Sprintf("retry attempt %d/%d (status %d): %v", e.Attempt, e.MaxAttempts, e.StatusCode, e.Err)
+}
+
+func (e *RetryAttemptError) Unwrap() error {
+	return e.Err
+}
+
+type RetryNotifyFunc func(err error)
+
 type RetryMiddleware struct {
 	nextRoundtripper http.RoundTripper
 	config           configuration.Configuration
 	logger           *zerolog.Logger
+	onRetryNotify    RetryNotifyFunc
 }
 
-func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper) *RetryMiddleware {
+func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, onRetryNotify ...RetryNotifyFunc) http.RoundTripper {
+	var notify RetryNotifyFunc
+	if len(onRetryNotify) > 0 {
+		notify = onRetryNotify[0]
+	}
 	return &RetryMiddleware{
 		nextRoundtripper: roundTripper,
 		config:           config,
 		logger:           logger,
+		onRetryNotify:    notify,
 	}
 }
 
@@ -123,7 +147,12 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		// depending on the response determine if we should retry
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
-			return response, retryError
+			return response, &RetryAttemptError{
+				StatusCode:  response.StatusCode,
+				Attempt:     actualAttempts,
+				MaxAttempts: *cachedMaxRetries,
+				Err:         retryError,
+			}
 		}
 
 		return response, nil
@@ -131,10 +160,24 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	backoffMethod := backoff.NewExponentialBackOff()
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
-	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod))
+	finalResponse, finalError = backoff.Retry(req.Context(), op,
+		backoff.WithBackOff(backoffMethod),
+		backoff.WithNotify(rm.notifyRetry),
+	)
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError
+}
+
+func (rm RetryMiddleware) notifyRetry(err error, duration time.Duration) {
+	if rm.onRetryNotify == nil {
+		return
+	}
+	var retryErr *RetryAttemptError
+	if errors.As(err, &retryErr) {
+		retryErr.Duration = duration
+		rm.onRetryNotify(retryErr)
+	}
 }
 
 // filterRetryError hides implementation-only errors that mean “we stopped retrying
