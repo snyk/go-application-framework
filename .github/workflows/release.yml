@@ -1,0 +1,35 @@
+name: Release
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: '0'
+
+      - name: Get Next Version
+        id: semver
+        uses: ietf-tools/semver-action@v1
+        with:
+          token: ${{ github.token }}
+          branch: ${{ github.ref_name }}
+          minorList: feat, revert
+          patchList: fix
+          noVersionBumpBehavior: silent
+
+      - name: Create tag and Push tag
+        if: ${{ steps.semver.outputs.next != '' }}
+        run: |
+          git tag ${{ steps.semver.outputs.next }}
+          git push origin ${{ steps.semver.outputs.next }}
+
+      - name: Release
+        if: ${{ steps.semver.outputs.next != '' }}
+        run: gh release create ${{ steps.semver.outputs.next }} --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
