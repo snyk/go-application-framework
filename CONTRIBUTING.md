@@ -2,7 +2,7 @@
 
 This repo is intended for internal (Snyk) contributions only at this time.
 
-# Creating a new extension
+## Creating a new extension
 
 The `go-application-framework` makes it easy to add functionality to the Snyk CLI by taking care of the orchestration, requirements, and state management when running the CLI; this all happens behind the scenes via the packages provided by the framework. It means we can focus on building the core business logic for our extension and not worry about much else.
 
@@ -12,7 +12,7 @@ Creating a new extension using the `go-application-framework` can be done in thr
 2. Register the extension with the workflow engine
 3. Initialise the extension when using the `go-application-framework`
 
-# Create the extension workflow
+### Create the extension workflow
 
 The extension workflow is the main component of your extension, it should:
 
@@ -20,11 +20,11 @@ The extension workflow is the main component of your extension, it should:
 2. Initialise your workflow (registering the extension with the workflow engine should happen here)
 3. Have an entry point containing the extension business logic
 
-# Creating `snyk whoami`
+### Creating `snyk whoami`
 
 The `snyk whoami` command was created following the steps outlined above; the following outlines the extension implementation in detail.
 
-## Uniquely identify your workflow
+#### Uniquely identify your workflow
 
 Before we can start creating our extension workflow, we'll need to create our workflow identifier. An identifier is required by the workflow engine to identify our workflow. The workflow identifier should also contain the name of the new extension command.
 
@@ -39,7 +39,7 @@ var workflowName = "whoami"
 var WORKFLOWID_WHOAMI workflow.Identifier = workflow.NewWorkflowIdentifier(workflowName)
 ```
 
-## Initialise your workflow
+#### Initialise your workflow
 
 Now that we have a workflow identifier, we can continue with the implementation of the workflow's initialiser via an `Init()` function.
 
@@ -58,19 +58,19 @@ func Init(engine workflow.Engine) error {
 }
 ```
 
-### Initialise configuration
+##### Initialise configuration
 
 We use the `pflag` package in order to create POSIX/GNU-style --flags. The extension should support the `--json` flag, so we add it to the configuration via `whoAmIConfig.Bool()`.
 
-### Mark experimental versions of an extension workflow
+##### Mark experimental versions of an extension workflow
 
 There is a common pattern to mark workflows as experimental by using [MarkAsExperimental()](https://github.com/snyk/go-application-framework/blob/main/pkg/local_workflows/config_utils/experimental.go#L28) in order to indicate early non production ready versions of a workflow. In the CLI this will automatically reflect in a required argument `--experimental`, if not provided the CLI will show an error and not call the workflow.
 
-### Register with the workflow engine
+##### Register with the workflow engine
 
 Next we must register the extension with the workflow engine. The `workflow` package is used again here in, firstly to abstract away the engine/workflow registration logic via `engine.Register`, and again to configure the workflow's configuration via `workflow.ConfigurationOptionsFromFlagset`.
 
-## Implement business logic via the workflow entry point
+#### Implement business logic via the workflow entry point
 
 Now we can define the business logic for our extension workflow. This can be done in an `entryPoint()` function, which has two parameters; `invocationContext` and `input []workflow.Data`.
 
@@ -128,7 +128,7 @@ func entryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (ou
 }
 ```
 
-### Get necessary invocation context objects
+##### Get necessary invocation context objects
 
 The first step is to retrieve the necessary objects the workflow requires.
 
@@ -136,15 +136,15 @@ The first step is to retrieve the necessary objects the workflow requires.
 - `invocationCtx.GetLogger()` will return a logger instance passed to the workflow engine during setup
 - `invocationCtx.GetNetworkAccess().GetHttpClient()` returns a httpClient which we can use to make Snyk API requests
 
-### Call the `/user/me` Snyk API endpoint
+##### Call the `/user/me` Snyk API endpoint
 
 The next step is to fetch the user info by calling the `/user/me` endpoint, The `fetchUserMe()` function makes the API request and returns the response body
 
-### Extract the username property from the API response
+##### Extract the username property from the API response
 
 Next, we must parse the response and extract the `username` property. The `extractUser()` function handles this
 
-### Return the username
+##### Return the username
 
 The last step is to return the username. The workflow engine expects a `[]]workflow.Data` type in the `entryPoint()` response, so we must create a response of this type. The `createWorkflowData()` function handles this
 
@@ -161,13 +161,13 @@ func createWorkflowData(data interface{}, contentType string) workflow.Data {
 
 `workflow.NewData()` creates a `workflow.Data` instance. Note that `workflow.NewData()` requires a new type identifier, which we create using `workflow.NewTypeIdentifier()`
 
-### Support `--json` flag
+##### Support `--json` flag
 
 As an additional functionality, we want to support the `--json` flag so that when we run `snyk whoami --json` we will return the full JSON payload from the `/user/me` endpoint
 
 Using the `config` object retrieved from `workflow.GetConfiguration()`, we can check if the flag is set using `config.GetBool("json")`, we can then return the full payload response using hte `createWorkflowData()` helper function
 
-# Initialise extension when using the `go-application-framework`
+### Initialise extension when using the `go-application-framework`
 
 The final step is to add the extension to the CLI, this is done in the [CLI](https://github.com/snyk/cli/blob/master/cliv2/cmd/cliv2/main.go) itself.
 
@@ -214,11 +214,11 @@ As you can see, adding our extension to the CLI is as simple as calling the `eng
 
 That's it!
 
-# UFM test fixtures
+### UFM test fixtures
 
 The presenter tests in `internal/presenters/` compare rendered output against expected files stored under `internal/presenters/testdata/ufm/`. There are several workflows for keeping these up to date.
 
-## Generating a fixture (recommended)
+#### Generating a fixture (recommended)
 
 Use the helper target to run a scan, dump workflow payloads to disk, pick the latest `workflow.TestResult.*`, add a `.json` extension, and optionally redact in one flow:
 
@@ -272,7 +272,7 @@ The dump command uses these internal settings by default:
 
 If the printed command shows `snyk test .` instead of `snyk secrets test .`, your shell may have `SCAN_CMD` exported. Run `unset SCAN_CMD` or pass `SCAN_CMD="secrets test ."` explicitly.
 
-## Redacting a dump into a stable fixture
+#### Redacting a dump into a stable fixture
 
 To redact an existing dump file manually:
 
@@ -287,7 +287,7 @@ make redact-fixture INPUT=./dumps/raw/workflow.TestResult.12345 OUTPUT=./path/to
 
 If `OUTPUT` is omitted, the redaction tool writes `<input>_redacted.json` next to the input path.
 
-## Regenerating expected files from existing fixtures
+#### Regenerating expected files from existing fixtures
 
 If you changed a presenter template and need to update the expected SARIF / human-readable output without re-fetching from the API:
 
@@ -296,3 +296,47 @@ make regenerate-expected
 ```
 
 This runs the presenter tests with `UFM_REGEN=1`, which overwrites the expected files with the current presenter output and skips the comparison. The same effect can be achieved by flipping the `regenerateExpectedFiles` constant at the top of `internal/presenters/presenter_ufm_test.go` to `true` and running the tests directly (handy when stepping through with a debugger). Review the diff before committing.
+
+## Creating commits
+
+Each commit must provide some benefit on its own without breaking the release pipeline.
+
+For larger changes, break down each step into multiple commits so that it's easy to review in pull requests and git
+history.
+
+Commits must follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) structure:
+
+```
+type: summary of your changes (please explain the WHAT and not the HOW)
+
+reasoning behind your changes
+```
+
+For example:
+
+```
+docs: added missing section about contributing guidelines
+
+We often get questions on how to contribute to this repo. What versions to use, what the workflow is, and so on. This change updates our CONTRIBUTING guide to answer those types of questions.
+```
+
+### Commit types
+
+The commit type is used to summarize intent and to automate various steps.
+
+| Type            | Description                                      		| Version bump |
+| --------------- | ------------------------------------------------------- | ------------ |
+| feat            | A new user-facing feature.                       		| minor        |
+| fix             | A bug fix for an existing feature.               		| patch        |
+| refactor        | Changes which do not affect existing features.   		| none         |
+| test            | Changes to tests for existing features.          		| none         |
+| docs            | Changes to documentation for existing features.  		| none         |
+| chore           | Build, workflow and pipeline changes.            		| none         |
+| revert          | Reverting a previous commit.                     		| patch        |
+| _any type_**!** | Appending a ! to any type denotes a breaking change.	| major        |
+
+### Handling breaking changes
+
+A major version bump is automatically triggered in one of two ways:
+- The ! Modifier: Append a ! directly after the commit type (e.g.: feat!).
+- The Footer Message: Include `BREAKING CHANGE:` in the commit footer, followed by a description of the change.
