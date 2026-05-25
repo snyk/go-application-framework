@@ -1,0 +1,81 @@
+name: Release
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release/**'
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compute-semver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: none
+    outputs:
+      next: ${{ steps.semver.outputs.next }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: '0'
+          persist-credentials: false
+
+      - name: Get Next Version
+        id: semver
+        uses: ietf-tools/semver-action@c90370b2958652d71c06a3484129a4d423a6d8a8  # v1.11.0
+        with:
+          token: ${{ github.token }}
+          branch: ${{ github.ref_name }}
+          minorList: feat, revert
+          patchList: fix
+          noVersionBumpBehavior: silent
+
+      - name: Validate version string
+        if: ${{ steps.semver.outputs.next != '' }}
+        env:
+          NEXT_VERSION: ${{ steps.semver.outputs.next }}
+        run: |
+          if ! printf '%s' "$NEXT_VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Unexpected version format: '$NEXT_VERSION'" >&2
+            exit 1
+          fi
+
+  release:
+    needs: compute-semver
+    if: needs.compute-semver.outputs.next != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      id-token: none
+    env:
+      NEXT_VERSION: ${{ needs.compute-semver.outputs.next }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Configure git authentication
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: Tag commit
+        run: git tag -- "$NEXT_VERSION"
+
+      - name: Push tag
+        run: git push origin -- "refs/tags/$NEXT_VERSION"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$NEXT_VERSION" --generate-notes
