@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
@@ -449,6 +450,8 @@ func Test_UserAgentInfo_Complete(t *testing.T) {
 }
 
 func TestNetworkImpl_Clone(t *testing.T) {
+	configtest.IsolateEnvironmentForTest(t)
+
 	config := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	network := NewNetworkAccess(config)
 
