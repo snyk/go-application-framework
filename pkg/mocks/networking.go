@@ -13,7 +13,6 @@ import (
 	auth "github.com/snyk/go-application-framework/pkg/auth"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	networking "github.com/snyk/go-application-framework/pkg/networking"
-	middleware "github.com/snyk/go-application-framework/pkg/networking/middleware"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
@@ -250,39 +249,4 @@ func (m *MockNetworkAccess) SetLogger(logger *zerolog.Logger) {
 func (mr *MockNetworkAccessMockRecorder) SetLogger(logger interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLogger", reflect.TypeOf((*MockNetworkAccess)(nil).SetLogger), logger)
-}
-
-// MockRetryFeedbackNetworkAccess is a mock of RetryFeedbackNetworkAccess interface.
-type MockRetryFeedbackNetworkAccess struct {
-	ctrl     *gomock.Controller
-	recorder *MockRetryFeedbackNetworkAccessMockRecorder
-}
-
-// MockRetryFeedbackNetworkAccessMockRecorder is the mock recorder for MockRetryFeedbackNetworkAccess.
-type MockRetryFeedbackNetworkAccessMockRecorder struct {
-	mock *MockRetryFeedbackNetworkAccess
-}
-
-// NewMockRetryFeedbackNetworkAccess creates a new mock instance.
-func NewMockRetryFeedbackNetworkAccess(ctrl *gomock.Controller) *MockRetryFeedbackNetworkAccess {
-	mock := &MockRetryFeedbackNetworkAccess{ctrl: ctrl}
-	mock.recorder = &MockRetryFeedbackNetworkAccessMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockRetryFeedbackNetworkAccess) EXPECT() *MockRetryFeedbackNetworkAccessMockRecorder {
-	return m.recorder
-}
-
-// SetRetryNotify mocks base method.
-func (m *MockRetryFeedbackNetworkAccess) SetRetryNotify(fn middleware.RetryNotifyFunc) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetRetryNotify", fn)
-}
-
-// SetRetryNotify indicates an expected call of SetRetryNotify.
-func (mr *MockRetryFeedbackNetworkAccessMockRecorder) SetRetryNotify(fn interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRetryNotify", reflect.TypeOf((*MockRetryFeedbackNetworkAccess)(nil).SetRetryNotify), fn)
 }

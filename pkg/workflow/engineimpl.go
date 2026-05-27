@@ -15,7 +15,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
-	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
@@ -326,25 +325,6 @@ func (e *EngineImpl) Invoke(
 			// prepare networkAccess
 			localNetworkAccess := e.networkAccess.Clone()
 			localNetworkAccess.SetConfiguration(options.config)
-			if ext, ok := localNetworkAccess.(networking.RetryFeedbackNetworkAccess); ok {
-				localAnalyticsReference := localAnalytics
-				localUiReference := localUi
-				localLoggerRef := &localLogger
-				ext.SetRetryNotify(func(err error) {
-					catalogErr, ok := middleware.CatalogNotificationFromRetryAttempt(err)
-					if !ok {
-						return
-					}
-					if localUiReference != nil {
-						if uiErr, ok := middleware.RetryAttemptNotification(err); ok {
-							if outputErr := localUiReference.OutputError(uiErr); outputErr != nil {
-								localLoggerRef.Debug().Err(outputErr).Msg("failed to show retry notification")
-							}
-						}
-					}
-					localAnalyticsReference.AddError(catalogErr)
-				})
-			}
 
 			localEngine := &engineWrapper{
 				WrappedEngine:                   e,

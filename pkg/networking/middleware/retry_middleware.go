@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 const defaultMaxAttemptsCount = 1 // Per default max network attempts (=1) this means retries are disabled and need to be enabled via the configuration
@@ -61,25 +63,19 @@ func (e *RetryAttemptError) Unwrap() error {
 	return e.Err
 }
 
-type RetryNotifyFunc func(err error)
-
 type RetryMiddleware struct {
 	nextRoundtripper http.RoundTripper
 	config           configuration.Configuration
 	logger           *zerolog.Logger
-	onRetryNotify    RetryNotifyFunc
+	errorHandler     networktypes.ErrorHandlerFunc
 }
 
-func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, onRetryNotify ...RetryNotifyFunc) http.RoundTripper {
-	var notify RetryNotifyFunc
-	if len(onRetryNotify) > 0 {
-		notify = onRetryNotify[0]
-	}
+func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, errorHandler networktypes.ErrorHandlerFunc) http.RoundTripper {
 	return &RetryMiddleware{
 		nextRoundtripper: roundTripper,
 		config:           config,
 		logger:           logger,
-		onRetryNotify:    notify,
+		errorHandler:     errorHandler,
 	}
 }
 
@@ -161,23 +157,28 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	backoffMethod := backoff.NewExponentialBackOff()
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
-	finalResponse, finalError = backoff.Retry(req.Context(), op,
+	reqCtx := req.Context()
+	finalResponse, finalError = backoff.Retry(reqCtx, op,
 		backoff.WithBackOff(backoffMethod),
-		backoff.WithNotify(rm.notifyRetry),
+		backoff.WithNotify(func(err error, duration time.Duration) {
+			rm.notifyRetry(err, duration, reqCtx)
+		}),
 	)
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError
 }
 
-func (rm RetryMiddleware) notifyRetry(err error, duration time.Duration) {
-	if rm.onRetryNotify == nil {
+func (rm RetryMiddleware) notifyRetry(err error, duration time.Duration, ctx context.Context) {
+	if rm.errorHandler == nil {
 		return
 	}
 	var retryErr *RetryAttemptError
 	if errors.As(err, &retryErr) {
 		retryErr.Duration = duration
-		rm.onRetryNotify(retryErr)
+		if handlerErr := rm.errorHandler(retryErr, ctx); handlerErr != nil {
+			rm.logger.Debug().Err(handlerErr).Msg("error handler failed during retry notification")
+		}
 	}
 }
 

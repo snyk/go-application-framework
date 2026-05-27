@@ -59,10 +59,6 @@ type NetworkAccess interface {
 	Clone() NetworkAccess
 }
 
-type RetryFeedbackNetworkAccess interface {
-	SetRetryNotify(fn middleware.RetryNotifyFunc)
-}
-
 type DynamicHeaderFunc func([]string) []string
 
 // networkImpl is the default implementation of the NetworkAccess interface.
@@ -74,7 +70,6 @@ type networkImpl struct {
 	errorHandler   networktypes.ErrorHandlerFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
-	retryNotify    middleware.RetryNotifyFunc
 }
 
 // defaultHeadersRoundTripper is a custom http.RoundTripper which decorates the request with default headers.
@@ -193,16 +188,12 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	}
 }
 
-func (n *networkImpl) SetRetryNotify(fn middleware.RetryNotifyFunc) {
-	n.retryNotify = fn
-}
-
 func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 	//nolint:errcheck // breaking api change needed to fix this
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
 	var crt http.RoundTripper = n.configureRoundTripper(transport)
 
-	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt, n.retryNotify)
+	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt, n.errorHandler)
 
 	if n.errorHandler != nil {
 		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
@@ -288,7 +279,6 @@ func (n *networkImpl) Clone() NetworkAccess {
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
-		retryNotify:    n.retryNotify,
 	}
 
 	for key, dynHeaderFuncs := range n.dynamicHeaders {
