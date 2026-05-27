@@ -15,7 +15,6 @@ import (
 	networking "github.com/snyk/go-application-framework/pkg/networking"
 	middleware "github.com/snyk/go-application-framework/pkg/networking/middleware"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
-	uitypes "github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 // MockNetworkAccess is a mock of NetworkAccess interface.
@@ -286,16 +285,4 @@ func (m *MockRetryFeedbackNetworkAccess) SetRetryNotify(fn middleware.RetryNotif
 func (mr *MockRetryFeedbackNetworkAccessMockRecorder) SetRetryNotify(fn interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRetryNotify", reflect.TypeOf((*MockRetryFeedbackNetworkAccess)(nil).SetRetryNotify), fn)
-}
-
-// SetUserInterface mocks base method.
-func (m *MockRetryFeedbackNetworkAccess) SetUserInterface(ui uitypes.UserInterface) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetUserInterface", ui)
-}
-
-// SetUserInterface indicates an expected call of SetUserInterface.
-func (mr *MockRetryFeedbackNetworkAccessMockRecorder) SetUserInterface(ui interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserInterface", reflect.TypeOf((*MockRetryFeedbackNetworkAccess)(nil).SetUserInterface), ui)
 }

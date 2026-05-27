@@ -2,15 +2,11 @@ package networking
 
 import (
 	"crypto/x509"
-	"errors"
-	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/error-catalog-golang-public/snyk"
 
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 
@@ -19,7 +15,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking/certs"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
-	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=networking.go -destination ../mocks/networking.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/networking/
@@ -65,7 +60,6 @@ type NetworkAccess interface {
 }
 
 type RetryFeedbackNetworkAccess interface {
-	SetUserInterface(ui uitypes.UserInterface)
 	SetRetryNotify(fn middleware.RetryNotifyFunc)
 }
 
@@ -80,7 +74,6 @@ type networkImpl struct {
 	errorHandler   networktypes.ErrorHandlerFunc
 	caPool         *x509.CertPool
 	logger         *zerolog.Logger
-	ui             uitypes.UserInterface
 	retryNotify    middleware.RetryNotifyFunc
 }
 
@@ -200,10 +193,6 @@ func (n *networkImpl) addDefaultHeader(request *http.Request) {
 	}
 }
 
-func (n *networkImpl) SetUserInterface(ui uitypes.UserInterface) {
-	n.ui = ui
-}
-
 func (n *networkImpl) SetRetryNotify(fn middleware.RetryNotifyFunc) {
 	n.retryNotify = fn
 }
@@ -213,7 +202,7 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
 	var crt http.RoundTripper = n.configureRoundTripper(transport)
 
-	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt, n.handleRetryNotify)
+	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt, n.retryNotify)
 
 	if n.errorHandler != nil {
 		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
@@ -225,48 +214,6 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 		logLevel:                 defaultNetworkLogLevel,
 	}
 	return &rt
-}
-
-func (n *networkImpl) handleRetryNotify(err error) {
-	var retryErr *middleware.RetryAttemptError
-	if !errors.As(err, &retryErr) {
-		return
-	}
-
-	if catalogErr, ok := CatalogNotificationFromRetryAttempt(retryErr); ok && n.ui != nil {
-		if outputErr := n.ui.OutputError(catalogErr); outputErr != nil && n.logger != nil {
-			n.logger.Debug().Err(outputErr).Msg("failed to show retry wait notification")
-		}
-	}
-
-	if n.retryNotify != nil {
-		n.retryNotify(retryErr)
-	}
-}
-
-// CatalogNotificationFromRetryAttempt maps a retry attempt to a catalog error when it should
-// be surfaced (UI warn, instrumentation, etc.). Returns false for retry types with no notification.
-func CatalogNotificationFromRetryAttempt(err error) (error, bool) {
-	var attempt *middleware.RetryAttemptError
-	if !errors.As(err, &attempt) {
-		return nil, false
-	}
-
-	if attempt.StatusCode != http.StatusTooManyRequests {
-		return nil, false
-	}
-
-	totalSecs := int(math.Ceil(attempt.Duration.Seconds()))
-	if totalSecs <= 0 {
-		totalSecs = 1
-	}
-
-	catalogErr := snyk.NewTooManyRequestsError(
-		fmt.Sprintf("Waiting up to %ds before retry (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts),
-	)
-	catalogErr.Level = "warn"
-
-	return catalogErr, true
 }
 
 func (n *networkImpl) GetRoundTripper() http.RoundTripper {
@@ -341,7 +288,6 @@ func (n *networkImpl) Clone() NetworkAccess {
 		dynamicHeaders: map[string]DynamicHeaderFunc{},
 		proxy:          n.proxy,
 		errorHandler:   n.errorHandler,
-		ui:             n.ui,
 		retryNotify:    n.retryNotify,
 	}
 

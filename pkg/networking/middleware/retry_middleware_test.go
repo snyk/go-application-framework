@@ -15,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -741,4 +742,43 @@ func setupRetryMiddleware(
 		return NewRetryMiddleware(config, logger, rt, onRetryNotify), &attemptCount
 	}
 	return NewRetryMiddleware(config, logger, rt), &attemptCount
+}
+
+func TestCatalogNotificationFromRetryAttempt(t *testing.T) {
+	t.Run("429 returns warn catalog error with wait message", func(t *testing.T) {
+		attempt := &RetryAttemptError{
+			StatusCode:  http.StatusTooManyRequests,
+			Attempt:     1,
+			MaxAttempts: 3,
+			Duration:    2 * time.Second,
+		}
+
+		notifyErr, ok := CatalogNotificationFromRetryAttempt(attempt)
+		require.True(t, ok)
+
+		var catalogErr snyk_errors.Error
+		require.True(t, errors.As(notifyErr, &catalogErr))
+		assert.Equal(t, "warn", catalogErr.Level)
+		assert.Equal(t, http.StatusTooManyRequests, catalogErr.StatusCode)
+		assert.NotEmpty(t, catalogErr.ErrorCode)
+		assert.Contains(t, catalogErr.Detail, "Waiting up to 2s before retry (attempt 1/3)")
+	})
+
+	t.Run("500 has no notification", func(t *testing.T) {
+		attempt := &RetryAttemptError{
+			StatusCode:  http.StatusInternalServerError,
+			Attempt:     1,
+			MaxAttempts: 3,
+		}
+
+		notifyErr, ok := CatalogNotificationFromRetryAttempt(attempt)
+		assert.False(t, ok)
+		assert.Nil(t, notifyErr)
+	})
+
+	t.Run("non-retry error has no notification", func(t *testing.T) {
+		notifyErr, ok := CatalogNotificationFromRetryAttempt(errors.New("other"))
+		assert.False(t, ok)
+		assert.Nil(t, notifyErr)
+	})
 }

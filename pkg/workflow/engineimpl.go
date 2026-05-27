@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking"
+	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
 )
@@ -326,12 +327,22 @@ func (e *EngineImpl) Invoke(
 			localNetworkAccess := e.networkAccess.Clone()
 			localNetworkAccess.SetConfiguration(options.config)
 			if ext, ok := localNetworkAccess.(networking.RetryFeedbackNetworkAccess); ok {
-				// Capture this invocation's analytics; the callback runs later during retries.
 				localAnalyticsReference := localAnalytics
+				localUiReference := localUi
+				localLoggerRef := &localLogger
 				ext.SetRetryNotify(func(err error) {
-					if catalogErr, ok := networking.CatalogNotificationFromRetryAttempt(err); ok {
-						localAnalyticsReference.AddError(catalogErr)
+					catalogErr, ok := middleware.CatalogNotificationFromRetryAttempt(err)
+					if !ok {
+						return
 					}
+					if localUiReference != nil {
+						if uiErr, ok := middleware.RetryAttemptNotification(err); ok {
+							if outputErr := localUiReference.OutputError(uiErr); outputErr != nil {
+								localLoggerRef.Debug().Err(outputErr).Msg("failed to show retry notification")
+							}
+						}
+					}
+					localAnalyticsReference.AddError(catalogErr)
 				})
 			}
 
@@ -367,9 +378,6 @@ func (e *EngineImpl) GetNetworkAccess() networking.NetworkAccess {
 	if e.networkAccess == nil {
 		e.networkAccess = networking.NewNetworkAccess(e.config)
 		e.networkAccess.SetLogger(e.logger)
-		if ext, ok := e.networkAccess.(networking.RetryFeedbackNetworkAccess); ok {
-			ext.SetUserInterface(e.ui)
-		}
 	}
 
 	return e.networkAccess
@@ -391,9 +399,6 @@ func (e *EngineImpl) GetUserInterface() ui.UserInterface {
 
 func (e *EngineImpl) SetUserInterface(userInterface ui.UserInterface) {
 	e.ui = userInterface
-	if ext, ok := e.networkAccess.(networking.RetryFeedbackNetworkAccess); ok {
-		ext.SetUserInterface(userInterface)
-	}
 }
 
 func (e *EngineImpl) GetRuntimeInfo() runtimeinfo.RuntimeInfo {
