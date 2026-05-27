@@ -162,7 +162,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	finalResponse, finalError = backoff.Retry(reqCtx, op,
 		backoff.WithBackOff(backoffMethod),
 		backoff.WithNotify(func(err error, duration time.Duration) {
-			rm.notifyRetry(err, duration, reqCtx)
+			rm.notifyRetry(reqCtx, err, duration)
 		}),
 	)
 
@@ -170,14 +170,14 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	return finalResponse, finalError
 }
 
-func (rm RetryMiddleware) notifyRetry(err error, duration time.Duration, ctx context.Context) {
+func (rm RetryMiddleware) notifyRetry(ctx context.Context, err error, duration time.Duration) {
 	if rm.errorHandler == nil {
 		return
 	}
 	var retryErr *RetryAttemptError
 	if errors.As(err, &retryErr) {
 		retryErr.Duration = duration
-		if catalogErr, ok := RetryAttemptNotification(retryErr); ok {
+		if catalogErr, ok := retryAttemptNotification(retryErr); ok {
 			if handlerErr := rm.errorHandler(catalogErr, ctx); handlerErr != nil {
 				rm.logger.Debug().Err(handlerErr).Msg("error handler failed during retry notification")
 			}
@@ -263,7 +263,7 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 	return nil
 }
 
-func RetryAttemptNotification(err error) (error, bool) {
+func retryAttemptNotification(err error) (error, bool) {
 	var attempt *RetryAttemptError
 	if !errors.As(err, &attempt) || attempt.StatusCode != http.StatusTooManyRequests {
 		return nil, false
@@ -274,12 +274,11 @@ func RetryAttemptNotification(err error) (error, bool) {
 		totalSecs = 1
 	}
 
-	return snyk_errors.Error{
-		Title:  "Rate limited",
-		Detail: fmt.Sprintf("Waiting up to %ds before retry (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts),
-		Level:  "warn",
-		Cause:  attempt,
-	}, true
+	notifMsg := fmt.Sprintf("Automatically retrying in %ds seconds... (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts)
+	notif := snyk.NewTooManyRequestsError(notifMsg, snyk_errors.WithCause(attempt))
+	notif.Description = ""
+
+	return notif, true
 }
 
 func parseRetryDelay(headerRetryAfterValue string) time.Duration {

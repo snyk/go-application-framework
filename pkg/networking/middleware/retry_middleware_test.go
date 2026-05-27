@@ -753,7 +753,7 @@ func TestRetryAttemptNotification(t *testing.T) {
 			Duration:    2 * time.Second,
 		}
 
-		notifyErr, ok := RetryAttemptNotification(attempt)
+		notifyErr, ok := retryAttemptNotification(attempt)
 		require.True(t, ok)
 
 		var catalogErr snyk_errors.Error
@@ -774,13 +774,13 @@ func TestRetryAttemptNotification(t *testing.T) {
 			MaxAttempts: 3,
 		}
 
-		notifyErr, ok := RetryAttemptNotification(attempt)
+		notifyErr, ok := retryAttemptNotification(attempt)
 		assert.False(t, ok)
 		assert.Nil(t, notifyErr)
 	})
 
 	t.Run("non-retry error has no notification", func(t *testing.T) {
-		notifyErr, ok := RetryAttemptNotification(errors.New("other"))
+		notifyErr, ok := retryAttemptNotification(errors.New("other"))
 		assert.False(t, ok)
 		assert.Nil(t, notifyErr)
 	})
