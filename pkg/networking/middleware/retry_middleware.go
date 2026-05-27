@@ -177,8 +177,10 @@ func (rm RetryMiddleware) notifyRetry(err error, duration time.Duration, ctx con
 	var retryErr *RetryAttemptError
 	if errors.As(err, &retryErr) {
 		retryErr.Duration = duration
-		if handlerErr := rm.errorHandler(retryErr, ctx); handlerErr != nil {
-			rm.logger.Debug().Err(handlerErr).Msg("error handler failed during retry notification")
+		if catalogErr, ok := RetryAttemptNotification(retryErr); ok {
+			if handlerErr := rm.errorHandler(catalogErr, ctx); handlerErr != nil {
+				rm.logger.Debug().Err(handlerErr).Msg("error handler failed during retry notification")
+			}
 		}
 	}
 }
@@ -276,32 +278,8 @@ func RetryAttemptNotification(err error) (error, bool) {
 		Title:  "Rate limited",
 		Detail: fmt.Sprintf("Waiting up to %ds before retry (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts),
 		Level:  "warn",
+		Cause:  attempt,
 	}, true
-}
-
-// CatalogNotificationFromRetryAttempt maps a retry attempt to a catalog error when it should
-// be surfaced (UI warn, instrumentation, etc.). Returns false for retry types with no notification.
-func CatalogNotificationFromRetryAttempt(err error) (error, bool) {
-	var attempt *RetryAttemptError
-	if !errors.As(err, &attempt) {
-		return nil, false
-	}
-
-	if attempt.StatusCode != http.StatusTooManyRequests {
-		return nil, false
-	}
-
-	totalSecs := int(math.Ceil(attempt.Duration.Seconds()))
-	if totalSecs <= 0 {
-		totalSecs = 1
-	}
-
-	catalogErr := snyk.NewTooManyRequestsError(
-		fmt.Sprintf("Waiting up to %ds before retry (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts),
-	)
-	catalogErr.Level = "warn"
-
-	return catalogErr, true
 }
 
 func parseRetryDelay(headerRetryAfterValue string) time.Duration {

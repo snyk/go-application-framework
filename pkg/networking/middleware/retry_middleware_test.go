@@ -744,8 +744,8 @@ func setupRetryMiddleware(
 	return NewRetryMiddleware(config, logger, rt, errorHandler), &attemptCount
 }
 
-func TestCatalogNotificationFromRetryAttempt(t *testing.T) {
-	t.Run("429 returns warn catalog error with wait message", func(t *testing.T) {
+func TestRetryAttemptNotification(t *testing.T) {
+	t.Run("429 returns warn catalog error with wait message and cause", func(t *testing.T) {
 		attempt := &RetryAttemptError{
 			StatusCode:  http.StatusTooManyRequests,
 			Attempt:     1,
@@ -753,15 +753,18 @@ func TestCatalogNotificationFromRetryAttempt(t *testing.T) {
 			Duration:    2 * time.Second,
 		}
 
-		notifyErr, ok := CatalogNotificationFromRetryAttempt(attempt)
+		notifyErr, ok := RetryAttemptNotification(attempt)
 		require.True(t, ok)
 
 		var catalogErr snyk_errors.Error
 		require.True(t, errors.As(notifyErr, &catalogErr))
 		assert.Equal(t, "warn", catalogErr.Level)
-		assert.Equal(t, http.StatusTooManyRequests, catalogErr.StatusCode)
-		assert.NotEmpty(t, catalogErr.ErrorCode)
+		assert.Equal(t, "Rate limited", catalogErr.Title)
 		assert.Contains(t, catalogErr.Detail, "Waiting up to 2s before retry (attempt 1/3)")
+
+		var cause *RetryAttemptError
+		require.True(t, errors.As(notifyErr, &cause), "original RetryAttemptError should be accessible via Unwrap")
+		assert.Equal(t, http.StatusTooManyRequests, cause.StatusCode)
 	})
 
 	t.Run("500 has no notification", func(t *testing.T) {
@@ -771,13 +774,13 @@ func TestCatalogNotificationFromRetryAttempt(t *testing.T) {
 			MaxAttempts: 3,
 		}
 
-		notifyErr, ok := CatalogNotificationFromRetryAttempt(attempt)
+		notifyErr, ok := RetryAttemptNotification(attempt)
 		assert.False(t, ok)
 		assert.Nil(t, notifyErr)
 	})
 
 	t.Run("non-retry error has no notification", func(t *testing.T) {
-		notifyErr, ok := CatalogNotificationFromRetryAttempt(errors.New("other"))
+		notifyErr, ok := RetryAttemptNotification(errors.New("other"))
 		assert.False(t, ok)
 		assert.Nil(t, notifyErr)
 	})
