@@ -14,6 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
@@ -271,17 +272,11 @@ func RetryAttemptNotification(err error) (error, bool) {
 		totalSecs = 1
 	}
 
-	notif := snyk.NewTooManyRequestsError(
-		fmt.Sprintf("Waiting up to %ds before retry (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts),
-	)
-	notif.Level = "warn"
-	notif.Title = "Rate limited"
-	notif.Description = ""
-	notif.StatusCode = 0
-	notif.ErrorCode = ""
-	notif.Links = nil
-
-	return notif, true
+	return snyk_errors.Error{
+		Title:  "Rate limited",
+		Detail: fmt.Sprintf("Waiting up to %ds before retry (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts),
+		Level:  "warn",
+	}, true
 }
 
 // CatalogNotificationFromRetryAttempt maps a retry attempt to a catalog error when it should
