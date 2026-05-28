@@ -723,27 +723,6 @@ func Test_retryMiddleware_429_then_success(t *testing.T) {
 	})
 }
 
-// setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
-func setupRetryMiddleware(
-	t *testing.T,
-	logger *zerolog.Logger,
-	errorHandler networktypes.ErrorHandlerFunc,
-	maxAttempts int,
-	roundTrip func(req *http.Request, attempt int) (*http.Response, error),
-) (http.RoundTripper, *int) {
-	t.Helper()
-	attemptCount := 0
-	fn := func(req *http.Request) (*http.Response, error) {
-		attemptCount++
-		return roundTrip(req, attemptCount)
-	}
-	rt := &failRoundtripper{t: t, roundTripFn: &fn}
-	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, maxAttempts)
-	config.Set(configurationKeyRetryAfter, 1)
-	return NewRetryMiddleware(config, logger, rt, errorHandler), &attemptCount
-}
-
 func TestRetryAttemptNotification(t *testing.T) {
 	t.Run("429 returns warn catalog error with wait message and cause", func(t *testing.T) {
 		attempt := &RetryAttemptError{
@@ -784,4 +763,25 @@ func TestRetryAttemptNotification(t *testing.T) {
 		assert.False(t, ok)
 		assert.Nil(t, notifyErr)
 	})
+}
+
+// setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
+func setupRetryMiddleware(
+	t *testing.T,
+	logger *zerolog.Logger,
+	errorHandler networktypes.ErrorHandlerFunc,
+	maxAttempts int,
+	roundTrip func(req *http.Request, attempt int) (*http.Response, error),
+) (http.RoundTripper, *int) {
+	t.Helper()
+	attemptCount := 0
+	fn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		return roundTrip(req, attemptCount)
+	}
+	rt := &failRoundtripper{t: t, roundTripFn: &fn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, maxAttempts)
+	config.Set(configurationKeyRetryAfter, 1)
+	return NewRetryMiddleware(config, logger, rt, errorHandler), &attemptCount
 }
