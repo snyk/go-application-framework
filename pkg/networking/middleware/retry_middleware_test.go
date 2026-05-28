@@ -759,8 +759,8 @@ func TestRetryAttemptNotification(t *testing.T) {
 		var catalogErr snyk_errors.Error
 		require.True(t, errors.As(notifyErr, &catalogErr))
 		assert.Equal(t, "warn", catalogErr.Level)
-		assert.Equal(t, "Rate limited", catalogErr.Title)
-		assert.Contains(t, catalogErr.Detail, "Waiting up to 2s before retry (attempt 1/3)")
+		assert.Equal(t, "Service temporarily throttled", catalogErr.Title)
+		assert.Contains(t, catalogErr.Detail, "Automatically retrying in 2s seconds... (attempt 1/3).")
 
 		var cause *RetryAttemptError
 		require.True(t, errors.As(notifyErr, &cause), "original RetryAttemptError should be accessible via Unwrap")
