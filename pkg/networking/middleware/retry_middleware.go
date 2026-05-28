@@ -71,12 +71,16 @@ type RetryMiddleware struct {
 	errorHandler     networktypes.ErrorHandlerFunc
 }
 
-func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, errorHandler networktypes.ErrorHandlerFunc) http.RoundTripper {
+func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, errorHandler ...networktypes.ErrorHandlerFunc) http.RoundTripper {
+	var handler networktypes.ErrorHandlerFunc
+	if len(errorHandler) > 0 {
+		handler = errorHandler[0]
+	}
 	return &RetryMiddleware{
 		nextRoundtripper: roundTripper,
 		config:           config,
 		logger:           logger,
-		errorHandler:     errorHandler,
+		errorHandler:     handler,
 	}
 }
 
@@ -274,7 +278,7 @@ func retryAttemptNotification(err error) (error, bool) {
 		totalSecs = 1
 	}
 
-	notifMsg := fmt.Sprintf("Automatically retrying in %ds seconds... (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts)
+	notifMsg := fmt.Sprintf("Automatically retrying in %d seconds... (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts)
 	notif := snyk.NewTooManyRequestsError(notifMsg, snyk_errors.WithCause(attempt))
 	notif.Description = ""
 

@@ -128,7 +128,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, 1)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, failRoundtripper, nil)
+		sut := NewRetryMiddleware(config, &logger, failRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
 		assert.NoError(t, err)
@@ -149,7 +149,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, 3)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, failureRoundtripper, nil)
+		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
 		assert.NoError(t, err)
 		assert.NotNil(t, response)
@@ -167,7 +167,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, failureRoundtripper, nil)
+		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
 		assert.NoError(t, err)
 		assert.NotNil(t, response)
@@ -205,7 +205,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, 3)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, rt, nil)
+		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
 
 		require.NoError(t, err)
@@ -233,7 +233,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, 3)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, rt, nil)
+		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
 		assert.NoError(t, err)
@@ -261,7 +261,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, 3)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, rt, nil)
+		sut := NewRetryMiddleware(config, &logger, rt)
 		resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
 
 		assert.NoError(t, err)
@@ -281,7 +281,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, failureRoundtripper, nil)
+		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
 		assert.NoError(t, err)
 		assert.NotNil(t, response)
@@ -299,7 +299,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, failureRoundtripper, nil)
+		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
 		assert.NoError(t, err)
 		assert.NotNil(t, response)
@@ -317,7 +317,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		config.Set(ConfigurationKeyRequestAttempts, expectedAttempts)
 		config.Set(configurationKeyRetryAfter, 1)
 
-		sut := NewRetryMiddleware(config, &logger, failureRoundtripper, nil)
+		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", bytes.NewReader(expectedBody)))
 		assert.NoError(t, err)
 		assert.NotNil(t, response)
@@ -333,7 +333,7 @@ func TestNewRetryMiddleware(t *testing.T) {
 		testRequest := httptest.NewRequest(http.MethodGet, "/", nil)
 
 		// invoke system under test
-		sut := NewRetryMiddleware(config, &logger, failureRoundtripper, nil)
+		sut := NewRetryMiddleware(config, &logger, failureRoundtripper)
 		_, err := sut.RoundTrip(testRequest)
 
 		assert.Equal(t, expectedErr.Error(), err.Error())
@@ -760,7 +760,7 @@ func TestRetryAttemptNotification(t *testing.T) {
 		require.True(t, errors.As(notifyErr, &catalogErr))
 		assert.Equal(t, "warn", catalogErr.Level)
 		assert.Equal(t, "Service temporarily throttled", catalogErr.Title)
-		assert.Contains(t, catalogErr.Detail, "Automatically retrying in 2s seconds... (attempt 1/3).")
+		assert.Contains(t, catalogErr.Detail, "Automatically retrying in 2 seconds... (attempt 1/3).")
 
 		var cause *RetryAttemptError
 		require.True(t, errors.As(notifyErr, &cause), "original RetryAttemptError should be accessible via Unwrap")
