@@ -68,6 +68,7 @@ type Configuration interface {
 
 	// PersistInStorage ensures that when Set is called with the given key, it will be persisted in the config file.
 	PersistInStorage(key string)
+	// SetStorage changes the storage backend for the configuration and clears the cache so old storage values are no longer used.
 	SetStorage(storage Storage)
 	GetStorage() Storage
 
@@ -700,6 +701,10 @@ func (ev *extendedViper) SetStorage(storage Storage) {
 	ev.mutex.Lock()
 	defer ev.mutex.Unlock()
 	ev.storage = storage
+	// And clear the cache so values from the old storage are no longer used.
+	if ev.defaultCache != nil {
+		ev.defaultCache.Flush()
+	}
 }
 
 func (ev *extendedViper) GetStorage() Storage {
