@@ -693,7 +693,8 @@ components:
         settings:
           description: |
             Folder-level settings (only FolderSettingName allowed). Distinct from global; no overlap.
-            Example: pre_assigned_org_id.
+            Uses replace-list semantics: entries not present in the request are removed.
+            To remove pre_assigned_org_id, omit it from this array entirely.
           items:
             $ref: '#/components/schemas/FolderSettingInput'
           type: array
@@ -717,7 +718,8 @@ components:
         name:
           $ref: '#/components/schemas/FolderSettingName'
         value:
-          description: Setting value (type depends on the setting; validated server-side)
+          description: Setting value as a UUID string. `null` is not accepted; omit
+            the entry from `settings` entirely to remove the assignment.
           example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
       required:
       - name
@@ -1156,7 +1158,7 @@ paths:
       - Configuration
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -1325,7 +1327,7 @@ paths:
           skip: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -1340,10 +1342,11 @@ paths:
         The scope is determined by the provided query parameters.
 
         ## Folder Configuration
-        When updating folder configurations (via `folder_configs`), you can optionally set
-        or modify `pre_assigned_org_id` in each folder's `settings`. This pre-assigns an organization to the folder,
-        which will be used for configuration resolution instead of the auto-selection algorithm.
-        Removing a pre-assigned organization is not supported in this version (tracked in IDE-1951).
+        When updating folder configurations (via `folder_configs`), you can set or replace
+        `pre_assigned_org_id` in each folder's `settings` by providing a UUID string. This pre-assigns
+        an organization to the folder, which will be used for configuration resolution instead of the
+        auto-selection algorithm. To remove the pre-assigned organization, omit `pre_assigned_org_id`
+        from the folder's `settings` array entirely.
       operationId: updateConfig
       parameters:
       - description: API version in format YYYY-MM-DD
@@ -1433,7 +1436,7 @@ paths:
       - Configuration
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -1445,9 +1448,9 @@ paths:
       description: "Create a new configuration at the specified scope level. \nThe
         scope is determined by the provided query parameters.\n\n## Folder Configuration\nWhen
         creating folder configurations (via `folder_configs`), you can optionally
-        set\n`pre_assigned_org_id` in each folder's `settings`. This pre-assigns an
-        organization to the folder,\nwhich will be used for configuration resolution
-        instead of the auto-selection algorithm.\n"
+        set\n`pre_assigned_org_id` in each folder's `settings` to a UUID string. This
+        pre-assigns an organization\nto the folder, which will be used for configuration
+        resolution instead of the auto-selection algorithm.\n"
       operationId: createConfig
       parameters:
       - description: API version in format YYYY-MM-DD
@@ -1543,7 +1546,7 @@ paths:
       - Configuration
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -1745,7 +1748,7 @@ paths:
           skip: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -1779,7 +1782,7 @@ paths:
 
         ## Folder Configuration
         Each folder config can optionally specify:
-        - `preferred_org_id` on the folder row (optional shortcut) or `pre_assigned_org_id` in `settings`
+        - `preferred_org_id` on the folder row (optional shortcut) or `pre_assigned_org_id` in `settings` (UUID string; omit the entry to remove an existing assignment)
         - `settings` - Folder-level settings (distinct from global; apply only to that folder and do not override global settings)
       operationId: createUserConfig
       parameters:
@@ -1868,7 +1871,7 @@ paths:
           skip: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -1934,7 +1937,7 @@ paths:
           skip: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -2033,7 +2036,7 @@ paths:
           skip: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -2114,7 +2117,7 @@ paths:
           skip: true
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/ide'
+      - '@snyk/developer-experience_ide'
       x-snyk-api-releases:
       - 2024-10-15~beta
       - 2026-05-07~beta
@@ -2133,3 +2136,4 @@ x-cerberus:
     strategies:
     - InternalJWT: {}
 x-snyk-api-version: "2026-05-07"
+

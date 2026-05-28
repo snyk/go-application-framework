@@ -374,7 +374,8 @@ type FolderConfigInput struct {
 	RemoteUrl string `json:"remote_url"`
 
 	// Settings Folder-level settings (only FolderSettingName allowed). Distinct from global; no overlap.
-	// Example: pre_assigned_org_id.
+	// Uses replace-list semantics: entries not present in the request are removed.
+	// To remove pre_assigned_org_id, omit it from this array entirely.
 	Settings *[]FolderSettingInput `json:"settings,omitempty"`
 }
 
@@ -389,7 +390,7 @@ type FolderSettingInput struct {
 	// Name Setting names allowed at folder level only. Must not be used in top-level settings.
 	Name FolderSettingName `json:"name"`
 
-	// Value Setting value (type depends on the setting; validated server-side)
+	// Value Setting value as a UUID string. `null` is not accepted; omit the entry from `settings` entirely to remove the assignment.
 	Value interface{} `json:"value"`
 }
 
