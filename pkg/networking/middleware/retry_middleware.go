@@ -79,7 +79,7 @@ func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOpti
 	}
 }
 
-func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, opts ...RetryMiddlewareOption) http.RoundTripper {
+func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, opts ...RetryMiddlewareOption) *RetryMiddleware {
 	rm := &RetryMiddleware{
 		nextRoundtripper: roundTripper,
 		config:           config,
