@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,8 +14,10 @@ import (
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 )
 
 const defaultMaxAttemptsCount = 1 // Per default max network attempts (=1) this means retries are disabled and need to be enabled via the configuration
@@ -44,18 +48,47 @@ var statusCodesToRetryLUT = map[int]retryLogic{
 var errRetryNecessary = errors.New("retry with backoff")
 var errRetryDelayMaxExceeded = errors.New("suggested retry delay exceeds maximum allowed wait")
 
+type RetryAttemptError struct {
+	StatusCode  int
+	Attempt     int
+	MaxAttempts int
+	Duration    time.Duration
+	Err         error
+}
+
+func (e *RetryAttemptError) Error() string {
+	return fmt.Sprintf("retry attempt %d/%d (status %d): %v", e.Attempt, e.MaxAttempts, e.StatusCode, e.Err)
+}
+
+func (e *RetryAttemptError) Unwrap() error {
+	return e.Err
+}
+
 type RetryMiddleware struct {
 	nextRoundtripper http.RoundTripper
 	config           configuration.Configuration
 	logger           *zerolog.Logger
+	errorHandler     networktypes.ErrorHandlerFunc
 }
 
-func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper) *RetryMiddleware {
-	return &RetryMiddleware{
+type RetryMiddlewareOption func(*RetryMiddleware)
+
+func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
+	return func(rm *RetryMiddleware) {
+		rm.errorHandler = handler
+	}
+}
+
+func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, opts ...RetryMiddlewareOption) *RetryMiddleware {
+	rm := &RetryMiddleware{
 		nextRoundtripper: roundTripper,
 		config:           config,
 		logger:           logger,
 	}
+	for _, opt := range opts {
+		opt(rm)
+	}
+	return rm
 }
 
 func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -123,7 +156,12 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		// depending on the response determine if we should retry
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
-			return response, retryError
+			return response, &RetryAttemptError{
+				StatusCode:  response.StatusCode,
+				Attempt:     actualAttempts,
+				MaxAttempts: *cachedMaxRetries,
+				Err:         retryError,
+			}
 		}
 
 		return response, nil
@@ -131,10 +169,31 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	backoffMethod := backoff.NewExponentialBackOff()
 	backoffMethod.InitialInterval = time.Duration(retryAfterSeconds) * time.Second
-	finalResponse, finalError = backoff.Retry(req.Context(), op, backoff.WithBackOff(backoffMethod))
+	reqCtx := req.Context()
+	finalResponse, finalError = backoff.Retry(reqCtx, op,
+		backoff.WithBackOff(backoffMethod),
+		backoff.WithNotify(func(err error, duration time.Duration) {
+			rm.notifyRetry(reqCtx, err, duration)
+		}),
+	)
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError
+}
+
+func (rm RetryMiddleware) notifyRetry(ctx context.Context, err error, duration time.Duration) {
+	if rm.errorHandler == nil {
+		return
+	}
+	var retryErr *RetryAttemptError
+	if errors.As(err, &retryErr) {
+		retryErr.Duration = duration
+		if catalogErr, ok := retryAttemptNotification(retryErr); ok {
+			if handlerErr := rm.errorHandler(catalogErr, ctx); handlerErr != nil {
+				rm.logger.Debug().Err(handlerErr).Msg("error handler failed during retry notification")
+			}
+		}
+	}
 }
 
 // filterRetryError hides implementation-only errors that mean “we stopped retrying
@@ -213,6 +272,24 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 	}
 
 	return nil
+}
+
+func retryAttemptNotification(err error) (error, bool) {
+	var attempt *RetryAttemptError
+	if !errors.As(err, &attempt) || attempt.StatusCode != http.StatusTooManyRequests {
+		return nil, false
+	}
+
+	totalSecs := int(math.Ceil(attempt.Duration.Seconds()))
+	if totalSecs <= 0 {
+		totalSecs = 1
+	}
+
+	notifMsg := fmt.Sprintf("Automatically retrying in %d seconds... (attempt %d/%d).", totalSecs, attempt.Attempt, attempt.MaxAttempts)
+	notif := snyk.NewTooManyRequestsError(notifMsg, snyk_errors.WithCause(attempt))
+	notif.Description = ""
+
+	return notif, true
 }
 
 func parseRetryDelay(headerRetryAfterValue string) time.Duration {

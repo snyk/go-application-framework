@@ -192,7 +192,8 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 	//nolint:errcheck // breaking api change needed to fix this
 	transport := http.DefaultTransport.(*http.Transport) //nolint:forcetypeassert // panic here is reasonable
 	var crt http.RoundTripper = n.configureRoundTripper(transport)
-	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt)
+
+	crt = middleware.NewRetryMiddleware(n.config, n.logger, crt, middleware.WithErrorHandler(n.errorHandler))
 
 	if n.errorHandler != nil {
 		crt = middleware.NewNetworkStackErrorHandlerMiddleware(crt, n.errorHandler)
