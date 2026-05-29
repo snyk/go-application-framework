@@ -71,17 +71,24 @@ type RetryMiddleware struct {
 	errorHandler     networktypes.ErrorHandlerFunc
 }
 
-func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, errorHandler ...networktypes.ErrorHandlerFunc) http.RoundTripper {
-	var handler networktypes.ErrorHandlerFunc
-	if len(errorHandler) > 0 {
-		handler = errorHandler[0]
+type RetryMiddlewareOption func(*RetryMiddleware)
+
+func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
+	return func(rm *RetryMiddleware) {
+		rm.errorHandler = handler
 	}
-	return &RetryMiddleware{
+}
+
+func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logger, roundTripper http.RoundTripper, opts ...RetryMiddlewareOption) http.RoundTripper {
+	rm := &RetryMiddleware{
 		nextRoundtripper: roundTripper,
 		config:           config,
 		logger:           logger,
-		errorHandler:     handler,
 	}
+	for _, opt := range opts {
+		opt(rm)
+	}
+	return rm
 }
 
 func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {

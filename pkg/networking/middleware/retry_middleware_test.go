@@ -783,5 +783,5 @@ func setupRetryMiddleware(
 	config := configuration.NewWithOpts()
 	config.Set(ConfigurationKeyRequestAttempts, maxAttempts)
 	config.Set(configurationKeyRetryAfter, 1)
-	return NewRetryMiddleware(config, logger, rt, errorHandler), &attemptCount
+	return NewRetryMiddleware(config, logger, rt, WithErrorHandler(errorHandler)), &attemptCount
 }
