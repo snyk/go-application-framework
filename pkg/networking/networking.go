@@ -209,6 +209,7 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 
 func (n *networkImpl) GetRoundTripper() http.RoundTripper {
 	rt := n.getUnauthorizedRoundTripper()
+	rt = middleware.NewNoAuthInterceptMiddleware(n.config, n.logger, rt)
 	return middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt)
 }
 

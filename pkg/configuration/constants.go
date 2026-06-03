@@ -85,6 +85,9 @@ const (
 	// feature flags
 	// ---------
 
+	// STOP_REQUESTS_WITHOUT_AUTH (boolean) if true, requests to Snyk API URLs that have no Authorization header are blocked with a synthetic 401 instead of being sent
+	STOP_REQUESTS_WITHOUT_AUTH string = "internal_stop_requests_without_auth"
+
 	FF_OAUTH_AUTH_FLOW_ENABLED string = "internal_snyk_oauth_enabled"
 	FF_TRANSFORMATION_WORKFLOW string = "internal_snyk_transformation_workflow_enabled"
 	// Feature flag to enable consistent ignores for code ,used in code-client-go's code workflow
