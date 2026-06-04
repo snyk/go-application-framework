@@ -65,7 +65,11 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 		additionalSubdomains := n.config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 		additionalUrls := n.config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 		requiresAuth, err := ShouldRequireAuthentication(apiUrl, newRequest.URL, additionalSubdomains, additionalUrls)
-		if err == nil && requiresAuth {
+		if err != nil {
+			if n.logger != nil {
+				n.logger.Debug().Err(err).Str("url", newRequest.URL.String()).Msg("could not determine if request requires auth, allowing through")
+			}
+		} else if requiresAuth {
 			if n.logger != nil {
 				n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
 			}
