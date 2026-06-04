@@ -26,18 +26,6 @@ func NewAuthHeaderMiddleware(
 	config configuration.Configuration,
 	authenticator auth.Authenticator,
 	roundTripper http.RoundTripper,
-) *AuthHeaderMiddleware {
-	return &AuthHeaderMiddleware{
-		next:          roundTripper,
-		config:        config,
-		authenticator: authenticator,
-	}
-}
-
-func NewAuthHeaderMiddlewareWithLogger(
-	config configuration.Configuration,
-	authenticator auth.Authenticator,
-	roundTripper http.RoundTripper,
 	logger *zerolog.Logger,
 ) *AuthHeaderMiddleware {
 	return &AuthHeaderMiddleware{
@@ -55,7 +43,7 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 
 	// RoundTrippers should not modify the source request according to the docs, so cloning is used.
 	newRequest := request.Clone(request.Context())
-	requiresAuth, tokenSet, err := AddAuthenticationHeader(n.authenticator, n.config, newRequest)
+	requiresAuth, tokenSet, err := addAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -122,11 +110,21 @@ var ErrAuthenticationFailed = fmt.Errorf("authentication failed")
 // AddAuthenticationHeader determines whether a request needs authentication,
 // negotiates authorization and sets request headers if necessary.
 //
-// Returns requiresAuth=true when the URL targets a Snyk API endpoint,
-// tokenSet=true when an auth token was successfully added to the request.
 // If this fails due to an authentication error, the resulting error will match
 // ErrAuthenticationFailed.
 func AddAuthenticationHeader(
+	authenticator auth.Authenticator,
+	config configuration.Configuration,
+	request *http.Request,
+) error {
+	_, _, err := addAuthenticationHeader(authenticator, config, request)
+	return err
+}
+
+// addAuthenticationHeader is the internal version that also returns whether
+// the URL required auth and whether a token was set. Used by RoundTrip to
+// drive the no-auth intercept without a second URL match.
+func addAuthenticationHeader(
 	authenticator auth.Authenticator,
 	config configuration.Configuration,
 	request *http.Request,
@@ -137,7 +135,7 @@ func AddAuthenticationHeader(
 	requiresAuth, err = ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 
 	if !requiresAuth {
-		return requiresAuth, false, err
+		return false, false, err
 	}
 
 	tokenSet, err = authenticator.AddAuthenticationHeader(request)

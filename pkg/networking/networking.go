@@ -164,8 +164,7 @@ func (n *networkImpl) AddDynamicHeaderField(key string, f DynamicHeaderFunc) {
 
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
-	_, _, err := middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
-	return err
+	return middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
 }
 
 // addDefaultHeader adds the default headers request.
@@ -210,7 +209,7 @@ func (n *networkImpl) getUnauthorizedRoundTripper() http.RoundTripper {
 
 func (n *networkImpl) GetRoundTripper() http.RoundTripper {
 	rt := n.getUnauthorizedRoundTripper()
-	return middleware.NewAuthHeaderMiddlewareWithLogger(n.config, n.GetAuthenticator(), rt, n.logger)
+	return middleware.NewAuthHeaderMiddleware(n.config, n.GetAuthenticator(), rt, n.logger)
 }
 
 func (n *networkImpl) configureRoundTripper(base *http.Transport) *http.Transport {
