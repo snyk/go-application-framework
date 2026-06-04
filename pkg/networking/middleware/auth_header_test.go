@@ -83,7 +83,7 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 		URL: url,
 	}
 
-	authenticator.EXPECT().AddAuthenticationHeader(request).Times(1)
+	authenticator.EXPECT().AddAuthenticationHeaderWithResult(request).Times(1)
 
 	err = middleware.AddAuthenticationHeader(authenticator, config, request)
 	assert.NoError(t, err)
@@ -95,7 +95,7 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 		URL: url2,
 	}
 
-	authenticator.EXPECT().AddAuthenticationHeader(request2).Times(1)
+	authenticator.EXPECT().AddAuthenticationHeaderWithResult(request2).Times(1)
 
 	err = middleware.AddAuthenticationHeader(authenticator, config, request2)
 	assert.NoError(t, err)
@@ -136,7 +136,7 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		})
 		ctrl := gomock.NewController(t)
 		auth := mocks.NewMockAuthenticator(ctrl)
-		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(false, nil).Times(1)
+		auth.EXPECT().AddAuthenticationHeaderWithResult(gomock.Any()).Return(false, nil).Times(1)
 
 		m := middleware.NewAuthHeaderMiddleware(newConfig(false), auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
@@ -153,7 +153,7 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		})
 		ctrl := gomock.NewController(t)
 		auth := mocks.NewMockAuthenticator(ctrl)
-		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(false, nil).Times(1)
+		auth.EXPECT().AddAuthenticationHeaderWithResult(gomock.Any()).Return(false, nil).Times(1)
 
 		m := middleware.NewAuthHeaderMiddleware(newConfig(true), auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
@@ -170,7 +170,7 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		})
 		ctrl := gomock.NewController(t)
 		auth := mocks.NewMockAuthenticator(ctrl)
-		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).DoAndReturn(func(r *http.Request) (bool, error) {
+		auth.EXPECT().AddAuthenticationHeaderWithResult(gomock.Any()).DoAndReturn(func(r *http.Request) (bool, error) {
 			r.Header.Set("Authorization", "token abc123")
 			return true, nil
 		}).Times(1)
@@ -190,8 +190,8 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		})
 		ctrl := gomock.NewController(t)
 		auth := mocks.NewMockAuthenticator(ctrl)
-		// non-Snyk URL — AddAuthenticationHeader not called
-		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Times(0)
+		// non-Snyk URL — AddAuthenticationHeaderWithResult not called
+		auth.EXPECT().AddAuthenticationHeaderWithResult(gomock.Any()).Times(0)
 
 		m := middleware.NewAuthHeaderMiddleware(newConfig(true), auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://example.com/api/something"))
@@ -213,7 +213,7 @@ func TestAuthenticationError_Is(t *testing.T) {
 	}
 
 	authenticator := mocks.NewMockAuthenticator(ctrl)
-	authenticator.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(false, fmt.Errorf("nope"))
+	authenticator.EXPECT().AddAuthenticationHeaderWithResult(gomock.Any()).Return(false, fmt.Errorf("nope"))
 	err = middleware.AddAuthenticationHeader(authenticator, config, request)
 	assert.ErrorIs(t, err, middleware.ErrAuthenticationFailed)
 	assert.ErrorContains(t, err, "nope")

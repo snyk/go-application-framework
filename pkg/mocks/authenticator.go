@@ -36,18 +36,32 @@ func (m *MockAuthenticator) EXPECT() *MockAuthenticatorMockRecorder {
 }
 
 // AddAuthenticationHeader mocks base method.
-func (m *MockAuthenticator) AddAuthenticationHeader(request *http.Request) (bool, error) {
+func (m *MockAuthenticator) AddAuthenticationHeader(request *http.Request) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddAuthenticationHeader", request)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // AddAuthenticationHeader indicates an expected call of AddAuthenticationHeader.
 func (mr *MockAuthenticatorMockRecorder) AddAuthenticationHeader(request interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAuthenticationHeader", reflect.TypeOf((*MockAuthenticator)(nil).AddAuthenticationHeader), request)
+}
+
+// AddAuthenticationHeaderWithResult mocks base method.
+func (m *MockAuthenticator) AddAuthenticationHeaderWithResult(request *http.Request) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAuthenticationHeaderWithResult", request)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddAuthenticationHeaderWithResult indicates an expected call of AddAuthenticationHeaderWithResult.
+func (mr *MockAuthenticatorMockRecorder) AddAuthenticationHeaderWithResult(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAuthenticationHeaderWithResult", reflect.TypeOf((*MockAuthenticator)(nil).AddAuthenticationHeaderWithResult), request)
 }
 
 // Authenticate mocks base method.
@@ -102,18 +116,32 @@ func (m *MockCancelableAuthenticator) EXPECT() *MockCancelableAuthenticatorMockR
 }
 
 // AddAuthenticationHeader mocks base method.
-func (m *MockCancelableAuthenticator) AddAuthenticationHeader(request *http.Request) (bool, error) {
+func (m *MockCancelableAuthenticator) AddAuthenticationHeader(request *http.Request) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddAuthenticationHeader", request)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // AddAuthenticationHeader indicates an expected call of AddAuthenticationHeader.
 func (mr *MockCancelableAuthenticatorMockRecorder) AddAuthenticationHeader(request interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAuthenticationHeader", reflect.TypeOf((*MockCancelableAuthenticator)(nil).AddAuthenticationHeader), request)
+}
+
+// AddAuthenticationHeaderWithResult mocks base method.
+func (m *MockCancelableAuthenticator) AddAuthenticationHeaderWithResult(request *http.Request) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAuthenticationHeaderWithResult", request)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddAuthenticationHeaderWithResult indicates an expected call of AddAuthenticationHeaderWithResult.
+func (mr *MockCancelableAuthenticatorMockRecorder) AddAuthenticationHeaderWithResult(request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAuthenticationHeaderWithResult", reflect.TypeOf((*MockCancelableAuthenticator)(nil).AddAuthenticationHeaderWithResult), request)
 }
 
 // Authenticate mocks base method.

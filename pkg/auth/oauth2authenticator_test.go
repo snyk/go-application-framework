@@ -186,7 +186,7 @@ func Test_AddAuthenticationHeader_validToken(t *testing.T) {
 	}
 
 	// run method under test
-	_, err = authenticator.AddAuthenticationHeader(emptyRequest)
+	err = authenticator.AddAuthenticationHeader(emptyRequest)
 	assert.NoError(t, err)
 
 	// compare
@@ -230,7 +230,7 @@ func Test_AddAuthenticationHeader_expiredToken(t *testing.T) {
 	}
 
 	// run method under test
-	_, err = authenticator.AddAuthenticationHeader(emptyRequest)
+	err = authenticator.AddAuthenticationHeader(emptyRequest)
 	assert.NoError(t, err)
 
 	// compare
@@ -280,7 +280,7 @@ func Test_AddAuthenticationHeader_expiredToken_somebodyUpdated(t *testing.T) {
 	assert.NoError(t, err)
 
 	// run method under test
-	_, err = authenticator.AddAuthenticationHeader(emptyRequest)
+	err = authenticator.AddAuthenticationHeader(emptyRequest)
 	assert.NoError(t, err)
 
 	// compare

@@ -503,7 +503,12 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 	return nil
 }
 
-func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) (bool, error) {
+func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
+	_, err := o.AddAuthenticationHeaderWithResult(request)
+	return err
+}
+
+func (o *oAuth2Authenticator) AddAuthenticationHeaderWithResult(request *http.Request) (bool, error) {
 	if request == nil {
 		return false, fmt.Errorf("request must not be nil")
 	}

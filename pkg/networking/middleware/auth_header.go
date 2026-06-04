@@ -138,7 +138,7 @@ func addAuthenticationHeader(
 		return false, false, err
 	}
 
-	tokenSet, err = authenticator.AddAuthenticationHeader(request)
+	tokenSet, err = authenticator.AddAuthenticationHeaderWithResult(request)
 	if err != nil {
 		return true, false, errors.Join(err, ErrAuthenticationFailed)
 	}
