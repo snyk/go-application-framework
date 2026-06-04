@@ -26,14 +26,23 @@ func NewAuthHeaderMiddleware(
 	config configuration.Configuration,
 	authenticator auth.Authenticator,
 	roundTripper http.RoundTripper,
-	logger *zerolog.Logger,
 ) *AuthHeaderMiddleware {
 	return &AuthHeaderMiddleware{
 		next:          roundTripper,
 		config:        config,
 		authenticator: authenticator,
-		logger:        logger,
 	}
+}
+
+func NewAuthHeaderMiddlewareWithLogger(
+	config configuration.Configuration,
+	authenticator auth.Authenticator,
+	roundTripper http.RoundTripper,
+	logger *zerolog.Logger,
+) *AuthHeaderMiddleware {
+	m := NewAuthHeaderMiddleware(config, authenticator, roundTripper)
+	m.logger = logger
+	return m
 }
 
 func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response, error) {

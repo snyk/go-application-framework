@@ -138,7 +138,7 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		auth := mocks.NewMockAuthenticator(ctrl)
 		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(nil).Times(1)
 
-		m := middleware.NewAuthHeaderMiddleware(newConfig(false), auth, next, &logger)
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(false), auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -155,7 +155,7 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		auth := mocks.NewMockAuthenticator(ctrl)
 		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(nil).Times(1)
 
-		m := middleware.NewAuthHeaderMiddleware(newConfig(true), auth, next, &logger)
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(true), auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -175,7 +175,7 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 			return nil
 		}).Times(1)
 
-		m := middleware.NewAuthHeaderMiddleware(newConfig(true), auth, next, &logger)
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(true), auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -192,7 +192,7 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		auth := mocks.NewMockAuthenticator(ctrl)
 		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Times(0)
 
-		m := middleware.NewAuthHeaderMiddleware(newConfig(true), auth, next, &logger)
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(true), auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://example.com/api/something"))
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
