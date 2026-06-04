@@ -164,7 +164,8 @@ func (n *networkImpl) AddDynamicHeaderField(key string, f DynamicHeaderFunc) {
 
 func (n *networkImpl) AddHeaders(request *http.Request) error {
 	n.addDefaultHeader(request)
-	return middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
+	_, _, err := middleware.AddAuthenticationHeader(n.GetAuthenticator(), n.config, request)
+	return err
 }
 
 // addDefaultHeader adds the default headers request.

@@ -43,18 +43,19 @@ func (t *tokenAuthenticator) Authenticate() error {
 	return nil
 }
 
-func (t *tokenAuthenticator) AddAuthenticationHeader(request *http.Request) error {
+func (t *tokenAuthenticator) AddAuthenticationHeader(request *http.Request) (bool, error) {
 	if request == nil {
-		return fmt.Errorf("request must not be nil")
+		return false, fmt.Errorf("request must not be nil")
 	}
 
 	token := t.tokenFunc()
 	if len(token) > 0 {
 		request.Header.Set("Authorization", token)
 		request.Header.Set("Session-Token", token)
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 func (t *tokenAuthenticator) IsSupported() bool {

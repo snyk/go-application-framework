@@ -55,32 +55,22 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 
 	// RoundTrippers should not modify the source request according to the docs, so cloning is used.
 	newRequest := request.Clone(request.Context())
-	err := AddAuthenticationHeader(n.authenticator, n.config, newRequest)
+	requiresAuth, tokenSet, err := AddAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	if n.config.GetBool(configuration.STOP_REQUESTS_WITHOUT_AUTH) && newRequest.Header.Get("Authorization") == "" {
-		apiUrl := n.config.GetString(configuration.API_URL)
-		additionalSubdomains := n.config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
-		additionalUrls := n.config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-		requiresAuth, err := ShouldRequireAuthentication(apiUrl, newRequest.URL, additionalSubdomains, additionalUrls)
-		if err != nil {
-			if n.logger != nil {
-				n.logger.Debug().Err(err).Str("url", newRequest.URL.String()).Msg("could not determine if request requires auth, allowing through")
-			}
-		} else if requiresAuth {
-			if n.logger != nil {
-				n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
-			}
-			return &http.Response{
-				StatusCode: http.StatusUnauthorized,
-				Status:     "401 Unauthorized",
-				Header:     make(http.Header),
-				Body:       io.NopCloser(http.NoBody),
-				Request:    newRequest,
-			}, nil
+	if n.config.GetBool(configuration.STOP_REQUESTS_WITHOUT_AUTH) && requiresAuth && !tokenSet {
+		if n.logger != nil {
+			n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
 		}
+		return &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Status:     "401 Unauthorized",
+			Header:     make(http.Header),
+			Body:       io.NopCloser(http.NoBody),
+			Request:    newRequest,
+		}, nil
 	}
 
 	return n.next.RoundTrip(newRequest)
@@ -132,26 +122,27 @@ var ErrAuthenticationFailed = fmt.Errorf("authentication failed")
 // AddAuthenticationHeader determines whether a request needs authentication,
 // negotiates authorization and sets request headers if necessary.
 //
+// Returns requiresAuth=true when the URL targets a Snyk API endpoint,
+// tokenSet=true when an auth token was successfully added to the request.
 // If this fails due to an authentication error, the resulting error will match
 // ErrAuthenticationFailed.
 func AddAuthenticationHeader(
 	authenticator auth.Authenticator,
 	config configuration.Configuration,
 	request *http.Request,
-) error {
+) (requiresAuth bool, tokenSet bool, err error) {
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
+	requiresAuth, err = ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 
-	// requests to the api automatically get an authentication token attached
-	if !isSnykApi {
-		return err
+	if !requiresAuth {
+		return requiresAuth, false, err
 	}
 
-	err = authenticator.AddAuthenticationHeader(request)
+	tokenSet, err = authenticator.AddAuthenticationHeader(request)
 	if err != nil {
-		return errors.Join(err, ErrAuthenticationFailed)
+		return true, false, errors.Join(err, ErrAuthenticationFailed)
 	}
-	return nil
+	return true, tokenSet, nil
 }
