@@ -3,9 +3,12 @@ package middleware
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -16,6 +19,7 @@ type AuthHeaderMiddleware struct {
 	next          http.RoundTripper
 	authenticator auth.Authenticator
 	config        configuration.Configuration
+	logger        *zerolog.Logger
 }
 
 func NewAuthHeaderMiddleware(
@@ -30,6 +34,20 @@ func NewAuthHeaderMiddleware(
 	}
 }
 
+func NewAuthHeaderMiddlewareWithLogger(
+	config configuration.Configuration,
+	authenticator auth.Authenticator,
+	roundTripper http.RoundTripper,
+	logger *zerolog.Logger,
+) *AuthHeaderMiddleware {
+	return &AuthHeaderMiddleware{
+		next:          roundTripper,
+		config:        config,
+		authenticator: authenticator,
+		logger:        logger,
+	}
+}
+
 func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL == nil {
 		return n.next.RoundTrip(request)
@@ -40,6 +58,25 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	err := AddAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
 		return nil, err
+	}
+
+	if n.config.GetBool(configuration.STOP_REQUESTS_WITHOUT_AUTH) && newRequest.Header.Get("Authorization") == "" {
+		apiUrl := n.config.GetString(configuration.API_URL)
+		additionalSubdomains := n.config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
+		additionalUrls := n.config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+		requiresAuth, err := ShouldRequireAuthentication(apiUrl, newRequest.URL, additionalSubdomains, additionalUrls)
+		if err == nil && requiresAuth {
+			if n.logger != nil {
+				n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
+			}
+			return &http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Status:     "401 Unauthorized",
+				Header:     make(http.Header),
+				Body:       io.NopCloser(http.NoBody),
+				Request:    newRequest,
+			}, nil
+		}
 	}
 
 	return n.next.RoundTrip(newRequest)
