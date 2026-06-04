@@ -17,9 +17,6 @@ type Authenticator interface {
 	Authenticate() error
 	// AddAuthenticationHeader adds the authentication header to the request.
 	AddAuthenticationHeader(request *http.Request) error
-	// AddAuthenticationHeaderWithResult adds the authentication header to the request.
-	// Returns true if a token was set, false if no token was available.
-	AddAuthenticationHeaderWithResult(request *http.Request) (bool, error)
 	// IsSupported returns true if the authenticator is ready for use.
 	// If false is returned, it is not possible to add authentication headers/env vars.
 	IsSupported() bool

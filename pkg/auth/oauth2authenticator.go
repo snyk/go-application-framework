@@ -504,16 +504,11 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 }
 
 func (o *oAuth2Authenticator) AddAuthenticationHeader(request *http.Request) error {
-	_, err := o.AddAuthenticationHeaderWithResult(request)
-	return err
-}
-
-func (o *oAuth2Authenticator) AddAuthenticationHeaderWithResult(request *http.Request) (bool, error) {
 	if request == nil {
-		return false, fmt.Errorf("request must not be nil")
+		return fmt.Errorf("request must not be nil")
 	}
 	if o.token == nil {
-		return false, fmt.Errorf("oauth token must not be nil to authorize")
+		return fmt.Errorf("oauth token must not be nil to authorize")
 	}
 
 	ctx := request.Context()
@@ -533,25 +528,25 @@ func (o *oAuth2Authenticator) AddAuthenticationHeaderWithResult(request *http.Re
 		cleanup, err := o.syncTokenRefresh(ctx)
 		defer cleanup()
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		// check if the token in the config is invalid as well
 		token, err := GetOAuthToken(o.config)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		if !token.Valid() {
 			// use TokenSource to refresh the token
 			validToken, err := o.tokenRefresherFunc(ctx, o.oauthConfig, o.token)
 			if err != nil {
-				return false, err
+				return err
 			}
 
 			if validToken != o.token {
 				if err := o.persistToken(validToken); err != nil {
-					return false, err
+					return err
 				}
 			}
 		} else {
@@ -564,10 +559,9 @@ func (o *oAuth2Authenticator) AddAuthenticationHeaderWithResult(request *http.Re
 		value := fmt.Sprint("Bearer ", accessToken)
 		request.Header.Set("Authorization", value)
 		request.Header.Set("Session-Token", value)
-		return true, nil
 	}
 
-	return false, nil
+	return nil
 }
 
 const syncTokenRefreshRetryDelay = time.Millisecond * 100

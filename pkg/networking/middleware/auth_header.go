@@ -43,12 +43,12 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 
 	// RoundTrippers should not modify the source request according to the docs, so cloning is used.
 	newRequest := request.Clone(request.Context())
-	requiresAuth, tokenSet, err := addAuthenticationHeader(n.authenticator, n.config, newRequest)
+	requiresAuth, err := addAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	if n.config.GetBool(configuration.STOP_REQUESTS_WITHOUT_AUTH) && requiresAuth && !tokenSet {
+	if n.config.GetBool(configuration.STOP_REQUESTS_WITHOUT_AUTH) && requiresAuth && newRequest.Header.Get("Authorization") == "" {
 		if n.logger != nil {
 			n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
 		}
@@ -117,30 +117,30 @@ func AddAuthenticationHeader(
 	config configuration.Configuration,
 	request *http.Request,
 ) error {
-	_, _, err := addAuthenticationHeader(authenticator, config, request)
+	_, err := addAuthenticationHeader(authenticator, config, request)
 	return err
 }
 
 // addAuthenticationHeader is the internal version that also returns whether
-// the URL required auth and whether a token was set. Used by RoundTrip to
-// drive the no-auth intercept without a second URL match.
+// the URL required auth. Used by RoundTrip to drive the no-auth intercept
+// without a second URL match.
 func addAuthenticationHeader(
 	authenticator auth.Authenticator,
 	config configuration.Configuration,
 	request *http.Request,
-) (requiresAuth bool, tokenSet bool, err error) {
+) (requiresAuth bool, err error) {
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 	requiresAuth, err = ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 
 	if !requiresAuth {
-		return false, false, err
+		return false, err
 	}
 
-	tokenSet, err = authenticator.AddAuthenticationHeaderWithResult(request)
+	err = authenticator.AddAuthenticationHeader(request)
 	if err != nil {
-		return true, false, errors.Join(err, ErrAuthenticationFailed)
+		return true, errors.Join(err, ErrAuthenticationFailed)
 	}
-	return true, tokenSet, nil
+	return true, nil
 }
