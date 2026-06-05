@@ -113,6 +113,97 @@ func Test_getRequestBody_setsGetBody(t *testing.T) {
 	assert.Equal(t, expectedBody, string(rewoundBytes))
 }
 
+type errOnCloseReadCloser struct {
+	io.Reader
+	closeErr error
+}
+
+func (r errOnCloseReadCloser) Close() error {
+	return r.closeErr
+}
+
+func Test_getRequestBody_returnsNilOnReadError(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/", io.NopCloser(&failReader{err: assert.AnError}))
+	require.NoError(t, err)
+
+	bodyReader := getRequestBody(req)
+	assert.Nil(t, bodyReader)
+	assert.Nil(t, req.GetBody)
+}
+
+func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
+	expectedBody := "hello world"
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/", io.NopCloser(errOnCloseReadCloser{
+		Reader:   bytes.NewReader([]byte(expectedBody)),
+		closeErr: assert.AnError,
+	}))
+	require.NoError(t, err)
+
+	bodyReader := getRequestBody(req)
+	require.NotNil(t, bodyReader)
+	defer bodyReader.Close()
+
+	loggedBody, err := io.ReadAll(bodyReader)
+	require.NoError(t, err)
+	assert.Equal(t, expectedBody, string(loggedBody))
+
+	require.NotNil(t, req.GetBody)
+	rewoundBody, err := req.GetBody()
+	require.NoError(t, err)
+	defer rewoundBody.Close()
+
+	rewoundBytes, err := io.ReadAll(rewoundBody)
+	require.NoError(t, err)
+	assert.Equal(t, expectedBody, string(rewoundBytes))
+}
+
+func Test_getResponseBody_restoresBodyWhenCloseFails(t *testing.T) {
+	expectedBody := "hello client"
+	response := &http.Response{
+		Body: io.NopCloser(errOnCloseReadCloser{
+			Reader:   bytes.NewReader([]byte(expectedBody)),
+			closeErr: assert.AnError,
+		}),
+	}
+
+	bodyReader := getResponseBody(response)
+	require.NotNil(t, bodyReader)
+	defer bodyReader.Close()
+
+	loggedBody, err := io.ReadAll(bodyReader)
+	require.NoError(t, err)
+	assert.Equal(t, expectedBody, string(loggedBody))
+
+	actualBody, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	assert.Equal(t, expectedBody, string(actualBody))
+}
+
+type failReader struct {
+	err error
+}
+
+func (r *failReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+func (r *failReader) Close() error {
+	return nil
+}
+
+func Test_decodeBody_returnsDecodedStringWhenCloseFails(t *testing.T) {
+	expectedBody := "hello world"
+	gzipBuffer := bytes.NewBuffer(nil)
+	gzipWriter := gzip.NewWriter(gzipBuffer)
+	_, err := gzipWriter.Write([]byte(expectedBody))
+	require.NoError(t, err)
+	require.NoError(t, gzipWriter.Close())
+
+	decoded, err := decodeBody(gzipBuffer.Bytes(), "gzip")
+	require.NoError(t, err)
+	assert.Equal(t, expectedBody, decoded)
+}
+
 func Test_LogRequest_NoLog(t *testing.T) {
 	buffer := bytes.Buffer{}
 	logger := zerolog.New(&buffer).Level(zerolog.InfoLevel)

@@ -37,16 +37,21 @@ func shouldNotLog(currentLevel zerolog.Level, levelToLogAt zerolog.Level) bool {
 }
 
 func getResponseBody(response *http.Response) io.ReadCloser {
-	if response.Body != nil {
-		bodyBytes, bodyErr := io.ReadAll(response.Body)
-		if bodyErr == nil {
-			response.Body.Close()
-			bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
-			response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-			return bodyReader
-		}
+	if response.Body == nil {
+		return nil
 	}
-	return nil
+
+	bodyBytes, readErr := io.ReadAll(response.Body)
+	closeErr := response.Body.Close()
+	if readErr != nil {
+		return nil
+	}
+
+	bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
+	response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	// closeErr is non-fatal once ReadAll succeeded; the body is fully buffered.
+	_ = closeErr
+	return bodyReader
 }
 
 func getRequestBody(request *http.Request) io.ReadCloser {
@@ -58,37 +63,44 @@ func getRequestBody(request *http.Request) io.ReadCloser {
 		return bodyReader
 	}
 
-	if request.Body != nil && request.Body != http.NoBody {
-		bodyBytes, bodyErr := io.ReadAll(request.Body)
-		if bodyErr == nil {
-			request.Body.Close()
-			bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
-			request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-			request.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewBuffer(bodyBytes)), nil
-			}
-			return bodyReader
-		}
+	if request.Body == nil || request.Body == http.NoBody {
+		return nil
 	}
 
-	return nil
+	bodyBytes, readErr := io.ReadAll(request.Body)
+	closeErr := request.Body.Close()
+	if readErr != nil {
+		return nil
+	}
+
+	bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
+	request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	request.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewBuffer(bodyBytes)), nil
+	}
+	// closeErr is non-fatal once ReadAll succeeded; Body/GetBody must stay restored.
+	_ = closeErr
+	return bodyReader
 }
 
 func decodeBody(bodyBytes []byte, contentEncoding string) (string, error) {
-	if contentEncoding == "gzip" {
-		reader, err := gzip.NewReader(bytes.NewReader(bodyBytes))
-		if err != nil {
-			return "", errors.Wrap(err, "failed to create gzip reader")
-		}
-		defer reader.Close()
-		decodedBytes, err := io.ReadAll(reader)
-		if err != nil {
-			return "", errors.Wrap(err, "failed to read decoded body")
-		}
-		return string(decodedBytes), nil
-	} else {
+	if contentEncoding != "gzip" {
 		return string(bodyBytes), nil
 	}
+
+	reader, err := gzip.NewReader(bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create gzip reader")
+	}
+
+	decodedBytes, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil {
+		return "", errors.Wrap(readErr, "failed to read decoded body")
+	}
+	// closeErr is non-fatal once decoding succeeded; return content for logging.
+	_ = closeErr
+	return string(decodedBytes), nil
 }
 
 func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, body io.ReadCloser, header http.Header, maxBodyCharacters int64) {
