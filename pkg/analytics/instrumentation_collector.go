@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/snyk/go-application-framework/pkg/logging"
 	"os/user"
 	"time"
+
+	"github.com/snyk/go-application-framework/pkg/logging"
 
 	"github.com/rs/zerolog"
 
@@ -219,6 +220,11 @@ func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttribute
 
 func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
 	stage := toInteractionStage(ic.stage)
+
+	if ic.userAgent.ClientMachineId != "" {
+		ic.extension["client_machine_id"] = ic.userAgent.ClientMachineId
+	}
+
 	return api.Interaction{
 		Categories:  &ic.category,
 		Errors:      toInteractionErrors(ic.instrumentationErr),

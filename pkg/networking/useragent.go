@@ -20,6 +20,7 @@ type UserAgentInfo struct {
 	IntegrationEnvironmentVersion string
 	OS                            string
 	Arch                          string
+	ClientMachineId               string
 }
 
 func UserAgentFromConfig(config configuration.Configuration, app string, appVersion string) UserAgentInfo {
@@ -33,6 +34,7 @@ func UaWithConfig(config configuration.Configuration) UserAgentOptions {
 		ua.IntegrationVersion = config.GetString(configuration.INTEGRATION_VERSION)
 		ua.IntegrationEnvironment = config.GetString(configuration.INTEGRATION_ENVIRONMENT)
 		ua.IntegrationEnvironmentVersion = config.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
+		ua.ClientMachineId = config.GetString(configuration.CLIENT_MACHINE_ID)
 	}
 	return result
 }
