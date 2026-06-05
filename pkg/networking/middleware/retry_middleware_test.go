@@ -339,6 +339,57 @@ func TestNewRetryMiddleware(t *testing.T) {
 		assert.Equal(t, expectedErr.Error(), err.Error())
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
 	})
+
+	t.Run("http.NoBody is not buffered when retries are enabled", func(t *testing.T) {
+		var capturedBody io.ReadCloser
+
+		//nolint:unparam // error is always nil but signature must match http.RoundTripper
+		customRTFn := func(req *http.Request) (*http.Response, error) {
+			capturedBody = req.Body
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+		}
+
+		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 3)
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com", http.NoBody)
+		require.NoError(t, err)
+		require.Equal(t, http.NoBody, req.Body)
+
+		sut := NewRetryMiddleware(config, &logger, rt)
+		_, err = sut.RoundTrip(req)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.NoBody, capturedBody)
+	})
+
+	t.Run("buffered request body sets GetBody for HTTP/2 retry compatibility", func(t *testing.T) {
+		var capturedGetBody func() (io.ReadCloser, error)
+
+		//nolint:unparam // error is always nil but signature must match http.RoundTripper
+		customRTFn := func(req *http.Request) (*http.Response, error) {
+			capturedGetBody = req.GetBody
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+		}
+
+		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 3)
+
+		sut := NewRetryMiddleware(config, &logger, rt)
+		_, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(expectedBody)))
+		require.NoError(t, err)
+
+		require.NotNil(t, capturedGetBody)
+		rewoundBody, err := capturedGetBody()
+		require.NoError(t, err)
+		defer rewoundBody.Close()
+
+		rewoundBytes, err := io.ReadAll(rewoundBody)
+		require.NoError(t, err)
+		assert.Equal(t, expectedBody, rewoundBytes)
+	})
 }
 
 func Test_shouldRetry(t *testing.T) {

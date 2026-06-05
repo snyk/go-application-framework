@@ -11,6 +11,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -78,6 +79,38 @@ func Test_shouldNotLog(t *testing.T) {
 			assert.Equal(t, tc.expectedResult, result)
 		})
 	}
+}
+
+func Test_getRequestBody_httpNoBody(t *testing.T) {
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/", http.NoBody)
+	require.NoError(t, err)
+
+	bodyReader := getRequestBody(req)
+	assert.Nil(t, bodyReader)
+	assert.Equal(t, http.NoBody, req.Body)
+}
+
+func Test_getRequestBody_setsGetBody(t *testing.T) {
+	expectedBody := "hello world"
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/", io.NopCloser(bytes.NewBufferString(expectedBody)))
+	require.NoError(t, err)
+
+	bodyReader := getRequestBody(req)
+	require.NotNil(t, bodyReader)
+	defer bodyReader.Close()
+
+	loggedBody, err := io.ReadAll(bodyReader)
+	require.NoError(t, err)
+	assert.Equal(t, expectedBody, string(loggedBody))
+
+	require.NotNil(t, req.GetBody)
+	rewoundBody, err := req.GetBody()
+	require.NoError(t, err)
+	defer rewoundBody.Close()
+
+	rewoundBytes, err := io.ReadAll(rewoundBody)
+	require.NoError(t, err)
+	assert.Equal(t, expectedBody, string(rewoundBytes))
 }
 
 func Test_LogRequest_NoLog(t *testing.T) {

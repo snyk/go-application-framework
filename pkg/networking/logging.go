@@ -58,12 +58,15 @@ func getRequestBody(request *http.Request) io.ReadCloser {
 		return bodyReader
 	}
 
-	if request.Body != nil {
+	if request.Body != nil && request.Body != http.NoBody {
 		bodyBytes, bodyErr := io.ReadAll(request.Body)
 		if bodyErr == nil {
 			request.Body.Close()
 			bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
 			request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			request.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewBuffer(bodyBytes)), nil
+			}
 			return bodyReader
 		}
 	}

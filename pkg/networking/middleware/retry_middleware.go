@@ -109,7 +109,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	// if a body is available, create a local copy to be able to use it multiple times
-	if req.Body != nil && maxAttempts > 1 {
+	if req.Body != nil && req.Body != http.NoBody && maxAttempts > 1 {
 		// possible optimization for large request bodies to not buffer in memory but in filesystem
 		var localBufferError error
 		localBodyBuffer, localBufferError = io.ReadAll(req.Body)
@@ -123,6 +123,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		req.Body = io.NopCloser(bytes.NewBuffer(localBodyBuffer))
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewBuffer(localBodyBuffer)), nil
+		}
 	}
 
 	op := func() (*http.Response, error) {
@@ -132,6 +135,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		localRequest := *req
 		if len(localBodyBuffer) > 0 {
 			localRequest.Body = io.NopCloser(bytes.NewBuffer(localBodyBuffer))
+			localRequest.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewBuffer(localBodyBuffer)), nil
+			}
 		}
 
 		// try to send request
