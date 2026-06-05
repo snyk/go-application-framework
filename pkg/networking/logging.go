@@ -42,10 +42,10 @@ func getResponseBody(response *http.Response) io.ReadCloser {
 	}
 
 	bodyBytes, readErr := io.ReadAll(response.Body)
-	closeErr := response.Body.Close()
 	if readErr != nil {
 		return nil
 	}
+	closeErr := response.Body.Close()
 
 	bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
 	response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -68,10 +68,10 @@ func getRequestBody(request *http.Request) io.ReadCloser {
 	}
 
 	bodyBytes, readErr := io.ReadAll(request.Body)
-	closeErr := request.Body.Close()
 	if readErr != nil {
 		return nil
 	}
+	closeErr := request.Body.Close()
 
 	bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
 	request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))

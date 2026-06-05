@@ -122,13 +122,36 @@ func (r errOnCloseReadCloser) Close() error {
 	return r.closeErr
 }
 
+type trackingReadCloser struct {
+	io.Reader
+	closed bool
+}
+
+func (r *trackingReadCloser) Close() error {
+	r.closed = true
+	return nil
+}
+
 func Test_getRequestBody_returnsNilOnReadError(t *testing.T) {
-	req, err := http.NewRequest(http.MethodPost, "http://localhost/", io.NopCloser(&failReader{err: assert.AnError}))
+	body := &trackingReadCloser{Reader: &failReader{err: assert.AnError}}
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/", body)
 	require.NoError(t, err)
 
 	bodyReader := getRequestBody(req)
 	assert.Nil(t, bodyReader)
 	assert.Nil(t, req.GetBody)
+	assert.False(t, body.closed, "must not close request body when read fails")
+	assert.Same(t, body, req.Body)
+}
+
+func Test_getResponseBody_returnsNilOnReadErrorWithoutClosingBody(t *testing.T) {
+	body := &trackingReadCloser{Reader: &failReader{err: assert.AnError}}
+	response := &http.Response{Body: body}
+
+	bodyReader := getResponseBody(response)
+	assert.Nil(t, bodyReader)
+	assert.False(t, body.closed, "must not close response body when read fails")
+	assert.Same(t, body, response.Body)
 }
 
 func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
