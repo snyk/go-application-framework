@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -146,6 +147,15 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 	})
 
 	t.Run("flag on, no token, Snyk API URL — returns 401 without calling next", func(t *testing.T) {
+		// app.snyk.io canonicalizes to api.snyk.io, so ShouldRequireAuthentication returns true.
+		cfg := newConfig(true)
+		apiUrl := cfg.GetString(configuration.API_URL)
+		reqUrl, err := url.Parse("https://app.snyk.io/rest/endpoint")
+		assert.NoError(t, err)
+		requiresAuth, err := middleware.ShouldRequireAuthentication(apiUrl, reqUrl, nil, nil)
+		assert.NoError(t, err)
+		assert.True(t, requiresAuth, "app.snyk.io must require auth for the 401 gate to fire")
+
 		called := false
 		next := roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			called = true
@@ -155,9 +165,12 @@ func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
 		auth := mocks.NewMockAuthenticator(ctrl)
 		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(nil).Times(1)
 
-		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(true), auth, next, &logger)
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(cfg, auth, next, &logger)
 		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
-		assert.NoError(t, err)
+		assert.Error(t, err)
+		var snykErr snyk_errors.Error
+		assert.ErrorAs(t, err, &snykErr, "expected UnauthorisedError from error catalog")
+		assert.NotNil(t, resp, "response must be non-nil so callers can read StatusCode")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.False(t, called)
 	})

@@ -54,9 +54,15 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 	newRequest := request.Clone(request.Context())
 	requiresAuth, err := addAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
-		return nil, err
+		if n.logger != nil {
+			n.logger.Debug().Err(err).Str("url", newRequest.URL.String()).Msg("could not determine if request requires auth, allowing through")
+		}
+		return n.next.RoundTrip(newRequest)
 	}
 
+	// The 401 gate fires only for token/PAT auth (no token → no Authorization header set).
+	// For OAuth, an expired/unrefreshable token causes addAuthenticationHeader to return an error,
+	// which is handled above (log + passthrough) — the Authorization check below is never reached.
 	if n.config.GetBool(configuration.STOP_REQUESTS_WITHOUT_AUTH) && requiresAuth && newRequest.Header.Get("Authorization") == "" {
 		if n.logger != nil {
 			n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
@@ -67,7 +73,7 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 			Header:     make(http.Header),
 			Body:       io.NopCloser(http.NoBody),
 			Request:    newRequest,
-		}, nil
+		}, errFromStatusCode(http.StatusUnauthorized)
 	}
 
 	return n.next.RoundTrip(newRequest)
