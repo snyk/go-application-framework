@@ -184,7 +184,6 @@ func (e *EngineImpl) initAnalytics() analytics.Analytics {
 	a := analytics.New()
 	a.SetIntegration(e.config.GetString(configuration.INTEGRATION_NAME), e.config.GetString(configuration.INTEGRATION_VERSION))
 	a.SetApiUrl(e.config.GetString(configuration.API_URL))
-	a.SetOrg(e.config.GetString(configuration.ORGANIZATION))
 	a.SetClient(func() *http.Client {
 		return e.networkAccess.GetHttpClient()
 	})
