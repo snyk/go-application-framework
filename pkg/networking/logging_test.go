@@ -97,7 +97,7 @@ func Test_getRequestBody_setsGetBody(t *testing.T) {
 
 	bodyReader := getRequestBody(req)
 	require.NotNil(t, bodyReader)
-	defer bodyReader.Close()
+	defer func() { _ = bodyReader.Close() }()
 
 	loggedBody, err := io.ReadAll(bodyReader)
 	require.NoError(t, err)
@@ -106,7 +106,7 @@ func Test_getRequestBody_setsGetBody(t *testing.T) {
 	require.NotNil(t, req.GetBody)
 	rewoundBody, err := req.GetBody()
 	require.NoError(t, err)
-	defer rewoundBody.Close()
+	defer func() { _ = rewoundBody.Close() }()
 
 	rewoundBytes, err := io.ReadAll(rewoundBody)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
 
 	bodyReader := getRequestBody(req)
 	require.NotNil(t, bodyReader)
-	defer bodyReader.Close()
+	defer func() { _ = bodyReader.Close() }()
 
 	loggedBody, err := io.ReadAll(bodyReader)
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
 	require.NotNil(t, req.GetBody)
 	rewoundBody, err := req.GetBody()
 	require.NoError(t, err)
-	defer rewoundBody.Close()
+	defer func() { _ = rewoundBody.Close() }()
 
 	rewoundBytes, err := io.ReadAll(rewoundBody)
 	require.NoError(t, err)
@@ -194,7 +194,7 @@ func Test_getResponseBody_restoresBodyWhenCloseFails(t *testing.T) {
 
 	bodyReader := getResponseBody(response)
 	require.NotNil(t, bodyReader)
-	defer bodyReader.Close()
+	defer func() { _ = bodyReader.Close() }()
 
 	loggedBody, err := io.ReadAll(bodyReader)
 	require.NoError(t, err)
