@@ -116,9 +116,11 @@ func Test_getRequestBody_setsGetBody(t *testing.T) {
 type errOnCloseReadCloser struct {
 	io.Reader
 	closeErr error
+	closed   bool
 }
 
-func (r errOnCloseReadCloser) Close() error {
+func (r *errOnCloseReadCloser) Close() error {
+	r.closed = true
 	return r.closeErr
 }
 
@@ -156,10 +158,11 @@ func Test_getResponseBody_returnsNilOnReadErrorWithoutClosingBody(t *testing.T) 
 
 func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
 	expectedBody := "hello world"
-	req, err := http.NewRequest(http.MethodPost, "http://localhost/", io.NopCloser(errOnCloseReadCloser{
+	body := &errOnCloseReadCloser{
 		Reader:   bytes.NewReader([]byte(expectedBody)),
 		closeErr: assert.AnError,
-	}))
+	}
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/", body)
 	require.NoError(t, err)
 
 	bodyReader := getRequestBody(req)
@@ -169,6 +172,7 @@ func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
 	loggedBody, err := io.ReadAll(bodyReader)
 	require.NoError(t, err)
 	assert.Equal(t, expectedBody, string(loggedBody))
+	assert.True(t, body.closed, "original request body Close must be invoked")
 
 	require.NotNil(t, req.GetBody)
 	rewoundBody, err := req.GetBody()
@@ -182,12 +186,11 @@ func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
 
 func Test_getResponseBody_restoresBodyWhenCloseFails(t *testing.T) {
 	expectedBody := "hello client"
-	response := &http.Response{
-		Body: io.NopCloser(errOnCloseReadCloser{
-			Reader:   bytes.NewReader([]byte(expectedBody)),
-			closeErr: assert.AnError,
-		}),
+	body := &errOnCloseReadCloser{
+		Reader:   bytes.NewReader([]byte(expectedBody)),
+		closeErr: assert.AnError,
 	}
+	response := &http.Response{Body: body}
 
 	bodyReader := getResponseBody(response)
 	require.NotNil(t, bodyReader)
@@ -196,6 +199,7 @@ func Test_getResponseBody_restoresBodyWhenCloseFails(t *testing.T) {
 	loggedBody, err := io.ReadAll(bodyReader)
 	require.NoError(t, err)
 	assert.Equal(t, expectedBody, string(loggedBody))
+	assert.True(t, body.closed, "original response body Close must be invoked")
 
 	actualBody, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
