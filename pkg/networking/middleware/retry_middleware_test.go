@@ -54,6 +54,39 @@ type failRoundtripper struct {
 	t           *testing.T
 }
 
+// getBodyRetryRoundTripper returns 503 on the first trip and 200 thereafter, asserting
+// GetBody returns the full body on every invocation.
+type getBodyRetryRoundTripper struct {
+	t            *testing.T
+	expectedBody []byte
+	invocations  int
+}
+
+func (g *getBodyRetryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	g.invocations++
+
+	require.NotNil(g.t, req.GetBody, "invocation %d: GetBody must be set when body is buffered", g.invocations)
+
+	body, err := req.GetBody()
+	require.NoError(g.t, err, "invocation %d", g.invocations)
+	defer func() { _ = body.Close() }()
+
+	got, err := io.ReadAll(body)
+	require.NoError(g.t, err, "invocation %d", g.invocations)
+	assert.Equal(g.t, g.expectedBody, got, "invocation %d: GetBody must return full body", g.invocations)
+
+	status := http.StatusServiceUnavailable
+	if g.invocations >= 2 {
+		status = http.StatusOK
+	}
+
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{},
+		Request:    req,
+	}, nil
+}
+
 func (f *failRoundtripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if f.roundTripFn != nil {
 		return (*f.roundTripFn)(req)
@@ -365,30 +398,18 @@ func TestNewRetryMiddleware(t *testing.T) {
 	})
 
 	t.Run("buffered request body sets GetBody for HTTP/2 retry compatibility", func(t *testing.T) {
-		var capturedGetBody func() (io.ReadCloser, error)
-
-		//nolint:unparam // error is always nil but signature must match http.RoundTripper
-		customRTFn := func(req *http.Request) (*http.Response, error) {
-			capturedGetBody = req.GetBody
-			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
-		}
-
-		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+		rt := &getBodyRetryRoundTripper{t: t, expectedBody: expectedBody}
 		config := configuration.NewWithOpts()
 		config.Set(ConfigurationKeyRequestAttempts, 3)
+		config.Set(configurationKeyRetryAfter, 1)
 
 		sut := NewRetryMiddleware(config, &logger, rt)
-		_, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(expectedBody)))
-		require.NoError(t, err)
+		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(expectedBody)))
 
-		require.NotNil(t, capturedGetBody)
-		rewoundBody, err := capturedGetBody()
 		require.NoError(t, err)
-		defer rewoundBody.Close()
-
-		rewoundBytes, err := io.ReadAll(rewoundBody)
-		require.NoError(t, err)
-		assert.Equal(t, expectedBody, rewoundBytes)
+		require.NotNil(t, response)
+		assert.Equal(t, http.StatusOK, response.StatusCode)
+		assert.Equal(t, "2", response.Header.Get(retryCountHeaderKey))
 	})
 }
 
