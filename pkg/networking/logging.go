@@ -36,7 +36,7 @@ func shouldNotLog(currentLevel zerolog.Level, levelToLogAt zerolog.Level) bool {
 	return currentLevel > levelToLogAt
 }
 
-func getResponseBody(response *http.Response) io.ReadCloser {
+func getResponseBody(response *http.Response, logger *zerolog.Logger) io.ReadCloser {
 	if response.Body == nil {
 		return nil
 	}
@@ -50,11 +50,13 @@ func getResponseBody(response *http.Response) io.ReadCloser {
 	bodyReader := io.NopCloser(bytes.NewBuffer(bodyBytes))
 	response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	// closeErr is non-fatal once ReadAll succeeded; the body is fully buffered.
-	_ = closeErr
+	if closeErr != nil && logger != nil {
+		logger.WithLevel(defaultNetworkLogLevel).Err(closeErr).Msg("failed to close response body")
+	}
 	return bodyReader
 }
 
-func getRequestBody(request *http.Request) io.ReadCloser {
+func getRequestBody(request *http.Request, logger *zerolog.Logger) io.ReadCloser {
 	if request.GetBody != nil {
 		bodyReader, bodyErr := request.GetBody()
 		if bodyErr != nil {
@@ -79,11 +81,13 @@ func getRequestBody(request *http.Request) io.ReadCloser {
 		return io.NopCloser(bytes.NewBuffer(bodyBytes)), nil
 	}
 	// closeErr is non-fatal once ReadAll succeeded; Body/GetBody must stay restored.
-	_ = closeErr
+	if closeErr != nil && logger != nil {
+		logger.WithLevel(defaultNetworkLogLevel).Err(closeErr).Msg("failed to close request body")
+	}
 	return bodyReader
 }
 
-func decodeBody(bodyBytes []byte, contentEncoding string) (string, error) {
+func decodeBody(bodyBytes []byte, contentEncoding string, logger *zerolog.Logger) (string, error) {
 	if contentEncoding != "gzip" {
 		return string(bodyBytes), nil
 	}
@@ -99,7 +103,9 @@ func decodeBody(bodyBytes []byte, contentEncoding string) (string, error) {
 		return "", errors.Wrap(readErr, "failed to read decoded body")
 	}
 	// closeErr is non-fatal once decoding succeeded; return content for logging.
-	_ = closeErr
+	if closeErr != nil && logger != nil {
+		logger.WithLevel(defaultNetworkLogLevel).Err(closeErr).Msg("failed to close gzip reader")
+	}
 	return string(decodedBytes), nil
 }
 
@@ -117,7 +123,7 @@ func logBody(logger *zerolog.Logger, logLevel zerolog.Level, logPrefix string, b
 			return
 		}
 
-		bodyString, err := decodeBody(bodyBytes, header.Get("Content-Encoding"))
+		bodyString, err := decodeBody(bodyBytes, header.Get("Content-Encoding"), logger)
 		if err != nil {
 			logger.WithLevel(logLevel).Err(err).Msgf("%s Failed to decode request body", logPrefix)
 		} else if len(bodyString) > 0 {
@@ -164,7 +170,7 @@ func LogRequest(r *http.Request, logger *zerolog.Logger) {
 		return
 	}
 
-	logBody(logger, defaultNetworkLogLevel, logPrefixRequest, getRequestBody(r), r.Header, maxNumberOfRequestBodyCharacters)
+	logBody(logger, defaultNetworkLogLevel, logPrefixRequest, getRequestBody(r, logger), r.Header, maxNumberOfRequestBodyCharacters)
 }
 
 func LogResponse(response *http.Response, logger *zerolog.Logger) {
@@ -188,6 +194,6 @@ func LogResponse(response *http.Response, logger *zerolog.Logger) {
 			return
 		}
 
-		logBody(logger, defaultNetworkLogLevel, logPrefixResponse, getResponseBody(response), response.Header, maxNumberOfResponseBodyCharacters)
+		logBody(logger, defaultNetworkLogLevel, logPrefixResponse, getResponseBody(response, logger), response.Header, maxNumberOfResponseBodyCharacters)
 	}
 }

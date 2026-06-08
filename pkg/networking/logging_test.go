@@ -85,7 +85,7 @@ func Test_getRequestBody_httpNoBody(t *testing.T) {
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/", http.NoBody)
 	require.NoError(t, err)
 
-	bodyReader := getRequestBody(req)
+	bodyReader := getRequestBody(req, nil)
 	assert.Nil(t, bodyReader)
 	assert.Equal(t, http.NoBody, req.Body)
 }
@@ -95,7 +95,7 @@ func Test_getRequestBody_setsGetBody(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPost, "http://localhost/", io.NopCloser(bytes.NewBufferString(expectedBody)))
 	require.NoError(t, err)
 
-	bodyReader := getRequestBody(req)
+	bodyReader := getRequestBody(req, nil)
 	require.NotNil(t, bodyReader)
 	defer func() { _ = bodyReader.Close() }()
 
@@ -139,7 +139,7 @@ func Test_getRequestBody_returnsNilOnReadError(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPost, "http://localhost/", body)
 	require.NoError(t, err)
 
-	bodyReader := getRequestBody(req)
+	bodyReader := getRequestBody(req, nil)
 	assert.Nil(t, bodyReader)
 	assert.Nil(t, req.GetBody)
 	assert.False(t, body.closed, "must not close request body when read fails")
@@ -150,7 +150,7 @@ func Test_getResponseBody_returnsNilOnReadErrorWithoutClosingBody(t *testing.T) 
 	body := &trackingReadCloser{Reader: &failReader{err: assert.AnError}}
 	response := &http.Response{Body: body}
 
-	bodyReader := getResponseBody(response)
+	bodyReader := getResponseBody(response, nil)
 	assert.Nil(t, bodyReader)
 	assert.False(t, body.closed, "must not close response body when read fails")
 	assert.Same(t, body, response.Body)
@@ -165,7 +165,7 @@ func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPost, "http://localhost/", body)
 	require.NoError(t, err)
 
-	bodyReader := getRequestBody(req)
+	bodyReader := getRequestBody(req, nil)
 	require.NotNil(t, bodyReader)
 	defer func() { _ = bodyReader.Close() }()
 
@@ -192,7 +192,7 @@ func Test_getResponseBody_restoresBodyWhenCloseFails(t *testing.T) {
 	}
 	response := &http.Response{Body: body}
 
-	bodyReader := getResponseBody(response)
+	bodyReader := getResponseBody(response, nil)
 	require.NotNil(t, bodyReader)
 	defer func() { _ = bodyReader.Close() }()
 
@@ -226,7 +226,7 @@ func Test_decodeBody_returnsDecodedStringWhenCloseFails(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, gzipWriter.Close())
 
-	decoded, err := decodeBody(gzipBuffer.Bytes(), "gzip")
+	decoded, err := decodeBody(gzipBuffer.Bytes(), "gzip", nil)
 	require.NoError(t, err)
 	assert.Equal(t, expectedBody, decoded)
 }
