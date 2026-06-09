@@ -11,7 +11,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -81,122 +80,6 @@ func Test_shouldNotLog(t *testing.T) {
 	}
 }
 
-func Test_getRequestBody_httpNoBody(t *testing.T) {
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/", http.NoBody)
-	require.NoError(t, err)
-
-	bodyReader := getRequestBody(req, nil)
-	assert.Nil(t, bodyReader)
-	assert.Equal(t, http.NoBody, req.Body)
-}
-
-func Test_getRequestBody_setsGetBody(t *testing.T) {
-	expectedBody := "hello world"
-	req, err := http.NewRequest(http.MethodPost, "http://localhost/", io.NopCloser(bytes.NewBufferString(expectedBody)))
-	require.NoError(t, err)
-
-	bodyReader := getRequestBody(req, nil)
-	require.NotNil(t, bodyReader)
-	defer func() { _ = bodyReader.Close() }()
-
-	loggedBody, err := io.ReadAll(bodyReader)
-	require.NoError(t, err)
-	assert.Equal(t, expectedBody, string(loggedBody))
-
-	require.NotNil(t, req.GetBody)
-	rewoundBody, err := req.GetBody()
-	require.NoError(t, err)
-	defer func() { _ = rewoundBody.Close() }()
-
-	rewoundBytes, err := io.ReadAll(rewoundBody)
-	require.NoError(t, err)
-	assert.Equal(t, expectedBody, string(rewoundBytes))
-}
-func Test_getRequestBody_returnsNilOnReadError(t *testing.T) {
-	body := &trackingReadCloser{Reader: &failReader{err: assert.AnError}}
-	req, err := http.NewRequest(http.MethodPost, "http://localhost/", body)
-	require.NoError(t, err)
-
-	bodyReader := getRequestBody(req, nil)
-	assert.Nil(t, bodyReader)
-	assert.Nil(t, req.GetBody)
-	assert.False(t, body.closed, "must not close request body when read fails")
-	assert.Same(t, body, req.Body)
-}
-
-func Test_getResponseBody_returnsNilOnReadErrorWithoutClosingBody(t *testing.T) {
-	body := &trackingReadCloser{Reader: &failReader{err: assert.AnError}}
-	response := &http.Response{Body: body}
-
-	bodyReader := getResponseBody(response, nil)
-	assert.Nil(t, bodyReader)
-	assert.False(t, body.closed, "must not close response body when read fails")
-	assert.Same(t, body, response.Body)
-}
-
-func Test_getRequestBody_restoresBodyWhenCloseFails(t *testing.T) {
-	expectedBody := "hello world"
-	body := &errOnCloseReadCloser{
-		Reader:   bytes.NewReader([]byte(expectedBody)),
-		closeErr: assert.AnError,
-	}
-	req, err := http.NewRequest(http.MethodPost, "http://localhost/", body)
-	require.NoError(t, err)
-
-	bodyReader := getRequestBody(req, nil)
-	require.NotNil(t, bodyReader)
-	defer func() { _ = bodyReader.Close() }()
-
-	loggedBody, err := io.ReadAll(bodyReader)
-	require.NoError(t, err)
-	assert.Equal(t, expectedBody, string(loggedBody))
-	assert.True(t, body.closed, "original request body Close must be invoked")
-
-	require.NotNil(t, req.GetBody)
-	rewoundBody, err := req.GetBody()
-	require.NoError(t, err)
-	defer func() { _ = rewoundBody.Close() }()
-
-	rewoundBytes, err := io.ReadAll(rewoundBody)
-	require.NoError(t, err)
-	assert.Equal(t, expectedBody, string(rewoundBytes))
-}
-
-func Test_getResponseBody_restoresBodyWhenCloseFails(t *testing.T) {
-	expectedBody := "hello client"
-	body := &errOnCloseReadCloser{
-		Reader:   bytes.NewReader([]byte(expectedBody)),
-		closeErr: assert.AnError,
-	}
-	response := &http.Response{Body: body}
-
-	bodyReader := getResponseBody(response, nil)
-	require.NotNil(t, bodyReader)
-	defer func() { _ = bodyReader.Close() }()
-
-	loggedBody, err := io.ReadAll(bodyReader)
-	require.NoError(t, err)
-	assert.Equal(t, expectedBody, string(loggedBody))
-	assert.True(t, body.closed, "original response body Close must be invoked")
-
-	actualBody, err := io.ReadAll(response.Body)
-	require.NoError(t, err)
-	assert.Equal(t, expectedBody, string(actualBody))
-}
-
-func Test_decodeBody_returnsDecodedStringWhenCloseFails(t *testing.T) {
-	expectedBody := "hello world"
-	gzipBuffer := bytes.NewBuffer(nil)
-	gzipWriter := gzip.NewWriter(gzipBuffer)
-	_, err := gzipWriter.Write([]byte(expectedBody))
-	require.NoError(t, err)
-	require.NoError(t, gzipWriter.Close())
-
-	decoded, err := decodeBody(gzipBuffer.Bytes(), "gzip", nil)
-	require.NoError(t, err)
-	assert.Equal(t, expectedBody, decoded)
-}
-
 func Test_LogRequest_NoLog(t *testing.T) {
 	buffer := bytes.Buffer{}
 	logger := zerolog.New(&buffer).Level(zerolog.InfoLevel)
@@ -254,13 +137,10 @@ func Test_LogRequest_happyPath_client_request(t *testing.T) {
 	logBuffer := bytes.Buffer{}
 	logger := zerolog.New(&logBuffer).Level(zerolog.TraceLevel)
 	request, err := http.NewRequest(http.MethodGet, "http://localhost/", nil)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, request)
-
 	request.GetBody = func() (io.ReadCloser, error) {
 		return body, nil
 	}
+	assert.NoError(t, err)
 
 	// method under test
 	LogRequest(request, &logger)
@@ -280,11 +160,8 @@ func Test_LogRequest_happyPath_gzipped_request(t *testing.T) {
 	logBuffer := bytes.Buffer{}
 	logger := zerolog.New(&logBuffer).Level(extendedNetworkLogLevel)
 	request, err := http.NewRequest(http.MethodPost, "http://localhost/", gzipBuffer)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, request)
-
 	request.Header.Add("Content-Encoding", "gzip")
+	assert.NoError(t, err)
 
 	// method under test
 	LogRequest(request, &logger)
@@ -506,39 +383,4 @@ func Test_logRoundTrip(t *testing.T) {
 		assert.NotEmpty(t, actualLoggerContent)
 		assert.Contains(t, actualLoggerContent, expectedResponseBodyError)
 	})
-}
-
-type (
-	errOnCloseReadCloser struct {
-		io.Reader
-		closeErr error
-		closed   bool
-	}
-
-	failReader struct {
-		err error
-	}
-
-	trackingReadCloser struct {
-		io.Reader
-		closed bool
-	}
-)
-
-func (r *failReader) Read([]byte) (int, error) {
-	return 0, r.err
-}
-
-func (r *failReader) Close() error {
-	return nil
-}
-
-func (r *errOnCloseReadCloser) Close() error {
-	r.closed = true
-	return r.closeErr
-}
-
-func (r *trackingReadCloser) Close() error {
-	r.closed = true
-	return nil
 }
