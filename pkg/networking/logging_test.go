@@ -112,28 +112,6 @@ func Test_getRequestBody_setsGetBody(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedBody, string(rewoundBytes))
 }
-
-type errOnCloseReadCloser struct {
-	io.Reader
-	closeErr error
-	closed   bool
-}
-
-func (r *errOnCloseReadCloser) Close() error {
-	r.closed = true
-	return r.closeErr
-}
-
-type trackingReadCloser struct {
-	io.Reader
-	closed bool
-}
-
-func (r *trackingReadCloser) Close() error {
-	r.closed = true
-	return nil
-}
-
 func Test_getRequestBody_returnsNilOnReadError(t *testing.T) {
 	body := &trackingReadCloser{Reader: &failReader{err: assert.AnError}}
 	req, err := http.NewRequest(http.MethodPost, "http://localhost/", body)
@@ -206,18 +184,6 @@ func Test_getResponseBody_restoresBodyWhenCloseFails(t *testing.T) {
 	assert.Equal(t, expectedBody, string(actualBody))
 }
 
-type failReader struct {
-	err error
-}
-
-func (r *failReader) Read([]byte) (int, error) {
-	return 0, r.err
-}
-
-func (r *failReader) Close() error {
-	return nil
-}
-
 func Test_decodeBody_returnsDecodedStringWhenCloseFails(t *testing.T) {
 	expectedBody := "hello world"
 	gzipBuffer := bytes.NewBuffer(nil)
@@ -288,10 +254,13 @@ func Test_LogRequest_happyPath_client_request(t *testing.T) {
 	logBuffer := bytes.Buffer{}
 	logger := zerolog.New(&logBuffer).Level(zerolog.TraceLevel)
 	request, err := http.NewRequest(http.MethodGet, "http://localhost/", nil)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, request)
+
 	request.GetBody = func() (io.ReadCloser, error) {
 		return body, nil
 	}
-	assert.NoError(t, err)
 
 	// method under test
 	LogRequest(request, &logger)
@@ -311,8 +280,11 @@ func Test_LogRequest_happyPath_gzipped_request(t *testing.T) {
 	logBuffer := bytes.Buffer{}
 	logger := zerolog.New(&logBuffer).Level(extendedNetworkLogLevel)
 	request, err := http.NewRequest(http.MethodPost, "http://localhost/", gzipBuffer)
-	request.Header.Add("Content-Encoding", "gzip")
+
 	assert.NoError(t, err)
+	assert.NotNil(t, request)
+
+	request.Header.Add("Content-Encoding", "gzip")
 
 	// method under test
 	LogRequest(request, &logger)
@@ -534,4 +506,39 @@ func Test_logRoundTrip(t *testing.T) {
 		assert.NotEmpty(t, actualLoggerContent)
 		assert.Contains(t, actualLoggerContent, expectedResponseBodyError)
 	})
+}
+
+type (
+	errOnCloseReadCloser struct {
+		io.Reader
+		closeErr error
+		closed   bool
+	}
+
+	failReader struct {
+		err error
+	}
+
+	trackingReadCloser struct {
+		io.Reader
+		closed bool
+	}
+)
+
+func (r *failReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+func (r *failReader) Close() error {
+	return nil
+}
+
+func (r *errOnCloseReadCloser) Close() error {
+	r.closed = true
+	return r.closeErr
+}
+
+func (r *trackingReadCloser) Close() error {
+	r.closed = true
+	return nil
 }
