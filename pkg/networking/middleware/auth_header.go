@@ -3,9 +3,12 @@ package middleware
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api"
 	"github.com/snyk/go-application-framework/pkg/auth"
@@ -16,6 +19,7 @@ type AuthHeaderMiddleware struct {
 	next          http.RoundTripper
 	authenticator auth.Authenticator
 	config        configuration.Configuration
+	logger        *zerolog.Logger
 }
 
 func NewAuthHeaderMiddleware(
@@ -30,6 +34,17 @@ func NewAuthHeaderMiddleware(
 	}
 }
 
+func NewAuthHeaderMiddlewareWithLogger(
+	config configuration.Configuration,
+	authenticator auth.Authenticator,
+	roundTripper http.RoundTripper,
+	logger *zerolog.Logger,
+) *AuthHeaderMiddleware {
+	m := NewAuthHeaderMiddleware(config, authenticator, roundTripper)
+	m.logger = logger
+	return m
+}
+
 func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL == nil {
 		return n.next.RoundTrip(request)
@@ -37,9 +52,28 @@ func (n *AuthHeaderMiddleware) RoundTrip(request *http.Request) (*http.Response,
 
 	// RoundTrippers should not modify the source request according to the docs, so cloning is used.
 	newRequest := request.Clone(request.Context())
-	err := AddAuthenticationHeader(n.authenticator, n.config, newRequest)
+	requiresAuth, err := addAuthenticationHeader(n.authenticator, n.config, newRequest)
 	if err != nil {
-		return nil, err
+		if n.logger != nil {
+			n.logger.Debug().Err(err).Str("url", newRequest.URL.String()).Msg("could not determine if request requires auth, allowing through")
+		}
+		return n.next.RoundTrip(newRequest)
+	}
+
+	// The 401 gate fires only for token/PAT auth (no token → no Authorization header set).
+	// For OAuth, an expired/unrefreshable token causes addAuthenticationHeader to return an error,
+	// which is handled above (log + passthrough) — the Authorization check below is never reached.
+	if n.config.GetBool(configuration.STOP_REQUESTS_WITHOUT_AUTH) && requiresAuth && newRequest.Header.Get("Authorization") == "" {
+		if n.logger != nil {
+			n.logger.Debug().Str("url", newRequest.URL.String()).Msg("request requires auth but no token present, blocking with 401")
+		}
+		return &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Status:     "401 Unauthorized",
+			Header:     make(http.Header),
+			Body:       io.NopCloser(http.NoBody),
+			Request:    newRequest,
+		}, errFromStatusCode(http.StatusUnauthorized)
 	}
 
 	return n.next.RoundTrip(newRequest)
@@ -98,19 +132,30 @@ func AddAuthenticationHeader(
 	config configuration.Configuration,
 	request *http.Request,
 ) error {
+	_, err := addAuthenticationHeader(authenticator, config, request)
+	return err
+}
+
+// addAuthenticationHeader is the internal version that also returns whether
+// the URL required auth. Used by RoundTrip to drive the no-auth intercept
+// without a second URL match.
+func addAuthenticationHeader(
+	authenticator auth.Authenticator,
+	config configuration.Configuration,
+	request *http.Request,
+) (requiresAuth bool, err error) {
 	apiUrl := config.GetString(configuration.API_URL)
 	additionalSubdomains := config.GetStringSlice(configuration.AUTHENTICATION_SUBDOMAINS)
 	additionalUrls := config.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	isSnykApi, err := ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
+	requiresAuth, err = ShouldRequireAuthentication(apiUrl, request.URL, additionalSubdomains, additionalUrls)
 
-	// requests to the api automatically get an authentication token attached
-	if !isSnykApi {
-		return err
+	if !requiresAuth {
+		return false, err
 	}
 
 	err = authenticator.AddAuthenticationHeader(request)
 	if err != nil {
-		return errors.Join(err, ErrAuthenticationFailed)
+		return true, errors.Join(err, ErrAuthenticationFailed)
 	}
-	return nil
+	return true, nil
 }

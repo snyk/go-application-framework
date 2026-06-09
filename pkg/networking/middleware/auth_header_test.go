@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/internal/api"
@@ -14,6 +16,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func Test_ShouldRequireAuthentication(t *testing.T) {
 	apiUrl, err := api.GetCanonicalApiUrlFromString("https://api.au.snyk.io")
@@ -104,6 +110,107 @@ func Test_AddAuthenticationHeader(t *testing.T) {
 
 	err = middleware.AddAuthenticationHeader(authenticator, config, request3)
 	assert.NoError(t, err)
+}
+
+func TestAuthHeaderMiddleware_StopRequestsWithoutAuth(t *testing.T) {
+	logger := zerolog.Nop()
+
+	newConfig := func(stopEnabled bool) configuration.Configuration {
+		cfg := configuration.New()
+		cfg.Set(configuration.API_URL, "https://api.snyk.io")
+		cfg.Set(configuration.STOP_REQUESTS_WITHOUT_AUTH, stopEnabled)
+		return cfg
+	}
+
+	newRequest := func(t *testing.T, rawURL string) *http.Request {
+		t.Helper()
+		u, err := url.Parse(rawURL)
+		assert.NoError(t, err)
+		return &http.Request{URL: u, Header: make(http.Header)}
+	}
+
+	t.Run("flag off — passthrough even without token", func(t *testing.T) {
+		called := false
+		next := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			called = true
+			return &http.Response{StatusCode: http.StatusOK}, nil
+		})
+		ctrl := gomock.NewController(t)
+		auth := mocks.NewMockAuthenticator(ctrl)
+		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(nil).Times(1)
+
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(false), auth, next, &logger)
+		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.True(t, called)
+	})
+
+	t.Run("flag on, no token, Snyk API URL — returns 401 without calling next", func(t *testing.T) {
+		// app.snyk.io canonicalizes to api.snyk.io, so ShouldRequireAuthentication returns true.
+		cfg := newConfig(true)
+		apiUrl := cfg.GetString(configuration.API_URL)
+		reqUrl, err := url.Parse("https://app.snyk.io/rest/endpoint")
+		assert.NoError(t, err)
+		requiresAuth, err := middleware.ShouldRequireAuthentication(apiUrl, reqUrl, nil, nil)
+		assert.NoError(t, err)
+		assert.True(t, requiresAuth, "app.snyk.io must require auth for the 401 gate to fire")
+
+		called := false
+		next := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			called = true
+			return &http.Response{StatusCode: http.StatusOK}, nil
+		})
+		ctrl := gomock.NewController(t)
+		auth := mocks.NewMockAuthenticator(ctrl)
+		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Return(nil).Times(1)
+
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(cfg, auth, next, &logger)
+		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
+		assert.Error(t, err)
+		var snykErr snyk_errors.Error
+		assert.ErrorAs(t, err, &snykErr, "expected UnauthorisedError from error catalog")
+		assert.NotNil(t, resp, "response must be non-nil so callers can read StatusCode")
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.False(t, called)
+	})
+
+	t.Run("flag on, token present — passthrough", func(t *testing.T) {
+		called := false
+		next := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			called = true
+			return &http.Response{StatusCode: http.StatusOK}, nil
+		})
+		ctrl := gomock.NewController(t)
+		auth := mocks.NewMockAuthenticator(ctrl)
+		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).DoAndReturn(func(r *http.Request) error {
+			r.Header.Set("Authorization", "token abc123")
+			return nil
+		}).Times(1)
+
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(true), auth, next, &logger)
+		resp, err := m.RoundTrip(newRequest(t, "https://app.snyk.io/rest/endpoint"))
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.True(t, called)
+	})
+
+	t.Run("flag on, no token, non-Snyk URL — passthrough", func(t *testing.T) {
+		called := false
+		next := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			called = true
+			return &http.Response{StatusCode: http.StatusOK}, nil
+		})
+		ctrl := gomock.NewController(t)
+		auth := mocks.NewMockAuthenticator(ctrl)
+		auth.EXPECT().AddAuthenticationHeader(gomock.Any()).Times(0)
+
+		m := middleware.NewAuthHeaderMiddlewareWithLogger(newConfig(true), auth, next, &logger)
+		resp, err := m.RoundTrip(newRequest(t, "https://example.com/api/something"))
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.True(t, called)
+	})
 }
 
 func TestAuthenticationError_Is(t *testing.T) {
