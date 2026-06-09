@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/snyk/go-application-framework/pkg/logging"
+	"maps"
 	"os/user"
 	"sync"
 	"time"
@@ -222,11 +223,15 @@ func (ic *instrumentationCollectorImpl) getV2Attributes() api.AnalyticsAttribute
 }
 
 func (ic *instrumentationCollectorImpl) getV2Interaction() api.Interaction {
+	ic.extensionMu.Lock()
+	extensionCopy := maps.Clone(ic.extension)
+	ic.extensionMu.Unlock()
+
 	stage := toInteractionStage(ic.stage)
 	return api.Interaction{
 		Categories:  &ic.category,
 		Errors:      toInteractionErrors(ic.instrumentationErr),
-		Extension:   &ic.extension,
+		Extension:   &extensionCopy,
 		Id:          ic.interactionId,
 		Results:     toInteractionResults(&ic.testSummary),
 		Stage:       &stage,
