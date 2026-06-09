@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -275,6 +276,19 @@ func setupBaseCollector(t *testing.T) InstrumentationCollector {
 	ic.SetTimestamp(time.Date(2025, 1, 01, 0, 0, 0, 0, time.UTC))
 
 	return ic
+}
+
+func TestAddExtension_ConcurrentSafe(t *testing.T) {
+	ic := NewInstrumentationCollector()
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			ic.AddExtension(fmt.Sprintf("key%d", n), n)
+		}(i)
+	}
+	wg.Wait()
 }
 
 // Helper function to build the expected response object

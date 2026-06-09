@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/snyk/go-application-framework/pkg/logging"
 	"os/user"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -63,6 +64,7 @@ type instrumentationCollectorImpl struct {
 	testSummary         json_schemas.TestSummary
 	targetId            string
 	instrumentationErr  []error
+	extensionMu         sync.Mutex
 	extension           map[string]interface{}
 }
 
@@ -134,6 +136,8 @@ func (ic *instrumentationCollectorImpl) AddError(err error) {
 }
 
 func (ic *instrumentationCollectorImpl) AddExtension(key string, value interface{}) {
+	ic.extensionMu.Lock()
+	defer ic.extensionMu.Unlock()
 	ic.extension[key] = value
 }
 
