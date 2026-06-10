@@ -54,6 +54,39 @@ type failRoundtripper struct {
 	t           *testing.T
 }
 
+// getBodyRetryRoundTripper returns 503 on the first trip and 200 thereafter, asserting
+// GetBody returns the full body on every invocation.
+type getBodyRetryRoundTripper struct {
+	t            *testing.T
+	expectedBody []byte
+	invocations  int
+}
+
+func (g *getBodyRetryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	g.invocations++
+
+	require.NotNil(g.t, req.GetBody, "invocation %d: GetBody must be set when body is buffered", g.invocations)
+
+	body, err := req.GetBody()
+	require.NoError(g.t, err, "invocation %d", g.invocations)
+	defer func() { _ = body.Close() }()
+
+	got, err := io.ReadAll(body)
+	require.NoError(g.t, err, "invocation %d", g.invocations)
+	assert.Equal(g.t, g.expectedBody, got, "invocation %d: GetBody must return full body", g.invocations)
+
+	status := http.StatusServiceUnavailable
+	if g.invocations >= 2 {
+		status = http.StatusOK
+	}
+
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{},
+		Request:    req,
+	}, nil
+}
+
 func (f *failRoundtripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if f.roundTripFn != nil {
 		return (*f.roundTripFn)(req)
@@ -338,6 +371,45 @@ func TestNewRetryMiddleware(t *testing.T) {
 
 		assert.Equal(t, expectedErr.Error(), err.Error())
 		assert.Equal(t, expectedAttempts, failureRoundtripper.actualCount)
+	})
+
+	t.Run("http.NoBody is not buffered when retries are enabled", func(t *testing.T) {
+		var capturedBody io.ReadCloser
+
+		//nolint:unparam // error is always nil but signature must match http.RoundTripper
+		customRTFn := func(req *http.Request) (*http.Response, error) {
+			capturedBody = req.Body
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req}, nil
+		}
+
+		rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 3)
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com", http.NoBody)
+		require.NoError(t, err)
+		require.Equal(t, http.NoBody, req.Body)
+
+		sut := NewRetryMiddleware(config, &logger, rt)
+		_, err = sut.RoundTrip(req)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.NoBody, capturedBody)
+	})
+
+	t.Run("buffered request body sets GetBody for HTTP/2 retry compatibility", func(t *testing.T) {
+		rt := &getBodyRetryRoundTripper{t: t, expectedBody: expectedBody}
+		config := configuration.NewWithOpts()
+		config.Set(ConfigurationKeyRequestAttempts, 3)
+		config.Set(configurationKeyRetryAfter, 1)
+
+		sut := NewRetryMiddleware(config, &logger, rt)
+		response, err := sut.RoundTrip(httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(expectedBody)))
+
+		require.NoError(t, err)
+		require.NotNil(t, response)
+		assert.Equal(t, http.StatusOK, response.StatusCode)
+		assert.Equal(t, "2", response.Header.Get(retryCountHeaderKey))
 	})
 }
 
