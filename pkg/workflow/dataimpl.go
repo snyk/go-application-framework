@@ -66,10 +66,18 @@ func withPayload(payload *interface{}) Option {
 	}
 }
 
+// WithConfiguration copies IN_MEMORY_THRESHOLD_BYTES and TEMP_DIR_PATH from
+// config when each key resolves to a value (including AddDefaultValue). If
+// TEMP_DIR_PATH is absent, d.tempDirPath is left unchanged (typically ""), and
+// os.CreateTemp uses the process default temp directory.
 func WithConfiguration(config configuration.Configuration) Option {
 	return func(d *DataImpl) {
-		d.inMemoryThreshold = config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES)
-		d.tempDirPath = config.GetString(configuration.TEMP_DIR_PATH)
+		if v := config.Get(configuration.IN_MEMORY_THRESHOLD_BYTES); v != nil {
+			d.inMemoryThreshold = config.GetInt(configuration.IN_MEMORY_THRESHOLD_BYTES)
+		}
+		if v := config.Get(configuration.TEMP_DIR_PATH); v != nil {
+			d.tempDirPath = config.GetString(configuration.TEMP_DIR_PATH)
+		}
 	}
 }
 
@@ -254,6 +262,28 @@ func (d *DataImpl) GetErrorList() []snyk_errors.Error {
 
 func (d *DataImpl) AddError(err snyk_errors.Error) {
 	d.errors = append(d.errors, err)
+}
+
+// applyConfiguration re-evaluates the payload location using the given
+// configuration. Field updates use the same rules as WithConfiguration.
+// If the payload is currently in memory and exceeds the
+// configured threshold, it is written to disk under the configured temp
+// directory. This allows the engine to apply its configuration to Data
+// objects that were created without WithConfiguration.
+func (d *DataImpl) applyConfiguration(config configuration.Configuration) {
+	if config.Get(configuration.IN_MEMORY_THRESHOLD_BYTES) == nil {
+		return
+	}
+
+	WithConfiguration(config)(d)
+
+	if d.payloadLocation.Type == InMemory && d.payload != nil {
+		d.payloadLocation = setPayloadLocation(d.identifier, d.inMemoryThreshold, d.tempDirPath, d.payload, d.logger)
+		if d.payloadLocation.Type == OnDisk {
+			d.logger.Debug().Msg("payload relocated to disk after applyConfiguration")
+			d.payload = nil
+		}
+	}
 }
 
 func setPayloadLocation(id Identifier, inMemoryThreshold int, tempDirPath string, payload interface{}, logger *zerolog.Logger) Location {

@@ -598,3 +598,42 @@ func Test_EngineImpl_InvokeWithContext_DefaultContext(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, receivedCtx)
 }
+
+func Test_Invoke_AppliesConfigurationToOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	config := configuration.New()
+	config.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+	config.Set(configuration.TEMP_DIR_PATH, tmpDir)
+
+	engine := NewWorkFlowEngine(config)
+
+	wfId := NewWorkflowIdentifier("threshold-test")
+	flagset := pflag.NewFlagSet("tt", pflag.ContinueOnError)
+
+	payload := []byte("this payload should be relocated to disk by the engine after Invoke")
+
+	_, err := engine.Register(wfId, ConfigurationOptionsFromFlagset(flagset), func(invocation InvocationContext, input []Data) ([]Data, error) {
+		// Create Data WITHOUT WithConfiguration — simulates what most callers do
+		id := NewTypeIdentifier(invocation.GetWorkflowIdentifier(), "testdata")
+		d := NewData(id, "application/octet-stream", payload)
+		return []Data{d}, nil
+	})
+	assert.NoError(t, err)
+	assert.NoError(t, engine.Init())
+
+	output, err := engine.Invoke(wfId)
+	assert.NoError(t, err)
+	assert.Len(t, output, 1)
+
+	// The engine should have applied its config, relocating the payload to disk
+	di, ok := output[0].(*DataImpl)
+	assert.True(t, ok)
+	assert.Equal(t, OnDisk, di.payloadLocation.Type)
+	assert.Contains(t, di.payloadLocation.Path, tmpDir)
+	assert.Nil(t, di.payload)
+
+	// GetPayload still returns the original bytes from disk
+	result := output[0].GetPayload()
+	assert.Equal(t, payload, result)
+}

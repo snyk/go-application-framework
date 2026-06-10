@@ -11,6 +11,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_NewDataFromInput(t *testing.T) {
@@ -192,6 +193,140 @@ func Test_NewData(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(actualFiles))
 		assert.Contains(t, actualFiles[0].Name(), expectedFileName)
+	})
+
+	t.Run("applyConfiguration relocates in-memory payload to disk", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logger := zerolog.Nop()
+
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "applytest")
+		payloadBytes := []byte("payload that should end up on disk after applyConfiguration")
+
+		data := NewData(id, "application/octet-stream", payloadBytes, WithLogger(&logger))
+
+		// Without WithConfiguration, payload stays in memory (threshold defaults to -1)
+		di, ok := data.(*DataImpl)
+		require.True(t, ok)
+		assert.Equal(t, InMemory, di.payloadLocation.Type)
+		assert.NotNil(t, di.payload)
+
+		// Now apply a configuration with threshold=0 — everything spills to disk
+		cfg := configuration.NewInMemory()
+		cfg.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+		cfg.Set(configuration.TEMP_DIR_PATH, tmpDir)
+		di.applyConfiguration(cfg)
+
+		assert.Equal(t, OnDisk, di.payloadLocation.Type)
+		assert.Nil(t, di.payload)
+		assert.Contains(t, di.payloadLocation.Path, tmpDir)
+
+		// GetPayload still returns the original bytes
+		result := data.GetPayload()
+		assert.Equal(t, payloadBytes, result)
+	})
+
+	t.Run("applyConfiguration is no-op when threshold is disabled", func(t *testing.T) {
+		logger := zerolog.Nop()
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "noop")
+		payloadBytes := []byte("stays in memory")
+
+		data := NewData(id, "text/plain", payloadBytes, WithLogger(&logger))
+		di, ok := data.(*DataImpl)
+		require.True(t, ok)
+
+		cfg := configuration.NewInMemory()
+		cfg.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, -1)
+		di.applyConfiguration(cfg)
+
+		assert.Equal(t, InMemory, di.payloadLocation.Type)
+		assert.NotNil(t, di.payload)
+	})
+
+	t.Run("applyConfiguration is no-op when threshold key is not set in config", func(t *testing.T) {
+		logger := zerolog.Nop()
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "unset")
+		payloadBytes := []byte("should stay in memory because key is unset")
+
+		data := NewData(id, "text/plain", payloadBytes, WithLogger(&logger))
+		di, ok := data.(*DataImpl)
+		require.True(t, ok)
+		assert.Equal(t, -1, di.inMemoryThreshold)
+
+		cfg := configuration.NewInMemory()
+		require.Nil(t, cfg.Get(configuration.IN_MEMORY_THRESHOLD_BYTES))
+		di.applyConfiguration(cfg)
+
+		assert.Equal(t, -1, di.inMemoryThreshold)
+		assert.Equal(t, InMemory, di.payloadLocation.Type)
+		assert.NotNil(t, di.payload)
+	})
+
+	t.Run("applyConfiguration uses AddDefaultValue when key is not Set", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logger := zerolog.Nop()
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "adddefault")
+		payloadBytes := []byte("spill via default value functions")
+
+		data := NewData(id, "application/octet-stream", payloadBytes, WithLogger(&logger))
+		di, ok := data.(*DataImpl)
+		require.True(t, ok)
+
+		cfg := configuration.NewInMemory()
+		cfg.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES, configuration.StandardDefaultValueFunction(0))
+		cfg.AddDefaultValue(configuration.TEMP_DIR_PATH, configuration.StandardDefaultValueFunction(tmpDir))
+
+		assert.False(t, cfg.IsSet(configuration.IN_MEMORY_THRESHOLD_BYTES))
+		assert.False(t, cfg.IsSet(configuration.TEMP_DIR_PATH))
+		require.NotNil(t, cfg.Get(configuration.IN_MEMORY_THRESHOLD_BYTES))
+		require.NotNil(t, cfg.Get(configuration.TEMP_DIR_PATH))
+
+		di.applyConfiguration(cfg)
+
+		assert.Equal(t, OnDisk, di.payloadLocation.Type)
+		assert.Nil(t, di.payload)
+		assert.Contains(t, di.payloadLocation.Path, tmpDir)
+	})
+
+	t.Run("applyConfiguration with threshold only uses system temp when TEMP_DIR_PATH absent", func(t *testing.T) {
+		logger := zerolog.Nop()
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "notemp")
+		payloadBytes := []byte("spill with no temp path in config")
+
+		data := NewData(id, "application/octet-stream", payloadBytes, WithLogger(&logger))
+		di, ok := data.(*DataImpl)
+		require.True(t, ok)
+
+		cfg := configuration.NewInMemory()
+		cfg.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+		require.Nil(t, cfg.Get(configuration.TEMP_DIR_PATH))
+
+		di.applyConfiguration(cfg)
+
+		assert.Equal(t, OnDisk, di.payloadLocation.Type)
+		assert.Contains(t, di.payloadLocation.Path, os.TempDir())
+	})
+
+	t.Run("applyConfiguration is no-op when payload is already on disk", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logger := zerolog.Nop()
+
+		cfg := configuration.NewInMemory()
+		cfg.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 0)
+		cfg.Set(configuration.TEMP_DIR_PATH, tmpDir)
+
+		id := NewTypeIdentifier(NewWorkflowIdentifier("cmd"), "alreadyondisk")
+		payloadBytes := []byte("on disk from the start")
+
+		data := NewData(id, "application/octet-stream", payloadBytes, WithConfiguration(cfg), WithLogger(&logger))
+		di, ok := data.(*DataImpl)
+		require.True(t, ok)
+		assert.Equal(t, OnDisk, di.payloadLocation.Type)
+		originalPath := di.payloadLocation.Path
+
+		// applyConfiguration again should not relocate
+		di.applyConfiguration(cfg)
+		assert.Equal(t, OnDisk, di.payloadLocation.Type)
+		assert.Equal(t, originalPath, di.payloadLocation.Path)
 	})
 
 	t.Run("when configuration is not provided, filesystem cache is not used", func(t *testing.T) {
