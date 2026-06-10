@@ -57,6 +57,7 @@ type Configuration interface {
 	AddFlagSet(flagset *pflag.FlagSet) error
 	AllKeys() []string
 	AddDefaultValue(key string, defaultValue DefaultValueFunction)
+	GetDefaultValueFunc(key string) DefaultValueFunction
 	AddAlternativeKeys(key string, altKeys []string)
 	GetAlternativeKeys(key string) []string
 	GetAllKeysThatContainValues(key string) []string
@@ -674,6 +675,15 @@ func (ev *extendedViper) AddDefaultValue(key string, defaultValue DefaultValueFu
 	defer ev.mutex.Unlock()
 
 	ev.defaultValues[key] = defaultValue
+}
+
+// GetDefaultValueFunc returns the DefaultValueFunction registered for key, or nil if none is registered.
+// This allows callers to capture the existing function before overwriting it with AddDefaultValue,
+// enabling layered/chained default-value behaviour.
+func (ev *extendedViper) GetDefaultValueFunc(key string) DefaultValueFunction {
+	ev.mutex.RLock()
+	defer ev.mutex.RUnlock()
+	return ev.defaultValues[key]
 }
 
 // AddAlternativeKeys adds alternative keys to the configuration.

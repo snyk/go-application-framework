@@ -226,6 +226,20 @@ func (mr *MockConfigurationMockRecorder) GetBoolWithError(key interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBoolWithError", reflect.TypeOf((*MockConfiguration)(nil).GetBoolWithError), key)
 }
 
+// GetDefaultValueFunc mocks base method.
+func (m *MockConfiguration) GetDefaultValueFunc(key string) configuration.DefaultValueFunction {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDefaultValueFunc", key)
+	ret0, _ := ret[0].(configuration.DefaultValueFunction)
+	return ret0
+}
+
+// GetDefaultValueFunc indicates an expected call of GetDefaultValueFunc.
+func (mr *MockConfigurationMockRecorder) GetDefaultValueFunc(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDefaultValueFunc", reflect.TypeOf((*MockConfiguration)(nil).GetDefaultValueFunc), key)
+}
+
 // GetDuration mocks base method.
 func (m *MockConfiguration) GetDuration(key string) time.Duration {
 	m.ctrl.T.Helper()
