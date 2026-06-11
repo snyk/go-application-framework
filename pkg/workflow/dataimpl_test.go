@@ -9,9 +9,18 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 )
+
+func payloadLocationType(data Data) PayloadLocation {
+	return PayloadLocation(reflect.ValueOf(data).Elem().FieldByName("payloadLocation").FieldByName("Type").Int())
+}
+
+func inMemoryThresholdBytes(data Data) int {
+	return int(reflect.ValueOf(data).Elem().FieldByName("inMemoryThreshold").Int())
+}
 
 func Test_NewDataFromInput(t *testing.T) {
 	expectedContentType := "application/json"
@@ -194,56 +203,90 @@ func Test_NewData(t *testing.T) {
 		assert.Contains(t, actualFiles[0].Name(), expectedFileName)
 	})
 
-	t.Run("when configuration is not provided, filesystem cache is not used", func(t *testing.T) {
-		expectedConfig := configuration.NewInMemory()
+	t.Run("when configuration is not provided, environment variables are honored", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("INTERNAL_IN_MEMORY_THRESHOLD_BYTES", "1")
+		t.Setenv("SNYK_TMP_PATH", tmpDir)
+
 		expectedLogger := zerolog.Logger{}
 		expectedContentType := "application/json"
-
-		expectedTempDir := path.Join(os.TempDir(), "dataImpl_test")
-		err := os.Mkdir(expectedTempDir, 0755)
-
-		// cleanup temp dir and files
-		defer func(path string) {
-			err = os.RemoveAll(path)
-			if err != nil {
-				fmt.Println("failed to remove temp dir: ", err)
-			}
-		}(expectedTempDir)
-		assert.NoError(t, err)
-
-		expectedConfig.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, 1)
-		expectedConfig.Set(configuration.TEMP_DIR_PATH, expectedTempDir)
 		expectedIdentifier := NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata")
 
-		dataWithConfig := NewData(
-			expectedIdentifier,
-			expectedContentType,
-			[]byte("put some data in here so that it is bigger than the expectedThreshold"),
-			WithConfiguration(expectedConfig),
-			WithLogger(&expectedLogger),
-			WithInputData(nil))
-
-		// assert that payload location is on disk
-		actualPayloadLocationWithConfig := reflect.ValueOf(dataWithConfig).Elem().FieldByName("payloadLocation").FieldByName("Type")
-		assert.Equal(t, int64(OnDisk), actualPayloadLocationWithConfig.Int())
-
-		// assert that payload location path is empty
-		actualPayloadLocationPathWithConfig := reflect.ValueOf(dataWithConfig).Elem().FieldByName("payloadLocation").FieldByName("Path")
-		assert.Contains(t, actualPayloadLocationPathWithConfig.String(), expectedTempDir)
-
-		dataNoConfig := NewData(
+		data := NewData(
 			expectedIdentifier,
 			expectedContentType,
 			[]byte("put some data in here so that it is bigger than the expectedThreshold"),
 			WithLogger(&expectedLogger),
 			WithInputData(nil))
 
-		// assert that payload location is in memory
-		actualPayloadLocationNoConfig := reflect.ValueOf(dataNoConfig).Elem().FieldByName("payloadLocation").FieldByName("Type")
-		assert.Equal(t, int64(InMemory), actualPayloadLocationNoConfig.Int())
+		assert.Equal(t, OnDisk, payloadLocationType(data))
 
-		// assert that payload location path is empty
-		actualPayloadLocationPathNoConfig := reflect.ValueOf(dataNoConfig).Elem().FieldByName("payloadLocation").FieldByName("Path")
-		assert.Equal(t, "", actualPayloadLocationPathNoConfig.String())
+		actualPayloadLocationPath := reflect.ValueOf(data).Elem().FieldByName("payloadLocation").FieldByName("Path")
+		assert.Contains(t, actualPayloadLocationPath.String(), tmpDir)
+	})
+
+	t.Run("when configuration is not provided, defaults to 512MB threshold", func(t *testing.T) {
+		t.Setenv("INTERNAL_IN_MEMORY_THRESHOLD_BYTES", "")
+		t.Setenv("SNYK_TMP_PATH", "")
+
+		data := NewData(
+			NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata"),
+			"application/json",
+			[]byte("small payload"),
+			WithLogger(&zerolog.Logger{}),
+			WithInputData(nil))
+
+		assert.Equal(t, constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB, inMemoryThresholdBytes(data))
+		assert.Equal(t, InMemory, payloadLocationType(data))
+	})
+
+	t.Run("caller WithConfiguration overrides env-backed default", func(t *testing.T) {
+		t.Setenv("INTERNAL_IN_MEMORY_THRESHOLD_BYTES", "1")
+
+		callerConfig := configuration.NewInMemory()
+		callerConfig.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, -1)
+
+		data := NewData(
+			NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata"),
+			"application/json",
+			[]byte("put some data in here so that it is bigger than the expectedThreshold"),
+			WithConfiguration(callerConfig),
+			WithLogger(&zerolog.Logger{}),
+			WithInputData(nil))
+
+		assert.Equal(t, -1, inMemoryThresholdBytes(data))
+		assert.Equal(t, InMemory, payloadLocationType(data))
+	})
+
+	t.Run("non-byte payload stays in memory when threshold exceeded", func(t *testing.T) {
+		t.Setenv("INTERNAL_IN_MEMORY_THRESHOLD_BYTES", "0")
+
+		data := NewData(
+			NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "mydata"),
+			"application/json",
+			"string payload is not spilled to disk",
+			WithLogger(&zerolog.Logger{}),
+			WithInputData(nil))
+
+		assert.Equal(t, InMemory, payloadLocationType(data))
+	})
+
+	t.Run("NewDataFromInput inherits env-backed defaults", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("INTERNAL_IN_MEMORY_THRESHOLD_BYTES", "1")
+		t.Setenv("SNYK_TMP_PATH", tmpDir)
+
+		input := NewData(
+			NewTypeIdentifier(NewWorkflowIdentifier("mycommand"), "inputdata"),
+			"application/json",
+			[]byte{})
+
+		data := NewDataFromInput(
+			input,
+			NewTypeIdentifier(NewWorkflowIdentifier("yourcommand"), "yourdata"),
+			"application/json",
+			[]byte("put some data in here so that it is bigger than the expectedThreshold"))
+
+		assert.Equal(t, OnDisk, payloadLocationType(data))
 	})
 }
