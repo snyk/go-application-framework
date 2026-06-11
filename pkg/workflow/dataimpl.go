@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/snyk/go-application-framework/internal/constants"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/rs/zerolog"
@@ -109,11 +110,10 @@ func newDataWith(opts ...Option) Data {
 		logger: &zerolog.Logger{},
 	}
 
-	// Configure and initialize default value for memory threshold. We default to -1 AKA this feature is disabled.
-	// Needed for cases when we call NewData() without WithConfiguration() OR we do not configure IN…MEMORY_THRESHOLD_BYTES
-	// If we do not disable by default, we will get inconsistencies with things like the temp dir in workflows that do not use WithConfiguration()
-	c := configuration.NewInMemory()
-	c.Set(configuration.IN_MEMORY_THRESHOLD_BYTES, -1)
+	// Apply env-backed defaults when callers omit WithConfiguration so INTERNAL_IN_MEMORY_THRESHOLD_BYTES is honored.
+	c := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	c.AddDefaultValue(configuration.IN_MEMORY_THRESHOLD_BYTES,
+		configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_IN_MEMORY_THRESHOLD_MB))
 	opts = append([]Option{WithConfiguration(c)}, opts...)
 
 	for _, opt := range opts {
