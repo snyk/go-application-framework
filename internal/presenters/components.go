@@ -151,6 +151,15 @@ func RenderError(err snyk_errors.Error, ctx context.Context) string {
 		}
 	}
 
+	// the user's own arguments are never echoed back here: they can carry
+	// sensitive values (e.g. --password)
+	if err.Level != "warn" {
+		body = append(body, "", lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Hint:"),
+			value.Render(renderGray("To diagnose, re-run your command with debug logs piped into Snyk Doctor:\nsnyk [command] -d 2>&1 | snyk doctor --experimental")),
+		))
+	}
+
 	title = renderBold(title)
 
 	return "\n" + backgroundHighlight.MarginRight(6-len(level)).Render(level) + " " + title + "\n" +

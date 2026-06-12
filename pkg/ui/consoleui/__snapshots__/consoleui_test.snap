@@ -13,4 +13,7 @@ Status:  400 Bad Request
 Docs:    https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0003 
                                                                      
 
+Hint:    [90mTo diagnose, re-run your command with debug logs piped into Snyk Doctor:[0m 
+         [90msnyk [command] -d 2>&1 | snyk doctor --experimental[0m                      
+
 ---
