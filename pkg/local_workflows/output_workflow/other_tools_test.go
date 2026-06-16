@@ -228,6 +228,42 @@ func Test_HandleContentTypeOther(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Contains(t, remaining, data)
 	})
+
+	t.Run("text/html data is routed to the text/html writer", func(t *testing.T) {
+		ctx := newMockContext(t)
+		buffer := &bytes.Buffer{}
+		writers := &testWriterMap{
+			writers: map[string][]*WriterEntry{
+				HTML_MIME_TYPE: {{
+					writer:   &nopCloser{writer: buffer},
+					mimeType: HTML_MIME_TYPE,
+					name:     "html-writer",
+				}},
+			},
+		}
+
+		data := workflow.NewData(workflowID, content_type.HTML, []byte(`<!doctype html><html></html>`))
+		remaining, err := HandleContentTypeOther([]workflow.Data{data}, ctx, writers)
+		assert.NoError(t, err)
+		assert.Equal(t, `<!doctype html><html></html>`, buffer.String())
+		assert.Empty(t, remaining)
+	})
+
+	t.Run("html config routes a text/html report to the default stdout writer", func(t *testing.T) {
+		ctx := newMockContext(t)
+
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
+
+		out := &stubOutputDestination{}
+		writers := GetWritersFromConfiguration(config, out)
+
+		data := workflow.NewData(workflowID, content_type.HTML, []byte(`<!doctype html><html>report</html>`))
+		remaining, err := HandleContentTypeOther([]workflow.Data{data}, ctx, writers)
+		assert.NoError(t, err)
+		assert.Contains(t, out.buffer.String(), `<!doctype html>`)
+		assert.Empty(t, remaining)
+	})
 }
 
 func Test_DefaultOutputIsStructured(t *testing.T) {
@@ -242,6 +278,14 @@ func Test_DefaultOutputIsStructured(t *testing.T) {
 	t.Run("returns true when json output is enabled", func(t *testing.T) {
 		config := configuration.NewWithOpts()
 		config.Set(OUTPUT_CONFIG_KEY_JSON, true)
+
+		result := DefaultOutputIsStructured(config)
+		assert.True(t, result)
+	})
+
+	t.Run("returns true when html output is enabled", func(t *testing.T) {
+		config := configuration.NewWithOpts()
+		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
 
 		result := DefaultOutputIsStructured(config)
 		assert.True(t, result)
