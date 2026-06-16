@@ -33,6 +33,10 @@ const (
 	reportAnalyticsWorkflowName      = "analytics.report"
 	reportAnalyticsInputDataFlagName = "inputData"
 	reportAnalyticsAPIVersion        = "2024-03-07~experimental"
+
+	// clientMachineIdExtensionKey is the V2 telemetry extension key under which the client
+	// machine identifier (sourced from the SNYK_CLIENT_MACHINE_ID env var) is reported.
+	clientMachineIdExtensionKey = "client_machine_id"
 )
 
 // InitReportAnalyticsWorkflow initializes the reportAnalytics workflow before registering it with the engine.
@@ -229,6 +233,9 @@ func instrumentScanDoneEvent(invocationCtx workflow.InvocationContext, input wor
 	ic.SetStage("dev")
 	ic.SetTestSummary(toTestSummary(scanDoneEvent.Data.Attributes.UniqueIssueCount, scanDoneEvent.Data.Type))
 	ic.AddExtension("device_id", scanDoneEvent.Data.Attributes.DeviceId)
+	if machineID := config.GetString(configuration.CLIENT_MACHINE_ID); machineID != "" {
+		ic.AddExtension(clientMachineIdExtensionKey, machineID)
+	}
 
 	data, err := analytics.GetV2InstrumentationObject(ic, analytics.WithLogger(logger))
 	if err != nil {

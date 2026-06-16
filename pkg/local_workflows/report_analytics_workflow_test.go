@@ -2,6 +2,7 @@ package localworkflows
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
@@ -209,6 +211,43 @@ func Test_ReportAnalytics_ReportAnalyticsEntryPoint_validatesInputJson(t *testin
 
 	_, err := reportAnalyticsEntrypoint(invocationContextMock, []workflow.Data{input})
 	require.Error(t, err)
+}
+
+func Test_ReportAnalytics_instrumentScanDoneEvent_clientMachineId(t *testing.T) {
+	run := func(t *testing.T, machineID string) map[string]interface{} {
+		t.Helper()
+		logger := zerolog.New(io.Discard)
+		config := configuration.New()
+		if machineID != "" {
+			config.Set(configuration.CLIENT_MACHINE_ID, machineID)
+		}
+
+		ctrl := gomock.NewController(t)
+		invocationContextMock := mocks.NewMockInvocationContext(ctrl)
+		invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
+		invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+		invocationContextMock.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1233.0"))).AnyTimes()
+
+		out, err := instrumentScanDoneEvent(invocationContextMock, testPayload(testGetScanDonePayloadString()))
+		require.NoError(t, err)
+
+		var body map[string]interface{}
+		require.NoError(t, json.Unmarshal(out.GetPayload().([]byte), &body))
+		attributes := body["data"].(map[string]interface{})["attributes"].(map[string]interface{})
+		interaction := attributes["interaction"].(map[string]interface{})
+		return interaction["extension"].(map[string]interface{})
+	}
+
+	t.Run("reported when set", func(t *testing.T) {
+		extension := run(t, "machine-42")
+		assert.Equal(t, "machine-42", extension[clientMachineIdExtensionKey])
+	})
+
+	t.Run("omitted when unset", func(t *testing.T) {
+		extension := run(t, "")
+		_, ok := extension[clientMachineIdExtensionKey]
+		assert.False(t, ok)
+	})
 }
 
 func testPayload(payload string) workflow.Data {

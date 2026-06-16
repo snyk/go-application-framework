@@ -27,6 +27,7 @@ const (
 	INTEGRATION_VERSION             string = "snyk_integration_version"             // INTEGRATION_VERSION (string) sets/returns the version of the integration for example the version of an IDE plugin
 	INTEGRATION_ENVIRONMENT         string = "snyk_integration_environment"         // INTEGRATION_ENVIRONMENT (string) sets/returns the environment of the integration for example the IDE name
 	INTEGRATION_ENVIRONMENT_VERSION string = "snyk_integration_environment_version" // INTEGRATION_ENVIRONMENT_VERSION (string) sets/returns the version of the environment of the integration for example the IDE version
+	CLIENT_MACHINE_ID               string = "snyk_client_machine_id"               // CLIENT_MACHINE_ID (string) sets/returns the client machine identifier (from SNYK_CLIENT_MACHINE_ID), reported to analytics/telemetry
 
 	// ---------
 	// Org related configuration
