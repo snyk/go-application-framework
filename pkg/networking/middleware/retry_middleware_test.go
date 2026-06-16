@@ -837,6 +837,66 @@ func TestRetryAttemptNotification(t *testing.T) {
 	})
 }
 
+// CLI-1591: Verify that POST body is preserved across retries when a 429 triggers
+// the per-status-code override (getMaxRetryAttempts) despite configured maxAttempts=1.
+func TestRetryMiddleware_429_POST_BodyPreservedAcrossRetries(t *testing.T) {
+	expectedBody := []byte(`{"depGraph":{"pkgManager":{"name":"npm"},"nodes":[]}}`)
+	logger := zerolog.Nop()
+
+	var bodiesReceived [][]byte
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+
+		body, err := io.ReadAll(req.Body)
+		require.NoError(t, err)
+		bodiesReceived = append(bodiesReceived, body)
+
+		headers := http.Header{}
+		if attemptCount < 3 {
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     headers,
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     headers,
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{
+		t:           t,
+		roundTripFn: &customRTFn,
+	}
+
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 1)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/test", bytes.NewReader(expectedBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	response, err := sut.RoundTrip(req)
+
+	assert.NoError(t, err)
+	require.NotNil(t, response)
+	assert.Equal(t, http.StatusOK, response.StatusCode, "Should succeed after retries")
+	assert.Equal(t, 3, attemptCount, "Should make 3 attempts per 429 override")
+
+	require.Len(t, bodiesReceived, 3, "Should have recorded body for each attempt")
+	for i, body := range bodiesReceived {
+		assert.Equal(t, expectedBody, body,
+			"Attempt %d: body must be preserved across retries", i+1)
+	}
+}
+
 // setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
 func setupRetryMiddleware(
 	t *testing.T,

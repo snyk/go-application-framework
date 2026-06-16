@@ -108,8 +108,10 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		retryAfterSeconds = tmp
 	}
 
-	// if a body is available, create a local copy to be able to use it multiple times
-	if req.Body != nil && req.Body != http.NoBody && maxAttempts > 1 {
+	// if a body is available, create a local copy to be able to use it multiple times.
+	// Always buffer: per-status-code overrides (e.g. 429 → 3 attempts) can trigger retries
+	// regardless of the configured maxAttempts, so the body must be available for reuse.
+	if req.Body != nil && req.Body != http.NoBody {
 		// possible optimization for large request bodies to not buffer in memory but in filesystem
 		var localBufferError error
 		localBodyBuffer, localBufferError = io.ReadAll(req.Body)
