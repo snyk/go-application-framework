@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	htmlTemplate "html/template"
 	"maps"
 	"os"
 	"reflect"
@@ -315,15 +314,6 @@ func getUnionValue(input interface{}) interface{} {
 	}
 
 	return result
-}
-
-func getHTMLTemplateFuncMap() htmlTemplate.FuncMap {
-	fnMap := htmlTemplate.FuncMap{}
-	// render simple HTML hello world in red
-	fnMap["helloworld"] = func() htmlTemplate.HTML {
-		return htmlTemplate.HTML("<h1 style='color: red;'>Hello World</h1>")
-	}
-	return fnMap
 }
 
 func getDefaultTemplateFuncMap(config configuration.Configuration, ri runtimeinfo.RuntimeInfo) template.FuncMap {

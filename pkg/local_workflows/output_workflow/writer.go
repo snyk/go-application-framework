@@ -132,12 +132,6 @@ func GetWritersFromConfiguration(config configuration.Configuration, outputDesti
 			[]string{},
 			true,
 		},
-		{
-			OUTPUT_CONFIG_KEY_HTML_FILE,
-			HTML_MIME_TYPE,
-			[]string{},
-			true,
-		},
 	}
 
 	// use configured file writers if available
@@ -193,10 +187,6 @@ func getDefaultWriterMimeType(config configuration.Configuration) string {
 
 	if config.GetBool(OUTPUT_CONFIG_KEY_JSON) {
 		return JSON_MIME_TYPE
-	}
-
-	if config.GetBool(OUTPUT_CONFIG_KEY_HTML) {
-		return HTML_MIME_TYPE
 	}
 
 	return DEFAULT_MIME_TYPE

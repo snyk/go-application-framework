@@ -2,9 +2,7 @@ package presenters
 
 import (
 	"fmt"
-	htmlTemplate "html/template"
 	"io"
-	"os"
 	"strings"
 	"text/template"
 
@@ -15,24 +13,16 @@ import (
 )
 
 type UfmPresenter struct {
-	TestPath         string
-	Input            []testapi.TestResult
-	config           configuration.Configuration
-	writer           io.Writer
-	runtimeinfo      runtimeinfo.RuntimeInfo
-	templateImpl     map[string]TemplateImplFunction
-	htmlTemplateImpl map[string]HTMLTemplateImplFunction
+	TestPath     string
+	Input        []testapi.TestResult
+	config       configuration.Configuration
+	writer       io.Writer
+	runtimeinfo  runtimeinfo.RuntimeInfo
+	templateImpl map[string]TemplateImplFunction
 }
-
-// HTMLTemplateImplFunction mirrors TemplateImplFunction but returns an *html/template.Template
-type HTMLTemplateImplFunction func() (*htmlTemplate.Template, htmlTemplate.FuncMap, error)
 
 var ApplicationSarifTemplatesUfm = []string{
 	"templates/ufm.sarif.tmpl",
-}
-
-var ApplicationHTMLTemplatesUfm = []string{
-	"templates/ufm.html.tmpl",
 }
 
 var DefaultTemplateFilesUfm = []string{
@@ -79,17 +69,6 @@ func NewUfmRenderer(results []testapi.TestResult, config configuration.Configura
 				return localFindingsTemplate, functionMapMimeType, nil
 			},
 		},
-		htmlTemplateImpl: map[string]HTMLTemplateImplFunction{
-			ApplicationHTMLMimeType: func() (*htmlTemplate.Template, htmlTemplate.FuncMap, error) {
-				ufmTemplate, err := htmlTemplate.New(ApplicationHTMLMimeType).Parse("")
-				if err != nil {
-					return nil, nil, err
-				}
-
-				functionMapMimeType := getHTMLTemplateFuncMap()
-				return ufmTemplate, functionMapMimeType, nil
-			},
-		},
 	}
 
 	for _, option := range options {
@@ -123,20 +102,12 @@ func (p *UfmPresenter) RegisterMimeType(mimeType string, implFactory TemplateImp
 	if _, ok := p.templateImpl[mimeType]; ok {
 		return fmt.Errorf("mimetype \"%s\" is already registered", mimeType)
 	}
-	if _, ok := p.htmlTemplateImpl[mimeType]; ok {
-		return fmt.Errorf("mimetype \"%s\" is already registered", mimeType)
-	}
 
 	p.templateImpl[mimeType] = implFactory
 	return nil
 }
 
 func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) error {
-	// Call renderHTMLTemplate() for HTML mime type
-	if _, ok := p.htmlTemplateImpl[mimeType]; ok {
-		return p.renderHTMLTemplate(templateFiles, mimeType)
-	}
-
 	// mimetype specific
 	localFindingsTemplate, err := p.getImplementationFromMimeType(mimeType)
 	if err != nil {
@@ -166,68 +137,6 @@ func (p *UfmPresenter) RenderTemplate(templateFiles []string, mimeType string) e
 	})
 	if err != nil {
 		return err
-	}
-	return nil
-}
-
-// renderHTMLTemplate is the html/template counterpart of RenderTemplate
-func (p *UfmPresenter) renderHTMLTemplate(templateFiles []string, mimeType string) error {
-	ufmTemplate, err := p.getHTMLImplementationFromMimeType(mimeType)
-	if err != nil {
-		return err
-	}
-
-	err = loadHTMLTemplates(templateFiles, ufmTemplate)
-	if err != nil {
-		return err
-	}
-
-	mainTmpl := ufmTemplate.Lookup("main")
-	if mainTmpl == nil {
-		return fmt.Errorf("the template must contain a 'main'")
-	}
-
-	return mainTmpl.Execute(p.writer, struct {
-		TestResults []testapi.TestResult
-	}{
-		TestResults: p.Input,
-	})
-}
-
-func (p *UfmPresenter) getHTMLImplementationFromMimeType(mimeType string) (*htmlTemplate.Template, error) {
-	functionMapGeneral := getDefaultTemplateFuncMap(p.config, p.runtimeinfo)
-
-	ufmTemplate, functionMapMimeType, err := p.htmlTemplateImpl[mimeType]()
-	if err != nil {
-		return nil, err
-	}
-
-	if functionMapMimeType != nil {
-		functionMapGeneral = utils.MergeMaps(functionMapGeneral, functionMapMimeType)
-	}
-	_ = ufmTemplate.Funcs(functionMapGeneral)
-
-	return ufmTemplate, nil
-}
-
-// loadHTMLTemplates mirrors loadTemplates for the html/template tree
-func loadHTMLTemplates(files []string, tmpl *htmlTemplate.Template) error {
-	if len(files) == 0 {
-		return fmt.Errorf("a template file must be specified")
-	}
-
-	for _, filename := range files {
-		data, err := embeddedFiles.ReadFile(filename)
-		if err != nil {
-			data, err = os.ReadFile(filename)
-			if err != nil {
-				return fmt.Errorf("failed to read template file %s", filename)
-			}
-		}
-		tmpl, err = tmpl.Parse(string(data))
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -21,7 +19,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-//nolint:unparam // path should be kept configurable
 func loadTestResults(t *testing.T, path string) []testapi.TestResult {
 	t.Helper()
 	testResultBytes, err := os.ReadFile(path)
@@ -183,70 +180,5 @@ func Test_HandleContentTypeUnifiedModel(t *testing.T) {
 			unwrapped := joinedErrs.Unwrap()
 			assert.Equal(t, 2, len(unwrapped))
 		}
-	})
-
-	t.Run("html and sarif file outputs are produced in the same run", func(t *testing.T) {
-		mockCtl := gomock.NewController(t)
-		defer mockCtl.Finish()
-
-		fileConfig := configuration.NewWithOpts()
-		expectedHTMLFile := filepath.Join(t.TempDir(), "report.html")
-		expectedSarifFile := filepath.Join(t.TempDir(), "report.sarif")
-		fileConfig.Set(OUTPUT_CONFIG_KEY_HTML_FILE, expectedHTMLFile)
-		fileConfig.Set(OUTPUT_CONFIG_KEY_SARIF_FILE, expectedSarifFile)
-		fileConfig.Set(configuration.MAX_THREADS, 10)
-
-		ctx := pkgMocks.NewMockInvocationContext(mockCtl)
-		ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-		ctx.EXPECT().GetConfiguration().Return(fileConfig).AnyTimes()
-		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))).AnyTimes()
-		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
-
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
-		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
-		input := []workflow.Data{workflowData}
-
-		writers := GetWritersFromConfiguration(fileConfig, &stubOutputDestination{})
-
-		remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
-		assert.NoError(t, err)
-		assert.NotNil(t, remaining)
-
-		htmlBytes, err := os.ReadFile(expectedHTMLFile)
-		assert.NoError(t, err, "HTML file should have been written")
-		assert.Contains(t, strings.ToLower(string(htmlBytes)), "<!doctype html>")
-
-		sarifBytes, err := os.ReadFile(expectedSarifFile)
-		assert.NoError(t, err, "SARIF file should have been written")
-		assert.Contains(t, string(sarifBytes), "\"version\": \"2.1.0\"")
-	})
-
-	t.Run("html flag renders HTML to the default stdout writer", func(t *testing.T) {
-		mockCtl := gomock.NewController(t)
-		defer mockCtl.Finish()
-
-		stdoutConfig := configuration.NewWithOpts()
-		stdoutConfig.Set(OUTPUT_CONFIG_KEY_HTML, true)
-		stdoutConfig.Set(configuration.MAX_THREADS, 10)
-
-		ctx := pkgMocks.NewMockInvocationContext(mockCtl)
-		ctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-		ctx.EXPECT().GetConfiguration().Return(stdoutConfig).AnyTimes()
-		ctx.EXPECT().GetRuntimeInfo().Return(runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))).AnyTimes()
-		ctx.EXPECT().Context().Return(t.Context()).AnyTimes()
-
-		results := loadTestResults(t, "../../../internal/presenters/testdata/ufm/secrets.testresult.json")
-		workflowData := ufm.CreateWorkflowDataFromTestResults(workflow.NewWorkflowIdentifier("test"), results)
-		input := []workflow.Data{workflowData}
-
-		outputDestination := &stubOutputDestination{}
-		writers := GetWritersFromConfiguration(stdoutConfig, outputDestination)
-
-		remaining, err := HandleContentTypeUnifiedModel(input, ctx, writers)
-		assert.NoError(t, err)
-		assert.NotNil(t, remaining)
-
-		stdout := outputDestination.buffer.String()
-		assert.Contains(t, strings.ToLower(stdout), "<!doctype html>", "default writer should have received HTML output")
 	})
 }
