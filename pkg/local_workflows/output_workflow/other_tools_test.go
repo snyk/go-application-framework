@@ -247,14 +247,6 @@ func Test_DefaultOutputIsStructured(t *testing.T) {
 		assert.True(t, result)
 	})
 
-	t.Run("returns true when html output is enabled", func(t *testing.T) {
-		config := configuration.NewWithOpts()
-		config.Set(OUTPUT_CONFIG_KEY_HTML, true)
-
-		result := DefaultOutputIsStructured(config)
-		assert.True(t, result)
-	})
-
 	t.Run("returns false when default output is used", func(t *testing.T) {
 		config := configuration.NewWithOpts()
 

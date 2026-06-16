@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"text/template"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -21,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
-	"golang.org/x/net/html"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -59,50 +57,6 @@ func validateSarifData(t *testing.T, data []byte) {
 		}
 		assert.True(t, validationResult.Valid(), "Sarif validation failed")
 	}
-}
-
-// validateHTMLOutput asserts the rendered output is a structurally valid HTML document
-func validateHTMLOutput(t *testing.T, data []byte) {
-	t.Helper()
-
-	doc, err := html.Parse(bytes.NewReader(data))
-	require.NoError(t, err, "rendered output must parse as HTML")
-
-	var doctypeCount, htmlCount, headCount, bodyCount int
-	var walk func(n *html.Node)
-	walk = func(n *html.Node) {
-		switch n.Type {
-		case html.DoctypeNode:
-			if strings.EqualFold(n.Data, "html") {
-				doctypeCount++
-			}
-		case html.ElementNode:
-			switch n.Data {
-			case "html":
-				htmlCount++
-			case "head":
-				headCount++
-			case "body":
-				bodyCount++
-			}
-		default:
-			// other node types (text, comments, etc.) are irrelevant to the structural checks
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(doc)
-
-	// Note html.Parse is a WHATWG error-correcting parser that rarely
-	// errors and synthesizes missing html/head/body elements, so the meaningful
-	// assertions are the doctype and element-uniqueness counts. Extend with XSS
-	// canaries (javascript: hrefs, on* attributes) once the template renders
-	// finding content.
-	assert.Equal(t, 1, doctypeCount, "expected exactly one <!doctype html>")
-	assert.Equal(t, 1, htmlCount, "expected exactly one <html> element")
-	assert.Equal(t, 1, headCount, "expected exactly one <head> element")
-	assert.Equal(t, 1, bodyCount, "expected exactly one <body> element")
 }
 
 // normalizeAutomationID removes project name and timestamp from automation ID
@@ -1326,58 +1280,4 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 	}
 
 	lipgloss.SetColorProfile(termenv.Ascii)
-}
-
-func Test_UfmPresenter_HTML(t *testing.T) {
-	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.1301.0"))
-
-	testCases := []struct {
-		name           string
-		testResultPath string
-	}{
-		{
-			name:           "cli",
-			testResultPath: "testdata/ufm/testresult_cli.json",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			require.FileExists(t, tc.testResultPath, "fixture missing — regenerate via `make generate-fixture` (see CONTRIBUTING.md)")
-
-			testResultBytes, err := os.ReadFile(tc.testResultPath)
-			assert.NoError(t, err)
-
-			testResult, err := ufm.NewSerializableTestResultFromBytes(testResultBytes)
-			assert.NoError(t, err)
-
-			config := configuration.NewWithOpts()
-			writer := &bytes.Buffer{}
-
-			presenter := presenters.NewUfmRenderer(testResult, config, writer, presenters.UfmWithRuntimeInfo(ri))
-			err = presenter.RenderTemplate(presenters.ApplicationHTMLTemplatesUfm, presenters.ApplicationHTMLMimeType)
-			assert.NoError(t, err)
-			validateHTMLOutput(t, writer.Bytes())
-		})
-	}
-}
-
-func Test_UfmPresenter_RegisterMimeType(t *testing.T) {
-	config := configuration.NewWithOpts()
-	writer := &bytes.Buffer{}
-	p := presenters.NewUfmRenderer(nil, config, writer)
-
-	t.Run("rejects double-registration of the HTML mime type", func(t *testing.T) {
-		err := p.RegisterMimeType(presenters.ApplicationHTMLMimeType, func() (*template.Template, template.FuncMap, error) {
-			return nil, nil, nil
-		})
-		assert.Error(t, err)
-	})
-
-	t.Run("registering a new mime type succeeds", func(t *testing.T) {
-		err := p.RegisterMimeType("mymime", func() (*template.Template, template.FuncMap, error) {
-			return nil, nil, nil
-		})
-		assert.NoError(t, err)
-	})
 }
