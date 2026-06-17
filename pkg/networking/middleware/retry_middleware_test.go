@@ -854,6 +854,15 @@ func TestRetryMiddleware_429_POST_BodyPreservedAcrossRetries(t *testing.T) {
 		require.NoError(t, err)
 		bodiesReceived = append(bodiesReceived, body)
 
+		// Verify GetBody also returns the full payload (used by HTTP/2 retries)
+		require.NotNil(t, req.GetBody, "Attempt %d: GetBody must be set", attemptCount)
+		getBodyReader, err := req.GetBody()
+		require.NoError(t, err, "Attempt %d: GetBody() must not error", attemptCount)
+		getBodyBytes, err := io.ReadAll(getBodyReader)
+		require.NoError(t, err)
+		assert.Equal(t, expectedBody, getBodyBytes,
+			"Attempt %d: GetBody() must return full body", attemptCount)
+
 		headers := http.Header{}
 		if attemptCount < 3 {
 			return &http.Response{
