@@ -1,6 +1,7 @@
 package localworkflows
 
 import (
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -17,6 +18,7 @@ func Init(engine workflow.Engine) error {
 		InitConfigWorkflow,
 		InitDataTransformationWorkflow,
 		InitFilterFindingsWorkflow,
+		doctor_workflow.InitDoctorWorkflow,
 	}
 
 	for i := range initMethods {
