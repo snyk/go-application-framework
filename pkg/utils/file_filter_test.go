@@ -7,7 +7,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
@@ -706,4 +709,125 @@ func TestDotSnykExclude_isExpired(t *testing.T) {
 			assert.Equal(t, test.expected, isExpired)
 		})
 	}
+}
+
+func TestFileFilter_GitTrackedFilesNotFiltered(t *testing.T) {
+	t.Run("committed files are not filtered even if they match gitignore", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Initialize a git repository
+		repo, err := git.PlainInit(tempDir, false)
+		assert.NoError(t, err)
+
+		// Create a file that will be tracked and matches gitignore pattern
+		trackedIgnoredFile := filepath.Join(tempDir, "ignored.log")
+		createFileInPath(t, trackedIgnoredFile, []byte("tracked but ignored"))
+
+		// Create another file that will NOT be tracked and matches gitignore pattern
+		untrackedIgnoredFile := filepath.Join(tempDir, "untracked.log")
+		createFileInPath(t, untrackedIgnoredFile, []byte("untracked and ignored"))
+
+		// Create a regular file that doesn't match gitignore
+		regularFile := filepath.Join(tempDir, "regular.txt")
+		createFileInPath(t, regularFile, []byte("regular file"))
+
+		// Add and commit the tracked file BEFORE creating gitignore
+		worktree, err := repo.Worktree()
+		assert.NoError(t, err)
+
+		_, err = worktree.Add("ignored.log")
+		assert.NoError(t, err)
+		_, err = worktree.Add("regular.txt")
+		assert.NoError(t, err)
+
+		_, err = worktree.Commit("initial commit", &git.CommitOptions{
+			Author: &object.Signature{
+				Name:  "Test",
+				Email: "test@test.com",
+				When:  time.Now(),
+			},
+		})
+		assert.NoError(t, err)
+
+		// Now create .gitignore that ignores *.log files
+		gitignorePath := filepath.Join(tempDir, ".gitignore")
+		createFileInPath(t, gitignorePath, []byte("*.log\n"))
+
+		// Create file filter and get filtered files
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		rules, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		allFiles := fileFilter.GetAllFiles()
+		filteredFiles := fileFilter.GetFilteredFiles(allFiles, rules)
+
+		// Collect filtered files
+		var filteredFilesList []string
+		for file := range filteredFiles {
+			filteredFilesList = append(filteredFilesList, file)
+		}
+
+		// The tracked file (ignored.log) should NOT be filtered out
+		assert.Contains(t, filteredFilesList, trackedIgnoredFile, "git tracked file should not be filtered even if it matches gitignore")
+
+		// The untracked file (untracked.log) SHOULD be filtered out
+		assert.NotContains(t, filteredFilesList, untrackedIgnoredFile, "untracked file matching gitignore should be filtered")
+
+		// The regular file should be present
+		assert.Contains(t, filteredFilesList, regularFile, "regular file should not be filtered")
+
+		// The gitignore file should be present
+		assert.Contains(t, filteredFilesList, gitignorePath, ".gitignore should not be filtered")
+	})
+
+	t.Run("staged but uncommitted files are not filtered even if they match gitignore", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Initialize a git repository
+		repo, err := git.PlainInit(tempDir, false)
+		assert.NoError(t, err)
+
+		// Create .gitignore first
+		gitignorePath := filepath.Join(tempDir, ".gitignore")
+		createFileInPath(t, gitignorePath, []byte("*.log\n"))
+
+		// Create a file that matches gitignore pattern but will be staged (git add)
+		stagedIgnoredFile := filepath.Join(tempDir, "staged.log")
+		createFileInPath(t, stagedIgnoredFile, []byte("staged but ignored"))
+
+		// Create another file that will NOT be staged and matches gitignore pattern
+		unstagedIgnoredFile := filepath.Join(tempDir, "unstaged.log")
+		createFileInPath(t, unstagedIgnoredFile, []byte("unstaged and ignored"))
+
+		// Stage the file (git add) but do NOT commit
+		worktree, err := repo.Worktree()
+		assert.NoError(t, err)
+
+		_, err = worktree.Add("staged.log")
+		assert.NoError(t, err)
+		// Note: we do NOT commit here - the file is only staged
+
+		// Create file filter and get filtered files
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		rules, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		allFiles := fileFilter.GetAllFiles()
+		filteredFiles := fileFilter.GetFilteredFiles(allFiles, rules)
+
+		// Collect filtered files
+		var filteredFilesList []string
+		for file := range filteredFiles {
+			filteredFilesList = append(filteredFilesList, file)
+		}
+
+		// The staged file (staged.log) should NOT be filtered out - it's in the index
+		assert.Contains(t, filteredFilesList, stagedIgnoredFile, "staged file should not be filtered even if it matches gitignore")
+
+		// The unstaged file (unstaged.log) SHOULD be filtered out
+		assert.NotContains(t, filteredFilesList, unstagedIgnoredFile, "unstaged file matching gitignore should be filtered")
+
+		// The gitignore file should be present
+		assert.Contains(t, filteredFilesList, gitignorePath, ".gitignore should not be filtered")
+	})
 }
