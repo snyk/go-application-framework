@@ -16,7 +16,7 @@ var ignoredMimetypes = []string{
 	content_type.TEST_SUMMARY,
 }
 
-var supportedMimeTypes = []string{"sarif", "json", DEFAULT_MIME_TYPE}
+var supportedMimeTypes = []string{"sarif", "json", "html", DEFAULT_MIME_TYPE}
 
 func HandleContentTypeOther(input []workflow.Data, invocation workflow.InvocationContext, writers WriterMap) ([]workflow.Data, error) {
 	var finalError error
