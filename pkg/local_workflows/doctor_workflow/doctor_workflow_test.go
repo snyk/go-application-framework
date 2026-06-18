@@ -1,8 +1,10 @@
 package doctor_workflow
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -74,4 +76,46 @@ func TestDoctorEntryPoint_MissingInputFile(t *testing.T) {
 	var snykErr snyk_errors.Error
 	require.ErrorAs(t, err, &snykErr)
 	assert.Equal(t, "SNYK-CLI-0000", snykErr.ErrorCode)
+}
+
+func TestReadDebugLog(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileBody *string
+		stdin    *string
+		expected string
+		wantErr  bool
+	}{
+		{name: "reads from input file", fileBody: new("hello from file"), expected: "hello from file"},
+		{name: "reads empty input file", fileBody: new("")},
+		{name: "reads from STDIN when no input path", stdin: new("hello from stdin"), expected: "hello from stdin"},
+		{name: "reads empty STDIN", stdin: new("")},
+		{name: "errors when input file does not exist", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				inputPath string
+				stdin     io.Reader
+			)
+			switch {
+			case tt.fileBody != nil:
+				inputPath = filepath.Join(t.TempDir(), "debug.log")
+				require.NoError(t, os.WriteFile(inputPath, []byte(*tt.fileBody), 0600))
+			case tt.stdin != nil:
+				stdin = strings.NewReader(*tt.stdin)
+			default:
+				inputPath = filepath.Join(t.TempDir(), "does-not-exist.log")
+			}
+
+			got, err := readDebugLog(stdin, inputPath)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
 }
