@@ -8,6 +8,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/spf13/pflag"
+	"golang.org/x/term"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -41,7 +42,14 @@ func doctorEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Dat
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	debugLog, err := readDebugLog(config.GetString(inputFlag))
+	inputPath := config.GetString(inputFlag)
+	if inputPath == "" && term.IsTerminal(int(os.Stdin.Fd())) {
+		return nil, cli.NewCommandArgsError(
+			fmt.Sprintf("No debug log was provided. Pipe one in with 'snyk <command> -d 2>&1 | snyk doctor', or pass a log file with --%s <path>.", inputFlag),
+		)
+	}
+
+	debugLog, err := readDebugLog(os.Stdin, inputPath)
 	if err != nil {
 		return nil, err
 	}
@@ -56,28 +64,22 @@ func doctorEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Dat
 	return []workflow.Data{outputData}, nil
 }
 
-func readDebugLog(inputPath string) (string, error) {
+func readDebugLog(stdin io.Reader, inputPath string) (string, error) {
 	if inputPath != "" {
 		content, err := os.ReadFile(inputPath)
 		if err != nil {
 			return "", cli.NewGeneralCLIFailureError(
-				fmt.Sprintf("failed to read debug log from %s", inputPath),
+				fmt.Sprintf("Could not read the debug log file at '%s'. Check that the path is correct and the file is readable.", inputPath),
 				snyk_errors.WithCause(err),
 			)
 		}
 		return string(content), nil
 	}
 
-	stat, err := os.Stdin.Stat()
-	if err == nil && (stat.Mode()&os.ModeCharDevice) != 0 {
-		return "", cli.NewCommandArgsError(
-			fmt.Sprintf("no debug log provided: pipe one in (snyk test -d 2>&1 | snyk doctor) or use --%s <file>", inputFlag),
-		)
-	}
-	content, err := io.ReadAll(os.Stdin)
+	content, err := io.ReadAll(stdin)
 	if err != nil {
 		return "", cli.NewGeneralCLIFailureError(
-			"failed to read debug log from STDIN",
+			"Could not read the debug log from standard input.",
 			snyk_errors.WithCause(err),
 		)
 	}
