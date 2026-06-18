@@ -906,6 +906,127 @@ func TestRetryMiddleware_429_POST_BodyPreservedAcrossRetries(t *testing.T) {
 	}
 }
 
+// TestRetryMiddleware_GetBodyPreset_SkipsBuffering verifies that when the request
+// already has GetBody set (e.g. body created via bytes.NewReader), the middleware
+// does NOT perform a redundant io.ReadAll copy, and retries still replay the body
+// correctly via GetBody.
+func TestRetryMiddleware_GetBodyPreset_SkipsBuffering(t *testing.T) {
+	expectedBody := []byte(`{"large":"payload that should not be copied"}`)
+	logger := zerolog.Nop()
+
+	var bodiesReceived [][]byte
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+
+		body, err := io.ReadAll(req.Body)
+		require.NoError(t, err)
+		bodiesReceived = append(bodiesReceived, body)
+
+		headers := http.Header{}
+		if attemptCount < 2 {
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     headers,
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     headers,
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+
+	// bytes.NewReader causes http.NewRequest to set GetBody automatically
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/upload", bytes.NewReader(expectedBody))
+	require.NotNil(t, req.GetBody, "precondition: GetBody must be set by http.NewRequest for *bytes.Reader")
+
+	response, err := sut.RoundTrip(req)
+
+	assert.NoError(t, err)
+	require.NotNil(t, response)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.Equal(t, 2, attemptCount, "Should retry once then succeed")
+
+	require.Len(t, bodiesReceived, 2)
+	for i, body := range bodiesReceived {
+		assert.Equal(t, expectedBody, body,
+			"Attempt %d: body must be correctly replayed via GetBody", i+1)
+	}
+}
+
+// TestRetryMiddleware_GetBodyNil_BuffersBody verifies that when the request body
+// does NOT have GetBody set (e.g. wrapped in io.NopCloser), the middleware falls
+// back to io.ReadAll buffering and retries still work.
+func TestRetryMiddleware_GetBodyNil_BuffersBody(t *testing.T) {
+	expectedBody := []byte(`{"wrapped":"body without GetBody"}`)
+	logger := zerolog.Nop()
+
+	var bodiesReceived [][]byte
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+
+		body, err := io.ReadAll(req.Body)
+		require.NoError(t, err)
+		bodiesReceived = append(bodiesReceived, body)
+
+		// After middleware buffering, GetBody should be set
+		require.NotNil(t, req.GetBody, "Attempt %d: GetBody must be set after middleware buffering", attemptCount)
+
+		headers := http.Header{}
+		if attemptCount < 2 {
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     headers,
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     headers,
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+
+	// Wrap body in NopCloser so that http.NewRequest does NOT set GetBody
+	req, err := http.NewRequest(http.MethodPost, "http://example.com/api", io.NopCloser(bytes.NewBuffer(expectedBody)))
+	require.NoError(t, err)
+	require.Nil(t, req.GetBody, "precondition: GetBody must be nil for NopCloser-wrapped body")
+
+	response, err := sut.RoundTrip(req)
+
+	assert.NoError(t, err)
+	require.NotNil(t, response)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.Equal(t, 2, attemptCount, "Should retry once then succeed")
+
+	require.Len(t, bodiesReceived, 2)
+	for i, body := range bodiesReceived {
+		assert.Equal(t, expectedBody, body,
+			"Attempt %d: body must be preserved via middleware buffering", i+1)
+	}
+}
+
 // setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
 func setupRetryMiddleware(
 	t *testing.T,
