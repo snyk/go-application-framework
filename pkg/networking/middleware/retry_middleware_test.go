@@ -948,7 +948,9 @@ func TestRetryMiddleware_GetBodyPreset_SkipsBuffering(t *testing.T) {
 	sut := NewRetryMiddleware(config, &logger, rt)
 
 	// bytes.NewReader causes http.NewRequest to set GetBody automatically
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/upload", bytes.NewReader(expectedBody))
+	// (httptest.NewRequest does NOT set GetBody, so we use http.NewRequest here)
+	req, reqErr := http.NewRequest(http.MethodPost, "http://example.com/api/v1/upload", bytes.NewReader(expectedBody))
+	require.NoError(t, reqErr)
 	require.NotNil(t, req.GetBody, "precondition: GetBody must be set by http.NewRequest for *bytes.Reader")
 
 	response, err := sut.RoundTrip(req)

@@ -144,7 +144,10 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			localRequest.GetBody = func() (io.ReadCloser, error) {
 				return io.NopCloser(bytes.NewBuffer(localBodyBuffer)), nil
 			}
-		} else if req.GetBody != nil {
+		} else if req.GetBody != nil && actualAttempts > 1 {
+			// On retry attempts, obtain a fresh body via GetBody.
+			// The first attempt uses the original req.Body so the transport
+			// can read and close it per the http.RoundTripper contract.
 			body, err := req.GetBody()
 			if err != nil {
 				return nil, backoff.Permanent(err)
