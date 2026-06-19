@@ -152,6 +152,9 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			if err != nil {
 				return nil, backoff.Permanent(err)
 			}
+			if body == nil {
+				return nil, backoff.Permanent(fmt.Errorf("GetBody returned nil reader"))
+			}
 			localRequest.Body = body
 		}
 
