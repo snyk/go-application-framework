@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -1029,28 +1030,21 @@ func TestRetryMiddleware_GetBodyNil_BuffersBody(t *testing.T) {
 	}
 }
 
-// seekableBody is a test helper that implements io.ReadSeeker + io.Closer,
-// allowing the retry middleware to detect it as seekable and avoid io.ReadAll.
-type seekableBody struct {
-	*bytes.Reader
-	closed bool
-}
-
-func newSeekableBody(data []byte) *seekableBody {
-	return &seekableBody{Reader: bytes.NewReader(data)}
-}
-
-func (s *seekableBody) Close() error {
-	s.closed = true
-	return nil
-}
-
 // TestRetryMiddleware_SeekableBody_NoBuffer verifies that when the request body
-// implements io.ReadSeeker (and GetBody is nil), the middleware rewinds via Seek
-// instead of copying into a memory buffer, and defers the real Close.
+// is a real *os.File (implements io.ReadSeeker + io.Closer, not recognised by
+// http.NewRequest for GetBody), the middleware rewinds via Seek instead of
+// copying into a memory buffer, and defers the real Close.
 func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
 	expectedBody := []byte(`{"seekable":"rewindable body, no buffer needed"}`)
 	logger := zerolog.Nop()
+
+	// Write payload to a temp file so the request body is a real *os.File.
+	tmpFile, err := os.CreateTemp(t.TempDir(), "seekable-body-*")
+	require.NoError(t, err)
+	_, err = tmpFile.Write(expectedBody)
+	require.NoError(t, err)
+	_, err = tmpFile.Seek(0, io.SeekStart)
+	require.NoError(t, err)
 
 	var bodiesReceived [][]byte
 	attemptCount := 0
@@ -1088,11 +1082,11 @@ func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
-	seekBody := newSeekableBody(expectedBody)
-	req, err := http.NewRequest(http.MethodPost, "http://example.com/api/v1/upload", seekBody)
+	// *os.File implements io.ReadSeeker + io.Closer but is not one of the
+	// types http.NewRequest recognises, so GetBody stays nil.
+	req, err := http.NewRequest(http.MethodPost, "http://example.com/api/v1/upload", tmpFile)
 	require.NoError(t, err)
-	// seekableBody is not one of the types http.NewRequest recognises, so GetBody is nil
-	require.Nil(t, req.GetBody, "precondition: GetBody must be nil for custom ReadSeeker body")
+	require.Nil(t, req.GetBody, "precondition: GetBody must be nil for *os.File body")
 
 	response, err := sut.RoundTrip(req)
 
@@ -1107,8 +1101,9 @@ func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
 			"Attempt %d: body must be correctly replayed via Seek", i+1)
 	}
 
-	// The deferred RealClose should have been called after RoundTrip returned
-	assert.True(t, seekBody.closed, "Real Close must be called after retry loop finishes")
+	// The deferred RealClose should have closed the file after RoundTrip returned.
+	_, err = tmpFile.Read(make([]byte, 1))
+	assert.ErrorIs(t, err, os.ErrClosed, "file must be closed after retry loop finishes")
 }
 
 // setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
