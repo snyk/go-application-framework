@@ -1029,6 +1029,88 @@ func TestRetryMiddleware_GetBodyNil_BuffersBody(t *testing.T) {
 	}
 }
 
+// seekableBody is a test helper that implements io.ReadSeeker + io.Closer,
+// allowing the retry middleware to detect it as seekable and avoid io.ReadAll.
+type seekableBody struct {
+	*bytes.Reader
+	closed bool
+}
+
+func newSeekableBody(data []byte) *seekableBody {
+	return &seekableBody{Reader: bytes.NewReader(data)}
+}
+
+func (s *seekableBody) Close() error {
+	s.closed = true
+	return nil
+}
+
+// TestRetryMiddleware_SeekableBody_NoBuffer verifies that when the request body
+// implements io.ReadSeeker (and GetBody is nil), the middleware rewinds via Seek
+// instead of copying into a memory buffer, and defers the real Close.
+func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
+	expectedBody := []byte(`{"seekable":"rewindable body, no buffer needed"}`)
+	logger := zerolog.Nop()
+
+	var bodiesReceived [][]byte
+	attemptCount := 0
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+
+		body, err := io.ReadAll(req.Body)
+		require.NoError(t, err)
+		bodiesReceived = append(bodiesReceived, body)
+
+		// Close should be a no-op (suppressed by the wrapper)
+		require.NoError(t, req.Body.Close())
+
+		headers := http.Header{}
+		if attemptCount < 2 {
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     headers,
+				Request:    req,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     headers,
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+
+	seekBody := newSeekableBody(expectedBody)
+	req, err := http.NewRequest(http.MethodPost, "http://example.com/api/v1/upload", seekBody)
+	require.NoError(t, err)
+	// seekableBody is not one of the types http.NewRequest recognises, so GetBody is nil
+	require.Nil(t, req.GetBody, "precondition: GetBody must be nil for custom ReadSeeker body")
+
+	response, err := sut.RoundTrip(req)
+
+	assert.NoError(t, err)
+	require.NotNil(t, response)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.Equal(t, 2, attemptCount, "Should retry once then succeed")
+
+	require.Len(t, bodiesReceived, 2)
+	for i, body := range bodiesReceived {
+		assert.Equal(t, expectedBody, body,
+			"Attempt %d: body must be correctly replayed via Seek", i+1)
+	}
+
+	// The deferred RealClose should have been called after RoundTrip returned
+	assert.True(t, seekBody.closed, "Real Close must be called after retry loop finishes")
+}
+
 // setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
 func setupRetryMiddleware(
 	t *testing.T,
