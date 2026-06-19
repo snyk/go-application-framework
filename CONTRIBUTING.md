@@ -216,7 +216,7 @@ That's it!
 
 ### UFM test fixtures
 
-The presenter tests in `internal/presenters/` compare rendered output against expected files stored under `internal/presenters/testdata/ufm/`. There are several workflows for keeping these up to date.
+The presenter tests in `internal/presenters/` compare rendered output against expected files stored under `internal/presenters/testdata/ufm/`. See [internal/presenters/testdata/ufm/README.md](internal/presenters/testdata/ufm/README.md) for the per-fixture catalog (source, scan command, test wiring). There are several workflows for keeping these up to date.
 
 #### Generating a fixture (recommended)
 

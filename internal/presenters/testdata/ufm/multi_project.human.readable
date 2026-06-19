@@ -1,66 +1,3 @@
-[1mTesting  (dotnet/obj/project.assets.json) ...[0m
-
-Tested 84 dependencies for known issues, found 6 issues, 9 vulnerable paths.
-
-[1mOpen Security issues: 6[0m
-
- ✗ [33m[MEDIUM][0m [1mAuthentication Bypass[0m
-   Finding ID: SNYK-DOTNET-SYSTEMNETHTTP-60048
-   Info: https://snyk.io/vuln/SNYK-DOTNET-SYSTEMNETHTTP-60048
-   Introduced by: System.Net.Http
-   Introduced through: tpwe@1.0.0 > NSubstitute@4.3.0 > Castle.Core@4.4.1 > NETStandard.Library@1.6.1 > System.Net.Http@4.3.0
-   Risk Score: 48
-
- ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
-   Finding ID: SNYK-DOTNET-SYSTEMNETHTTP-60045
-   Info: https://snyk.io/vuln/SNYK-DOTNET-SYSTEMNETHTTP-60045
-   Introduced by: System.Net.Http
-   Introduced through: tpwe@1.0.0 > NSubstitute@4.3.0 > Castle.Core@4.4.1 > NETStandard.Library@1.6.1 > System.Net.Http@4.3.0
-   Risk Score: 130
-
- ✗ [31m[HIGH][0m [1mImproper Certificate Validation[0m
-   Finding ID: SNYK-DOTNET-SYSTEMNETHTTP-60046
-   Info: https://snyk.io/vuln/SNYK-DOTNET-SYSTEMNETHTTP-60046
-   Introduced by: System.Net.Http
-   Introduced through: tpwe@1.0.0 > NSubstitute@4.3.0 > Castle.Core@4.4.1 > NETStandard.Library@1.6.1 > System.Net.Http@4.3.0
-   Risk Score: 115
-
- ✗ [31m[HIGH][0m [1mPrivilege Escalation[0m
-   Finding ID: SNYK-DOTNET-SYSTEMNETHTTP-60047
-   Info: https://snyk.io/vuln/SNYK-DOTNET-SYSTEMNETHTTP-60047
-   Introduced by: System.Net.Http
-   Introduced through: tpwe@1.0.0 > NSubstitute@4.3.0 > Castle.Core@4.4.1 > NETStandard.Library@1.6.1 > System.Net.Http@4.3.0
-   Risk Score: 115
-
- ✗ [31m[HIGH][0m [1mInformation Exposure[0m
-   Finding ID: SNYK-DOTNET-SYSTEMNETHTTP-72439
-   Info: https://snyk.io/vuln/SNYK-DOTNET-SYSTEMNETHTTP-72439
-   Introduced by: System.Net.Http
-   Introduced through: tpwe@1.0.0 > NSubstitute@4.3.0 > Castle.Core@4.4.1 > NETStandard.Library@1.6.1 > System.Net.Http@4.3.0
-   Risk Score: 123
-
- ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: SNYK-DOTNET-SYSTEMTEXTREGULAREXPRESSIONS-174708
-   Info: https://snyk.io/vuln/SNYK-DOTNET-SYSTEMTEXTREGULAREXPRESSIONS-174708
-   Introduced by: System.Text.RegularExpressions
-   Introduced through: tpwe@1.0.0 > NSubstitute@4.3.0 > Castle.Core@4.4.1 > NETStandard.Library@1.6.1 > System.Text.RegularExpressions@4.3.0
-   Risk Score: 119
-
-╭─────────────────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                            │
-│                                                         │
-│   Organization:      My Org                             │
-│   Test type:         Software Composition Analysis      │
-│   Project path:      multi-project                      │
-│   Target file:       dotnet/obj/project.assets.json     │
-│                                                         │
-│   Total security issues: 6                              │
-│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]    │
-│   Open   : [1m6[0m [[35m 0 CRITICAL [0m[31m 5 HIGH [0m[33m 1 MEDIUM [0m 0 LOW ]    │
-╰─────────────────────────────────────────────────────────╯
-
-─────────────────────────────────────────────────────
-
 [1mTesting  (ghost/package.json) ...[0m
 
 Tested 23 dependencies for known issues, found 19 issues, 27 vulnerable paths.
@@ -757,11 +694,11 @@ Tested 23 dependencies for known issues, found 19 issues, 27 vulnerable paths.
 │                                                            │
 │   Organization:      My Org                                │
 │   Test type:         Software Composition Analysis         │
-│   Projects tested:   7 projects                            │
+│   Projects tested:   6 projects                            │
 │                                                            │
-│   Total security issues: 67                                │
+│   Total security issues: 61                                │
 │   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]       │
-│   Open   : [1m67[0m [[35m 0 CRITICAL [0m[31m 19 HIGH [0m[33m 40 MEDIUM [0m 8 LOW ]    │
+│   Open   : [1m61[0m [[35m 0 CRITICAL [0m[31m 14 HIGH [0m[33m 39 MEDIUM [0m 8 LOW ]    │
 ╰────────────────────────────────────────────────────────────╯
 
 💡 Tip

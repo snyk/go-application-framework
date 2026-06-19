@@ -16,6 +16,13 @@ SCAN_CMD="${SCAN_CMD:-${DEFAULT_SCAN_CMD}}"
 REPORT="${REPORT:-0}"
 REDACT="${REDACT:-1}"
 
+# OSS `snyk test` routes to legacycli unless the unified Test API FF is on; only the
+# unified path emits workflow.TestResult payloads we need. Config honors this env var
+# before the org FF gateway (see CLI-1510). Not needed for `secrets test`.
+if [[ "${SCAN_CMD}" == test* ]]; then
+  export INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST="${INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST:-true}"
+fi
+
 if [[ -z "${PROJECT}" ]]; then
   echo "error: PROJECT is required" >&2
   exit 1
@@ -44,7 +51,11 @@ echo "  working directory for scan: ${PROJECT}"
 echo ""
 printf "Running (equivalent):\n"
 printf "  cd %q\n" "${PROJECT}"
-printf "  SNYK_TMP_PATH=%q INTERNAL_IN_MEMORY_THRESHOLD_BYTES=1 INTERNAL_CLEANUP_GLOBAL_TEMP_DIR_ENABLED=false %q" "${DUMP_DIR}" "${SNYK_BIN}"
+printf "  SNYK_TMP_PATH=%q INTERNAL_IN_MEMORY_THRESHOLD_BYTES=1 INTERNAL_CLEANUP_GLOBAL_TEMP_DIR_ENABLED=false" "${DUMP_DIR}"
+if [[ "${SCAN_CMD}" == test* ]]; then
+  printf " INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST=%q" "${INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST}"
+fi
+printf " %q" "${SNYK_BIN}"
 for a in "${scan_args[@]}"; do
 	printf " %q" "${a}"
 done
@@ -82,6 +93,10 @@ if [[ -z "${latest_dump}" ]]; then
   echo "hint: ensure SNYK_TMP_PATH is honored by the CLI build and that the" >&2
   echo "      scan workflow emits a []byte TestResult payload that exceeds" >&2
   echo "      INTERNAL_IN_MEMORY_THRESHOLD_BYTES (=1)." >&2
+  if [[ "${SCAN_CMD}" == test* ]]; then
+    echo "      For OSS snyk test, INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST=true" >&2
+    echo "      is required (generate-fixture sets it by default for test scans)." >&2
+  fi
   exit 1
 fi
 
