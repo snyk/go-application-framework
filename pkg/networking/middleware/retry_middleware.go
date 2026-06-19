@@ -91,7 +91,7 @@ func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logg
 	return rm
 }
 
-func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
+func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) { //nolint:gocyclo // complexity inherent to sequential retry logic with per-status-code overrides
 	var finalResponse *http.Response
 	var finalError error
 	var localBodyBuffer []byte
