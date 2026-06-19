@@ -1031,7 +1031,7 @@ func TestRetryMiddleware_GetBodyNil_BuffersBody(t *testing.T) {
 }
 
 // TestRetryMiddleware_SeekableBody_NoBuffer verifies that when the request body
-// is a real *os.File (implements io.ReadSeeker + io.Closer, not recognised by
+// is a real *os.File (implements io.ReadSeeker + io.Closer, not recognized by
 // http.NewRequest for GetBody), the middleware rewinds via Seek instead of
 // copying into a memory buffer, and defers the real Close.
 func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
@@ -1053,9 +1053,9 @@ func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
 	customRTFn := func(req *http.Request) (*http.Response, error) {
 		attemptCount++
 
-		body, err := io.ReadAll(req.Body)
-		require.NoError(t, err)
-		bodiesReceived = append(bodiesReceived, body)
+		readBody, readErr := io.ReadAll(req.Body)
+		require.NoError(t, readErr)
+		bodiesReceived = append(bodiesReceived, readBody)
 
 		// Close should be a no-op (suppressed by the wrapper)
 		require.NoError(t, req.Body.Close())
@@ -1083,7 +1083,7 @@ func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
 	sut := NewRetryMiddleware(config, &logger, rt)
 
 	// *os.File implements io.ReadSeeker + io.Closer but is not one of the
-	// types http.NewRequest recognises, so GetBody stays nil.
+	// types http.NewRequest recognizes, so GetBody stays nil.
 	req, err := http.NewRequest(http.MethodPost, "http://example.com/api/v1/upload", tmpFile)
 	require.NoError(t, err)
 	require.Nil(t, req.GetBody, "precondition: GetBody must be nil for *os.File body")
