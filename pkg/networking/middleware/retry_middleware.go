@@ -87,6 +87,16 @@ func (b *noCloseSeekBody) RealClose() error {
 	return nil
 }
 
+// drainAndClose fully reads any remaining bytes from the body and then closes
+// it, enabling the underlying TCP connection to be reused by the transport.
+func drainAndClose(body io.ReadCloser) {
+	if body == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, body)
+	_ = body.Close()
+}
+
 type RetryMiddlewareOption func(*RetryMiddleware)
 
 func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
@@ -145,8 +155,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		// connections.  This matches stdlib's Client.do which drains+closes
 		// intermediate responses between attempts.
 		if prevRespBody != nil {
-			_, _ = io.Copy(io.Discard, prevRespBody)
-			_ = prevRespBody.Close()
+			drainAndClose(prevRespBody)
 			prevRespBody = nil
 		}
 
@@ -189,7 +198,14 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		origBody := response.Body // capture before shouldRetry may replace it (e.g. getErrorList for 503)
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
-			prevRespBody = origBody
+
+			// Only track the body for cleanup when an actual retry will follow.
+			// Permanent errors mean this is the final response — the caller owns its body.
+			var permErr *backoff.PermanentError
+			if !errors.As(retryError, &permErr) {
+				prevRespBody = origBody
+			}
+
 			return response, &RetryAttemptError{
 				StatusCode:  response.StatusCode,
 				Attempt:     actualAttempts,
@@ -213,10 +229,8 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// Ensure any intermediate body is closed if the loop exited before the
 	// next op() call could clean it up (e.g. context cancellation).
-	if prevRespBody != nil && (finalResponse == nil || prevRespBody != finalResponse.Body) {
-		_, _ = io.Copy(io.Discard, prevRespBody)
-		_ = prevRespBody.Close()
-	}
+	drainAndClose(prevRespBody)
+	prevRespBody = nil
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError
