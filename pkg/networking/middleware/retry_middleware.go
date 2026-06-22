@@ -124,7 +124,6 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	var retryAfterSeconds = defaultRetryAfterSeconds
 	var actualAttempts int = 0
 	var cachedMaxRetries *int = nil // Per-request cached max retries
-	var prevRespBody io.ReadCloser  // original response body from prior attempt, for drain+close
 
 	if tmp := rm.config.GetInt(ConfigurationKeyRequestAttempts); tmp > 0 {
 		maxAttempts = tmp
@@ -150,14 +149,6 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	op := func() (*http.Response, error) {
 		actualAttempts++
-
-		// Close the previous response body before retrying to avoid leaking
-		// connections.  This matches stdlib's Client.do which drains+closes
-		// intermediate responses between attempts.
-		if prevRespBody != nil {
-			drainAndClose(prevRespBody)
-			prevRespBody = nil
-		}
 
 		// create a local copy of the request
 		localRequest := *req
@@ -203,7 +194,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			// Permanent errors mean this is the final response — the caller owns its body.
 			var permErr *backoff.PermanentError
 			if !errors.As(retryError, &permErr) {
-				prevRespBody = origBody
+				drainAndClose(origBody)
 			}
 
 			return response, &RetryAttemptError{
@@ -226,11 +217,6 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			rm.notifyRetry(reqCtx, err, duration)
 		}),
 	)
-
-	// Ensure any intermediate body is closed if the loop exited before the
-	// next op() call could clean it up (e.g. context cancellation).
-	drainAndClose(prevRespBody)
-	prevRespBody = nil
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError
