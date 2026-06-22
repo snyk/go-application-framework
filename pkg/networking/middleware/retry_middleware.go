@@ -79,7 +79,6 @@ type noCloseSeekBody struct {
 	realCloser io.Closer
 }
 
-func (b *noCloseSeekBody) Read(p []byte) (int, error) { return b.ReadSeeker.Read(p) }
 func (b *noCloseSeekBody) Close() error               { return nil }
 func (b *noCloseSeekBody) RealClose() error {
 	if b.realCloser != nil {
@@ -115,6 +114,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 	var retryAfterSeconds = defaultRetryAfterSeconds
 	var actualAttempts int = 0
 	var cachedMaxRetries *int = nil // Per-request cached max retries
+	var prevRespBody io.ReadCloser  // original response body from prior attempt, for drain+close
 
 	if tmp := rm.config.GetInt(ConfigurationKeyRequestAttempts); tmp > 0 {
 		maxAttempts = tmp
@@ -140,6 +140,15 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	op := func() (*http.Response, error) {
 		actualAttempts++
+
+		// Close the previous response body before retrying to avoid leaking
+		// connections.  This matches stdlib's Client.do which drains+closes
+		// intermediate responses between attempts.
+		if prevRespBody != nil {
+			_, _ = io.Copy(io.Discard, prevRespBody)
+			_ = prevRespBody.Close()
+			prevRespBody = nil
+		}
 
 		// create a local copy of the request
 		localRequest := *req
@@ -177,8 +186,10 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		// depending on the response determine if we should retry
+		origBody := response.Body // capture before shouldRetry may replace it (e.g. getErrorList for 503)
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
+			prevRespBody = origBody
 			return response, &RetryAttemptError{
 				StatusCode:  response.StatusCode,
 				Attempt:     actualAttempts,
@@ -199,6 +210,13 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 			rm.notifyRetry(reqCtx, err, duration)
 		}),
 	)
+
+	// Ensure any intermediate body is closed if the loop exited before the
+	// next op() call could clean it up (e.g. context cancellation).
+	if prevRespBody != nil && (finalResponse == nil || prevRespBody != finalResponse.Body) {
+		_, _ = io.Copy(io.Discard, prevRespBody)
+		_ = prevRespBody.Close()
+	}
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError

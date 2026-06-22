@@ -1106,6 +1106,210 @@ func TestRetryMiddleware_SeekableBody_NoBuffer(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrClosed, "file must be closed after retry loop finishes")
 }
 
+// TestRetryMiddleware_IntermediateResponseBodyClosed verifies that response bodies
+// from failed attempts are closed before the next retry fires.  Without this,
+// connections are leaked (one per retry) against real servers because the
+// transport cannot recycle the connection until the body is drained+closed.
+func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
+	logger := zerolog.Nop()
+
+	type trackedBody struct {
+		closed bool
+		mu     sync.Mutex
+	}
+
+	var intermediateBody trackedBody
+
+	attemptCount := 0
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{}
+
+		if attemptCount == 1 {
+			// First attempt: return 503 with a body that tracks Close()
+			body := io.NopCloser(bytes.NewReader([]byte("service unavailable")))
+			trackingBody := &trackingReadCloser{
+				ReadCloser: body,
+				onClose: func() {
+					intermediateBody.mu.Lock()
+					intermediateBody.closed = true
+					intermediateBody.mu.Unlock()
+				},
+			}
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     headers,
+				Body:       trackingBody,
+				Request:    req,
+			}, nil
+		}
+
+		// Second attempt: success
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     headers,
+			Body:       io.NopCloser(bytes.NewReader([]byte("ok"))),
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 3)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 2, attemptCount, "Should retry once then succeed")
+
+	// The intermediate (503) response body MUST have been closed before the
+	// second attempt, matching stdlib's Client.do behavior.
+	intermediateBody.mu.Lock()
+	defer intermediateBody.mu.Unlock()
+	assert.True(t, intermediateBody.closed,
+		"Intermediate response body must be closed between retries to avoid leaking connections")
+}
+
+// TestRetryMiddleware_ContextCancellation_BodyClosed verifies that when the
+// context is cancelled between retry attempts, the last intermediate response
+// body is still closed (via the post-loop cleanup).
+func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
+	logger := zerolog.Nop()
+
+	var mu sync.Mutex
+	bodyClosed := false
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	attemptCount := 0
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{}
+
+		body := io.NopCloser(bytes.NewReader([]byte("error")))
+		trackingBody := &trackingReadCloser{
+			ReadCloser: body,
+			onClose: func() {
+				mu.Lock()
+				bodyClosed = true
+				mu.Unlock()
+			},
+		}
+
+		// Cancel context after first attempt so the retry loop exits
+		// before a second op() call can close the body.
+		cancel()
+
+		return &http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Header:     headers,
+			Body:       trackingBody,
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 5)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/", nil)
+	_, _ = sut.RoundTrip(req)
+
+	assert.Equal(t, 1, attemptCount, "Only one attempt before context cancellation")
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.True(t, bodyClosed,
+		"Intermediate body must be closed even when context cancellation stops the retry loop")
+}
+
+// TestRetryMiddleware_MultipleIntermediateResponseBodiesClosed verifies that ALL
+// intermediate response bodies are closed when multiple retries occur, not just
+// the first one.
+func TestRetryMiddleware_MultipleIntermediateResponseBodiesClosed(t *testing.T) {
+	logger := zerolog.Nop()
+
+	var mu sync.Mutex
+	closedBodies := map[int]bool{}
+
+	attemptCount := 0
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		attemptCount++
+		headers := http.Header{}
+		currentAttempt := attemptCount
+
+		if currentAttempt <= 3 {
+			// Attempts 1-3: return 503 with a body that tracks Close()
+			body := io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf("error attempt %d", currentAttempt))))
+			trackingBody := &trackingReadCloser{
+				ReadCloser: body,
+				onClose: func() {
+					mu.Lock()
+					closedBodies[currentAttempt] = true
+					mu.Unlock()
+				},
+			}
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     headers,
+				Body:       trackingBody,
+				Request:    req,
+			}, nil
+		}
+
+		// Attempt 4: success
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     headers,
+			Body:       io.NopCloser(bytes.NewReader([]byte("ok"))),
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 5)
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, 4, attemptCount, "Should retry 3 times then succeed on 4th")
+
+	mu.Lock()
+	defer mu.Unlock()
+	for attempt := 1; attempt <= 3; attempt++ {
+		assert.True(t, closedBodies[attempt],
+			"Response body from attempt %d must be closed between retries", attempt)
+	}
+}
+
+// trackingReadCloser wraps an io.ReadCloser and calls onClose when Close is invoked.
+type trackingReadCloser struct {
+	io.ReadCloser
+	onClose func()
+}
+
+func (t *trackingReadCloser) Close() error {
+	if t.onClose != nil {
+		t.onClose()
+	}
+	return t.ReadCloser.Close()
+}
+
 // setupRetryMiddleware wires RetryMiddleware with a counting transport and the given config.
 func setupRetryMiddleware(
 	t *testing.T,
