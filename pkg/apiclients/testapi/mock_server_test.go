@@ -246,7 +246,7 @@ func newApiErrorResponder(t *testing.T, orgID uuid.UUID, statusCode int, errorRe
 
 // Parses a sample JSON string and returns the depGraph part.
 // Fails the test immediately if unmarshalling fails.
-func depGraphFromJSON(t *testing.T) testapi.IoSnykApiV1testdepgraphRequestDepGraph {
+func depGraphFromJSON(t *testing.T) testapi.DepGraphRef {
 	t.Helper()
 
 	jsonImport := `{
@@ -281,7 +281,7 @@ func depGraphFromJSON(t *testing.T) testapi.IoSnykApiV1testdepgraphRequestDepGra
 		}`
 
 	var topLevelStruct struct {
-		DepGraph testapi.IoSnykApiV1testdepgraphRequestDepGraph `json:"depGraph"`
+		DepGraph testapi.DepGraphRef `json:"depGraph"`
 	}
 	err := json.Unmarshal([]byte(jsonImport), &topLevelStruct)
 	require.NoError(t, err)

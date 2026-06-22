@@ -618,12 +618,15 @@ type DeepcodeBundleSubjectType string
 // DepGraphContent Dep Graph file contents, of the same format as Dep Graphs
 // provided to /v1/test-dep-graph endpoint.
 type DepGraphContent struct {
-	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
-	Type     DepGraphContentType                    `json:"type"`
+	DepGraph DepGraphRef         `json:"dep_graph"`
+	Type     DepGraphContentType `json:"type"`
 }
 
 // DepGraphContentType defines model for DepGraphContent.Type.
 type DepGraphContentType string
+
+// DepGraphRef defines model for DepGraphRef.
+type DepGraphRef = json.RawMessage
 
 // DepGraphSubject **Deprecated**
 //
@@ -653,7 +656,7 @@ type DepGraphSubjectCreate struct {
 	// DepGraph When creating a test, provide the dep-graph contents inline to the request.
 	//
 	// This attribute is only available when creating a new Test.
-	DepGraph IoSnykApiV1testdepgraphRequestDepGraph `json:"dep_graph"`
+	DepGraph DepGraphRef `json:"dep_graph"`
 
 	// Locator Source file(s) from which the dependency graph was derived.
 	//
@@ -1656,8 +1659,8 @@ type ScmRepoLocatorType string
 // Currently supported scans utilizing ScmResources are:
 // - SAST scans on (1) ScmResource that references a repo already
 // imported into Snyk
-// - Secrets scans on (1) ScmResource that references a repo already
-// imported into Snyk
+// - Secrets scans on (1) ScmResource that references a repo which
+// may not already be imported into Snyk
 type ScmResource struct {
 	// Commit Commit hash to reference specifically.
 	Commit *string `json:"commit,omitempty"`
@@ -1862,8 +1865,10 @@ type SnykPolicyRefOwner string
 // Project, Target, or otherwise, this SnykReferenceResource can
 // be used to initiate a Test with the appropriate ID.
 //
-// Currently no scans are supported through the Test API for
-// SnykReferenceResources.
+// Supported scans:
+// - SCA scan on one (1) SnykReferenceResource which contains a
+// Target ID in addition to at least one of CommitRef or Branch
+// provided on the SCM Context object.
 type SnykReferenceResource struct {
 	// RefId ID referring the contents already known by Snyk.
 	RefId openapi_types.UUID `json:"ref_id"`
@@ -2254,16 +2259,21 @@ type TestComponent struct {
 
 // TestConfiguration Test configuration.
 type TestConfiguration struct {
+	AssetName *string `json:"asset_name,omitempty"`
+
 	// LocalPolicy Inline configured policy options for determining outcome of this specific test.
 	//
 	// If centrally managed policies are in scope, inline policies are overridden
 	// by managed policies. Policy references explain which policies were
 	// effective for test evaluation.
-	LocalPolicy                *LocalPolicy `json:"local_policy,omitempty"`
-	ProjectBusinessCriticality *string      `json:"project_business_criticality,omitempty"`
-	ProjectEnvironment         *[]string    `json:"project_environment,omitempty"`
-	ProjectLifecycle           *[]string    `json:"project_lifecycle,omitempty"`
-	ProjectTags                *[]string    `json:"project_tags,omitempty"`
+	LocalPolicy *LocalPolicy `json:"local_policy,omitempty"`
+
+	// Monitor Indicates whether the test result should be monitored with recurring tests.
+	Monitor                    *bool     `json:"monitor,omitempty"`
+	ProjectBusinessCriticality *string   `json:"project_business_criticality,omitempty"`
+	ProjectEnvironment         *[]string `json:"project_environment,omitempty"`
+	ProjectLifecycle           *[]string `json:"project_lifecycle,omitempty"`
+	ProjectTags                *[]string `json:"project_tags,omitempty"`
 
 	// PublishReport Publish findings into a report, viewable in the Snyk web UI.
 	PublishReport *bool `json:"publish_report,omitempty"`
@@ -2582,15 +2592,6 @@ type IoSnykApiCommonPaginatedLinks struct {
 // IoSnykApiCommonRelatedLink defines model for io.snyk.api.common.RelatedLink.
 type IoSnykApiCommonRelatedLink struct {
 	Related *IoSnykApiCommonLinkProperty `json:"related,omitempty"`
-}
-
-// IoSnykApiV1testdepgraphRequestDepGraph defines model for io.snyk.api.v1testdepgraph.request.DepGraph.
-type IoSnykApiV1testdepgraphRequestDepGraph struct {
-	Graph                IoSnykApiV1testdepgraphRequestGraph          `json:"graph"`
-	PkgManager           IoSnykApiV1testdepgraphRequestPackageManager `json:"pkgManager"`
-	Pkgs                 []IoSnykApiV1testdepgraphRequestPackage      `json:"pkgs"`
-	SchemaVersion        string                                       `json:"schemaVersion"`
-	AdditionalProperties map[string]interface{}                       `json:"-"`
 }
 
 // IoSnykApiV1testdepgraphRequestGraph defines model for io.snyk.api.v1testdepgraph.request.Graph.
@@ -3035,111 +3036,6 @@ func (a IoSnykApiCommonErrorLink) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'about': %w", err)
 		}
-	}
-
-	for fieldName, field := range a.AdditionalProperties {
-		object[fieldName], err = json.Marshal(field)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
-		}
-	}
-	return json.Marshal(object)
-}
-
-// Getter for additional properties for IoSnykApiV1testdepgraphRequestDepGraph. Returns the specified
-// element and whether it was found
-func (a IoSnykApiV1testdepgraphRequestDepGraph) Get(fieldName string) (value interface{}, found bool) {
-	if a.AdditionalProperties != nil {
-		value, found = a.AdditionalProperties[fieldName]
-	}
-	return
-}
-
-// Setter for additional properties for IoSnykApiV1testdepgraphRequestDepGraph
-func (a *IoSnykApiV1testdepgraphRequestDepGraph) Set(fieldName string, value interface{}) {
-	if a.AdditionalProperties == nil {
-		a.AdditionalProperties = make(map[string]interface{})
-	}
-	a.AdditionalProperties[fieldName] = value
-}
-
-// Override default JSON handling for IoSnykApiV1testdepgraphRequestDepGraph to handle AdditionalProperties
-func (a *IoSnykApiV1testdepgraphRequestDepGraph) UnmarshalJSON(b []byte) error {
-	object := make(map[string]json.RawMessage)
-	err := json.Unmarshal(b, &object)
-	if err != nil {
-		return err
-	}
-
-	if raw, found := object["graph"]; found {
-		err = json.Unmarshal(raw, &a.Graph)
-		if err != nil {
-			return fmt.Errorf("error reading 'graph': %w", err)
-		}
-		delete(object, "graph")
-	}
-
-	if raw, found := object["pkgManager"]; found {
-		err = json.Unmarshal(raw, &a.PkgManager)
-		if err != nil {
-			return fmt.Errorf("error reading 'pkgManager': %w", err)
-		}
-		delete(object, "pkgManager")
-	}
-
-	if raw, found := object["pkgs"]; found {
-		err = json.Unmarshal(raw, &a.Pkgs)
-		if err != nil {
-			return fmt.Errorf("error reading 'pkgs': %w", err)
-		}
-		delete(object, "pkgs")
-	}
-
-	if raw, found := object["schemaVersion"]; found {
-		err = json.Unmarshal(raw, &a.SchemaVersion)
-		if err != nil {
-			return fmt.Errorf("error reading 'schemaVersion': %w", err)
-		}
-		delete(object, "schemaVersion")
-	}
-
-	if len(object) != 0 {
-		a.AdditionalProperties = make(map[string]interface{})
-		for fieldName, fieldBuf := range object {
-			var fieldVal interface{}
-			err := json.Unmarshal(fieldBuf, &fieldVal)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
-			}
-			a.AdditionalProperties[fieldName] = fieldVal
-		}
-	}
-	return nil
-}
-
-// Override default JSON handling for IoSnykApiV1testdepgraphRequestDepGraph to handle AdditionalProperties
-func (a IoSnykApiV1testdepgraphRequestDepGraph) MarshalJSON() ([]byte, error) {
-	var err error
-	object := make(map[string]json.RawMessage)
-
-	object["graph"], err = json.Marshal(a.Graph)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'graph': %w", err)
-	}
-
-	object["pkgManager"], err = json.Marshal(a.PkgManager)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'pkgManager': %w", err)
-	}
-
-	object["pkgs"], err = json.Marshal(a.Pkgs)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'pkgs': %w", err)
-	}
-
-	object["schemaVersion"], err = json.Marshal(a.SchemaVersion)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'schemaVersion': %w", err)
 	}
 
 	for fieldName, field := range a.AdditionalProperties {
