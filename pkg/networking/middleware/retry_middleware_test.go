@@ -1176,7 +1176,7 @@ func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
 }
 
 // TestRetryMiddleware_ContextCancellation_BodyClosed verifies that when the
-// context is cancelled between retry attempts, the last intermediate response
+// context is canceled between retry attempts, the last intermediate response
 // body is still closed (via the post-loop cleanup).
 func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
 	logger := zerolog.Nop()
@@ -1221,8 +1221,10 @@ func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
 
 	sut := NewRetryMiddleware(config, &logger, rt)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/", nil)
-	_, _ = sut.RoundTrip(req)
+	req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/", nil)
+	require.NoError(t, reqErr)
+	_, err := sut.RoundTrip(req)
+	require.Error(t, err, "Expected context cancellation error")
 
 	assert.Equal(t, 1, attemptCount, "Only one attempt before context cancellation")
 

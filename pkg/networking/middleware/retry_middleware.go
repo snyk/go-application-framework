@@ -79,7 +79,7 @@ type noCloseSeekBody struct {
 	realCloser io.Closer
 }
 
-func (b *noCloseSeekBody) Close() error               { return nil }
+func (b *noCloseSeekBody) Close() error { return nil }
 func (b *noCloseSeekBody) RealClose() error {
 	if b.realCloser != nil {
 		return b.realCloser.Close()
@@ -93,7 +93,7 @@ func drainAndClose(body io.ReadCloser) {
 	if body == nil {
 		return
 	}
-	_, _ = io.Copy(io.Discard, body)
+	_, _ = io.Copy(io.Discard, body) //nolint:errcheck // best-effort drain for connection reuse
 	_ = body.Close()
 }
 
