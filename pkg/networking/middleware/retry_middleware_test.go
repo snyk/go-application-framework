@@ -1177,7 +1177,7 @@ func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
 
 // TestRetryMiddleware_ContextCancellation_BodyClosed verifies that when the
 // context is canceled between retry attempts, the last intermediate response
-// body is still closed (via the post-loop cleanup).
+// body is still closed (eagerly inside op() before backoff observes the cancellation).
 func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
 	logger := zerolog.Nop()
 
@@ -1232,6 +1232,60 @@ func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
 	defer mu.Unlock()
 	assert.True(t, bodyClosed,
 		"Intermediate body must be closed even when context cancellation stops the retry loop")
+}
+
+// TestRetryMiddleware_503Permanent_OriginalBodyClosed verifies that when a 503
+// response causes a permanent stop (retries exhausted), the original transport
+// body is still closed even though getErrorList replaced response.Body with a
+// buffer.  Without this, the TCP connection leaks because the transport body
+// was consumed (ReadAll) but never Close()'d.
+func TestRetryMiddleware_503Permanent_OriginalBodyClosed(t *testing.T) {
+	logger := zerolog.Nop()
+
+	var mu sync.Mutex
+	bodyClosed := false
+
+	//nolint:unparam // error is always nil but signature must match http.RoundTripper
+	customRTFn := func(req *http.Request) (*http.Response, error) {
+		headers := http.Header{}
+
+		// Return a 503 (non-maintenance) with a tracking body.
+		// Since maxAttempts=1, shouldRetry will return Permanent on the first attempt.
+		body := io.NopCloser(bytes.NewReader([]byte("service unavailable")))
+		trackingBody := &trackingReadCloser{
+			ReadCloser: body,
+			onClose: func() {
+				mu.Lock()
+				bodyClosed = true
+				mu.Unlock()
+			},
+		}
+		return &http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Header:     headers,
+			Body:       trackingBody,
+			Request:    req,
+		}, nil
+	}
+
+	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
+	config := configuration.NewWithOpts()
+	config.Set(ConfigurationKeyRequestAttempts, 1) // maxAttempts=1 → permanent stop on first 503
+	config.Set(configurationKeyRetryAfter, 1)
+
+	sut := NewRetryMiddleware(config, &logger, rt)
+	resp, err := sut.RoundTrip(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+
+	// The original transport body must be closed even on permanent 503, because
+	// getErrorList consumed it (ReadAll) and replaced response.Body with a buffer.
+	mu.Lock()
+	defer mu.Unlock()
+	assert.True(t, bodyClosed,
+		"Original response body must be closed on permanent 503 to avoid leaking connections")
 }
 
 // TestRetryMiddleware_MultipleIntermediateResponseBodiesClosed verifies that ALL

@@ -190,10 +190,12 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
 
-			// Only track the body for cleanup when an actual retry will follow.
-			// Permanent errors mean this is the final response — the caller owns its body.
+			// Close origBody when a retry will follow (non-permanent) OR when
+			// getErrorList replaced response.Body (permanent 503). Skip only when
+			// the caller still owns the same body reference (non-503 permanent).
 			var permErr *backoff.PermanentError
-			if !errors.As(retryError, &permErr) {
+			bodyWasReplaced := origBody != response.Body
+			if !errors.As(retryError, &permErr) || bodyWasReplaced {
 				drainAndClose(origBody)
 			}
 
@@ -227,7 +229,7 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 //   - getBody: function that produces a fresh reader on retries (may be nil)
 //   - cleanup: called after the retry loop to release resources (may be nil)
 //
-// The original request is not modified.
+// The caller is expected to assign body/getBody onto the request.
 //
 // Three strategies, in order of preference:
 //  1. GetBody already set (e.g. http.NewRequest with *bytes.Reader) → return as-is.
