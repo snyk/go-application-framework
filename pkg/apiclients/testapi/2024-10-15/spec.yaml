@@ -509,7 +509,7 @@ components:
         provided to /v1/test-dep-graph endpoint.
       properties:
         dep_graph:
-          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.DepGraph'
+          $ref: '#/components/schemas/DepGraphRef'
         type:
           enum:
           - dep_graph
@@ -518,6 +518,26 @@ components:
       - type
       - dep_graph
       type: object
+    DepGraphRef:
+      additionalProperties: {}
+      properties:
+        graph:
+          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.Graph'
+        pkgManager:
+          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.PackageManager'
+        pkgs:
+          items:
+            $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.Package'
+          type: array
+        schemaVersion:
+          type: string
+      required:
+      - schemaVersion
+      - pkgManager
+      - pkgs
+      - graph
+      type: object
+      x-go-type: json.RawMessage
     DepGraphSubject:
       description: |-
         **Deprecated**
@@ -554,7 +574,7 @@ components:
       properties:
         dep_graph:
           allOf:
-          - $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.DepGraph'
+          - $ref: '#/components/schemas/DepGraphRef'
           description: |-
             When creating a test, provide the dep-graph contents inline to the request.
 
@@ -2280,8 +2300,8 @@ components:
         Currently supported scans utilizing ScmResources are:
         - SAST scans on (1) ScmResource that references a repo already
         imported into Snyk
-        - Secrets scans on (1) ScmResource that references a repo already
-        imported into Snyk
+        - Secrets scans on (1) ScmResource that references a repo which
+        may not already be imported into Snyk
       example:
         commit: 8dbd1ea7201a0d49603467981075a633d91e40b9
         file_patterns: []
@@ -2607,8 +2627,10 @@ components:
         Project, Target, or otherwise, this SnykReferenceResource can
         be used to initiate a Test with the appropriate ID.
 
-        Currently no scans are supported through the Test API for
-        SnykReferenceResources.
+        Supported scans:
+        - SCA scan on one (1) SnykReferenceResource which contains a
+        Target ID in addition to at least one of CommitRef or Branch
+        provided on the SCM Context object.
       example:
         ref_id: 00000000-0000-0000-0000-000000000000
         reference_type: project
@@ -3217,6 +3239,9 @@ components:
     TestConfiguration:
       description: Test configuration.
       properties:
+        asset_name:
+          maxLength: 256
+          type: string
         local_policy:
           allOf:
           - $ref: '#/components/schemas/LocalPolicy'
@@ -3226,6 +3251,10 @@ components:
             If centrally managed policies are in scope, inline policies are overridden
             by managed policies. Policy references explain which policies were
             effective for test evaluation.
+        monitor:
+          description: Indicates whether the test result should be monitored with
+            recurring tests.
+          type: boolean
         project_business_criticality:
           maxLength: 256
           type: string
@@ -3732,25 +3761,6 @@ components:
       properties:
         related:
           $ref: '#/components/schemas/io.snyk.api.common.LinkProperty'
-      type: object
-    io.snyk.api.v1testdepgraph.request.DepGraph:
-      additionalProperties: {}
-      properties:
-        graph:
-          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.Graph'
-        pkgManager:
-          $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.PackageManager'
-        pkgs:
-          items:
-            $ref: '#/components/schemas/io.snyk.api.v1testdepgraph.request.Package'
-          type: array
-        schemaVersion:
-          type: string
-      required:
-      - schemaVersion
-      - pkgManager
-      - pkgs
-      - graph
       type: object
     io.snyk.api.v1testdepgraph.request.Graph:
       additionalProperties: {}
