@@ -40,6 +40,7 @@ type TestData struct {
 	ExpectedEffectiveSummary *testapi.FindingSummary
 	ExpectedRawSummary       *testapi.FindingSummary
 	ExpectedTestComponents   *[]testapi.TestComponent
+	ExpectedAssetLink        *string
 }
 
 func setupTestScenarioWithSubject(t *testing.T) TestData {
@@ -93,6 +94,7 @@ func setupTestScenarioWithSubject(t *testing.T) TestData {
 		ExpectedCreatedAt:        expectedCreatedAt,
 		ExpectedEffectiveSummary: expectedEffectiveSummary,
 		ExpectedRawSummary:       expectedRawSummary,
+		ExpectedAssetLink:        &mockAssetInventoryLink,
 	}
 }
 
@@ -141,6 +143,7 @@ func setupTestScenarioWithResources(t *testing.T) TestData {
 		ExpectedCreatedAt:        expectedCreatedAt,
 		ExpectedEffectiveSummary: expectedEffectiveSummary,
 		ExpectedRawSummary:       expectedRawSummary,
+		ExpectedAssetLink:        &mockAssetInventoryLink,
 	}
 }
 
@@ -261,6 +264,7 @@ func Test_StartTest_Success(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -365,6 +369,7 @@ func Test_StartTestWithResources_Success(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -634,6 +639,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -717,6 +723,7 @@ func Test_Wait_Synchronous_WithResources_Success_Pass_WithFindings(t *testing.T)
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -792,7 +799,8 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 }
 
@@ -862,7 +870,8 @@ func Test_Wait_Synchronous_WithResources_Success_Fail(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 }
 
@@ -958,6 +967,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -1057,6 +1067,7 @@ func Test_Wait_Asynchronous_WithResources_Success_Pass(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -1565,7 +1576,8 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink)
 	require.NotNil(t, result.Get(testapi.TestResultBreachedPolicies))
 	assert.Equal(t, expectedBreachedPolicies, result.Get(testapi.TestResultBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
@@ -1656,7 +1668,9 @@ func Test_Wait_WithResources_Synchronous_Finished_With_ErrorsAndWarnings(t *test
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
+	)
 	require.NotNil(t, result.Get(testapi.TestResultBreachedPolicies))
 	assert.Equal(t, expectedBreachedPolicies, result.Get(testapi.TestResultBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
@@ -1673,7 +1687,8 @@ func assertCommonTestResultFields(
 	expectedResources *[]testapi.TestResource,
 	expectedEffectiveSummary *testapi.FindingSummary,
 	expectedRawSummary *testapi.FindingSummary,
-	expectedTestComponents *[]testapi.TestComponent) {
+	expectedTestComponents *[]testapi.TestComponent,
+	expectedAssetLink *string) {
 	t.Helper()
 	require.NotNil(t, result.GetTestID())
 	assert.Equal(t, expectedTestID, *result.GetTestID())
@@ -1726,6 +1741,13 @@ func assertCommonTestResultFields(
 		assert.Equal(t, expectedTestComponents, result.Get(testapi.TestResultComponents))
 	} else {
 		assert.Nil(t, result.Get(testapi.TestResultComponents))
+	}
+
+	if expectedAssetLink != nil {
+		require.NotNil(t, result.GetMetadataValue("asset"))
+		assetLink, ok := result.GetMetadataValue("asset").(string)
+		require.True(t, ok)
+		require.Equal(t, *expectedAssetLink, assetLink)
 	}
 }
 

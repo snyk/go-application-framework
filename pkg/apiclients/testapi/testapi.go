@@ -2,6 +2,7 @@ package testapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -654,6 +655,76 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 	}
 }
 
+// Override UnmarshalJSON function on GetTest Links to handle Asset link coming back in
+// additional properties.
+func (gl *GetTest_200_Links) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["self"]; found {
+		err = json.Unmarshal(raw, &gl.Self)
+		if err != nil {
+			return fmt.Errorf("error reading 'self': %w", err)
+		}
+		delete(object, "self")
+	}
+	if raw, found := object["related"]; found {
+		err = json.Unmarshal(raw, &gl.Related)
+		if err != nil {
+			return fmt.Errorf("error reading 'related': %w", err)
+		}
+		delete(object, "related")
+	}
+
+	if len(object) != 0 {
+		gl.AdditionalProperties = make(map[string]IoSnykApiCommonLinkProperty)
+		for fieldName, fieldBuf := range object {
+			var fieldVal IoSnykApiCommonLinkProperty
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			gl.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override MarshalJSON function on GetTest Links to handle Asset link coming back in
+// additional properties.
+func (gl GetTest_200_Links) MarshalJSON() ([]byte, error) {
+	object := make(map[string]json.RawMessage)
+	var err error
+
+	object["self"], err = json.Marshal(gl.Self)
+	if err != nil {
+		return nil, err
+	}
+	object["related"], err = json.Marshal(gl.Related)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(gl.AdditionalProperties) != 0 {
+		for linkName, link := range gl.AdditionalProperties {
+			object[linkName], err = json.Marshal(link)
+			if err != nil {
+				return nil, fmt.Errorf("error marshaling additional link %s: %w", linkName, err)
+			}
+		}
+	}
+
+	res, err := json.Marshal(object)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 // Get the test result outcome from polling and populate testResult.
 // Errors returned here are for the API interaction (e.g., bad response), not the test itself.
 // Test state is captured in testResult's State, Errors, and Warnings.
@@ -701,6 +772,15 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 		result.PassFail = &attrs.Outcome.Result
 		result.OutcomeReason = attrs.Outcome.Reason
 		result.BreachedPolicies = attrs.Outcome.BreachedPolicies
+	}
+
+	links := resp.ApplicationvndApiJSON200.Links
+	if assetLink, ok := links.AdditionalProperties["asset"]; ok {
+		assetLinkStr, err := assetLink.AsIoSnykApiCommonLinkString()
+		if err != nil {
+			h.client.logger.Debug().AnErr("failed parsing asset link string", err)
+		}
+		result.metadata["asset"] = assetLinkStr
 	}
 
 	return result, nil

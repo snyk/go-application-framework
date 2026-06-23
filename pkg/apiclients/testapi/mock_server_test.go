@@ -484,6 +484,8 @@ func mockJobRedirectResponse(t *testing.T, jobID openapi_types.UUID, relatedLink
 	return responseBodyBytes
 }
 
+var mockAssetInventoryLink = "https://server.mock/orgs/org/inventory/assets/uuid/overview"
+
 // Creates a marshaled JSON response for the GET /tests/{test_id} call (200 OK).
 func mockTestResultResponse(
 	t *testing.T,
@@ -530,6 +532,10 @@ func mockTestResultResponse(
 		Type:       testapi.TestDataTypeTests,
 	}
 
+	var assetLink testapi.IoSnykApiCommonLinkProperty
+	err := assetLink.FromIoSnykApiCommonLinkString(mockAssetInventoryLink)
+	require.NoError(t, err)
+
 	mockResponseBody := struct {
 		Data    testapi.TestData               `json:"data"`
 		Jsonapi testapi.IoSnykApiCommonJsonApi `json:"jsonapi"`
@@ -540,7 +546,11 @@ func mockTestResultResponse(
 		Jsonapi: testapi.IoSnykApiCommonJsonApi{
 			Version: testapi.N10,
 		},
-		Links: testapi.GetTest_200_Links{},
+		Links: testapi.GetTest_200_Links{
+			AdditionalProperties: map[string]testapi.IoSnykApiCommonLinkProperty{
+				"asset": assetLink,
+			},
+		},
 	}
 	responseBodyBytes, err := json.Marshal(mockResponseBody)
 	require.NoError(t, err)
