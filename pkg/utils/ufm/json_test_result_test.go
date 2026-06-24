@@ -453,10 +453,14 @@ func Test_Findings_ConcurrentAccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, testResults, 1)
 
-	expectedFindings, complete, err := testResults[0].Findings(ctx)
+	expectedResults, err := NewSerializableTestResultFromBytes(testResultsData)
+	require.NoError(t, err)
+	require.Len(t, expectedResults, 1)
+	expectedFindings, complete, err := expectedResults[0].Findings(ctx)
 	require.NoError(t, err)
 	require.True(t, complete)
 	expectedCount := len(expectedFindings)
+	require.Greater(t, expectedCount, 0)
 
 	var wg sync.WaitGroup
 	wg.Add(10)

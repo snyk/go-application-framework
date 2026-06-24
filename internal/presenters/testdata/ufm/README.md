@@ -15,7 +15,7 @@ Workflow overview: [CONTRIBUTING.md](../../../../CONTRIBUTING.md#ufm-test-fixtur
 | `secrets` | synthetic | ✓ | ✓ | — | placeholder `testId`, no `metadata.project-name` | SARIF: `ignoreSuppressions=true`; human: `includeIgnores=true` | hand-maintained; do not regenerate via live scan |
 | `secrets.0findings` | synthetic | ✓ | — | — | placeholder `testId`, zero findings | SARIF: `ignoreSuppressions=true` | hand-maintained |
 | `secrets.duplicated-sarif-rules` | synthetic | ✓ | ✓ | — | placeholder `testId`; multiple findings share SARIF rule IDs | SARIF: `ignoreSuppressions=true`; human: `includeIgnores=true` | hand-maintained |
-| `secrets.with-report` | synthetic | ✓ | ✓ | — | placeholder `testId`; includes report URL in output | SARIF: `ignoreSuppressions=true`; human: `includeIgnores=true` | hand-maintained; models `--report` output (`REPORT=1` when dumping live secrets) |
+| `secrets.with-report` | synthetic | ✓ | ✓ | — | placeholder `testId`; includes report URL in output | SARIF: `ignoreSuppressions=true`; human: `includeIgnores=true` | hand-maintained synthetic — do not regenerate; models `--report` URL (see `REPORT=1` in `generate-fixture.sh` for live `secrets` dumps only) |
 
 **Planned (CLI-1510 Phase 2):** `python_pins` — synthetic fixture for `Pin … to …` human-readable remediation (not yet added).
 
