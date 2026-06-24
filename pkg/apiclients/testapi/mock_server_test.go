@@ -54,6 +54,7 @@ type FinalTestResultConfig struct {
 	BreachedPolicies  *testapi.PolicyRefSet
 	EffectiveSummary  *testapi.FindingSummary
 	RawSummary        *testapi.FindingSummary
+	AssetLinkForm     AssetLinkForm    // Controls the shape of the "asset" link in the response. Defaults to string form.
 	CustomHandler     http.HandlerFunc // If set, this custom handler is used instead of standard result mock
 }
 
@@ -177,6 +178,7 @@ func handleTestResultRequest(t *testing.T, w http.ResponseWriter, r *http.Reques
 		config.FinalTestResult.EffectiveSummary,
 		config.FinalTestResult.RawSummary,
 		config.FinalTestResult.TestComponents,
+		config.FinalTestResult.AssetLinkForm,
 	)
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write(resultResp)
@@ -486,6 +488,21 @@ func mockJobRedirectResponse(t *testing.T, jobID openapi_types.UUID, relatedLink
 
 var mockAssetInventoryLink = "https://server.mock/orgs/org/inventory/assets/uuid/overview"
 
+// AssetLinkForm controls how the "asset" link is shaped in mockTestResultResponse.
+type AssetLinkForm int
+
+const (
+	// AssetLinkFormDefault emits the asset link as a plain string (the production wire shape).
+	// This is the zero value so existing tests get the string form by default.
+	AssetLinkFormDefault AssetLinkForm = iota
+	// AssetLinkFormString explicitly emits the asset link as a LinkString.
+	AssetLinkFormString
+	// AssetLinkFormObject emits the asset link as a LinkObject ({"href": ...}).
+	AssetLinkFormObject
+	// AssetLinkFormAbsent omits the asset link from the links additionalProperties.
+	AssetLinkFormAbsent
+)
+
 // Creates a marshaled JSON response for the GET /tests/{test_id} call (200 OK).
 func mockTestResultResponse(
 	t *testing.T,
@@ -503,6 +520,7 @@ func mockTestResultResponse(
 	effectiveSummary *testapi.FindingSummary,
 	rawSummary *testapi.FindingSummary,
 	testComponents *[]testapi.TestComponent,
+	assetLinkForm AssetLinkForm,
 ) []byte {
 	t.Helper()
 	attributes := testapi.TestAttributes{
@@ -532,9 +550,29 @@ func mockTestResultResponse(
 		Type:       testapi.TestDataTypeTests,
 	}
 
-	var assetLink testapi.IoSnykApiCommonLinkProperty
-	err := assetLink.FromIoSnykApiCommonLinkString(mockAssetInventoryLink)
-	require.NoError(t, err)
+	links := testapi.GetTest_200_Links{}
+	switch assetLinkForm {
+	case AssetLinkFormAbsent:
+		// no asset link
+	case AssetLinkFormObject:
+		var assetLink testapi.IoSnykApiCommonLinkProperty
+		err := assetLink.FromIoSnykApiCommonLinkObject(testapi.IoSnykApiCommonLinkObject{
+			Href: mockAssetInventoryLink,
+		})
+		require.NoError(t, err)
+		links.AdditionalProperties = map[string]testapi.IoSnykApiCommonLinkProperty{
+			testapi.TestResultMetadataKeyAsset: assetLink,
+		}
+	case AssetLinkFormDefault, AssetLinkFormString:
+		fallthrough
+	default:
+		var assetLink testapi.IoSnykApiCommonLinkProperty
+		err := assetLink.FromIoSnykApiCommonLinkString(mockAssetInventoryLink)
+		require.NoError(t, err)
+		links.AdditionalProperties = map[string]testapi.IoSnykApiCommonLinkProperty{
+			testapi.TestResultMetadataKeyAsset: assetLink,
+		}
+	}
 
 	mockResponseBody := struct {
 		Data    testapi.TestData               `json:"data"`
@@ -546,11 +584,7 @@ func mockTestResultResponse(
 		Jsonapi: testapi.IoSnykApiCommonJsonApi{
 			Version: testapi.N10,
 		},
-		Links: testapi.GetTest_200_Links{
-			AdditionalProperties: map[string]testapi.IoSnykApiCommonLinkProperty{
-				"asset": assetLink,
-			},
-		},
+		Links: links,
 	}
 	responseBodyBytes, err := json.Marshal(mockResponseBody)
 	require.NoError(t, err)

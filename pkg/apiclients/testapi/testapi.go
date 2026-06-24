@@ -35,6 +35,12 @@ const (
 	TestResultComponents       TestResultKeys = "components"
 )
 
+// Keys used when storing values in TestResult.metadata
+// (accessed via TestResult.GetMetadataValue).
+const (
+	TestResultMetadataKeyAsset = "asset"
+)
+
 // config holds configuration for the test API client, set using ConfigOption functions.
 type config struct {
 	PollInterval          time.Duration // Default: 2000ms, Min: 1000ms
@@ -655,8 +661,16 @@ func (h *testHandle) pollJobToCompletion(ctx context.Context) (*uuid.UUID, error
 	}
 }
 
-// Override UnmarshalJSON function on GetTest Links to handle Asset link coming back in
-// additional properties.
+// The GetTest_200_Links type is generated in testapi.gen.go (DO NOT EDIT), but
+// oapi-codegen does not emit Marshal/UnmarshalJSON for inline link schemas with
+// AdditionalProperties, so the hand-written overrides below are needed to round-
+// trip the Asset link the API returns under "additionalProperties". If a future
+// regeneration of testapi.gen.go starts emitting these methods, the duplicate
+// definitions will fail to compile and these overrides should be removed (or
+// the underlying spec changed to a $ref so codegen handles it natively).
+
+// UnmarshalJSON handles GetTest_200_Links, including link entries returned under
+// additionalProperties (e.g. the "asset" link).
 func (gl *GetTest_200_Links) UnmarshalJSON(b []byte) error {
 	object := make(map[string]json.RawMessage)
 	err := json.Unmarshal(b, &object)
@@ -693,36 +707,35 @@ func (gl *GetTest_200_Links) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Override MarshalJSON function on GetTest Links to handle Asset link coming back in
-// additional properties.
+// MarshalJSON handles GetTest_200_Links, including link entries stored under
+// additionalProperties (e.g. the "asset" link). Self and Related are
+// `omitempty` in the generated struct tags, so we mirror that behavior here by
+// only emitting them when non-nil.
 func (gl GetTest_200_Links) MarshalJSON() ([]byte, error) {
 	object := make(map[string]json.RawMessage)
 	var err error
 
-	object["self"], err = json.Marshal(gl.Self)
-	if err != nil {
-		return nil, err
+	if gl.Self != nil {
+		object["self"], err = json.Marshal(gl.Self)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'self': %w", err)
+		}
 	}
-	object["related"], err = json.Marshal(gl.Related)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(gl.AdditionalProperties) != 0 {
-		for linkName, link := range gl.AdditionalProperties {
-			object[linkName], err = json.Marshal(link)
-			if err != nil {
-				return nil, fmt.Errorf("error marshaling additional link %s: %w", linkName, err)
-			}
+	if gl.Related != nil {
+		object["related"], err = json.Marshal(gl.Related)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'related': %w", err)
 		}
 	}
 
-	res, err := json.Marshal(object)
-	if err != nil {
-		return nil, err
+	for linkName, link := range gl.AdditionalProperties {
+		object[linkName], err = json.Marshal(link)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling additional link %s: %w", linkName, err)
+		}
 	}
 
-	return res, nil
+	return json.Marshal(object)
 }
 
 // Get the test result outcome from polling and populate testResult.
@@ -775,12 +788,17 @@ func (h *testHandle) fetchResultStatus(ctx context.Context, testID uuid.UUID) (T
 	}
 
 	links := resp.ApplicationvndApiJSON200.Links
-	if assetLink, ok := links.AdditionalProperties["asset"]; ok {
-		assetLinkStr, err := assetLink.AsIoSnykApiCommonLinkString()
-		if err != nil {
-			h.client.logger.Debug().AnErr("failed parsing asset link string", err)
+	if assetLink, ok := links.AdditionalProperties[TestResultMetadataKeyAsset]; ok {
+		// io.snyk.api.common.LinkProperty is oneOf: [LinkString, LinkObject], so
+		// attempt the string form first and fall back to the object form's Href.
+		// This mirrors extractNextCursor's handling of the same union type.
+		if s, err := assetLink.AsIoSnykApiCommonLinkString(); err == nil {
+			result.metadata[TestResultMetadataKeyAsset] = s
+		} else if obj, err := assetLink.AsIoSnykApiCommonLinkObject(); err == nil {
+			result.metadata[TestResultMetadataKeyAsset] = obj.Href
+		} else {
+			h.client.logger.Debug().Err(err).Msg("failed parsing asset link")
 		}
-		result.metadata["asset"] = assetLinkStr
 	}
 
 	return result, nil
