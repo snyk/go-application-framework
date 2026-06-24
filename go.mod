@@ -25,7 +25,7 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.2
-	github.com/go-git/go-git/v5 v5.19.0
+	github.com/go-git/go-git/v5 v5.19.1
 	github.com/gofrs/flock v0.12.1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mattn/go-isatty v0.0.20
