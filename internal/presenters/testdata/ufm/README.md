@@ -8,7 +8,7 @@ Workflow overview: [CONTRIBUTING.md](../../../../CONTRIBUTING.md#ufm-test-fixtur
 
 | Basename | Type | SARIF | Human | HTML | Metadata (`*.testresult.json`) | Test config | Regeneration |
 |----------|------|:-----:|:-----:|:----:|--------------------------------|-------------|--------------|
-| `testresult_cli` | live | ✓ (`original_cli.sarif`) | ✓ (`cli.human.readable`) | ✓ | `project-name: snyk`, `display-target-file: package.json` | SARIF: `ignoreSuppressions=true`; human: defaults | `SCAN_CMD="test ."`, `PROJECT=<snyk/cli checkout>`, `ORG=my-org` |
+| `testresult_cli` | live | ✓ (`original_cli.sarif`) | ✓ (`cli.human.readable`) | ✓ | `project-name: snyk`, `display-target-file: package-lock.json` | SARIF: `ignoreSuppressions=true`; human: defaults | `SCAN_CMD="test ."`, `PROJECT=<snyk/cli checkout>`, `ORG=my-org` |
 | `webgoat` | live | ✓ (`webgoat.sarif.json`) | — | — | `project-name: org.owasp.webgoat:webgoat`, `display-target-file: pom.xml` | SARIF: `ignoreSuppressions=true` | `SCAN_CMD="test ."`, `PROJECT=~/workspace/WebGoat`, `ORG=my-org` |
 | `webgoat.ignore` | live | ✓ (`webgoat.ignore.sarif.json`) | ✓ (`webgoat.ignore.human.readable`) | — | same project as `webgoat`; policy includes ignores | SARIF: `ignoreSuppressions=false`; human: `includeIgnores=true`, `severityThreshold=medium` | same as `webgoat` (`PROJECT=~/workspace/WebGoat`); scan org/policy must include configured ignores |
 | `multi_project` | live | ✓ (`multi_project.sarif.json`) | ✓ (`multi_project.human.readable`) | — | 6 sub-projects (`python`, `golangproject`, `package.json`, …); legacy `tpwe` dotnet project removed from committed fixtures | SARIF: `ignoreSuppressions=true`; human: defaults | **not live-regenerated in CLI-1510** — see below |
@@ -80,7 +80,7 @@ make generate-fixture \
 cp dumps/testresult_cli.testresult.json internal/presenters/testdata/ufm/testresult_cli.json
 ```
 
-Verify: `metadata.project-name` is `snyk`, `display-target-file` is `package.json`.
+Verify: `metadata.project-name` is `snyk`, `display-target-file` is `package-lock.json`.
 
 **`webgoat` (+ `webgoat.ignore` input)**
 
