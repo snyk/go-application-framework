@@ -80,6 +80,19 @@ func resolveOrgIdToUUID(ctx context.Context, orgId string, engine workflow.Engin
 	return &parsedUUID, nil
 }
 
+// buildUserConfigParams constructs the GetUserConfigParams for the given remoteUrl.
+func buildUserConfigParams(remoteUrl string) *v20260507.GetUserConfigParams {
+	merged := true
+	params := &v20260507.GetUserConfigParams{
+		Version: "2026-05-07",
+		Merged:  &merged,
+	}
+	if remoteUrl != "" {
+		params.RemoteUrl = &remoteUrl
+	}
+	return params
+}
+
 // GetMergedConfigForFolder retrieves merged LDX-Sync user configuration for the given folder
 func GetMergedConfigForFolder(ctx context.Context, engine workflow.Engine, dir string, orgId string) LdxSyncConfigResult {
 	if dir == "" {
@@ -92,17 +105,15 @@ func GetMergedConfigForFolder(ctx context.Context, engine workflow.Engine, dir s
 		return LdxSyncConfigResult{Error: fmt.Errorf("failed to create LDX-Sync client: %w", err)}
 	}
 
-	remoteUrl, err := git.GetRemoteUrl(dir)
-	if err != nil || remoteUrl == "" {
-		return LdxSyncConfigResult{Error: fmt.Errorf("git remote detection failed: %w", err)}
+	// remoteErr is intentionally tolerated: non-Git folders, Git repos with no remote,
+	// and other VCS tools are supported per IDE-1993 and fall back to the user's default org.
+	remoteUrl, remoteErr := git.GetRemoteUrl(dir)
+	logger := engine.GetLogger().With().Str("method", "GetMergedConfigForFolder").Logger()
+	if remoteErr != nil || remoteUrl == "" {
+		logger.Debug().Err(remoteErr).Str("dir", dir).Msg("no git remote detected; resolving LDX-Sync config for non-Git folder")
 	}
 
-	merged := true
-	params := &v20260507.GetUserConfigParams{
-		Version:   "2026-05-07",
-		Merged:    &merged,
-		RemoteUrl: &remoteUrl,
-	}
+	params := buildUserConfigParams(remoteUrl)
 
 	if orgId != "" {
 		var orgUUID *uuid.UUID
