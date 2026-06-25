@@ -22,13 +22,6 @@ is_oss_test_scan() {
 	[[ "${scan_args[0]:-}" == "test" ]]
 }
 
-# OSS `snyk test` routes to legacycli unless the unified Test API FF is on; only the
-# unified path emits workflow.TestResult payloads we need. Config honors this env var
-# before the org FF gateway (see CLI-1510). Not needed for `secrets test`.
-if is_oss_test_scan; then
-  export INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST="${INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST:-true}"
-fi
-
 if [[ -z "${PROJECT}" ]]; then
   echo "error: PROJECT is required" >&2
   exit 1
@@ -40,6 +33,13 @@ fi
 if [[ -z "${NAME}" ]]; then
   echo "error: NAME is required" >&2
   exit 1
+fi
+
+# OSS `snyk test` routes to legacycli unless the unified Test API FF is on; only the
+# unified path emits workflow.TestResult payloads we need. Config honors this env var
+# before the org FF gateway (see CLI-1510). Not needed for `secrets test`.
+if is_oss_test_scan; then
+  export INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST="${INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST:-true}"
 fi
 
 mkdir -p "${DUMP_DIR}" "${OUT_DIR}"

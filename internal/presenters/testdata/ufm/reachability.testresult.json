@@ -1,0 +1,411 @@
+[
+  {
+    "testId": "11111111-2222-3333-4444-555555555555",
+    "testConfiguration": {
+      "local_policy": {
+        "fail_on_upgradable": false,
+        "severity_threshold": "low",
+        "suppress_pending_ignores": false
+      },
+      "scan_config": {
+        "sca": {}
+      },
+      "timeout": {
+        "outcome": "fail",
+        "seconds": 1200
+      }
+    },
+    "createdAt": "2025-01-01T00:00:00.000000Z",
+    "executionState": "finished",
+    "passFail": "fail",
+    "outcomeReason": "policy_breach",
+    "effectiveSummary": {
+      "count": 2,
+      "count_by": {
+        "result_type": {
+          "config": 0,
+          "dast": 0,
+          "other": 0,
+          "sast": 0,
+          "sca": 2,
+          "secrets": 0
+        },
+        "severity": {
+          "critical": 0,
+          "high": 1,
+          "low": 0,
+          "medium": 1,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "rawSummary": {
+      "count": 2,
+      "count_by": {
+        "result_type": {
+          "config": 0,
+          "dast": 0,
+          "other": 0,
+          "sast": 0,
+          "sca": 2,
+          "secrets": 0
+        },
+        "severity": {
+          "critical": 0,
+          "high": 1,
+          "low": 0,
+          "medium": 1,
+          "none": 0,
+          "other": 0
+        }
+      }
+    },
+    "findingsComplete": true,
+    "metadata": {
+      "display-target-file": "reachability-fixture.json",
+      "project-name": "reachability-fixture"
+    },
+    "findings": [
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "Open Redirect in got (synthetic reachability fixture).",
+          "evidence": [
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                }
+              ],
+              "source": "dependency_path"
+            },
+            {
+              "reachability": "no_info",
+              "source": "reachability"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "aaaaaaaa-bbbb-cccc-dddd-000000000001",
+          "locations": [
+            {
+              "package": {
+                "name": "got",
+                "version": "11.8.2"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "id": "CVE-2022-33987",
+              "source": "cve"
+            },
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<11.8.5",
+                ">=12.0.0 <12.1.0"
+              ],
+              "created_at": "2022-06-19T09:23:24.210132Z",
+              "credits": [
+                "Unknown"
+              ],
+              "cvss_base_score": 5.4,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.4,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-06T13:37:59.661917Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N"
+                },
+                {
+                  "assigner": "NVD",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:54:52.230794Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:58:23.299604Z",
+                  "severity": "medium",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+                }
+              ],
+              "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+              "disclosed_at": "2022-06-19T08:33:16Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.73924",
+                "probability": "0.00852"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "not defined",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "not defined",
+                    "type": "primary"
+                  }
+                ],
+                "sources": []
+              },
+              "id": "SNYK-JS-GOT-2932019",
+              "initially_fixed_in_versions": [
+                "11.8.5",
+                "12.1.0"
+              ],
+              "is_fixable": true,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-03-11T07:58:23.299604Z",
+              "package_name": "got",
+              "package_version": "",
+              "published_at": "2022-06-19T15:33:44.269688Z",
+              "references": [
+                {
+                  "title": "GitHub Diff",
+                  "url": "https://github.com/sindresorhus/got/compare/v12.0.3...v12.1.0"
+                },
+                {
+                  "title": "GitHub PR",
+                  "url": "https://github.com/sindresorhus/got/pull/2047"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CWE-601",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Open Redirect"
+        },
+        "links": {},
+        "relationships": {},
+        "type": "findings"
+      },
+      {
+        "attributes": {
+          "cause_of_failure": false,
+          "description": "ReDoS in marked (synthetic reachability fixture).",
+          "evidence": [
+            {
+              "reachability": "function",
+              "source": "reachability"
+            },
+            {
+              "path": [
+                {
+                  "name": "snyk",
+                  "version": "1.0.0-monorepo"
+                }
+              ],
+              "source": "dependency_path"
+            }
+          ],
+          "finding_type": "sca",
+          "key": "aaaaaaaa-bbbb-cccc-dddd-000000000002",
+          "locations": [
+            {
+              "package": {
+                "name": "marked",
+                "version": "4.0.1"
+              },
+              "type": "package"
+            }
+          ],
+          "policy_modifications": [],
+          "problems": [
+            {
+              "id": "GHSA-rrrm-qjm4-v8hf",
+              "source": "ghsa"
+            },
+            {
+              "affected_hash_ranges": [],
+              "affected_hashes": [],
+              "affected_versions": [
+                "<4.0.10"
+              ],
+              "created_at": "2022-01-16T12:11:35.068696Z",
+              "credits": [
+                "MakeNowJust"
+              ],
+              "cvss_base_score": 5.3,
+              "cvss_sources": [
+                {
+                  "assigner": "Snyk",
+                  "base_score": 5.3,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-06T13:42:56.34902Z",
+                  "severity": "medium",
+                  "type": "primary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L/E:P"
+                },
+                {
+                  "assigner": "NVD",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:54:28.135496Z",
+                  "severity": "high",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                },
+                {
+                  "assigner": "Red Hat",
+                  "base_score": 7.5,
+                  "cvss_version": "3.1",
+                  "modified_at": "2024-03-11T07:58:24.376025Z",
+                  "severity": "high",
+                  "type": "secondary",
+                  "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                }
+              ],
+              "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L/E:P",
+              "disclosed_at": "2022-01-14T21:04:41Z",
+              "ecosystem": {
+                "language": "js",
+                "package_manager": "npm",
+                "type": "build"
+              },
+              "epss_details": {
+                "model_version": "v2025.03.14",
+                "percentile": "0.64584",
+                "probability": "0.00490"
+              },
+              "exploit_details": {
+                "maturity_levels": [
+                  {
+                    "format": "CVSSv3",
+                    "level": "proof of concept",
+                    "type": "secondary"
+                  },
+                  {
+                    "format": "CVSSv4",
+                    "level": "proof of concept",
+                    "type": "primary"
+                  }
+                ],
+                "sources": [
+                  "Snyk"
+                ]
+              },
+              "id": "SNYK-JS-MARKED-2342082",
+              "initially_fixed_in_versions": [
+                "4.0.10"
+              ],
+              "is_fixable": true,
+              "is_malicious": false,
+              "is_social_media_trending": false,
+              "modified_at": "2024-03-11T07:58:24.376025Z",
+              "package_name": "marked",
+              "package_version": "",
+              "published_at": "2022-01-16T15:23:59.300943Z",
+              "references": [
+                {
+                  "title": "GitHub Commit",
+                  "url": "https://github.com/markedjs/marked/commit/c4a3ccd344b6929afa8a1d50ac54a721e57012c0"
+                },
+                {
+                  "title": "GitHub Release",
+                  "url": "https://github.com/markedjs/marked/releases/tag/v4.0.10"
+                }
+              ],
+              "severity": "medium",
+              "source": "snyk_vuln"
+            },
+            {
+              "id": "CVE-2022-21680",
+              "source": "cve"
+            },
+            {
+              "id": "CWE-1333",
+              "source": "cwe"
+            }
+          ],
+          "rating": {
+            "severity": "medium"
+          },
+          "risk": {},
+          "title": "Regular Expression Denial of Service (ReDoS)"
+        },
+        "links": {},
+        "relationships": {
+          "fix": {
+            "data": {
+              "attributes": {
+                "action": {
+                  "package_name": "marked",
+                  "format": "upgrade_package_advice",
+                  "upgrade_paths": [
+                    {
+                      "dependency_path": [
+                        {
+                          "name": "snyk",
+                          "version": "1.0.0-monorepo"
+                        },
+                        {
+                          "name": "marked",
+                          "version": "4.0.10"
+                        }
+                      ],
+                      "is_drop": false
+                    }
+                  ]
+                },
+                "outcome": "fully_resolved"
+              },
+              "id": "00000000-0000-0000-0000-000000000004",
+              "type": "fixes"
+            }
+          }
+        },
+        "type": "findings"
+      }
+    ]
+  }
+]

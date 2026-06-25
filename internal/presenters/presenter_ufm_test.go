@@ -1277,6 +1277,13 @@ func Test_UfmPresenter_HumanReadable(t *testing.T) {
 			includeIgnores:    true,
 			severityThreshold: "",
 		},
+		{
+			name:              "reachability",
+			expectedPath:      "testdata/ufm/reachability.human.readable",
+			testResultPath:    "testdata/ufm/reachability.testresult.json",
+			includeIgnores:    false,
+			severityThreshold: "",
+		},
 	}
 
 	for _, tc := range testCases {

@@ -16,6 +16,7 @@ Workflow overview: [CONTRIBUTING.md](../../../../CONTRIBUTING.md#ufm-test-fixtur
 | `secrets.0findings` | synthetic | ✓ | — | — | placeholder `testId`, zero findings | SARIF: `ignoreSuppressions=true` | hand-maintained |
 | `secrets.duplicated-sarif-rules` | synthetic | ✓ | ✓ | — | placeholder `testId`; multiple findings share SARIF rule IDs | SARIF: `ignoreSuppressions=true`; human: `includeIgnores=true` | hand-maintained |
 | `secrets.with-report` | synthetic | ✓ | ✓ | — | placeholder `testId`; includes report URL in output | SARIF: `ignoreSuppressions=true`; human: `includeIgnores=true` | hand-maintained synthetic — do not regenerate; models `--report` URL (see `REPORT=1` in `generate-fixture.sh` for live `secrets` dumps only) |
+| `reachability` | synthetic | — | ✓ (`reachability.human.readable`) | — | placeholder `testId`; SCA findings with `ReachabilityEvidence` | human: defaults | hand-maintained — unified OSS `snyk test` dumps no longer emit reachability; preserves `ufm.human.tmpl` reachability branch coverage |
 
 **Planned (CLI-1510 Phase 2):** `python_pins` — synthetic fixture for `Pin … to …` human-readable remediation (not yet added).
 
@@ -37,7 +38,7 @@ The original dump also included `tpwe` (`dotnet/obj/project.assets.json`) from a
 ### Synthetic vs live
 
 - **Live:** produced via `make generate-fixture` from a real `snyk test` (or `secrets test`) scan, then redacted with `ufm-fixture-tool`.
-- **Synthetic:** hand-edited `*.testresult.json` for deterministic edge cases (secrets variants, zero findings, duplicated SARIF rules). Placeholder `testId` `11111111-2222-3333-4444-555555555555` is intentional.
+- **Synthetic:** hand-edited `*.testresult.json` for deterministic edge cases (secrets variants, zero findings, duplicated SARIF rules, reachability). Placeholder `testId` `11111111-2222-3333-4444-555555555555` is intentional. Live OSS regen via unified Test API no longer includes reachability evidence — use `reachability.testresult.json` for golden coverage of that presenter branch.
 
 ## Regenerating fixtures
 
