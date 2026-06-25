@@ -40,6 +40,7 @@ type TestData struct {
 	ExpectedEffectiveSummary *testapi.FindingSummary
 	ExpectedRawSummary       *testapi.FindingSummary
 	ExpectedTestComponents   *[]testapi.TestComponent
+	ExpectedAssetLink        *string
 }
 
 func setupTestScenarioWithSubject(t *testing.T) TestData {
@@ -93,6 +94,7 @@ func setupTestScenarioWithSubject(t *testing.T) TestData {
 		ExpectedCreatedAt:        expectedCreatedAt,
 		ExpectedEffectiveSummary: expectedEffectiveSummary,
 		ExpectedRawSummary:       expectedRawSummary,
+		ExpectedAssetLink:        &mockAssetInventoryLink,
 	}
 }
 
@@ -141,6 +143,7 @@ func setupTestScenarioWithResources(t *testing.T) TestData {
 		ExpectedCreatedAt:        expectedCreatedAt,
 		ExpectedEffectiveSummary: expectedEffectiveSummary,
 		ExpectedRawSummary:       expectedRawSummary,
+		ExpectedAssetLink:        &mockAssetInventoryLink,
 	}
 }
 
@@ -261,6 +264,7 @@ func Test_StartTest_Success(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -365,6 +369,7 @@ func Test_StartTestWithResources_Success(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -634,6 +639,7 @@ func Test_Wait_Synchronous_Success_Pass_WithFindings(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -717,6 +723,7 @@ func Test_Wait_Synchronous_WithResources_Success_Pass_WithFindings(t *testing.T)
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -792,7 +799,8 @@ func Test_Wait_Synchronous_Success_Fail(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 }
 
@@ -862,7 +870,8 @@ func Test_Wait_Synchronous_WithResources_Success_Fail(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 }
 
@@ -958,6 +967,7 @@ func Test_Wait_Asynchronous_Success_Pass(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -1057,6 +1067,7 @@ func Test_Wait_Asynchronous_WithResources_Success_Pass(t *testing.T) {
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
 		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
 	)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
 
@@ -1565,7 +1576,8 @@ func Test_Wait_Synchronous_Finished_With_ErrorsAndWarnings(t *testing.T) {
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink)
 	require.NotNil(t, result.Get(testapi.TestResultBreachedPolicies))
 	assert.Equal(t, expectedBreachedPolicies, result.Get(testapi.TestResultBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
@@ -1656,7 +1668,9 @@ func Test_Wait_WithResources_Synchronous_Finished_With_ErrorsAndWarnings(t *test
 		testData.ExpectedTestResources,
 		testData.ExpectedEffectiveSummary,
 		testData.ExpectedRawSummary,
-		testData.ExpectedTestComponents)
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
+	)
 	require.NotNil(t, result.Get(testapi.TestResultBreachedPolicies))
 	assert.Equal(t, expectedBreachedPolicies, result.Get(testapi.TestResultBreachedPolicies))
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2), "Should have polled at least twice")
@@ -1673,7 +1687,8 @@ func assertCommonTestResultFields(
 	expectedResources *[]testapi.TestResource,
 	expectedEffectiveSummary *testapi.FindingSummary,
 	expectedRawSummary *testapi.FindingSummary,
-	expectedTestComponents *[]testapi.TestComponent) {
+	expectedTestComponents *[]testapi.TestComponent,
+	expectedAssetLink *string) {
 	t.Helper()
 	require.NotNil(t, result.GetTestID())
 	assert.Equal(t, expectedTestID, *result.GetTestID())
@@ -1726,6 +1741,15 @@ func assertCommonTestResultFields(
 		assert.Equal(t, expectedTestComponents, result.Get(testapi.TestResultComponents))
 	} else {
 		assert.Nil(t, result.Get(testapi.TestResultComponents))
+	}
+
+	if expectedAssetLink != nil {
+		require.NotNil(t, result.GetMetadataValue(testapi.TestResultMetadataKeyAsset))
+		assetLink, ok := result.GetMetadataValue(testapi.TestResultMetadataKeyAsset).(string)
+		require.True(t, ok)
+		require.Equal(t, *expectedAssetLink, assetLink)
+	} else {
+		assert.Nil(t, result.GetMetadataValue(testapi.TestResultMetadataKeyAsset))
 	}
 }
 
@@ -2353,6 +2377,183 @@ func Test_StartTestWithResources_WithScanConfig_Success(t *testing.T) {
 	require.NotNil(t, result, "Result should not be nil after successful Wait()")
 	assertTestOutcomePass(t, result, testData.TestID)
 	assert.GreaterOrEqual(t, testData.PollCounter.Load(), int32(2))
+}
+
+// Test that an asset link delivered as a LinkObject ({"href": ...}) is
+// extracted into the result metadata under TestResultMetadataKeyAsset.
+func Test_AssetLink_ObjectForm(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+	startParams := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.TestExecutionStatesPending},
+			{ShouldRedirect: true},
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+			AssetLinkForm:     AssetLinkFormObject,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	hlClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := hlClient.StartTest(ctx, startParams)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	err = handle.Wait(ctx)
+	require.NoError(t, err)
+	result := handle.Result()
+	require.NotNil(t, result)
+
+	// The same link string is expected, just delivered as a LinkObject this time.
+	assertCommonTestResultFields(
+		t,
+		result,
+		testData.TestID,
+		testData.ExpectedTestConfig,
+		testData.ExpectedTestSubject,
+		testData.ExpectedSubjectLocators,
+		testData.ExpectedTestResources,
+		testData.ExpectedEffectiveSummary,
+		testData.ExpectedRawSummary,
+		testData.ExpectedTestComponents,
+		&mockAssetInventoryLink,
+	)
+}
+
+// Test that when no asset link is present in the response, no "asset" entry
+// is written to the result metadata (i.e. consumers can distinguish "absent"
+// from "present-but-empty").
+func Test_AssetLink_Absent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	testData := setupTestScenarioWithSubject(t)
+	// Override: this scenario has no asset link.
+	testData.ExpectedAssetLink = nil
+
+	startParams := testapi.NewStartTestParamsFromSubject(testData.OrgID.String(), testData.TestSubjectCreate, nil)
+
+	handlerConfig := TestAPIHandlerConfig{
+		OrgID:       testData.OrgID,
+		JobID:       testData.JobID,
+		TestID:      testData.TestID,
+		APIVersion:  testapi.DefaultAPIVersion,
+		PollCounter: testData.PollCounter,
+		JobPollResponses: []JobPollResponseConfig{
+			{Status: testapi.TestExecutionStatesPending},
+			{ShouldRedirect: true},
+		},
+		FinalTestResult: FinalTestResultConfig{
+			Outcome:           testapi.Pass,
+			TestConfiguration: testData.ExpectedTestConfig,
+			CreatedAt:         &testData.ExpectedCreatedAt,
+			TestSubject:       testData.ExpectedTestSubject,
+			SubjectLocators:   testData.ExpectedSubjectLocators,
+			EffectiveSummary:  testData.ExpectedEffectiveSummary,
+			RawSummary:        testData.ExpectedRawSummary,
+			AssetLinkForm:     AssetLinkFormAbsent,
+		},
+	}
+	handler := newTestAPIMockHandler(t, handlerConfig)
+	server, cleanup := startMockServer(t, handler)
+	defer cleanup()
+
+	testHTTPClient := newTestHTTPClient(t, server)
+	hlClient, err := testapi.NewTestClient(server.URL,
+		testapi.WithPollInterval(1*time.Second),
+		testapi.WithCustomHTTPClient(testHTTPClient),
+	)
+	require.NoError(t, err)
+
+	handle, err := hlClient.StartTest(ctx, startParams)
+	require.NoError(t, err)
+	require.NotNil(t, handle)
+
+	err = handle.Wait(ctx)
+	require.NoError(t, err)
+	result := handle.Result()
+	require.NotNil(t, result)
+
+	assertCommonTestResultFields(
+		t,
+		result,
+		testData.TestID,
+		testData.ExpectedTestConfig,
+		testData.ExpectedTestSubject,
+		testData.ExpectedSubjectLocators,
+		testData.ExpectedTestResources,
+		testData.ExpectedEffectiveSummary,
+		testData.ExpectedRawSummary,
+		testData.ExpectedTestComponents,
+		testData.ExpectedAssetLink,
+	)
+	// Make the absence assertion explicit (assertCommonTestResultFields also checks this).
+	assert.Nil(t, result.GetMetadataValue(testapi.TestResultMetadataKeyAsset))
+}
+
+// Test_GetTest200Links_MarshalJSON_OmitsEmpty verifies that the hand-written
+// MarshalJSON honors the `omitempty` semantics of the generated struct tags
+// for Self and Related, and that additionalProperties round-trip through
+// UnmarshalJSON.
+func Test_GetTest200Links_MarshalJSON_OmitsEmpty(t *testing.T) {
+	t.Parallel()
+
+	// Empty links: Self and Related are nil and there are no additionalProperties.
+	emptyLinks := testapi.GetTest_200_Links{}
+	bytes, err := emptyLinks.MarshalJSON()
+	require.NoError(t, err)
+	assert.JSONEq(t, `{}`, string(bytes), "empty links must marshal to an empty object, not {\"self\":null,\"related\":null}")
+
+	// Links with only additionalProperties: Self/Related must still be omitted.
+	var assetLink testapi.IoSnykApiCommonLinkProperty
+	require.NoError(t, assetLink.FromIoSnykApiCommonLinkString(mockAssetInventoryLink))
+	withAsset := testapi.GetTest_200_Links{
+		AdditionalProperties: map[string]testapi.IoSnykApiCommonLinkProperty{
+			testapi.TestResultMetadataKeyAsset: assetLink,
+		},
+	}
+	bytes, err = withAsset.MarshalJSON()
+	require.NoError(t, err)
+	assert.JSONEq(t,
+		fmt.Sprintf(`{%q:%q}`, testapi.TestResultMetadataKeyAsset, mockAssetInventoryLink),
+		string(bytes),
+	)
+
+	// Round-trip: UnmarshalJSON of the produced bytes recovers the asset link.
+	var roundTrip testapi.GetTest_200_Links
+	require.NoError(t, roundTrip.UnmarshalJSON(bytes))
+	require.Nil(t, roundTrip.Self)
+	require.Nil(t, roundTrip.Related)
+	got, ok := roundTrip.AdditionalProperties[testapi.TestResultMetadataKeyAsset]
+	require.True(t, ok)
+	gotStr, err := got.AsIoSnykApiCommonLinkString()
+	require.NoError(t, err)
+	assert.Equal(t, mockAssetInventoryLink, gotStr)
 }
 
 // Test StartTest with Resources, LocalPolicy, and ScanConfig succeeds

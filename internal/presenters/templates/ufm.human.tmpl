@@ -305,6 +305,12 @@ Tested {{ int $dependencyCount }} dependencies for known issues, found {{ len $o
         {{- printf "  %s" ( . | bold ) }}
     {{- end -}}
 
+    {{- /* Render asset inventory link when available (sbom test --report) */ -}}
+    {{- with $.GetMetadataValue "asset" }}
+        {{- "\n\n" }}
+        {{- printf "View your asset(s) at: %s" ( . | bold ) }}
+    {{- end -}}
+
     {{- "\n" }}
     {{- with $.GetMetadataValue "target-directory" }}
 	    {{- $targetId := getTargetId . }}
