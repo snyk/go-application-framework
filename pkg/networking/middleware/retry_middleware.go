@@ -240,14 +240,16 @@ func ensureGetBodyExists(req *http.Request) (io.ReadCloser, func() (io.ReadClose
 		return req.Body, req.GetBody, nil, nil
 	}
 
+	// body can be rewound
 	if rs, ok := req.Body.(io.ReadSeeker); ok {
-		wrapped := &noCloseSeekBody{ReadSeeker: rs, realCloser: req.Body}
-		return wrapped, func() (io.ReadCloser, error) {
+		body := &noCloseSeekBody{ReadSeeker: rs, realCloser: req.Body}
+		getBody := func() (io.ReadCloser, error) {
 			if _, seekErr := rs.Seek(0, io.SeekStart); seekErr != nil {
 				return nil, seekErr
 			}
-			return wrapped, nil
-		}, wrapped.RealClose, nil
+			return body, nil
+		}
+		return body, getBody, body.RealClose, nil
 	}
 
 	bodyBytes, readErr := io.ReadAll(req.Body)
