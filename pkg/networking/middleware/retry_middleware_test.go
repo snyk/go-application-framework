@@ -55,7 +55,7 @@ type failRoundtripper struct {
 	t           *testing.T
 }
 
-// getBodyRetryRoundTripper returns 503 on the first trip and 200 thereafter, asserting
+// getBodyRetryRoundTripper returns 429 on the first trip and 200 thereafter, asserting
 // GetBody returns the full body on every invocation.
 type getBodyRetryRoundTripper struct {
 	t            *testing.T
@@ -441,7 +441,7 @@ func Test_shouldRetry(t *testing.T) {
 			maxAttempts:       1,
 		},
 		{
-			name:            "Retryable status code (503) with invalid Retry-After header",
+			name:            "Retryable status code (429) with invalid Retry-After header",
 			response:        newResponse(http.StatusServiceUnavailable, http.Header{"Retry-After": []string{"abc"}}),
 			expectedErrorIs: errRetryNecessary, // retryDelaySecs will be 0
 			attempts:        0,
@@ -490,7 +490,7 @@ func Test_shouldRetry(t *testing.T) {
 			maxAttempts:     1,
 		},
 		{
-			name: "Retryable status code (503) with maintenance window error",
+			name: "Retryable status code (429) with maintenance window error",
 			response: func() *http.Response {
 				resp := newResponse(http.StatusServiceUnavailable, http.Header{"Retry-After": []string{"5"}})
 				var buf bytes.Buffer
@@ -1127,7 +1127,7 @@ func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
 		headers := http.Header{}
 
 		if attemptCount == 1 {
-			// First attempt: return 503 with a body that tracks Close()
+			// First attempt: return 429 with a body that tracks Close()
 			body := io.NopCloser(bytes.NewReader([]byte("too much")))
 			trackingBody := &trackingReadCloser{
 				ReadCloser: body,
@@ -1167,7 +1167,7 @@ func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, 2, attemptCount, "Should retry once then succeed")
 
-	// The intermediate (503) response body MUST have been closed before the
+	// The intermediate (429) response body MUST have been closed before the
 	// second attempt, matching stdlib's Client.do behavior.
 	intermediateBody.mu.Lock()
 	defer intermediateBody.mu.Unlock()
@@ -1234,7 +1234,7 @@ func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
 		"Intermediate body must be closed even when context cancellation stops the retry loop")
 }
 
-// TestRetryMiddleware_503Permanent_OriginalBodyClosed verifies that when a 503
+// TestRetryMiddleware_503Permanent_OriginalBodyClosed verifies that when a 429
 // response causes a permanent stop (retries exhausted), the original transport
 // body is still closed even though getErrorList replaced response.Body with a
 // buffer.  Without this, the TCP connection leaks because the transport body
@@ -1249,7 +1249,7 @@ func TestRetryMiddleware_503Permanent_OriginalBodyClosed(t *testing.T) {
 	customRTFn := func(req *http.Request) (*http.Response, error) {
 		headers := http.Header{}
 
-		// Return a 503 (non-maintenance) with a tracking body.
+		// Return a 429 (non-maintenance) with a tracking body.
 		// Since maxAttempts=1, shouldRetry will return Permanent on the first attempt.
 		body := io.NopCloser(bytes.NewReader([]byte("service unavailable")))
 		trackingBody := &trackingReadCloser{
@@ -1270,7 +1270,7 @@ func TestRetryMiddleware_503Permanent_OriginalBodyClosed(t *testing.T) {
 
 	rt := &failRoundtripper{t: t, roundTripFn: &customRTFn}
 	config := configuration.NewWithOpts()
-	config.Set(ConfigurationKeyRequestAttempts, 1) // maxAttempts=1 → permanent stop on first 503
+	config.Set(ConfigurationKeyRequestAttempts, 1) // maxAttempts=1 → permanent stop on first 429
 	config.Set(configurationKeyRetryAfter, 1)
 
 	sut := NewRetryMiddleware(config, &logger, rt)
@@ -1280,12 +1280,12 @@ func TestRetryMiddleware_503Permanent_OriginalBodyClosed(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 
-	// The original transport body must be closed even on permanent 503, because
+	// The original transport body must be closed even on permanent 429, because
 	// getErrorList consumed it (ReadAll) and replaced response.Body with a buffer.
 	mu.Lock()
 	defer mu.Unlock()
 	assert.True(t, bodyClosed,
-		"Original response body must be closed on permanent 503 to avoid leaking connections")
+		"Original response body must be closed on permanent 429 to avoid leaking connections")
 }
 
 // TestRetryMiddleware_MultipleIntermediateResponseBodiesClosed verifies that ALL
@@ -1305,7 +1305,7 @@ func TestRetryMiddleware_MultipleIntermediateResponseBodiesClosed(t *testing.T) 
 		currentAttempt := attemptCount
 
 		if currentAttempt <= 3 {
-			// Attempts 1-3: return 503 with a body that tracks Close()
+			// Attempts 1-3: return 429 with a body that tracks Close()
 			body := io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf("error attempt %d", currentAttempt))))
 			trackingBody := &trackingReadCloser{
 				ReadCloser: body,
