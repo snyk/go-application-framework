@@ -56,6 +56,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(inputFlag, path)
+	config.Set(noLiveCheckFlag, true)
 
 	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), false)
 	require.NoError(t, err)
@@ -72,6 +73,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 
 func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	config := configuration.NewWithOpts()
+	config.Set(noLiveCheckFlag, true)
 
 	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog), false)
 	require.NoError(t, err)
@@ -80,6 +82,36 @@ func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	assert.Equal(t, ok, true)
 	rendered := string(payload)
 	assert.Contains(t, rendered, "Notable Events")
+}
+
+func Test_runDoctor_gathersAuthContext(t *testing.T) {
+	config := configuration.NewWithOpts()
+
+	ctx := setupMockContext(t, config)
+	engine := mocks.NewMockEngine(gomock.NewController(t))
+	engine.EXPECT().
+		InvokeWithConfig(gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+
+	output, err := runDoctor(ctx, strings.NewReader(sampleLog), false)
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok)
+	rendered := string(payload)
+	assert.Contains(t, rendered, "Notable Events")
+	assert.Contains(t, rendered, "Authenticated as: user@snyk.io")
+}
+
+func whoAmIData(payload string) workflow.Data {
+	// whoami (without --json) returns the username as a plain string payload.
+	return workflow.NewData(
+		workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("whoami"), "whoami"),
+		"text/plain",
+		payload,
+	)
 }
 
 func Test_runDoctor_noInputOnTerminalErrors(t *testing.T) {
