@@ -1,6 +1,6 @@
 [1mTesting  (package-lock.json) ...[0m
 
-Tested 461 dependencies for known issues, found 8 issues, 107 vulnerable paths.
+Tested 462 dependencies for known issues, found 8 issues, 107 vulnerable paths.
 
 [1mOpen Security issues: 8[0m
 
@@ -8,19 +8,19 @@ Tested 461 dependencies for known issues, found 8 issues, 107 vulnerable paths.
    Finding ID: SNYK-JS-COLORNAME-17614999
    Info: https://snyk.io/vuln/SNYK-JS-COLORNAME-17614999
    Introduced by: color-name
-   Introduced through: snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4
+   Introduced through: snyk@1.0.0-monorepo > chalk@2.4.2 > ansi-styles@3.2.1 > color-convert@1.9.3 > color-name@1.1.3
 
  ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
    Finding ID: SNYK-JS-DEBUG-13283909
    Info: https://snyk.io/vuln/SNYK-JS-DEBUG-13283909
    Introduced by: debug
-   Introduced through: snyk@1.0.0-monorepo > debug@4.3.4
+   Introduced through: snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > debug@4.4.3
 
  ✗ [33m[MEDIUM][0m [1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m
    Finding ID: SNYK-JS-DEBUG-14214893
    Info: https://snyk.io/vuln/SNYK-JS-DEBUG-14214893
    Introduced by: debug
-   Introduced through: snyk@1.0.0-monorepo > snyk-docker-plugin@9.10.0 > debug@4.4.3
+   Introduced through: snyk@1.0.0-monorepo > debug@4.3.4
 
  ✗ [33m[MEDIUM][0m [1mOpen Redirect[0m
    Finding ID: SNYK-JS-GOT-2932019
@@ -50,21 +50,21 @@ Tested 461 dependencies for known issues, found 8 issues, 107 vulnerable paths.
    Finding ID: SNYK-JS-LODASH-12239302
    Info: https://snyk.io/vuln/SNYK-JS-LODASH-12239302
    Introduced by: lodash
-   Introduced through: snyk@1.0.0-monorepo > snyk-docker-plugin@9.10.0 > snyk-poetry-lockfile-parser@1.9.1 > lodash@4.18.1
+   Introduced through: snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > snyk-poetry-lockfile-parser@1.9.1 > lodash@4.18.1
 
 [32m[1mIssues to fix by upgrading:[0m[0m
 
   Upgrade [1m@snyk/fix@1.0.0-monorepo[0m to [1m@snyk/fix@1.471.0[0m to fix
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
-    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.3.4[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.3[0m
+    introduced by snyk@1.0.0-monorepo > chalk@2.4.2 > ansi-styles@3.2.1 > color-convert@1.9.3 > color-name@1.1.3 and [36m15[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.4.3[0m
+    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > debug@4.4.3 and [36m36[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.3.4[0m
     introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m36[0m other paths
-  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.4.3[0m
-    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.10.0 > debug@4.4.3 and [36m36[0m other paths
 
   Upgrade [1mchalk@2.4.2[0m to [1mchalk@5.0.0[0m to fix
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
-    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.3[0m
+    introduced by snyk@1.0.0-monorepo > chalk@2.4.2 > ansi-styles@3.2.1 > color-convert@1.9.3 > color-name@1.1.3 and [36m15[0m other paths
 
   Upgrade [1mmarked@4.0.1[0m to [1mmarked@4.0.10[0m to fix
   ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342073] in [1mmarked@4.0.1[0m
@@ -73,25 +73,25 @@ Tested 461 dependencies for known issues, found 8 issues, 107 vulnerable paths.
     introduced by snyk@1.0.0-monorepo > marked@4.0.1
 
   Upgrade [1mora@5.4.0[0m to [1mora@6.1.0[0m to fix
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
-    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.3[0m
+    introduced by snyk@1.0.0-monorepo > chalk@2.4.2 > ansi-styles@3.2.1 > color-convert@1.9.3 > color-name@1.1.3 and [36m15[0m other paths
 
   Upgrade [1mwrap-ansi@5.1.0[0m to [1mwrap-ansi@8.0.0[0m to fix
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
-    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.3[0m
+    introduced by snyk@1.0.0-monorepo > chalk@2.4.2 > ansi-styles@3.2.1 > color-convert@1.9.3 > color-name@1.1.3 and [36m15[0m other paths
 
 [90m[1mIssues with no direct upgrade or patch:[0m[0m
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.3.4[0m
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.4.3[0m
+    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > debug@4.4.3 and [36m36[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.3.4[0m
     introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m36[0m other paths
-  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.4.3[0m
-    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.10.0 > debug@4.4.3 and [36m36[0m other paths
   ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-GOT-2932019] in [1mgot@11.8.2[0m
     introduced by snyk@1.0.0-monorepo > snyk-nodejs-lockfile-parser@2.8.1 > @yarnpkg/core@4.5.0 > got@11.8.2 and [36m2[0m other paths
   This issue was fixed in: [1m11.8.5, 12.1.0[0m
   ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ASYNC-12239908] in [1masync@3.2.6[0m
     introduced by snyk@1.0.0-monorepo > snyk-config@5.2.0 > async@3.2.6 and [36m3[0m other paths
   ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-12239302] in [1mlodash@4.18.1[0m
-    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.10.0 > snyk-poetry-lockfile-parser@1.9.1 > lodash@4.18.1 and [36m7[0m other paths
+    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > snyk-poetry-lockfile-parser@1.9.1 > lodash@4.18.1 and [36m7[0m other paths
 
 ╭─────────────────────────────────────────────────────────╮
 │ [1mTest Summary[0m                                            │

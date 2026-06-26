@@ -1,6 +1,6 @@
 [1mTesting  (pom.xml) ...[0m
 
-Tested 163 dependencies for known issues, found 55 issues, 55 vulnerable paths.
+Tested 194 dependencies for known issues, found 55 issues, 55 vulnerable paths.
 
 [1mOpen Security issues: 55[0m
 
@@ -8,91 +8,91 @@ Tested 163 dependencies for known issues, found 55 issues, 55 vulnerable paths.
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12009535
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12009535
    Introduced by: com.fasterxml.jackson.core:jackson-core
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12010004
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12010004
    Introduced by: com.fasterxml.jackson.core:jackson-databind
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > io.jsonwebtoken:jjwt@0.9.1 > com.fasterxml.jackson.core:jackson-databind@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068051
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068051
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068052
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068052
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068053
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068053
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068054
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068054
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068055
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068055
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068056
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068056
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068057
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068057
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mDivision by zero[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238610
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238610
    Introduced by: com.fasterxml.jackson.core:jackson-core
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
 
  ✗ [33m[MEDIUM][0m [1mDivision by zero[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238618
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238618
    Introduced by: com.fasterxml.jackson.core:jackson-core
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
 
  ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12246954
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12246954
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283910
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283910
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283911
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283911
    Introduced by: com.fasterxml.jackson.core:jackson-databind
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > io.jsonwebtoken:jjwt@0.9.1 > com.fasterxml.jackson.core:jackson-databind@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-18369184
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-18369184
    Introduced by: com.fasterxml.jackson.core:jackson-databind
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > io.jsonwebtoken:jjwt@0.9.1 > com.fasterxml.jackson.core:jackson-databind@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
 
  ✗ [33m[MEDIUM][0m [1mArbitrary File Deletion[0m
    Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966
@@ -182,37 +182,37 @@ Tested 163 dependencies for known issues, found 55 issues, 55 vulnerable paths.
    Finding ID: SNYK-JAVA-ORGSLF4J-12060275
    Info: https://snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12060275
    Introduced by: org.slf4j:slf4j-api
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.17
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
 
  ✗ [33m[MEDIUM][0m [1mArbitrary File Read[0m
    Finding ID: SNYK-JAVA-ORGSLF4J-12238606
    Info: https://snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238606
    Introduced by: org.slf4j:slf4j-api
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.17
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
 
  ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
    Finding ID: SNYK-JAVA-ORGSLF4J-12238607
    Info: https://snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238607
    Introduced by: org.slf4j:slf4j-api
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.17
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
 
  ✗ [31m[HIGH][0m [1mDirectory Traversal[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238609
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238609
    Introduced by: com.fasterxml.jackson.core:jackson-core
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
 
  ✗ [31m[HIGH][0m [1mBuffer Overflow[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238611
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238611
    Introduced by: com.fasterxml.jackson.core:jackson-core
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
 
  ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-13270217
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13270217
    Introduced by: com.fasterxml.jackson.core:jackson-annotations
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
 
  ✗ [31m[HIGH][0m [1mDeserialization of Untrusted Data[0m
    Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458
@@ -326,7 +326,7 @@ Tested 163 dependencies for known issues, found 55 issues, 55 vulnerable paths.
    Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238608
    Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238608
    Introduced by: com.fasterxml.jackson.core:jackson-core
-   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
 
  ✗ [35m[CRITICAL][0m [1mDeserialization of Untrusted Data[0m
    Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088331
@@ -404,56 +404,53 @@ Tested 163 dependencies for known issues, found 55 issues, 55 vulnerable paths.
   ✗ [35m[1mDeserialization of Untrusted Data[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088331] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
     introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
 
-  Upgrade [1mio.jsonwebtoken:jjwt@0.9.1[0m to [1mio.jsonwebtoken:jjwt@0.12.0[0m to fix
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12010004] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > io.jsonwebtoken:jjwt@0.9.1 > com.fasterxml.jackson.core:jackson-databind@2.21.2
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283911] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > io.jsonwebtoken:jjwt@0.9.1 > com.fasterxml.jackson.core:jackson-databind@2.21.2
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-18369184] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > io.jsonwebtoken:jjwt@0.9.1 > com.fasterxml.jackson.core:jackson-databind@2.21.2
-
-  Upgrade [1morg.flywaydb:flyway-core@11.7.2[0m to [1morg.flywaydb:flyway-core@11.8.1[0m to fix
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068051] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068052] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068053] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068054] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068055] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068056] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068057] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12246954] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283910] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13270217] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.flywaydb:flyway-core@11.7.2 > com.fasterxml.jackson.datatype:jackson-datatype-jsr310@2.21.2 > com.fasterxml.jackson.core:jackson-annotations@2.21
-
 [90m[1mIssues with no direct upgrade or patch:[0m[0m
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12009535] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12009535] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
   This issue was fixed in: [1m2.12.6[0m
-  ✗ [33m[1mDivision by zero[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238610] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
-  ✗ [33m[1mDivision by zero[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238618] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
-  ✗ [33m[1mInformation Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12060275] in [1morg.slf4j:slf4j-api@2.0.17[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.17
-  ✗ [33m[1mArbitrary File Read[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238606] in [1morg.slf4j:slf4j-api@2.0.17[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.17
-  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238607] in [1morg.slf4j:slf4j-api@2.0.17[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.17
-  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238609] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
-  ✗ [31m[1mBuffer Overflow[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238611] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
-  ✗ [35m[1mDirectory Traversal[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238608] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.2[0m
-    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.auth0:java-jwt@4.5.2 > com.fasterxml.jackson.core:jackson-core@2.21.2
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12010004] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+  This issue was fixed in: [1m2.12.6[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068051] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068052] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068053] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068054] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068055] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068056] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068057] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mDivision by zero[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238610] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [33m[1mDivision by zero[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238618] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12246954] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283910] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283911] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-18369184] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+  ✗ [33m[1mInformation Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12060275] in [1morg.slf4j:slf4j-api@2.0.18[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+  ✗ [33m[1mArbitrary File Read[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238606] in [1morg.slf4j:slf4j-api@2.0.18[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238607] in [1morg.slf4j:slf4j-api@2.0.18[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238609] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [31m[1mBuffer Overflow[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238611] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13270217] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [35m[1mDirectory Traversal[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238608] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
 
 ╭────────────────────────────────────────────────────────────╮
 │ [1mTest Summary[0m                                               │

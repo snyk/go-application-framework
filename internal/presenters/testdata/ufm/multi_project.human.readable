@@ -1,211 +1,1865 @@
-[1mTesting  (ghost/package.json) ...[0m
+[1mTesting  (snyk-goof/package-lock.json) ...[0m
 
-Tested 23 dependencies for known issues, found 19 issues, 27 vulnerable paths.
+Tested 700 dependencies for known issues, found 120 issues, 436 vulnerable paths.
 
-[1mOpen Security issues: 19[0m
+[1mOpen Security issues: 120[0m
 
- ✗ [LOW] [1mCross-site Scripting[0m
-   Finding ID: SNYK-JS-SEND-7926862
-   Info: https://snyk.io/vuln/SNYK-JS-SEND-7926862
-   Introduced by: send
-   Introduced through: package.json@ > express@4.0.0 > send@0.2.0
-   Risk Score: 57
+ ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-BRACEEXPANSION-9789073
+   Info: https://snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073
+   Introduced by: brace-expansion
+   Introduced through: goof@1.0.1 > express-fileupload@0.0.5 > fs-extra@0.22.1 > rimraf@2.6.3 > glob@7.1.3 > minimatch@3.0.4 > brace-expansion@1.1.11
 
- ✗ [LOW] [1mCross-site Scripting[0m
-   Finding ID: SNYK-JS-SERVESTATIC-7926865
-   Info: https://snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865
-   Introduced by: serve-static
-   Introduced through: package.json@ > express@4.0.0 > serve-static@1.0.1
-   Risk Score: 57
+ ✗ [LOW] [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-MINIMIST-2429795
+   Info: https://snyk.io/vuln/SNYK-JS-MINIMIST-2429795
+   Introduced by: minimist
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > spawn-wrap@1.2.3 > mkdirp@0.5.1 > minimist@0.0.8
+
+ ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:braces:20180219
+   Info: https://snyk.io/vuln/npm:braces:20180219
+   Introduced by: braces
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > micromatch@2.3.8 > braces@1.8.5
+
+ ✗ [LOW] [1mInsecure use of /tmp folder[0m
+   Finding ID: npm:cli:20160615
+   Info: https://snyk.io/vuln/npm:cli:20160615
+   Introduced by: cli
+   Introduced through: goof@1.0.1 > dustjs-linkedin@2.6.0 > cli@0.6.6
+
+ ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:debug:20170905
+   Info: https://snyk.io/vuln/npm:debug:20170905
+   Introduced by: debug
+   Introduced through: goof@1.0.1 > express@4.12.4 > finalhandler@0.3.6 > debug@2.2.0
+
+ ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:hawk:20160119
+   Info: https://snyk.io/vuln/npm:hawk:20160119
+   Introduced by: hawk
+   Introduced through: goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0 > hawk@1.1.1
 
  ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
    Finding ID: npm:mime:20170907
    Info: https://snyk.io/vuln/npm:mime:20170907
    Introduced by: mime
-   Introduced through: package.json@ > express@4.0.0 > accepts@1.0.0 > mime@1.2.11
-   Risk Score: 35
+   Introduced through: goof@1.0.1 > express@4.12.4 > serve-static@1.9.3 > send@0.12.3 > mime@1.3.4
 
- ✗ [LOW] [1mOpen Redirect[0m
-   Finding ID: npm:serve-static:20150113
-   Info: https://snyk.io/vuln/npm:serve-static:20150113
-   Introduced by: serve-static
-   Introduced through: package.json@ > express@4.0.0 > serve-static@1.0.1
-   Risk Score: 24
+ ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:moment:20170905
+   Info: https://snyk.io/vuln/npm:moment:20170905
+   Introduced by: moment
+   Introduced through: goof@1.0.1 > moment@2.15.1
+
+ ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:ms:20170412
+   Info: https://snyk.io/vuln/npm:ms:20170412
+   Introduced by: ms
+   Introduced through: goof@1.0.1 > humanize-ms@1.0.1 > ms@0.6.2
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: SNYK-JS-COOKIE-8163060
-   Info: https://snyk.io/vuln/SNYK-JS-COOKIE-8163060
+   Finding ID: SNYK-JS-COLORNAME-17614999
+   Info: https://snyk.io/vuln/SNYK-JS-COLORNAME-17614999
+   Introduced by: color-name
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > @snyk/update-notifier@2.5.1-rc2 > boxen@1.3.0 > chalk@2.4.2 > ansi-styles@3.2.1 > color-convert@1.9.3 > color-name@1.1.3
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary Code Injection[0m
+   Finding ID: SNYK-JS-COOKIE-13271683
+   Info: https://snyk.io/vuln/SNYK-JS-COOKIE-13271683
    Introduced by: cookie
-   Introduced through: package.json@ > express@4.0.0 > cookie@0.1.0
-   Risk Score: 34
+   Introduced through: goof@1.0.1 > express@4.12.4 > cookie@0.1.2
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-DEBUG-13283909
+   Info: https://snyk.io/vuln/SNYK-JS-DEBUG-13283909
+   Introduced by: debug
+   Introduced through: goof@1.0.1 > method-override@3.0.0 > debug@3.1.0
+
+ ✗ [33m[MEDIUM][0m [1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m
+   Finding ID: SNYK-JS-DEBUG-14214893
+   Info: https://snyk.io/vuln/SNYK-JS-DEBUG-14214893
+   Introduced by: debug
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-gradle-plugin@3.2.4 > debug@4.1.1
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary Code Injection[0m
+   Finding ID: SNYK-JS-EJS-1049328
+   Info: https://snyk.io/vuln/SNYK-JS-EJS-1049328
+   Introduced by: ejs
+   Introduced through: goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
+   Finding ID: SNYK-JS-EXPRESSFILEUPLOAD-2635697
+   Info: https://snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-2635697
+   Introduced by: express-fileupload
+   Introduced through: goof@1.0.1 > express-fileupload@0.0.5
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
+   Finding ID: SNYK-JS-EXPRESSFILEUPLOAD-2635946
+   Info: https://snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-2635946
+   Introduced by: express-fileupload
+   Introduced through: goof@1.0.1 > express-fileupload@0.0.5
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-GLOBPARENT-1016905
+   Info: https://snyk.io/vuln/SNYK-JS-GLOBPARENT-1016905
+   Introduced by: glob-parent
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > test-exclude@1.1.0 > micromatch@2.3.8 > parse-glob@3.0.4 > glob-base@0.3.0 > glob-parent@2.0.0
 
  ✗ [33m[MEDIUM][0m [1mOpen Redirect[0m
-   Finding ID: SNYK-JS-EXPRESS-6474509
-   Info: https://snyk.io/vuln/SNYK-JS-EXPRESS-6474509
-   Introduced by: express
-   Introduced through: package.json@ > express@4.0.0
-   Risk Score: 74
+   Finding ID: SNYK-JS-GOT-2932019
+   Info: https://snyk.io/vuln/SNYK-JS-GOT-2932019
+   Introduced by: got
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > @snyk/update-notifier@2.5.1-rc2 > latest-version@3.1.0 > package-json@4.0.1 > got@6.7.1
 
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting[0m
-   Finding ID: SNYK-JS-EXPRESS-7926867
-   Info: https://snyk.io/vuln/SNYK-JS-EXPRESS-7926867
-   Introduced by: express
-   Introduced through: package.json@ > express@4.0.0
-   Risk Score: 75
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-HANDLEBARS-1279029
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-1279029
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
 
- ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: SNYK-JS-PATHTOREGEXP-7925106
-   Info: https://snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106
-   Introduced by: path-to-regexp
-   Introduced through: package.json@ > express@4.0.0 > path-to-regexp@0.1.2
-   Risk Score: 57
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-HANDLEBARS-567742
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-567742
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
 
  ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: SNYK-JS-PATHTOREGEXP-8482416
-   Info: https://snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416
-   Introduced by: path-to-regexp
-   Introduced through: package.json@ > express@4.0.0 > path-to-regexp@0.1.2
-   Risk Score: 61
+   Finding ID: SNYK-JS-HOSTEDGITINFO-1088355
+   Info: https://snyk.io/vuln/SNYK-JS-HOSTEDGITINFO-1088355
+   Introduced by: hosted-git-info
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-resolve-deps@4.4.0 > snyk-module@1.9.1 > hosted-git-info@2.8.5
 
- ✗ [33m[MEDIUM][0m [1mNon-Constant Time String Comparison[0m
-   Finding ID: npm:cookie-signature:20160804
-   Info: https://snyk.io/vuln/npm:cookie-signature:20160804
-   Introduced by: cookie-signature
-   Introduced through: package.json@ > express@4.0.0 > cookie-signature@1.0.3
-   Risk Score: 86
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-JQUERY-174006
+   Info: https://snyk.io/vuln/SNYK-JS-JQUERY-174006
+   Introduced by: jquery
+   Introduced through: goof@1.0.1 > jquery@2.2.4
 
  ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: npm:express:20140912
-   Info: https://snyk.io/vuln/npm:express:20140912
-   Introduced by: express
-   Introduced through: package.json@ > express@4.0.0
-   Risk Score: 69
+   Finding ID: SNYK-JS-JQUERY-565129
+   Info: https://snyk.io/vuln/SNYK-JS-JQUERY-565129
+   Introduced by: jquery
+   Introduced through: goof@1.0.1 > jquery@2.2.4
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JS-JQUERY-567880
+   Info: https://snyk.io/vuln/SNYK-JS-JQUERY-567880
+   Introduced by: jquery
+   Introduced through: goof@1.0.1 > jquery@2.2.4
+
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-JSONPOINTER-1577288
+   Info: https://snyk.io/vuln/SNYK-JS-JSONPOINTER-1577288
+   Introduced by: jsonpointer
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0 > jsonpointer@4.0.1
 
  ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
-   Finding ID: npm:qs:20140806-1
-   Info: https://snyk.io/vuln/npm:qs:20140806-1
-   Introduced by: qs
-   Introduced through: package.json@ > express@4.0.0 > qs@0.6.6
-   Risk Score: 74
+   Finding ID: SNYK-JS-JSYAML-173999
+   Info: https://snyk.io/vuln/SNYK-JS-JSYAML-173999
+   Introduced by: js-yaml
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > js-yaml@3.6.1
+
+ ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-JSZIP-1251497
+   Info: https://snyk.io/vuln/SNYK-JS-JSZIP-1251497
+   Introduced by: jszip
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > jszip@3.2.2
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-LODASH-1018905
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-1018905
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > lodash@4.17.15
+
+ ✗ [33m[MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
+   Finding ID: SNYK-JS-LODASH-18314748
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-18314748
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/ruby-semver@2.0.4 > lodash@4.17.15
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-LODASH-73639
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-73639
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > lodash@4.17.4
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-174116
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-174116
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-2342073
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-2342073
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-2342082
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-2342082
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-451540
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-451540
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-584281
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-584281
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MINIMATCH-3050818
+   Info: https://snyk.io/vuln/SNYK-JS-MINIMATCH-3050818
+   Introduced by: minimatch
+   Introduced through: goof@1.0.1 > tap@5.8.0 > glob@7.1.3 > minimatch@3.0.4
+
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-MINIMIST-559764
+   Info: https://snyk.io/vuln/SNYK-JS-MINIMIST-559764
+   Introduced by: minimist
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > minimist@1.2.0
+
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-MONGOOSE-1086688
+   Info: https://snyk.io/vuln/SNYK-JS-MONGOOSE-1086688
+   Introduced by: mongoose
+   Introduced through: goof@1.0.1 > mongoose@4.2.4
+
+ ✗ [33m[MEDIUM][0m [1mInformation Exposure[0m
+   Finding ID: SNYK-JS-MONGOOSE-472486
+   Info: https://snyk.io/vuln/SNYK-JS-MONGOOSE-472486
+   Introduced by: mongoose
+   Introduced through: goof@1.0.1 > mongoose@4.2.4
+
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-MPATH-1577289
+   Info: https://snyk.io/vuln/SNYK-JS-MPATH-1577289
+   Introduced by: mpath
+   Introduced through: goof@1.0.1 > mongoose@4.2.4 > mpath@0.1.1
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JS-PARSEURL-2935944
+   Info: https://snyk.io/vuln/SNYK-JS-PARSEURL-2935944
+   Introduced by: parse-url
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
+
+ ✗ [33m[MEDIUM][0m [1mInformation Exposure[0m
+   Finding ID: SNYK-JS-PARSEURL-2935947
+   Info: https://snyk.io/vuln/SNYK-JS-PARSEURL-2935947
+   Introduced by: parse-url
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JS-PARSEURL-2942134
+   Info: https://snyk.io/vuln/SNYK-JS-PARSEURL-2942134
+   Introduced by: parse-url
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-UGLIFYJS-1727251
+   Info: https://snyk.io/vuln/SNYK-JS-UGLIFYJS-1727251
+   Introduced by: uglify-js
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5 > uglify-js@2.6.2
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary Code Injection[0m
+   Finding ID: SNYK-JS-UNDERSCORE-1080984
+   Info: https://snyk.io/vuln/SNYK-JS-UNDERSCORE-1080984
+   Introduced by: underscore
+   Introduced through: goof@1.0.1 > cfenv@1.2.2 > underscore@1.9.1
+
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-YARGSPARSER-560381
+   Info: https://snyk.io/vuln/SNYK-JS-YARGSPARSER-560381
+   Introduced by: yargs-parser
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > yargs@4.7.1 > yargs-parser@2.4.0
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:brace-expansion:20170302
+   Info: https://snyk.io/vuln/npm:brace-expansion:20170302
+   Introduced by: brace-expansion
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > spawn-wrap@1.2.3 > rimraf@2.5.2 > glob@7.0.3 > minimatch@3.0.0 > brace-expansion@1.1.4
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: npm:ejs:20161130
+   Info: https://snyk.io/vuln/npm:ejs:20161130
+   Introduced by: ejs
+   Introduced through: goof@1.0.1 > ejs@1.0.0
+
+ ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
+   Finding ID: npm:ejs:20161130-1
+   Info: https://snyk.io/vuln/npm:ejs:20161130-1
+   Introduced by: ejs
+   Introduced through: goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8
+
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: npm:hoek:20180212
+   Info: https://snyk.io/vuln/npm:hoek:20180212
+   Introduced by: hoek
+   Introduced through: goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0 > hawk@1.1.1 > boom@0.4.2 > hoek@0.9.1
+
+ ✗ [33m[MEDIUM][0m [1mTiming Attack[0m
+   Finding ID: npm:http-signature:20150122
+   Info: https://snyk.io/vuln/npm:http-signature:20150122
+   Introduced by: http-signature
+   Introduced through: goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0 > http-signature@0.10.1
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: npm:jquery:20150627
+   Info: https://snyk.io/vuln/npm:jquery:20150627
+   Introduced by: jquery
+   Introduced through: goof@1.0.1 > jquery@2.2.4
+
+ ✗ [33m[MEDIUM][0m [1mPrototype Pollution[0m
+   Finding ID: npm:lodash:20180130
+   Info: https://snyk.io/vuln/npm:lodash:20180130
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > lodash@4.17.4
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: npm:marked:20170815-1
+   Info: https://snyk.io/vuln/npm:marked:20170815-1
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:moment:20161019
+   Info: https://snyk.io/vuln/npm:moment:20161019
+   Introduced by: moment
+   Introduced through: goof@1.0.1 > moment@2.15.1
+
+ ✗ [33m[MEDIUM][0m [1mRemote Memory Exposure[0m
+   Finding ID: npm:mongoose:20160116
+   Info: https://snyk.io/vuln/npm:mongoose:20160116
+   Introduced by: mongoose
+   Introduced through: goof@1.0.1 > mongoose@4.2.4
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:ms:20151024
+   Info: https://snyk.io/vuln/npm:ms:20151024
+   Introduced by: ms
+   Introduced through: goof@1.0.1 > humanize-ms@1.0.1 > ms@0.6.2
+
+ ✗ [33m[MEDIUM][0m [1mRemote Memory Exposure[0m
+   Finding ID: npm:request:20160119
+   Info: https://snyk.io/vuln/npm:request:20160119
+   Introduced by: request
+   Introduced through: goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:semver:20150403
+   Info: https://snyk.io/vuln/npm:semver:20150403
+   Introduced by: semver
+   Introduced through: goof@1.0.1 > npmconf@0.0.24 > semver@1.1.4
 
  ✗ [33m[MEDIUM][0m [1mDirectory Traversal[0m
-   Finding ID: npm:send:20140912
-   Info: https://snyk.io/vuln/npm:send:20140912
-   Introduced by: send
-   Introduced through: package.json@ > express@4.0.0 > send@0.2.0
-   Risk Score: 39
+   Finding ID: npm:st:20140206
+   Info: https://snyk.io/vuln/npm:st:20140206
+   Introduced by: st
+   Introduced through: goof@1.0.1 > st@0.2.4
 
- ✗ [33m[MEDIUM][0m [1mRoot Path Disclosure[0m
-   Finding ID: npm:send:20151103
-   Info: https://snyk.io/vuln/npm:send:20151103
-   Introduced by: send
-   Introduced through: package.json@ > express@4.0.0 > send@0.2.0
-   Risk Score: 40
+ ✗ [33m[MEDIUM][0m [1mOpen Redirect[0m
+   Finding ID: npm:st:20171013
+   Info: https://snyk.io/vuln/npm:st:20171013
+   Introduced by: st
+   Introduced through: goof@1.0.1 > st@0.2.4
 
- ✗ [31m[HIGH][0m [1mPrototype Poisoning[0m
-   Finding ID: SNYK-JS-QS-3153490
-   Info: https://snyk.io/vuln/SNYK-JS-QS-3153490
-   Introduced by: qs
-   Introduced through: package.json@ > express@4.0.0 > qs@0.6.6
-   Risk Score: 150
+ ✗ [33m[MEDIUM][0m [1mUninitialized Memory Exposure[0m
+   Finding ID: npm:tunnel-agent:20170305
+   Info: https://snyk.io/vuln/npm:tunnel-agent:20170305
+   Introduced by: tunnel-agent
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > tunnel-agent@0.4.3
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-ACORN-559469
+   Info: https://snyk.io/vuln/SNYK-JS-ACORN-559469
+   Introduced by: acorn
+   Introduced through: goof@1.0.1 > @snyk/nodejs-runtime-agent@1.43.0 > acorn@5.7.1
+
+ ✗ [31m[HIGH][0m [1mDirectory Traversal[0m
+   Finding ID: SNYK-JS-ADMZIP-1065796
+   Info: https://snyk.io/vuln/SNYK-JS-ADMZIP-1065796
+   Introduced by: adm-zip
+   Introduced through: goof@1.0.1 > adm-zip@0.4.11
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-ANSIREGEX-1583908
+   Info: https://snyk.io/vuln/SNYK-JS-ANSIREGEX-1583908
+   Introduced by: ansi-regex
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > strip-ansi@5.2.0 > ansi-regex@4.1.0
+
+ ✗ [31m[HIGH][0m [1mDirectory Traversal[0m
+   Finding ID: SNYK-JS-ASYNC-12239908
+   Info: https://snyk.io/vuln/SNYK-JS-ASYNC-12239908
+   Introduced by: async
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0 > async@1.5.2
+
+ ✗ [31m[HIGH][0m [1mRemote Memory Exposure[0m
+   Finding ID: SNYK-JS-BL-608877
+   Info: https://snyk.io/vuln/SNYK-JS-BL-608877
+   Introduced by: bl
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-docker-plugin@1.38.0 > tar-stream@2.1.0 > bl@3.0.0
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-DICER-2311764
+   Info: https://snyk.io/vuln/SNYK-JS-DICER-2311764
+   Introduced by: dicer
+   Introduced through: goof@1.0.1 > express-fileupload@0.0.5 > connect-busboy@0.0.2 > busboy@0.3.1 > dicer@0.3.0
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-DUSTJSLINKEDIN-1089257
+   Info: https://snyk.io/vuln/SNYK-JS-DUSTJSLINKEDIN-1089257
+   Introduced by: dustjs-linkedin
+   Introduced through: goof@1.0.1 > dustjs-linkedin@2.6.0
+
+ ✗ [31m[HIGH][0m [1mRemote Code Execution (RCE)[0m
+   Finding ID: SNYK-JS-EJS-2803307
+   Info: https://snyk.io/vuln/SNYK-JS-EJS-2803307
+   Introduced by: ejs
+   Introduced through: goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-EXPRESSFILEUPLOAD-473997
+   Info: https://snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-473997
+   Introduced by: express-fileupload
+   Introduced through: goof@1.0.1 > express-fileupload@0.0.5
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-EXPRESSFILEUPLOAD-595969
+   Info: https://snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-595969
+   Introduced by: express-fileupload
+   Introduced through: goof@1.0.1 > express-fileupload@0.0.5
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-FILETYPE-2958042
+   Info: https://snyk.io/vuln/SNYK-JS-FILETYPE-2958042
+   Introduced by: file-type
+   Introduced through: goof@1.0.1 > file-type@8.1.0
+
+ ✗ [31m[HIGH][0m [1mRemote Code Execution (RCE)[0m
+   Finding ID: SNYK-JS-HANDLEBARS-1056767
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-1056767
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-HANDLEBARS-173692
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-173692
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-HANDLEBARS-174183
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-174183
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-HANDLEBARS-469063
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-469063
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-HANDLEBARS-480388
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-480388
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JS-HANDLEBARS-534478
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-534478
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-HAWK-2808852
+   Info: https://snyk.io/vuln/SNYK-JS-HAWK-2808852
+   Introduced by: hawk
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > hawk@3.1.3
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-INI-1048974
+   Info: https://snyk.io/vuln/SNYK-JS-INI-1048974
+   Introduced by: ini
+   Introduced through: goof@1.0.1 > npmconf@0.0.24 > ini@1.1.0
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-ISMYJSONVALID-597165
+   Info: https://snyk.io/vuln/SNYK-JS-ISMYJSONVALID-597165
+   Introduced by: is-my-json-valid
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JS-ISMYJSONVALID-597167
+   Info: https://snyk.io/vuln/SNYK-JS-ISMYJSONVALID-597167
+   Introduced by: is-my-json-valid
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-JSONSCHEMA-1920922
+   Info: https://snyk.io/vuln/SNYK-JS-JSONSCHEMA-1920922
+   Introduced by: json-schema
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > http-signature@1.1.1 > jsprim@1.4.1 > json-schema@0.2.3
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JS-JSYAML-174129
+   Info: https://snyk.io/vuln/SNYK-JS-JSYAML-174129
+   Introduced by: js-yaml
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > js-yaml@3.6.1
+
+ ✗ [31m[HIGH][0m [1mDLL Injection[0m
+   Finding ID: SNYK-JS-KERBEROS-568900
+   Info: https://snyk.io/vuln/SNYK-JS-KERBEROS-568900
+   Introduced by: kerberos
+   Introduced through: goof@1.0.1 > mongoose@4.2.4 > mongodb@2.0.46 > mongodb-core@1.2.19 > kerberos@0.0.24
+
+ ✗ [31m[HIGH][0m [1mCommand Injection[0m
+   Finding ID: SNYK-JS-LODASH-1040724
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-1040724
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/ruby-semver@2.0.4 > lodash@4.17.15
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-LODASH-12239302
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-12239302
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > lodash@4.17.4
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-LODASH-450202
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-450202
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > @snyk/dep-graph@1.13.1 > lodash@4.17.4
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-LODASH-567746
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-567746
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/dep-graph@1.13.1 > lodash@4.17.4
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-LODASH-608086
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-608086
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > lodash@4.17.15
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-LODASH-73638
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-73638
+   Introduced by: lodash
+   Introduced through: goof@1.0.1 > lodash@4.17.4
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-LODASHSET-1320032
+   Info: https://snyk.io/vuln/SNYK-JS-LODASHSET-1320032
+   Introduced by: lodash.set
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-resolve-deps@4.4.0 > lodash.set@4.3.2
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MINIMATCH-1019388
+   Info: https://snyk.io/vuln/SNYK-JS-MINIMATCH-1019388
+   Introduced by: minimatch
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > fileset@0.2.1 > glob@5.0.15 > minimatch@2.0.10
+
+ ✗ [31m[HIGH][0m [1mDirectory Traversal[0m
+   Finding ID: SNYK-JS-MOMENT-2440688
+   Info: https://snyk.io/vuln/SNYK-JS-MOMENT-2440688
+   Introduced by: moment
+   Introduced through: goof@1.0.1 > moment@2.15.1
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-MONGODB-473855
+   Info: https://snyk.io/vuln/SNYK-JS-MONGODB-473855
+   Introduced by: mongodb
+   Introduced through: goof@1.0.1 > mongoose@4.2.4 > mongodb@2.0.46
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-MONGOOSE-2961688
+   Info: https://snyk.io/vuln/SNYK-JS-MONGOOSE-2961688
+   Introduced by: mongoose
+   Introduced through: goof@1.0.1 > mongoose@4.2.4
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-MQUERY-1050858
+   Info: https://snyk.io/vuln/SNYK-JS-MQUERY-1050858
+   Introduced by: mquery
+   Introduced through: goof@1.0.1 > mongoose@4.2.4 > mquery@1.6.3
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-MQUERY-1089718
+   Info: https://snyk.io/vuln/SNYK-JS-MQUERY-1089718
+   Introduced by: mquery
+   Introduced through: goof@1.0.1 > mongoose@4.2.4 > mquery@1.6.3
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-NCONF-2395478
+   Info: https://snyk.io/vuln/SNYK-JS-NCONF-2395478
+   Introduced by: nconf
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0
+
+ ✗ [31m[HIGH][0m [1mServer-side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JS-NETMASK-1089716
+   Info: https://snyk.io/vuln/SNYK-JS-NETMASK-1089716
+   Introduced by: netmask
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > proxy-agent@3.1.1 > pac-proxy-agent@3.0.1 > pac-resolver@3.0.0 > netmask@1.0.6
+
+ ✗ [31m[HIGH][0m [1mServer-side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JS-NETMASK-11879326
+   Info: https://snyk.io/vuln/SNYK-JS-NETMASK-11879326
+   Introduced by: netmask
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > proxy-agent@3.1.1 > pac-proxy-agent@3.0.1 > pac-resolver@3.0.0 > netmask@1.0.6
+
+ ✗ [31m[HIGH][0m [1mRemote Code Execution (RCE)[0m
+   Finding ID: SNYK-JS-PACRESOLVER-1564857
+   Info: https://snyk.io/vuln/SNYK-JS-PACRESOLVER-1564857
+   Introduced by: pac-resolver
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > proxy-agent@3.1.1 > pac-proxy-agent@3.0.1 > pac-resolver@3.0.0
+
+ ✗ [31m[HIGH][0m [1mAuthorization Bypass Through User-Controlled Key[0m
+   Finding ID: SNYK-JS-PARSEPATH-2936439
+   Info: https://snyk.io/vuln/SNYK-JS-PARSEPATH-2936439
+   Introduced by: parse-path
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1 > parse-path@4.0.1
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-PATHTOREGEXP-13271681
+   Info: https://snyk.io/vuln/SNYK-JS-PATHTOREGEXP-13271681
+   Introduced by: path-to-regexp
+   Introduced through: goof@1.0.1 > express@4.12.4 > path-to-regexp@0.1.3
+
+ ✗ [31m[HIGH][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-Y18N-1021887
+   Info: https://snyk.io/vuln/SNYK-JS-Y18N-1021887
+   Introduced by: y18n
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0 > yargs@3.32.0 > y18n@3.2.1
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: npm:ejs:20161128
+   Info: https://snyk.io/vuln/npm:ejs:20161128
+   Introduced by: ejs
+   Introduced through: goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8
 
  ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
    Finding ID: npm:fresh:20170908
    Info: https://snyk.io/vuln/npm:fresh:20170908
    Introduced by: fresh
-   Introduced through: package.json@ > express@4.0.0 > fresh@0.2.2
-   Risk Score: 101
+   Introduced through: goof@1.0.1 > express@4.12.4 > serve-static@1.9.3 > send@0.12.3 > fresh@0.2.4
+
+ ✗ [31m[HIGH][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: npm:marked:20150520
+   Info: https://snyk.io/vuln/npm:marked:20150520
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [31m[HIGH][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: npm:marked:20170112
+   Info: https://snyk.io/vuln/npm:marked:20170112
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [31m[HIGH][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: npm:marked:20170815
+   Info: https://snyk.io/vuln/npm:marked:20170815
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:marked:20170907
+   Info: https://snyk.io/vuln/npm:marked:20170907
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:marked:20180225
+   Info: https://snyk.io/vuln/npm:marked:20180225
+   Introduced by: marked
+   Introduced through: goof@1.0.1 > marked@0.3.5
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: npm:minimatch:20160620
+   Info: https://snyk.io/vuln/npm:minimatch:20160620
+   Introduced by: minimatch
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > fileset@0.2.1 > glob@5.0.15 > minimatch@2.0.10
 
  ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
    Finding ID: npm:negotiator:20160616
    Info: https://snyk.io/vuln/npm:negotiator:20160616
    Introduced by: negotiator
-   Introduced through: package.json@ > express@4.0.0 > accepts@1.0.0 > negotiator@0.3.0
-   Risk Score: 101
+   Introduced through: goof@1.0.1 > express@4.12.4 > accepts@1.2.13 > negotiator@0.5.3
 
- ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
-   Finding ID: npm:qs:20140806
-   Info: https://snyk.io/vuln/npm:qs:20140806
-   Introduced by: qs
-   Introduced through: package.json@ > express@4.0.0 > qs@0.6.6
-   Risk Score: 105
+ ✗ [31m[HIGH][0m [1mUninitialized Memory Exposure[0m
+   Finding ID: npm:npmconf:20180512
+   Info: https://snyk.io/vuln/npm:npmconf:20180512
+   Introduced by: npmconf
+   Introduced through: goof@1.0.1 > npmconf@0.0.24
 
  ✗ [31m[HIGH][0m [1mPrototype Override Protection Bypass[0m
    Finding ID: npm:qs:20170213
    Info: https://snyk.io/vuln/npm:qs:20170213
    Introduced by: qs
-   Introduced through: package.json@ > express@4.0.0 > qs@0.6.6
-   Risk Score: 101
+   Introduced through: goof@1.0.1 > body-parser@1.9.0 > qs@2.2.4
+
+ ✗ [35m[CRITICAL][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-HANDLEBARS-534988
+   Info: https://snyk.io/vuln/SNYK-JS-HANDLEBARS-534988
+   Introduced by: handlebars
+   Introduced through: goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+
+ ✗ [35m[CRITICAL][0m [1mPrototype Pollution[0m
+   Finding ID: SNYK-JS-JSONPOINTER-598804
+   Info: https://snyk.io/vuln/SNYK-JS-JSONPOINTER-598804
+   Introduced by: jsonpointer
+   Introduced through: goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0 > jsonpointer@4.0.1
+
+ ✗ [35m[CRITICAL][0m [1mServer-side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JS-PARSEURL-2936249
+   Info: https://snyk.io/vuln/SNYK-JS-PARSEURL-2936249
+   Introduced by: parse-url
+   Introduced through: goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
 
 [32m[1mIssues to fix by upgrading:[0m[0m
 
-  Upgrade [1mexpress@4.0.0[0m to [1mexpress@4.21.2[0m to fix
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SEND-7926862] in [1msend@0.2.0[0m
-    introduced by package.json@ > express@4.0.0 > send@0.2.0 and [36m1[0m other path
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865] in [1mserve-static@1.0.1[0m
-    introduced by package.json@ > express@4.0.0 > serve-static@1.0.1
-  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime@1.2.11[0m
-    introduced by package.json@ > express@4.0.0 > accepts@1.0.0 > mime@1.2.11 and [36m3[0m other paths
-  ✗ [1mOpen Redirect[0m [LOW] [https://security.snyk.io/vuln/npm:serve-static:20150113] in [1mserve-static@1.0.1[0m
-    introduced by package.json@ > express@4.0.0 > serve-static@1.0.1
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-8163060] in [1mcookie@0.1.0[0m
-    introduced by package.json@ > express@4.0.0 > cookie@0.1.0
-  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-6474509] in [1mexpress@4.0.0[0m
-    introduced by package.json@ > express@4.0.0
-  ✗ [33m[1mCross-site Scripting[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-7926867] in [1mexpress@4.0.0[0m
-    introduced by package.json@ > express@4.0.0
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106] in [1mpath-to-regexp@0.1.2[0m
-    introduced by package.json@ > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416] in [1mpath-to-regexp@0.1.2[0m
-    introduced by package.json@ > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mNon-Constant Time String Comparison[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:cookie-signature:20160804] in [1mcookie-signature@1.0.3[0m
-    introduced by package.json@ > express@4.0.0 > cookie-signature@1.0.3
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:express:20140912] in [1mexpress@4.0.0[0m
-    introduced by package.json@ > express@4.0.0
-  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:qs:20140806-1] in [1mqs@0.6.6[0m
-    introduced by package.json@ > express@4.0.0 > qs@0.6.6
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20140912] in [1msend@0.2.0[0m
-    introduced by package.json@ > express@4.0.0 > send@0.2.0 and [36m1[0m other path
-  ✗ [33m[1mRoot Path Disclosure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20151103] in [1msend@0.2.0[0m
-    introduced by package.json@ > express@4.0.0 > send@0.2.0 and [36m1[0m other path
-  ✗ [31m[1mPrototype Poisoning[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-QS-3153490] in [1mqs@0.6.6[0m
-    introduced by package.json@ > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:fresh:20170908] in [1mfresh@0.2.2[0m
-    introduced by package.json@ > express@4.0.0 > fresh@0.2.2 and [36m2[0m other paths
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator@0.3.0[0m
-    introduced by package.json@ > express@4.0.0 > accepts@1.0.0 > negotiator@0.3.0
-  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20140806] in [1mqs@0.6.6[0m
-    introduced by package.json@ > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs@0.6.6[0m
-    introduced by package.json@ > express@4.0.0 > qs@0.6.6
+  Upgrade [1m@snyk/nodejs-runtime-agent@1.43.0[0m to [1m@snyk/nodejs-runtime-agent@1.47.3[0m to fix
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ACORN-559469] in [1macorn@5.7.1[0m
+    introduced by goof@1.0.1 > @snyk/nodejs-runtime-agent@1.43.0 > acorn@5.7.1
 
-╭───────────────────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                              │
-│                                                           │
-│   Organization:      My Org                               │
-│   Test type:         Software Composition Analysis        │
-│   Project path:      multi-project                        │
-│   Target file:       ghost/package.json                   │
-│                                                           │
-│   Total security issues: 19                               │
-│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]      │
-│   Open   : [1m19[0m [[35m 0 CRITICAL [0m[31m 5 HIGH [0m[33m 10 MEDIUM [0m 4 LOW ]    │
-╰───────────────────────────────────────────────────────────╯
+  Upgrade [1madm-zip@0.4.11[0m to [1madm-zip@0.5.2[0m to fix
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ADMZIP-1065796] in [1madm-zip@0.4.11[0m
+    introduced by goof@1.0.1 > adm-zip@0.4.11
+
+  Upgrade [1mbody-parser@1.9.0[0m to [1mbody-parser@1.17.1[0m to fix
+  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs@2.2.4[0m
+    introduced by goof@1.0.1 > body-parser@1.9.0 > qs@2.2.4 and [36m2[0m other paths
+
+  Upgrade [1mcfenv@1.2.2[0m to [1mcfenv@1.2.4[0m to fix
+  ✗ [33m[1mArbitrary Code Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-UNDERSCORE-1080984] in [1munderscore@1.9.1[0m
+    introduced by goof@1.0.1 > cfenv@1.2.2 > underscore@1.9.1
+
+  Upgrade [1mdustjs-linkedin@2.6.0[0m to [1mdustjs-linkedin@3.0.0[0m to fix
+  ✗ [1mInsecure use of /tmp folder[0m [LOW] [https://security.snyk.io/vuln/npm:cli:20160615] in [1mcli@0.6.6[0m
+    introduced by goof@1.0.1 > dustjs-linkedin@2.6.0 > cli@0.6.6
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-DUSTJSLINKEDIN-1089257] in [1mdustjs-linkedin@2.6.0[0m
+    introduced by goof@1.0.1 > dustjs-linkedin@2.6.0
+
+  Upgrade [1mejs@1.0.0[0m to [1mejs@3.1.7[0m to fix
+  ✗ [33m[1mArbitrary Code Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EJS-1049328] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:ejs:20161130] in [1mejs@1.0.0[0m
+    introduced by goof@1.0.1 > ejs@1.0.0 and [36m1[0m other path
+  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:ejs:20161130-1] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-EJS-2803307] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:ejs:20161128] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+
+  Upgrade [1merrorhandler@1.2.0[0m to [1merrorhandler@1.4.3[0m to fix
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator@0.5.3[0m
+    introduced by goof@1.0.1 > express@4.12.4 > accepts@1.2.13 > negotiator@0.5.3 and [36m2[0m other paths
+
+  Upgrade [1mexpress@4.12.4[0m to [1mexpress@5.0.0[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:debug:20170905] in [1mdebug@2.2.0[0m
+    introduced by goof@1.0.1 > express@4.12.4 > finalhandler@0.3.6 > debug@2.2.0 and [36m4[0m other paths
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime@1.3.4[0m
+    introduced by goof@1.0.1 > express@4.12.4 > serve-static@1.9.3 > send@0.12.3 > mime@1.3.4 and [36m3[0m other paths
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:ms:20170412] in [1mms@0.6.2[0m
+    introduced by goof@1.0.1 > humanize-ms@1.0.1 > ms@0.6.2 and [36m9[0m other paths
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-13271681] in [1mpath-to-regexp@0.1.3[0m
+    introduced by goof@1.0.1 > express@4.12.4 > path-to-regexp@0.1.3
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:fresh:20170908] in [1mfresh@0.2.4[0m
+    introduced by goof@1.0.1 > express@4.12.4 > serve-static@1.9.3 > send@0.12.3 > fresh@0.2.4 and [36m2[0m other paths
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator@0.5.3[0m
+    introduced by goof@1.0.1 > express@4.12.4 > accepts@1.2.13 > negotiator@0.5.3 and [36m2[0m other paths
+  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs@2.2.4[0m
+    introduced by goof@1.0.1 > body-parser@1.9.0 > qs@2.2.4 and [36m2[0m other paths
+
+  Upgrade [1mexpress-fileupload@0.0.5[0m to [1mexpress-fileupload@1.1.10[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073] in [1mbrace-expansion@1.1.11[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5 > fs-extra@0.22.1 > rimraf@2.6.3 > glob@7.1.3 > minimatch@3.0.4 > brace-expansion@1.1.11 and [36m10[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMATCH-3050818] in [1mminimatch@3.0.4[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > glob@7.1.3 > minimatch@3.0.4 and [36m11[0m other paths
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-DICER-2311764] in [1mdicer@0.3.0[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5 > connect-busboy@0.0.2 > busboy@0.3.1 > dicer@0.3.0
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-473997] in [1mexpress-fileupload@0.0.5[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-595969] in [1mexpress-fileupload@0.0.5[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5
+
+  Upgrade [1mfile-type@8.1.0[0m to [1mfile-type@16.5.4[0m to fix
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-FILETYPE-2958042] in [1mfile-type@8.1.0[0m
+    introduced by goof@1.0.1 > file-type@8.1.0
+
+  Upgrade [1mhumanize-ms@1.0.1[0m to [1mhumanize-ms@1.2.1[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:ms:20170412] in [1mms@0.6.2[0m
+    introduced by goof@1.0.1 > humanize-ms@1.0.1 > ms@0.6.2 and [36m9[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:ms:20151024] in [1mms@0.6.2[0m
+    introduced by goof@1.0.1 > humanize-ms@1.0.1 > ms@0.6.2
+
+  Upgrade [1mjquery@2.2.4[0m to [1mjquery@3.5.0[0m to fix
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-JQUERY-174006] in [1mjquery@2.2.4[0m
+    introduced by goof@1.0.1 > jquery@2.2.4
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-JQUERY-565129] in [1mjquery@2.2.4[0m
+    introduced by goof@1.0.1 > jquery@2.2.4
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-JQUERY-567880] in [1mjquery@2.2.4[0m
+    introduced by goof@1.0.1 > jquery@2.2.4
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:jquery:20150627] in [1mjquery@2.2.4[0m
+    introduced by goof@1.0.1 > jquery@2.2.4
+
+  Upgrade [1mlodash@4.17.4[0m to [1mlodash@4.17.21[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-1018905] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-18314748] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/ruby-semver@2.0.4 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-73639] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > lodash@4.17.4 and [36m3[0m other paths
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:lodash:20180130] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > lodash@4.17.4 and [36m3[0m other paths
+  ✗ [31m[1mCommand Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-1040724] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/ruby-semver@2.0.4 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-450202] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/dep-graph@1.13.1 > lodash@4.17.4 and [36m3[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-567746] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/dep-graph@1.13.1 > lodash@4.17.4 and [36m17[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-608086] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-73638] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > lodash@4.17.4 and [36m3[0m other paths
+
+  Upgrade [1mmarked@0.3.5[0m to [1mmarked@4.0.10[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-174116] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342073] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342082] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-451540] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-584281] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:marked:20170815-1] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [31m[1mCross-site Scripting (XSS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:marked:20150520] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [31m[1mCross-site Scripting (XSS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:marked:20170112] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [31m[1mCross-site Scripting (XSS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:marked:20170815] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:marked:20170907] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:marked:20180225] in [1mmarked@0.3.5[0m
+    introduced by goof@1.0.1 > marked@0.3.5
+
+  Upgrade [1mmoment@2.15.1[0m to [1mmoment@2.29.2[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:moment:20170905] in [1mmoment@2.15.1[0m
+    introduced by goof@1.0.1 > moment@2.15.1
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:moment:20161019] in [1mmoment@2.15.1[0m
+    introduced by goof@1.0.1 > moment@2.15.1
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-MOMENT-2440688] in [1mmoment@2.15.1[0m
+    introduced by goof@1.0.1 > moment@2.15.1
+
+  Upgrade [1mmongoose@4.2.4[0m to [1mmongoose@9.0.0[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:debug:20170905] in [1mdebug@2.2.0[0m
+    introduced by goof@1.0.1 > express@4.12.4 > finalhandler@0.3.6 > debug@2.2.0 and [36m4[0m other paths
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:ms:20170412] in [1mms@0.6.2[0m
+    introduced by goof@1.0.1 > humanize-ms@1.0.1 > ms@0.6.2 and [36m9[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@3.1.0[0m
+    introduced by goof@1.0.1 > method-override@3.0.0 > debug@3.1.0 and [36m37[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.1.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-gradle-plugin@3.2.4 > debug@4.1.1 and [36m37[0m other paths
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MONGOOSE-1086688] in [1mmongoose@4.2.4[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4
+  ✗ [33m[1mInformation Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MONGOOSE-472486] in [1mmongoose@4.2.4[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MPATH-1577289] in [1mmpath@0.1.1[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4 > mpath@0.1.1
+  ✗ [33m[1mRemote Memory Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:mongoose:20160116] in [1mmongoose@4.2.4[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ASYNC-12239908] in [1masync@1.5.2[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0 > async@1.5.2 and [36m5[0m other paths
+  ✗ [31m[1mDLL Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-KERBEROS-568900] in [1mkerberos@0.0.24[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4 > mongodb@2.0.46 > mongodb-core@1.2.19 > kerberos@0.0.24
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-MONGODB-473855] in [1mmongodb@2.0.46[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4 > mongodb@2.0.46
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-MONGOOSE-2961688] in [1mmongoose@4.2.4[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-MQUERY-1050858] in [1mmquery@1.6.3[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4 > mquery@1.6.3
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-MQUERY-1089718] in [1mmquery@1.6.3[0m
+    introduced by goof@1.0.1 > mongoose@4.2.4 > mquery@1.6.3
+
+  Upgrade [1mms@0.7.3[0m to [1mms@2.0.0[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:ms:20170412] in [1mms@0.6.2[0m
+    introduced by goof@1.0.1 > humanize-ms@1.0.1 > ms@0.6.2 and [36m9[0m other paths
+
+  Upgrade [1mnpmconf@0.0.24[0m to [1mnpmconf@2.1.3[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:semver:20150403] in [1msemver@1.1.4[0m
+    introduced by goof@1.0.1 > npmconf@0.0.24 > semver@1.1.4
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-INI-1048974] in [1mini@1.1.0[0m
+    introduced by goof@1.0.1 > npmconf@0.0.24 > ini@1.1.0 and [36m5[0m other paths
+  ✗ [31m[1mUninitialized Memory Exposure[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:npmconf:20180512] in [1mnpmconf@0.0.24[0m
+    introduced by goof@1.0.1 > npmconf@0.0.24
+
+  Upgrade [1msnyk@1.290.2[0m to [1msnyk@1.996.0[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073] in [1mbrace-expansion@1.1.11[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5 > fs-extra@0.22.1 > rimraf@2.6.3 > glob@7.1.3 > minimatch@3.0.4 > brace-expansion@1.1.11 and [36m10[0m other paths
+  ✗ [1mPrototype Pollution[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-MINIMIST-2429795] in [1mminimist@0.0.8[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > spawn-wrap@1.2.3 > mkdirp@0.5.1 > minimist@0.0.8 and [36m8[0m other paths
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.3[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/update-notifier@2.5.1-rc2 > boxen@1.3.0 > chalk@2.4.2 > ansi-styles@3.2.1 > color-convert@1.9.3 > color-name@1.1.3 and [36m5[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@3.1.0[0m
+    introduced by goof@1.0.1 > method-override@3.0.0 > debug@3.1.0 and [36m37[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.1.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-gradle-plugin@3.2.4 > debug@4.1.1 and [36m37[0m other paths
+  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-GOT-2932019] in [1mgot@6.7.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/update-notifier@2.5.1-rc2 > latest-version@3.1.0 > package-json@4.0.1 > got@6.7.1
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-HOSTEDGITINFO-1088355] in [1mhosted-git-info@2.8.5[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-resolve-deps@4.4.0 > snyk-module@1.9.1 > hosted-git-info@2.8.5 and [36m4[0m other paths
+  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-JSZIP-1251497] in [1mjszip@3.2.2[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > jszip@3.2.2
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-1018905] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-18314748] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/ruby-semver@2.0.4 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-73639] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > lodash@4.17.4 and [36m3[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMATCH-3050818] in [1mminimatch@3.0.4[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > glob@7.1.3 > minimatch@3.0.4 and [36m11[0m other paths
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMIST-559764] in [1mminimist@1.2.0[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > minimist@1.2.0 and [36m8[0m other paths
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PARSEURL-2935944] in [1mparse-url@5.0.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
+  ✗ [33m[1mInformation Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PARSEURL-2935947] in [1mparse-url@5.0.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PARSEURL-2942134] in [1mparse-url@5.0.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:lodash:20180130] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > lodash@4.17.4 and [36m3[0m other paths
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ANSIREGEX-1583908] in [1mansi-regex@4.1.0[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > strip-ansi@5.2.0 > ansi-regex@4.1.0 and [36m15[0m other paths
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ASYNC-12239908] in [1masync@1.5.2[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0 > async@1.5.2 and [36m5[0m other paths
+  ✗ [31m[1mRemote Memory Exposure[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-BL-608877] in [1mbl@3.0.0[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-docker-plugin@1.38.0 > tar-stream@2.1.0 > bl@3.0.0 and [36m1[0m other path
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-INI-1048974] in [1mini@1.1.0[0m
+    introduced by goof@1.0.1 > npmconf@0.0.24 > ini@1.1.0 and [36m5[0m other paths
+  ✗ [31m[1mCommand Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-1040724] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/ruby-semver@2.0.4 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-12239302] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > lodash@4.17.4 and [36m17[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-450202] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/dep-graph@1.13.1 > lodash@4.17.4 and [36m3[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-567746] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > @snyk/snyk-cocoapods-plugin@2.0.1 > @snyk/cocoapods-lockfile-parser@3.0.0 > @snyk/dep-graph@1.13.1 > lodash@4.17.4 and [36m17[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-608086] in [1mlodash@4.17.15[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-nuget-plugin@1.16.0 > lodash@4.17.15 and [36m17[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-73638] in [1mlodash@4.17.4[0m
+    introduced by goof@1.0.1 > lodash@4.17.4 and [36m3[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASHSET-1320032] in [1mlodash.set@4.3.2[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-resolve-deps@4.4.0 > lodash.set@4.3.2
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-NCONF-2395478] in [1mnconf@0.10.0[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0
+  ✗ [31m[1mServer-side Request Forgery (SSRF)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-NETMASK-1089716] in [1mnetmask@1.0.6[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > proxy-agent@3.1.1 > pac-proxy-agent@3.0.1 > pac-resolver@3.0.0 > netmask@1.0.6
+  ✗ [31m[1mServer-side Request Forgery (SSRF)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-NETMASK-11879326] in [1mnetmask@1.0.6[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > proxy-agent@3.1.1 > pac-proxy-agent@3.0.1 > pac-resolver@3.0.0 > netmask@1.0.6
+  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-PACRESOLVER-1564857] in [1mpac-resolver@3.0.0[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > proxy-agent@3.1.1 > pac-proxy-agent@3.0.1 > pac-resolver@3.0.0
+  ✗ [31m[1mAuthorization Bypass Through User-Controlled Key[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-PARSEPATH-2936439] in [1mparse-path@4.0.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1 > parse-path@4.0.1
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-Y18N-1021887] in [1my18n@3.2.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0 > yargs@3.32.0 > y18n@3.2.1 and [36m1[0m other path
+  ✗ [35m[1mServer-side Request Forgery (SSRF)[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JS-PARSEURL-2936249] in [1mparse-url@5.0.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > git-url-parse@11.1.2 > git-up@4.0.1 > parse-url@5.0.1
+
+  Upgrade [1mst@0.2.4[0m to [1mst@1.2.2[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime@1.3.4[0m
+    introduced by goof@1.0.1 > express@4.12.4 > serve-static@1.9.3 > send@0.12.3 > mime@1.3.4 and [36m3[0m other paths
+  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:st:20140206] in [1mst@0.2.4[0m
+    introduced by goof@1.0.1 > st@0.2.4
+  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:st:20171013] in [1mst@0.2.4[0m
+    introduced by goof@1.0.1 > st@0.2.4
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator@0.5.3[0m
+    introduced by goof@1.0.1 > express@4.12.4 > accepts@1.2.13 > negotiator@0.5.3 and [36m2[0m other paths
+
+  Upgrade [1mtap@5.8.0[0m to [1mtap@18.0.0[0m to fix
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-BRACEEXPANSION-9789073] in [1mbrace-expansion@1.1.11[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5 > fs-extra@0.22.1 > rimraf@2.6.3 > glob@7.1.3 > minimatch@3.0.4 > brace-expansion@1.1.11 and [36m10[0m other paths
+  ✗ [1mPrototype Pollution[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-MINIMIST-2429795] in [1mminimist@0.0.8[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > spawn-wrap@1.2.3 > mkdirp@0.5.1 > minimist@0.0.8 and [36m8[0m other paths
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:braces:20180219] in [1mbraces@1.8.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > micromatch@2.3.8 > braces@1.8.5 and [36m1[0m other path
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:hawk:20160119] in [1mhawk@1.1.1[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0 > hawk@1.1.1
+  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime@1.3.4[0m
+    introduced by goof@1.0.1 > express@4.12.4 > serve-static@1.9.3 > send@0.12.3 > mime@1.3.4 and [36m3[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@3.1.0[0m
+    introduced by goof@1.0.1 > method-override@3.0.0 > debug@3.1.0 and [36m37[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.1.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-gradle-plugin@3.2.4 > debug@4.1.1 and [36m37[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-GLOBPARENT-1016905] in [1mglob-parent@2.0.0[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > test-exclude@1.1.0 > micromatch@2.3.8 > parse-glob@3.0.4 > glob-base@0.3.0 > glob-parent@2.0.0 and [36m1[0m other path
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-1279029] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-567742] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-HOSTEDGITINFO-1088355] in [1mhosted-git-info@2.8.5[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-resolve-deps@4.4.0 > snyk-module@1.9.1 > hosted-git-info@2.8.5 and [36m4[0m other paths
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-JSONPOINTER-1577288] in [1mjsonpointer@4.0.1[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0 > jsonpointer@4.0.1
+  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-JSYAML-173999] in [1mjs-yaml@3.6.1[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > js-yaml@3.6.1 and [36m1[0m other path
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMATCH-3050818] in [1mminimatch@3.0.4[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > glob@7.1.3 > minimatch@3.0.4 and [36m11[0m other paths
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMIST-559764] in [1mminimist@1.2.0[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > minimist@1.2.0 and [36m8[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-UGLIFYJS-1727251] in [1muglify-js@2.6.2[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5 > uglify-js@2.6.2
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-YARGSPARSER-560381] in [1myargs-parser@2.4.0[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > yargs@4.7.1 > yargs-parser@2.4.0
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:brace-expansion:20170302] in [1mbrace-expansion@1.1.4[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > spawn-wrap@1.2.3 > rimraf@2.5.2 > glob@7.0.3 > minimatch@3.0.0 > brace-expansion@1.1.4 and [36m4[0m other paths
+  ✗ [33m[1mPrototype Pollution[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:hoek:20180212] in [1mhoek@0.9.1[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0 > hawk@1.1.1 > boom@0.4.2 > hoek@0.9.1 and [36m7[0m other paths
+  ✗ [33m[1mTiming Attack[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:http-signature:20150122] in [1mhttp-signature@0.10.1[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0 > http-signature@0.10.1
+  ✗ [33m[1mRemote Memory Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:request:20160119] in [1mrequest@2.42.0[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > codecov.io@0.1.6 > request@2.42.0
+  ✗ [33m[1mUninitialized Memory Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:tunnel-agent:20170305] in [1mtunnel-agent@0.4.3[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > tunnel-agent@0.4.3 and [36m1[0m other path
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ANSIREGEX-1583908] in [1mansi-regex@4.1.0[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > strip-ansi@5.2.0 > ansi-regex@4.1.0 and [36m15[0m other paths
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ASYNC-12239908] in [1masync@1.5.2[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0 > async@1.5.2 and [36m5[0m other paths
+  ✗ [31m[1mRemote Memory Exposure[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-BL-608877] in [1mbl@3.0.0[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-docker-plugin@1.38.0 > tar-stream@2.1.0 > bl@3.0.0 and [36m1[0m other path
+  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-1056767] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-173692] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-174183] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-469063] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-480388] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-534478] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-HAWK-2808852] in [1mhawk@3.1.3[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > hawk@3.1.3 and [36m1[0m other path
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ISMYJSONVALID-597165] in [1mis-my-json-valid@2.19.0[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ISMYJSONVALID-597167] in [1mis-my-json-valid@2.19.0[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-JSONSCHEMA-1920922] in [1mjson-schema@0.2.3[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > http-signature@1.1.1 > jsprim@1.4.1 > json-schema@0.2.3
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-JSYAML-174129] in [1mjs-yaml@3.6.1[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > js-yaml@3.6.1 and [36m1[0m other path
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMATCH-1019388] in [1mminimatch@2.0.10[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > fileset@0.2.1 > glob@5.0.15 > minimatch@2.0.10 and [36m5[0m other paths
+  ✗ [31m[1mPrototype Pollution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-Y18N-1021887] in [1my18n@3.2.1[0m
+    introduced by goof@1.0.1 > snyk@1.290.2 > snyk-config@2.2.3 > nconf@0.10.0 > yargs@3.32.0 > y18n@3.2.1 and [36m1[0m other path
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:minimatch:20160620] in [1mminimatch@2.0.10[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > fileset@0.2.1 > glob@5.0.15 > minimatch@2.0.10 and [36m5[0m other paths
+  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs@2.2.4[0m
+    introduced by goof@1.0.1 > body-parser@1.9.0 > qs@2.2.4 and [36m2[0m other paths
+  ✗ [35m[1mPrototype Pollution[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JS-HANDLEBARS-534988] in [1mhandlebars@4.0.5[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > handlebars@4.0.5
+  ✗ [35m[1mPrototype Pollution[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JS-JSONPOINTER-598804] in [1mjsonpointer@4.0.1[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > coveralls@2.13.3 > request@2.79.0 > har-validator@2.0.6 > is-my-json-valid@2.19.0 > jsonpointer@4.0.1
+
+[90m[1mIssues with no direct upgrade or patch:[0m[0m
+  ✗ [33m[1mArbitrary Code Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-13271683] in [1mcookie@0.1.2[0m
+    introduced by goof@1.0.1 > express@4.12.4 > cookie@0.1.2 and [36m1[0m other path
+  This issue was fixed in: [1m1.0.0[0m
+  ✗ [33m[1mArbitrary Code Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EJS-1049328] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+  This issue was fixed in: [1m3.1.6[0m
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-2635697] in [1mexpress-fileupload@0.0.5[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESSFILEUPLOAD-2635946] in [1mexpress-fileupload@0.0.5[0m
+    introduced by goof@1.0.1 > express-fileupload@0.0.5
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMATCH-3050818] in [1mminimatch@3.0.4[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > glob@7.1.3 > minimatch@3.0.4 and [36m11[0m other paths
+  This issue was fixed in: [1m3.0.5[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:ejs:20161130] in [1mejs@1.0.0[0m
+    introduced by goof@1.0.1 > ejs@1.0.0 and [36m1[0m other path
+  This issue was fixed in: [1m2.5.5[0m
+  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:ejs:20161130-1] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+  This issue was fixed in: [1m2.5.5[0m
+  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-EJS-2803307] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+  This issue was fixed in: [1m3.1.7[0m
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-MINIMATCH-1019388] in [1mminimatch@2.0.10[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > fileset@0.2.1 > glob@5.0.15 > minimatch@2.0.10 and [36m5[0m other paths
+  This issue was fixed in: [1m3.0.2[0m
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:ejs:20161128] in [1mejs@0.8.8[0m
+    introduced by goof@1.0.1 > ejs-locals@1.0.2 > ejs@0.8.8 and [36m1[0m other path
+  This issue was fixed in: [1m2.5.3[0m
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:minimatch:20160620] in [1mminimatch@2.0.10[0m
+    introduced by goof@1.0.1 > tap@5.8.0 > nyc@6.6.1 > istanbul@0.4.3 > fileset@0.2.1 > glob@5.0.15 > minimatch@2.0.10 and [36m5[0m other paths
+  This issue was fixed in: [1m3.0.2[0m
+
+╭─────────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                                │
+│                                                             │
+│   Organization:      My Org                                 │
+│   Test type:         Software Composition Analysis          │
+│   Project path:      multi-project                          │
+│   Target file:       snyk-goof/package-lock.json            │
+│                                                             │
+│   Total security issues: 120                                │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]        │
+│   Open   : [1m120[0m [[35m 3 CRITICAL [0m[31m 55 HIGH [0m[33m 53 MEDIUM [0m 9 LOW ]    │
+╰─────────────────────────────────────────────────────────────╯
 
 ─────────────────────────────────────────────────────
 
-[1mTesting  (golang/go.mod) ...[0m
+[1mTesting  (webgoat/pom.xml) ...[0m
 
-Tested 29 dependencies for known issues, found 1 issues, 1 vulnerable paths.
+Tested 194 dependencies for known issues, found 55 issues, 55 vulnerable paths.
 
-[1mOpen Security issues: 1[0m
+[1mOpen Security issues: 55[0m
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12009535
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12009535
+   Introduced by: com.fasterxml.jackson.core:jackson-core
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12010004
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12010004
+   Introduced by: com.fasterxml.jackson.core:jackson-databind
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068051
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068051
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068052
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068052
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068053
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068053
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068054
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068054
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068055
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068055
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068056
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068056
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068057
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068057
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mDivision by zero[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238610
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238610
+   Introduced by: com.fasterxml.jackson.core:jackson-core
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+
+ ✗ [33m[MEDIUM][0m [1mDivision by zero[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238618
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238618
+   Introduced by: com.fasterxml.jackson.core:jackson-core
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12246954
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12246954
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283910
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283910
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283911
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283911
+   Introduced by: com.fasterxml.jackson.core:jackson-databind
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-18369184
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-18369184
+   Introduced by: com.fasterxml.jackson.core:jackson-databind
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Deletion[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mServer-Side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051967
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051967
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088328
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088328
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088329
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088329
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088330
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088330
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088332
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088332
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088333
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088333
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088334
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088334
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088335
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088335
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088336
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088336
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088338
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088338
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1294540
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1294540
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569189
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569189
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mInsecure XML deserialization[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-460764
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-460764
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [33m[MEDIUM][0m [1mInformation Exposure[0m
+   Finding ID: SNYK-JAVA-ORGSLF4J-12060275
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12060275
+   Introduced by: org.slf4j:slf4j-api
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Read[0m
+   Finding ID: SNYK-JAVA-ORGSLF4J-12238606
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238606
+   Introduced by: org.slf4j:slf4j-api
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
+   Finding ID: SNYK-JAVA-ORGSLF4J-12238607
+   Info: https://snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238607
+   Introduced by: org.slf4j:slf4j-api
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+
+ ✗ [31m[HIGH][0m [1mDirectory Traversal[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238609
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238609
+   Introduced by: com.fasterxml.jackson.core:jackson-core
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+
+ ✗ [31m[HIGH][0m [1mBuffer Overflow[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238611
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238611
+   Introduced by: com.fasterxml.jackson.core:jackson-core
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-13270217
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13270217
+   Introduced by: com.fasterxml.jackson.core:jackson-annotations
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+
+ ✗ [31m[HIGH][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088337
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088337
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569176
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569176
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569177
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569177
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569178
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569178
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569179
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569179
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569180
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569180
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569181
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569181
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569182
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569182
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mRemote Code Execution (RCE)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569183
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569183
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569185
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569185
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569186
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569186
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mArbitrary Code Execution[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569187
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569187
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569190
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569190
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mServer-Side Request Forgery (SSRF)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569191
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569191
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-2388977
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-2388977
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mXML External Entity (XXE) Injection[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-30385
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-30385
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-31394
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-31394
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+ ✗ [35m[CRITICAL][0m [1mDirectory Traversal[0m
+   Finding ID: SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238608
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238608
+   Introduced by: com.fasterxml.jackson.core:jackson-core
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+
+ ✗ [35m[CRITICAL][0m [1mDeserialization of Untrusted Data[0m
+   Finding ID: SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088331
+   Info: https://snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088331
+   Introduced by: com.thoughtworks.xstream:xstream
+   Introduced through: org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+[32m[1mIssues to fix by upgrading:[0m[0m
+
+  Upgrade [1mcom.thoughtworks.xstream:xstream@1.4.5[0m to [1mcom.thoughtworks.xstream:xstream@1.4.19[0m to fix
+  ✗ [33m[1mArbitrary File Deletion[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051966] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mServer-Side Request Forgery (SSRF)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1051967] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088328] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088329] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088330] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088332] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088333] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088334] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088335] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088336] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088338] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDeserialization of Untrusted Data[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1294540] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569189] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [33m[1mInsecure XML deserialization[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-460764] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mDeserialization of Untrusted Data[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1040458] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mDeserialization of Untrusted Data[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088337] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569176] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569177] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569178] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569179] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569180] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569181] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569182] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569183] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569185] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569186] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mArbitrary Code Execution[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569187] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mServer-Side Request Forgery (SSRF)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569190] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mServer-Side Request Forgery (SSRF)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1569191] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-2388977] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mXML External Entity (XXE) Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-30385] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-31394] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+  ✗ [35m[1mDeserialization of Untrusted Data[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMTHOUGHTWORKSXSTREAM-1088331] in [1mcom.thoughtworks.xstream:xstream@1.4.5[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.thoughtworks.xstream:xstream@1.4.5
+
+[90m[1mIssues with no direct upgrade or patch:[0m[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12009535] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  This issue was fixed in: [1m2.12.6[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12010004] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+  This issue was fixed in: [1m2.12.6[0m
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068051] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068052] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068053] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068054] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068055] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068056] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12068057] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mDivision by zero[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238610] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [33m[1mDivision by zero[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238618] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12246954] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283910] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13283911] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-18369184] in [1mcom.fasterxml.jackson.core:jackson-databind@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4
+  ✗ [33m[1mInformation Exposure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12060275] in [1morg.slf4j:slf4j-api@2.0.18[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+  ✗ [33m[1mArbitrary File Read[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238606] in [1morg.slf4j:slf4j-api@2.0.18[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JAVA-ORGSLF4J-12238607] in [1morg.slf4j:slf4j-api@2.0.18[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > org.thymeleaf.extras:thymeleaf-extras-springsecurity6@3.1.5.RELEASE > org.slf4j:slf4j-api@2.0.18
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238609] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [31m[1mBuffer Overflow[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238611] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-13270217] in [1mcom.fasterxml.jackson.core:jackson-annotations@2.21[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-annotations@2.21
+  ✗ [35m[1mDirectory Traversal[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-JAVA-COMFASTERXMLJACKSONCORE-12238608] in [1mcom.fasterxml.jackson.core:jackson-core@2.21.4[0m
+    introduced by org.owasp.webgoat:webgoat@2026.2-SNAPSHOT > com.fasterxml.jackson.core:jackson-databind@2.21.4 > com.fasterxml.jackson.core:jackson-core@2.21.4
+
+╭────────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                               │
+│                                                            │
+│   Organization:      My Org                                │
+│   Test type:         Software Composition Analysis         │
+│   Project path:      multi-project                         │
+│   Target file:       webgoat/pom.xml                       │
+│                                                            │
+│   Total security issues: 55                                │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]       │
+│   Open   : [1m55[0m [[35m 2 CRITICAL [0m[31m 21 HIGH [0m[33m 32 MEDIUM [0m 0 LOW ]    │
+╰────────────────────────────────────────────────────────────╯
+
+─────────────────────────────────────────────────────
+
+[1mTesting  (python-pip-app-jarvis2/requirements.txt) ...[0m
+
+Tested 33 dependencies for known issues, found 17 issues, 49 vulnerable paths.
+
+[1mOpen Security issues: 17[0m
+
+ ✗ [33m[MEDIUM][0m [1mCRLF Injection[0m
+   Finding ID: SNYK-PYTHON-HTTPLIB2-569758
+   Info: https://snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-569758
+   Introduced by: httplib2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-PYTHON-JINJA2-1012994
+   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994
+   Introduced by: jinja2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6
+
+ ✗ [33m[MEDIUM][0m [1mSandbox Escape[0m
+   Finding ID: SNYK-PYTHON-JINJA2-174126
+   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-174126
+   Introduced by: jinja2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6
+
+ ✗ [33m[MEDIUM][0m [1mAccess Restriction Bypass[0m
+   Finding ID: SNYK-PYTHON-RSA-570831
+   Info: https://snyk.io/vuln/SNYK-PYTHON-RSA-570831
+   Introduced by: rsa
+   Introduced through: python-pip-app-jarvis2@0.0.0 > rsa@3.4.2
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
+   Finding ID: SNYK-PYTHON-SETUPTOOLS-12246955
+   Info: https://snyk.io/vuln/SNYK-PYTHON-SETUPTOOLS-12246955
+   Introduced by: setuptools
+   Introduced through: python-pip-app-jarvis2@0.0.0 > apscheduler@3.3.1 > setuptools@79.0.1
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-1533435
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-1533435
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [33m[MEDIUM][0m [1mAuthentication Bypass[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-72681
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-72681
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [31m[HIGH][0m [1mImproper Input Validation[0m
+   Finding ID: SNYK-PYTHON-FLASK-42185
+   Info: https://snyk.io/vuln/SNYK-PYTHON-FLASK-42185
+   Introduced by: flask
+   Introduced through: python-pip-app-jarvis2@0.0.0 > flask@0.12.2
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-PYTHON-FLASK-451637
+   Info: https://snyk.io/vuln/SNYK-PYTHON-FLASK-451637
+   Introduced by: flask
+   Introduced through: python-pip-app-jarvis2@0.0.0 > flask@0.12.2
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-PYTHON-HTTPLIB2-1065795
+   Info: https://snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-1065795
+   Introduced by: httplib2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3
+
+ ✗ [31m[HIGH][0m [1mCRLF Injection[0m
+   Finding ID: SNYK-PYTHON-HTTPLIB2-570767
+   Info: https://snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-570767
+   Introduced by: httplib2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3
+
+ ✗ [31m[HIGH][0m [1mTiming Attack[0m
+   Finding ID: SNYK-PYTHON-RSA-1038401
+   Info: https://snyk.io/vuln/SNYK-PYTHON-RSA-1038401
+   Introduced by: rsa
+   Introduced through: python-pip-app-jarvis2@0.0.0 > rsa@3.4.2
+
+ ✗ [31m[HIGH][0m [1mHTTP Header Injection[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-1014645
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-1014645
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [31m[HIGH][0m [1mCRLF injection[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-174323
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-174323
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [31m[HIGH][0m [1mImproper Certificate Validation[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-174464
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-174464
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [35m[CRITICAL][0m [1mInformation Exposure[0m
+   Finding ID: SNYK-PYTHON-REQUESTS-72435
+   Info: https://snyk.io/vuln/SNYK-PYTHON-REQUESTS-72435
+   Introduced by: requests
+   Introduced through: python-pip-app-jarvis2@0.0.0 > requests@2.17.3
+
+ ✗ [35m[CRITICAL][0m [1mInsufficient Randomness[0m
+   Finding ID: SNYK-PYTHON-WERKZEUG-458931
+   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-458931
+   Introduced by: werkzeug
+   Introduced through: python-pip-app-jarvis2@0.0.0 > werkzeug@0.12.2
+
+[32m[1mIssues to fix by upgrading:[0m[0m
+
+  Upgrade [1mflask@0.12.2[0m to [1mflask@0.12.3[0m to fix
+  ✗ [31m[1mImproper Input Validation[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-FLASK-42185] in [1mflask@0.12.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > flask@0.12.2 and [36m1[0m other path
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-FLASK-451637] in [1mflask@0.12.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > flask@0.12.2 and [36m1[0m other path
+
+  Upgrade [1mhttplib2@0.10.3[0m to [1mhttplib2@0.19.0[0m to fix
+  ✗ [33m[1mCRLF Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-569758] in [1mhttplib2@0.10.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3 and [36m3[0m other paths
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-1065795] in [1mhttplib2@0.10.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3 and [36m3[0m other paths
+  ✗ [31m[1mCRLF Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-570767] in [1mhttplib2@0.10.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3 and [36m3[0m other paths
+
+  Upgrade [1mjinja2@2.9.6[0m to [1mjinja2@2.11.3[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2@2.9.6[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6 and [36m2[0m other paths
+  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2@2.9.6[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6 and [36m2[0m other paths
+
+  Upgrade [1mrequests@2.17.3[0m to [1mrequests@2.20[0m to fix
+  ✗ [35m[1mInformation Exposure[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-PYTHON-REQUESTS-72435] in [1mrequests@2.17.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > requests@2.17.3 and [36m1[0m other path
+
+  Upgrade [1mrsa@3.4.2[0m to [1mrsa@4.7[0m to fix
+  ✗ [33m[1mAccess Restriction Bypass[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-RSA-570831] in [1mrsa@3.4.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > rsa@3.4.2 and [36m2[0m other paths
+  ✗ [31m[1mTiming Attack[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-RSA-1038401] in [1mrsa@3.4.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > rsa@3.4.2 and [36m2[0m other paths
+
+  Upgrade [1murllib3@1.21.1[0m to [1murllib3@1.26.5[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-1533435] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [33m[1mAuthentication Bypass[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-72681] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [31m[1mHTTP Header Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-1014645] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [31m[1mCRLF injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-174323] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [31m[1mImproper Certificate Validation[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-174464] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+
+  Upgrade [1mwerkzeug@0.12.2[0m to [1mwerkzeug@0.15.3[0m to fix
+  ✗ [35m[1mInsufficient Randomness[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-458931] in [1mwerkzeug@0.12.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > werkzeug@0.12.2 and [36m2[0m other paths
+
+[90m[1mIssues with no direct upgrade or patch:[0m[0m
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-SETUPTOOLS-12246955] in [1msetuptools@79.0.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > apscheduler@3.3.1 > setuptools@79.0.1
+
+╭─────────────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                                    │
+│                                                                 │
+│   Organization:      My Org                                     │
+│   Test type:         Software Composition Analysis              │
+│   Project path:      multi-project                              │
+│   Target file:       python-pip-app-jarvis2/requirements.txt    │
+│                                                                 │
+│   Total security issues: 17                                     │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]            │
+│   Open   : [1m17[0m [[35m 2 CRITICAL [0m[31m 8 HIGH [0m[33m 7 MEDIUM [0m 0 LOW ]           │
+╰─────────────────────────────────────────────────────────────────╯
+
+─────────────────────────────────────────────────────
+
+[1mTesting  (package.json) ...[0m
+
+Tested 459 dependencies for known issues, found 8 issues, 107 vulnerable paths.
+
+[1mOpen Security issues: 8[0m
+
+ ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
+   Finding ID: SNYK-JS-COLORNAME-17614999
+   Info: https://snyk.io/vuln/SNYK-JS-COLORNAME-17614999
+   Introduced by: color-name
+   Introduced through: snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-DEBUG-13283909
+   Info: https://snyk.io/vuln/SNYK-JS-DEBUG-13283909
+   Introduced by: debug
+   Introduced through: snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > debug@4.4.3
+
+ ✗ [33m[MEDIUM][0m [1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m
+   Finding ID: SNYK-JS-DEBUG-14214893
+   Info: https://snyk.io/vuln/SNYK-JS-DEBUG-14214893
+   Introduced by: debug
+   Introduced through: snyk@1.0.0-monorepo > debug@4.3.4
 
  ✗ [33m[MEDIUM][0m [1mOpen Redirect[0m
-   Finding ID: SNYK-GOLANG-GITHUBCOMVALYALAFASTHTTP-6815320
-   Info: https://snyk.io/vuln/SNYK-GOLANG-GITHUBCOMVALYALAFASTHTTP-6815320
-   Introduced by: github.com/valyala/fasthttp
-   Introduced through: golangproject@0.0.0 > github.com/gofiber/fiber/v2@2.52.9 > github.com/valyala/fasthttp@1.51.0
-   Risk Score: 84
+   Finding ID: SNYK-JS-GOT-2932019
+   Info: https://snyk.io/vuln/SNYK-JS-GOT-2932019
+   Introduced by: got
+   Introduced through: snyk@1.0.0-monorepo > snyk-nodejs-lockfile-parser@2.8.1 > @yarnpkg/core@4.5.0 > got@11.8.2
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-2342073
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-2342073
+   Introduced by: marked
+   Introduced through: snyk@1.0.0-monorepo > marked@4.0.1
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-JS-MARKED-2342082
+   Info: https://snyk.io/vuln/SNYK-JS-MARKED-2342082
+   Introduced by: marked
+   Introduced through: snyk@1.0.0-monorepo > marked@4.0.1
+
+ ✗ [31m[HIGH][0m [1mDirectory Traversal[0m
+   Finding ID: SNYK-JS-ASYNC-12239908
+   Info: https://snyk.io/vuln/SNYK-JS-ASYNC-12239908
+   Introduced by: async
+   Introduced through: snyk@1.0.0-monorepo > snyk-config@5.2.0 > async@3.2.6
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-JS-LODASH-12239302
+   Info: https://snyk.io/vuln/SNYK-JS-LODASH-12239302
+   Introduced by: lodash
+   Introduced through: snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > snyk-poetry-lockfile-parser@1.9.1 > lodash@4.18.1
+
+[32m[1mIssues to fix by upgrading:[0m[0m
+
+  Upgrade [1m@snyk/fix@1.0.0-monorepo[0m to [1m@snyk/fix@1.471.0[0m to fix
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
+    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.4.3[0m
+    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > debug@4.4.3 and [36m36[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m36[0m other paths
+
+  Upgrade [1mchalk@2.4.2[0m to [1mchalk@5.0.0[0m to fix
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
+    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
+
+  Upgrade [1mmarked@4.0.1[0m to [1mmarked@4.0.10[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342073] in [1mmarked@4.0.1[0m
+    introduced by snyk@1.0.0-monorepo > marked@4.0.1
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-MARKED-2342082] in [1mmarked@4.0.1[0m
+    introduced by snyk@1.0.0-monorepo > marked@4.0.1
+
+  Upgrade [1mora@5.4.0[0m to [1mora@6.1.0[0m to fix
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
+    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
+
+  Upgrade [1mwrap-ansi@5.1.0[0m to [1mwrap-ansi@8.0.0[0m to fix
+  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COLORNAME-17614999] in [1mcolor-name@1.1.4[0m
+    introduced by snyk@1.0.0-monorepo > @snyk/fix@1.0.0-monorepo > chalk@4.1.1 > ansi-styles@4.3.0 > color-convert@2.0.1 > color-name@1.1.4 and [36m15[0m other paths
+
+[90m[1mIssues with no direct upgrade or patch:[0m[0m
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-13283909] in [1mdebug@4.4.3[0m
+    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > debug@4.4.3 and [36m36[0m other paths
+  ✗ [33m[1mAlternate solution to CWE-1333 | Inefficient Regular Expression Complexity[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-DEBUG-14214893] in [1mdebug@4.3.4[0m
+    introduced by snyk@1.0.0-monorepo > debug@4.3.4 and [36m36[0m other paths
+  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-GOT-2932019] in [1mgot@11.8.2[0m
+    introduced by snyk@1.0.0-monorepo > snyk-nodejs-lockfile-parser@2.8.1 > @yarnpkg/core@4.5.0 > got@11.8.2 and [36m2[0m other paths
+  This issue was fixed in: [1m11.8.5, 12.1.0[0m
+  ✗ [31m[1mDirectory Traversal[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-ASYNC-12239908] in [1masync@3.2.6[0m
+    introduced by snyk@1.0.0-monorepo > snyk-config@5.2.0 > async@3.2.6 and [36m3[0m other paths
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-LODASH-12239302] in [1mlodash@4.18.1[0m
+    introduced by snyk@1.0.0-monorepo > snyk-docker-plugin@9.11.0 > snyk-poetry-lockfile-parser@1.9.1 > lodash@4.18.1 and [36m7[0m other paths
 
 ╭─────────────────────────────────────────────────────────╮
 │ [1mTest Summary[0m                                            │
@@ -213,493 +1867,26 @@ Tested 29 dependencies for known issues, found 1 issues, 1 vulnerable paths.
 │   Organization:      My Org                             │
 │   Test type:         Software Composition Analysis      │
 │   Project path:      multi-project                      │
-│   Target file:       golang/go.mod                      │
+│   Target file:       package.json                       │
 │                                                         │
-│   Total security issues: 1                              │
+│   Total security issues: 8                              │
 │   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]    │
-│   Open   : [1m1[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 1 MEDIUM [0m 0 LOW ]    │
+│   Open   : [1m8[0m [[35m 0 CRITICAL [0m[31m 2 HIGH [0m[33m 6 MEDIUM [0m 0 LOW ]    │
 ╰─────────────────────────────────────────────────────────╯
 
 ─────────────────────────────────────────────────────
 
-[1mTesting  (maven/pom.xml) ...[0m
-
-Tested 4 dependencies for known issues, found 0 issues, 0 vulnerable paths.
-
-[1mOpen no findings type found issues: 0[0m
-
-╭─────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                │
-│                                             │
-│   Organization:      My Org                 │
-│   Test type:         Other                  │
-│   Project path:      multi-project          │
-│   Target file:       maven/pom.xml          │
-│                                             │
-│   Total no findings type found issues: 0    │
-╰─────────────────────────────────────────────╯
-
-─────────────────────────────────────────────────────
-
-[1mTesting  (not-python/requirements.txt) ...[0m
-
-Tested 7 dependencies for known issues, found 11 issues, 22 vulnerable paths.
-
-[1mOpen Security issues: 11[0m
-
- ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: SNYK-PYTHON-JINJA2-1012994
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 84
-
- ✗ [33m[MEDIUM][0m [1mSandbox Escape[0m
-   Finding ID: SNYK-PYTHON-JINJA2-174126
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-174126
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 154
-
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: SNYK-PYTHON-JINJA2-6150717
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 81
-
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: SNYK-PYTHON-JINJA2-6809379
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 82
-
- ✗ [33m[MEDIUM][0m [1mTemplate Injection[0m
-   Finding ID: SNYK-PYTHON-JINJA2-8548181
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 98
-
- ✗ [33m[MEDIUM][0m [1mImproper Neutralization[0m
-   Finding ID: SNYK-PYTHON-JINJA2-8548987
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 190
-
- ✗ [33m[MEDIUM][0m [1mTemplate Injection[0m
-   Finding ID: SNYK-PYTHON-JINJA2-9292516
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 190
-
- ✗ [33m[MEDIUM][0m [1mDirectory Traversal[0m
-   Finding ID: SNYK-PYTHON-WERKZEUG-8309091
-   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091
-   Introduced by: werkzeug
-   Introduced through: not-python@0.0.0 > werkzeug@3.0.1
-   Risk Score: 53
-
- ✗ [33m[MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
-   Finding ID: SNYK-PYTHON-WERKZEUG-8309092
-   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092
-   Introduced by: werkzeug
-   Introduced through: not-python@0.0.0 > werkzeug@3.0.1
-   Risk Score: 61
-
- ✗ [31m[HIGH][0m [1mSandbox Bypass[0m
-   Finding ID: SNYK-PYTHON-JINJA2-455616
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-455616
-   Introduced by: jinja2
-   Introduced through: not-python@0.0.0 > jinja2@2.7.2
-   Risk Score: 171
-
- ✗ [31m[HIGH][0m [1mRemote Code Execution (RCE)[0m
-   Finding ID: SNYK-PYTHON-WERKZEUG-6808933
-   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933
-   Introduced by: werkzeug
-   Introduced through: not-python@0.0.0 > werkzeug@3.0.1
-   Risk Score: 292
-
-[32m[1mIssues to fix by upgrading:[0m[0m
-
-  Upgrade [1mjinja2@2.7.2[0m to [1mjinja2@3.1.6[0m to fix
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mImproper Neutralization[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [31m[1mSandbox Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-455616] in [1mjinja2@2.7.2[0m
-    introduced by not-python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-
-  Upgrade [1mwerkzeug@3.0.1[0m to [1mwerkzeug@3.0.6[0m to fix
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091] in [1mwerkzeug@3.0.1[0m
-    introduced by not-python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
-  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092] in [1mwerkzeug@3.0.1[0m
-    introduced by not-python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
-  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933] in [1mwerkzeug@3.0.1[0m
-    introduced by not-python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
-
-╭──────────────────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                             │
-│                                                          │
-│   Organization:      My Org                              │
-│   Test type:         Software Composition Analysis       │
-│   Project path:      multi-project                       │
-│   Target file:       not-python/requirements.txt         │
-│                                                          │
-│   Total security issues: 11                              │
-│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]     │
-│   Open   : [1m11[0m [[35m 0 CRITICAL [0m[31m 2 HIGH [0m[33m 9 MEDIUM [0m 0 LOW ]    │
-╰──────────────────────────────────────────────────────────╯
-
-─────────────────────────────────────────────────────
-
-[1mTesting  (python/requirements.txt) ...[0m
-
-Tested 7 dependencies for known issues, found 11 issues, 22 vulnerable paths.
-
-[1mOpen Security issues: 11[0m
-
- ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: SNYK-PYTHON-JINJA2-1012994
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 84
-
- ✗ [33m[MEDIUM][0m [1mSandbox Escape[0m
-   Finding ID: SNYK-PYTHON-JINJA2-174126
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-174126
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 154
-
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: SNYK-PYTHON-JINJA2-6150717
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 81
-
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: SNYK-PYTHON-JINJA2-6809379
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 82
-
- ✗ [33m[MEDIUM][0m [1mTemplate Injection[0m
-   Finding ID: SNYK-PYTHON-JINJA2-8548181
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 98
-
- ✗ [33m[MEDIUM][0m [1mImproper Neutralization[0m
-   Finding ID: SNYK-PYTHON-JINJA2-8548987
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 190
-
- ✗ [33m[MEDIUM][0m [1mTemplate Injection[0m
-   Finding ID: SNYK-PYTHON-JINJA2-9292516
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 190
-
- ✗ [33m[MEDIUM][0m [1mDirectory Traversal[0m
-   Finding ID: SNYK-PYTHON-WERKZEUG-8309091
-   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091
-   Introduced by: werkzeug
-   Introduced through: python@0.0.0 > werkzeug@3.0.1
-   Risk Score: 53
-
- ✗ [33m[MEDIUM][0m [1mAllocation of Resources Without Limits or Throttling[0m
-   Finding ID: SNYK-PYTHON-WERKZEUG-8309092
-   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092
-   Introduced by: werkzeug
-   Introduced through: python@0.0.0 > werkzeug@3.0.1
-   Risk Score: 61
-
- ✗ [31m[HIGH][0m [1mSandbox Bypass[0m
-   Finding ID: SNYK-PYTHON-JINJA2-455616
-   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-455616
-   Introduced by: jinja2
-   Introduced through: python@0.0.0 > jinja2@2.7.2
-   Risk Score: 171
-
- ✗ [31m[HIGH][0m [1mRemote Code Execution (RCE)[0m
-   Finding ID: SNYK-PYTHON-WERKZEUG-6808933
-   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933
-   Introduced by: werkzeug
-   Introduced through: python@0.0.0 > werkzeug@3.0.1
-   Risk Score: 292
-
-[32m[1mIssues to fix by upgrading:[0m[0m
-
-  Upgrade [1mjinja2@2.7.2[0m to [1mjinja2@3.1.6[0m to fix
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6150717] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-6809379] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548181] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mImproper Neutralization[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-8548987] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [33m[1mTemplate Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-9292516] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-  ✗ [31m[1mSandbox Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-455616] in [1mjinja2@2.7.2[0m
-    introduced by python@0.0.0 > jinja2@2.7.2 and [36m1[0m other path
-
-  Upgrade [1mwerkzeug@3.0.1[0m to [1mwerkzeug@3.0.6[0m to fix
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309091] in [1mwerkzeug@3.0.1[0m
-    introduced by python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
-  ✗ [33m[1mAllocation of Resources Without Limits or Throttling[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-8309092] in [1mwerkzeug@3.0.1[0m
-    introduced by python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
-  ✗ [31m[1mRemote Code Execution (RCE)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-6808933] in [1mwerkzeug@3.0.1[0m
-    introduced by python@0.0.0 > werkzeug@3.0.1 and [36m1[0m other path
-
-╭──────────────────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                             │
-│                                                          │
-│   Organization:      My Org                              │
-│   Test type:         Software Composition Analysis       │
-│   Project path:      multi-project                       │
-│   Target file:       python/requirements.txt             │
-│                                                          │
-│   Total security issues: 11                              │
-│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]     │
-│   Open   : [1m11[0m [[35m 0 CRITICAL [0m[31m 2 HIGH [0m[33m 9 MEDIUM [0m 0 LOW ]    │
-╰──────────────────────────────────────────────────────────╯
-
-─────────────────────────────────────────────────────
-
-[1mTesting  (tsc/package.json) ...[0m
-
-Tested 23 dependencies for known issues, found 19 issues, 27 vulnerable paths.
-
-[1mOpen Security issues: 19[0m
-
- ✗ [LOW] [1mCross-site Scripting[0m
-   Finding ID: SNYK-JS-SEND-7926862
-   Info: https://snyk.io/vuln/SNYK-JS-SEND-7926862
-   Introduced by: send
-   Introduced through: tsc@1.0.0 > express@4.0.0 > send@0.2.0
-   Risk Score: 57
-
- ✗ [LOW] [1mCross-site Scripting[0m
-   Finding ID: SNYK-JS-SERVESTATIC-7926865
-   Info: https://snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865
-   Introduced by: serve-static
-   Introduced through: tsc@1.0.0 > express@4.0.0 > serve-static@1.0.1
-   Risk Score: 57
-
- ✗ [LOW] [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: npm:mime:20170907
-   Info: https://snyk.io/vuln/npm:mime:20170907
-   Introduced by: mime
-   Introduced through: tsc@1.0.0 > express@4.0.0 > accepts@1.0.0 > mime@1.2.11
-   Risk Score: 35
-
- ✗ [LOW] [1mOpen Redirect[0m
-   Finding ID: npm:serve-static:20150113
-   Info: https://snyk.io/vuln/npm:serve-static:20150113
-   Introduced by: serve-static
-   Introduced through: tsc@1.0.0 > express@4.0.0 > serve-static@1.0.1
-   Risk Score: 24
-
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: SNYK-JS-COOKIE-8163060
-   Info: https://snyk.io/vuln/SNYK-JS-COOKIE-8163060
-   Introduced by: cookie
-   Introduced through: tsc@1.0.0 > express@4.0.0 > cookie@0.1.0
-   Risk Score: 34
-
- ✗ [33m[MEDIUM][0m [1mOpen Redirect[0m
-   Finding ID: SNYK-JS-EXPRESS-6474509
-   Info: https://snyk.io/vuln/SNYK-JS-EXPRESS-6474509
-   Introduced by: express
-   Introduced through: tsc@1.0.0 > express@4.0.0
-   Risk Score: 74
-
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting[0m
-   Finding ID: SNYK-JS-EXPRESS-7926867
-   Info: https://snyk.io/vuln/SNYK-JS-EXPRESS-7926867
-   Introduced by: express
-   Introduced through: tsc@1.0.0 > express@4.0.0
-   Risk Score: 75
-
- ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: SNYK-JS-PATHTOREGEXP-7925106
-   Info: https://snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106
-   Introduced by: path-to-regexp
-   Introduced through: tsc@1.0.0 > express@4.0.0 > path-to-regexp@0.1.2
-   Risk Score: 57
-
- ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: SNYK-JS-PATHTOREGEXP-8482416
-   Info: https://snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416
-   Introduced by: path-to-regexp
-   Introduced through: tsc@1.0.0 > express@4.0.0 > path-to-regexp@0.1.2
-   Risk Score: 61
-
- ✗ [33m[MEDIUM][0m [1mNon-Constant Time String Comparison[0m
-   Finding ID: npm:cookie-signature:20160804
-   Info: https://snyk.io/vuln/npm:cookie-signature:20160804
-   Introduced by: cookie-signature
-   Introduced through: tsc@1.0.0 > express@4.0.0 > cookie-signature@1.0.3
-   Risk Score: 86
-
- ✗ [33m[MEDIUM][0m [1mCross-site Scripting (XSS)[0m
-   Finding ID: npm:express:20140912
-   Info: https://snyk.io/vuln/npm:express:20140912
-   Introduced by: express
-   Introduced through: tsc@1.0.0 > express@4.0.0
-   Risk Score: 69
-
- ✗ [33m[MEDIUM][0m [1mDenial of Service (DoS)[0m
-   Finding ID: npm:qs:20140806-1
-   Info: https://snyk.io/vuln/npm:qs:20140806-1
-   Introduced by: qs
-   Introduced through: tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-   Risk Score: 74
-
- ✗ [33m[MEDIUM][0m [1mDirectory Traversal[0m
-   Finding ID: npm:send:20140912
-   Info: https://snyk.io/vuln/npm:send:20140912
-   Introduced by: send
-   Introduced through: tsc@1.0.0 > express@4.0.0 > send@0.2.0
-   Risk Score: 39
-
- ✗ [33m[MEDIUM][0m [1mRoot Path Disclosure[0m
-   Finding ID: npm:send:20151103
-   Info: https://snyk.io/vuln/npm:send:20151103
-   Introduced by: send
-   Introduced through: tsc@1.0.0 > express@4.0.0 > send@0.2.0
-   Risk Score: 40
-
- ✗ [31m[HIGH][0m [1mPrototype Poisoning[0m
-   Finding ID: SNYK-JS-QS-3153490
-   Info: https://snyk.io/vuln/SNYK-JS-QS-3153490
-   Introduced by: qs
-   Introduced through: tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-   Risk Score: 150
-
- ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: npm:fresh:20170908
-   Info: https://snyk.io/vuln/npm:fresh:20170908
-   Introduced by: fresh
-   Introduced through: tsc@1.0.0 > express@4.0.0 > fresh@0.2.2
-   Risk Score: 101
-
- ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
-   Finding ID: npm:negotiator:20160616
-   Info: https://snyk.io/vuln/npm:negotiator:20160616
-   Introduced by: negotiator
-   Introduced through: tsc@1.0.0 > express@4.0.0 > accepts@1.0.0 > negotiator@0.3.0
-   Risk Score: 101
-
- ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
-   Finding ID: npm:qs:20140806
-   Info: https://snyk.io/vuln/npm:qs:20140806
-   Introduced by: qs
-   Introduced through: tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-   Risk Score: 105
-
- ✗ [31m[HIGH][0m [1mPrototype Override Protection Bypass[0m
-   Finding ID: npm:qs:20170213
-   Info: https://snyk.io/vuln/npm:qs:20170213
-   Introduced by: qs
-   Introduced through: tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-   Risk Score: 101
-
-[32m[1mIssues to fix by upgrading:[0m[0m
-
-  Upgrade [1mexpress@4.0.0[0m to [1mexpress@4.21.2[0m to fix
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SEND-7926862] in [1msend@0.2.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and [36m1[0m other path
-  ✗ [1mCross-site Scripting[0m [LOW] [https://security.snyk.io/vuln/SNYK-JS-SERVESTATIC-7926865] in [1mserve-static@1.0.1[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > serve-static@1.0.1
-  ✗ [1mRegular Expression Denial of Service (ReDoS)[0m [LOW] [https://security.snyk.io/vuln/npm:mime:20170907] in [1mmime@1.2.11[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > accepts@1.0.0 > mime@1.2.11 and [36m3[0m other paths
-  ✗ [1mOpen Redirect[0m [LOW] [https://security.snyk.io/vuln/npm:serve-static:20150113] in [1mserve-static@1.0.1[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > serve-static@1.0.1
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-COOKIE-8163060] in [1mcookie@0.1.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > cookie@0.1.0
-  ✗ [33m[1mOpen Redirect[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-6474509] in [1mexpress@4.0.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0
-  ✗ [33m[1mCross-site Scripting[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-EXPRESS-7926867] in [1mexpress@4.0.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-7925106] in [1mpath-to-regexp@0.1.2[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-JS-PATHTOREGEXP-8482416] in [1mpath-to-regexp@0.1.2[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > path-to-regexp@0.1.2
-  ✗ [33m[1mNon-Constant Time String Comparison[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:cookie-signature:20160804] in [1mcookie-signature@1.0.3[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > cookie-signature@1.0.3
-  ✗ [33m[1mCross-site Scripting (XSS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:express:20140912] in [1mexpress@4.0.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0
-  ✗ [33m[1mDenial of Service (DoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:qs:20140806-1] in [1mqs@0.6.6[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-  ✗ [33m[1mDirectory Traversal[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20140912] in [1msend@0.2.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and [36m1[0m other path
-  ✗ [33m[1mRoot Path Disclosure[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/npm:send:20151103] in [1msend@0.2.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > send@0.2.0 and [36m1[0m other path
-  ✗ [31m[1mPrototype Poisoning[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-JS-QS-3153490] in [1mqs@0.6.6[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:fresh:20170908] in [1mfresh@0.2.2[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > fresh@0.2.2 and [36m2[0m other paths
-  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:negotiator:20160616] in [1mnegotiator@0.3.0[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > accepts@1.0.0 > negotiator@0.3.0
-  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20140806] in [1mqs@0.6.6[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-  ✗ [31m[1mPrototype Override Protection Bypass[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/npm:qs:20170213] in [1mqs@0.6.6[0m
-    introduced by tsc@1.0.0 > express@4.0.0 > qs@0.6.6
-
-╭───────────────────────────────────────────────────────────╮
-│ [1mTest Summary[0m                                              │
-│                                                           │
-│   Organization:      My Org                               │
-│   Test type:         Software Composition Analysis        │
-│   Project path:      multi-project                        │
-│   Target file:       tsc/package.json                     │
-│                                                           │
-│   Total security issues: 19                               │
-│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]      │
-│   Open   : [1m19[0m [[35m 0 CRITICAL [0m[31m 5 HIGH [0m[33m 10 MEDIUM [0m 4 LOW ]    │
-╰───────────────────────────────────────────────────────────╯
-
-─────────────────────────────────────────────────────
-
-╭────────────────────────────────────────────────────────────╮
-│ [1mOverall Test Summary[0m                                       │
-│                                                            │
-│   Organization:      My Org                                │
-│   Test type:         Software Composition Analysis         │
-│   Projects tested:   6 projects                            │
-│                                                            │
-│   Total security issues: 61                                │
-│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]       │
-│   Open   : [1m61[0m [[35m 0 CRITICAL [0m[31m 14 HIGH [0m[33m 39 MEDIUM [0m 8 LOW ]    │
-╰────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────────────╮
+│ [1mOverall Test Summary[0m                                        │
+│                                                             │
+│   Organization:      My Org                                 │
+│   Test type:         Software Composition Analysis          │
+│   Projects tested:   4 projects                             │
+│                                                             │
+│   Total security issues: 200                                │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]        │
+│   Open   : [1m200[0m [[35m 7 CRITICAL [0m[31m 86 HIGH [0m[33m 98 MEDIUM [0m 9 LOW ]    │
+╰─────────────────────────────────────────────────────────────╯
 
 💡 Tip
 

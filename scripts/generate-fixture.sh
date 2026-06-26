@@ -85,15 +85,13 @@ fi
 
 # GAF derives TEMP_DIR_PATH as <SNYK_TMP_PATH>/<cli-version>/tmp/pid<pid>, so
 # the dump file lives in a nested subdirectory rather than directly under
-# DUMP_DIR. Recurse and pick the newest match by mtime.
-latest_dump=""
+# DUMP_DIR. `--all-projects` emits one TestResult dump per sub-project.
+dump_files=()
 while IFS= read -r -d '' f; do
-  if [[ -z "${latest_dump}" || "${f}" -nt "${latest_dump}" ]]; then
-    latest_dump="${f}"
-  fi
+  dump_files+=("${f}")
 done < <(find "${DUMP_DIR}" -type f -name 'workflow.TestResult.*' -print0 2>/dev/null)
 
-if [[ -z "${latest_dump}" ]]; then
+if [[ "${#dump_files[@]}" -eq 0 ]]; then
   echo "error: no workflow.TestResult.* file found under ${DUMP_DIR}" >&2
   echo "hint: ensure SNYK_TMP_PATH is honored by the CLI build and that the" >&2
   echo "      scan workflow emits a []byte TestResult payload that exceeds" >&2
@@ -106,7 +104,28 @@ if [[ -z "${latest_dump}" ]]; then
 fi
 
 raw_output="${OUT_DIR}/${NAME}.testresult.raw.json"
-cp "${latest_dump}" "${raw_output}"
+if [[ "${#dump_files[@]}" -eq 1 ]]; then
+  cp "${dump_files[0]}" "${raw_output}"
+else
+  python3 - "${raw_output}" "${TARGET_DIRECTORY:-multi-project}" "${dump_files[@]}" <<'PY'
+import json, sys
+
+out_path, target_directory = sys.argv[1], sys.argv[2]
+merged = []
+for path in sys.argv[3:]:
+    data = json.load(open(path))
+    if isinstance(data, list):
+        merged.extend(data)
+    else:
+        merged.append(data)
+for item in merged:
+    item.setdefault("metadata", {})["target-directory"] = target_directory
+merged.sort(key=lambda item: item.get("metadata", {}).get("project-name", ""))
+with open(out_path, "w") as fh:
+    json.dump(merged, fh)
+print(f"merged {len(sys.argv) - 3} dump(s) into {len(merged)} test result(s)")
+PY
+fi
 echo "wrote ${raw_output}"
 
 if [[ "${REDACT}" == "1" ]]; then
