@@ -71,6 +71,32 @@ type RetryMiddleware struct {
 	errorHandler     networktypes.ErrorHandlerFunc
 }
 
+// noCloseSeekBody wraps an io.ReadSeeker so that Close is suppressed during
+// retries.  The underlying stream stays open and is rewound with Seek(0)
+// instead of being copied into memory.  Call RealClose after the retry loop.
+type noCloseSeekBody struct {
+	io.ReadSeeker
+	realCloser io.Closer
+}
+
+func (b *noCloseSeekBody) Close() error { return nil }
+func (b *noCloseSeekBody) RealClose() error {
+	if b.realCloser != nil {
+		return b.realCloser.Close()
+	}
+	return nil
+}
+
+// drainAndClose fully reads any remaining bytes from the body and then closes
+// it, enabling the underlying TCP connection to be reused by the transport.
+func drainAndClose(body io.ReadCloser) {
+	if body == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, body) //nolint:errcheck // best-effort drain for connection reuse
+	_ = body.Close()
+}
+
 type RetryMiddlewareOption func(*RetryMiddleware)
 
 func WithErrorHandler(handler networktypes.ErrorHandlerFunc) RetryMiddlewareOption {
@@ -91,10 +117,9 @@ func NewRetryMiddleware(config configuration.Configuration, logger *zerolog.Logg
 	return rm
 }
 
-func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
+func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) { //nolint:gocyclo // complexity from sequential retry logic with per-status-code overrides
 	var finalResponse *http.Response
 	var finalError error
-	var localBodyBuffer []byte
 	var maxAttempts = defaultMaxAttemptsCount
 	var retryAfterSeconds = defaultRetryAfterSeconds
 	var actualAttempts int = 0
@@ -108,40 +133,41 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		retryAfterSeconds = tmp
 	}
 
-	// if a body is available, create a local copy to be able to use it multiple times
-	if req.Body != nil && req.Body != http.NoBody && maxAttempts > 1 {
-		// possible optimization for large request bodies to not buffer in memory but in filesystem
-		var localBufferError error
-		localBodyBuffer, localBufferError = io.ReadAll(req.Body)
-		closeError := req.Body.Close()
-
-		if localBufferError != nil {
-			return nil, localBufferError
-		}
-		if closeError != nil {
-			return nil, closeError
-		}
-
-		req.Body = io.NopCloser(bytes.NewBuffer(localBodyBuffer))
-		req.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewBuffer(localBodyBuffer)), nil
-		}
+	body, getBody, cleanup, err := ensureGetBodyExists(req)
+	if err != nil {
+		return nil, err
 	}
+	req.Body = body
+	if getBody != nil {
+		req.GetBody = getBody
+	}
+	defer func() {
+		if cleanup != nil {
+			_ = cleanup() //nolint:errcheck // best-effort cleanup, nothing to do on error
+		}
+	}()
 
 	op := func() (*http.Response, error) {
 		actualAttempts++
 
 		// create a local copy of the request
 		localRequest := *req
-		if len(localBodyBuffer) > 0 {
-			localRequest.Body = io.NopCloser(bytes.NewBuffer(localBodyBuffer))
-			localRequest.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewBuffer(localBodyBuffer)), nil
+
+		// on retries, obtain a fresh body; the first attempt uses the
+		// original req.Body carried over by the shallow copy above
+		if actualAttempts > 1 && req.GetBody != nil {
+			freshBody, getBodyErr := req.GetBody()
+			if getBodyErr != nil {
+				return nil, backoff.Permanent(getBodyErr)
 			}
+			if freshBody == nil {
+				return nil, backoff.Permanent(fmt.Errorf("GetBody returned nil reader"))
+			}
+			localRequest.Body = freshBody
 		}
 
 		// try to send request
-		response, err := rm.nextRoundtripper.RoundTrip(&localRequest)
+		response, rtErr := rm.nextRoundtripper.RoundTrip(&localRequest)
 
 		// keep track of actual retry attempts for monitoring/logging
 		if response != nil && response.Header != nil && actualAttempts > 1 {
@@ -149,8 +175,8 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		// errors from the next round tripper cannot be retried
-		if err != nil {
-			return response, backoff.Permanent(err)
+		if rtErr != nil {
+			return response, backoff.Permanent(rtErr)
 		}
 
 		// Cache max retry attempts for the current request
@@ -162,6 +188,13 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		// depending on the response determine if we should retry
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
+
+			// When doing a retry, we need to drain and close the RESPONSE body, to ensure that the resources are freed
+			var permErr *backoff.PermanentError
+			if !errors.As(retryError, &permErr) {
+				drainAndClose(response.Body)
+			}
+
 			return response, &RetryAttemptError{
 				StatusCode:  response.StatusCode,
 				Attempt:     actualAttempts,
@@ -185,6 +218,54 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	finalError = rm.filterRetryError(finalError, actualAttempts)
 	return finalResponse, finalError
+}
+
+// ensureGetBodyExists inspects the request body and returns:
+//   - body:    replacement Body for the first attempt (may be the original)
+//   - getBody: function that produces a fresh reader on retries (may be nil)
+//   - cleanup: called after the retry loop to release resources (may be nil)
+//
+// The caller is expected to assign body/getBody onto the request.
+//
+// Three strategies, in order of preference:
+//  1. GetBody already set (e.g. http.NewRequest with *bytes.Reader) → return as-is.
+//  2. Body implements io.ReadSeeker → wrap to suppress Close, Seek(0) to rewind.
+//  3. Fallback: io.ReadAll into memory buffer.
+func ensureGetBodyExists(req *http.Request) (io.ReadCloser, func() (io.ReadCloser, error), func() error, error) {
+	if req.Body == nil || req.Body == http.NoBody {
+		return req.Body, nil, nil, nil
+	}
+
+	if req.GetBody != nil {
+		return req.Body, req.GetBody, nil, nil
+	}
+
+	// body can be rewound
+	if rs, ok := req.Body.(io.ReadSeeker); ok {
+		body := &noCloseSeekBody{ReadSeeker: rs, realCloser: req.Body}
+		getBody := func() (io.ReadCloser, error) {
+			if _, seekErr := rs.Seek(0, io.SeekStart); seekErr != nil {
+				return nil, seekErr
+			}
+			return body, nil
+		}
+		return body, getBody, body.RealClose, nil
+	}
+
+	bodyBytes, readErr := io.ReadAll(req.Body)
+	closeErr := req.Body.Close()
+	if readErr != nil {
+		return nil, nil, nil, readErr
+	}
+	if closeErr != nil {
+		return nil, nil, nil, closeErr
+	}
+
+	newGetBody := func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewBuffer(bodyBytes)), nil
+	}
+	firstBody, firstBodyErr := newGetBody()
+	return firstBody, newGetBody, nil, firstBodyErr
 }
 
 func (rm RetryMiddleware) notifyRetry(ctx context.Context, err error, duration time.Duration) {
