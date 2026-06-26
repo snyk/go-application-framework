@@ -186,17 +186,13 @@ func (rm RetryMiddleware) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		// depending on the response determine if we should retry
-		origBody := response.Body // capture before shouldRetry may replace it (e.g. getErrorList for 503)
 		if retryError := shouldRetry(response, actualAttempts, *cachedMaxRetries); retryError != nil {
 			rm.logger.Debug().Msgf("Retrying request, reason: %v", retryError)
 
-			// Close origBody when a retry will follow (non-permanent) OR when
-			// getErrorList replaced response.Body (permanent 503). Skip only when
-			// the caller still owns the same body reference (non-503 permanent).
+			// When doing a retry, we need to drain and close the RESPONSE body, to ensure that the resources are freed
 			var permErr *backoff.PermanentError
-			bodyWasReplaced := origBody != response.Body
-			if !errors.As(retryError, &permErr) || bodyWasReplaced {
-				drainAndClose(origBody)
+			if !errors.As(retryError, &permErr) {
+				drainAndClose(response.Body)
 			}
 
 			return response, &RetryAttemptError{
