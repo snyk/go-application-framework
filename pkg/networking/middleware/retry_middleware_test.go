@@ -1128,7 +1128,7 @@ func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
 
 		if attemptCount == 1 {
 			// First attempt: return 503 with a body that tracks Close()
-			body := io.NopCloser(bytes.NewReader([]byte("service unavailable")))
+			body := io.NopCloser(bytes.NewReader([]byte("too much")))
 			trackingBody := &trackingReadCloser{
 				ReadCloser: body,
 				onClose: func() {
@@ -1138,7 +1138,7 @@ func TestRetryMiddleware_IntermediateResponseBodyClosed(t *testing.T) {
 				},
 			}
 			return &http.Response{
-				StatusCode: http.StatusServiceUnavailable,
+				StatusCode: http.StatusTooManyRequests,
 				Header:     headers,
 				Body:       trackingBody,
 				Request:    req,
@@ -1207,7 +1207,7 @@ func TestRetryMiddleware_ContextCancellation_BodyClosed(t *testing.T) {
 		cancel()
 
 		return &http.Response{
-			StatusCode: http.StatusServiceUnavailable,
+			StatusCode: http.StatusTooManyRequests,
 			Header:     headers,
 			Body:       trackingBody,
 			Request:    req,
@@ -1261,7 +1261,7 @@ func TestRetryMiddleware_503Permanent_OriginalBodyClosed(t *testing.T) {
 			},
 		}
 		return &http.Response{
-			StatusCode: http.StatusServiceUnavailable,
+			StatusCode: http.StatusTooManyRequests,
 			Header:     headers,
 			Body:       trackingBody,
 			Request:    req,
@@ -1278,7 +1278,7 @@ func TestRetryMiddleware_503Permanent_OriginalBodyClosed(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 
 	// The original transport body must be closed even on permanent 503, because
 	// getErrorList consumed it (ReadAll) and replaced response.Body with a buffer.
@@ -1316,7 +1316,7 @@ func TestRetryMiddleware_MultipleIntermediateResponseBodiesClosed(t *testing.T) 
 				},
 			}
 			return &http.Response{
-				StatusCode: http.StatusServiceUnavailable,
+				StatusCode: http.StatusTooManyRequests,
 				Header:     headers,
 				Body:       trackingBody,
 				Request:    req,
