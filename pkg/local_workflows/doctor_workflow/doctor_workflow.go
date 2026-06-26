@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/logsummary"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -60,6 +61,14 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	logger.Debug().Msgf("doctor: summarized debug log (%d notable events from %d bytes)", len(summary.Highlights), len(debugLog))
 
 	report := summary.Format()
+	if config.GetBool(noLiveCheckFlag) {
+		logger.Debug().Msg("doctor: --no-live-check set, skipping live checks")
+	} else {
+		live := livecheck.Run(invocationCtx)
+		logger.Debug().Msgf("doctor: gathered live context (auth ok=%t)", live.Auth.OK)
+		report += live.Format()
+	}
+
 	outputData := workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_DOCTOR, doctorWorkflowName),
 		"text/plain",
