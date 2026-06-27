@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 )
@@ -29,6 +30,10 @@ func Test_ResponseMiddleware(t *testing.T) {
 		case "/500":
 			w.WriteHeader(http.StatusInternalServerError)
 		case "/429":
+			w.WriteHeader(http.StatusTooManyRequests)
+		case "/429-with-reset":
+			w.Header().Set("X-RateLimit-Reset", "3600")
+			w.Header().Set("Retry-After", "1800")
 			w.WriteHeader(http.StatusTooManyRequests)
 		case "/jsonapi-SNYK-0003":
 			w.WriteHeader(http.StatusBadRequest)
@@ -94,6 +99,43 @@ func Test_ResponseMiddleware(t *testing.T) {
 			assert.Equal(t, snykErr.Meta["request-id"], "1234")
 			assert.Equal(t, snykErr.Meta["request-path"], fmt.Sprintf("/%d", code))
 		}
+	})
+
+	t.Run("429 with rate-limit headers enriches error", func(t *testing.T) {
+		config := getBaseConfig()
+		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+
+		req := buildRequest(server.URL + "/429-with-reset")
+		res, err := rt.RoundTrip(req)
+
+		assert.NotNil(t, res)
+		assert.Error(t, err)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
+		assert.Equal(t, 3600, snykErr.Meta["retry-after-seconds"])
+
+		errorRendered := presenters.RenderError(snykErr, context.Background())
+		assert.Contains(t, errorRendered, "Retry after: ~60 min")
+	})
+
+	t.Run("429 without rate-limit headers keeps default message", func(t *testing.T) {
+		config := getBaseConfig()
+		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+
+		req := buildRequest(server.URL + "/429")
+		res, err := rt.RoundTrip(req)
+
+		assert.NotNil(t, res)
+		assert.Error(t, err)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
+		assert.Equal(t, "Service temporarily throttled", snykErr.Title)
 	})
 
 	t.Run("no error if no status code matches", func(t *testing.T) {
