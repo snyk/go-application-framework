@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package snyk.extension.v1;
+
+option go_package = "github.com/snyk/go-application-framework/pkg/extension/proto;extensionpb";
+
+// Extension is the contract an out-of-process extension binary exposes to the
+// host CLI. The host launches the binary via hashicorp/go-plugin and talks to
+// it over this gRPC service. The host never loads extension code into its own
+// address space; everything crosses this boundary.
+service Extension {
+  // Discover returns the workflows this extension provides. The host calls it
+  // once, right after launching the plugin, to register proxy workflows.
+  rpc Discover(DiscoverRequest) returns (DiscoverResponse);
+
+  // Execute runs one of the extension's workflows. The host marshals the
+  // declared configuration snapshot and input data across; the extension
+  // returns its output data.
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+}
+
+message DiscoverRequest {}
+
+message DiscoverResponse {
+  repeated WorkflowSpec workflows = 1;
+}
+
+// WorkflowSpec mirrors what an in-process extension registers via
+// engine.Register: an identifier, visibility, and its configuration flags.
+message WorkflowSpec {
+  string identifier = 1; // workflow identifier URL, e.g. "flw://hello"
+  bool visible = 2;
+  repeated FlagSpec flags = 3;
+}
+
+// FlagSpec describes one configuration option the workflow understands. The
+// host uses these both to build CLI flags and to decide which configuration
+// values are exported to the extension at Execute time.
+message FlagSpec {
+  string name = 1;
+  string type = 2; // "bool" | "string" | "int"
+  string default_value = 3;
+  string usage = 4;
+}
+
+message ExecuteRequest {
+  string identifier = 1;
+  // config is the snapshot of configuration values the host exports to the
+  // extension. Only keys the extension declared via FlagSpec are included.
+  map<string, string> config = 2;
+  repeated DataMsg input = 3;
+}
+
+message ExecuteResponse {
+  repeated DataMsg output = 1;
+}
+
+// DataMsg is the wire form of workflow.Data. Payloads are transported as bytes
+// with an explicit encoding so the receiver can reconstruct the original Go
+// value.
+message DataMsg {
+  string identifier = 1;
+  map<string, string> metadata = 2;
+  bytes payload = 3;
+  PayloadEncoding payload_encoding = 4;
+}
+
+enum PayloadEncoding {
+  PAYLOAD_ENCODING_UNSPECIFIED = 0; // nil payload
+  PAYLOAD_ENCODING_BYTES = 1;       // []byte, sent verbatim
+  PAYLOAD_ENCODING_STRING = 2;      // string
+  PAYLOAD_ENCODING_JSON = 3;        // any other value, JSON-encoded
+}

@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/extension"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
@@ -425,6 +426,20 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)
+
+	// Load any out-of-process extension binaries configured for this engine.
+	// This replaces the previous "scan here for extension binaries" placeholder:
+	// extensions run as gRPC subprocesses and are registered like built-ins.
+	if config != nil {
+		if paths := config.GetStringSlice(extension.ConfigurationKeyPaths); len(paths) > 0 {
+			loader := extension.NewLoader(
+				extension.WithPaths(paths...),
+				extension.WithLogger(engine.GetLogger()),
+			)
+			engine.AddExtensionInitializer(loader.Init)
+		}
+	}
+
 	return engine
 }
 

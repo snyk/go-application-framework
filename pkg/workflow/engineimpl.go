@@ -160,14 +160,15 @@ func (e *EngineImpl) Init() error {
 
 	_ = e.GetNetworkAccess()
 
+	// Extension initializers include both built-in extensions and, when
+	// configured, a loader for out-of-process extension binaries (see
+	// pkg/extension and app.WithExtensionPaths).
 	for i := range e.extensionInitializer {
 		err = e.extensionInitializer[i](e)
 		if err != nil {
 			return err
 		}
 	}
-
-	// later scan here for extension binaries
 
 	if e.analytics == nil {
 		e.analytics = e.initAnalytics()

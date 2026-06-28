@@ -1,0 +1,135 @@
+package extension
+
+import (
+	"context"
+	"net/url"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+)
+
+// fakeConn is an in-memory pluginConn used to test the Loader's registration
+// and proxying logic without launching a subprocess.
+type fakeConn struct {
+	specs        []*extensionpb.WorkflowSpec
+	output       []*extensionpb.DataMsg
+	execErr      error
+	lastID       string
+	lastConfig   map[string]string
+	lastInput    []*extensionpb.DataMsg
+	executeCalls int
+}
+
+func (f *fakeConn) Discover(context.Context) ([]*extensionpb.WorkflowSpec, error) {
+	return f.specs, nil
+}
+
+func (f *fakeConn) Execute(_ context.Context, id string, config map[string]string, input []*extensionpb.DataMsg) ([]*extensionpb.DataMsg, error) {
+	f.executeCalls++
+	f.lastID = id
+	f.lastConfig = config
+	f.lastInput = input
+	if f.execErr != nil {
+		return nil, f.execErr
+	}
+	return f.output, nil
+}
+
+func fakeDialer(conn pluginConn) dialer {
+	return func(context.Context, string) (pluginConn, func(), error) {
+		return conn, func() {}, nil
+	}
+}
+
+func newInitializedEngine(t *testing.T, loader *Loader) workflow.Engine {
+	t.Helper()
+	engine := workflow.NewDefaultWorkFlowEngine()
+	engine.AddExtensionInitializer(loader.Init)
+	require.NoError(t, engine.Init())
+	return engine
+}
+
+func TestLoader_RegistersDiscoveredWorkflows(t *testing.T) {
+	conn := &fakeConn{
+		specs: []*extensionpb.WorkflowSpec{
+			{Identifier: "flw://hello", Visible: true, Flags: []*extensionpb.FlagSpec{
+				{Name: "name", Type: "string", DefaultValue: "world", Usage: "who to greet"},
+			}},
+			{Identifier: "flw://secret", Visible: false},
+		},
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)))
+	engine := newInitializedEngine(t, loader)
+
+	helloID, _ := url.Parse("flw://hello")
+	entry, ok := engine.GetWorkflow(helloID)
+	require.True(t, ok, "hello workflow should be registered")
+	assert.True(t, entry.IsVisible())
+
+	secretID, _ := url.Parse("flw://secret")
+	secretEntry, ok := engine.GetWorkflow(secretID)
+	require.True(t, ok)
+	assert.False(t, secretEntry.IsVisible(), "hidden workflow visibility should be honored")
+
+	// The declared flag is wired into the engine's configuration.
+	assert.Equal(t, "world", engine.GetConfiguration().GetString("name"))
+}
+
+func TestLoader_ProxyInvocation(t *testing.T) {
+	outID := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("hello"), "greeting")
+	conn := &fakeConn{
+		specs: []*extensionpb.WorkflowSpec{
+			{Identifier: "flw://hello", Visible: true, Flags: []*extensionpb.FlagSpec{
+				{Name: "name", Type: "string", DefaultValue: "world"},
+			}},
+		},
+		output: []*extensionpb.DataMsg{
+			mustMsg(t, workflow.NewData(outID, "text/plain", []byte("hi"))),
+		},
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)))
+	engine := newInitializedEngine(t, loader)
+
+	engine.GetConfiguration().Set("name", "snyk")
+
+	helloID, _ := url.Parse("flw://hello")
+	output, err := engine.Invoke(helloID)
+	require.NoError(t, err)
+
+	// The proxy forwarded the call to the extension...
+	assert.Equal(t, 1, conn.executeCalls)
+	assert.Equal(t, "flw://hello", conn.lastID)
+	// ...exporting only the declared config key, with its live value.
+	assert.Equal(t, map[string]string{"name": "snyk"}, conn.lastConfig)
+	// ...and the extension's output came back converted to workflow.Data.
+	require.Len(t, output, 1)
+	assert.Equal(t, []byte("hi"), output[0].GetPayload())
+}
+
+func TestLoader_FailingDialerDoesNotAbortInit(t *testing.T) {
+	loader := NewLoader(WithPaths("broken"), withDialer(func(context.Context, string) (pluginConn, func(), error) {
+		return nil, nil, assert.AnError
+	}))
+
+	engine := workflow.NewDefaultWorkFlowEngine()
+	engine.AddExtensionInitializer(loader.Init)
+	// A broken extension must not break engine initialization.
+	assert.NoError(t, engine.Init())
+}
+
+func TestLoader_ProxyPropagatesExecuteError(t *testing.T) {
+	conn := &fakeConn{
+		specs:   []*extensionpb.WorkflowSpec{{Identifier: "flw://hello", Visible: true}},
+		execErr: assert.AnError,
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)))
+	engine := newInitializedEngine(t, loader)
+
+	helloID, _ := url.Parse("flw://hello")
+	_, err := engine.Invoke(helloID)
+	require.Error(t, err)
+}
