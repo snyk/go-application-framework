@@ -2,6 +2,7 @@ package extension
 
 import (
 	"context"
+	"net/url"
 	"strconv"
 
 	plugin "github.com/hashicorp/go-plugin"
@@ -14,13 +15,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-// Handler is the plugin-side implementation of a single workflow. It receives a
-// configuration reconstructed from the values the host exported and the decoded
-// input data, and returns the workflow's output data.
-//
-// The signature deliberately mirrors workflow.Callback so that moving logic
-// between an in-process workflow and an out-of-process extension is mechanical.
-type Handler func(ctx context.Context, config configuration.Configuration, input []workflow.Data) ([]workflow.Data, error)
+// Handler is the plugin-side implementation of a single workflow. It is exactly
+// workflow.Callback: it receives a workflow.InvocationContext (configuration,
+// network access, logger, UI) and the input data, and returns output data. An
+// existing in-process workflow callback can be registered as an extension
+// without changing its signature.
+type Handler = workflow.Callback
 
 // Registrar is handed to the register callback passed to Serve. Extension
 // authors use it to declare the workflows their binary provides.
@@ -110,7 +110,14 @@ func (h *serveHandler) Execute(ctx context.Context, req *extensionpb.ExecuteRequ
 		return nil, status.Errorf(codes.InvalidArgument, "decoding input: %v", err)
 	}
 
-	output, err := reg.handler(ctx, config, input)
+	id, err := url.Parse(req.GetIdentifier())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "parsing identifier: %v", err)
+	}
+
+	invocation := newPluginInvocationContext(ctx, id, config, req.GetNetworkProxyUrl(), req.GetNetworkProxyToken())
+
+	output, err := reg.handler(invocation, input)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}

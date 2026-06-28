@@ -18,9 +18,7 @@ type fakeConn struct {
 	specs        []*extensionpb.WorkflowSpec
 	output       []*extensionpb.DataMsg
 	execErr      error
-	lastID       string
-	lastConfig   map[string]string
-	lastInput    []*extensionpb.DataMsg
+	lastReq      executeRequest
 	executeCalls int
 }
 
@@ -28,11 +26,9 @@ func (f *fakeConn) Discover(context.Context) ([]*extensionpb.WorkflowSpec, error
 	return f.specs, nil
 }
 
-func (f *fakeConn) Execute(_ context.Context, id string, config map[string]string, input []*extensionpb.DataMsg) ([]*extensionpb.DataMsg, error) {
+func (f *fakeConn) Execute(_ context.Context, req executeRequest) ([]*extensionpb.DataMsg, error) {
 	f.executeCalls++
-	f.lastID = id
-	f.lastConfig = config
-	f.lastInput = input
+	f.lastReq = req
 	if f.execErr != nil {
 		return nil, f.execErr
 	}
@@ -102,9 +98,9 @@ func TestLoader_ProxyInvocation(t *testing.T) {
 
 	// The proxy forwarded the call to the extension...
 	assert.Equal(t, 1, conn.executeCalls)
-	assert.Equal(t, "flw://hello", conn.lastID)
+	assert.Equal(t, "flw://hello", conn.lastReq.identifier)
 	// ...exporting only the declared config key, with its live value.
-	assert.Equal(t, map[string]string{"name": "snyk"}, conn.lastConfig)
+	assert.Equal(t, map[string]string{"name": "snyk"}, conn.lastReq.config)
 	// ...and the extension's output came back converted to workflow.Data.
 	require.Len(t, output, 1)
 	assert.Equal(t, []byte("hi"), output[0].GetPayload())

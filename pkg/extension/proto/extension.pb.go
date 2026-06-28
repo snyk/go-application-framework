@@ -292,10 +292,17 @@ type ExecuteRequest struct {
 	Identifier string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
 	// config is the snapshot of configuration values the host exports to the
 	// extension. Only keys the extension declared via FlagSpec are included.
-	Config        map[string]string `protobuf:"bytes,2,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Input         []*DataMsg        `protobuf:"bytes,3,rep,name=input,proto3" json:"input,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Config map[string]string `protobuf:"bytes,2,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Input  []*DataMsg        `protobuf:"bytes,3,rep,name=input,proto3" json:"input,omitempty"`
+	// network_proxy_url and network_proxy_token connect the extension to the
+	// host's authenticated network access (the "option C" loopback auth proxy).
+	// When set, the extension makes plain HTTP requests to network_proxy_url and
+	// the host injects the user's credentials before forwarding upstream. Empty
+	// when no network access is provided to this invocation.
+	NetworkProxyUrl   string `protobuf:"bytes,4,opt,name=network_proxy_url,json=networkProxyUrl,proto3" json:"network_proxy_url,omitempty"`
+	NetworkProxyToken string `protobuf:"bytes,5,opt,name=network_proxy_token,json=networkProxyToken,proto3" json:"network_proxy_token,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ExecuteRequest) Reset() {
@@ -347,6 +354,20 @@ func (x *ExecuteRequest) GetInput() []*DataMsg {
 		return x.Input
 	}
 	return nil
+}
+
+func (x *ExecuteRequest) GetNetworkProxyUrl() string {
+	if x != nil {
+		return x.NetworkProxyUrl
+	}
+	return ""
+}
+
+func (x *ExecuteRequest) GetNetworkProxyToken() string {
+	if x != nil {
+		return x.NetworkProxyToken
+	}
+	return ""
 }
 
 type ExecuteResponse struct {
@@ -482,13 +503,15 @@ const file_extension_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12#\n" +
 	"\rdefault_value\x18\x03 \x01(\tR\fdefaultValue\x12\x14\n" +
-	"\x05usage\x18\x04 \x01(\tR\x05usage\"\xe4\x01\n" +
+	"\x05usage\x18\x04 \x01(\tR\x05usage\"\xc0\x02\n" +
 	"\x0eExecuteRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
 	"identifier\x12E\n" +
 	"\x06config\x18\x02 \x03(\v2-.snyk.extension.v1.ExecuteRequest.ConfigEntryR\x06config\x120\n" +
-	"\x05input\x18\x03 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x05input\x1a9\n" +
+	"\x05input\x18\x03 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x05input\x12*\n" +
+	"\x11network_proxy_url\x18\x04 \x01(\tR\x0fnetworkProxyUrl\x12.\n" +
+	"\x13network_proxy_token\x18\x05 \x01(\tR\x11networkProxyToken\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"E\n" +

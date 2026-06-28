@@ -49,6 +49,13 @@ message ExecuteRequest {
   // extension. Only keys the extension declared via FlagSpec are included.
   map<string, string> config = 2;
   repeated DataMsg input = 3;
+  // network_proxy_url and network_proxy_token connect the extension to the
+  // host's authenticated network access (the "option C" loopback auth proxy).
+  // When set, the extension makes plain HTTP requests to network_proxy_url and
+  // the host injects the user's credentials before forwarding upstream. Empty
+  // when no network access is provided to this invocation.
+  string network_proxy_url = 4;
+  string network_proxy_token = 5;
 }
 
 message ExecuteResponse {

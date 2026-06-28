@@ -12,6 +12,7 @@ import (
 	plugin "github.com/hashicorp/go-plugin"
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -138,28 +139,63 @@ func (l *Loader) registerWorkflow(engine workflow.Engine, conn pluginConn, spec 
 
 // makeProxy builds the in-process workflow.Callback that forwards an invocation
 // to the out-of-process extension. The only configuration values exported to
-// the extension are the keys it declared via FlagSpec.
+// the extension are the keys it declared via FlagSpec. For the duration of the
+// call it stands up a loopback auth proxy (option C) so the extension can reach
+// the host's authenticated network access without ever holding credentials.
 func (l *Loader) makeProxy(conn pluginConn, spec *extensionpb.WorkflowSpec) workflow.Callback {
 	return func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		config := invocation.GetConfiguration()
 
-		snapshot := make(map[string]string, len(spec.GetFlags()))
+		req := executeRequest{
+			identifier: spec.GetIdentifier(),
+			config:     make(map[string]string, len(spec.GetFlags())),
+		}
 		for _, flag := range spec.GetFlags() {
-			snapshot[flag.GetName()] = config.GetString(flag.GetName())
+			req.config[flag.GetName()] = config.GetString(flag.GetName())
 		}
 
-		inMsgs, err := dataSliceToMsgs(input)
-		if err != nil {
+		// Bridge the host's authenticated network access for this invocation.
+		if proxy, cleanup := l.startAuthProxy(invocation); proxy != nil {
+			defer cleanup()
+			req.networkProxyURL = proxy.BaseURL()
+			req.networkProxyToken = proxy.Secret()
+		}
+
+		var err error
+		if req.input, err = dataSliceToMsgs(input); err != nil {
 			return nil, fmt.Errorf("serializing input for %q: %w", spec.GetIdentifier(), err)
 		}
 
-		outMsgs, err := conn.Execute(invocation.Context(), spec.GetIdentifier(), snapshot, inMsgs)
+		outMsgs, err := conn.Execute(invocation.Context(), req)
 		if err != nil {
 			return nil, fmt.Errorf("executing extension workflow %q: %w", spec.GetIdentifier(), err)
 		}
 
 		return msgsToDataSlice(outMsgs, config)
 	}
+}
+
+// startAuthProxy launches the loopback auth proxy backed by the invocation's
+// network access. It returns (nil, noop) when network access is unavailable so
+// invocation still proceeds without the network bridge.
+func (l *Loader) startAuthProxy(invocation workflow.InvocationContext) (*AuthProxy, func()) {
+	noop := func() {}
+
+	network := invocation.GetNetworkAccess()
+	if network == nil {
+		return nil, noop
+	}
+	upstream := invocation.GetConfiguration().GetString(configuration.API_URL)
+	if upstream == "" {
+		return nil, noop
+	}
+
+	proxy, err := NewAuthProxy(upstream, network.GetRoundTripper(), l.logger)
+	if err != nil {
+		l.logger.Warn().Err(err).Msg("extension network access disabled: failed to start auth proxy")
+		return nil, noop
+	}
+	return proxy, func() { _ = proxy.Close() }
 }
 
 // Close terminates every extension process the Loader launched. Call it during

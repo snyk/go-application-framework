@@ -1,6 +1,8 @@
 package extension
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -68,4 +71,49 @@ func TestEndToEnd_LoadRealPluginBinary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	assert.Equal(t, []byte("hello snyk"), out[0].GetPayload())
+}
+
+// TestEndToEnd_ExtensionMakesAuthenticatedCall is the option-C proof: a loaded
+// extension calls the "Snyk API" through the host's authenticated network
+// access. The host injects the user's credentials; the extension process never
+// holds them.
+func TestEndToEnd_ExtensionMakesAuthenticatedCall(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping end-to-end plugin build in short mode")
+	}
+
+	const token = "test-token-12345"
+
+	// Fake Snyk API: records the Authorization header it received and echoes it.
+	var seenAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenAuth = r.Header.Get("Authorization")
+		assert.Equal(t, "/echo", r.URL.Path)
+		_, _ = w.Write([]byte(`{"authorization":"` + seenAuth + `"}`))
+	}))
+	defer upstream.Close()
+
+	binary := buildExamplePlugin(t)
+
+	loader := NewLoader(WithPaths(binary))
+	t.Cleanup(loader.Close)
+
+	engine := workflow.NewDefaultWorkFlowEngine()
+	config := engine.GetConfiguration()
+	config.Set(configuration.API_URL, upstream.URL)
+	config.Set(configuration.AUTHENTICATION_TOKEN, token)
+	engine.AddExtensionInitializer(loader.Init)
+	require.NoError(t, engine.Init())
+
+	fetchID, _ := url.Parse("flw://hello.fetch")
+	out, err := engine.Invoke(fetchID)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+
+	// The host injected the token; the upstream saw it...
+	assert.Contains(t, seenAuth, token, "host should have injected the auth token upstream")
+	// ...and the authenticated response flowed back to the extension and out.
+	payload, ok := out[0].GetPayload().([]byte)
+	require.True(t, ok)
+	assert.Contains(t, string(payload), token)
 }

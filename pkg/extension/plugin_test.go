@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -55,9 +54,9 @@ func TestGRPC_Discover(t *testing.T) {
 
 func TestGRPC_Execute_RoundTrip(t *testing.T) {
 	// A handler that greets using the "name" config value and echoes its input.
-	handler := func(_ context.Context, config configuration.Configuration, input []workflow.Data) ([]workflow.Data, error) {
+	handler := func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		id := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("hello"), "greeting")
-		greeting := "hello " + config.GetString("name")
+		greeting := "hello " + invocation.GetConfiguration().GetString("name")
 		out := workflow.NewData(id, "text/plain", []byte(greeting))
 		result := []workflow.Data{out}
 		return append(result, input...), nil
@@ -72,7 +71,11 @@ func TestGRPC_Execute_RoundTrip(t *testing.T) {
 	inID := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("hello"), "echo")
 	input := []*extensionpb.DataMsg{mustMsg(t, workflow.NewData(inID, "text/plain", []byte("ping")))}
 
-	out, err := conn.Execute(context.Background(), "flw://hello", map[string]string{"name": "snyk"}, input)
+	out, err := conn.Execute(context.Background(), executeRequest{
+		identifier: "flw://hello",
+		config:     map[string]string{"name": "snyk"},
+		input:      input,
+	})
 	require.NoError(t, err)
 	require.Len(t, out, 2)
 
@@ -88,23 +91,23 @@ func TestGRPC_Execute_UnknownWorkflow(t *testing.T) {
 		r.Register("flw://hello", noopHandler)
 	})
 
-	_, err := conn.Execute(context.Background(), "flw://missing", nil, nil)
+	_, err := conn.Execute(context.Background(), executeRequest{identifier: "flw://missing"})
 	assert.Error(t, err)
 }
 
 func TestGRPC_Execute_HandlerError(t *testing.T) {
 	conn := newTestConn(t, func(r Registrar) {
-		r.Register("flw://boom", func(context.Context, configuration.Configuration, []workflow.Data) ([]workflow.Data, error) {
+		r.Register("flw://boom", func(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
 			return nil, assert.AnError
 		})
 	})
 
-	_, err := conn.Execute(context.Background(), "flw://boom", nil, nil)
+	_, err := conn.Execute(context.Background(), executeRequest{identifier: "flw://boom"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), assert.AnError.Error())
 }
 
-func noopHandler(context.Context, configuration.Configuration, []workflow.Data) ([]workflow.Data, error) {
+func noopHandler(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
 	return nil, nil
 }
 

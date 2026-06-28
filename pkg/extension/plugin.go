@@ -59,12 +59,21 @@ func pluginMap(impl extensionpb.ExtensionServer) map[string]plugin.Plugin {
 	}
 }
 
+// executeRequest is the host-side, transport-agnostic form of an Execute call.
+type executeRequest struct {
+	identifier        string
+	config            map[string]string
+	input             []*extensionpb.DataMsg
+	networkProxyURL   string
+	networkProxyToken string
+}
+
 // pluginConn is the host-side view of a connected extension. It is an interface
 // so the Loader can be unit-tested with an in-memory fake instead of a real
 // subprocess.
 type pluginConn interface {
 	Discover(ctx context.Context) ([]*extensionpb.WorkflowSpec, error)
-	Execute(ctx context.Context, identifier string, config map[string]string, input []*extensionpb.DataMsg) ([]*extensionpb.DataMsg, error)
+	Execute(ctx context.Context, req executeRequest) ([]*extensionpb.DataMsg, error)
 }
 
 // grpcClient is the gRPC-backed implementation of pluginConn.
@@ -82,11 +91,13 @@ func (c *grpcClient) Discover(ctx context.Context) ([]*extensionpb.WorkflowSpec,
 	return resp.GetWorkflows(), nil
 }
 
-func (c *grpcClient) Execute(ctx context.Context, identifier string, config map[string]string, input []*extensionpb.DataMsg) ([]*extensionpb.DataMsg, error) {
+func (c *grpcClient) Execute(ctx context.Context, req executeRequest) ([]*extensionpb.DataMsg, error) {
 	resp, err := c.client.Execute(ctx, &extensionpb.ExecuteRequest{
-		Identifier: identifier,
-		Config:     config,
-		Input:      input,
+		Identifier:        req.identifier,
+		Config:            req.config,
+		Input:             req.input,
+		NetworkProxyUrl:   req.networkProxyURL,
+		NetworkProxyToken: req.networkProxyToken,
 	})
 	if err != nil {
 		return nil, err

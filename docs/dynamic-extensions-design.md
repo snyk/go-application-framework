@@ -1,6 +1,10 @@
-# Dynamic Extensions (Phase 1) — Technical Design
+# Dynamic Extensions — Technical Design
 
-Status: **Phase 1 — developer loop.** Implemented in `pkg/extension`.
+Status: **Phase 1 (developer loop) + authenticated network access.** Implemented
+in `pkg/extension`. Extensions load from prebuilt binaries without rebuilding the
+host, run out of process over gRPC, receive a full `workflow.InvocationContext`,
+and can call the Snyk API using the host's credentials without ever holding
+them.
 
 This document describes how the go-application-framework loads extensions
 *dynamically* — from standalone binaries discovered at runtime — instead of only
@@ -22,15 +26,21 @@ to a file in `pkg/extension`.
   (signing, registry, allowlist) and richer host callbacks can build on without
   re-architecting.
 
-**Non-goals (deferred to Phase 2 — see §10)**
+**Also delivered (host callback — network)**
+
+- Authenticated network access via the "option C" loopback auth proxy (§5a), so
+  trusted extensions can call the Snyk API with the user's credentials kept
+  host-side.
+
+**Non-goals (deferred — see §10)**
 
 - Downloading/installing extensions, a registry, signature verification, or an
   enterprise allowlist.
-- Giving extensions access to the host's authenticated network stack, UI, or
-  analytics (host callbacks).
-- A sandbox that constrains a *malicious* extension. Phase 1 isolates for
-  robustness (crash containment), not for confinement; an extension binary runs
-  with the user's OS privileges. Confinement is a trust-layer + (optionally
+- Bridging the remaining host services as live callbacks: UI, analytics, and
+  `Engine.Invoke`. (Network is done; the others are local/unavailable for now.)
+- A sandbox that constrains a *malicious* extension. The current phase isolates
+  for robustness (crash containment), not for confinement; an extension binary
+  runs with the user's OS privileges. Confinement is a trust-layer + (optionally
   WebAssembly) concern, called out in §9.
 
 ## 2. Background: the existing model
@@ -124,6 +134,39 @@ from its declared flag set (for defaults/types) overlaid with the snapshot. This
 keeps the exported surface minimal and predictable, which also matters for the
 Phase 2 security story.
 
+## 5a. Authenticated network access — "option C" (`authproxy.go`)
+
+Extensions need to call the Snyk API with the user's authentication, proxy, and
+TLS configuration. Rather than ship credentials into the extension process, the
+host runs a **loopback authenticating reverse proxy** for the duration of each
+invocation:
+
+```
+extension http.Client ──plain HTTP──▶ 127.0.0.1:PORT (AuthProxy)
+                                          │  validate per-invocation secret
+                                          │  strip secret, rewrite onto API_URL
+                                          ▼
+                                   host authenticated RoundTripper ──HTTPS──▶ Snyk API
+                                   (injects auth + headers + proxy + TLS)
+```
+
+- The host passes the extension two strings in `ExecuteRequest`: the proxy
+  `BaseURL` and a per-invocation random secret. **Credentials never cross into
+  the extension process.**
+- On the plugin side the proxy URL is installed as the extension's
+  `configuration.API_URL`, and the secret is attached as a static header
+  (`buildNetworkAccess`). Extension code calls `GetNetworkAccess().GetHttpClient()`
+  and builds URLs from `API_URL` exactly as an in-process workflow does.
+- The proxy's transport is `invocation.GetNetworkAccess().GetRoundTripper()`, so
+  the host injects auth precisely as if it had made the call itself.
+- The secret check (constant-time) ensures other local processes can't use the
+  proxy. The proxy is scoped to the single configured upstream (the API); it is
+  **not** a general-purpose egress. The whole proxy lives only for the duration
+  of the `Execute` call.
+
+This needs no gRPC broker: the extension reaches the loopback proxy over an
+ordinary socket, so the large `NetworkAccess` interface is never marshaled.
+
 ## 6. Host loader (`loader.go`)
 
 `extension.Loader.Init` *is* a `workflow.ExtensionInit`, so it is added to the
@@ -136,8 +179,8 @@ engine exactly like a built-in initializer.
   incompatible third-party extension must never prevent the CLI from starting.
 - **The proxy** (`makeProxy`) is the in-process `workflow.Callback` registered
   for each discovered workflow. On invocation it snapshots the declared config,
-  marshals input, calls `Execute`, and converts the result back to
-  `[]workflow.Data`.
+  starts the loopback auth proxy (§5a), marshals input, calls `Execute`, and
+  converts the result back to `[]workflow.Data`.
 - **Lifecycle.** `Close()` terminates every launched process; a CLI should defer
   it (or `plugin.CleanupClients()`) at shutdown. go-plugin children also detect
   parent death and exit on their own, so a missed `Close` does not orphan
@@ -160,15 +203,32 @@ func main() {
     })
 }
 
-func greet(_ context.Context, config configuration.Configuration, _ []workflow.Data) ([]workflow.Data, error) {
+func greet(ictx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
     id := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("hello"), "greeting")
-    return []workflow.Data{workflow.NewData(id, "text/plain", []byte("hello "+config.GetString("name")))}, nil
+    name := ictx.GetConfiguration().GetString("name")
+    return []workflow.Data{workflow.NewData(id, "text/plain", []byte("hello "+name))}, nil
 }
 ```
 
-`Handler`'s signature deliberately mirrors `workflow.Callback`, so moving logic
-between an in-process workflow and an out-of-process extension is mechanical.
-The full working example is `pkg/extension/testdata/exampleplugin`.
+`extension.Handler` is a type alias for `workflow.Callback` — an extension
+handler *is* a workflow callback, so an existing in-process workflow can be
+served as an extension without changing its signature.
+
+On the plugin side, `Serve` builds a real `workflow.InvocationContext`
+(`invocationcontext.go`) and passes it to the handler. Which services are live:
+
+| Service | Status in this phase |
+|---|---|
+| `GetConfiguration()` | declared flags + the proxied `API_URL` |
+| `GetNetworkAccess()` | **live** — routed through the host auth proxy (§5a) |
+| `GetLogger()` / `GetEnhancedLogger()` | write to stderr (go-plugin forwards to host) |
+| `GetUserInterface()` | console UI on **stderr** (stdout is the plugin protocol channel) |
+| `GetAnalytics()` | local instance (not yet bridged to the host) |
+| `GetEngine()` | `nil` — invoking sibling workflows across the boundary is deferred |
+| `GetRuntimeInfo()` | `nil` — not yet bridged |
+
+The full working example (a config workflow **and** an authenticated API call) is
+`pkg/extension/testdata/exampleplugin`.
 
 ## 8. Configuration and the developer loop
 
@@ -186,7 +246,7 @@ initializer. The developer loop becomes: `go build` your extension →
 
 ## 9. Security model
 
-What Phase 1 *does* provide:
+What this phase *does* provide:
 
 - **Isolation for robustness.** Extensions run in their own process; a crash is
   contained. The host never executes extension code in-process (contrast Go's
@@ -195,25 +255,31 @@ What Phase 1 *does* provide:
 - **Handshake gating.** The magic cookie + protocol version stop a stray or
   mismatched executable from being driven as an extension.
 - **Minimal config exposure.** Only declared keys are exported to an extension.
+- **Credentials stay host-side.** Network access uses the option-C auth proxy
+  (§5a): the host injects authentication; the extension only ever holds a
+  short-lived, single-upstream loopback secret. The host mediates every outbound
+  request, which is also the seam where a future allowlist can scope or deny
+  egress per extension.
 - **Explicit, operator-controlled loading.** Nothing is auto-discovered or
   auto-downloaded.
 
-What Phase 1 deliberately does **not** provide (and must not be mistaken for):
+What this phase deliberately does **not** provide (and must not be mistaken for):
 
 - It is **not** a sandbox. A loaded binary runs with the user's full OS
-  privileges. Phase 1 assumes the operator chose to run the binary — appropriate
-  for local development, **not** for untrusted third-party code.
+  privileges. It assumes the operator chose to run the binary — appropriate for
+  local development and trusted extensions, **not** for untrusted third-party
+  code.
 
 The enterprise-safety properties — verifying *which* code may run — live in the
-Phase 2 trust layer (§10), mirroring how Terraform secures providers (signing +
+trust layer (§10), mirroring how Terraform secures providers (signing +
 registry + the org choosing what to install) rather than sandboxing them.
 
-## 10. Phase 2 roadmap and the seams left for it
+## 10. Roadmap and the seams left for it
 
-- **Host callbacks.** Give extensions the authenticated network stack, UI, and
-  analytics back over gRPC using go-plugin's `GRPCBroker` (bidirectional). Seam:
-  `InvocationContext` is already the single source of these services in the
-  proxy; the broker plumbing slots in there.
+- **Remaining host callbacks.** Bridge UI, analytics, and `Engine.Invoke` back to
+  the host over go-plugin's `GRPCBroker` (bidirectional). Network is already done
+  (§5a) via the simpler loopback-proxy approach. Seam: `pluginInvocationContext`
+  is the single place these services are assembled on the plugin side.
 - **Trust layer.** Signature + checksum verification (Sigstore/cosign), a
   registry with verified publishers, and a **default-deny enterprise allowlist**
   expressed as a configuration policy (e.g. `extensions.allowed`). Seam: the
@@ -232,9 +298,13 @@ registry + the org choosing what to install) rather than sandboxing them.
 - **`loader_test.go`** — registration, visibility, config-snapshot scoping, proxy
   invocation, and graceful skip on dialer failure, using an injected fake conn
   against a real `workflow.Engine`.
+- **`authproxy_test.go`** — secret enforcement (constant-time, rejects
+  missing/wrong) and host-side auth injection, against a fake upstream.
 - **`loader_e2e_test.go`** and **`app/app_extension_test.go`** — the
-  load-without-rebuild proof: compile the testdata binary, then load and invoke
-  it through the real go-plugin subprocess dialer (skipped under `-short`).
+  load-without-rebuild proof and the **option-C proof**: compile the testdata
+  binary, load it through the real go-plugin subprocess dialer, and have it make
+  an authenticated API call where the host injects the token (skipped under
+  `-short`).
 
 ## 12. File map
 
@@ -244,7 +314,9 @@ registry + the org choosing what to install) rather than sandboxing them.
 | `proto/*.pb.go` | generated code (`buf generate`) |
 | `plugin.go` | handshake, go-plugin adapters, host `grpcClient`, `pluginConn` |
 | `convert.go` | `Data`/payload/config marshaling |
+| `authproxy.go` | host-side loopback auth proxy (option C) |
 | `serve.go` | plugin-author SDK (`Serve`, `Registrar`) + `serveHandler` |
+| `invocationcontext.go` | plugin-side `workflow.InvocationContext` |
 | `loader.go` | host-side `Loader` (`ExtensionInit`), proxy, real dialer |
-| `testdata/exampleplugin` | minimal reference extension |
+| `testdata/exampleplugin` | reference extension (config + authenticated API call) |
 | `app/app.go`, `app/options.go` | `WithExtensionPaths` + factory wiring |
