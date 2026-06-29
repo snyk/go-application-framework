@@ -1,5 +1,8 @@
 # Dynamic Extensions — Technical Design
 
+> Diagrams: see [dynamic-extensions-architecture.md](./dynamic-extensions-architecture.md)
+> for a component view (existing vs. new) and an invocation sequence diagram.
+
 Status: **Developer loop + authenticated network + host callbacks.** Implemented
 in `pkg/extension`. Extensions load from prebuilt binaries without rebuilding the
 host, run out of process over gRPC, receive a full `workflow.InvocationContext`,
