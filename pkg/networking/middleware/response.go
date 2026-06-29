@@ -179,8 +179,8 @@ func enrichRateLimitError(err error, res *http.Response) error {
 
 	// the default description can be replaced with something more actionable
 	snykErr.Detail = fmt.Sprintf("Retry after: ~%d min (\u2248%s UTC).", retryMinutes, retryTime.Format("15:04"))
-	snykErr.Description = "This limit is shared across all scans using this token \u2014 " +
-		"parallel scans in CI can exhaust it together, even if each one runs only once. " +
+	snykErr.Description = "This limit is shared across all usage of this token \u2014 " +
+		"parallel scans in CI or running different applications can exhaust it quickly. " +
 		"Reduce the chance of this: lower scan concurrency in your pipeline, " +
 		"add backoff/jitter between scans."
 
