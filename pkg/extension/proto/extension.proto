@@ -56,6 +56,11 @@ message ExecuteRequest {
   // when no network access is provided to this invocation.
   string network_proxy_url = 4;
   string network_proxy_token = 5;
+  // broker_id identifies the go-plugin broker stream the host is serving its
+  // HostCallback service on for this invocation. The extension dials it back to
+  // invoke sibling workflows and record analytics. Zero when no callbacks are
+  // available.
+  uint32 broker_id = 6;
 }
 
 message ExecuteResponse {
@@ -78,3 +83,42 @@ enum PayloadEncoding {
   PAYLOAD_ENCODING_STRING = 2;      // string
   PAYLOAD_ENCODING_JSON = 3;        // any other value, JSON-encoded
 }
+
+// HostCallback is the reverse direction: services the host exposes back to the
+// extension for the duration of an Execute call, reached over the go-plugin
+// broker. It lets an extension behave like an in-process workflow — invoking
+// sibling workflows and recording analytics that flow into the host's batch.
+service HostCallback {
+  // Invoke runs another workflow registered with the host engine, by
+  // identifier, in the host's full context (auth, network, other extensions).
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  // AddExtensionValue records an instrumentation key/value on the host's
+  // analytics for this invocation.
+  rpc AddExtensionValue(ExtensionValue) returns (CallbackAck);
+  // ReportError records an error on the host's analytics.
+  rpc ReportError(ReportErrorRequest) returns (CallbackAck);
+}
+
+message InvokeRequest {
+  string identifier = 1;
+  repeated DataMsg input = 2;
+}
+
+message InvokeResponse {
+  repeated DataMsg output = 1;
+}
+
+message ExtensionValue {
+  string key = 1;
+  oneof value {
+    string string_value = 2;
+    int64 int_value = 3;
+    bool bool_value = 4;
+  }
+}
+
+message ReportErrorRequest {
+  string message = 1;
+}
+
+message CallbackAck {}

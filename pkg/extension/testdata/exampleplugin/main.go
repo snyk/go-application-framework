@@ -31,6 +31,10 @@ func main() {
 		// network access. The extension never sees the user's credentials; the
 		// host injects them (see the "option C" auth proxy in the design doc).
 		r.Register("flw://hello.fetch", fetch)
+
+		// A workflow that invokes a sibling workflow on the host engine and
+		// records analytics — both via host callbacks.
+		r.Register("flw://hello.callsibling", callSibling)
 	})
 }
 
@@ -68,4 +72,24 @@ func fetch(ictx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data,
 	return []workflow.Data{
 		workflow.NewData(id, "application/json", body),
 	}, nil
+}
+
+func callSibling(ictx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+	// Analytics recorded here flow into the host's batch.
+	ictx.GetAnalytics().AddExtensionStringValue("ext.example", "ran")
+
+	engine := ictx.GetEngine()
+	if engine == nil {
+		return nil, fmt.Errorf("engine not available to extension")
+	}
+
+	reqID := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("hello.callsibling"), "request")
+	out, err := engine.Invoke(
+		workflow.NewWorkflowIdentifier("sibling"),
+		workflow.WithInput([]workflow.Data{workflow.NewData(reqID, "text/plain", []byte("from-extension"))}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("invoking sibling workflow: %w", err)
+	}
+	return out, nil
 }

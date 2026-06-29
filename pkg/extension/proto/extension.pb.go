@@ -301,8 +301,13 @@ type ExecuteRequest struct {
 	// when no network access is provided to this invocation.
 	NetworkProxyUrl   string `protobuf:"bytes,4,opt,name=network_proxy_url,json=networkProxyUrl,proto3" json:"network_proxy_url,omitempty"`
 	NetworkProxyToken string `protobuf:"bytes,5,opt,name=network_proxy_token,json=networkProxyToken,proto3" json:"network_proxy_token,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// broker_id identifies the go-plugin broker stream the host is serving its
+	// HostCallback service on for this invocation. The extension dials it back to
+	// invoke sibling workflows and record analytics. Zero when no callbacks are
+	// available.
+	BrokerId      uint32 `protobuf:"varint,6,opt,name=broker_id,json=brokerId,proto3" json:"broker_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExecuteRequest) Reset() {
@@ -368,6 +373,13 @@ func (x *ExecuteRequest) GetNetworkProxyToken() string {
 		return x.NetworkProxyToken
 	}
 	return ""
+}
+
+func (x *ExecuteRequest) GetBrokerId() uint32 {
+	if x != nil {
+		return x.BrokerId
+	}
+	return 0
 }
 
 type ExecuteResponse struct {
@@ -485,6 +497,288 @@ func (x *DataMsg) GetPayloadEncoding() PayloadEncoding {
 	return PayloadEncoding_PAYLOAD_ENCODING_UNSPECIFIED
 }
 
+type InvokeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identifier    string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	Input         []*DataMsg             `protobuf:"bytes,2,rep,name=input,proto3" json:"input,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InvokeRequest) Reset() {
+	*x = InvokeRequest{}
+	mi := &file_extension_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InvokeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InvokeRequest) ProtoMessage() {}
+
+func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_extension_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InvokeRequest.ProtoReflect.Descriptor instead.
+func (*InvokeRequest) Descriptor() ([]byte, []int) {
+	return file_extension_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *InvokeRequest) GetIdentifier() string {
+	if x != nil {
+		return x.Identifier
+	}
+	return ""
+}
+
+func (x *InvokeRequest) GetInput() []*DataMsg {
+	if x != nil {
+		return x.Input
+	}
+	return nil
+}
+
+type InvokeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Output        []*DataMsg             `protobuf:"bytes,1,rep,name=output,proto3" json:"output,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InvokeResponse) Reset() {
+	*x = InvokeResponse{}
+	mi := &file_extension_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InvokeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InvokeResponse) ProtoMessage() {}
+
+func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_extension_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InvokeResponse.ProtoReflect.Descriptor instead.
+func (*InvokeResponse) Descriptor() ([]byte, []int) {
+	return file_extension_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *InvokeResponse) GetOutput() []*DataMsg {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
+type ExtensionValue struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// Types that are valid to be assigned to Value:
+	//
+	//	*ExtensionValue_StringValue
+	//	*ExtensionValue_IntValue
+	//	*ExtensionValue_BoolValue
+	Value         isExtensionValue_Value `protobuf_oneof:"value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExtensionValue) Reset() {
+	*x = ExtensionValue{}
+	mi := &file_extension_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtensionValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtensionValue) ProtoMessage() {}
+
+func (x *ExtensionValue) ProtoReflect() protoreflect.Message {
+	mi := &file_extension_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtensionValue.ProtoReflect.Descriptor instead.
+func (*ExtensionValue) Descriptor() ([]byte, []int) {
+	return file_extension_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ExtensionValue) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *ExtensionValue) GetValue() isExtensionValue_Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *ExtensionValue) GetStringValue() string {
+	if x != nil {
+		if x, ok := x.Value.(*ExtensionValue_StringValue); ok {
+			return x.StringValue
+		}
+	}
+	return ""
+}
+
+func (x *ExtensionValue) GetIntValue() int64 {
+	if x != nil {
+		if x, ok := x.Value.(*ExtensionValue_IntValue); ok {
+			return x.IntValue
+		}
+	}
+	return 0
+}
+
+func (x *ExtensionValue) GetBoolValue() bool {
+	if x != nil {
+		if x, ok := x.Value.(*ExtensionValue_BoolValue); ok {
+			return x.BoolValue
+		}
+	}
+	return false
+}
+
+type isExtensionValue_Value interface {
+	isExtensionValue_Value()
+}
+
+type ExtensionValue_StringValue struct {
+	StringValue string `protobuf:"bytes,2,opt,name=string_value,json=stringValue,proto3,oneof"`
+}
+
+type ExtensionValue_IntValue struct {
+	IntValue int64 `protobuf:"varint,3,opt,name=int_value,json=intValue,proto3,oneof"`
+}
+
+type ExtensionValue_BoolValue struct {
+	BoolValue bool `protobuf:"varint,4,opt,name=bool_value,json=boolValue,proto3,oneof"`
+}
+
+func (*ExtensionValue_StringValue) isExtensionValue_Value() {}
+
+func (*ExtensionValue_IntValue) isExtensionValue_Value() {}
+
+func (*ExtensionValue_BoolValue) isExtensionValue_Value() {}
+
+type ReportErrorRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportErrorRequest) Reset() {
+	*x = ReportErrorRequest{}
+	mi := &file_extension_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportErrorRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportErrorRequest) ProtoMessage() {}
+
+func (x *ReportErrorRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_extension_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportErrorRequest.ProtoReflect.Descriptor instead.
+func (*ReportErrorRequest) Descriptor() ([]byte, []int) {
+	return file_extension_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ReportErrorRequest) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type CallbackAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CallbackAck) Reset() {
+	*x = CallbackAck{}
+	mi := &file_extension_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CallbackAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CallbackAck) ProtoMessage() {}
+
+func (x *CallbackAck) ProtoReflect() protoreflect.Message {
+	mi := &file_extension_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CallbackAck.ProtoReflect.Descriptor instead.
+func (*CallbackAck) Descriptor() ([]byte, []int) {
+	return file_extension_proto_rawDescGZIP(), []int{11}
+}
+
 var File_extension_proto protoreflect.FileDescriptor
 
 const file_extension_proto_rawDesc = "" +
@@ -503,7 +797,7 @@ const file_extension_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12#\n" +
 	"\rdefault_value\x18\x03 \x01(\tR\fdefaultValue\x12\x14\n" +
-	"\x05usage\x18\x04 \x01(\tR\x05usage\"\xc0\x02\n" +
+	"\x05usage\x18\x04 \x01(\tR\x05usage\"\xdd\x02\n" +
 	"\x0eExecuteRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
@@ -511,7 +805,8 @@ const file_extension_proto_rawDesc = "" +
 	"\x06config\x18\x02 \x03(\v2-.snyk.extension.v1.ExecuteRequest.ConfigEntryR\x06config\x120\n" +
 	"\x05input\x18\x03 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x05input\x12*\n" +
 	"\x11network_proxy_url\x18\x04 \x01(\tR\x0fnetworkProxyUrl\x12.\n" +
-	"\x13network_proxy_token\x18\x05 \x01(\tR\x11networkProxyToken\x1a9\n" +
+	"\x13network_proxy_token\x18\x05 \x01(\tR\x11networkProxyToken\x12\x1b\n" +
+	"\tbroker_id\x18\x06 \x01(\rR\bbrokerId\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"E\n" +
@@ -526,7 +821,24 @@ const file_extension_proto_rawDesc = "" +
 	"\x10payload_encoding\x18\x04 \x01(\x0e2\".snyk.extension.v1.PayloadEncodingR\x0fpayloadEncoding\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x87\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"a\n" +
+	"\rInvokeRequest\x12\x1e\n" +
+	"\n" +
+	"identifier\x18\x01 \x01(\tR\n" +
+	"identifier\x120\n" +
+	"\x05input\x18\x02 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x05input\"D\n" +
+	"\x0eInvokeResponse\x122\n" +
+	"\x06output\x18\x01 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x06output\"\x90\x01\n" +
+	"\x0eExtensionValue\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12#\n" +
+	"\fstring_value\x18\x02 \x01(\tH\x00R\vstringValue\x12\x1d\n" +
+	"\tint_value\x18\x03 \x01(\x03H\x00R\bintValue\x12\x1f\n" +
+	"\n" +
+	"bool_value\x18\x04 \x01(\bH\x00R\tboolValueB\a\n" +
+	"\x05value\".\n" +
+	"\x12ReportErrorRequest\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\"\r\n" +
+	"\vCallbackAck*\x87\x01\n" +
 	"\x0fPayloadEncoding\x12 \n" +
 	"\x1cPAYLOAD_ENCODING_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PAYLOAD_ENCODING_BYTES\x10\x01\x12\x1b\n" +
@@ -534,7 +846,11 @@ const file_extension_proto_rawDesc = "" +
 	"\x15PAYLOAD_ENCODING_JSON\x10\x032\xb2\x01\n" +
 	"\tExtension\x12S\n" +
 	"\bDiscover\x12\".snyk.extension.v1.DiscoverRequest\x1a#.snyk.extension.v1.DiscoverResponse\x12P\n" +
-	"\aExecute\x12!.snyk.extension.v1.ExecuteRequest\x1a\".snyk.extension.v1.ExecuteResponseBJZHgithub.com/snyk/go-application-framework/pkg/extension/proto;extensionpbb\x06proto3"
+	"\aExecute\x12!.snyk.extension.v1.ExecuteRequest\x1a\".snyk.extension.v1.ExecuteResponse2\x8b\x02\n" +
+	"\fHostCallback\x12M\n" +
+	"\x06Invoke\x12 .snyk.extension.v1.InvokeRequest\x1a!.snyk.extension.v1.InvokeResponse\x12V\n" +
+	"\x11AddExtensionValue\x12!.snyk.extension.v1.ExtensionValue\x1a\x1e.snyk.extension.v1.CallbackAck\x12T\n" +
+	"\vReportError\x12%.snyk.extension.v1.ReportErrorRequest\x1a\x1e.snyk.extension.v1.CallbackAckBJZHgithub.com/snyk/go-application-framework/pkg/extension/proto;extensionpbb\x06proto3"
 
 var (
 	file_extension_proto_rawDescOnce sync.Once
@@ -549,36 +865,49 @@ func file_extension_proto_rawDescGZIP() []byte {
 }
 
 var file_extension_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_extension_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_extension_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_extension_proto_goTypes = []any{
-	(PayloadEncoding)(0),     // 0: snyk.extension.v1.PayloadEncoding
-	(*DiscoverRequest)(nil),  // 1: snyk.extension.v1.DiscoverRequest
-	(*DiscoverResponse)(nil), // 2: snyk.extension.v1.DiscoverResponse
-	(*WorkflowSpec)(nil),     // 3: snyk.extension.v1.WorkflowSpec
-	(*FlagSpec)(nil),         // 4: snyk.extension.v1.FlagSpec
-	(*ExecuteRequest)(nil),   // 5: snyk.extension.v1.ExecuteRequest
-	(*ExecuteResponse)(nil),  // 6: snyk.extension.v1.ExecuteResponse
-	(*DataMsg)(nil),          // 7: snyk.extension.v1.DataMsg
-	nil,                      // 8: snyk.extension.v1.ExecuteRequest.ConfigEntry
-	nil,                      // 9: snyk.extension.v1.DataMsg.MetadataEntry
+	(PayloadEncoding)(0),       // 0: snyk.extension.v1.PayloadEncoding
+	(*DiscoverRequest)(nil),    // 1: snyk.extension.v1.DiscoverRequest
+	(*DiscoverResponse)(nil),   // 2: snyk.extension.v1.DiscoverResponse
+	(*WorkflowSpec)(nil),       // 3: snyk.extension.v1.WorkflowSpec
+	(*FlagSpec)(nil),           // 4: snyk.extension.v1.FlagSpec
+	(*ExecuteRequest)(nil),     // 5: snyk.extension.v1.ExecuteRequest
+	(*ExecuteResponse)(nil),    // 6: snyk.extension.v1.ExecuteResponse
+	(*DataMsg)(nil),            // 7: snyk.extension.v1.DataMsg
+	(*InvokeRequest)(nil),      // 8: snyk.extension.v1.InvokeRequest
+	(*InvokeResponse)(nil),     // 9: snyk.extension.v1.InvokeResponse
+	(*ExtensionValue)(nil),     // 10: snyk.extension.v1.ExtensionValue
+	(*ReportErrorRequest)(nil), // 11: snyk.extension.v1.ReportErrorRequest
+	(*CallbackAck)(nil),        // 12: snyk.extension.v1.CallbackAck
+	nil,                        // 13: snyk.extension.v1.ExecuteRequest.ConfigEntry
+	nil,                        // 14: snyk.extension.v1.DataMsg.MetadataEntry
 }
 var file_extension_proto_depIdxs = []int32{
-	3, // 0: snyk.extension.v1.DiscoverResponse.workflows:type_name -> snyk.extension.v1.WorkflowSpec
-	4, // 1: snyk.extension.v1.WorkflowSpec.flags:type_name -> snyk.extension.v1.FlagSpec
-	8, // 2: snyk.extension.v1.ExecuteRequest.config:type_name -> snyk.extension.v1.ExecuteRequest.ConfigEntry
-	7, // 3: snyk.extension.v1.ExecuteRequest.input:type_name -> snyk.extension.v1.DataMsg
-	7, // 4: snyk.extension.v1.ExecuteResponse.output:type_name -> snyk.extension.v1.DataMsg
-	9, // 5: snyk.extension.v1.DataMsg.metadata:type_name -> snyk.extension.v1.DataMsg.MetadataEntry
-	0, // 6: snyk.extension.v1.DataMsg.payload_encoding:type_name -> snyk.extension.v1.PayloadEncoding
-	1, // 7: snyk.extension.v1.Extension.Discover:input_type -> snyk.extension.v1.DiscoverRequest
-	5, // 8: snyk.extension.v1.Extension.Execute:input_type -> snyk.extension.v1.ExecuteRequest
-	2, // 9: snyk.extension.v1.Extension.Discover:output_type -> snyk.extension.v1.DiscoverResponse
-	6, // 10: snyk.extension.v1.Extension.Execute:output_type -> snyk.extension.v1.ExecuteResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	3,  // 0: snyk.extension.v1.DiscoverResponse.workflows:type_name -> snyk.extension.v1.WorkflowSpec
+	4,  // 1: snyk.extension.v1.WorkflowSpec.flags:type_name -> snyk.extension.v1.FlagSpec
+	13, // 2: snyk.extension.v1.ExecuteRequest.config:type_name -> snyk.extension.v1.ExecuteRequest.ConfigEntry
+	7,  // 3: snyk.extension.v1.ExecuteRequest.input:type_name -> snyk.extension.v1.DataMsg
+	7,  // 4: snyk.extension.v1.ExecuteResponse.output:type_name -> snyk.extension.v1.DataMsg
+	14, // 5: snyk.extension.v1.DataMsg.metadata:type_name -> snyk.extension.v1.DataMsg.MetadataEntry
+	0,  // 6: snyk.extension.v1.DataMsg.payload_encoding:type_name -> snyk.extension.v1.PayloadEncoding
+	7,  // 7: snyk.extension.v1.InvokeRequest.input:type_name -> snyk.extension.v1.DataMsg
+	7,  // 8: snyk.extension.v1.InvokeResponse.output:type_name -> snyk.extension.v1.DataMsg
+	1,  // 9: snyk.extension.v1.Extension.Discover:input_type -> snyk.extension.v1.DiscoverRequest
+	5,  // 10: snyk.extension.v1.Extension.Execute:input_type -> snyk.extension.v1.ExecuteRequest
+	8,  // 11: snyk.extension.v1.HostCallback.Invoke:input_type -> snyk.extension.v1.InvokeRequest
+	10, // 12: snyk.extension.v1.HostCallback.AddExtensionValue:input_type -> snyk.extension.v1.ExtensionValue
+	11, // 13: snyk.extension.v1.HostCallback.ReportError:input_type -> snyk.extension.v1.ReportErrorRequest
+	2,  // 14: snyk.extension.v1.Extension.Discover:output_type -> snyk.extension.v1.DiscoverResponse
+	6,  // 15: snyk.extension.v1.Extension.Execute:output_type -> snyk.extension.v1.ExecuteResponse
+	9,  // 16: snyk.extension.v1.HostCallback.Invoke:output_type -> snyk.extension.v1.InvokeResponse
+	12, // 17: snyk.extension.v1.HostCallback.AddExtensionValue:output_type -> snyk.extension.v1.CallbackAck
+	12, // 18: snyk.extension.v1.HostCallback.ReportError:output_type -> snyk.extension.v1.CallbackAck
+	14, // [14:19] is the sub-list for method output_type
+	9,  // [9:14] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_extension_proto_init() }
@@ -586,15 +915,20 @@ func file_extension_proto_init() {
 	if File_extension_proto != nil {
 		return
 	}
+	file_extension_proto_msgTypes[9].OneofWrappers = []any{
+		(*ExtensionValue_StringValue)(nil),
+		(*ExtensionValue_IntValue)(nil),
+		(*ExtensionValue_BoolValue)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_extension_proto_rawDesc), len(file_extension_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   14,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_extension_proto_goTypes,
 		DependencyIndexes: file_extension_proto_depIdxs,

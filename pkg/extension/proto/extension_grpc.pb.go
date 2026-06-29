@@ -178,3 +178,201 @@ var Extension_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "extension.proto",
 }
+
+const (
+	HostCallback_Invoke_FullMethodName            = "/snyk.extension.v1.HostCallback/Invoke"
+	HostCallback_AddExtensionValue_FullMethodName = "/snyk.extension.v1.HostCallback/AddExtensionValue"
+	HostCallback_ReportError_FullMethodName       = "/snyk.extension.v1.HostCallback/ReportError"
+)
+
+// HostCallbackClient is the client API for HostCallback service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// HostCallback is the reverse direction: services the host exposes back to the
+// extension for the duration of an Execute call, reached over the go-plugin
+// broker. It lets an extension behave like an in-process workflow — invoking
+// sibling workflows and recording analytics that flow into the host's batch.
+type HostCallbackClient interface {
+	// Invoke runs another workflow registered with the host engine, by
+	// identifier, in the host's full context (auth, network, other extensions).
+	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
+	// AddExtensionValue records an instrumentation key/value on the host's
+	// analytics for this invocation.
+	AddExtensionValue(ctx context.Context, in *ExtensionValue, opts ...grpc.CallOption) (*CallbackAck, error)
+	// ReportError records an error on the host's analytics.
+	ReportError(ctx context.Context, in *ReportErrorRequest, opts ...grpc.CallOption) (*CallbackAck, error)
+}
+
+type hostCallbackClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewHostCallbackClient(cc grpc.ClientConnInterface) HostCallbackClient {
+	return &hostCallbackClient{cc}
+}
+
+func (c *hostCallbackClient) Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InvokeResponse)
+	err := c.cc.Invoke(ctx, HostCallback_Invoke_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostCallbackClient) AddExtensionValue(ctx context.Context, in *ExtensionValue, opts ...grpc.CallOption) (*CallbackAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CallbackAck)
+	err := c.cc.Invoke(ctx, HostCallback_AddExtensionValue_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostCallbackClient) ReportError(ctx context.Context, in *ReportErrorRequest, opts ...grpc.CallOption) (*CallbackAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CallbackAck)
+	err := c.cc.Invoke(ctx, HostCallback_ReportError_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// HostCallbackServer is the server API for HostCallback service.
+// All implementations must embed UnimplementedHostCallbackServer
+// for forward compatibility.
+//
+// HostCallback is the reverse direction: services the host exposes back to the
+// extension for the duration of an Execute call, reached over the go-plugin
+// broker. It lets an extension behave like an in-process workflow — invoking
+// sibling workflows and recording analytics that flow into the host's batch.
+type HostCallbackServer interface {
+	// Invoke runs another workflow registered with the host engine, by
+	// identifier, in the host's full context (auth, network, other extensions).
+	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	// AddExtensionValue records an instrumentation key/value on the host's
+	// analytics for this invocation.
+	AddExtensionValue(context.Context, *ExtensionValue) (*CallbackAck, error)
+	// ReportError records an error on the host's analytics.
+	ReportError(context.Context, *ReportErrorRequest) (*CallbackAck, error)
+	mustEmbedUnimplementedHostCallbackServer()
+}
+
+// UnimplementedHostCallbackServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedHostCallbackServer struct{}
+
+func (UnimplementedHostCallbackServer) Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Invoke not implemented")
+}
+func (UnimplementedHostCallbackServer) AddExtensionValue(context.Context, *ExtensionValue) (*CallbackAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddExtensionValue not implemented")
+}
+func (UnimplementedHostCallbackServer) ReportError(context.Context, *ReportErrorRequest) (*CallbackAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportError not implemented")
+}
+func (UnimplementedHostCallbackServer) mustEmbedUnimplementedHostCallbackServer() {}
+func (UnimplementedHostCallbackServer) testEmbeddedByValue()                      {}
+
+// UnsafeHostCallbackServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to HostCallbackServer will
+// result in compilation errors.
+type UnsafeHostCallbackServer interface {
+	mustEmbedUnimplementedHostCallbackServer()
+}
+
+func RegisterHostCallbackServer(s grpc.ServiceRegistrar, srv HostCallbackServer) {
+	// If the following call panics, it indicates UnimplementedHostCallbackServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&HostCallback_ServiceDesc, srv)
+}
+
+func _HostCallback_Invoke_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InvokeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostCallbackServer).Invoke(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostCallback_Invoke_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostCallbackServer).Invoke(ctx, req.(*InvokeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostCallback_AddExtensionValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExtensionValue)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostCallbackServer).AddExtensionValue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostCallback_AddExtensionValue_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostCallbackServer).AddExtensionValue(ctx, req.(*ExtensionValue))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostCallback_ReportError_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportErrorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostCallbackServer).ReportError(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostCallback_ReportError_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostCallbackServer).ReportError(ctx, req.(*ReportErrorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// HostCallback_ServiceDesc is the grpc.ServiceDesc for HostCallback service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var HostCallback_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "snyk.extension.v1.HostCallback",
+	HandlerType: (*HostCallbackServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Invoke",
+			Handler:    _HostCallback_Invoke_Handler,
+		},
+		{
+			MethodName: "AddExtensionValue",
+			Handler:    _HostCallback_AddExtensionValue_Handler,
+		},
+		{
+			MethodName: "ReportError",
+			Handler:    _HostCallback_ReportError_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "extension.proto",
+}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -34,25 +35,48 @@ type pluginInvocationContext struct {
 	zlogger   *zerolog.Logger
 	ui        ui.UserInterface
 	analytics analytics.Analytics
+	engine    workflow.Engine
 }
 
 var _ workflow.InvocationContext = (*pluginInvocationContext)(nil)
 
-func newPluginInvocationContext(ctx context.Context, id workflow.Identifier, config configuration.Configuration, proxyURL, proxyToken string) *pluginInvocationContext {
+// newPluginInvocationContext assembles the InvocationContext handed to an
+// extension's handler. When hostClient is non-nil (the host offered callbacks),
+// analytics and the engine are backed by the host: analytics flows into the
+// host's batch and GetEngine().Invoke runs sibling workflows on the host.
+func newPluginInvocationContext(ctx context.Context, id workflow.Identifier, config configuration.Configuration, proxyURL, proxyToken string, hostClient extensionpb.HostCallbackClient) *pluginInvocationContext {
 	// stdout is reserved for the go-plugin handshake/protocol, so everything
 	// human-facing on the plugin side must go to stderr.
 	zl := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	network := buildNetworkAccess(config, proxyURL, proxyToken)
+	uiface := pluginUserInterface()
 
-	return &pluginInvocationContext{
-		ctx:       ctx,
-		id:        id,
-		config:    config,
-		network:   buildNetworkAccess(config, proxyURL, proxyToken),
-		logger:    log.New(os.Stderr, "", 0),
-		zlogger:   &zl,
-		ui:        pluginUserInterface(),
-		analytics: analytics.New(),
+	c := &pluginInvocationContext{
+		ctx:     ctx,
+		id:      id,
+		config:  config,
+		network: network,
+		logger:  log.New(os.Stderr, "", 0),
+		zlogger: &zl,
+		ui:      uiface,
 	}
+
+	if hostClient != nil {
+		c.analytics = newRemoteAnalytics(ctx, hostClient)
+		c.engine = &remoteEngine{
+			ctx:     ctx,
+			client:  hostClient,
+			config:  config,
+			network: network,
+			logger:  &zl,
+			ui:      uiface,
+			stats:   c.analytics,
+		}
+	} else {
+		c.analytics = analytics.New()
+	}
+
+	return c
 }
 
 // buildNetworkAccess constructs a NetworkAccess that routes through the host's
@@ -96,9 +120,9 @@ func (c *pluginInvocationContext) GetLogger() *log.Logger                     { 
 func (c *pluginInvocationContext) GetEnhancedLogger() *zerolog.Logger         { return c.zlogger }
 func (c *pluginInvocationContext) GetUserInterface() ui.UserInterface         { return c.ui }
 
-// GetEngine returns nil: an extension cannot invoke host workflows across the
-// process boundary yet. Bridging Engine.Invoke is deferred to a later phase.
-func (c *pluginInvocationContext) GetEngine() workflow.Engine { return nil }
+// GetEngine returns an engine whose Invoke runs sibling workflows on the host,
+// or nil when the host did not offer callbacks for this invocation.
+func (c *pluginInvocationContext) GetEngine() workflow.Engine { return c.engine }
 
 // GetRuntimeInfo returns nil in this phase; runtime info is not yet bridged.
 func (c *pluginInvocationContext) GetRuntimeInfo() runtimeinfo.RuntimeInfo { return nil }

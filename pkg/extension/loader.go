@@ -149,6 +149,7 @@ func (l *Loader) makeProxy(conn pluginConn, spec *extensionpb.WorkflowSpec) work
 		req := executeRequest{
 			identifier: spec.GetIdentifier(),
 			config:     make(map[string]string, len(spec.GetFlags())),
+			invocation: invocation,
 		}
 		for _, flag := range spec.GetFlags() {
 			req.config[flag.GetName()] = config.GetString(flag.GetName())

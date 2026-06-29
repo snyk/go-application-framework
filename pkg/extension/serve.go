@@ -62,6 +62,7 @@ type serveHandler struct {
 	extensionpb.UnimplementedExtensionServer
 	workflows map[string]*workflowRegistration
 	order     []string // preserves registration order for stable Discover output
+	broker    *plugin.GRPCBroker
 }
 
 func newServeHandler() *serveHandler {
@@ -115,7 +116,21 @@ func (h *serveHandler) Execute(ctx context.Context, req *extensionpb.ExecuteRequ
 		return nil, status.Errorf(codes.InvalidArgument, "parsing identifier: %v", err)
 	}
 
-	invocation := newPluginInvocationContext(ctx, id, config, req.GetNetworkProxyUrl(), req.GetNetworkProxyToken())
+	// Dial the host's callback service for this invocation, if offered, so the
+	// extension can invoke sibling workflows and record analytics. We always
+	// dial when a broker id is present (even if the handler ends up not using
+	// the callbacks) so the host's AcceptAndServe goroutine terminates.
+	var hostClient extensionpb.HostCallbackClient
+	if brokerID := req.GetBrokerId(); brokerID != 0 && h.broker != nil {
+		conn, dialErr := h.broker.Dial(brokerID)
+		if dialErr != nil {
+			return nil, status.Errorf(codes.Internal, "dialing host callbacks: %v", dialErr)
+		}
+		defer conn.Close()
+		hostClient = extensionpb.NewHostCallbackClient(conn)
+	}
+
+	invocation := newPluginInvocationContext(ctx, id, config, req.GetNetworkProxyUrl(), req.GetNetworkProxyToken(), hostClient)
 
 	output, err := reg.handler(invocation, input)
 	if err != nil {

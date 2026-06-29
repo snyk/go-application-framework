@@ -9,9 +9,11 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -116,4 +118,59 @@ func TestEndToEnd_ExtensionMakesAuthenticatedCall(t *testing.T) {
 	payload, ok := out[0].GetPayload().([]byte)
 	require.True(t, ok)
 	assert.Contains(t, string(payload), token)
+}
+
+// TestEndToEnd_ExtensionCallsSiblingAndRecordsAnalytics is the host-callback
+// proof: a loaded extension invokes a sibling workflow on the host engine and
+// records analytics, both over the go-plugin broker, across a real subprocess.
+func TestEndToEnd_ExtensionCallsSiblingAndRecordsAnalytics(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping end-to-end plugin build in short mode")
+	}
+
+	binary := buildExamplePlugin(t)
+
+	loader := NewLoader(WithPaths(binary))
+	t.Cleanup(loader.Close)
+
+	engine := workflow.NewDefaultWorkFlowEngine()
+
+	// Register a host-side sibling workflow the extension will invoke by id.
+	engine.AddExtensionInitializer(func(e workflow.Engine) error {
+		_, err := e.Register(
+			workflow.NewWorkflowIdentifier("sibling"),
+			workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("sibling", pflag.ContinueOnError)),
+			func(_ workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+				payload := ""
+				if len(input) > 0 {
+					if b, ok := input[0].GetPayload().([]byte); ok {
+						payload = string(b)
+					}
+				}
+				outID := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("sibling"), "result")
+				return []workflow.Data{workflow.NewData(outID, "text/plain", []byte("sibling-got:"+payload))}, nil
+			},
+		)
+		return err
+	})
+	engine.AddExtensionInitializer(loader.Init)
+	require.NoError(t, engine.Init())
+
+	callID, _ := url.Parse("flw://hello.callsibling")
+	out, err := engine.Invoke(callID)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+
+	// The host ran the sibling with the extension's input and returned its output.
+	payload, ok := out[0].GetPayload().([]byte)
+	require.True(t, ok)
+	assert.Equal(t, "sibling-got:from-extension", string(payload))
+
+	// The extension's analytics reached the host's instrumentation, prefixed by
+	// the calling workflow's identifier.
+	obj, err := analytics.GetV2InstrumentationObject(engine.GetAnalytics().GetInstrumentation())
+	require.NoError(t, err)
+	require.NotNil(t, obj.Data.Attributes.Interaction.Extension)
+	extension := *obj.Data.Attributes.Interaction.Extension
+	assert.Equal(t, "ran", extension["hello.callsibling::ext.example"])
 }

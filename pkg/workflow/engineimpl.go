@@ -72,6 +72,23 @@ func WithContext(ctx context.Context) EngineInvokeOption {
 	}
 }
 
+// ResolveInvokeOptions applies the given invoke options on top of base and
+// returns the resulting configuration and input. EngineInvokeOptions are opaque
+// closures over an unexported runtime config, so this is the supported way for
+// callers that need to forward an Invoke across a boundary (e.g. an
+// out-of-process extension proxying GetEngine().Invoke) to read the input and
+// configuration an option set produces.
+func ResolveInvokeOptions(base configuration.Configuration, opts ...EngineInvokeOption) (configuration.Configuration, []Data) {
+	rc := engineRuntimeConfig{
+		config: base,
+		input:  []Data{},
+	}
+	for _, opt := range opts {
+		opt(&rc)
+	}
+	return rc.config, rc.input
+}
+
 func (e *EngineImpl) GetLogger() *zerolog.Logger {
 	e.mu.RLock()
 	defer e.mu.RUnlock()

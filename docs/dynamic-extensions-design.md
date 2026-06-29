@@ -1,10 +1,11 @@
 # Dynamic Extensions — Technical Design
 
-Status: **Phase 1 (developer loop) + authenticated network access.** Implemented
+Status: **Developer loop + authenticated network + host callbacks.** Implemented
 in `pkg/extension`. Extensions load from prebuilt binaries without rebuilding the
 host, run out of process over gRPC, receive a full `workflow.InvocationContext`,
-and can call the Snyk API using the host's credentials without ever holding
-them.
+call the Snyk API using the host's credentials without ever holding them, invoke
+sibling workflows on the host engine, and record analytics into the host's
+batch.
 
 This document describes how the go-application-framework loads extensions
 *dynamically* — from standalone binaries discovered at runtime — instead of only
@@ -26,18 +27,20 @@ to a file in `pkg/extension`.
   (signing, registry, allowlist) and richer host callbacks can build on without
   re-architecting.
 
-**Also delivered (host callback — network)**
+**Also delivered (host callbacks)**
 
 - Authenticated network access via the "option C" loopback auth proxy (§5a), so
   trusted extensions can call the Snyk API with the user's credentials kept
   host-side.
+- Sibling workflow invocation (`GetEngine().Invoke`) and analytics recording,
+  bridged back to the host over the go-plugin broker (§5b).
 
 **Non-goals (deferred — see §10)**
 
 - Downloading/installing extensions, a registry, signature verification, or an
   enterprise allowlist.
-- Bridging the remaining host services as live callbacks: UI, analytics, and
-  `Engine.Invoke`. (Network is done; the others are local/unavailable for now.)
+- Bridging the remaining host services as live callbacks: `UserInterface`
+  (interactive prompts/progress) and `RuntimeInfo` are local/unavailable for now.
 - A sandbox that constrains a *malicious* extension. The current phase isolates
   for robustness (crash containment), not for confinement; an extension binary
   runs with the user's OS privileges. Confinement is a trust-layer + (optionally
@@ -167,6 +170,50 @@ extension http.Client ──plain HTTP──▶ 127.0.0.1:PORT (AuthProxy)
 This needs no gRPC broker: the extension reaches the loopback proxy over an
 ordinary socket, so the large `NetworkAccess` interface is never marshaled.
 
+**Scope — what this restricts.** The proxy rewrites every request onto the one
+configured upstream (`API_URL`), so the host-injected credentials can only ever
+reach the Snyk API — an extension cannot point them at another host. It does
+**not** sandbox the extension's own outbound sockets: the process can still open
+its own unauthenticated connections anywhere (we are not confining the process
+in this phase). The restriction is specifically on where the *host's
+credentials* can go, and the proxy is the single point where a future policy can
+log, scope, or deny that egress per extension.
+
+## 5b. Host callbacks — sibling workflows & analytics (`hostcallback.go`, `proxies.go`)
+
+Some services must call *back* into live host objects, so for these the host
+stands up a second gRPC service — `HostCallback` — that the extension dials over
+go-plugin's `GRPCBroker` (bidirectional channel). This is set up per invocation:
+
+1. Before calling `Execute`, the host picks a broker id, starts
+   `broker.AcceptAndServe(id, …)` serving a `hostCallbackServer` bound to *this
+   invocation's* engine and analytics, and passes the id in `ExecuteRequest`.
+2. The extension dials the id (`broker.Dial`) and builds a `HostCallback`
+   client, which backs a `remoteEngine` and `remoteAnalytics` on the plugin
+   side. It always dials when an id is present (even if unused) so the host's
+   serving goroutine terminates; the connection closes when `Execute` returns.
+
+What crosses:
+
+- **`GetEngine().Invoke(id, …)`** → `HostCallback.Invoke`. The host runs the
+  sibling workflow **in its own full context** (auth, network, other
+  extensions). This is the key architectural point: extensions and built-ins
+  compose the same way in-process workflows do — by **identifier through the
+  engine's public `Invoke`**, never by calling each other's code. Because
+  `EngineInvokeOption`s are opaque closures, the plugin resolves the caller's
+  input via `workflow.ResolveInvokeOptions`; per-invocation config overrides are
+  not propagated across the boundary in this phase (the sibling uses the host's
+  configuration).
+- **`GetAnalytics()` recording** (`AddExtension*Value`, `AddError`) →
+  `HostCallback.AddExtensionValue`/`ReportError`, landing on the invocation's
+  host analytics (prefixed by the calling workflow id, e.g.
+  `hello.callsibling::ext.example`) so it ships in the host's batch.
+
+`remoteAnalytics` embeds a local `analytics.Analytics` to satisfy the full
+interface and overrides only the recording methods; `remoteEngine` implements
+`workflow.Engine` with `Invoke`/`InvokeWith*` forwarding and host-only methods
+as no-ops/errors.
+
 ## 6. Host loader (`loader.go`)
 
 `extension.Loader.Init` *is* a `workflow.ExtensionInit`, so it is added to the
@@ -221,11 +268,15 @@ On the plugin side, `Serve` builds a real `workflow.InvocationContext`
 |---|---|
 | `GetConfiguration()` | declared flags + the proxied `API_URL` |
 | `GetNetworkAccess()` | **live** — routed through the host auth proxy (§5a) |
+| `GetEngine().Invoke(...)` | **live** — runs sibling workflows on the host (§5b) |
+| `GetAnalytics()` | **live** — instrumentation flows into the host's batch (§5b) |
 | `GetLogger()` / `GetEnhancedLogger()` | write to stderr (go-plugin forwards to host) |
 | `GetUserInterface()` | console UI on **stderr** (stdout is the plugin protocol channel) |
-| `GetAnalytics()` | local instance (not yet bridged to the host) |
-| `GetEngine()` | `nil` — invoking sibling workflows across the boundary is deferred |
 | `GetRuntimeInfo()` | `nil` — not yet bridged |
+
+The remaining `Engine` methods on the extension-side engine (`Register`, `Init`,
+the `Set*`/`Get*Workflow*` family) are host-only concerns and are no-ops or
+return errors across the boundary.
 
 The full working example (a config workflow **and** an authenticated API call) is
 `pkg/extension/testdata/exampleplugin`.
@@ -276,10 +327,11 @@ registry + the org choosing what to install) rather than sandboxing them.
 
 ## 10. Roadmap and the seams left for it
 
-- **Remaining host callbacks.** Bridge UI, analytics, and `Engine.Invoke` back to
-  the host over go-plugin's `GRPCBroker` (bidirectional). Network is already done
-  (§5a) via the simpler loopback-proxy approach. Seam: `pluginInvocationContext`
-  is the single place these services are assembled on the plugin side.
+- **Remaining host callbacks.** Network (§5a), sibling `Engine.Invoke`, and
+  analytics (§5b) are done. Still local-only: `UserInterface` (interactive
+  prompts/progress need streaming RPCs) and `RuntimeInfo`. Seam:
+  `pluginInvocationContext` is the single place these are assembled on the plugin
+  side, and `HostCallback` is the service to extend.
 - **Trust layer.** Signature + checksum verification (Sigstore/cosign), a
   registry with verified publishers, and a **default-deny enterprise allowlist**
   expressed as a configuration policy (e.g. `extensions.allowed`). Seam: the
@@ -300,11 +352,14 @@ registry + the org choosing what to install) rather than sandboxing them.
   against a real `workflow.Engine`.
 - **`authproxy_test.go`** — secret enforcement (constant-time, rejects
   missing/wrong) and host-side auth injection, against a fake upstream.
-- **`loader_e2e_test.go`** and **`app/app_extension_test.go`** — the
-  load-without-rebuild proof and the **option-C proof**: compile the testdata
-  binary, load it through the real go-plugin subprocess dialer, and have it make
-  an authenticated API call where the host injects the token (skipped under
-  `-short`).
+- **`callbacks_test.go`** — `hostCallbackServer` + `remoteEngine`/
+  `remoteAnalytics` over a real in-memory gRPC connection: sibling invoke and
+  analytics forwarding, no subprocess.
+- **`loader_e2e_test.go`** and **`app/app_extension_test.go`** — the subprocess
+  proofs (skipped under `-short`): load-without-rebuild; the **option-C proof**
+  (extension makes an authenticated API call, host injects the token); and the
+  **host-callback proof** (extension invokes a host sibling workflow and records
+  analytics over the broker).
 
 ## 12. File map
 
@@ -312,11 +367,14 @@ registry + the org choosing what to install) rather than sandboxing them.
 |------|----------------|
 | `proto/extension.proto` | gRPC service + message definitions |
 | `proto/*.pb.go` | generated code (`buf generate`) |
-| `plugin.go` | handshake, go-plugin adapters, host `grpcClient`, `pluginConn` |
+| `plugin.go` | handshake, go-plugin adapters (broker capture), host `grpcClient`, `pluginConn` |
 | `convert.go` | `Data`/payload/config marshaling |
 | `authproxy.go` | host-side loopback auth proxy (option C) |
+| `hostcallback.go` | host-side `HostCallback` server (sibling invoke, analytics) |
+| `proxies.go` | plugin-side `remoteEngine` + `remoteAnalytics` |
 | `serve.go` | plugin-author SDK (`Serve`, `Registrar`) + `serveHandler` |
 | `invocationcontext.go` | plugin-side `workflow.InvocationContext` |
 | `loader.go` | host-side `Loader` (`ExtensionInit`), proxy, real dialer |
-| `testdata/exampleplugin` | reference extension (config + authenticated API call) |
+| `testdata/exampleplugin` | reference extension (config, API call, sibling invoke + analytics) |
+| `workflow/engineimpl.go` | `ResolveInvokeOptions` helper |
 | `app/app.go`, `app/options.go` | `WithExtensionPaths` + factory wiring |

@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 
 	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // pluginName is the key under which the Extension plugin is registered in the
@@ -42,13 +43,17 @@ type grpcPlugin struct {
 
 var _ plugin.GRPCPlugin = (*grpcPlugin)(nil)
 
-func (p *grpcPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
+func (p *grpcPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
+	// The broker lets the plugin dial back into the host's HostCallback service.
+	if h, ok := p.impl.(*serveHandler); ok {
+		h.broker = broker
+	}
 	extensionpb.RegisterExtensionServer(s, p.impl)
 	return nil
 }
 
-func (p *grpcPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
-	return &grpcClient{client: extensionpb.NewExtensionClient(c)}, nil
+func (p *grpcPlugin) GRPCClient(_ context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+	return &grpcClient{client: extensionpb.NewExtensionClient(c), broker: broker}, nil
 }
 
 // pluginMap builds the go-plugin plugin map. impl is non-nil only on the plugin
@@ -66,6 +71,9 @@ type executeRequest struct {
 	input             []*extensionpb.DataMsg
 	networkProxyURL   string
 	networkProxyToken string
+	// invocation backs the per-invocation HostCallback service (sibling invoke,
+	// analytics). It is not serialized; it stays host-side. Nil disables callbacks.
+	invocation workflow.InvocationContext
 }
 
 // pluginConn is the host-side view of a connected extension. It is an interface
@@ -79,6 +87,7 @@ type pluginConn interface {
 // grpcClient is the gRPC-backed implementation of pluginConn.
 type grpcClient struct {
 	client extensionpb.ExtensionClient
+	broker *plugin.GRPCBroker
 }
 
 var _ pluginConn = (*grpcClient)(nil)
@@ -92,13 +101,32 @@ func (c *grpcClient) Discover(ctx context.Context) ([]*extensionpb.WorkflowSpec,
 }
 
 func (c *grpcClient) Execute(ctx context.Context, req executeRequest) ([]*extensionpb.DataMsg, error) {
-	resp, err := c.client.Execute(ctx, &extensionpb.ExecuteRequest{
+	pbReq := &extensionpb.ExecuteRequest{
 		Identifier:        req.identifier,
 		Config:            req.config,
 		Input:             req.input,
 		NetworkProxyUrl:   req.networkProxyURL,
 		NetworkProxyToken: req.networkProxyToken,
-	})
+	}
+
+	// Serve the HostCallback service for this invocation on a broker stream the
+	// extension can dial back into.
+	if c.broker != nil && req.invocation != nil {
+		brokerID := c.broker.NextId()
+		invocation := req.invocation
+		go c.broker.AcceptAndServe(brokerID, func(opts []grpc.ServerOption) *grpc.Server {
+			s := grpc.NewServer(opts...)
+			extensionpb.RegisterHostCallbackServer(s, newHostCallbackServer(
+				invocation.GetEngine(),
+				invocation.GetAnalytics(),
+				invocation.GetConfiguration(),
+			))
+			return s
+		})
+		pbReq.BrokerId = brokerID
+	}
+
+	resp, err := c.client.Execute(ctx, pbReq)
 	if err != nil {
 		return nil, err
 	}
