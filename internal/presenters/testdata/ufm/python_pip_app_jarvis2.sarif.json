@@ -1,0 +1,1210 @@
+
+	{
+		"$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+		"version": "2.1.0",
+		"runs": [
+			{
+				"tool": {
+					"driver" : {
+						"name" : "Snyk Open Source",
+						"semanticVersion" : "1.1301.0",
+						"version" : "1.1301.0",
+						"informationUri" : "https://docs.snyk.io/",
+						"rules" : [
+							{
+								"id": "SNYK-PYTHON-RSA-1038401",
+								"shortDescription": {
+									"text": "High severity - Timing Attack vulnerability in rsa"
+								},
+								"fullDescription": {
+									"text": "(CVE-2020-25658) rsa@3.4.2"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: rsa\n* Introduced through: python-pip-app-jarvis2@0.0.0 and rsa@3.4.2\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › rsa@3.4.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › oauth2client@4.1.1 › rsa@3.4.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › oauth2client@4.1.1 › rsa@3.4.2\n# Overview\n[rsa](https://pypi.org/project/rsa/) is a pure-Python RSA implementation.\n\nAffected versions of this package are vulnerable to Timing Attack via timed processing of valid `PKCS#1` v1.5 ciphertext.\n# Remediation\nUpgrade `rsa` to version 4.7 or higher.\n# References\n- [GitHub Issue](https://github.com/sybrenstuvel/python-rsa/issues/165)\n- [RedHat Bugzilla Bug](https://bugzilla.redhat.com/show_bug.cgi?id=1889972)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-208",
+										"pip"
+									],
+									"cvssv3_baseScore": 7.5,
+									"security-severity": "7.5"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-JINJA2-1012994",
+								"shortDescription": {
+									"text": "Medium severity - Regular Expression Denial of Service (ReDoS) vulnerability in jinja2"
+								},
+								"fullDescription": {
+									"text": "(CVE-2020-28493) jinja2@2.9.6"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: jinja2\n* Introduced through: python-pip-app-jarvis2@0.0.0 and jinja2@2.9.6\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › jinja2@2.9.6\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask@0.12.2 › jinja2@2.9.6\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask-assets@0.12 › flask@0.12.2 › jinja2@2.9.6\n# Overview\n[Jinja2](https://pypi.org/project/Jinja2/) is a template engine written in pure Python. It provides a Django inspired non-XML syntax but supports inline expressions and an optional sandboxed environment.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS). The ReDoS vulnerability is mainly due to the `_punctuation_re regex` operator and its use of multiple wildcards. The last wildcard is the most exploitable as it searches for trailing punctuation.\r\n\r\nThis issue can be mitigated by using Markdown to format user content instead of the urlize filter, or by implementing request timeouts or limiting process memory.\r\n\r\n## PoC by Yeting Li\r\n```\r\nfrom jinja2.utils import urlize\r\nfrom time import perf_counter\r\n\r\nfor i in range(3):\r\n    text = \"abc@\" + \".\" * (i+1)*5000 + \"!\"\r\n    LEN = len(text)\r\n    BEGIN = perf_counter()\r\n    urlize(text)\r\n    DURATION = perf_counter() - BEGIN\r\n    print(f\"{LEN}: took {DURATION} seconds!\")\r\n```\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n# Remediation\nUpgrade `Jinja2` to version 2.11.3 or higher.\n# References\n- [GitHub Additional Information](https://github.com/pallets/jinja/blob/ab81fd9c277900c85da0c322a2ff9d68a235b2e6/src/jinja2/utils.py#L20)\n- [GitHub PR](https://github.com/pallets/jinja/pull/1343)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-400",
+										"pip"
+									],
+									"cvssv3_baseScore": 5.3,
+									"security-severity": "5.3"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-URLLIB3-174464",
+								"shortDescription": {
+									"text": "High severity - Improper Certificate Validation vulnerability in urllib3"
+								},
+								"fullDescription": {
+									"text": "(CVE-2019-11324) urllib3@1.21.1"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: urllib3\n* Introduced through: python-pip-app-jarvis2@0.0.0 and urllib3@1.21.1\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › requests@2.17.3 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › soco@0.12 › requests@2.17.3 › urllib3@1.21.1\n# Overview\n[urllib3](https://pypi.org/project/urllib3/) is a HTTP library with thread-safe connection pooling, file post, and more.\n\nAffected versions of this package are vulnerable to Improper Certificate Validation. It mishandles certain cases where the desired set of CA certificates is different from the OS store of CA certificates. This can result in SSL connections succeeding in situations where it should have failed.\n# Remediation\nUpgrade `urllib3` to version 1.24.2 or higher.\n# References\n- [GitHub Comparison](https://github.com/urllib3/urllib3/compare/a6ec68a...1efadf4)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-295",
+										"pip"
+									],
+									"cvssv3_baseScore": 7.5,
+									"security-severity": "7.5"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-URLLIB3-1533435",
+								"shortDescription": {
+									"text": "Medium severity - Regular Expression Denial of Service (ReDoS) vulnerability in urllib3"
+								},
+								"fullDescription": {
+									"text": "(CVE-2021-33503) urllib3@1.21.1"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: urllib3\n* Introduced through: python-pip-app-jarvis2@0.0.0 and urllib3@1.21.1\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › requests@2.17.3 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › soco@0.12 › requests@2.17.3 › urllib3@1.21.1\n# Overview\n[urllib3](https://pypi.org/project/urllib3/) is a HTTP library with thread-safe connection pooling, file post, and more.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS) via the `SUBAUTHORITY_PAT` regex pattern in `src/urllib3/util/url.py`. \r\n\r\nIf a URL is passed as a parameter or redirected to via an HTTP redirect and it contains many `@` characters in the authority component, the authority regular expression exhibits catastrophic backtracking, causing a denial of service.\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n# Remediation\nUpgrade `urllib3` to version 1.26.5 or higher.\n# References\n- [GitHub Commit](https://github.com/urllib3/urllib3/commit/2d4a3fee6de2fa45eb82169361918f759269b4ec)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-400",
+										"pip"
+									],
+									"cvssv3_baseScore": 5.3,
+									"security-severity": "5.3"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-SETUPTOOLS-12246955",
+								"shortDescription": {
+									"text": "Medium severity - Arbitrary File Upload vulnerability in setuptools"
+								},
+								"fullDescription": {
+									"text": "setuptools@79.0.1"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: setuptools\n* Introduced through: python-pip-app-jarvis2@0.0.0, apscheduler@3.3.1 and others\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › apscheduler@3.3.1 › setuptools@79.0.1\n# Overview\n\nAffected versions of this package are vulnerable to Arbitrary File Upload wow\n# Remediation\n# References\n- [GitHub Commit](https://github.com/pypa/setuptools/commit/46b885148501a3a3dbea3631ed40a9dc551956e9)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-434",
+										"pip"
+									],
+									"cvssv3_baseScore": 5.3,
+									"security-severity": "5.3"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-REQUESTS-72435",
+								"shortDescription": {
+									"text": "Critical severity - Information Exposure vulnerability in requests"
+								},
+								"fullDescription": {
+									"text": "(CVE-2018-18074) requests@2.17.3"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: requests\n* Introduced through: python-pip-app-jarvis2@0.0.0 and requests@2.17.3\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › requests@2.17.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › soco@0.12 › requests@2.17.3\n# Overview\n[Requests](https://pypi.org/project/requests/) is a  _Non-GMO_ HTTP library for Python\r\n\r\nAffected versions of this package are vulnerable to Information Exposure.\r\nUpon receiving a same-hostname https-to-http redirect, it sends the HTTP Authorization header to an http URI. This makes it easier for remote attackers to discover credentials by sniffing the network.\r\n\r\n# Remediation\r\nUpgrade `request` to version 2.20 or higher.\n\n# References\n- [https://github.com/requests/requests/commit/c45d7c49ea75133e52ab22a8e9e13173938e36ff](https://github.com/requests/requests/commit/c45d7c49ea75133e52ab22a8e9e13173938e36ff)\n- [https://github.com/requests/requests/pull/4718](https://github.com/requests/requests/pull/4718)\n- [https://github.com/requests/requests/issues/4716](https://github.com/requests/requests/issues/4716)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-200",
+										"pip"
+									],
+									"cvssv3_baseScore": 9.8,
+									"security-severity": "9.8"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-WERKZEUG-458931",
+								"shortDescription": {
+									"text": "Critical severity - Insufficient Randomness vulnerability in werkzeug"
+								},
+								"fullDescription": {
+									"text": "(CVE-2019-14806) werkzeug@0.12.2"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: werkzeug\n* Introduced through: python-pip-app-jarvis2@0.0.0 and werkzeug@0.12.2\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › werkzeug@0.12.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask@0.12.2 › werkzeug@0.12.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask-assets@0.12 › flask@0.12.2 › werkzeug@0.12.2\n# Overview\n[Werkzeug](https://werkzeug.palletsprojects.com/) is a WSGI web application library.\n\nAffected versions of this package are vulnerable to Insufficient Randomness when used with Docker, it has insufficient debugger PIN randomness because Docker containers share the same machine id.\n# Remediation\nUpgrade `Werkzeug` to version 0.15.3 or higher.\n# References\n- [GitHub Commit](https://github.com/pallets/werkzeug/commit/00bc43b1672e662e5e3b8cecd79e67fc968fa246)\n- [Release Notes](https://palletsprojects.com/blog/werkzeug-0-15-3-released/)\n- [Vulnerable Code](https://github.com/pallets/werkzeug/blob/7fef41b120327d3912fbe12fb64f1951496fcf3e/src/werkzeug/debug/__init__.py#L168)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-310",
+										"pip"
+									],
+									"cvssv3_baseScore": 9.1,
+									"security-severity": "9.1"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-FLASK-42185",
+								"shortDescription": {
+									"text": "High severity - Improper Input Validation vulnerability in flask"
+								},
+								"fullDescription": {
+									"text": "(CVE-2018-1000656) flask@0.12.2"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: flask\n* Introduced through: python-pip-app-jarvis2@0.0.0 and flask@0.12.2\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask@0.12.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask-assets@0.12 › flask@0.12.2\n# Overview\n[flask](https://pypi.org/project/Flask/) is a lightweight WSGI web application framework.\n\nAffected versions of this package are vulnerable to Improper Input Validation. It did not detect the encoding of incoming JSON data as one of the supported UTF encodings, and allowed arbitrary encodings from the request.\n\n# Remediation\nUpgrade `flask` to version 0.12.3 or higher.\n\n# References\n- [GitHub PR](https://github.com/pallets/flask/pull/2691)\n- [GitHub Release Tag](https://github.com/pallets/flask/releases/tag/0.12.3)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-20",
+										"pip"
+									],
+									"cvssv3_baseScore": 7.5,
+									"security-severity": "7.5"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-HTTPLIB2-569758",
+								"shortDescription": {
+									"text": "Medium severity - CRLF Injection vulnerability in httplib2"
+								},
+								"fullDescription": {
+									"text": "(CVE-2020-11078) httplib2@0.10.3"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: httplib2\n* Introduced through: python-pip-app-jarvis2@0.0.0 and httplib2@0.10.3\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › oauth2client@4.1.1 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › oauth2client@4.1.1 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › httplib2@0.10.3\n# Overview\n[httplib2](https://github.com/httplib2/httplib2) is a small HTTP client library for Python.\n\nAffected versions of this package are vulnerable to CRLF Injection. An attacker controlling an unescaped part of uri for `httplib2.Http.request()` could change request headers and body, send additional hidden requests to same server. This vulnerability impacts software that uses` httplib2` with `uri` constructed by string concatenation, as opposed to proper `urllib` building with escaping.\n# Remediation\nUpgrade `httplib2` to version 0.18.0 or higher.\n# References\n- [GitHub Commit](https://github.com/httplib2/httplib2/commit/a1457cc31f3206cf691d11d2bf34e98865873e9e)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-93",
+										"pip"
+									],
+									"cvssv3_baseScore": 6.8,
+									"security-severity": "6.8"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-HTTPLIB2-570767",
+								"shortDescription": {
+									"text": "High severity - CRLF Injection vulnerability in httplib2"
+								},
+								"fullDescription": {
+									"text": "httplib2@0.10.3"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: httplib2\n* Introduced through: python-pip-app-jarvis2@0.0.0 and httplib2@0.10.3\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › oauth2client@4.1.1 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › oauth2client@4.1.1 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › httplib2@0.10.3\n# Overview\n[httplib2](https://github.com/httplib2/httplib2) is a small HTTP client library for Python.\n\nAffected versions of this package are vulnerable to CRLF Injection. It allows `%xx` quote of space, CR, LF characters in the URI.\n# Remediation\nUpgrade `httplib2` to version 0.18.0 or higher.\n# References\n- [GitHub Commit](https://github.com/httplib2/httplib2/commit/a1457cc31f3206cf691d11d2bf34e98865873e9e)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-93",
+										"pip"
+									],
+									"cvssv3_baseScore": 8.2,
+									"security-severity": "8.2"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-FLASK-451637",
+								"shortDescription": {
+									"text": "High severity - Denial of Service (DoS) vulnerability in flask"
+								},
+								"fullDescription": {
+									"text": "(CVE-2019-1010083) flask@0.12.2"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: flask\n* Introduced through: python-pip-app-jarvis2@0.0.0 and flask@0.12.2\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask@0.12.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask-assets@0.12 › flask@0.12.2\n# Overview\n[Flask](https://pypi.org/project/Flask/) is a lightweight WSGI web application framework\n\nAffected versions of this package are vulnerable to Denial of Service (DoS). The package allows for unsafe encoded JSON data to be decoded.\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its intended and legitimate users.\n\nUnlike other vulnerabilities, DoS attacks usually do not aim at breaching security. Rather, they are focused on making websites and services unavailable to genuine users resulting in downtime.\n\nOne popular Denial of Service vulnerability is DDoS (a Distributed Denial of Service), an attack that attempts to clog network pipes to the system by generating a large volume of traffic from many machines.\n\nWhen it comes to open source libraries, DoS vulnerabilities allow attackers to trigger such a crash or crippling of the service by using a flaw either in the application code or from the use of open source libraries.\n\nTwo common types of DoS vulnerabilities:\n\n* High CPU/Memory Consumption- An attacker sending crafted requests that could cause the system to take a disproportionate amount of time to process. For example, [commons-fileupload:commons-fileupload](SNYK-JAVA-COMMONSFILEUPLOAD-30082).\n\n* Crash - An attacker sending crafted requests that could cause the system to crash. For Example,  [npm `ws` package](https://snyk.io/vuln/npm:ws:20171108)\n\n# Remediation\nUpgrade `Flask` to version 0.12.3 or higher.\n# References\n- [GitHub Issue - Backport](https://github.com/pallets/flask/issues/2692)\n- [GitHub PR](https://github.com/pallets/flask/pull/2691)\n- [Release Notes](https://www.palletsprojects.com/blog/flask-1-0-released/)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-20",
+										"pip"
+									],
+									"cvssv3_baseScore": 7.5,
+									"security-severity": "7.5"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-RSA-570831",
+								"shortDescription": {
+									"text": "Medium severity - Access Restriction Bypass vulnerability in rsa"
+								},
+								"fullDescription": {
+									"text": "(CVE-2020-13757) rsa@3.4.2"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: rsa\n* Introduced through: python-pip-app-jarvis2@0.0.0 and rsa@3.4.2\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › rsa@3.4.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › oauth2client@4.1.1 › rsa@3.4.2\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › oauth2client@4.1.1 › rsa@3.4.2\n# Overview\n[rsa](https://pypi.org/project/rsa/) is a pure-Python RSA implementation.\n\nAffected versions of this package are vulnerable to Access Restriction Bypass. It does not detect `ciphertext` modification during decryption (prepended \"0\" bytes) in `PKCS1_v1_5`.\n# Remediation\nUpgrade `rsa` to version 4.1 or higher.\n# References\n- [GitHub Commit](https://github.com/sybrenstuvel/python-rsa/commit/93af6f2f89a9bf28361e67716c4240e691520f30)\n- [GitHub Issue](https://github.com/sybrenstuvel/python-rsa/issues/146)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-284",
+										"pip"
+									],
+									"cvssv3_baseScore": 5.6,
+									"security-severity": "5.6"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-HTTPLIB2-1065795",
+								"shortDescription": {
+									"text": "High severity - Regular Expression Denial of Service (ReDoS) vulnerability in httplib2"
+								},
+								"fullDescription": {
+									"text": "(CVE-2021-21240) httplib2@0.10.3"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: httplib2\n* Introduced through: python-pip-app-jarvis2@0.0.0 and httplib2@0.10.3\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › oauth2client@4.1.1 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › oauth2client@4.1.1 › httplib2@0.10.3\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › google-api-python-client@1.6.2 › httplib2@0.10.3\n# Overview\n[httplib2](https://github.com/httplib2/httplib2) is a small HTTP client library for Python.\n\nAffected versions of this package are vulnerable to Regular Expression Denial of Service (ReDoS). A malicious server which responds with long series of `\\xa0` characters in the `www-authenticate` header, may cause a CPU burn while parsing the header of the `httplib2` client accessing server.\n\n# Details\n\nDenial of Service (DoS) describes a family of attacks, all aimed at making a system inaccessible to its original and legitimate users. There are many types of DoS attacks, ranging from trying to clog the network pipes to the system by generating a large volume of traffic from many machines (a Distributed Denial of Service - DDoS - attack) to sending crafted requests that cause a system to crash or take a disproportional amount of time to process.\n\nThe Regular expression Denial of Service (ReDoS) is a type of Denial of Service attack. Regular expressions are incredibly powerful, but they aren't very intuitive and can ultimately end up making it easy for attackers to take your site down.\n\nLet’s take the following regular expression as an example:\n```js\nregex = /A(B|C+)+D/\n```\n\nThis regular expression accomplishes the following:\n- `A` The string must start with the letter 'A'\n- `(B|C+)+` The string must then follow the letter A with either the letter 'B' or some number of occurrences of the letter 'C' (the `+` matches one or more times). The `+` at the end of this section states that we can look for one or more matches of this section.\n- `D` Finally, we ensure this section of the string ends with a 'D'\n\nThe expression would match inputs such as `ABBD`, `ABCCCCD`, `ABCBCCCD` and `ACCCCCD`\n\nIt most cases, it doesn't take very long for a regex engine to find a match:\n\n```bash\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCD\")'\n0.04s user 0.01s system 95% cpu 0.052 total\n\n$ time node -e '/A(B|C+)+D/.test(\"ACCCCCCCCCCCCCCCCCCCCCCCCCCCCX\")'\n1.79s user 0.02s system 99% cpu 1.812 total\n```\n\nThe entire process of testing it against a 30 characters long string takes around ~52ms. But when given an invalid string, it takes nearly two seconds to complete the test, over ten times as long as it took to test a valid string. The dramatic difference is due to the way regular expressions get evaluated.\n\nMost Regex engines will work very similarly (with minor differences). The engine will match the first possible way to accept the current character and proceed to the next one. If it then fails to match the next one, it will backtrack and see if there was another way to digest the previous character. If it goes too far down the rabbit hole only to find out the string doesn’t match in the end, and if many characters have multiple valid regex paths, the number of backtracking steps can become very large, resulting in what is known as _catastrophic backtracking_.\n\nLet's look at how our expression runs into this problem, using a shorter string: \"ACCCX\". While it seems fairly straightforward, there are still four different ways that the engine could match those three C's:\n1. CCC\n2. CC+C\n3. C+CC\n4. C+C+C.\n\nThe engine has to try each of those combinations to see if any of them potentially match against the expression. When you combine that with the other steps the engine must take, we can use [RegEx 101 debugger](https://regex101.com/debugger) to see the engine has to take a total of 38 steps before it can determine the string doesn't match.\n\nFrom there, the number of steps the engine must use to validate a string just continues to grow.\n\n| String | Number of C's | Number of steps |\n| -------|-------------:| -----:|\n| ACCCX | 3 | 38\n| ACCCCX | 4 | 71\n| ACCCCCX | 5 | 136\n| ACCCCCCCCCCCCCCX | 14 | 65,553\n\n\nBy the time the string includes 14 C's, the engine has to take over 65,000 steps just to see if the string is valid. These extreme situations can cause them to work very slowly (exponentially related to input size, as shown above), allowing an attacker to exploit this and can cause the service to excessively consume CPU, resulting in a Denial of Service.\n\n# Remediation\nUpgrade `httplib2` to version 0.19.0 or higher.\n# References\n- [GitHub Commit](https://github.com/httplib2/httplib2/commit/bd9ee252c8f099608019709e22c0d705e98d26bc)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-400",
+										"pip"
+									],
+									"cvssv3_baseScore": 7.5,
+									"security-severity": "7.5"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-URLLIB3-1014645",
+								"shortDescription": {
+									"text": "High severity - HTTP Header Injection vulnerability in urllib3"
+								},
+								"fullDescription": {
+									"text": "(CVE-2020-26137) urllib3@1.21.1"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: urllib3\n* Introduced through: python-pip-app-jarvis2@0.0.0 and urllib3@1.21.1\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › requests@2.17.3 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › soco@0.12 › requests@2.17.3 › urllib3@1.21.1\n# Overview\n[urllib3](https://pypi.org/project/urllib3/) is a HTTP library with thread-safe connection pooling, file post, and more.\n\nAffected versions of this package are vulnerable to HTTP Header Injection. The 'method' parameter is not filtered to prevent the injection from altering the entire request.\r\n\r\nFor example:\r\n```\r\n>>> conn = http.client.HTTPConnection(\"localhost\", 80)\r\n>>> conn.request(method=\"GET / HTTP/1.1\\r\\nHost: abc\\r\\nRemainder:\", url=\"/index.html\")\r\n```\r\n\r\nThis will result in the following request being generated:\r\n```\r\nGET / HTTP/1.1\r\nHost: abc\r\nRemainder: /index.html HTTP/1.1\r\nHost: localhost\r\nAccept-Encoding: identity\r\n```\n# Remediation\nUpgrade `urllib3` to version 1.25.9 or higher.\n# References\n- [GitHub Commit](https://github.com/urllib3/urllib3/commit/1dd69c5c5982fae7c87a620d487c2ebf7a6b436b)\n- [GitHub PR](https://github.com/urllib3/urllib3/pull/1800)\n- [Python Issue Tracker](https://bugs.python.org/issue39603)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-644",
+										"pip"
+									],
+									"cvssv3_baseScore": 7.7,
+									"security-severity": "7.7"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-URLLIB3-72681",
+								"shortDescription": {
+									"text": "Medium severity - Authentication Bypass vulnerability in urllib3"
+								},
+								"fullDescription": {
+									"text": "(CVE-2018-20060) urllib3@1.21.1"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: urllib3\n* Introduced through: python-pip-app-jarvis2@0.0.0 and urllib3@1.21.1\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › requests@2.17.3 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › soco@0.12 › requests@2.17.3 › urllib3@1.21.1\n# Overview\n \n[urllib3](https://pypi.org/project/urllib3/) is a HTTP library with thread-safe connection pooling, file post, and more.\n\n\nAffected versions of this package are vulnerable to Authentication Bypass.\nIt did remove the Authorization HTTP header when following a cross-origin redirect. This can allow for credentials in the Authorization header to be exposed to unintended hosts or transmitted in cleartext.\n\n# Remediation\n\nUpgrade urllib3 to version 1.23 or higher.\n\n\n# References\n\n- [GitHub Issue](https://github.com/urllib3/urllib3/issues/1316)\n\n- [GitHub PR](https://github.com/urllib3/urllib3/pull/1346)\n\n- [RedHat Bugzilla Bug](https://bugzilla.redhat.com/show_bug.cgi?id=1649153)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-288",
+										"pip"
+									],
+									"cvssv3_baseScore": 5.9,
+									"security-severity": "5.9"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-JINJA2-174126",
+								"shortDescription": {
+									"text": "Medium severity - Sandbox Escape vulnerability in jinja2"
+								},
+								"fullDescription": {
+									"text": "(CVE-2019-10906) jinja2@2.9.6"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: jinja2\n* Introduced through: python-pip-app-jarvis2@0.0.0 and jinja2@2.9.6\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › jinja2@2.9.6\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask@0.12.2 › jinja2@2.9.6\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › flask-assets@0.12 › flask@0.12.2 › jinja2@2.9.6\n# Overview\n[Jinja2](https://pypi.org/project/Jinja2/) is a template engine written in pure Python. It provides a Django inspired non-XML syntax but supports inline expressions and an optional sandboxed environment.\n\nAffected versions of this package are vulnerable to Sandbox Escape via the `str.format_map`.\n# Remediation\nUpgrade `Jinja2` to version 2.10.1 or higher.\n# References\n- [Release Notes](https://palletsprojects.com/blog/jinja-2-10-1-released)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-265",
+										"pip"
+									],
+									"cvssv3_baseScore": 6,
+									"security-severity": "6.0"
+								}
+							},
+							{
+								"id": "SNYK-PYTHON-URLLIB3-174323",
+								"shortDescription": {
+									"text": "High severity - CRLF injection vulnerability in urllib3"
+								},
+								"fullDescription": {
+									"text": "(CVE-2019-11236) urllib3@1.21.1"
+								},
+								"help": {
+									"text": "",
+									"markdown": "* Package Manager: pip\n* Vulnerable module: urllib3\n* Introduced through: python-pip-app-jarvis2@0.0.0 and urllib3@1.21.1\n### Detailed paths\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › requests@2.17.3 › urllib3@1.21.1\n* _Introduced through_: python-pip-app-jarvis2@0.0.0 › soco@0.12 › requests@2.17.3 › urllib3@1.21.1\n# Overview\n[urllib3](https://pypi.org/project/urllib3/) is a HTTP library with thread-safe connection pooling, file post, and more.\n\nAffected versions of this package are vulnerable to CRLF injection. Attacker who has the control of the requesting address parameter, could  manipulate an HTTP header and attack an internal service.\r\n\r\n# PoC\r\nby `ragdoll` and `Alvin Chang`\r\n```\r\nimport urllib3\r\n\r\npool_manager = urllib3.PoolManager()\r\n\r\nhost = \"localhost:7777?a=1 HTTP/1.1\\r\\nX-injected: header\\r\\nTEST: 123\"\r\nurl = \"http://\" + host + \":8080/test/?test=a\"\r\n\r\ntry:\r\n    info = pool_manager.request('GET', url).info()\r\n    print(info)\r\nexcept Exception:\r\n    pass\r\n\r\n# nc -l localhost 7777\r\nGET /?a=1 HTTP/1.1\r\nX-injected: header\r\nTEST: 123:8080/test/?test=a HTTP/1.1\r\nHost: localhost:7777\r\nAccept-Encoding: identity\r\n```\r\nThe nc server will display the HTTP request with a manipulated header content: `X-injected:header`, indicating a successful injection of the HTTP header.\n# Remediation\nUpgrade `urllib3` to version 1.24.3 or higher.\n# References\n- [GitHub Commit](https://github.com/urllib3/urllib3/commit/5d523706c7b03f947dc50a7e783758a2bfff0532)\n- [GitHub Issue](https://github.com/urllib3/urllib3/issues/1553)\n- [GitHub PR](https://github.com/urllib3/urllib3/pull/1487)\n- [GitHub PR](https://github.com/urllib3/urllib3/pull/1531)\n- [Python Bug Report](https://bugs.python.org/issue36276)\n"
+								},
+								"properties": {
+									"tags": [
+										"security",
+										"CWE-93",
+										"pip"
+									],
+									"cvssv3_baseScore": 7.3,
+									"security-severity": "7.3"
+								}
+							}
+						],
+						"properties": {
+							"artifactsScanned": 33
+						}
+					}
+				},
+			"results": [
+				{
+					"ruleId": "SNYK-PYTHON-RSA-1038401",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable rsa package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "rsa@3.4.2"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to rsa@4.7"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "rsa@4.7"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-JINJA2-1012994",
+					"level": "warning",
+					"message": {
+						"text": "This file introduces a vulnerable jinja2 package with a medium severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "jinja2@2.9.6"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to jinja2@2.11.3"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "jinja2@2.11.3"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-URLLIB3-174464",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable urllib3 package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "urllib3@1.21.1"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to urllib3@1.24.2"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "urllib3@1.24.2"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-URLLIB3-1533435",
+					"level": "warning",
+					"message": {
+						"text": "This file introduces a vulnerable urllib3 package with a medium severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "urllib3@1.21.1"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to urllib3@1.26.5"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "urllib3@1.26.5"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-SETUPTOOLS-12246955",
+					"level": "warning",
+					"message": {
+						"text": "This file introduces a vulnerable setuptools package with a medium severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "setuptools@79.0.1"
+								}
+							]
+						}
+						
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-REQUESTS-72435",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable requests package with a critical severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "requests@2.17.3"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to requests@2.20"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "requests@2.20"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-WERKZEUG-458931",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable werkzeug package with a critical severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "werkzeug@0.12.2"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to werkzeug@0.15.3"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "werkzeug@0.15.3"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-FLASK-42185",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable flask package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "flask@0.12.2"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to flask@0.12.3"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "flask@0.12.3"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-HTTPLIB2-569758",
+					"level": "warning",
+					"message": {
+						"text": "This file introduces a vulnerable httplib2 package with a medium severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "httplib2@0.10.3"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to httplib2@0.18.0"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "httplib2@0.18.0"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-HTTPLIB2-570767",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable httplib2 package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "httplib2@0.10.3"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to httplib2@0.18.0"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "httplib2@0.18.0"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-FLASK-451637",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable flask package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "flask@0.12.2"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to flask@0.12.3"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "flask@0.12.3"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-RSA-570831",
+					"level": "warning",
+					"message": {
+						"text": "This file introduces a vulnerable rsa package with a medium severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "rsa@3.4.2"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to rsa@4.1"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "rsa@4.1"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-HTTPLIB2-1065795",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable httplib2 package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "httplib2@0.10.3"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to httplib2@0.19.0"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "httplib2@0.19.0"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-URLLIB3-1014645",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable urllib3 package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "urllib3@1.21.1"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to urllib3@1.25.9"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "urllib3@1.25.9"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-URLLIB3-72681",
+					"level": "warning",
+					"message": {
+						"text": "This file introduces a vulnerable urllib3 package with a medium severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "urllib3@1.21.1"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to urllib3@1.23"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "urllib3@1.23"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-JINJA2-174126",
+					"level": "warning",
+					"message": {
+						"text": "This file introduces a vulnerable jinja2 package with a medium severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "jinja2@2.9.6"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to jinja2@2.10.1"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "jinja2@2.10.1"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"ruleId": "SNYK-PYTHON-URLLIB3-174323",
+					"level": "error",
+					"message": {
+						"text": "This file introduces a vulnerable urllib3 package with a high severity vulnerability."
+					},
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "requirements.txt"
+								},
+								"region": {
+									"startLine": 1
+								}
+							} , 
+							"logicalLocations": [
+								{
+									"fullyQualifiedName": "urllib3@1.21.1"
+								}
+							]
+						}
+						
+					],
+					"fixes": [
+						{
+							"description": {
+								"text": "Upgrade to urllib3@1.24.3"
+							},
+							"artifactChanges": [
+								{
+									"artifactLocation": {
+										"uri": "requirements.txt"
+									},
+									"replacements": [
+										{
+											"deletedRegion": {
+												"startLine": 1
+											},
+											"insertedContent": {
+												"text": "urllib3@1.24.3"
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			],
+				"automationDetails": {
+					"id":"Snyk/Open Source/python-pip-app-jarvis2/2026-06-26T13:11:22Z"
+				}
+			}
+		]
+	}
