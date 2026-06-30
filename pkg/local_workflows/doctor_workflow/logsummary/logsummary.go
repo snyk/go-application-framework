@@ -2,8 +2,11 @@ package logsummary
 
 import "strings"
 
-const maxHighlights = 200
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
+// EventKind categorizes a notable log event.
 type EventKind string
 
 const (
@@ -11,12 +14,16 @@ const (
 	EventError     EventKind = "error"
 )
 
+const maxHighlights = 200
+
+// Highlight is a notable event extracted from the log body.
 type Highlight struct {
 	Line    int
 	Kind    EventKind
 	Message string
 }
 
+// Summary is the result of parsing a CLI debug log.
 type Summary struct {
 	CLIVersion   string
 	FormatSpecID string
@@ -26,6 +33,15 @@ type Summary struct {
 	Truncated    bool
 }
 
+// ---------------------------------------------------------------------------
+// Summarize: 3-phase pipeline entry point
+// ---------------------------------------------------------------------------
+
+// Summarize parses a CLI debug log and returns a structured summary.
+//
+// Phase 1: Tokenize each line using the detected format spec's lexer.
+// Phase 2: Find structural landmarks, carve token stream into sections.
+// Phase 3: Process each section independently (header, highlights, footer).
 func Summarize(log string) Summary {
 	rawLines := strings.Split(log, "\n")
 	spec := detectFormat(rawLines)
@@ -52,6 +68,10 @@ func Summarize(log string) Summary {
 		Truncated:    truncated,
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Internal: highlight collection (Phase 3)
+// ---------------------------------------------------------------------------
 
 func collectHighlights(tokens []TokenizedLine) ([]Highlight, bool) {
 	var highlights []Highlight
@@ -91,6 +111,10 @@ func tokenToEventKind(t Token) EventKind {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Internal: message joining and footer assembly
+// ---------------------------------------------------------------------------
+
 func joinMessages(tokens []TokenizedLine) string {
 	if len(tokens) == 0 {
 		return ""
@@ -104,13 +128,9 @@ func joinMessages(tokens []TokenizedLine) string {
 
 func joinFooter(summaryTokens, resultTokens []TokenizedLine) string {
 	var footerTokens []TokenizedLine
-
-	// If we have a result section (errors marker or exit code), skip the summary
-	// section content and use the result directly.
 	if len(resultTokens) > 0 {
 		footerTokens = resultTokens
 	} else if len(summaryTokens) > 0 {
-		// Summary block exists but no errors/exit code after it
 		footerTokens = summaryTokens
 	}
 

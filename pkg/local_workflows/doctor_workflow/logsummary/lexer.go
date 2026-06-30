@@ -2,6 +2,11 @@ package logsummary
 
 import "regexp"
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+// Token classifies a single log line.
 type Token int
 
 const (
@@ -17,6 +22,7 @@ const (
 	TokenExitCode
 )
 
+// TokenizedLine is a raw log line enriched with its token classification.
 type TokenizedLine struct {
 	Number       int
 	RawText      string
@@ -25,11 +31,13 @@ type TokenizedLine struct {
 	Token        Token
 }
 
+// BodyClassifier maps a matching function to a token type for body-line classification.
 type BodyClassifier struct {
 	Match func(msg string) bool
 	Token Token
 }
 
+// LexerSpec defines the per-version rules for tokenizing log lines.
 type LexerSpec struct {
 	LinePrefixRe    *regexp.Regexp
 	SummaryMarker   string
@@ -40,7 +48,12 @@ type LexerSpec struct {
 	BodyClassifiers []BodyClassifier
 }
 
+// LexerOption is a functional option applied when deriving a new LexerSpec.
 type LexerOption func(*LexerSpec)
+
+// ---------------------------------------------------------------------------
+// LexerOption constructors
+// ---------------------------------------------------------------------------
 
 func WithSummaryMarker(m string) LexerOption {
 	return func(s *LexerSpec) { s.SummaryMarker = m }
@@ -67,6 +80,12 @@ func WithVersionPrefix(p string) LexerOption {
 	return func(s *LexerSpec) { s.VersionPrefix = p }
 }
 
+// ---------------------------------------------------------------------------
+// DeriveLexer
+// ---------------------------------------------------------------------------
+
+// DeriveLexer creates a new LexerSpec by copying parent and applying overrides.
+// The BodyClassifiers slice is deep-copied so mutations don't leak to the parent.
 func DeriveLexer(parent LexerSpec, opts ...LexerOption) LexerSpec {
 	spec := parent
 	spec.BodyClassifiers = append([]BodyClassifier{}, parent.BodyClassifiers...)
@@ -75,6 +94,10 @@ func DeriveLexer(parent LexerSpec, opts ...LexerOption) LexerSpec {
 	}
 	return spec
 }
+
+// ---------------------------------------------------------------------------
+// Tokenization (Phase 1 of the pipeline)
+// ---------------------------------------------------------------------------
 
 func tokenize(spec LexerSpec, rawLines []string) []TokenizedLine {
 	lines := make([]TokenizedLine, 0, len(rawLines))
@@ -92,6 +115,10 @@ func tokenize(spec LexerSpec, rawLines []string) []TokenizedLine {
 	}
 	return lines
 }
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
 
 func stripCR(s string) string {
 	if len(s) > 0 && s[len(s)-1] == '\r' {

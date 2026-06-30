@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Format renders the Summary as a human-readable diagnostic report.
 func (summary Summary) Format() string {
 	var sb strings.Builder
 

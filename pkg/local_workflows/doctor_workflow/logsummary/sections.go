@@ -2,6 +2,11 @@ package logsummary
 
 import "sort"
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+// Section identifies a region of the parsed log.
 type Section int
 
 const (
@@ -12,16 +17,23 @@ const (
 	SectionResult
 )
 
+// Landmark is a structural anchor found in the token stream.
 type Landmark struct {
 	Token Token
 	Index int
 }
 
+// LandmarkRule maps an anchor token to the section it opens.
 type LandmarkRule struct {
 	AnchorToken  Token
 	OpensSection Section
 }
 
+// ---------------------------------------------------------------------------
+// Landmark scanning (Phase 2a of the pipeline)
+// ---------------------------------------------------------------------------
+
+// findLandmarks scans tokens for all anchor positions defined by the rules.
 func findLandmarks(tokens []TokenizedLine, rules []LandmarkRule) []Landmark {
 	anchorSet := make(map[Token]struct{}, len(rules))
 	for _, r := range rules {
@@ -36,6 +48,13 @@ func findLandmarks(tokens []TokenizedLine, rules []LandmarkRule) []Landmark {
 	return landmarks
 }
 
+// ---------------------------------------------------------------------------
+// Section splitting (Phase 2b of the pipeline)
+// ---------------------------------------------------------------------------
+
+// splitByLandmarks carves the token stream into named regions using landmark
+// positions. Lines before the first landmark go into SectionPreamble (or
+// SectionBody when there are no landmarks at all).
 func splitByLandmarks(tokens []TokenizedLine, landmarks []Landmark, rules []LandmarkRule) map[Section][]TokenizedLine {
 	ruleMap := make(map[Token]Section, len(rules))
 	for _, r := range rules {
@@ -71,6 +90,12 @@ func splitByLandmarks(tokens []TokenizedLine, landmarks []Landmark, rules []Land
 	return sections
 }
 
+// ---------------------------------------------------------------------------
+// Header extraction
+// ---------------------------------------------------------------------------
+
+// extractHeaderFromRegion finds the version line and its trailing table rows
+// within a region. Returns (header tokens, remaining body tokens).
 func extractHeaderFromRegion(region []TokenizedLine) (header, rest []TokenizedLine) {
 	if len(region) == 0 {
 		return nil, nil
@@ -97,7 +122,6 @@ func extractHeaderFromRegion(region []TokenizedLine) (header, rest []TokenizedLi
 		break
 	}
 
-	// Trim trailing blank lines from header
 	headerEnd := end
 	for headerEnd > start && region[headerEnd-1].Token == TokenBlank {
 		headerEnd--
