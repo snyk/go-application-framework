@@ -344,18 +344,18 @@ func Test_getErrorList_ClosesOriginalBody(t *testing.T) {
 		config := getBaseConfig()
 		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
 
-		_ = middleware.HandleResponse(res, config)
-
+		err := middleware.HandleResponse(res, config)
+		assert.Error(t, err)
 		assert.True(t, tb.closed, "original body must be closed after reading")
 	})
 
 	t.Run("closes body on invalid JSON", func(t *testing.T) {
-		res, tb := newTrackingResponse(http.StatusBadRequest, "not json")
+		res, tb := newTrackingResponse(http.StatusInternalServerError, "not json")
 		config := getBaseConfig()
 		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
 
-		_ = middleware.HandleResponse(res, config)
-
+		err := middleware.HandleResponse(res, config)
+		assert.Error(t, err)
 		assert.True(t, tb.closed, "original body must be closed even when JSON parsing fails")
 	})
 
@@ -364,8 +364,8 @@ func Test_getErrorList_ClosesOriginalBody(t *testing.T) {
 		config := getBaseConfig()
 		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
 
-		_ = middleware.HandleResponse(res, config)
-
+		err := middleware.HandleResponse(res, config)
+		assert.Error(t, err)
 		assert.True(t, tb.closed, "original body must be closed")
 
 		bodyBytes, err := io.ReadAll(res.Body)
@@ -393,8 +393,8 @@ func Test_getErrorList_ClosesOriginalBody(t *testing.T) {
 		config := getBaseConfig()
 		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
 
-		_ = middleware.HandleResponse(res, config)
-
+		err := middleware.HandleResponse(res, config)
+		assert.Error(t, err)
 		assert.True(t, tb.closed, "original body must be closed even when empty")
 	})
 }
