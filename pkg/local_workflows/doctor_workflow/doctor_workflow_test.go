@@ -18,24 +18,26 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-func TestDoctorWorkflowRegistration(t *testing.T) {
+const sampleLog = "2026-06-10T13:10:38Z main - < response [0x1]: 401 Unauthorized\n" +
+	"2026-06-10T13:10:38Z main - ------------ Summary ------------\n" +
+	"2026-06-10T13:10:38Z main - ------------ Errors ------------\n" +
+	"2026-06-10T13:10:38Z main - Authentication error (SNYK-0005)\n" +
+	"2026-06-10T13:10:38Z main - Exit Code:             2"
+
+func Test_DoctorWorkflow_registration(t *testing.T) {
 	config := configuration.NewWithOpts()
 	engine := workflow.NewWorkFlowEngine(config)
 
-	err := InitDoctorWorkflow(engine)
-	require.NoError(t, err)
+	require.NoError(t, InitDoctorWorkflow(engine))
 
 	entry, ok := engine.GetWorkflow(WORKFLOWID_DOCTOR)
 	assert.True(t, ok)
 	require.NotNil(t, entry)
 
-	flags := entry.GetConfigurationOptions()
-	flagSet := workflow.FlagsetFromConfigurationOptions(flags)
+	flagSet := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
 	require.NotNil(t, flagSet)
 	assert.NotNil(t, flagSet.Lookup(inputFlag))
-	assert.NotNil(t, flagSet.Lookup(includeReportFlag))
 	assert.NotNil(t, flagSet.Lookup(noLiveCheckFlag))
-	assert.NotNil(t, flagSet.Lookup(configuration.FLAG_EXPERIMENTAL))
 }
 
 func setupMockContext(t *testing.T, config configuration.Configuration) *mocks.MockInvocationContext {
@@ -48,37 +50,59 @@ func setupMockContext(t *testing.T, config configuration.Configuration) *mocks.M
 	return invocationContextMock
 }
 
-func TestDoctorEntryPoint_ReadsInputFile(t *testing.T) {
-	logContent := "hello debug log"
-	logPath := filepath.Join(t.TempDir(), "debug.log")
-	require.NoError(t, os.WriteFile(logPath, []byte(logContent), 0600))
+func Test_runDoctor_summarizesInputFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "debug.log")
+	require.NoError(t, os.WriteFile(path, []byte(sampleLog), 0600))
 
 	config := configuration.NewWithOpts()
-	config.Set(inputFlag, logPath)
+	config.Set(inputFlag, path)
 
-	output, err := doctorEntryPoint(setupMockContext(t, config), nil)
+	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), false)
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 
-	payload, ok := output[0].GetPayload().([]byte)
-	require.True(t, ok)
-	assert.Equal(t, logContent, string(payload))
 	assert.Equal(t, "text/plain", output[0].GetContentType())
+	payload, ok := output[0].GetPayload().([]byte)
+	assert.Equal(t, ok, true)
+	rendered := string(payload)
+	assert.Contains(t, rendered, "Notable Events")
+	assert.Contains(t, rendered, "401 Unauthorized")
+	assert.Contains(t, rendered, "Exit Code:")
 }
 
-func TestDoctorEntryPoint_MissingInputFile(t *testing.T) {
+func Test_runDoctor_readsPipedStdin(t *testing.T) {
+	config := configuration.NewWithOpts()
+
+	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog), false)
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+	payload, ok := output[0].GetPayload().([]byte)
+	assert.Equal(t, ok, true)
+	rendered := string(payload)
+	assert.Contains(t, rendered, "Notable Events")
+}
+
+func Test_runDoctor_noInputOnTerminalErrors(t *testing.T) {
+	config := configuration.NewWithOpts()
+
+	_, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), true)
+
+	var snykErr snyk_errors.Error
+	require.ErrorAs(t, err, &snykErr)
+}
+
+func Test_runDoctor_missingInputFile(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(inputFlag, filepath.Join(t.TempDir(), "does-not-exist.log"))
 
-	_, err := doctorEntryPoint(setupMockContext(t, config), nil)
-	require.Error(t, err)
+	_, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), false)
 
 	var snykErr snyk_errors.Error
 	require.ErrorAs(t, err, &snykErr)
 	assert.Equal(t, "SNYK-CLI-0000", snykErr.ErrorCode)
 }
 
-func TestReadDebugLog(t *testing.T) {
+func Test_readDebugLog(t *testing.T) {
 	tests := []struct {
 		name     string
 		fileBody *string
