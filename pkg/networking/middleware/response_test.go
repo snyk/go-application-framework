@@ -31,19 +31,6 @@ func Test_ResponseMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		case "/429":
 			w.WriteHeader(http.StatusTooManyRequests)
-		case "/429-with-reset":
-			w.Header().Set("X-RateLimit-Reset", "300")
-			w.Header().Set("Retry-After", "120")
-			w.WriteHeader(http.StatusTooManyRequests)
-		case "/429-with-hour-reset":
-			w.Header().Set("X-RateLimit-Reset", "3600")
-			w.WriteHeader(http.StatusTooManyRequests)
-		case "/429-with-short-reset":
-			w.Header().Set("Retry-After", "5")
-			w.WriteHeader(http.StatusTooManyRequests)
-		case "/429-with-huge-reset":
-			w.Header().Set("X-RateLimit-Reset", "99999999")
-			w.WriteHeader(http.StatusTooManyRequests)
 		case "/jsonapi-SNYK-0003":
 			w.WriteHeader(http.StatusBadRequest)
 			_, err := w.Write([]byte(`{"jsonapi":{"version":"1.0"},"errors":[{"status":"400","detail":"project found but does not contain a target id","id":"6b86a7a8-9efb-4ed1-b3a2-1ed78ced78a9","title":"Not Found","meta":{"created":"2025-02-21T03:14:00.318931623Z"}}]}`))
@@ -108,100 +95,6 @@ func Test_ResponseMiddleware(t *testing.T) {
 			assert.Equal(t, snykErr.Meta["request-id"], "1234")
 			assert.Equal(t, snykErr.Meta["request-path"], fmt.Sprintf("/%d", code))
 		}
-	})
-
-	t.Run("429 with rate-limit headers enriches error", func(t *testing.T) {
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
-
-		req := buildRequest(server.URL + "/429-with-reset")
-		res, err := rt.RoundTrip(req)
-
-		assert.NotNil(t, res)
-		assert.Error(t, err)
-
-		snykErr := snyk_errors.Error{}
-		assert.ErrorAs(t, err, &snykErr)
-		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
-		assert.Equal(t, 300, snykErr.Meta["retry-after-seconds"])
-
-		errorRendered := presenters.RenderError(snykErr, context.Background())
-		assert.Contains(t, errorRendered, "Retry after: ~5 min")
-	})
-
-	t.Run("429 with hour-level delay renders hours", func(t *testing.T) {
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
-
-		req := buildRequest(server.URL + "/429-with-hour-reset")
-		res, err := rt.RoundTrip(req)
-
-		assert.NotNil(t, res)
-		assert.Error(t, err)
-
-		snykErr := snyk_errors.Error{}
-		assert.ErrorAs(t, err, &snykErr)
-		assert.Equal(t, 3600, snykErr.Meta["retry-after-seconds"])
-
-		errorRendered := presenters.RenderError(snykErr, context.Background())
-		assert.Contains(t, errorRendered, "Retry after: ~1 h")
-	})
-
-	t.Run("429 with sub-minute delay renders seconds", func(t *testing.T) {
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
-
-		req := buildRequest(server.URL + "/429-with-short-reset")
-		res, err := rt.RoundTrip(req)
-
-		assert.NotNil(t, res)
-		assert.Error(t, err)
-
-		snykErr := snyk_errors.Error{}
-		assert.ErrorAs(t, err, &snykErr)
-		assert.Equal(t, 5, snykErr.Meta["retry-after-seconds"])
-
-		errorRendered := presenters.RenderError(snykErr, context.Background())
-		assert.Contains(t, errorRendered, "Retry after: 5 s")
-	})
-
-	t.Run("429 with delay beyond cap skips retry detail but keeps description", func(t *testing.T) {
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
-
-		req := buildRequest(server.URL + "/429-with-huge-reset")
-		res, err := rt.RoundTrip(req)
-
-		assert.NotNil(t, res)
-		assert.Error(t, err)
-
-		snykErr := snyk_errors.Error{}
-		assert.ErrorAs(t, err, &snykErr)
-		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
-		assert.Nil(t, snykErr.Meta["retry-after-seconds"])
-		assert.Contains(t, snykErr.Description, "shared across all usage of this token")
-	})
-
-	t.Run("429 without rate-limit headers still has actionable description", func(t *testing.T) {
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
-		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
-
-		req := buildRequest(server.URL + "/429")
-		res, err := rt.RoundTrip(req)
-
-		assert.NotNil(t, res)
-		assert.Error(t, err)
-
-		snykErr := snyk_errors.Error{}
-		assert.ErrorAs(t, err, &snykErr)
-		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
-		assert.Contains(t, snykErr.Description, "shared across all usage of this token")
-		assert.Nil(t, snykErr.Meta["retry-after-seconds"])
 	})
 
 	t.Run("no error if no status code matches", func(t *testing.T) {
@@ -364,6 +257,127 @@ func Test_ResponseMiddleware(t *testing.T) {
 				assert.NoError(t, err, "Body should close without errors")
 			})
 		}
+	})
+}
+
+func Test_ResponseMiddleware_RateLimitEnrichment(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/429":
+			w.WriteHeader(http.StatusTooManyRequests)
+		case "/429-with-reset":
+			w.Header().Set("X-RateLimit-Reset", "300")
+			w.Header().Set("Retry-After", "120")
+			w.WriteHeader(http.StatusTooManyRequests)
+		case "/429-with-hour-reset":
+			w.Header().Set("X-RateLimit-Reset", "3600")
+			w.WriteHeader(http.StatusTooManyRequests)
+		case "/429-with-short-reset":
+			w.Header().Set("Retry-After", "5")
+			w.WriteHeader(http.StatusTooManyRequests)
+		case "/429-with-huge-reset":
+			w.Header().Set("X-RateLimit-Reset", "99999999")
+			w.WriteHeader(http.StatusTooManyRequests)
+		}
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	errHandler := func(err error, ctx context.Context) error {
+		return err
+	}
+
+	t.Run("with rate-limit headers enriches error", func(t *testing.T) {
+		config := getBaseConfig()
+		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+
+		req := buildRequest(server.URL + "/429-with-reset")
+		res, err := rt.RoundTrip(req)
+
+		assert.NotNil(t, res)
+		assert.Error(t, err)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
+		assert.Equal(t, 300, snykErr.Meta["retry-after-seconds"])
+
+		errorRendered := presenters.RenderError(snykErr, context.Background())
+		assert.Contains(t, errorRendered, "Retry after: ~5 min")
+	})
+
+	t.Run("hour-level delay renders hours", func(t *testing.T) {
+		config := getBaseConfig()
+		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+
+		req := buildRequest(server.URL + "/429-with-hour-reset")
+		res, err := rt.RoundTrip(req)
+
+		assert.NotNil(t, res)
+		assert.Error(t, err)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, 3600, snykErr.Meta["retry-after-seconds"])
+
+		errorRendered := presenters.RenderError(snykErr, context.Background())
+		assert.Contains(t, errorRendered, "Retry after: ~1 h")
+	})
+
+	t.Run("sub-minute delay renders seconds", func(t *testing.T) {
+		config := getBaseConfig()
+		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+
+		req := buildRequest(server.URL + "/429-with-short-reset")
+		res, err := rt.RoundTrip(req)
+
+		assert.NotNil(t, res)
+		assert.Error(t, err)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, 5, snykErr.Meta["retry-after-seconds"])
+
+		errorRendered := presenters.RenderError(snykErr, context.Background())
+		assert.Contains(t, errorRendered, "Retry after: 5 s")
+	})
+
+	t.Run("delay beyond cap skips retry detail but keeps description", func(t *testing.T) {
+		config := getBaseConfig()
+		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+
+		req := buildRequest(server.URL + "/429-with-huge-reset")
+		res, err := rt.RoundTrip(req)
+
+		assert.NotNil(t, res)
+		assert.Error(t, err)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
+		assert.Nil(t, snykErr.Meta["retry-after-seconds"])
+		assert.Contains(t, snykErr.Description, "shared across all usage of this token")
+	})
+
+	t.Run("without rate-limit headers still has actionable description", func(t *testing.T) {
+		config := getBaseConfig()
+		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{server.URL})
+		rt := middleware.NewReponseMiddleware(http.DefaultTransport, config, errHandler)
+
+		req := buildRequest(server.URL + "/429")
+		res, err := rt.RoundTrip(req)
+
+		assert.NotNil(t, res)
+		assert.Error(t, err)
+
+		snykErr := snyk_errors.Error{}
+		assert.ErrorAs(t, err, &snykErr)
+		assert.Equal(t, "SNYK-0001", snykErr.ErrorCode)
+		assert.Contains(t, snykErr.Description, "shared across all usage of this token")
+		assert.Nil(t, snykErr.Meta["retry-after-seconds"])
 	})
 }
 
