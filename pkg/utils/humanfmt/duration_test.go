@@ -1,4 +1,4 @@
-package utils
+package humanfmt
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHumanDuration(t *testing.T) {
+func TestDuration(t *testing.T) {
 	tests := []struct {
 		name     string
 		duration time.Duration
@@ -37,7 +37,7 @@ func TestHumanDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, HumanDuration(tt.duration))
+			assert.Equal(t, tt.expected, Duration(tt.duration))
 		})
 	}
 }
