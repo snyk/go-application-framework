@@ -83,8 +83,12 @@ func tokenToEventKind(t Token) EventKind {
 		return EventHTTPError
 	case TokenCLIError, TokenFailedLine:
 		return EventError
+	case TokenPlain, TokenBlank, TokenVersionLine, TokenTableRow,
+		TokenSummaryMarker, TokenErrorsMarker, TokenExitCode:
+		return ""
+	default:
+		return ""
 	}
-	return ""
 }
 
 func joinMessages(tokens []TokenizedLine) string {

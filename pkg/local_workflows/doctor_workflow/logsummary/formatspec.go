@@ -76,11 +76,17 @@ func (c VersionConstraint) Contains(v CLIVersion) bool {
 	return true
 }
 
-func versionRange(min, max string) VersionConstraint {
-	minV, _ := ParseCLIVersion(min)
+func versionRange(lower, upper string) VersionConstraint {
+	minV, err := ParseCLIVersion(lower)
+	if err != nil {
+		panic(fmt.Sprintf("invalid min version %q: %v", lower, err))
+	}
 	var maxV CLIVersion
-	if max != "" {
-		maxV, _ = ParseCLIVersion(max)
+	if upper != "" {
+		maxV, err = ParseCLIVersion(upper)
+		if err != nil {
+			panic(fmt.Sprintf("invalid max version %q: %v", upper, err))
+		}
 	}
 	return VersionConstraint{MinInclusive: minV, MaxExclusive: maxV}
 }
@@ -134,12 +140,12 @@ var (
 )
 
 var baseLexer = LexerSpec{
-	LinePrefixRe:  basePrefixRe,
-	SummaryMarker: "------------ Summary ------------",
-	ErrorsMarker:  "------------ Errors ------------",
-	VersionPrefix: "Version:",
+	LinePrefixRe:   basePrefixRe,
+	SummaryMarker:  "------------ Summary ------------",
+	ErrorsMarker:   "------------ Errors ------------",
+	VersionPrefix:  "Version:",
 	ExitCodePrefix: "Exit Code:",
-	TableRowRe:    baseTableRe,
+	TableRowRe:     baseTableRe,
 	BodyClassifiers: []BodyClassifier{
 		{Match: func(msg string) bool { return responseRe.MatchString(msg) }, Token: TokenHTTPError},
 		{Match: func(msg string) bool { return strings.HasPrefix(msg, "< error:") }, Token: TokenCLIError},

@@ -87,9 +87,12 @@ func TestVersionConstraint_Contains(t *testing.T) {
 func TestVersionConstraint_UnboundedMax(t *testing.T) {
 	constraint := versionRange("2.0.0", "")
 
-	v1, _ := ParseCLIVersion("2.0.0")
-	v2, _ := ParseCLIVersion("99.99.99")
-	v3, _ := ParseCLIVersion("1.9999.0")
+	v1, err := ParseCLIVersion("2.0.0")
+	require.NoError(t, err)
+	v2, err := ParseCLIVersion("99.99.99")
+	require.NoError(t, err)
+	v3, err := ParseCLIVersion("1.9999.0")
+	require.NoError(t, err)
 
 	assert.True(t, constraint.Contains(v1))
 	assert.True(t, constraint.Contains(v2))
