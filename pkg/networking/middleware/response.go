@@ -81,6 +81,7 @@ func getErrorList(res *http.Response) []snyk_errors.Error {
 		return []snyk_errors.Error{}
 	}
 
+	_ = res.Body.Close()
 	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	errorList, err := snyk_errors.FromJSONAPIErrorBytes(bodyBytes)
