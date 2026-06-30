@@ -1,4 +1,4 @@
-package utils
+package humanfmt
 
 import (
 	"fmt"
@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// HumanDuration formats a duration into a human-readable string,
-// picking the most appropriate unit (seconds, minutes, or hours+minutes).
-func HumanDuration(d time.Duration) string {
+// Duration formats a duration into a human-readable string,
+// picking the most appropriate unit (seconds, minutes, or hours).
+func Duration(d time.Duration) string {
 	switch {
 	case d < 90*time.Second:
 		return fmt.Sprintf("%d s", int(math.Round(d.Seconds())))

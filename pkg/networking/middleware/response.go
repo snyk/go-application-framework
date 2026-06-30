@@ -15,6 +15,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	networktypes "github.com/snyk/go-application-framework/pkg/networking/network_types"
 	"github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/utils/humanfmt"
 )
 
 type ResponseMiddleware struct {
@@ -180,7 +181,7 @@ func enrichRateLimitError(err error, res *http.Response) error {
 	if retryDelay > 0 && retryDelay <= maxDisplayRetryAfter {
 		retryTime := time.Now().Add(retryDelay)
 
-		snykErr.Detail = fmt.Sprintf("Retry after: %s (\u2248%s).", utils.HumanDuration(retryDelay), retryTime.Format("15:04 MST"))
+		snykErr.Detail = fmt.Sprintf("Retry after: %s (\u2248%s).", humanfmt.Duration(retryDelay), retryTime.Format("15:04 MST"))
 		snyk_errors.WithMeta("retry-after-seconds", int(retryDelay.Seconds()))(&snykErr)
 	}
 
