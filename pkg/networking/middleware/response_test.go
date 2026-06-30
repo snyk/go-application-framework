@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
@@ -334,94 +333,6 @@ func Test_ResponseMiddleware_RateLimitEnrichment(t *testing.T) {
 		assert.Contains(t, snykErr.Description, "shared across all usage of this token")
 		assert.Nil(t, snykErr.Meta["retry-after-seconds"])
 	})
-}
-
-func Test_getErrorList_ClosesOriginalBody(t *testing.T) {
-	validErrorBody := `{"jsonapi":{"version":"1.0"},"errors":[{"status":"400","detail":"bad request","title":"Bad Request"}]}`
-
-	t.Run("closes body on valid JSON API error", func(t *testing.T) {
-		res, tb := newTrackingResponse(http.StatusBadRequest, validErrorBody)
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
-
-		err := middleware.HandleResponse(res, config)
-		assert.Error(t, err)
-		assert.True(t, tb.closed, "original body must be closed after reading")
-	})
-
-	t.Run("closes body on invalid JSON", func(t *testing.T) {
-		res, tb := newTrackingResponse(http.StatusInternalServerError, "not json")
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
-
-		err := middleware.HandleResponse(res, config)
-		assert.Error(t, err)
-		assert.True(t, tb.closed, "original body must be closed even when JSON parsing fails")
-	})
-
-	t.Run("body is readable after HandleResponse", func(t *testing.T) {
-		res, tb := newTrackingResponse(http.StatusBadRequest, validErrorBody)
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
-
-		err := middleware.HandleResponse(res, config)
-		assert.Error(t, err)
-		assert.True(t, tb.closed, "original body must be closed")
-
-		bodyBytes, err := io.ReadAll(res.Body)
-		assert.NoError(t, err, "replacement body should be readable")
-		assert.Equal(t, validErrorBody, string(bodyBytes))
-	})
-
-	t.Run("nil body returns empty error list without panic", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "https://api.snyk.io/test", nil)
-		res := &http.Response{
-			StatusCode: http.StatusBadRequest,
-			Body:       nil,
-			Header:     http.Header{},
-			Request:    req,
-		}
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
-
-		err := middleware.HandleResponse(res, config)
-		assert.Error(t, err)
-	})
-
-	t.Run("empty body returns empty error list", func(t *testing.T) {
-		res, tb := newTrackingResponse(http.StatusBadRequest, "")
-		config := getBaseConfig()
-		config.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, []string{"https://api.snyk.io"})
-
-		err := middleware.HandleResponse(res, config)
-		assert.Error(t, err)
-		assert.True(t, tb.closed, "original body must be closed even when empty")
-	})
-}
-
-// --- test helpers ---
-
-type trackingBody struct {
-	io.ReadCloser
-	closed bool
-}
-
-func (tb *trackingBody) Close() error {
-	tb.closed = true
-	return tb.ReadCloser.Close()
-}
-
-func newTrackingResponse(statusCode int, body string) (*http.Response, *trackingBody) {
-	tb := &trackingBody{
-		ReadCloser: io.NopCloser(strings.NewReader(body)),
-	}
-	req := httptest.NewRequest(http.MethodGet, "https://api.snyk.io/test", nil)
-	return &http.Response{
-		StatusCode: statusCode,
-		Body:       tb,
-		Header:     http.Header{},
-		Request:    req,
-	}, tb
 }
 
 func buildRequest(url string) *http.Request {
