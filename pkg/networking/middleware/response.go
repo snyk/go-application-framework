@@ -74,14 +74,14 @@ func getErrorList(res *http.Response) []snyk_errors.Error {
 	if res.Body == nil {
 		return []snyk_errors.Error{}
 	}
-	originalBody := res.Body
-	defer originalBody.Close()
 	// get JSONApiErrors from body
 	bodyBytes, err := io.ReadAll(res.Body)
-	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return []snyk_errors.Error{}
 	}
+
+	_ = res.Body.Close()
+	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	errorList, err := snyk_errors.FromJSONAPIErrorBytes(bodyBytes)
 	if err != nil {
