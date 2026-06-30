@@ -22,7 +22,7 @@ func (tb *trackingBody) Close() error {
 func Test_getErrorList_closesBody(t *testing.T) {
 	validJSON := `{"jsonapi":{"version":"1.0"},"errors":[{"status":"400","detail":"bad request","title":"Bad Request"}]}`
 
-	t.Run("parses errors and closes body", func(t *testing.T) {
+	t.Run("parses errors and closes body after successful read", func(t *testing.T) {
 		tb := &trackingBody{ReadCloser: io.NopCloser(strings.NewReader(validJSON))}
 		res := &http.Response{Body: tb}
 
@@ -31,15 +31,6 @@ func Test_getErrorList_closesBody(t *testing.T) {
 		assert.Len(t, errors, 1)
 		assert.Equal(t, "Bad Request", errors[0].Title)
 		assert.Equal(t, "bad request", errors[0].Detail)
-		assert.True(t, tb.closed, "original body must be closed after reading")
-	})
-
-	t.Run("closes body after successful read", func(t *testing.T) {
-		tb := &trackingBody{ReadCloser: io.NopCloser(strings.NewReader(validJSON))}
-		res := &http.Response{Body: tb}
-
-		getErrorList(res)
-
 		assert.True(t, tb.closed, "original body must be closed after reading")
 	})
 
