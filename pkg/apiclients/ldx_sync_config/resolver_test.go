@@ -216,6 +216,18 @@ func TestResolveOrgFromUserConfig(t *testing.T) {
 			expectedErr:   errors.New("api is down"),
 			cfgResult:     LdxSyncConfigResult{Error: errors.New("ldx api error")},
 		},
+		{
+			name:          "non-git folder result - falls back to is_default org when no preferred_by_algorithm",
+			expectedOrgId: "default-org",
+			cfgResult: LdxSyncConfigResult{
+				Config: makeUserConfigResponse([]v20241015.Organization{
+					{Id: "other-org", PreferredByAlgorithm: utils.Ptr(false)},
+					{Id: "default-org", IsDefault: utils.Ptr(true)},
+				}),
+				RemoteUrl:   "",
+				ProjectRoot: "/tmp/my-project",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -275,23 +287,32 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 	runCmd("git", "init")
 	runCmd("git", "remote", "add", "origin", "https://github.com/test/repo.git")
 
-	// Setup a temp dir without git for git failure tests
+	// Setup a temp dir without git for non-git project tests
 	tempDirNoGit, err := os.MkdirTemp("", "test-no-git")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDirNoGit)
 
+	// Setup a temp dir with git init but no remote (partial-git)
+	tempDirNoRemote, err := os.MkdirTemp("", "test-git-no-remote")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDirNoRemote)
+	initCmd := exec.Command("git", "init")
+	initCmd.Dir = tempDirNoRemote
+	assert.NoError(t, initCmd.Run())
+
 	// Test cases
 	tests := []struct {
-		name           string
-		setupLdxMock   func(mock *ldx_mocks.MockClientWithResponsesInterface)
-		setupApiMock   func(mock *api_mocks.MockApiClient)
-		clientError    error
-		dir            string
-		orgId          string
-		expectedError  string
-		expectNoError  bool
-		expectedConfig bool
-		expectedOrgId  string // For response priority validation
+		name                 string
+		setupLdxMock         func(mock *ldx_mocks.MockClientWithResponsesInterface)
+		setupApiMock         func(mock *api_mocks.MockApiClient)
+		clientError          error
+		dir                  string
+		orgId                string
+		expectedError        string
+		expectNoError        bool
+		expectedConfig       bool
+		expectEmptyRemoteUrl bool
+		expectedOrgId        string // For response priority validation
 	}{
 		// Task 2: Error path test cases (empty dir, client failures, git failures)
 		{
@@ -306,14 +327,44 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 			expectedError: "failed to create LDX-Sync client",
 		},
 		{
-			name:          "git remote detection failure - no git init",
-			dir:           tempDirNoGit,
-			expectedError: "git remote detection failed",
+			name: "non-git folder - succeeds without RemoteUrl param",
+			dir:  tempDirNoGit,
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(
+					gomock.Any(),
+					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
+				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
+					assert.Nil(t, params.RemoteUrl)
+					assert.Nil(t, params.Org)
+					return &v20241015.GetUserConfigResponse{
+						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
+						JSON200:      makeUserConfigResponse([]v20241015.Organization{{Id: "org-1"}}),
+					}, nil
+				})
+			},
+			expectNoError:        true,
+			expectedConfig:       true,
+			expectEmptyRemoteUrl: true,
 		},
 		{
-			name:          "git remote empty string",
-			dir:           tempDirNoGit,
-			expectedError: "git remote detection failed",
+			name: "git init with no remote - succeeds without RemoteUrl param",
+			dir:  tempDirNoRemote,
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(
+					gomock.Any(),
+					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
+				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
+					assert.Nil(t, params.RemoteUrl)
+					assert.Nil(t, params.Org)
+					return &v20241015.GetUserConfigResponse{
+						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
+						JSON200:      makeUserConfigResponse([]v20241015.Organization{{Id: "org-1"}}),
+					}, nil
+				})
+			},
+			expectNoError:        true,
+			expectedConfig:       true,
+			expectEmptyRemoteUrl: true,
 		},
 		// Task 3: OrgId resolution error path test cases
 		{
@@ -535,6 +586,101 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 			expectedConfig: true,
 			expectedOrgId:  "org-from-json200",
 		},
+		// Non-git folder: org selection variants
+		{
+			name:  "non-git folder, UUID orgId - Org sent, RemoteUrl not sent",
+			dir:   tempDirNoGit,
+			orgId: "123e4567-e89b-12d3-a456-426614174000",
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(
+					gomock.Any(),
+					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
+				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
+					assert.Nil(t, params.RemoteUrl)
+					assert.NotNil(t, params.Org)
+					assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", params.Org.String())
+					return &v20241015.GetUserConfigResponse{
+						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
+						JSON200:      makeUserConfigResponse([]v20241015.Organization{{Id: "org-1"}}),
+					}, nil
+				})
+			},
+			expectNoError:        true,
+			expectedConfig:       true,
+			expectEmptyRemoteUrl: true,
+		},
+		{
+			name:  "non-git folder, slug orgId - slug resolved, RemoteUrl not sent",
+			dir:   tempDirNoGit,
+			orgId: "my-org-slug",
+			setupApiMock: func(mock *api_mocks.MockApiClient) {
+				mock.EXPECT().GetOrgIdFromSlug(gomock.Any(), "my-org-slug").Return("123e4567-e89b-12d3-a456-426614174000", nil)
+			},
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(
+					gomock.Any(),
+					gomock.AssignableToTypeOf(&v20241015.GetUserConfigParams{}),
+				).DoAndReturn(func(ctx interface{}, params *v20241015.GetUserConfigParams, _ ...interface{}) (*v20241015.GetUserConfigResponse, error) {
+					assert.Nil(t, params.RemoteUrl)
+					assert.NotNil(t, params.Org)
+					assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", params.Org.String())
+					return &v20241015.GetUserConfigResponse{
+						HTTPResponse: &http.Response{StatusCode: http.StatusOK},
+						JSON200:      makeUserConfigResponse([]v20241015.Organization{{Id: "org-1"}}),
+					}, nil
+				})
+			},
+			expectNoError:        true,
+			expectedConfig:       true,
+			expectEmptyRemoteUrl: true,
+		},
+		// Non-git folder: API error paths still surface correctly
+		{
+			name: "non-git folder - API returns 400 error",
+			dir:  tempDirNoGit,
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(gomock.Any(), gomock.Any()).Return(&v20241015.GetUserConfigResponse{
+					HTTPResponse: &http.Response{StatusCode: http.StatusBadRequest},
+					JSON400:      &v20241015.ErrorResponseApplicationJSON{},
+				}, nil)
+			},
+			expectedError: "400 API error occurred",
+		},
+		{
+			name: "non-git folder - API returns 500 error",
+			dir:  tempDirNoGit,
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(gomock.Any(), gomock.Any()).Return(&v20241015.GetUserConfigResponse{
+					HTTPResponse: &http.Response{StatusCode: http.StatusInternalServerError},
+					JSON500:      &v20241015.ErrorResponseApplicationJSON{},
+				}, nil)
+			},
+			expectedError: "500 API error occurred",
+		},
+		{
+			name: "non-git folder - API returns network error",
+			dir:  tempDirNoGit,
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("network error"))
+			},
+			expectedError: "failed to retrieve LDX-Sync config",
+		},
+		{
+			name: "non-git folder - success response with no data still errors",
+			dir:  tempDirNoGit,
+			setupLdxMock: func(mock *ldx_mocks.MockClientWithResponsesInterface) {
+				mock.EXPECT().GetUserConfigWithResponse(gomock.Any(), gomock.Any()).Return(&v20241015.GetUserConfigResponse{
+					HTTPResponse: &http.Response{StatusCode: http.StatusOK},
+				}, nil)
+			},
+			expectedError: "no configuration data in response",
+		},
+		{
+			name:          "non-git folder - client creation failure still errors",
+			dir:           tempDirNoGit,
+			clientError:   fmt.Errorf("client creation failed"),
+			expectedError: "failed to create LDX-Sync client",
+		},
 	}
 
 	for _, tt := range tests {
@@ -580,7 +726,11 @@ func TestGetMergedConfigForFolder(t *testing.T) {
 				assert.NoError(t, result.Error)
 				if tt.expectedConfig {
 					assert.NotNil(t, result.Config)
-					assert.NotEmpty(t, result.RemoteUrl)
+					if tt.expectEmptyRemoteUrl {
+						assert.Empty(t, result.RemoteUrl)
+					} else {
+						assert.NotEmpty(t, result.RemoteUrl)
+					}
 					assert.NotEmpty(t, result.ProjectRoot)
 					// Verify response priority if expectedOrgId is set
 					if tt.expectedOrgId != "" && result.Config != nil && result.Config.Data.Attributes.Organizations != nil {
