@@ -38,8 +38,9 @@ func Test_getErrorList_closesBody(t *testing.T) {
 		tb := &trackingBody{ReadCloser: io.NopCloser(strings.NewReader("not json"))}
 		res := &http.Response{Body: tb}
 
-		getErrorList(res)
+		errors := getErrorList(res)
 
+		assert.Len(t, errors, 0)
 		assert.True(t, tb.closed, "original body must be closed even when JSON parsing fails")
 	})
 }
