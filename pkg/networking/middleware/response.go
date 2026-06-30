@@ -3,8 +3,10 @@ package middleware
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/error-catalog-golang-public/snyk"
@@ -94,7 +96,7 @@ func getErrorsFromResponse(res *http.Response) error {
 	}
 
 	var resultError error
-	defaultError := errFromStatusCode(res.StatusCode)
+	defaultError := errFromResponse(res)
 
 	// try to decode JSON API or Error Catalog Errors
 	errorList := getErrorList(res)
@@ -124,7 +126,23 @@ func getErrorsFromResponse(res *http.Response) error {
 	return resultError
 }
 
-// errFromStatusCode matches the providede status code to an Error Catalog error. If no match is found, nil is returned.
+// errFromResponse maps the response to an Error Catalog error, enriching it
+// with response-specific data (e.g. rate-limit headers for 429s).
+func errFromResponse(res *http.Response) error {
+	baseErr := errFromStatusCode(res.StatusCode)
+	if baseErr == nil {
+		return nil
+	}
+
+	if res.StatusCode == http.StatusTooManyRequests {
+		return enrichRateLimitError(baseErr, res)
+	}
+
+	return baseErr
+}
+
+// errFromStatusCode matches the status code to an Error Catalog error.
+// If no match is found, nil is returned.
 func errFromStatusCode(code int) error {
 	switch code {
 	case http.StatusUnauthorized:
@@ -140,6 +158,33 @@ func errFromStatusCode(code int) error {
 	default:
 		return nil
 	}
+}
+
+// enrichRateLimitError adds rate-limit header data to a 429 error so the user
+// sees a concrete retry-after duration and actionable guidance.
+func enrichRateLimitError(err error, res *http.Response) error {
+	var snykErr snyk_errors.Error
+	if !errors.As(err, &snykErr) {
+		return err
+	}
+
+	// always replace the generic description with actionable guidance
+	snykErr.Description = "This limit is shared across all usage of this token \u2014 " +
+		"parallel scans in CI or running different applications can exhaust it quickly. " +
+		"Reduce the chance of this: lower scan concurrency in your pipeline, " +
+		"add backoff/jitter between scans."
+
+	const maxDisplayRetryAfter = 48 * time.Hour
+
+	retryDelay := rateLimitRetryDelay(res)
+	if retryDelay > 0 && retryDelay <= maxDisplayRetryAfter {
+		retryTime := time.Now().Add(retryDelay)
+
+		snykErr.Detail = fmt.Sprintf("Retry after: %s (\u2248%s).", utils.HumanDuration(retryDelay), retryTime.Format("15:04 MST"))
+		snyk_errors.WithMeta("retry-after-seconds", int(retryDelay.Seconds()))(&snykErr)
+	}
+
+	return snykErr
 }
 
 // addRequestDataToErr adds the request-id and request-url fields in the metadata map for the error.

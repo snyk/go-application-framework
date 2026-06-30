@@ -329,22 +329,7 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			return backoff.Permanent(errRetryNecessary)
 		}
 
-		fixRetryDelay := time.Duration(0)
-
-		// try to read retry-after header if available
-		if headerRetryAfterValue := response.Header.Get("Retry-After"); len(headerRetryAfterValue) > 0 {
-			fixRetryDelay = parseRetryDelay(headerRetryAfterValue)
-		}
-
-		fixXRateLimitReset := time.Duration(0)
-
-		// try to read X-RateLimit-Reset header if available
-		// according to envoy docs: number of seconds until reset of the current time-window
-		if headerXRateLimitResetValue := response.Header.Get("X-RateLimit-Reset"); len(headerXRateLimitResetValue) > 0 {
-			fixXRateLimitReset = parseRetryDelay(headerXRateLimitResetValue)
-		}
-
-		timeToWait := max(fixRetryDelay, fixXRateLimitReset)
+		timeToWait := rateLimitRetryDelay(response)
 		if timeToWait > maxRetryAfter {
 			return backoff.Permanent(errRetryDelayMaxExceeded)
 		}
@@ -393,4 +378,19 @@ func parseRetryDelay(headerRetryAfterValue string) time.Duration {
 	}
 
 	return 0
+}
+
+// rateLimitRetryDelay extracts the longer of Retry-After and X-RateLimit-Reset
+// durations from the response headers.
+func rateLimitRetryDelay(res *http.Response) time.Duration {
+	var retryAfter, rateLimitReset time.Duration
+
+	if v := res.Header.Get("Retry-After"); len(v) > 0 {
+		retryAfter = parseRetryDelay(v)
+	}
+	if v := res.Header.Get("X-RateLimit-Reset"); len(v) > 0 {
+		rateLimitReset = parseRetryDelay(v)
+	}
+
+	return max(retryAfter, rateLimitReset)
 }
