@@ -56,9 +56,3 @@ var BaseSpec = logparse.NewFormatSpec("base", logparse.VersionRange("0.0.0", "")
 // registry lists known format specs, newest-first. Detection returns the first
 // spec whose version constraint contains the log's declared version.
 var registry = []logparse.FormatSpec{BaseSpec}
-
-// newDetector builds a detector over the current registry. It is constructed
-// per call so tests that swap the registry take effect.
-func newDetector() *logparse.Detector {
-	return logparse.NewDetector(basePrefixRe, versionPrefixes, registry, BaseSpec)
-}

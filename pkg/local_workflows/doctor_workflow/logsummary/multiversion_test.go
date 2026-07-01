@@ -43,15 +43,12 @@ func TestSummarize_unknownFutureVersionFallsBack(t *testing.T) {
 }
 
 func TestSummarize_twoVersionsSameEngine(t *testing.T) {
-	origRegistry := registry
-	defer func() { registry = origRegistry }()
-
 	v2Spec := logparse.DeriveFormat(BaseSpec, "v2.0", logparse.VersionRange("2.0.0", ""),
 		logparse.WithLexerOverrides(
 			logparse.WithSummaryMarker("============ Summary ============"),
 		),
 	)
-	registry = []logparse.FormatSpec{v2Spec, BaseSpec}
+	summarizer := NewSummarizer([]logparse.FormatSpec{v2Spec, BaseSpec}, BaseSpec)
 
 	v1Log := strings.Join([]string{
 		"2026-06-10T13:10:38Z main - Version:               1.0.0",
@@ -69,8 +66,8 @@ func TestSummarize_twoVersionsSameEngine(t *testing.T) {
 		"2026-06-10T13:10:38Z main - Exit Code:             1",
 	}, "\n")
 
-	result1 := Summarize(v1Log)
-	result2 := Summarize(v2Log)
+	result1 := summarizer.Summarize(v1Log)
+	result2 := summarizer.Summarize(v2Log)
 
 	assert.Equal(t, "base", result1.FormatSpecID)
 	assert.Equal(t, "v2.0", result2.FormatSpecID)
@@ -86,9 +83,6 @@ func TestSummarize_twoVersionsSameEngine(t *testing.T) {
 }
 
 func TestSummarize_derivedSpecWithExtraClassifier(t *testing.T) {
-	origRegistry := registry
-	defer func() { registry = origRegistry }()
-
 	v2Spec := logparse.DeriveFormat(BaseSpec, "v2.0", logparse.VersionRange("2.0.0", ""),
 		logparse.WithLexerOverrides(
 			logparse.WithExtraClassifier(
@@ -97,14 +91,14 @@ func TestSummarize_derivedSpecWithExtraClassifier(t *testing.T) {
 			),
 		),
 	)
-	registry = []logparse.FormatSpec{v2Spec, BaseSpec}
+	summarizer := NewSummarizer([]logparse.FormatSpec{v2Spec, BaseSpec}, BaseSpec)
 
 	v1Log := strings.Join([]string{
 		"2026-06-10T13:10:38Z main - Version:               1.0.0",
 		"2026-06-10T13:10:38Z main - FATAL something crashed",
 	}, "\n")
 
-	result1 := Summarize(v1Log)
+	result1 := summarizer.Summarize(v1Log)
 	assert.Empty(t, result1.Highlights, "base spec should not match FATAL")
 
 	v2Log := strings.Join([]string{
@@ -112,7 +106,7 @@ func TestSummarize_derivedSpecWithExtraClassifier(t *testing.T) {
 		"2026-06-10T13:10:38Z main - FATAL something crashed",
 	}, "\n")
 
-	result2 := Summarize(v2Log)
+	result2 := summarizer.Summarize(v2Log)
 	require.Len(t, result2.Highlights, 1)
 	assert.Equal(t, EventError, result2.Highlights[0].Kind)
 	assert.Contains(t, result2.Highlights[0].Message, "FATAL something crashed")

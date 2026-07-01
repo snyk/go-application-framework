@@ -59,19 +59,43 @@ func NewSummary(cliVersion, formatSpecID, header, footer string, highlights []Hi
 }
 
 // ---------------------------------------------------------------------------
-// Summarize: 3-phase pipeline entry point
+// Summarizer: owns the format registry used to parse logs
 // ---------------------------------------------------------------------------
+
+// Summarizer parses CLI debug logs using a configured set of format specs.
+// Construct one with NewSummarizer to parse against a custom registry (for
+// example in tests), or use the package-level Summarize for the default
+// doctor configuration.
+type Summarizer struct {
+	detector *logparse.Detector
+}
+
+// NewSummarizer builds a Summarizer over the given registry. The registry is
+// tried newest-first; fallback is used when the log declares no version or none
+// matches.
+func NewSummarizer(registry []logparse.FormatSpec, fallback logparse.FormatSpec) *Summarizer {
+	return &Summarizer{
+		detector: logparse.NewDetector(basePrefixRe, versionPrefixes, registry, fallback),
+	}
+}
+
+// defaultSummarizer parses against the package-level doctor registry.
+var defaultSummarizer = NewSummarizer(registry, BaseSpec)
+
+// Summarize parses a CLI debug log against the default doctor configuration.
+func Summarize(log string) Summary {
+	return defaultSummarizer.Summarize(log)
+}
 
 // Summarize parses a CLI debug log and returns a structured summary.
 //
 // Phase 1: Tokenize each line using the detected format spec's lexer.
 // Phase 2: Find structural landmarks, carve token stream into sections.
 // Phase 3: Process each section independently (header, highlights, footer).
-func Summarize(log string) Summary {
+func (s *Summarizer) Summarize(log string) Summary {
 	rawLines := strings.Split(log, "\n")
 
-	detector := newDetector()
-	spec := detector.Detect(rawLines)
+	spec := s.detector.Detect(rawLines)
 
 	tokens := logparse.Tokenize(spec.Lexer, rawLines)
 	landmarks := logparse.FindLandmarks(tokens, spec.LandmarkRules)
@@ -86,7 +110,7 @@ func Summarize(log string) Summary {
 
 	highlights, truncated := collectHighlights(bodyTokens)
 
-	cliVer, _ := detector.ExtractCLIVersion(rawLines)
+	cliVer, _ := s.detector.ExtractCLIVersion(rawLines)
 	return NewSummary(
 		cliVer.Raw,
 		spec.ID,
