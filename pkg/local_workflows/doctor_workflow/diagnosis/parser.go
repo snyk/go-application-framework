@@ -118,13 +118,34 @@ func extractHeader(body []ParsedLine) []ParsedLine {
 	end := start
 	for i := start + 1; i < len(body); i++ {
 		ln := body[i]
-		if !ln.HasCLIPrefix || classifyBodyLine(ln) != "" || !isTableRow(ln.Message) {
+		if !ln.HasCLIPrefix || !isTableRow(ln.Message) || isBodyEventTableRow(ln) {
 			break
 		}
 		end = i
 	}
 
 	return body[start : end+1]
+}
+
+// isBodyEventTableRow returns true for lines that match tableRowRe but are
+// actually error messages, not header key-value fields. Lines starting with
+// "< error:" or matching responseRe begin with '<' and never pass the
+// isTableRow check, so they don't need handling here.
+//
+// The heuristic: header keys are short labels (1–3 words) before the colon.
+// Error messages like "Failed to fetch organizations: …" have ≥4 words
+// before the first colon.
+func isBodyEventTableRow(ln ParsedLine) bool {
+	if !ln.HasCLIPrefix {
+		return false
+	}
+	idx := strings.Index(ln.Message, ":")
+	if idx < 0 {
+		return false
+	}
+	key := ln.Message[:idx]
+	words := strings.Fields(key)
+	return len(words) > 3
 }
 
 func resultStartAfterSummary(lines []ParsedLine, start int) int {

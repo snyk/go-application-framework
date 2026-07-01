@@ -163,6 +163,23 @@ func TestSplitSections_eventAfterHeaderNotSwallowed(t *testing.T) {
 	assert.Len(t, body, 3)
 }
 
+func TestSplitSections_shortKeyHeaderFieldNotTruncated(t *testing.T) {
+	log := strings.Join([]string{
+		"2026-06-10T13:10:38Z main - Version:               1.0.0",
+		"2026-06-10T13:10:38Z main - Platform:              darwin arm64",
+		"2026-06-10T13:10:38Z main - Failed Checks:         none",
+		"2026-06-10T13:10:38Z main - > request [0x2b3cd0a17cc0]: GET https://api.snyk.io",
+	}, "\n")
+
+	lines, err := ParseLines(strings.NewReader(log))
+	require.NoError(t, err)
+
+	header, _, _ := SplitSections(lines)
+
+	require.Len(t, header, 3)
+	assert.Equal(t, "Failed Checks:         none", header[2].Message)
+}
+
 func TestSplitSections_embeddedMarkersDoNotDelimit(t *testing.T) {
 	log := strings.Join([]string{
 		"2026-06-10T13:10:38Z main - < error: real failure",

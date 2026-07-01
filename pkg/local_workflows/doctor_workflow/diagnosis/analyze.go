@@ -3,6 +3,7 @@ package diagnosis
 import (
 	"context"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -48,10 +49,10 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 			continue
 
 		case strings.HasPrefix(msg, exitCodePrefix):
-			code := strings.TrimSpace(strings.TrimPrefix(msg, exitCodePrefix))
-			sev := SeverityInfo
-			if code != "0" {
-				sev = SeverityError
+			codeStr := strings.TrimSpace(strings.TrimPrefix(msg, exitCodePrefix))
+			sev := SeverityError
+			if code, err := strconv.Atoi(codeStr); err == nil && code == 0 {
+				sev = SeverityInfo
 			}
 			findings = append(findings, Finding{
 				Source:   SourceCLIResult,
