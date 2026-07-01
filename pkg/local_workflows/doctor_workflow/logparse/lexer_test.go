@@ -1,4 +1,4 @@
-package logsummary
+package logparse
 
 import (
 	"strings"
@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTokenize_classifiesAllBaseTokenTypes(t *testing.T) {
+func TestTokenize_classifiesAllTokenTypes(t *testing.T) {
 	lines := []string{
 		"2026-06-10T13:10:38Z main - Version:               1.0.0",
 		"2026-06-10T13:10:38Z main - Platform:              darwin arm64",
@@ -23,7 +23,7 @@ func TestTokenize_classifiesAllBaseTokenTypes(t *testing.T) {
 		"",
 	}
 
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, len(lines))
 
 	assert.Equal(t, TokenVersionLine, tokens[0].Token, "Version line")
@@ -41,7 +41,7 @@ func TestTokenize_classifiesAllBaseTokenTypes(t *testing.T) {
 
 func TestTokenize_stripsTimestampPrefix(t *testing.T) {
 	lines := []string{"2026-06-10T13:10:38Z main - Version:               1.0.0"}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 1)
 
 	assert.Equal(t, "Version:               1.0.0", tokens[0].Message)
@@ -51,7 +51,7 @@ func TestTokenize_stripsTimestampPrefix(t *testing.T) {
 
 func TestTokenize_unprefixedLine(t *testing.T) {
 	lines := []string{"some random output without timestamp"}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 1)
 
 	assert.False(t, tokens[0].HasCLIPrefix)
@@ -61,7 +61,7 @@ func TestTokenize_unprefixedLine(t *testing.T) {
 
 func TestTokenize_blankLineIsTokenBlank(t *testing.T) {
 	lines := []string{"", "   ", "\t"}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 3)
 
 	for i, tok := range tokens {
@@ -70,10 +70,8 @@ func TestTokenize_blankLineIsTokenBlank(t *testing.T) {
 }
 
 func TestTokenize_firstClassifierWins(t *testing.T) {
-	// "< error:" matches both CLE error prefix and could hypothetically match others.
-	// Ensure the first classifier (HTTP response) doesn't match and CLI error does.
 	lines := []string{"2026-06-10T13:10:38Z main - < error: something"}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 1)
 	assert.Equal(t, TokenCLIError, tokens[0].Token)
 }
@@ -82,18 +80,16 @@ func TestTokenize_summaryMarkerMustBeExact(t *testing.T) {
 	lines := []string{
 		"2026-06-10T13:10:38Z main - Failed to parse ------------ Summary ------------",
 	}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 1)
 
-	// The marker is embedded in a longer message, should NOT be TokenSummaryMarker
 	assert.NotEqual(t, TokenSummaryMarker, tokens[0].Token)
 }
 
 func TestTokenize_CRLFhandling(t *testing.T) {
 	lines := strings.Split("2026-06-10T13:10:38Z main - Version:               1.0.0\r\n2026-06-10T13:10:38Z main - Exit Code:             2\r\n", "\n")
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 
-	// After split on \n, lines will have trailing \r which tokenize should strip
 	versionTok := tokens[0]
 	assert.Equal(t, TokenVersionLine, versionTok.Token)
 	assert.False(t, strings.HasSuffix(versionTok.Message, "\r"), "\\r should be stripped from message")
@@ -101,21 +97,35 @@ func TestTokenize_CRLFhandling(t *testing.T) {
 
 func TestTokenize_200ResponseIsPlain(t *testing.T) {
 	lines := []string{"2026-06-10T13:10:38Z main - < response [0xbbb]: 200 OK"}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 1)
 	assert.Equal(t, TokenPlain, tokens[0].Token)
 }
 
 func TestTokenize_304ResponseIsPlain(t *testing.T) {
 	lines := []string{"2026-06-10T13:10:38Z main - < response [0xbbb]: 304 Not Modified"}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 1)
 	assert.Equal(t, TokenPlain, tokens[0].Token)
 }
 
 func TestTokenize_failedWithoutSpaceIsPlain(t *testing.T) {
 	lines := []string{"2026-06-10T13:10:38Z main - FailedOverNode rebalancing"}
-	tokens := tokenize(baseLexer, lines)
+	tokens := Tokenize(testLexer, lines)
 	require.Len(t, tokens, 1)
 	assert.Equal(t, TokenPlain, tokens[0].Token)
+}
+
+func TestNewLexerSpec_appliesOptions(t *testing.T) {
+	spec := NewLexerSpec(
+		WithSummaryMarker("=== S ==="),
+		WithErrorsMarker("=== E ==="),
+		WithVersionPrefix("V:"),
+		WithExitCodePrefix("EC:"),
+	)
+
+	assert.Equal(t, "=== S ===", spec.SummaryMarker)
+	assert.Equal(t, "=== E ===", spec.ErrorsMarker)
+	assert.Equal(t, "V:", spec.VersionPrefix)
+	assert.Equal(t, "EC:", spec.ExitCodePrefix)
 }

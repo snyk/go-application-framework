@@ -1,6 +1,10 @@
 package logsummary
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/logparse"
+)
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +38,27 @@ type Summary struct {
 }
 
 // ---------------------------------------------------------------------------
+// Constructors
+// ---------------------------------------------------------------------------
+
+// NewHighlight builds a Highlight.
+func NewHighlight(line int, kind EventKind, message string) Highlight {
+	return Highlight{Line: line, Kind: kind, Message: message}
+}
+
+// NewSummary builds a Summary.
+func NewSummary(cliVersion, formatSpecID, header, footer string, highlights []Highlight, truncated bool) Summary {
+	return Summary{
+		CLIVersion:   cliVersion,
+		FormatSpecID: formatSpecID,
+		Header:       header,
+		Footer:       footer,
+		Highlights:   highlights,
+		Truncated:    truncated,
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Summarize: 3-phase pipeline entry point
 // ---------------------------------------------------------------------------
 
@@ -44,36 +69,39 @@ type Summary struct {
 // Phase 3: Process each section independently (header, highlights, footer).
 func Summarize(log string) Summary {
 	rawLines := strings.Split(log, "\n")
-	spec := detectFormat(rawLines)
-	tokens := tokenize(spec.Lexer, rawLines)
-	landmarks := findLandmarks(tokens, spec.LandmarkRules)
-	sections := splitByLandmarks(tokens, landmarks, spec.LandmarkRules)
 
-	headerTokens, bodyRemainder := extractHeaderFromRegion(sections[SectionHeader])
+	detector := newDetector()
+	spec := detector.Detect(rawLines)
 
-	var bodyTokens []TokenizedLine
-	bodyTokens = append(bodyTokens, sections[SectionPreamble]...)
+	tokens := logparse.Tokenize(spec.Lexer, rawLines)
+	landmarks := logparse.FindLandmarks(tokens, spec.LandmarkRules)
+	sections := logparse.SplitByLandmarks(tokens, landmarks, spec.LandmarkRules)
+
+	headerTokens, bodyRemainder := logparse.ExtractHeaderFromRegion(sections[logparse.SectionHeader])
+
+	var bodyTokens []logparse.TokenizedLine
+	bodyTokens = append(bodyTokens, sections[logparse.SectionPreamble]...)
 	bodyTokens = append(bodyTokens, bodyRemainder...)
-	bodyTokens = append(bodyTokens, sections[SectionBody]...)
+	bodyTokens = append(bodyTokens, sections[logparse.SectionBody]...)
 
 	highlights, truncated := collectHighlights(bodyTokens)
 
-	cliVer, _ := extractCLIVersion(rawLines)
-	return Summary{
-		CLIVersion:   cliVer.Raw,
-		FormatSpecID: spec.ID,
-		Header:       joinMessages(headerTokens),
-		Footer:       joinFooter(sections[SectionSummary], sections[SectionResult]),
-		Highlights:   highlights,
-		Truncated:    truncated,
-	}
+	cliVer, _ := detector.ExtractCLIVersion(rawLines)
+	return NewSummary(
+		cliVer.Raw,
+		spec.ID,
+		joinMessages(headerTokens),
+		joinFooter(sections[logparse.SectionSummary], sections[logparse.SectionResult]),
+		highlights,
+		truncated,
+	)
 }
 
 // ---------------------------------------------------------------------------
 // Internal: highlight collection (Phase 3)
 // ---------------------------------------------------------------------------
 
-func collectHighlights(tokens []TokenizedLine) ([]Highlight, bool) {
+func collectHighlights(tokens []logparse.TokenizedLine) ([]Highlight, bool) {
 	var highlights []Highlight
 	seen := make(map[string]struct{})
 	for _, tok := range tokens {
@@ -85,11 +113,7 @@ func collectHighlights(tokens []TokenizedLine) ([]Highlight, bool) {
 			continue
 		}
 		seen[tok.Message] = struct{}{}
-		highlights = append(highlights, Highlight{
-			Line:    tok.Number,
-			Kind:    kind,
-			Message: tok.Message,
-		})
+		highlights = append(highlights, NewHighlight(tok.Number, kind, tok.Message))
 		if len(highlights) == maxHighlights {
 			return highlights, true
 		}
@@ -97,14 +121,15 @@ func collectHighlights(tokens []TokenizedLine) ([]Highlight, bool) {
 	return highlights, false
 }
 
-func tokenToEventKind(t Token) EventKind {
+func tokenToEventKind(t logparse.Token) EventKind {
 	switch t {
-	case TokenHTTPError:
+	case logparse.TokenHTTPError:
 		return EventHTTPError
-	case TokenCLIError, TokenFailedLine:
+	case logparse.TokenCLIError, logparse.TokenFailedLine:
 		return EventError
-	case TokenPlain, TokenBlank, TokenVersionLine, TokenTableRow,
-		TokenSummaryMarker, TokenErrorsMarker, TokenExitCode:
+	case logparse.TokenPlain, logparse.TokenBlank, logparse.TokenVersionLine,
+		logparse.TokenTableRow, logparse.TokenSummaryMarker, logparse.TokenErrorsMarker,
+		logparse.TokenExitCode:
 		return ""
 	default:
 		return ""
@@ -115,7 +140,7 @@ func tokenToEventKind(t Token) EventKind {
 // Internal: message joining and footer assembly
 // ---------------------------------------------------------------------------
 
-func joinMessages(tokens []TokenizedLine) string {
+func joinMessages(tokens []logparse.TokenizedLine) string {
 	if len(tokens) == 0 {
 		return ""
 	}
@@ -126,8 +151,8 @@ func joinMessages(tokens []TokenizedLine) string {
 	return strings.Join(parts, "\n")
 }
 
-func joinFooter(summaryTokens, resultTokens []TokenizedLine) string {
-	var footerTokens []TokenizedLine
+func joinFooter(summaryTokens, resultTokens []logparse.TokenizedLine) string {
+	var footerTokens []logparse.TokenizedLine
 	if len(resultTokens) > 0 {
 		footerTokens = resultTokens
 	} else if len(summaryTokens) > 0 {

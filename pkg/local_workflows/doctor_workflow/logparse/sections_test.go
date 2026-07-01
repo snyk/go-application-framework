@@ -1,4 +1,4 @@
-package logsummary
+package logparse
 
 import (
 	"testing"
@@ -6,10 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func makeTok(number int, token Token, msg string) TokenizedLine {
-	return TokenizedLine{Number: number, Message: msg, Token: token, HasCLIPrefix: true}
-}
 
 func TestFindLandmarks_findsAllAnchors(t *testing.T) {
 	tokens := []TokenizedLine{
@@ -23,14 +19,14 @@ func TestFindLandmarks_findsAllAnchors(t *testing.T) {
 		makeTok(8, TokenExitCode, "Exit Code: 2"),
 	}
 
-	landmarks := findLandmarks(tokens, baseLandmarks)
+	landmarks := FindLandmarks(tokens, testLandmarks)
 
 	require.Len(t, landmarks, 4)
-	assert.Equal(t, 1, landmarks[0].Index) // VersionLine
+	assert.Equal(t, 1, landmarks[0].Index)
 	assert.Equal(t, TokenVersionLine, landmarks[0].Token)
-	assert.Equal(t, 4, landmarks[1].Index) // SummaryMarker
-	assert.Equal(t, 6, landmarks[2].Index) // ErrorsMarker
-	assert.Equal(t, 7, landmarks[3].Index) // ExitCode
+	assert.Equal(t, 4, landmarks[1].Index)
+	assert.Equal(t, 6, landmarks[2].Index)
+	assert.Equal(t, 7, landmarks[3].Index)
 }
 
 func TestFindLandmarks_noAnchors(t *testing.T) {
@@ -39,7 +35,7 @@ func TestFindLandmarks_noAnchors(t *testing.T) {
 		makeTok(2, TokenPlain, "more text"),
 	}
 
-	landmarks := findLandmarks(tokens, baseLandmarks)
+	landmarks := FindLandmarks(tokens, testLandmarks)
 	assert.Empty(t, landmarks)
 }
 
@@ -50,9 +46,8 @@ func TestFindLandmarks_duplicateAnchors(t *testing.T) {
 		makeTok(3, TokenSummaryMarker, "--- Summary ---"),
 	}
 
-	landmarks := findLandmarks(tokens, baseLandmarks)
+	landmarks := FindLandmarks(tokens, testLandmarks)
 
-	// Both should be found - splitByLandmarks will handle priority
 	require.Len(t, landmarks, 2)
 	assert.Equal(t, 0, landmarks[0].Index)
 	assert.Equal(t, 2, landmarks[1].Index)
@@ -70,22 +65,18 @@ func TestSplitByLandmarks_standardLayout(t *testing.T) {
 		makeTok(8, TokenExitCode, "Exit Code: 2"),
 	}
 
-	landmarks := findLandmarks(tokens, baseLandmarks)
-	sections := splitByLandmarks(tokens, landmarks, baseLandmarks)
+	landmarks := FindLandmarks(tokens, testLandmarks)
+	sections := SplitByLandmarks(tokens, landmarks, testLandmarks)
 
-	// Preamble: tokens before first landmark
 	require.Len(t, sections[SectionPreamble], 1)
 	assert.Equal(t, "preamble", sections[SectionPreamble][0].Message)
 
-	// Header: VersionLine + table rows until next landmark
 	require.Len(t, sections[SectionHeader], 2)
 	assert.Equal(t, TokenVersionLine, sections[SectionHeader][0].Token)
 
-	// Summary section
 	require.Len(t, sections[SectionSummary], 2)
 	assert.Equal(t, TokenSummaryMarker, sections[SectionSummary][0].Token)
 
-	// Result section: ErrorsMarker + ExitCode
 	require.NotEmpty(t, sections[SectionResult])
 	assert.Equal(t, TokenErrorsMarker, sections[SectionResult][0].Token)
 }
@@ -96,11 +87,33 @@ func TestSplitByLandmarks_noLandmarks(t *testing.T) {
 		makeTok(2, TokenPlain, "line 2"),
 	}
 
-	sections := splitByLandmarks(tokens, nil, baseLandmarks)
+	sections := SplitByLandmarks(tokens, nil, testLandmarks)
 
 	assert.Len(t, sections[SectionBody], 2)
 	assert.Empty(t, sections[SectionPreamble])
 	assert.Empty(t, sections[SectionHeader])
+}
+
+func TestSplitByLandmarks_reorderedSections(t *testing.T) {
+	// Landmarks are provided out of positional order; the splitter sorts them.
+	tokens := []TokenizedLine{
+		makeTok(1, TokenExitCode, "Exit Code: 2"),
+		makeTok(2, TokenPlain, "trailing"),
+		makeTok(3, TokenVersionLine, "Version: 1.0.0"),
+		makeTok(4, TokenTableRow, "Platform: darwin"),
+	}
+	landmarks := []Landmark{
+		NewLandmark(TokenVersionLine, 2),
+		NewLandmark(TokenExitCode, 0),
+	}
+
+	sections := SplitByLandmarks(tokens, landmarks, testLandmarks)
+
+	// ExitCode is first by index, so it opens the preamble-less first region.
+	require.NotEmpty(t, sections[SectionResult])
+	assert.Equal(t, TokenExitCode, sections[SectionResult][0].Token)
+	require.NotEmpty(t, sections[SectionHeader])
+	assert.Equal(t, TokenVersionLine, sections[SectionHeader][0].Token)
 }
 
 func TestSplitByLandmarks_adjacentLandmarks(t *testing.T) {
@@ -110,13 +123,11 @@ func TestSplitByLandmarks_adjacentLandmarks(t *testing.T) {
 		makeTok(3, TokenExitCode, "Exit Code: 0"),
 	}
 
-	landmarks := findLandmarks(tokens, baseLandmarks)
-	sections := splitByLandmarks(tokens, landmarks, baseLandmarks)
+	landmarks := FindLandmarks(tokens, testLandmarks)
+	sections := SplitByLandmarks(tokens, landmarks, testLandmarks)
 
 	require.Len(t, sections[SectionSummary], 1)
 	assert.Equal(t, TokenSummaryMarker, sections[SectionSummary][0].Token)
-
-	// ErrorsMarker and ExitCode both open SectionResult
 	require.NotEmpty(t, sections[SectionResult])
 }
 
@@ -129,7 +140,7 @@ func TestExtractHeaderFromRegion_stopsAtNonTableRow(t *testing.T) {
 		makeTok(5, TokenPlain, "more body"),
 	}
 
-	header, rest := extractHeaderFromRegion(region)
+	header, rest := ExtractHeaderFromRegion(region)
 
 	require.Len(t, header, 3)
 	assert.Equal(t, "Version: 1.0.0", header[0].Message)
@@ -140,7 +151,7 @@ func TestExtractHeaderFromRegion_stopsAtNonTableRow(t *testing.T) {
 }
 
 func TestExtractHeaderFromRegion_emptyRegion(t *testing.T) {
-	header, rest := extractHeaderFromRegion(nil)
+	header, rest := ExtractHeaderFromRegion(nil)
 	assert.Nil(t, header)
 	assert.Nil(t, rest)
 }
@@ -151,7 +162,7 @@ func TestExtractHeaderFromRegion_noVersionLine(t *testing.T) {
 		makeTok(2, TokenPlain, "another line"),
 	}
 
-	header, rest := extractHeaderFromRegion(region)
+	header, rest := ExtractHeaderFromRegion(region)
 
 	assert.Nil(t, header)
 	require.Len(t, rest, 2)
@@ -162,7 +173,7 @@ func TestExtractHeaderFromRegion_versionLineOnly(t *testing.T) {
 		makeTok(1, TokenVersionLine, "Version: 1.0.0"),
 	}
 
-	header, rest := extractHeaderFromRegion(region)
+	header, rest := ExtractHeaderFromRegion(region)
 
 	require.Len(t, header, 1)
 	assert.Equal(t, "Version: 1.0.0", header[0].Message)
@@ -178,8 +189,8 @@ func TestExtractHeaderFromRegion_trailingBlanksExcluded(t *testing.T) {
 		makeTok(5, TokenPlain, "body line"),
 	}
 
-	header, rest := extractHeaderFromRegion(region)
+	header, rest := ExtractHeaderFromRegion(region)
 
-	require.Len(t, header, 2) // Version + Platform, blanks trimmed
-	require.Len(t, rest, 1)   // body line (blanks consumed)
+	require.Len(t, header, 2)
+	require.Len(t, rest, 1)
 }

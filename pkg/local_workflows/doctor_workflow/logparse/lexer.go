@@ -1,26 +1,10 @@
-package logsummary
+package logparse
 
 import "regexp"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-// Token classifies a single log line.
-type Token int
-
-const (
-	TokenPlain Token = iota
-	TokenBlank
-	TokenVersionLine
-	TokenTableRow
-	TokenHTTPError
-	TokenCLIError
-	TokenFailedLine
-	TokenSummaryMarker
-	TokenErrorsMarker
-	TokenExitCode
-)
 
 // TokenizedLine is a raw log line enriched with its token classification.
 type TokenizedLine struct {
@@ -48,8 +32,38 @@ type LexerSpec struct {
 	BodyClassifiers []BodyClassifier
 }
 
-// LexerOption is a functional option applied when deriving a new LexerSpec.
+// LexerOption is a functional option applied when building or deriving a LexerSpec.
 type LexerOption func(*LexerSpec)
+
+// ---------------------------------------------------------------------------
+// Constructors
+// ---------------------------------------------------------------------------
+
+// NewTokenizedLine builds a TokenizedLine.
+func NewTokenizedLine(number int, rawText, message string, hasCLIPrefix bool, token Token) TokenizedLine {
+	return TokenizedLine{
+		Number:       number,
+		RawText:      rawText,
+		Message:      message,
+		HasCLIPrefix: hasCLIPrefix,
+		Token:        token,
+	}
+}
+
+// NewBodyClassifier builds a BodyClassifier.
+func NewBodyClassifier(match func(msg string) bool, token Token) BodyClassifier {
+	return BodyClassifier{Match: match, Token: token}
+}
+
+// NewLexerSpec builds a LexerSpec from the given options, starting from an
+// empty spec.
+func NewLexerSpec(opts ...LexerOption) LexerSpec {
+	var spec LexerSpec
+	for _, opt := range opts {
+		opt(&spec)
+	}
+	return spec
+}
 
 // ---------------------------------------------------------------------------
 // LexerOption constructors
@@ -63,21 +77,37 @@ func WithErrorsMarker(m string) LexerOption {
 	return func(s *LexerSpec) { s.ErrorsMarker = m }
 }
 
-func WithExtraClassifier(match func(string) bool, token Token) LexerOption {
-	return func(s *LexerSpec) {
-		s.BodyClassifiers = append(
-			[]BodyClassifier{{Match: match, Token: token}},
-			s.BodyClassifiers...,
-		)
-	}
+func WithVersionPrefix(p string) LexerOption {
+	return func(s *LexerSpec) { s.VersionPrefix = p }
+}
+
+func WithExitCodePrefix(p string) LexerOption {
+	return func(s *LexerSpec) { s.ExitCodePrefix = p }
 }
 
 func WithLinePrefixRe(re *regexp.Regexp) LexerOption {
 	return func(s *LexerSpec) { s.LinePrefixRe = re }
 }
 
-func WithVersionPrefix(p string) LexerOption {
-	return func(s *LexerSpec) { s.VersionPrefix = p }
+func WithTableRowRe(re *regexp.Regexp) LexerOption {
+	return func(s *LexerSpec) { s.TableRowRe = re }
+}
+
+// WithClassifiers replaces the body classifiers with a copy of the given set.
+func WithClassifiers(classifiers ...BodyClassifier) LexerOption {
+	return func(s *LexerSpec) {
+		s.BodyClassifiers = append([]BodyClassifier{}, classifiers...)
+	}
+}
+
+// WithExtraClassifier prepends a classifier so it takes priority over inherited ones.
+func WithExtraClassifier(match func(string) bool, token Token) LexerOption {
+	return func(s *LexerSpec) {
+		s.BodyClassifiers = append(
+			[]BodyClassifier{NewBodyClassifier(match, token)},
+			s.BodyClassifiers...,
+		)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -96,22 +126,17 @@ func DeriveLexer(parent LexerSpec, opts ...LexerOption) LexerSpec {
 }
 
 // ---------------------------------------------------------------------------
-// Tokenization (Phase 1 of the pipeline)
+// Tokenize (Phase 1 of the pipeline)
 // ---------------------------------------------------------------------------
 
-func tokenize(spec LexerSpec, rawLines []string) []TokenizedLine {
+// Tokenize classifies each raw line into a TokenizedLine using the given spec.
+func Tokenize(spec LexerSpec, rawLines []string) []TokenizedLine {
 	lines := make([]TokenizedLine, 0, len(rawLines))
 	for i, raw := range rawLines {
 		raw = stripCR(raw)
 		msg, hasPrefix := stripLinePrefix(spec.LinePrefixRe, raw)
 		tok := classifyToken(spec, msg, hasPrefix)
-		lines = append(lines, TokenizedLine{
-			Number:       i + 1,
-			RawText:      raw,
-			Message:      msg,
-			HasCLIPrefix: hasPrefix,
-			Token:        tok,
-		})
+		lines = append(lines, NewTokenizedLine(i+1, raw, msg, hasPrefix, tok))
 	}
 	return lines
 }
@@ -150,13 +175,15 @@ func classifyToken(spec LexerSpec, msg string, hasPrefix bool) Token {
 		return TokenErrorsMarker
 	}
 
+	if hasFieldPrefix(msg, spec.VersionPrefix) {
+		return TokenVersionLine
+	}
+	if hasFieldPrefix(msg, spec.ExitCodePrefix) {
+		return TokenExitCode
+	}
+
+	// Body classifiers and table-row detection only apply to prefixed CLI lines.
 	if hasPrefix {
-		if hasFieldPrefix(msg, spec.VersionPrefix) {
-			return TokenVersionLine
-		}
-		if hasFieldPrefix(msg, spec.ExitCodePrefix) {
-			return TokenExitCode
-		}
 		for _, c := range spec.BodyClassifiers {
 			if c.Match(msg) {
 				return c.Token
@@ -164,13 +191,6 @@ func classifyToken(spec LexerSpec, msg string, hasPrefix bool) Token {
 		}
 		if spec.TableRowRe != nil && isTableRowLike(msg, spec.TableRowRe) {
 			return TokenTableRow
-		}
-	} else {
-		if hasFieldPrefix(msg, spec.VersionPrefix) {
-			return TokenVersionLine
-		}
-		if hasFieldPrefix(msg, spec.ExitCodePrefix) {
-			return TokenExitCode
 		}
 	}
 

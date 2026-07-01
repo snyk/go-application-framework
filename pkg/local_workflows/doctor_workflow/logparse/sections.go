@@ -1,4 +1,4 @@
-package logsummary
+package logparse
 
 import "sort"
 
@@ -7,14 +7,14 @@ import "sort"
 // ---------------------------------------------------------------------------
 
 // Section identifies a region of the parsed log.
-type Section int
+type Section string
 
 const (
-	SectionPreamble Section = iota
-	SectionHeader
-	SectionBody
-	SectionSummary
-	SectionResult
+	SectionPreamble Section = "preamble"
+	SectionHeader   Section = "header"
+	SectionBody     Section = "body"
+	SectionSummary  Section = "summary"
+	SectionResult   Section = "result"
 )
 
 // Landmark is a structural anchor found in the token stream.
@@ -30,11 +30,25 @@ type LandmarkRule struct {
 }
 
 // ---------------------------------------------------------------------------
+// Constructors
+// ---------------------------------------------------------------------------
+
+// NewLandmark builds a Landmark.
+func NewLandmark(token Token, index int) Landmark {
+	return Landmark{Token: token, Index: index}
+}
+
+// NewLandmarkRule builds a LandmarkRule.
+func NewLandmarkRule(anchor Token, opens Section) LandmarkRule {
+	return LandmarkRule{AnchorToken: anchor, OpensSection: opens}
+}
+
+// ---------------------------------------------------------------------------
 // Landmark scanning (Phase 2a of the pipeline)
 // ---------------------------------------------------------------------------
 
-// findLandmarks scans tokens for all anchor positions defined by the rules.
-func findLandmarks(tokens []TokenizedLine, rules []LandmarkRule) []Landmark {
+// FindLandmarks scans tokens for all anchor positions defined by the rules.
+func FindLandmarks(tokens []TokenizedLine, rules []LandmarkRule) []Landmark {
 	anchorSet := make(map[Token]struct{}, len(rules))
 	for _, r := range rules {
 		anchorSet[r.AnchorToken] = struct{}{}
@@ -42,7 +56,7 @@ func findLandmarks(tokens []TokenizedLine, rules []LandmarkRule) []Landmark {
 	var landmarks []Landmark
 	for i, tok := range tokens {
 		if _, ok := anchorSet[tok.Token]; ok {
-			landmarks = append(landmarks, Landmark{Token: tok.Token, Index: i})
+			landmarks = append(landmarks, NewLandmark(tok.Token, i))
 		}
 	}
 	return landmarks
@@ -52,10 +66,10 @@ func findLandmarks(tokens []TokenizedLine, rules []LandmarkRule) []Landmark {
 // Section splitting (Phase 2b of the pipeline)
 // ---------------------------------------------------------------------------
 
-// splitByLandmarks carves the token stream into named regions using landmark
+// SplitByLandmarks carves the token stream into named regions using landmark
 // positions. Lines before the first landmark go into SectionPreamble (or
 // SectionBody when there are no landmarks at all).
-func splitByLandmarks(tokens []TokenizedLine, landmarks []Landmark, rules []LandmarkRule) map[Section][]TokenizedLine {
+func SplitByLandmarks(tokens []TokenizedLine, landmarks []Landmark, rules []LandmarkRule) map[Section][]TokenizedLine {
 	ruleMap := make(map[Token]Section, len(rules))
 	for _, r := range rules {
 		ruleMap[r.AnchorToken] = r.OpensSection
@@ -94,9 +108,9 @@ func splitByLandmarks(tokens []TokenizedLine, landmarks []Landmark, rules []Land
 // Header extraction
 // ---------------------------------------------------------------------------
 
-// extractHeaderFromRegion finds the version line and its trailing table rows
+// ExtractHeaderFromRegion finds the version line and its trailing table rows
 // within a region. Returns (header tokens, remaining body tokens).
-func extractHeaderFromRegion(region []TokenizedLine) (header, rest []TokenizedLine) {
+func ExtractHeaderFromRegion(region []TokenizedLine) (header, rest []TokenizedLine) {
 	if len(region) == 0 {
 		return nil, nil
 	}
