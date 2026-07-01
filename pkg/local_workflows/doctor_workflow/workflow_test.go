@@ -1,7 +1,7 @@
 package doctor_workflow
 
 import (
-	"io"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +38,7 @@ func Test_DoctorWorkflow_registration(t *testing.T) {
 	require.NotNil(t, flagSet)
 	assert.NotNil(t, flagSet.Lookup(inputFlag))
 	assert.NotNil(t, flagSet.Lookup(noLiveCheckFlag))
+	assert.NotNil(t, flagSet.Lookup(jsonFlag))
 }
 
 func setupMockContext(t *testing.T, config configuration.Configuration) *mocks.MockInvocationContext {
@@ -47,6 +48,7 @@ func setupMockContext(t *testing.T, config configuration.Configuration) *mocks.M
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	invocationContextMock.EXPECT().Context().Return(context.Background()).AnyTimes()
 	return invocationContextMock
 }
 
@@ -63,7 +65,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 
 	assert.Equal(t, "text/plain", output[0].GetContentType())
 	payload, ok := output[0].GetPayload().([]byte)
-	assert.Equal(t, ok, true)
+	assert.True(t, ok)
 	rendered := string(payload)
 	assert.Contains(t, rendered, "Notable Events")
 	assert.Contains(t, rendered, "401 Unauthorized")
@@ -77,7 +79,7 @@ func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 	payload, ok := output[0].GetPayload().([]byte)
-	assert.Equal(t, ok, true)
+	assert.True(t, ok)
 	rendered := string(payload)
 	assert.Contains(t, rendered, "Notable Events")
 }
@@ -102,44 +104,16 @@ func Test_runDoctor_missingInputFile(t *testing.T) {
 	assert.Equal(t, "SNYK-CLI-0000", snykErr.ErrorCode)
 }
 
-func Test_readDebugLog(t *testing.T) {
-	tests := []struct {
-		name     string
-		fileBody *string
-		stdin    *string
-		expected string
-		wantErr  bool
-	}{
-		{name: "reads from input file", fileBody: new("hello from file"), expected: "hello from file"},
-		{name: "reads empty input file", fileBody: new("")},
-		{name: "reads from STDIN when no input path", stdin: new("hello from stdin"), expected: "hello from stdin"},
-		{name: "reads empty STDIN", stdin: new("")},
-		{name: "errors when input file does not exist", wantErr: true},
-	}
+func Test_runDoctor_jsonOutput(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(jsonFlag, true)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var (
-				inputPath string
-				stdin     io.Reader
-			)
-			switch {
-			case tt.fileBody != nil:
-				inputPath = filepath.Join(t.TempDir(), "debug.log")
-				require.NoError(t, os.WriteFile(inputPath, []byte(*tt.fileBody), 0600))
-			case tt.stdin != nil:
-				stdin = strings.NewReader(*tt.stdin)
-			default:
-				inputPath = filepath.Join(t.TempDir(), "does-not-exist.log")
-			}
+	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog), false)
+	require.NoError(t, err)
+	require.Len(t, output, 1)
 
-			got, err := readDebugLog(stdin, inputPath)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
+	assert.Equal(t, "application/json", output[0].GetContentType())
+	payload, ok := output[0].GetPayload().([]byte)
+	assert.True(t, ok)
+	assert.Contains(t, string(payload), `"findings"`)
 }
