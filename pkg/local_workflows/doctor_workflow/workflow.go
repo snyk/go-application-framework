@@ -25,11 +25,13 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	// A log is available from --input or from a pipe (stdin is not a terminal).
 	// A bare `snyk doctor` with neither has nothing to analyze, so it defaults to
 	// live checks rather than erroring.
-	hasLogInput := inputPath != "" || !stdinIsTerminal
+	isAnalyzeDebugLogs := inputPath != "" || !stdinIsTerminal
+	hasLiveFlag := config.GetBool(liveFlag)
+	shouldDoLiveChecks := hasLiveFlag || !isAnalyzeDebugLogs
 
 	// 1. Analyze the log when there is one; otherwise start from an empty report.
 	report := &diagnosis.DoctorReport{SchemaVersion: diagnosis.SchemaVersion}
-	if hasLogInput {
+	if isAnalyzeDebugLogs {
 		reader, err := diagnosis.OpenInput(inputPath, stdin, stdinIsTerminal)
 		if err != nil {
 			return nil, err
@@ -46,7 +48,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	// 2. Live checks (auth now, connectivity later) touch the current environment.
 	// They run when requested via --live, or by default for a bare invocation
 	// (no log to analyze). They append to the same findings stream.
-	if config.GetBool(liveFlag) || !hasLogInput {
+	if shouldDoLiveChecks {
 		live := livecheck.Run(invocationCtx)
 		report.Findings = append(report.Findings, live...)
 		logger.Debug().Msgf("doctor: gathered %d live-check finding(s)", len(live))
