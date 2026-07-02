@@ -8,6 +8,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -35,7 +36,17 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 
 	logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
 
-	// 3. Format — select by --json flag
+	// 3. Live checks (auth now, connectivity later), unless disabled — they
+	// append to the same findings stream.
+	if config.GetBool(noLiveCheckFlag) {
+		logger.Debug().Msg("doctor: --no-live-check set, skipping live checks")
+	} else {
+		live := livecheck.Run(invocationCtx)
+		report.Findings = append(report.Findings, live...)
+		logger.Debug().Msgf("doctor: gathered %d live-check finding(s)", len(live))
+	}
+
+	// 4. Format — select by --json flag
 	var buf bytes.Buffer
 	contentType := "text/plain"
 	if config.GetBool(jsonFlag) {
@@ -48,7 +59,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		return nil, err
 	}
 
-	// 4. Package
+	// 5. Package
 	data := workflow.NewData(
 		workflow.NewTypeIdentifier(WORKFLOWID_DOCTOR, doctorWorkflowName),
 		contentType,
