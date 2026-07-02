@@ -11,7 +11,8 @@ import (
 // Run executes the live checks and returns their findings for inclusion in the
 // doctor report. New checks append their findings here.
 func Run(invocationCtx workflow.InvocationContext) []diagnosis.Finding {
-	return []diagnosis.Finding{
-		checkAuth(invocationCtx).finding(),
-	}
+	return append(
+		[]diagnosis.Finding{checkAuth(invocationCtx).finding()},
+		checkConnectivity(invocationCtx).findings()...,
+	)
 }
