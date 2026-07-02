@@ -1,5 +1,5 @@
-// Package livecheck runs live, environment-touching diagnostics (auth now,
-// connectivity later) and maps each into the shared diagnosis.Finding contract,
+// Package livecheck runs live, environment-touching diagnostics (auth and
+// connectivity) and maps each into the shared diagnosis.Finding contract,
 // so live results join the same findings stream as log analysis.
 package livecheck
 

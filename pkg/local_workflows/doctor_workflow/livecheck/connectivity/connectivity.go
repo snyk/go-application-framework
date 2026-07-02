@@ -109,7 +109,9 @@ func summarizeConnectivity(result connectivityResult) connectivitySummary {
 	summary.Organizations = describeOrganizations(result.Organizations, 10)
 
 	for _, todo := range result.TODOs {
-		if todo.Level != checkconnectivity.TodoInfo {
+		// Host failures are already summarized in FailureGroups; per-host TodoFail
+		// messages repeat the same detail (often including raw Get/url errors).
+		if todo.Level == checkconnectivity.TodoInfo || todo.Level == checkconnectivity.TodoWarn {
 			summary.Warnings = append(summary.Warnings, todo.Message)
 		}
 	}

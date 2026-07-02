@@ -1,11 +1,13 @@
 package connectivity
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	connectivitycheck "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
@@ -118,6 +120,39 @@ func TestConnectivityStatus_findings(t *testing.T) {
 	}.Findings()
 	assert.Equal(t, diagnosis.SeverityError, failed[0].Severity)
 	assert.Contains(t, failed[0].Message, "Failed to run connectivity check")
+}
+
+func TestSummarizeConnectivity_omitsRedundantFailureTODOs(t *testing.T) {
+	const payload = `{
+  "proxyConfig": {"detected": true, "url": "localhost", "variable": "HTTPS_PROXY"},
+  "hostResults": [
+    {"host": "api.snyk.io", "status": 5},
+    {"host": "app.snyk.io", "status": 5}
+  ],
+  "todos": [
+    {"level": 2, "message": "Connection to 'api.snyk.io' failed: Get \"https://api.snyk.io\": Connection refused. This may be a firewall..."},
+    {"level": 1, "message": "Proxy requires 'Basic' authentication for 'api.snyk.io'."}
+  ],
+  "organizations": [],
+  "tokenPresent": false
+}`
+
+	var result connectivityResult
+	require.NoError(t, json.Unmarshal([]byte(payload), &result))
+
+	summary := summarizeConnectivity(result)
+	assert.Len(t, summary.FailureGroups, 1)
+	assert.Equal(t, "BLOCKED", summary.FailureGroups[0].Status)
+	assert.Equal(t, []string{"api.snyk.io", "app.snyk.io"}, summary.FailureGroups[0].Hosts)
+	assert.Len(t, summary.Warnings, 1)
+	assert.Contains(t, summary.Warnings[0], "Proxy requires")
+
+	findings := connectivityStatus{Summary: summary}.Findings()
+	require.Len(t, findings, 1)
+	for _, detail := range findings[0].Details {
+		assert.NotContains(t, detail, "Connection to 'api.snyk.io' failed")
+	}
+	assert.Contains(t, findings[0].Details[0], "BLOCKED:")
 }
 
 func connectivityData(payload string) workflow.Data {
