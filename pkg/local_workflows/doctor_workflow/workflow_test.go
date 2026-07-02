@@ -37,7 +37,7 @@ func Test_DoctorWorkflow_registration(t *testing.T) {
 	flagSet := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
 	require.NotNil(t, flagSet)
 	assert.NotNil(t, flagSet.Lookup(inputFlag))
-	assert.NotNil(t, flagSet.Lookup(noLiveCheckFlag))
+	assert.NotNil(t, flagSet.Lookup(liveFlag))
 	assert.NotNil(t, flagSet.Lookup(jsonFlag))
 }
 
@@ -58,7 +58,6 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 
 	config := configuration.NewWithOpts()
 	config.Set(inputFlag, path)
-	config.Set(noLiveCheckFlag, true)
 
 	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), false)
 	require.NoError(t, err)
@@ -75,7 +74,6 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 
 func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	config := configuration.NewWithOpts()
-	config.Set(noLiveCheckFlag, true)
 
 	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog), false)
 	require.NoError(t, err)
@@ -88,6 +86,7 @@ func Test_runDoctor_readsPipedStdin(t *testing.T) {
 
 func Test_runDoctor_gathersAuthContext(t *testing.T) {
 	config := configuration.NewWithOpts()
+	config.Set(liveFlag, true)
 
 	ctx := setupMockContext(t, config)
 	engine := mocks.NewMockEngine(gomock.NewController(t))
@@ -139,7 +138,6 @@ func Test_runDoctor_missingInputFile(t *testing.T) {
 func Test_runDoctor_jsonOutput(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(jsonFlag, true)
-	config.Set(noLiveCheckFlag, true)
 
 	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog), false)
 	require.NoError(t, err)

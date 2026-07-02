@@ -36,11 +36,10 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 
 	logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
 
-	// 3. Live checks (auth now, connectivity later), unless disabled — they
-	// append to the same findings stream.
-	if config.GetBool(noLiveCheckFlag) {
-		logger.Debug().Msg("doctor: --no-live-check set, skipping live checks")
-	} else {
+	// 3. Live checks (auth now, connectivity later) are opt-in via --live: they
+	// touch the current environment, so they stay off for offline log analysis.
+	// They append to the same findings stream, so no format changes are needed.
+	if config.GetBool(liveFlag) {
 		live := livecheck.Run(invocationCtx)
 		report.Findings = append(report.Findings, live...)
 		logger.Debug().Msgf("doctor: gathered %d live-check finding(s)", len(live))

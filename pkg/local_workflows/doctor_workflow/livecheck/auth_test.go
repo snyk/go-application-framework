@@ -35,6 +35,11 @@ func TestCheckAuth(t *testing.T) {
 			invokeOut: []workflow.Data{},
 			want:      AuthStatus{ErrorMessage: "whoami returned no usable result"},
 		},
+		{
+			name:      "unexpected payload type",
+			invokeOut: []workflow.Data{jsonWhoAmIData(`{"userName":"user@snyk.io"}`)},
+			want:      AuthStatus{ErrorMessage: "whoami returned an unexpected payload type"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -44,7 +49,7 @@ func TestCheckAuth(t *testing.T) {
 
 			engine := mocks.NewMockEngine(ctrl)
 			engine.EXPECT().
-				InvokeWithConfig(workflowIDWhoAmI, gomock.Any()).
+				InvokeWithConfig(WhoAmIWorkflowID, gomock.Any()).
 				Return(tt.invokeOut, tt.invokeErr)
 
 			ctx := mocks.NewMockInvocationContext(ctrl)
@@ -54,6 +59,31 @@ func TestCheckAuth(t *testing.T) {
 			assert.Equal(t, tt.want, checkAuth(ctx))
 		})
 	}
+}
+
+func TestCheckAuth_forcesJSONOff(t *testing.T) {
+	// The doctor run itself may be invoked with --json; the whoami sub-invocation
+	// must still take its string-payload path or the identity assertion breaks.
+	ctrl := gomock.NewController(t)
+	config := configuration.NewWithOpts()
+	config.Set("json", true)
+
+	var invokedWithJSON bool
+	engine := mocks.NewMockEngine(ctrl)
+	engine.EXPECT().
+		InvokeWithConfig(WhoAmIWorkflowID, gomock.Any()).
+		DoAndReturn(func(_ workflow.Identifier, c configuration.Configuration) ([]workflow.Data, error) {
+			invokedWithJSON = c.GetBool("json")
+			return []workflow.Data{whoAmIData("user@snyk.io")}, nil
+		})
+
+	ctx := mocks.NewMockInvocationContext(ctrl)
+	ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+
+	got := checkAuth(ctx)
+	assert.True(t, got.OK)
+	assert.False(t, invokedWithJSON, "whoami must be invoked with json disabled")
 }
 
 func TestAuthStatus_finding(t *testing.T) {
@@ -73,8 +103,17 @@ func TestAuthStatus_finding(t *testing.T) {
 func whoAmIData(payload string) workflow.Data {
 	// whoami (without --json) returns the username as a plain string payload.
 	return workflow.NewData(
-		workflow.NewTypeIdentifier(workflowIDWhoAmI, "whoami"),
+		workflow.NewTypeIdentifier(WhoAmIWorkflowID, "whoami"),
 		"text/plain",
 		payload,
+	)
+}
+
+func jsonWhoAmIData(payload string) workflow.Data {
+	// whoami with --json returns a []byte JSON payload, not a string.
+	return workflow.NewData(
+		workflow.NewTypeIdentifier(WhoAmIWorkflowID, "whoami"),
+		"application/json",
+		[]byte(payload),
 	)
 }
