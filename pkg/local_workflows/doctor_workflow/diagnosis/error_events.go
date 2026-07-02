@@ -1,6 +1,7 @@
 package diagnosis
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -36,10 +37,10 @@ func (c *ErrorEventCheck) Analyze(body []ParsedLine) []Finding {
 
 		findings = append(findings, Finding{
 			Source:   SourceLogAnalysis,
-			Line:     line.Number,
 			Kind:     kind,
 			Severity: SeverityError,
 			Message:  line.Message,
+			Subject:  fmt.Sprintf("L%d", line.Number),
 		})
 
 		if len(findings) == maxHighlights {

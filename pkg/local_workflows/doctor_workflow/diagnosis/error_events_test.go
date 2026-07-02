@@ -22,7 +22,7 @@ func TestErrorEventCheck_detectsHTTPErrors(t *testing.T) {
 	assert.Equal(t, KindHTTPError, findings[0].Kind)
 	assert.Equal(t, SourceLogAnalysis, findings[0].Source)
 	assert.Equal(t, SeverityError, findings[0].Severity)
-	assert.Equal(t, 1, findings[0].Line)
+	assert.Equal(t, "L1", findings[0].Subject)
 }
 
 func TestErrorEventCheck_detectsCLIErrors(t *testing.T) {
@@ -72,7 +72,7 @@ func TestErrorEventCheck_dedupesRepeatedEvents(t *testing.T) {
 	findings := check.Analyze(lines)
 
 	require.Len(t, findings, 1)
-	assert.Equal(t, 1, findings[0].Line)
+	assert.Equal(t, "L1", findings[0].Subject)
 }
 
 func TestErrorEventCheck_highlightCap(t *testing.T) {

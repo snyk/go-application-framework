@@ -3,6 +3,7 @@ package diagnosis
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,9 +17,17 @@ func TestFormatText_fullReport(t *testing.T) {
 			Raw:    "Version: 1.0.0",
 		},
 		Findings: []Finding{
-			{Source: SourceLogAnalysis, Line: 3, Kind: KindHTTPError, Severity: SeverityError, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized"},
-			{Source: SourceCLIResult, Line: 10, Kind: KindExitCode, Severity: SeverityError, Message: "Exit Code: 2"},
+			{Source: SourceLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized"},
 		},
+		Result: strings.Join([]string{
+			"------------ Errors ------------",
+			"ERROR:                 Authentication error (SNYK-0005)",
+			"  Description:",
+			"                       Authentication credentials not recognized.",
+			"  Links:",
+			"                       https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0005",
+			"Exit Code:             2",
+		}, "\n"),
 	}
 
 	var buf bytes.Buffer
@@ -33,7 +42,11 @@ func TestFormatText_fullReport(t *testing.T) {
 	assert.Contains(t, rendered, "L3 [http-error]")
 	assert.Contains(t, rendered, "401 Unauthorized")
 	assert.Contains(t, rendered, "Result")
-	assert.Contains(t, rendered, "Exit Code: 2")
+	// The full errors block is preserved verbatim, not just the code line.
+	assert.Contains(t, rendered, "Authentication error (SNYK-0005)")
+	assert.Contains(t, rendered, "Description:")
+	assert.Contains(t, rendered, "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-0005")
+	assert.Contains(t, rendered, "Exit Code:             2")
 }
 
 func TestFormatText_noFindings(t *testing.T) {
@@ -67,7 +80,7 @@ func TestFormatJSON_roundTrips(t *testing.T) {
 			Raw:    "Version: 1.0.0",
 		},
 		Findings: []Finding{
-			{Source: SourceLogAnalysis, Line: 3, Kind: KindHTTPError, Severity: SeverityError, Message: "401 Unauthorized"},
+			{Source: SourceLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "401 Unauthorized"},
 		},
 	}
 

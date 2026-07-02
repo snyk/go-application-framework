@@ -28,6 +28,25 @@ func TestParseLines_basic(t *testing.T) {
 	assert.False(t, lines[2].HasCLIPrefix)
 }
 
+func TestParseLines_stripsGitHubActionsDoubleTimestamp(t *testing.T) {
+	// CI logs (e.g. GitHub Actions) prepend a runner timestamp to every line, so
+	// the CLI prefix appears after a second timestamp. Both must be stripped, or
+	// nothing downstream recognizes the line as a CLI debug line.
+	input := strings.Join([]string{
+		"2026-06-26T13:58:20.0068701Z 2026-06-26T13:58:20Z main - Version:               1.1305.2",
+		"2026-06-26T13:58:32.0215276Z 2026-06-26T13:58:32Z main - < response [0x2b166c22aa00]: 403 Forbidden",
+	}, "\n")
+
+	lines, err := ParseLines(strings.NewReader(input))
+	require.NoError(t, err)
+	require.Len(t, lines, 2)
+
+	assert.True(t, lines[0].HasCLIPrefix)
+	assert.Equal(t, "Version:               1.1305.2", lines[0].Message)
+	assert.True(t, lines[1].HasCLIPrefix)
+	assert.Equal(t, "< response [0x2b166c22aa00]: 403 Forbidden", lines[1].Message)
+}
+
 func TestSplitSections_withSummaryAndErrors(t *testing.T) {
 	log := strings.Join([]string{
 		"2026-06-10T13:10:38Z main - < error: real failure",

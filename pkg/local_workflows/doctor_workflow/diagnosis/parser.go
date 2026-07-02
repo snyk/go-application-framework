@@ -16,11 +16,22 @@ const (
 
 var (
 	// cliPrefixRe matches the Snyk CLI debug prefix, e.g. "2026-06-10T13:10:38Z main - ".
-	cliPrefixRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\S+ \S+ - ?`)
+	// The leading timestamp is optional so CI-wrapped logs (e.g. GitHub Actions,
+	// which prepends its own runner timestamp to every line) still match.
+	cliPrefixRe = regexp.MustCompile(`^(?:\d{4}-\d{2}-\d{2}T\S+ )?\d{4}-\d{2}-\d{2}T\S+ \S+ - ?`)
 	// tableRowRe identifies rows in the CLI environment table so unknown fields
 	// added by future CLI versions still stay in the Environment section.
 	tableRowRe = regexp.MustCompile(`^[A-Za-z][\w .-]*:`)
+	// multiSpaceRe collapses the column-alignment padding the CLI table uses, so
+	// structured field values read cleanly ("a  b" -> "a b").
+	multiSpaceRe = regexp.MustCompile(`[ \t]{2,}`)
 )
+
+// normalizeSpace trims and collapses runs of spaces/tabs so extracted field
+// values don't carry the log's column-alignment padding.
+func normalizeSpace(s string) string {
+	return multiSpaceRe.ReplaceAllString(strings.TrimSpace(s), " ")
+}
 
 // ParsedLine is a single line from a debug log after prefix normalization.
 type ParsedLine struct {
@@ -85,12 +96,21 @@ func ExtractSummary(header []ParsedLine) Summary {
 	var rawParts []string
 
 	for _, ln := range header {
-		rawParts = append(rawParts, ln.Message)
+		rawParts = append(rawParts, strings.TrimRight(ln.Message, " \t"))
 
-		// Continuation line (indented): append to previous field's value.
+		// Continuation line (indented): append to the previous field's value.
 		if len(ln.Message) > 0 && (ln.Message[0] == ' ' || ln.Message[0] == '\t') {
-			if len(fields) > 0 {
-				fields[len(fields)-1].Value += "\n" + strings.TrimSpace(ln.Message)
+			cont := normalizeSpace(ln.Message)
+			if cont == "" || len(fields) == 0 {
+				continue
+			}
+			last := &fields[len(fields)-1]
+			// Avoid a leading "\n" when the parent value is empty (e.g. a
+			// "Features:" header whose sub-items follow indented).
+			if last.Value == "" {
+				last.Value = cont
+			} else {
+				last.Value += "\n" + cont
 			}
 			continue
 		}
@@ -98,7 +118,7 @@ func ExtractSummary(header []ParsedLine) Summary {
 		// Key:Value line
 		if idx := strings.Index(ln.Message, ":"); idx >= 0 {
 			key := strings.TrimSpace(ln.Message[:idx])
-			value := strings.TrimSpace(ln.Message[idx+1:])
+			value := normalizeSpace(ln.Message[idx+1:])
 			fields = append(fields, KeyValue{Key: key, Value: value})
 		}
 	}
