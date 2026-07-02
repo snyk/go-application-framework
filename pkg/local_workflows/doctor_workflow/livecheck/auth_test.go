@@ -1,6 +1,7 @@
 package livecheck
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -49,10 +50,11 @@ func TestCheckAuth(t *testing.T) {
 
 			engine := mocks.NewMockEngine(ctrl)
 			engine.EXPECT().
-				InvokeWithConfig(WhoAmIWorkflowID, gomock.Any()).
+				Invoke(WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
 				Return(tt.invokeOut, tt.invokeErr)
 
 			ctx := mocks.NewMockInvocationContext(ctrl)
+			ctx.EXPECT().Context().Return(context.Background()).AnyTimes()
 			ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
@@ -61,29 +63,16 @@ func TestCheckAuth(t *testing.T) {
 	}
 }
 
-func TestCheckAuth_forcesJSONOff(t *testing.T) {
+func TestWhoamiConfig_forcesJSONOff(t *testing.T) {
 	// The doctor run itself may be invoked with --json; the whoami sub-invocation
 	// must still take its string-payload path or the identity assertion breaks.
-	ctrl := gomock.NewController(t)
-	config := configuration.NewWithOpts()
-	config.Set("json", true)
+	base := configuration.NewWithOpts()
+	base.Set("json", true)
 
-	var invokedWithJSON bool
-	engine := mocks.NewMockEngine(ctrl)
-	engine.EXPECT().
-		InvokeWithConfig(WhoAmIWorkflowID, gomock.Any()).
-		DoAndReturn(func(_ workflow.Identifier, c configuration.Configuration) ([]workflow.Data, error) {
-			invokedWithJSON = c.GetBool("json")
-			return []workflow.Data{whoAmIData("user@snyk.io")}, nil
-		})
+	got := whoamiConfig(base)
 
-	ctx := mocks.NewMockInvocationContext(ctrl)
-	ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
-	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
-
-	got := checkAuth(ctx)
-	assert.True(t, got.OK)
-	assert.False(t, invokedWithJSON, "whoami must be invoked with json disabled")
+	assert.False(t, got.GetBool("json"), "whoami config must disable json")
+	assert.True(t, base.GetBool("json"), "the doctor config must not be mutated")
 }
 
 func TestAuthStatus_finding(t *testing.T) {

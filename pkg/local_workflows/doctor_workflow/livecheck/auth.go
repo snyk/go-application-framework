@@ -1,8 +1,10 @@
 package livecheck
 
 import (
+	"context"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -18,8 +20,8 @@ const (
 	// contract below holds even when the doctor run itself used --json.
 	whoamiJSONFlag = "json"
 
-	// authCheckTimeout bounds the live whoami call so a hung request degrades to
-	// a finding instead of blocking the already-computed report.
+	// authCheckTimeout bounds the live whoami call (via WithContext) so a hung
+	// request degrades to a finding instead of blocking the already-computed report.
 	authCheckTimeout = 15 * time.Second
 )
 
@@ -31,39 +33,36 @@ type AuthStatus struct {
 }
 
 // checkAuth verifies authentication via the whoami workflow: a string result is
-// the identity; error/empty is a failure. Bounded by authCheckTimeout so a hung
-// call can't block doctor (InvokeWithConfig takes no context).
+// the identity; error/empty is a failure. The call is bounded by authCheckTimeout
+// via WithContext so a hung request cancels rather than blocking doctor.
 func checkAuth(invocationCtx workflow.InvocationContext) AuthStatus {
-	config := invocationCtx.GetConfiguration().Clone()
-	// Force whoami's string-payload path regardless of the doctor run's --json.
+	ctx, cancel := context.WithTimeout(invocationCtx.Context(), authCheckTimeout)
+	defer cancel()
+
+	data, err := invocationCtx.GetEngine().Invoke(
+		WhoAmIWorkflowID,
+		workflow.WithConfig(whoamiConfig(invocationCtx.GetConfiguration())),
+		workflow.WithContext(ctx),
+	)
+	if err != nil {
+		return AuthStatus{ErrorMessage: err.Error()}
+	}
+	if len(data) == 0 {
+		return AuthStatus{ErrorMessage: "whoami returned no usable result"}
+	}
+	identity, ok := data[0].GetPayload().(string)
+	if !ok {
+		return AuthStatus{ErrorMessage: "whoami returned an unexpected payload type"}
+	}
+	return AuthStatus{OK: true, Identity: identity}
+}
+
+// whoamiConfig clones the doctor config and forces json off so whoami returns
+// its plain-string identity payload regardless of the doctor run's --json.
+func whoamiConfig(base configuration.Configuration) configuration.Configuration {
+	config := base.Clone()
 	config.Set(whoamiJSONFlag, false)
-
-	type invokeResult struct {
-		data []workflow.Data
-		err  error
-	}
-	resultCh := make(chan invokeResult, 1)
-	go func() {
-		data, err := invocationCtx.GetEngine().InvokeWithConfig(WhoAmIWorkflowID, config)
-		resultCh <- invokeResult{data: data, err: err}
-	}()
-
-	select {
-	case <-time.After(authCheckTimeout):
-		return AuthStatus{ErrorMessage: "authentication check timed out"}
-	case result := <-resultCh:
-		if result.err != nil {
-			return AuthStatus{ErrorMessage: result.err.Error()}
-		}
-		if len(result.data) == 0 {
-			return AuthStatus{ErrorMessage: "whoami returned no usable result"}
-		}
-		identity, ok := result.data[0].GetPayload().(string)
-		if !ok {
-			return AuthStatus{ErrorMessage: "whoami returned an unexpected payload type"}
-		}
-		return AuthStatus{OK: true, Identity: identity}
-	}
+	return config
 }
 
 // finding maps the auth status into the generic contract (Source = auth).
