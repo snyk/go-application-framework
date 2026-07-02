@@ -37,7 +37,7 @@ func Test_DoctorWorkflow_registration(t *testing.T) {
 	flagSet := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
 	require.NotNil(t, flagSet)
 	assert.NotNil(t, flagSet.Lookup(inputFlag))
-	assert.NotNil(t, flagSet.Lookup(noLiveCheckFlag))
+	assert.NotNil(t, flagSet.Lookup(liveFlag))
 	assert.NotNil(t, flagSet.Lookup(jsonFlag))
 }
 
@@ -84,13 +84,56 @@ func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	assert.Contains(t, rendered, "Notable Events")
 }
 
-func Test_runDoctor_noInputOnTerminalErrors(t *testing.T) {
+func Test_runDoctor_gathersAuthContext(t *testing.T) {
+	config := configuration.NewWithOpts()
+	config.Set(liveFlag, true)
+
+	ctx := setupMockContext(t, config)
+	engine := mocks.NewMockEngine(gomock.NewController(t))
+	engine.EXPECT().
+		Invoke(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+
+	output, err := runDoctor(ctx, strings.NewReader(sampleLog), false)
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok)
+	rendered := string(payload)
+	assert.Contains(t, rendered, "Authentication")
+	assert.Contains(t, rendered, "Authenticated as user@snyk.io")
+}
+
+func whoAmIData(payload string) workflow.Data {
+	// whoami (without --json) returns the username as a plain string payload.
+	return workflow.NewData(
+		workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("whoami"), "whoami"),
+		"text/plain",
+		payload,
+	)
+}
+
+func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
+	// No --input and stdin is a terminal (no pipe): nothing to analyze, so the
+	// live checks run by default instead of erroring.
 	config := configuration.NewWithOpts()
 
-	_, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), true)
+	ctx := setupMockContext(t, config)
+	engine := mocks.NewMockEngine(gomock.NewController(t))
+	engine.EXPECT().
+		Invoke(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-	var snykErr snyk_errors.Error
-	require.ErrorAs(t, err, &snykErr)
+	output, err := runDoctor(ctx, strings.NewReader(""), true)
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok)
+	assert.Contains(t, string(payload), "Authenticated as user@snyk.io")
 }
 
 func Test_runDoctor_missingInputFile(t *testing.T) {
