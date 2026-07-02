@@ -8,6 +8,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -20,31 +21,46 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 
-	// 1. Open input
-	reader, err := diagnosis.OpenInput(config.GetString(inputFlag), stdin, stdinIsTerminal)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
+	inputPath := config.GetString(inputFlag)
+	// A log is available from --input or from a pipe (stdin is not a terminal).
+	// A bare `snyk doctor` with neither has nothing to analyze, so it defaults to
+	// live checks rather than erroring.
+	hasLogInput := inputPath != "" || !stdinIsTerminal
 
-	// 2. Analyze
-	report, err := diagnosis.Analyze(ctx, reader, diagnosis.DefaultLogChecks())
-	if err != nil {
-		return nil, err
+	// 1. Analyze the log when there is one; otherwise start from an empty report.
+	report := &diagnosis.DoctorReport{SchemaVersion: diagnosis.SchemaVersion}
+	if hasLogInput {
+		reader, err := diagnosis.OpenInput(inputPath, stdin, stdinIsTerminal)
+		if err != nil {
+			return nil, err
+		}
+		defer reader.Close()
+
+		report, err = diagnosis.Analyze(ctx, reader, diagnosis.DefaultLogChecks())
+		if err != nil {
+			return nil, err
+		}
+		logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
 	}
 
-	logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
+	// 2. Live checks (auth now, connectivity later) touch the current environment.
+	// They run when requested via --live, or by default for a bare invocation
+	// (no log to analyze). They append to the same findings stream.
+	if config.GetBool(liveFlag) || !hasLogInput {
+		live := livecheck.Run(invocationCtx)
+		report.Findings = append(report.Findings, live...)
+		logger.Debug().Msgf("doctor: gathered %d live-check finding(s)", len(live))
+	}
 
 	// 3. Format — select by --json flag
 	var buf bytes.Buffer
 	contentType := "text/plain"
+	render := diagnosis.FormatText
 	if config.GetBool(jsonFlag) {
 		contentType = "application/json"
-		err = diagnosis.FormatJSON(&buf, report)
-	} else {
-		err = diagnosis.FormatText(&buf, report)
+		render = diagnosis.FormatJSON
 	}
-	if err != nil {
+	if err := render(&buf, report); err != nil {
 		return nil, err
 	}
 
