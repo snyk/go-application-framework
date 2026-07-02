@@ -10,12 +10,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	connectivitycheck "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -96,7 +96,7 @@ func Test_runDoctor_gathersLiveContextWithLiveFlag(t *testing.T) {
 	engine := mocks.NewMockEngine(gomock.NewController(t))
 	gomock.InOrder(
 		engine.EXPECT().
-			Invoke(livecheck.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
 			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
 		engine.EXPECT().
 			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
@@ -120,7 +120,7 @@ func Test_runDoctor_gathersLiveContextWithLiveFlag(t *testing.T) {
 
 func whoAmIData(payload string) workflow.Data {
 	return workflow.NewData(
-		workflow.NewTypeIdentifier(livecheck.WhoAmIWorkflowID, "whoami"),
+		workflow.NewTypeIdentifier(auth.WhoAmIWorkflowID, "whoami"),
 		"text/plain",
 		payload,
 	)
@@ -133,7 +133,7 @@ func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
 	engine := mocks.NewMockEngine(gomock.NewController(t))
 	gomock.InOrder(
 		engine.EXPECT().
-			Invoke(livecheck.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
 			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
 		engine.EXPECT().
 			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
@@ -159,7 +159,7 @@ func Test_runDoctor_continuesWhenConnectivityFails(t *testing.T) {
 	engine := mocks.NewMockEngine(gomock.NewController(t))
 	gomock.InOrder(
 		engine.EXPECT().
-			Invoke(livecheck.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
 			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
 		engine.EXPECT().
 			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).

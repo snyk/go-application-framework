@@ -1,4 +1,4 @@
-package livecheck
+package connectivity
 
 import (
 	"errors"
@@ -85,7 +85,7 @@ func TestCheckConnectivity(t *testing.T) {
 			ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-			got := checkConnectivity(ctx)
+			got := Check(ctx)
 			if tt.name == "bad json" {
 				assert.True(t, got.Summary.Failed)
 				assert.Contains(t, got.Summary.FailureText, "could not decode connectivity result:")
@@ -107,7 +107,7 @@ func TestConnectivityStatus_findings(t *testing.T) {
 			Organizations: []string{"my-org (default)"},
 		},
 	}
-	findings := ok.findings()
+	findings := ok.Findings()
 	assert.Len(t, findings, 1)
 	assert.Equal(t, diagnosis.SourceConnectivity, findings[0].Source)
 	assert.Contains(t, findings[0].Message, "Hosts: 2/2 reachable")
@@ -115,7 +115,7 @@ func TestConnectivityStatus_findings(t *testing.T) {
 
 	failed := connectivityStatus{
 		Summary: connectivitySummary{Failed: true, FailureText: "network down"},
-	}.findings()
+	}.Findings()
 	assert.Equal(t, diagnosis.SeverityError, failed[0].Severity)
 	assert.Contains(t, failed[0].Message, "Failed to run connectivity check")
 }

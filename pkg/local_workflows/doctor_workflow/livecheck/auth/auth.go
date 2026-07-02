@@ -1,4 +1,4 @@
-package livecheck
+package auth
 
 import (
 	"context"
@@ -32,10 +32,10 @@ type AuthStatus struct {
 	ErrorMessage string
 }
 
-// checkAuth verifies authentication via the whoami workflow: a string result is
+// Check verifies authentication via the whoami workflow: a string result is
 // the identity; error/empty is a failure. The call is bounded by authCheckTimeout
 // via WithContext so a hung request cancels rather than blocking doctor.
-func checkAuth(invocationCtx workflow.InvocationContext) AuthStatus {
+func Check(invocationCtx workflow.InvocationContext) AuthStatus {
 	ctx, cancel := context.WithTimeout(invocationCtx.Context(), authCheckTimeout)
 	defer cancel()
 
@@ -65,22 +65,22 @@ func whoamiConfig(base configuration.Configuration) configuration.Configuration 
 	return config
 }
 
-// finding maps the auth status into the generic contract (Source = auth).
-func (a AuthStatus) finding() diagnosis.Finding {
+// Findings maps the auth status into the generic contract (Source = auth).
+func (a AuthStatus) Findings() []diagnosis.Finding {
 	if a.OK {
-		return diagnosis.Finding{
+		return []diagnosis.Finding{diagnosis.Finding{
 			Source:   diagnosis.SourceAuth,
 			Kind:     "auth",
 			Severity: diagnosis.SeverityInfo,
 			Message:  "Authenticated as " + a.Identity,
 			Fields:   map[string]string{"identity": a.Identity},
-		}
+		}}
 	}
-	return diagnosis.Finding{
+	return []diagnosis.Finding{diagnosis.Finding{
 		Source:   diagnosis.SourceAuth,
 		Kind:     "auth",
 		Severity: diagnosis.SeverityError,
 		Message:  "Failed to verify authentication",
 		Details:  []string{a.ErrorMessage},
-	}
+	}}
 }

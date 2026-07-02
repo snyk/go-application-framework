@@ -1,4 +1,4 @@
-package livecheck
+package auth
 
 import (
 	"context"
@@ -58,7 +58,7 @@ func TestCheckAuth(t *testing.T) {
 			ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-			assert.Equal(t, tt.want, checkAuth(ctx))
+			assert.Equal(t, tt.want, Check(ctx))
 		})
 	}
 }
@@ -76,13 +76,13 @@ func TestWhoamiConfig_forcesJSONOff(t *testing.T) {
 }
 
 func TestAuthStatus_finding(t *testing.T) {
-	ok := AuthStatus{OK: true, Identity: "user@snyk.io"}.finding()
+	ok := AuthStatus{OK: true, Identity: "user@snyk.io"}.Findings()
 	assert.Equal(t, diagnosis.SourceAuth, ok.Source)
 	assert.Equal(t, diagnosis.SeverityInfo, ok.Severity)
 	assert.Contains(t, ok.Message, "user@snyk.io")
 	assert.Equal(t, "user@snyk.io", ok.Fields["identity"])
 
-	failed := AuthStatus{ErrorMessage: "Authentication error"}.finding()
+	failed := AuthStatus{ErrorMessage: "Authentication error"}.Findings()
 	assert.Equal(t, diagnosis.SourceAuth, failed.Source)
 	assert.Equal(t, diagnosis.SeverityError, failed.Severity)
 	assert.Contains(t, failed.Message, "Failed to verify authentication")

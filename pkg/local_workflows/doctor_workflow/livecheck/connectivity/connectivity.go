@@ -1,4 +1,4 @@
-package livecheck
+package connectivity
 
 import (
 	"encoding/json"
@@ -46,7 +46,7 @@ type connectivityResult struct {
 	TokenPresent  bool                             `json:"tokenPresent"`
 }
 
-func checkConnectivity(invocationCtx workflow.InvocationContext) connectivityStatus {
+func Check(invocationCtx workflow.InvocationContext) connectivityStatus {
 	config := invocationCtx.GetConfiguration().Clone()
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 	config.Set("json", true)
@@ -147,7 +147,7 @@ func firstPayloadString(data []workflow.Data) (string, bool) {
 	}
 }
 
-func (c connectivityStatus) findings() []diagnosis.Finding {
+func (c connectivityStatus) Findings() []diagnosis.Finding {
 	if c.Summary.Failed {
 		return []diagnosis.Finding{{
 			Source:   diagnosis.SourceConnectivity,
