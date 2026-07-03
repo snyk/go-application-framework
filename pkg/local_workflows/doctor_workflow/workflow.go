@@ -48,6 +48,8 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		report.Summary.Fields = []diagnosis.KeyValue{
 			{"Version", invocationCtx.GetRuntimeInfo().GetVersion()},
 			{"API", config.GetString(configuration.API_URL)},
+			{"Cache", config.GetString(configuration.CACHE_PATH)},
+			{"Organization", config.GetString(configuration.ORGANIZATION)},
 		}
 	}
 
