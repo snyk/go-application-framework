@@ -1,6 +1,14 @@
 {{- define "finding" -}}
-{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Kind)) }} {{ trimRight .Message }}
-{{- if .Subject }}
+{{- $title := .Title -}}
+{{- $description := .Message -}}
+{{- if eq $title "" -}}
+{{- $title = .Message -}}
+{{- end -}}
+{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Kind)) }} {{ trimRight $title}}
+{{- if ne $title $description }}
+  Description: {{ $description }}
+{{- end -}}
+{{- if .Subject -}}
   Occurrences: {{ .Subject }}
 {{- end -}}
 {{- range $k, $v := .Fields }}
