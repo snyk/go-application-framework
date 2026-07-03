@@ -56,7 +56,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	// 3. Format — select by --json flag
 	var buf bytes.Buffer
 	contentType := "text/plain"
-	render := diagnosis.FormatText
+	render := diagnosis.FormatTemplate
 	if config.GetBool(jsonFlag) {
 		contentType = "application/json"
 		render = diagnosis.FormatJSON
