@@ -1,9 +1,5 @@
 {{- define "finding" -}}
-{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Kind)) }} {{ trimRight .Message }}{{ if .Code }} ({{ .Code }}){{ end }}
-{{- if .Subject }}
-Occurrences: {{ .Subject }}
-{{- end -}}
-
+{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Kind)) }} {{ trimRight .Message }}
 {{- if .Subject }}
   Occurrences: {{ .Subject }}
 {{- end -}}

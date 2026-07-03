@@ -86,6 +86,16 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		logger.Debug().Msgf("doctor: gathered %d live-check finding(s)", len(live))
 	}
 
+	if len(report.Findings) == 0 {
+		report.Findings = append(report.Findings, diagnosis.Finding{
+			Source:   diagnosis.SourceCLIResult,
+			Kind:     "healthy",
+			Title:    "Nothing found",
+			Message:  "Nothing found",
+			Severity: diagnosis.SeverityInfo,
+		})
+	}
+
 	// 3. Format — select by --json flag
 	var buf bytes.Buffer
 	contentType := "text/plain"
