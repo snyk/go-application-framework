@@ -26,8 +26,16 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 
 	progressbar := userInterface.NewProgressBar()
 	progressbar.SetTitle("Examining ...")
-	progressbar.UpdateProgress(uitypes.InfiniteProgress)
-	defer progressbar.Clear()
+	uiError := progressbar.UpdateProgress(uitypes.InfiniteProgress)
+	if uiError != nil {
+		logger.Warn().Err(uiError).Msg("failed to update progress bar")
+	}
+	defer func() {
+		uiError = progressbar.Clear()
+		if uiError != nil {
+			logger.Warn().Err(uiError).Msg("failed to update progress bar")
+		}
+	}()
 
 	inputPath := config.GetString(inputFlag)
 	// A log is available from --input or from a pipe (stdin is not a terminal).
@@ -53,10 +61,10 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
 	} else {
 		report.Summary.Fields = []diagnosis.KeyValue{
-			{"Version", invocationCtx.GetRuntimeInfo().GetVersion()},
-			{"API", config.GetString(configuration.API_URL)},
-			{"Cache", config.GetString(configuration.CACHE_PATH)},
-			{"Organization", config.GetString(configuration.ORGANIZATION)},
+			{Key: "Version", Value: invocationCtx.GetRuntimeInfo().GetVersion()},
+			{Key: "API", Value: config.GetString(configuration.API_URL)},
+			{Key: "Cache", Value: config.GetString(configuration.CACHE_PATH)},
+			{Key: "Organization", Value: config.GetString(configuration.ORGANIZATION)},
 		}
 	}
 
