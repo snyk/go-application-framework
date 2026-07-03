@@ -1,7 +1,10 @@
 {{- define "finding" -}}
- -  {{ if .Subject }}{{ .Subject }} {{ end }}[{{ .Kind }}] {{ trimRight .Message }}{{ if .Code }} ({{ .Code }}){{ end }}
+{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Kind)) }} {{ trimRight .Message }}{{ if .Code }} ({{ .Code }}){{ end }}
+{{- if .Subject }}
+Occurrences: {{ .Subject }}
+{{- end -}}
 {{- range .Remediation }}
-      → {{ . }}
+→ {{ . }}
 {{- end -}}
 {{- "\n" }}
 {{- end -}}
@@ -11,13 +14,13 @@
 {{- printf "%s" (title "Basic Information") -}}
 {{- if .Summary.Fields -}}
 {{- range .Summary.Fields -}}
-    - {{ .Key }}: {{ .Value }}{{- "\n" }}
+- {{ .Key }}: {{ .Value }}{{- "\n" }}
 {{- end -}}
 {{- end }}
 
-{{- printf "%s" (title "Symptions") -}}
+{{- printf "%s" (title "Symptoms") -}}
 {{- range .Findings -}}
-    {{ template "finding" . }}
+{{ template "finding" . }}
 {{- end }}
 {{- end -}}
 

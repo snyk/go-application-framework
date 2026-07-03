@@ -36,7 +36,7 @@ func TestFormatText_fullReport(t *testing.T) {
 
 	rendered := buf.String()
 	assert.Contains(t, rendered, "Snyk Doctor Diagnostic Report")
-	assert.Contains(t, rendered, "Patient Info")
+	assert.Contains(t, rendered, "Environment")
 	assert.Contains(t, rendered, "Version: 1.0.0")
 	assert.Contains(t, rendered, "Notable Events")
 	assert.Contains(t, rendered, "L3 [http-error]")
@@ -69,7 +69,7 @@ func TestFormatText_noSummary(t *testing.T) {
 	require.NoError(t, FormatText(&buf, report))
 
 	rendered := buf.String()
-	assert.Contains(t, rendered, "Patient Info")
+	assert.Contains(t, rendered, "Environment")
 	assert.Contains(t, rendered, "(not found in the provided log)")
 }
 
@@ -97,14 +97,12 @@ func TestFormatTemplate_fullReport(t *testing.T) {
 
 	rendered := buf.String()
 	assert.Contains(t, rendered, "Snyk Doctor Diagnostic Report")
-	assert.Contains(t, rendered, "Patient Info")
+	assert.Contains(t, rendered, "Basic Information")
 	assert.Contains(t, rendered, "Version: 1.0.0")
-	assert.Contains(t, rendered, "Notable Events")
-	assert.Contains(t, rendered, "L3 [http-error]")
+	assert.Contains(t, rendered, "Symptoms")
+	assert.Contains(t, rendered, "[HTTP-ERROR]")
+	assert.Contains(t, rendered, "Occurrences: L3")
 	assert.Contains(t, rendered, "401 Unauthorized")
-	assert.Contains(t, rendered, "Result")
-	assert.Contains(t, rendered, "Authentication error (SNYK-0005)")
-	assert.Contains(t, rendered, "Exit Code:             2")
 }
 
 func TestFormatTemplate_noFindings(t *testing.T) {
@@ -116,8 +114,8 @@ func TestFormatTemplate_noFindings(t *testing.T) {
 	require.NoError(t, FormatTemplate(&buf, report))
 
 	rendered := buf.String()
-	assert.Contains(t, rendered, "No failing requests or CLI error entries found in the log body.")
-	assert.Contains(t, rendered, "(not found in the provided log)")
+	assert.Contains(t, rendered, "Basic Information")
+	assert.Contains(t, rendered, "Symptoms")
 }
 
 func TestFormatTemplate_extraSources(t *testing.T) {
@@ -132,9 +130,10 @@ func TestFormatTemplate_extraSources(t *testing.T) {
 	require.NoError(t, FormatTemplate(&buf, report))
 
 	rendered := buf.String()
-	assert.Contains(t, rendered, "Connectivity")
+	assert.Contains(t, rendered, "Symptoms")
+	assert.Contains(t, rendered, "[DNS]")
 	assert.Contains(t, rendered, "DNS lookup failed")
-	assert.Contains(t, rendered, "Authentication")
+	assert.Contains(t, rendered, "[TOKEN]")
 	assert.Contains(t, rendered, "Token expired")
 }
 

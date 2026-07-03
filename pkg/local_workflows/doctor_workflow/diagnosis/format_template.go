@@ -8,6 +8,8 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/snyk/go-application-framework/internal/presenters"
 )
 
@@ -83,6 +85,32 @@ func doctorFuncMap() template.FuncMap {
 		"trimRight":  func(s string) string { return strings.TrimRight(s, " ") },
 		"join":       strings.Join,
 		"splitLines": func(s string) []string { return strings.Split(s, "\n") },
+
+		// Color helpers for terminal output.
+		"red":    func(s string) string { return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(s) },
+		"green":  func(s string) string { return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(s) },
+		"yellow": func(s string) string { return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render(s) },
+		"bold":   func(s string) string { return lipgloss.NewStyle().Bold(true).Render(s) },
+		"severityIcon": func(sev Severity) string {
+			switch sev {
+			case SeverityError:
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("✗")
+			case SeverityWarning:
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("!")
+			default:
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("✓")
+			}
+		},
+		"severityColor": func(sev Severity, s string) string {
+			switch sev {
+			case SeverityError:
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(s)
+			case SeverityWarning:
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render(s)
+			default:
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(s)
+			}
+		},
 
 		// Domain helpers — expose existing functions so the template can
 		// filter and group findings without Go-side layout code.
