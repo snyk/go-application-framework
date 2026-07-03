@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension/connectivity"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -41,13 +42,18 @@ func InitConnectivityCheckWorkflow(engine workflow.Engine) error {
 }
 
 // connectivityCheckEntryPoint is the entry point for the connectivity check workflow
-func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input []workflow.Data) (output []workflow.Data, err error) {
+func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) (output []workflow.Data, err error) {
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
 	networkAccess := invocationCtx.GetNetworkAccess()
-	ui := invocationCtx.GetUserInterface()
+	userInterface := invocationCtx.GetUserInterface()
 
-	checker := connectivity.NewChecker(networkAccess, logger, config, ui)
+	var checkerUI ui.UserInterface
+	if !config.GetBool("no-progress") {
+		// just show the connectivity check progress bar if no-progress is not set, otherwise show the default UI
+		checkerUI = userInterface
+	}
+	checker := connectivity.NewChecker(networkAccess, logger, config, checkerUI)
 
 	logger.Info().Msg("Starting Snyk connectivity check")
 

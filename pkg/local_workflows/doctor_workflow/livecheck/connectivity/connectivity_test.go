@@ -29,6 +29,27 @@ const sampleConnectivityJSON = `{
   "tokenPresent": true
 }`
 
+func TestCheck_setsNoProgressConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	config := configuration.NewWithOpts()
+
+	engine := mocks.NewMockEngine(ctrl)
+	engine.EXPECT().
+		InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+		DoAndReturn(func(_ workflow.Identifier, cfg configuration.Configuration) ([]workflow.Data, error) {
+			assert.True(t, cfg.GetBool("no-progress"))
+			assert.True(t, cfg.GetBool("json"))
+			return []workflow.Data{connectivityData(sampleConnectivityJSON)}, nil
+		})
+
+	ctx := mocks.NewMockInvocationContext(ctrl)
+	ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+
+	got := Check(ctx)
+	assert.False(t, got.Summary.Failed)
+}
+
 func TestCheckConnectivity(t *testing.T) {
 	tests := []struct {
 		name      string

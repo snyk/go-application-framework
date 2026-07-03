@@ -12,6 +12,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// noProgressConfigKey suppresses the connectivity-check progress bar when doctor
+// invokes the workflow in the background while other checks run.
+const noProgressConfigKey = "no-progress"
+
 type connectivitySummary struct {
 	Failed      bool
 	FailureText string
@@ -46,14 +50,40 @@ type connectivityResult struct {
 	TokenPresent  bool                             `json:"tokenPresent"`
 }
 
-func Check(invocationCtx workflow.InvocationContext) connectivityStatus {
-	config := invocationCtx.GetConfiguration().Clone()
+// AsyncCheck runs Check in the background. Call Wait for the result.
+type AsyncCheck struct {
+	done chan connectivityStatus
+}
+
+// StartAsync begins the connectivity check without blocking the caller.
+func StartAsync(invocationCtx workflow.InvocationContext) *AsyncCheck {
+	async := &AsyncCheck{done: make(chan connectivityStatus, 1)}
+	go func() {
+		async.done <- Check(invocationCtx)
+	}()
+	return async
+}
+
+// Wait blocks until the background connectivity check completes.
+func (a *AsyncCheck) Wait() connectivityStatus {
+	return <-a.done
+}
+
+func connectivityConfig(base configuration.Configuration) configuration.Configuration {
+	config := base.Clone()
 	config.Set(configuration.FLAG_EXPERIMENTAL, true)
 	config.Set("json", true)
 	config.Set("timeout", 10)
 	config.Set("max-org-count", 100)
+	config.Set(noProgressConfigKey, true)
+	return config
+}
 
-	data, err := invocationCtx.GetEngine().InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, config)
+func Check(invocationCtx workflow.InvocationContext) connectivityStatus {
+	data, err := invocationCtx.GetEngine().InvokeWithConfig(
+		connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK,
+		connectivityConfig(invocationCtx.GetConfiguration()),
+	)
 	if err != nil {
 		return connectivityStatus{Summary: connectivitySummary{Failed: true, FailureText: err.Error()}}
 	}

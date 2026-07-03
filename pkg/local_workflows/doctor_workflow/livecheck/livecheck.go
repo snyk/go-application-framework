@@ -11,10 +11,13 @@ import (
 )
 
 // Run executes the live checks and returns their findings for inclusion in the
-// doctor report. New checks append their findings here.
-func Run(invocationCtx workflow.InvocationContext) []diagnosis.Finding {
-	return append(
-		auth.Check(invocationCtx).Findings(),
-		connectivity.Check(invocationCtx).Findings()...,
-	)
+// doctor report. Connectivity runs in the background while auth (and any log
+// analysis started earlier via connAsync) proceed; connAsync, when non-nil, is
+// the connectivity check already started by the caller.
+func Run(invocationCtx workflow.InvocationContext, connAsync *connectivity.AsyncCheck) []diagnosis.Finding {
+	if connAsync == nil {
+		connAsync = connectivity.StartAsync(invocationCtx)
+	}
+	authFindings := auth.Check(invocationCtx).Findings()
+	return append(authFindings, connAsync.Wait().Findings()...)
 }
