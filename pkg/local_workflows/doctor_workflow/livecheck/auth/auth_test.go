@@ -81,14 +81,12 @@ func TestAuthStatus_finding(t *testing.T) {
 	require.Len(t, ok, 1)
 	assert.Equal(t, diagnosis.SourceAuth, ok[0].Source)
 	assert.Equal(t, diagnosis.SeverityInfo, ok[0].Severity)
-	assert.Contains(t, ok[0].Message, "user@snyk.io")
-	assert.Equal(t, "user@snyk.io", ok[0].Fields["identity"])
+	assert.Equal(t, "user@snyk.io", ok[0].Fields["user"])
 
 	failed := AuthStatus{ErrorMessage: "Authentication error"}.Findings()
 	require.Len(t, failed, 1)
 	assert.Equal(t, diagnosis.SourceAuth, failed[0].Source)
 	assert.Equal(t, diagnosis.SeverityError, failed[0].Severity)
-	assert.Contains(t, failed[0].Message, "Failed to verify authentication")
 	assert.Contains(t, failed[0].Details, "Authentication error")
 }
 

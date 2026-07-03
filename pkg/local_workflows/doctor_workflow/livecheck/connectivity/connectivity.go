@@ -52,6 +52,7 @@ func Check(invocationCtx workflow.InvocationContext) connectivityStatus {
 	config.Set("json", true)
 	config.Set("timeout", 10)
 	config.Set("max-org-count", 100)
+	config.Set("silent", true)
 
 	data, err := invocationCtx.GetEngine().InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, config)
 	if err != nil {
@@ -80,6 +81,7 @@ func summarizeConnectivity(result connectivityResult) connectivitySummary {
 		HostsTotal:   len(result.HostResults),
 		TokenPresent: result.TokenPresent,
 		OrgCount:     len(result.Organizations),
+		Failed:       len(result.TODOs) > 0,
 	}
 
 	if result.ProxyConfig.Detected {
@@ -155,19 +157,13 @@ func (c connectivityStatus) Findings() []diagnosis.Finding {
 			Source:   diagnosis.SourceConnectivity,
 			Kind:     "connectivity",
 			Severity: diagnosis.SeverityError,
-			Message:  "Failed to run connectivity check",
+			Message:  "Connection issues discovered",
 			Details:  []string{c.Summary.FailureText},
 		}}
 	}
 
-	token := "not configured"
-	if c.Summary.TokenPresent {
-		token = "configured"
-	}
-
 	fields := map[string]string{
 		"proxy": c.Summary.Proxy,
-		"token": token,
 		"hosts": fmt.Sprintf("%d/%d reachable", c.Summary.HostsOK, c.Summary.HostsTotal),
 	}
 
@@ -185,7 +181,7 @@ func (c connectivityStatus) Findings() []diagnosis.Finding {
 		Source:   diagnosis.SourceConnectivity,
 		Kind:     "connectivity",
 		Severity: diagnosis.SeverityInfo,
-		Message:  fmt.Sprintf("Hosts: %d/%d reachable", c.Summary.HostsOK, c.Summary.HostsTotal),
+		Message:  "Connection successfully verified",
 		Fields:   fields,
 		Details:  details,
 	}}

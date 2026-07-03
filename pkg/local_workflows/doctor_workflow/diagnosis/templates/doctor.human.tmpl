@@ -1,0 +1,34 @@
+{{- define "finding" -}}
+{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Kind)) }} {{ trimRight .Message }}{{ if .Code }} ({{ .Code }}){{ end }}
+{{- if .Subject }}
+Occurrences: {{ .Subject }}
+{{- end -}}
+
+{{- if .Subject }}
+  Occurrences: {{ .Subject }}
+{{- end -}}
+{{- range $k, $v := .Fields }}
+  {{ capitalize $k }}: {{ $v }}
+{{- end -}}
+{{- range .Remediation }}
+→ {{ . }}
+{{- end -}}
+{{- "\n\n" }}
+{{- end -}}
+
+{{- define "main" -}}
+{{- printf "%s" (title "Snyk Doctor Diagnostic Report") -}}
+{{- printf "%s" (title "Basic Information") -}}
+{{- if .Summary.Fields -}}
+{{- range .Summary.Fields -}}
+- {{ .Key }}: {{ .Value }}{{- "\n" }}
+{{- end -}}
+{{- end }}
+
+{{- printf "%s" (title "Symptoms") -}}
+{{- range .Findings -}}
+{{ template "finding" . }}
+{{- end }}
+{{- end -}}
+
+{{- template "main" . -}}

@@ -7,8 +7,10 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -20,6 +22,20 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	ctx := invocationCtx.Context()
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
+	userInterface := invocationCtx.GetUserInterface()
+
+	progressbar := userInterface.NewProgressBar()
+	progressbar.SetTitle("Examining ...")
+	uiError := progressbar.UpdateProgress(uitypes.InfiniteProgress)
+	if uiError != nil {
+		logger.Warn().Err(uiError).Msg("failed to update progress bar")
+	}
+	defer func() {
+		uiError = progressbar.Clear()
+		if uiError != nil {
+			logger.Warn().Err(uiError).Msg("failed to update progress bar")
+		}
+	}()
 
 	inputPath := config.GetString(inputFlag)
 	// A log is available from --input or from a pipe (stdin is not a terminal).
@@ -43,6 +59,13 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 			return nil, err
 		}
 		logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
+	} else {
+		report.Summary.Fields = []diagnosis.KeyValue{
+			{Key: "Version", Value: invocationCtx.GetRuntimeInfo().GetVersion()},
+			{Key: "API", Value: config.GetString(configuration.API_URL)},
+			{Key: "Cache", Value: config.GetString(configuration.CACHE_PATH)},
+			{Key: "Organization", Value: config.GetString(configuration.ORGANIZATION)},
+		}
 	}
 
 	// 2. Live checks touch the current environment. They run when requested via
@@ -56,7 +79,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	// 3. Format — select by --json flag
 	var buf bytes.Buffer
 	contentType := "text/plain"
-	render := diagnosis.FormatText
+	render := diagnosis.FormatTemplate
 	if config.GetBool(jsonFlag) {
 		contentType = "application/json"
 		render = diagnosis.FormatJSON

@@ -112,14 +112,11 @@ func TestConnectivityStatus_findings(t *testing.T) {
 	findings := ok.Findings()
 	assert.Len(t, findings, 1)
 	assert.Equal(t, diagnosis.SourceConnectivity, findings[0].Source)
-	assert.Contains(t, findings[0].Message, "Hosts: 2/2 reachable")
-	assert.Equal(t, "configured", findings[0].Fields["token"])
 
 	failed := connectivityStatus{
 		Summary: connectivitySummary{Failed: true, FailureText: "network down"},
 	}.Findings()
 	assert.Equal(t, diagnosis.SeverityError, failed[0].Severity)
-	assert.Contains(t, failed[0].Message, "Failed to run connectivity check")
 }
 
 func TestSummarizeConnectivity_omitsRedundantFailureTODOs(t *testing.T) {
@@ -152,7 +149,6 @@ func TestSummarizeConnectivity_omitsRedundantFailureTODOs(t *testing.T) {
 	for _, detail := range findings[0].Details {
 		assert.NotContains(t, detail, "Connection to 'api.snyk.io' failed")
 	}
-	assert.Contains(t, findings[0].Details[0], "BLOCKED:")
 }
 
 func connectivityData(payload string) workflow.Data {

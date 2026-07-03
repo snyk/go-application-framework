@@ -73,6 +73,70 @@ func TestFormatText_noSummary(t *testing.T) {
 	assert.Contains(t, rendered, "(not found in the provided log)")
 }
 
+func TestFormatTemplate_fullReport(t *testing.T) {
+	report := &DoctorReport{
+		Summary: Summary{
+			Fields: []KeyValue{{Key: "Version", Value: "1.0.0"}},
+			Raw:    "Version: 1.0.0",
+		},
+		Findings: []Finding{
+			{Source: SourceLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized"},
+		},
+		Result: strings.Join([]string{
+			"------------ Errors ------------",
+			"ERROR:                 Authentication error (SNYK-0005)",
+			"  Description:",
+			"                       Authentication credentials not recognized.",
+			"Exit Code:             2",
+		}, "\n"),
+	}
+
+	var buf bytes.Buffer
+	err := FormatTemplate(&buf, report)
+	require.NoError(t, err)
+
+	rendered := buf.String()
+	assert.Contains(t, rendered, "Snyk Doctor Diagnostic Report")
+	assert.Contains(t, rendered, "Basic Information")
+	assert.Contains(t, rendered, "Version: 1.0.0")
+	assert.Contains(t, rendered, "Symptoms")
+	assert.Contains(t, rendered, "[HTTP-ERROR]")
+	assert.Contains(t, rendered, "Occurrences: L3")
+	assert.Contains(t, rendered, "401 Unauthorized")
+}
+
+func TestFormatTemplate_noFindings(t *testing.T) {
+	report := &DoctorReport{
+		Summary: Summary{Raw: "Version: 1.0.0"},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, FormatTemplate(&buf, report))
+
+	rendered := buf.String()
+	assert.Contains(t, rendered, "Basic Information")
+	assert.Contains(t, rendered, "Symptoms")
+}
+
+func TestFormatTemplate_extraSources(t *testing.T) {
+	report := &DoctorReport{
+		Findings: []Finding{
+			{Source: SourceConnectivity, Kind: "dns", Severity: SeverityWarning, Message: "DNS lookup failed"},
+			{Source: SourceAuth, Kind: "token", Severity: SeverityError, Message: "Token expired"},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, FormatTemplate(&buf, report))
+
+	rendered := buf.String()
+	assert.Contains(t, rendered, "Symptoms")
+	assert.Contains(t, rendered, "[DNS]")
+	assert.Contains(t, rendered, "DNS lookup failed")
+	assert.Contains(t, rendered, "[TOKEN]")
+	assert.Contains(t, rendered, "Token expired")
+}
+
 func TestFormatJSON_roundTrips(t *testing.T) {
 	report := &DoctorReport{
 		Summary: Summary{

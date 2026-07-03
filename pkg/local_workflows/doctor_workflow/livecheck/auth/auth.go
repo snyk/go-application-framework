@@ -70,15 +70,15 @@ func (a AuthStatus) Findings() []diagnosis.Finding {
 	if a.OK {
 		return []diagnosis.Finding{diagnosis.Finding{
 			Source:   diagnosis.SourceAuth,
-			Kind:     "auth",
+			Kind:     "authentication",
 			Severity: diagnosis.SeverityInfo,
-			Message:  "Authenticated as " + a.Identity,
-			Fields:   map[string]string{"identity": a.Identity},
+			Message:  "Successfully authenticated",
+			Fields:   map[string]string{"user": a.Identity},
 		}}
 	}
 	return []diagnosis.Finding{diagnosis.Finding{
 		Source:   diagnosis.SourceAuth,
-		Kind:     "auth",
+		Kind:     "authentication",
 		Severity: diagnosis.SeverityError,
 		Message:  "Failed to verify authentication",
 		Details:  []string{a.ErrorMessage},
