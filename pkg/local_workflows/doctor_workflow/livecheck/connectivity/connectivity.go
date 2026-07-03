@@ -52,6 +52,7 @@ func Check(invocationCtx workflow.InvocationContext) connectivityStatus {
 	config.Set("json", true)
 	config.Set("timeout", 10)
 	config.Set("max-org-count", 100)
+	config.Set("silent", true)
 
 	data, err := invocationCtx.GetEngine().InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, config)
 	if err != nil {
