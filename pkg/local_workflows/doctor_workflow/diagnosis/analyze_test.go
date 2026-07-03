@@ -28,17 +28,17 @@ func TestAnalyze_emptyConfigFixture(t *testing.T) {
 	assert.Contains(t, report.Summary.Raw, "Version:")
 	assert.Contains(t, report.Summary.Raw, "API:")
 
-	// Should have log-analysis findings (HTTP errors, CLI errors).
+	// Should have log-analysis findings: HTTP errors (now correlated) + CLI errors.
 	var hasHTTP, hasCLI bool
 	for _, f := range report.Findings {
-		if f.Source == SourceLogAnalysis && f.Kind == KindHTTPError {
+		if f.Source == SourceLogAnalysis && f.Kind == KindCorrelation {
 			hasHTTP = true
 		}
 		if f.Source == SourceLogAnalysis && f.Kind == KindCLIError {
 			hasCLI = true
 		}
 	}
-	assert.True(t, hasHTTP, "expected HTTP error finding")
+	assert.True(t, hasHTTP, "expected correlated HTTP error finding")
 	assert.True(t, hasCLI, "expected CLI error finding")
 
 	// Should have result findings (exit code, error code).
@@ -69,10 +69,10 @@ func TestAnalyze_wrongEnvironmentFixture(t *testing.T) {
 	}
 	assert.True(t, hasExit)
 
-	// 401 Unauthorized should appear as HTTP error.
+	// 401 Unauthorized should appear as a correlated HTTP finding.
 	var hasHTTP bool
 	for _, f := range report.Findings {
-		if f.Kind == KindHTTPError && strings.Contains(f.Message, "401 Unauthorized") {
+		if f.Kind == KindCorrelation && strings.Contains(f.Message, "401 Unauthorized") {
 			hasHTTP = true
 		}
 	}
@@ -91,7 +91,9 @@ func TestAnalyze_noHeaderFooter(t *testing.T) {
 
 	assert.Empty(t, report.Summary.Fields)
 	require.Len(t, report.Findings, 2)
-	assert.Equal(t, KindHTTPError, report.Findings[0].Kind)
+	// DefaultLogChecks runs correlation first, then CLI error events.
+	assert.Equal(t, KindCorrelation, report.Findings[0].Kind)
+	assert.Contains(t, report.Findings[0].Message, "500 Internal Server Error")
 	assert.Equal(t, KindCLIError, report.Findings[1].Kind)
 }
 

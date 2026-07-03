@@ -155,7 +155,7 @@ func (c connectivityStatus) Findings() []diagnosis.Finding {
 	if c.Summary.Failed {
 		return []diagnosis.Finding{{
 			Source:   diagnosis.SourceConnectivity,
-			Kind:     "connectivity",
+			Kind:     diagnosis.KindConnectivity,
 			Severity: diagnosis.SeverityError,
 			Message:  "Connection issues discovered",
 			Details:  []string{c.Summary.FailureText},
@@ -179,7 +179,7 @@ func (c connectivityStatus) Findings() []diagnosis.Finding {
 
 	return []diagnosis.Finding{{
 		Source:   diagnosis.SourceConnectivity,
-		Kind:     "connectivity",
+		Kind:     diagnosis.KindConnectivity,
 		Severity: diagnosis.SeverityInfo,
 		Message:  "Connection successfully verified",
 		Fields:   fields,

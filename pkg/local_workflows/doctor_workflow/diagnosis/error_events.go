@@ -2,7 +2,6 @@ package diagnosis
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -12,10 +11,9 @@ const (
 	failedPrefix   = "Failed "
 )
 
-// responseRe matches an HTTP response line with a 4xx/5xx status.
-var responseRe = regexp.MustCompile(`^< response \[0x[0-9a-fA-F]+\]:\s*[45]\d{2}\b`)
-
-// ErrorEventCheck detects HTTP errors and CLI error lines in log body.
+// ErrorEventCheck detects CLI error lines in the log body. HTTP request/response
+// errors are handled by CorrelationCheck (which produces richer, correlated
+// findings), so this check deliberately does not classify response lines.
 type ErrorEventCheck struct{}
 
 func (c *ErrorEventCheck) Name() string { return "error-events" }
@@ -41,6 +39,7 @@ func (c *ErrorEventCheck) Analyze(body []ParsedLine) []Finding {
 			Severity: SeverityError,
 			Message:  line.Message,
 			Subject:  fmt.Sprintf("L%d", line.Number),
+			Lines:    []int{line.Number},
 		})
 
 		if len(findings) == maxHighlights {
@@ -50,15 +49,13 @@ func (c *ErrorEventCheck) Analyze(body []ParsedLine) []Finding {
 	return findings
 }
 
-// classifyBodyLine returns the finding kind for a body line, or "" when
-// the line is not notable. Only prefixed CLI lines are considered.
-func classifyBodyLine(line ParsedLine) string {
+// classifyBodyLine returns the finding kind for a body line, or "" when the line
+// is not a CLI error. Only prefixed CLI lines are considered.
+func classifyBodyLine(line ParsedLine) Kind {
 	if !line.HasCLIPrefix {
 		return ""
 	}
 	switch {
-	case responseRe.MatchString(line.Message):
-		return KindHTTPError
 	case strings.HasPrefix(line.Message, cliErrorPrefix), strings.HasPrefix(line.Message, failedPrefix):
 		return KindCLIError
 	}

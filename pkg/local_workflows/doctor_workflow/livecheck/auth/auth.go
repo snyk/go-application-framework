@@ -68,17 +68,17 @@ func whoamiConfig(base configuration.Configuration) configuration.Configuration 
 // Findings maps the auth status into the generic contract (Source = auth).
 func (a AuthStatus) Findings() []diagnosis.Finding {
 	if a.OK {
-		return []diagnosis.Finding{diagnosis.Finding{
+		return []diagnosis.Finding{{
 			Source:   diagnosis.SourceAuth,
-			Kind:     "authentication",
+			Kind:     diagnosis.KindAuth,
 			Severity: diagnosis.SeverityInfo,
 			Message:  "Successfully authenticated",
 			Fields:   map[string]string{"user": a.Identity},
 		}}
 	}
-	return []diagnosis.Finding{diagnosis.Finding{
+	return []diagnosis.Finding{{
 		Source:   diagnosis.SourceAuth,
-		Kind:     "authentication",
+		Kind:     diagnosis.KindAuth,
 		Severity: diagnosis.SeverityError,
 		Message:  "Failed to verify authentication",
 		Details:  []string{a.ErrorMessage},

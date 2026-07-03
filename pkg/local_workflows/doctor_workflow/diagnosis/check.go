@@ -6,7 +6,9 @@ type LogCheck interface {
 	Analyze(body []ParsedLine) []Finding
 }
 
-// DefaultLogChecks returns the standard set of log checks.
+// DefaultLogChecks returns the standard set of log checks. CorrelationCheck owns
+// HTTP request/response findings (rich, correlated); ErrorEventCheck covers the
+// remaining CLI error lines.
 func DefaultLogChecks() []LogCheck {
-	return []LogCheck{&ErrorEventCheck{}}
+	return []LogCheck{&CorrelationCheck{}, &ErrorEventCheck{}}
 }

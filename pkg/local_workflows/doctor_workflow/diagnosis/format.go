@@ -84,9 +84,9 @@ func writeFinding(write func(string, ...interface{}), f Finding) {
 
 // extraSources returns, in first-seen order, the finding sources beyond the two
 // core log sections, so new producers surface without formatter changes.
-func extraSources(findings []Finding) []string {
-	seen := map[string]bool{SourceLogAnalysis: true, SourceCLIResult: true}
-	var sources []string
+func extraSources(findings []Finding) []Source {
+	seen := map[Source]bool{SourceLogAnalysis: true, SourceCLIResult: true}
+	var sources []Source
 	for _, f := range findings {
 		if !seen[f.Source] {
 			seen[f.Source] = true
@@ -98,14 +98,14 @@ func extraSources(findings []Finding) []string {
 
 // sourceTitle maps a source to a friendly section header, falling back to the
 // raw source label for unknown producers.
-func sourceTitle(source string) string {
+func sourceTitle(source Source) string {
 	switch source {
 	case SourceConnectivity:
 		return "Connectivity"
 	case SourceAuth:
 		return "Authentication"
 	default:
-		return source
+		return string(source)
 	}
 }
 
@@ -114,7 +114,7 @@ func FormatJSON(w io.Writer, report *DoctorReport) error {
 	return json.NewEncoder(w).Encode(report)
 }
 
-func filterBySource(findings []Finding, source string) []Finding {
+func filterBySource(findings []Finding, source Source) []Finding {
 	var result []Finding
 	for _, f := range findings {
 		if f.Source == source {

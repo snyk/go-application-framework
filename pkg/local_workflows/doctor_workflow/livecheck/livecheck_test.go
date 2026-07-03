@@ -32,26 +32,25 @@ const sampleConnectivityJSON = `{
 func TestRun(t *testing.T) {
 	authOKFinding := diagnosis.Finding{
 		Source:   diagnosis.SourceAuth,
-		Kind:     "authentication",
+		Kind:     diagnosis.KindAuth,
 		Severity: diagnosis.SeverityInfo,
-		Message:  "Authenticated as user@snyk.io",
-		Fields:   map[string]string{"identity": "user@snyk.io"},
+		Message:  "Successfully authenticated",
+		Fields:   map[string]string{"user": "user@snyk.io"},
 	}
 	authFailFinding := diagnosis.Finding{
 		Source:   diagnosis.SourceAuth,
-		Kind:     "authentication",
+		Kind:     diagnosis.KindAuth,
 		Severity: diagnosis.SeverityError,
 		Message:  "Failed to verify authentication",
 		Details:  []string{"authentication error (status: 401)"},
 	}
 	connectivityOKFinding := diagnosis.Finding{
 		Source:   diagnosis.SourceConnectivity,
-		Kind:     "connectivity",
+		Kind:     diagnosis.KindConnectivity,
 		Severity: diagnosis.SeverityInfo,
-		Message:  "Hosts: 2/2 reachable",
+		Message:  "Connection successfully verified",
 		Fields: map[string]string{
 			"proxy": "none detected",
-			"token": "configured",
 			"hosts": "2/2 reachable",
 		},
 		Details: []string{
@@ -61,9 +60,9 @@ func TestRun(t *testing.T) {
 	}
 	connectivityFailFinding := diagnosis.Finding{
 		Source:   diagnosis.SourceConnectivity,
-		Kind:     "connectivity",
+		Kind:     diagnosis.KindConnectivity,
 		Severity: diagnosis.SeverityError,
-		Message:  "Failed to run connectivity check",
+		Message:  "Connection issues discovered",
 		Details:  []string{"connectivity check failed"},
 	}
 

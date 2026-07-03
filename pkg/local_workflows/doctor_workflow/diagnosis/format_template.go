@@ -82,8 +82,9 @@ func doctorFuncMap() template.FuncMap {
 		"divider": presenters.RenderDivider,
 		"tip":     func(s string) string { return presenters.RenderTip(s + "\n") },
 
-		// String helpers.
-		"toUpper":    strings.ToUpper,
+		// String helpers. toUpper accepts any so it works on named string types
+		// (e.g. Kind) as well as plain strings.
+		"toUpper":    func(v any) string { return strings.ToUpper(fmt.Sprint(v)) },
 		"capitalize": cases.Title(language.English).String,
 		"trimRight":  func(s string) string { return strings.TrimRight(s, " ") },
 		"join":       strings.Join,

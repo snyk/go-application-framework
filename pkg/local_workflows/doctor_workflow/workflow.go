@@ -68,6 +68,16 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		}
 	}
 
+	// Record where the report came from, so findings are traceable to their origin.
+	switch {
+	case inputPath != "":
+		report.Source = &diagnosis.SourceInfo{Kind: diagnosis.SourceKindLogFile, Path: inputPath}
+	case isAnalyzeDebugLogs:
+		report.Source = &diagnosis.SourceInfo{Kind: diagnosis.SourceKindStdin}
+	default:
+		report.Source = &diagnosis.SourceInfo{Kind: diagnosis.SourceKindLive}
+	}
+
 	// 2. Live checks touch the current environment. They run when requested via
 	// --live, or by default for a bare invocation (no log to analyze).
 	if shouldDoLiveChecks {

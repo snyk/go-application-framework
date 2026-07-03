@@ -9,22 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestErrorEventCheck_detectsHTTPErrors(t *testing.T) {
-	lines := []ParsedLine{
-		{Number: 1, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized", HasCLIPrefix: true},
-		{Number: 2, Message: "< response [0x2b3cd0a17cc0]: 500 Internal Server Error", HasCLIPrefix: true},
-	}
-
-	check := &ErrorEventCheck{}
-	findings := check.Analyze(lines)
-
-	require.Len(t, findings, 2)
-	assert.Equal(t, KindHTTPError, findings[0].Kind)
-	assert.Equal(t, SourceLogAnalysis, findings[0].Source)
-	assert.Equal(t, SeverityError, findings[0].Severity)
-	assert.Equal(t, "L1", findings[0].Subject)
-}
-
 func TestErrorEventCheck_detectsCLIErrors(t *testing.T) {
 	lines := []ParsedLine{
 		{Number: 1, Message: "< error: Authentication error", HasCLIPrefix: true},
@@ -36,13 +20,18 @@ func TestErrorEventCheck_detectsCLIErrors(t *testing.T) {
 
 	require.Len(t, findings, 2)
 	assert.Equal(t, KindCLIError, findings[0].Kind)
+	assert.Equal(t, SourceLogAnalysis, findings[0].Source)
+	assert.Equal(t, SeverityError, findings[0].Severity)
+	assert.Equal(t, "L1", findings[0].Subject)
+	assert.Equal(t, []int{1}, findings[0].Lines)
 	assert.Equal(t, KindCLIError, findings[1].Kind)
 }
 
-func TestErrorEventCheck_successfulResponsesNotHighlighted(t *testing.T) {
+func TestErrorEventCheck_ignoresResponseLines(t *testing.T) {
+	// HTTP responses are handled by CorrelationCheck, not this check.
 	lines := []ParsedLine{
-		{Number: 1, Message: "< response [0x2b3cd0a17cc0]: 200 OK", HasCLIPrefix: true},
-		{Number: 2, Message: "< response [0x2b3cd0a17cc0]: 304 Not Modified", HasCLIPrefix: true},
+		{Number: 1, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized", HasCLIPrefix: true},
+		{Number: 2, Message: "< response [0x2b3cd0a17cc0]: 200 OK", HasCLIPrefix: true},
 	}
 
 	check := &ErrorEventCheck{}
@@ -63,7 +52,7 @@ func TestErrorEventCheck_dedupesRepeatedEvents(t *testing.T) {
 	for i := range lines {
 		lines[i] = ParsedLine{
 			Number:       i + 1,
-			Message:      "< response [0x2b3cd0a17cc0]: 401 Unauthorized",
+			Message:      "< error: Authentication error",
 			HasCLIPrefix: true,
 		}
 	}
@@ -91,34 +80,36 @@ func TestErrorEventCheck_highlightCap(t *testing.T) {
 	assert.Len(t, findings, maxHighlights)
 }
 
-func TestErrorEventCheck_responseRequiresStatusLineShape(t *testing.T) {
-	lines := []ParsedLine{
-		{Number: 1, Message: "sending response to: 404 handler", HasCLIPrefix: true},
-		{Number: 2, Message: "< response [0xbbb]: 503 Service Unavailable", HasCLIPrefix: true},
-	}
-
-	check := &ErrorEventCheck{}
-	findings := check.Analyze(lines)
-
-	require.Len(t, findings, 1)
-	assert.Equal(t, KindHTTPError, findings[0].Kind)
-	assert.Contains(t, findings[0].Message, "503 Service Unavailable")
-}
-
 func TestDefaultLogChecks(t *testing.T) {
 	checks := DefaultLogChecks()
-	require.Len(t, checks, 1)
-	assert.Equal(t, "error-events", checks[0].Name())
+	require.Len(t, checks, 2)
+	assert.Equal(t, "http-correlation", checks[0].Name())
+	assert.Equal(t, "error-events", checks[1].Name())
 
-	// Verify it finds events in a realistic log snippet.
+	// A realistic snippet: an HTTP error (correlation) and a CLI error (events).
 	log := strings.Join([]string{
 		"2026-06-10T13:10:38Z main - < response [0x2b3cd0a17cc0]: 401 Unauthorized",
 		"2026-06-10T13:10:38Z main - < error: something broke",
 	}, "\n")
 	parsed, err := ParseLines(strings.NewReader(log))
 	require.NoError(t, err)
-
 	_, body, _ := SplitSections(parsed)
-	findings := checks[0].Analyze(body)
-	assert.Len(t, findings, 2)
+
+	var findings []Finding
+	for _, c := range checks {
+		findings = append(findings, c.Analyze(body)...)
+	}
+
+	var hasCorrelation, hasCLI bool
+	for _, f := range findings {
+		switch f.Kind {
+		case KindCorrelation:
+			hasCorrelation = true
+		case KindCLIError:
+			hasCLI = true
+		default:
+		}
+	}
+	assert.True(t, hasCorrelation, "expected correlation finding for the 401")
+	assert.True(t, hasCLI, "expected CLI error finding")
 }

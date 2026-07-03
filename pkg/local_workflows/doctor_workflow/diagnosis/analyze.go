@@ -40,6 +40,9 @@ func Analyze(ctx context.Context, r io.Reader, checks []LogCheck) (*DoctorReport
 
 	findings = append(findings, parseResultFindings(footer)...)
 
+	// Suppress findings that reflect normal CLI behavior (e.g. feature-flag 403s).
+	findings = refineFindings(findings)
+
 	return &DoctorReport{
 		SchemaVersion: SchemaVersion,
 		Summary:       summary,
@@ -93,6 +96,7 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 				Severity: sev,
 				Message:  ln.Message,
 				Subject:  fmt.Sprintf("L%d", ln.Number),
+				Lines:    []int{ln.Number},
 				Fields:   map[string]string{"exitCode": codeStr},
 			})
 
@@ -103,6 +107,7 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 				Severity: SeverityError,
 				Message:  ln.Message,
 				Subject:  fmt.Sprintf("L%d", ln.Number),
+				Lines:    []int{ln.Number},
 				Code:     extractSnykCode(msg),
 			})
 
