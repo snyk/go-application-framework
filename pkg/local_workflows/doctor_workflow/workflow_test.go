@@ -10,10 +10,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	connectivitycheck "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -70,6 +72,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 	assert.Contains(t, rendered, "Notable Events")
 	assert.Contains(t, rendered, "401 Unauthorized")
 	assert.Contains(t, rendered, "Exit Code:")
+	assert.NotContains(t, rendered, "Connectivity")
 }
 
 func Test_runDoctor_readsPipedStdin(t *testing.T) {
@@ -82,17 +85,23 @@ func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	assert.True(t, ok)
 	rendered := string(payload)
 	assert.Contains(t, rendered, "Notable Events")
+	assert.NotContains(t, rendered, "Connectivity")
 }
 
-func Test_runDoctor_gathersAuthContext(t *testing.T) {
+func Test_runDoctor_gathersLiveContextWithLiveFlag(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(liveFlag, true)
 
 	ctx := setupMockContext(t, config)
 	engine := mocks.NewMockEngine(gomock.NewController(t))
-	engine.EXPECT().
-		Invoke(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	gomock.InOrder(
+		engine.EXPECT().
+			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
+		engine.EXPECT().
+			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+			Return([]workflow.Data{connectivityData(sampleConnectivityJSON)}, nil),
+	)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
 	output, err := runDoctor(ctx, strings.NewReader(sampleLog), false)
@@ -102,29 +111,34 @@ func Test_runDoctor_gathersAuthContext(t *testing.T) {
 	payload, ok := output[0].GetPayload().([]byte)
 	require.True(t, ok)
 	rendered := string(payload)
+	assert.Contains(t, rendered, "Notable Events")
 	assert.Contains(t, rendered, "Authentication")
 	assert.Contains(t, rendered, "Authenticated as user@snyk.io")
+	assert.Contains(t, rendered, "Connectivity")
+	assert.Contains(t, rendered, "Hosts: 2/2 reachable")
 }
 
 func whoAmIData(payload string) workflow.Data {
-	// whoami (without --json) returns the username as a plain string payload.
 	return workflow.NewData(
-		workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("whoami"), "whoami"),
+		workflow.NewTypeIdentifier(auth.WhoAmIWorkflowID, "whoami"),
 		"text/plain",
 		payload,
 	)
 }
 
 func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
-	// No --input and stdin is a terminal (no pipe): nothing to analyze, so the
-	// live checks run by default instead of erroring.
 	config := configuration.NewWithOpts()
 
 	ctx := setupMockContext(t, config)
 	engine := mocks.NewMockEngine(gomock.NewController(t))
-	engine.EXPECT().
-		Invoke(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	gomock.InOrder(
+		engine.EXPECT().
+			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
+		engine.EXPECT().
+			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+			Return([]workflow.Data{connectivityData(sampleConnectivityJSON)}, nil),
+	)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
 	output, err := runDoctor(ctx, strings.NewReader(""), true)
@@ -133,7 +147,54 @@ func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
 
 	payload, ok := output[0].GetPayload().([]byte)
 	require.True(t, ok)
-	assert.Contains(t, string(payload), "Authenticated as user@snyk.io")
+	rendered := string(payload)
+	assert.Contains(t, rendered, "Authenticated as user@snyk.io")
+	assert.Contains(t, rendered, "Hosts: 2/2 reachable")
+}
+
+func Test_runDoctor_continuesWhenConnectivityFails(t *testing.T) {
+	config := configuration.NewWithOpts()
+
+	ctx := setupMockContext(t, config)
+	engine := mocks.NewMockEngine(gomock.NewController(t))
+	gomock.InOrder(
+		engine.EXPECT().
+			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
+		engine.EXPECT().
+			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+			Return(nil, assert.AnError),
+	)
+	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+
+	output, err := runDoctor(ctx, strings.NewReader(""), true)
+	require.NoError(t, err)
+
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok)
+	rendered := string(payload)
+	assert.Contains(t, rendered, "Failed to run connectivity check")
+}
+
+const sampleConnectivityJSON = `{
+  "proxyConfig": {"detected": false},
+  "hostResults": [
+    {"host": "api.snyk.io", "status": 0},
+    {"host": "app.snyk.io", "status": 1}
+  ],
+  "todos": [],
+  "organizations": [
+    {"slug": "my-org", "isDefault": true}
+  ],
+  "tokenPresent": true
+}`
+
+func connectivityData(payload string) workflow.Data {
+	return workflow.NewData(
+		workflow.NewTypeIdentifier(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, "connectivity-check"),
+		"application/json",
+		[]byte(payload),
+	)
 }
 
 func Test_runDoctor_missingInputFile(t *testing.T) {
