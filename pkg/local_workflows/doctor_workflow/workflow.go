@@ -7,6 +7,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -43,6 +44,11 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 			return nil, err
 		}
 		logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
+	} else {
+		report.Summary.Fields = []diagnosis.KeyValue{
+			{"Version", invocationCtx.GetRuntimeInfo().GetVersion()},
+			{"API", config.GetString(configuration.API_URL)},
+		}
 	}
 
 	// 2. Live checks touch the current environment. They run when requested via
