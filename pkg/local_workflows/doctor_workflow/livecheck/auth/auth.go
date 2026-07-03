@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -36,6 +37,19 @@ type AuthStatus struct {
 // the identity; error/empty is a failure. The call is bounded by authCheckTimeout
 // via WithContext so a hung request cancels rather than blocking doctor.
 func Check(invocationCtx workflow.InvocationContext) AuthStatus {
+	// check if credentials exist
+	fakeRequest := &http.Request{
+		URL:    invocationCtx.GetConfiguration().GetUrl(configuration.API_URL),
+		Header: make(http.Header),
+	}
+	err := invocationCtx.GetNetworkAccess().AddHeaders(fakeRequest)
+	if err == nil {
+		if _, ok := fakeRequest.Header["Authorization"]; !ok {
+			return AuthStatus{ErrorMessage: "The application is not authenticated."}
+		}
+	}
+
+	// check if credentials are valid
 	ctx, cancel := context.WithTimeout(invocationCtx.Context(), authCheckTimeout)
 	defer cancel()
 
@@ -44,6 +58,7 @@ func Check(invocationCtx workflow.InvocationContext) AuthStatus {
 		workflow.WithConfig(whoamiConfig(invocationCtx.GetConfiguration())),
 		workflow.WithContext(ctx),
 	)
+
 	if err != nil {
 		return AuthStatus{ErrorMessage: err.Error()}
 	}
@@ -80,7 +95,7 @@ func (a AuthStatus) Findings() []diagnosis.Finding {
 		Producer: diagnosis.ProducerAuth,
 		Kind:     diagnosis.KindAuthFailure,
 		Severity: diagnosis.SeverityError,
-		Message:  "Failed to verify authentication",
-		Details:  []string{a.ErrorMessage},
+		Title:    "Failed to verify authentication",
+		Message:  a.ErrorMessage,
 	}}
 }
