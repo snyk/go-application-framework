@@ -1,4 +1,4 @@
-package livecheck
+package auth
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
@@ -58,7 +59,7 @@ func TestCheckAuth(t *testing.T) {
 			ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-			assert.Equal(t, tt.want, checkAuth(ctx))
+			assert.Equal(t, tt.want, Check(ctx))
 		})
 	}
 }
@@ -76,17 +77,19 @@ func TestWhoamiConfig_forcesJSONOff(t *testing.T) {
 }
 
 func TestAuthStatus_finding(t *testing.T) {
-	ok := AuthStatus{OK: true, Identity: "user@snyk.io"}.finding()
-	assert.Equal(t, diagnosis.SourceAuth, ok.Source)
-	assert.Equal(t, diagnosis.SeverityInfo, ok.Severity)
-	assert.Contains(t, ok.Message, "user@snyk.io")
-	assert.Equal(t, "user@snyk.io", ok.Fields["identity"])
+	ok := AuthStatus{OK: true, Identity: "user@snyk.io"}.Findings()
+	require.Len(t, ok, 1)
+	assert.Equal(t, diagnosis.SourceAuth, ok[0].Source)
+	assert.Equal(t, diagnosis.SeverityInfo, ok[0].Severity)
+	assert.Contains(t, ok[0].Message, "user@snyk.io")
+	assert.Equal(t, "user@snyk.io", ok[0].Fields["identity"])
 
-	failed := AuthStatus{ErrorMessage: "Authentication error"}.finding()
-	assert.Equal(t, diagnosis.SourceAuth, failed.Source)
-	assert.Equal(t, diagnosis.SeverityError, failed.Severity)
-	assert.Contains(t, failed.Message, "Failed to verify authentication")
-	assert.Contains(t, failed.Details, "Authentication error")
+	failed := AuthStatus{ErrorMessage: "Authentication error"}.Findings()
+	require.Len(t, failed, 1)
+	assert.Equal(t, diagnosis.SourceAuth, failed[0].Source)
+	assert.Equal(t, diagnosis.SeverityError, failed[0].Severity)
+	assert.Contains(t, failed[0].Message, "Failed to verify authentication")
+	assert.Contains(t, failed[0].Details, "Authentication error")
 }
 
 func whoAmIData(payload string) workflow.Data {

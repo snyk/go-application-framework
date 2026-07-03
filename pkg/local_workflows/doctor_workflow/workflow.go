@@ -45,9 +45,8 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
 	}
 
-	// 2. Live checks (auth now, connectivity later) touch the current environment.
-	// They run when requested via --live, or by default for a bare invocation
-	// (no log to analyze). They append to the same findings stream.
+	// 2. Live checks touch the current environment. They run when requested via
+	// --live, or by default for a bare invocation (no log to analyze).
 	if shouldDoLiveChecks {
 		live := livecheck.Run(invocationCtx)
 		report.Findings = append(report.Findings, live...)
