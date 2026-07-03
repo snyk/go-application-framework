@@ -9,6 +9,8 @@ import (
 	"text/template"
 
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
 )
@@ -82,6 +84,7 @@ func doctorFuncMap() template.FuncMap {
 
 		// String helpers.
 		"toUpper":    strings.ToUpper,
+		"capitalize": cases.Title(language.English).String,
 		"trimRight":  func(s string) string { return strings.TrimRight(s, " ") },
 		"join":       strings.Join,
 		"splitLines": func(s string) []string { return strings.Split(s, "\n") },

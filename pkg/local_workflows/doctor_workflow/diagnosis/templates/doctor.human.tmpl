@@ -3,10 +3,17 @@
 {{- if .Subject }}
 Occurrences: {{ .Subject }}
 {{- end -}}
+
+{{- if .Subject }}
+  Occurrences: {{ .Subject }}
+{{- end -}}
+{{- range $k, $v := .Fields }}
+  {{ capitalize $k }}: {{ $v }}
+{{- end -}}
 {{- range .Remediation }}
 → {{ . }}
 {{- end -}}
-{{- "\n" }}
+{{- "\n\n" }}
 {{- end -}}
 
 {{- define "main" -}}
