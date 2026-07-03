@@ -36,7 +36,7 @@ func TestCorrelation_joinsBySnykRequestID(t *testing.T) {
 
 	f := onlyFinding(t, (&CorrelationCheck{}).Analyze(body))
 
-	assert.Equal(t, SourceLogAnalysis, f.Source)
+	assert.Equal(t, ProducerLogAnalysis, f.Producer)
 	assert.Equal(t, KindCorrelation, f.Kind)
 	assert.Equal(t, SeverityError, f.Severity)
 	assert.Equal(t, "snyk-request-id", f.Fields[FieldCorrelatedBy])
@@ -44,8 +44,9 @@ func TestCorrelation_joinsBySnykRequestID(t *testing.T) {
 	assert.Equal(t, "403", f.Fields[FieldStatus])
 	assert.Equal(t, "e2c8b236-5252-4dbe-a276-513cdb81fad9", f.Fields[FieldSnykRequestID])
 	assert.Contains(t, f.Fields[FieldURL], "scanUsrLibJars")
-	assert.Contains(t, f.Fields[FieldReason], "doesn't have 'scan-usr-lib-jars' feature enabled")
-	assert.Contains(t, f.Message, "403 Forbidden: GET")
+	// Summary is the title; the decoded reason is the message.
+	assert.Contains(t, f.Title, "403 Forbidden: GET")
+	assert.Contains(t, f.Message, "doesn't have 'scan-usr-lib-jars' feature enabled")
 	// Lines span the request line + response status + body rows (header rows are
 	// used only to extract the Snyk-Request-Id, not tracked as finding lines).
 	assert.Equal(t, []int{446, 448, 450}, f.Lines)
@@ -74,10 +75,10 @@ func TestCorrelation_akamaiEdgeBlockNoRequestID(t *testing.T) {
 	assert.Equal(t, "PUT", f.Fields[FieldMethod])
 	assert.Equal(t, "akamai", f.Fields[FieldEdge])
 	assert.Equal(t, "18.73643017.1782482311.65647328", f.Fields[FieldEdgeReference])
-	// Reason is decoded and readable - no HTML entities or tags leak through.
-	assert.Contains(t, f.Fields[FieldReason], "monitor-dependencies")
-	assert.NotContains(t, f.Fields[FieldReason], "&#")
-	assert.NotContains(t, f.Fields[FieldReason], "<")
+	// The decoded reason is the message - readable, no HTML entities or tags leak.
+	assert.Contains(t, f.Message, "monitor-dependencies")
+	assert.NotContains(t, f.Message, "&#")
+	assert.NotContains(t, f.Message, "<")
 }
 
 func TestCorrelation_adjacencyWhenUnambiguous(t *testing.T) {

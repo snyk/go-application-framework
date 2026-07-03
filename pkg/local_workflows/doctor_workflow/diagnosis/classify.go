@@ -35,5 +35,5 @@ func isFeatureFlag403(f Finding) bool {
 	if strings.Contains(f.Fields[FieldURL], "/cli-config/feature-flags/") {
 		return true
 	}
-	return strings.Contains(strings.ToLower(f.Fields[FieldReason]), "feature enabled")
+	return strings.Contains(strings.ToLower(f.Message), "feature enabled")
 }

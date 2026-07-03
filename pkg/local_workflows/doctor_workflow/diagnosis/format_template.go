@@ -118,8 +118,8 @@ func doctorFuncMap() template.FuncMap {
 
 		// Domain helpers — expose existing functions so the template can
 		// filter and group findings without Go-side layout code.
-		"filterBySource": filterBySource,
-		"extraSources":   extraSources,
-		"sourceTitle":    sourceTitle,
+		"filterByProducer": filterByProducer,
+		"extraProducers":   extraProducers,
+		"producerTitle":    producerTitle,
 	}
 }

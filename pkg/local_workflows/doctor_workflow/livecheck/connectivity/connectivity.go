@@ -154,8 +154,8 @@ func firstPayloadString(data []workflow.Data) (string, bool) {
 func (c connectivityStatus) Findings() []diagnosis.Finding {
 	if c.Summary.Failed {
 		return []diagnosis.Finding{{
-			Source:   diagnosis.SourceConnectivity,
-			Kind:     diagnosis.KindConnectivity,
+			Producer: diagnosis.ProducerConnectivity,
+			Kind:     diagnosis.KindConnectivityFailure,
 			Severity: diagnosis.SeverityError,
 			Message:  "Connection issues discovered",
 			Details:  []string{c.Summary.FailureText},
@@ -178,8 +178,8 @@ func (c connectivityStatus) Findings() []diagnosis.Finding {
 	details = append(details, c.Summary.Warnings...)
 
 	return []diagnosis.Finding{{
-		Source:   diagnosis.SourceConnectivity,
-		Kind:     diagnosis.KindConnectivity,
+		Producer: diagnosis.ProducerConnectivity,
+		Kind:     diagnosis.KindConnectivityOK,
 		Severity: diagnosis.SeverityInfo,
 		Message:  "Connection successfully verified",
 		Fields:   fields,

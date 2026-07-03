@@ -73,7 +73,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		sanityCheckResults := config_utils.CheckSanity(config)
 		for _, res := range sanityCheckResults {
 			report.Findings = append(report.Findings, diagnosis.Finding{
-				Source:   diagnosis.SourceCLIResult,
+				Producer: diagnosis.ProducerCLIResult,
 				Kind:     "config-check",
 				Title:    "Possible configuration issue",
 				Message:  res.Description,
@@ -108,7 +108,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 
 	if len(report.Findings) == 0 {
 		report.Findings = append(report.Findings, diagnosis.Finding{
-			Source:   diagnosis.SourceCLIResult,
+			Producer: diagnosis.ProducerCLIResult,
 			Kind:     "healthy",
 			Title:    "Nothing found",
 			Message:  "Nothing found",

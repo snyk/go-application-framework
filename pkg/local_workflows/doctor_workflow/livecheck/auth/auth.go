@@ -69,16 +69,16 @@ func whoamiConfig(base configuration.Configuration) configuration.Configuration 
 func (a AuthStatus) Findings() []diagnosis.Finding {
 	if a.OK {
 		return []diagnosis.Finding{{
-			Source:   diagnosis.SourceAuth,
-			Kind:     diagnosis.KindAuth,
+			Producer: diagnosis.ProducerAuth,
+			Kind:     diagnosis.KindAuthOK,
 			Severity: diagnosis.SeverityInfo,
 			Message:  "Successfully authenticated",
 			Fields:   map[string]string{"user": a.Identity},
 		}}
 	}
 	return []diagnosis.Finding{{
-		Source:   diagnosis.SourceAuth,
-		Kind:     diagnosis.KindAuth,
+		Producer: diagnosis.ProducerAuth,
+		Kind:     diagnosis.KindAuthFailure,
 		Severity: diagnosis.SeverityError,
 		Message:  "Failed to verify authentication",
 		Details:  []string{a.ErrorMessage},

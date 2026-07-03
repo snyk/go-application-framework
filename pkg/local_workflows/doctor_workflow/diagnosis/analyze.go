@@ -91,7 +91,7 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 				sev = SeverityInfo
 			}
 			findings = append(findings, Finding{
-				Source:   SourceCLIResult,
+				Producer: ProducerCLIResult,
 				Kind:     KindExitCode,
 				Severity: sev,
 				Message:  ln.Message,
@@ -102,7 +102,7 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 
 		case strings.HasPrefix(msg, errorPrefix):
 			findings = append(findings, Finding{
-				Source:   SourceCLIResult,
+				Producer: ProducerCLIResult,
 				Kind:     KindErrorCode,
 				Severity: SeverityError,
 				Message:  ln.Message,

@@ -20,7 +20,7 @@ func TestErrorEventCheck_detectsCLIErrors(t *testing.T) {
 
 	require.Len(t, findings, 2)
 	assert.Equal(t, KindCLIError, findings[0].Kind)
-	assert.Equal(t, SourceLogAnalysis, findings[0].Source)
+	assert.Equal(t, ProducerLogAnalysis, findings[0].Producer)
 	assert.Equal(t, SeverityError, findings[0].Severity)
 	assert.Equal(t, "L1", findings[0].Subject)
 	assert.Equal(t, []int{1}, findings[0].Lines)

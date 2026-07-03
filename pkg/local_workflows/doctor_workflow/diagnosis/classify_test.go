@@ -22,12 +22,12 @@ func TestIsFeatureFlag403(t *testing.T) {
 		},
 		{
 			name: "feature-flag 403 by reason (no url attributed)",
-			f:    Finding{Kind: KindCorrelation, Fields: map[string]string{FieldStatus: "403", FieldReason: "Org x doesn't have 'y' feature enabled"}},
+			f:    Finding{Kind: KindCorrelation, Message: "Org x doesn't have 'y' feature enabled", Fields: map[string]string{FieldStatus: "403"}},
 			want: true,
 		},
 		{
 			name: "edge-block 403 is not benign",
-			f:    Finding{Kind: KindCorrelation, Fields: map[string]string{FieldStatus: "403", FieldURL: "https://api.snyk.io/v1/monitor-dependencies?org=x", FieldReason: "Access Denied (Akamai)"}},
+			f:    Finding{Kind: KindCorrelation, Message: "Access Denied (Akamai)", Fields: map[string]string{FieldStatus: "403", FieldURL: "https://api.snyk.io/v1/monitor-dependencies?org=x"}},
 			want: false,
 		},
 		{

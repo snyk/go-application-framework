@@ -276,9 +276,6 @@ func buildCorrelationFinding(resp *httpResponse, req *httpRequest, correlatedBy,
 		FieldStatus:       strconv.Itoa(resp.status),
 		FieldCorrelatedBy: correlatedBy,
 	}
-	if reason != "" {
-		fields[FieldReason] = reason
-	}
 	if edge != "" {
 		fields[FieldEdge] = edge
 	}
@@ -289,26 +286,32 @@ func buildCorrelationFinding(resp *httpResponse, req *httpRequest, correlatedBy,
 		fields[FieldSnykRequestID] = resp.snykRequestID
 	}
 
-	headline := strings.TrimSpace(fmt.Sprintf("%d %s", resp.status, resp.statusText))
+	// Title is the one-line summary; Message carries the decoded "why".
+	title := strings.TrimSpace(fmt.Sprintf("%d %s", resp.status, resp.statusText))
 	lines := append([]int(nil), resp.lines...)
 	if req != nil {
 		fields[FieldMethod] = req.method
 		fields[FieldURL] = req.rawURL
-		fields[FieldRequestHandle] = req.handle
 		if _, ok := fields[FieldSnykRequestID]; !ok && req.snykRequestID != "" {
 			fields[FieldSnykRequestID] = req.snykRequestID
 		}
-		headline = fmt.Sprintf("%s: %s %s", headline, req.method, req.rawURL)
+		title = fmt.Sprintf("%s: %s %s", title, req.method, req.rawURL)
 		if req.line > 0 {
 			lines = append(lines, req.line)
 		}
 	}
 
+	message := reason
+	if message == "" {
+		message = title
+	}
+
 	return Finding{
-		Source:   SourceLogAnalysis,
+		Producer: ProducerLogAnalysis,
 		Kind:     KindCorrelation,
 		Severity: SeverityError,
-		Message:  headline,
+		Title:    title,
+		Message:  message,
 		Lines:    sortUnique(lines),
 		Fields:   fields,
 	}
@@ -432,7 +435,7 @@ func truncate(s string) string {
 }
 
 func findingDedupeKey(f Finding) string {
-	return string(f.Kind) + "|" + f.Fields[FieldMethod] + "|" + f.Fields[FieldURL] + "|" + f.Fields[FieldStatus] + "|" + f.Message
+	return string(f.Kind) + "|" + f.Title
 }
 
 func mergeLines(a, b []int) []int {

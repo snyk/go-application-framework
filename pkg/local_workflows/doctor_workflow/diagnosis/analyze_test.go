@@ -31,10 +31,10 @@ func TestAnalyze_emptyConfigFixture(t *testing.T) {
 	// Should have log-analysis findings: HTTP errors (now correlated) + CLI errors.
 	var hasHTTP, hasCLI bool
 	for _, f := range report.Findings {
-		if f.Source == SourceLogAnalysis && f.Kind == KindCorrelation {
+		if f.Producer == ProducerLogAnalysis && f.Kind == KindCorrelation {
 			hasHTTP = true
 		}
-		if f.Source == SourceLogAnalysis && f.Kind == KindCLIError {
+		if f.Producer == ProducerLogAnalysis && f.Kind == KindCLIError {
 			hasCLI = true
 		}
 	}
@@ -44,10 +44,10 @@ func TestAnalyze_emptyConfigFixture(t *testing.T) {
 	// Should have result findings (exit code, error code).
 	var hasExit, hasErrorCode bool
 	for _, f := range report.Findings {
-		if f.Source == SourceCLIResult && f.Kind == KindExitCode {
+		if f.Producer == ProducerCLIResult && f.Kind == KindExitCode {
 			hasExit = true
 		}
-		if f.Source == SourceCLIResult && f.Kind == KindErrorCode {
+		if f.Producer == ProducerCLIResult && f.Kind == KindErrorCode {
 			hasErrorCode = true
 		}
 	}

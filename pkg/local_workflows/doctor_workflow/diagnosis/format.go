@@ -18,16 +18,16 @@ func FormatText(w io.Writer, report *DoctorReport) error {
 
 	write("Snyk Doctor Diagnostic Report\n")
 
-	// Environment and Result render verbatim; findings render per source.
+	// Environment and Result render verbatim; findings render per producer.
 	writeRawSection(write, "Environment", report.Summary.Raw)
-	writeFindingsSection(write, "Notable Events", filterBySource(report.Findings, SourceLogAnalysis),
+	writeFindingsSection(write, "Notable Events", filterByProducer(report.Findings, ProducerLogAnalysis),
 		"No failing requests or CLI error entries found in the log body.")
 	writeRawSection(write, "Result", report.Result)
 
 	// Additional producers (connectivity, auth, ...) get a section each, with no
 	// per-producer formatter code.
-	for _, source := range extraSources(report.Findings) {
-		writeFindingsSection(write, sourceTitle(source), filterBySource(report.Findings, source), "")
+	for _, producer := range extraProducers(report.Findings) {
+		writeFindingsSection(write, producerTitle(producer), filterByProducer(report.Findings, producer), "")
 	}
 
 	if len(errs) > 0 {
@@ -73,7 +73,16 @@ func writeFinding(write func(string, ...interface{}), f Finding) {
 	if f.Code != "" {
 		code = " (" + f.Code + ")"
 	}
-	write("  %s[%s] %s%s\n", subject, f.Kind, strings.TrimRight(f.Message, " "), code)
+	// Title is the headline; when a distinct Message exists (the decoded reason)
+	// it renders below so the summary stays uncluttered.
+	headline := f.Title
+	if headline == "" {
+		headline = f.Message
+	}
+	write("  %s[%s] %s%s\n", subject, f.Kind, strings.TrimRight(headline, " "), code)
+	if f.Title != "" && f.Message != "" && f.Message != f.Title {
+		write("      %s\n", strings.TrimRight(f.Message, " "))
+	}
 	for _, step := range f.Remediation {
 		write("      → %s\n", step)
 	}
@@ -82,30 +91,30 @@ func writeFinding(write func(string, ...interface{}), f Finding) {
 	}
 }
 
-// extraSources returns, in first-seen order, the finding sources beyond the two
-// core log sections, so new producers surface without formatter changes.
-func extraSources(findings []Finding) []Source {
-	seen := map[Source]bool{SourceLogAnalysis: true, SourceCLIResult: true}
-	var sources []Source
+// extraProducers returns, in first-seen order, the finding producers beyond the
+// two core log sections, so new producers surface without formatter changes.
+func extraProducers(findings []Finding) []Producer {
+	seen := map[Producer]bool{ProducerLogAnalysis: true, ProducerCLIResult: true}
+	var producers []Producer
 	for _, f := range findings {
-		if !seen[f.Source] {
-			seen[f.Source] = true
-			sources = append(sources, f.Source)
+		if !seen[f.Producer] {
+			seen[f.Producer] = true
+			producers = append(producers, f.Producer)
 		}
 	}
-	return sources
+	return producers
 }
 
-// sourceTitle maps a source to a friendly section header, falling back to the
-// raw source label for unknown producers.
-func sourceTitle(source Source) string {
-	switch source {
-	case SourceConnectivity:
+// producerTitle maps a producer to a friendly section header, falling back to
+// the raw producer label for unknown producers.
+func producerTitle(producer Producer) string {
+	switch producer {
+	case ProducerConnectivity:
 		return "Connectivity"
-	case SourceAuth:
+	case ProducerAuth:
 		return "Authentication"
 	default:
-		return string(source)
+		return string(producer)
 	}
 }
 
@@ -114,10 +123,10 @@ func FormatJSON(w io.Writer, report *DoctorReport) error {
 	return json.NewEncoder(w).Encode(report)
 }
 
-func filterBySource(findings []Finding, source Source) []Finding {
+func filterByProducer(findings []Finding, producer Producer) []Finding {
 	var result []Finding
 	for _, f := range findings {
-		if f.Source == source {
+		if f.Producer == producer {
 			result = append(result, f)
 		}
 	}

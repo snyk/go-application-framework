@@ -31,22 +31,22 @@ const sampleConnectivityJSON = `{
 
 func TestRun(t *testing.T) {
 	authOKFinding := diagnosis.Finding{
-		Source:   diagnosis.SourceAuth,
-		Kind:     diagnosis.KindAuth,
+		Producer: diagnosis.ProducerAuth,
+		Kind:     diagnosis.KindAuthOK,
 		Severity: diagnosis.SeverityInfo,
 		Message:  "Successfully authenticated",
 		Fields:   map[string]string{"user": "user@snyk.io"},
 	}
 	authFailFinding := diagnosis.Finding{
-		Source:   diagnosis.SourceAuth,
-		Kind:     diagnosis.KindAuth,
+		Producer: diagnosis.ProducerAuth,
+		Kind:     diagnosis.KindAuthFailure,
 		Severity: diagnosis.SeverityError,
 		Message:  "Failed to verify authentication",
 		Details:  []string{"authentication error (status: 401)"},
 	}
 	connectivityOKFinding := diagnosis.Finding{
-		Source:   diagnosis.SourceConnectivity,
-		Kind:     diagnosis.KindConnectivity,
+		Producer: diagnosis.ProducerConnectivity,
+		Kind:     diagnosis.KindConnectivityOK,
 		Severity: diagnosis.SeverityInfo,
 		Message:  "Connection successfully verified",
 		Fields: map[string]string{
@@ -59,8 +59,8 @@ func TestRun(t *testing.T) {
 		},
 	}
 	connectivityFailFinding := diagnosis.Finding{
-		Source:   diagnosis.SourceConnectivity,
-		Kind:     diagnosis.KindConnectivity,
+		Producer: diagnosis.ProducerConnectivity,
+		Kind:     diagnosis.KindConnectivityFailure,
 		Severity: diagnosis.SeverityError,
 		Message:  "Connection issues discovered",
 		Details:  []string{"connectivity check failed"},
@@ -121,9 +121,9 @@ func TestRun(t *testing.T) {
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
 			actual := Run(ctx)
-			// compare wanted findings vs actual and focus only on source and severity
+			// compare wanted findings vs actual and focus only on producer and severity
 			for i, want := range tt.want {
-				assert.Equal(t, want.Source, actual[i].Source)
+				assert.Equal(t, want.Producer, actual[i].Producer)
 				assert.Equal(t, want.Severity, actual[i].Severity)
 			}
 		})

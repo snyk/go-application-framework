@@ -34,7 +34,7 @@ func (c *ErrorEventCheck) Analyze(body []ParsedLine) []Finding {
 		seen[line.Message] = struct{}{}
 
 		findings = append(findings, Finding{
-			Source:   SourceLogAnalysis,
+			Producer: ProducerLogAnalysis,
 			Kind:     kind,
 			Severity: SeverityError,
 			Message:  line.Message,

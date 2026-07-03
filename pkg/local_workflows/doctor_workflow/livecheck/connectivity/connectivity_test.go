@@ -111,7 +111,7 @@ func TestConnectivityStatus_findings(t *testing.T) {
 	}
 	findings := ok.Findings()
 	assert.Len(t, findings, 1)
-	assert.Equal(t, diagnosis.SourceConnectivity, findings[0].Source)
+	assert.Equal(t, diagnosis.ProducerConnectivity, findings[0].Producer)
 
 	failed := connectivityStatus{
 		Summary: connectivitySummary{Failed: true, FailureText: "network down"},

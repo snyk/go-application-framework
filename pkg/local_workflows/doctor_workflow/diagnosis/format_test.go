@@ -17,7 +17,7 @@ func TestFormatText_fullReport(t *testing.T) {
 			Raw:    "Version: 1.0.0",
 		},
 		Findings: []Finding{
-			{Source: SourceLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized"},
+			{Producer: ProducerLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized"},
 		},
 		Result: strings.Join([]string{
 			"------------ Errors ------------",
@@ -80,7 +80,7 @@ func TestFormatTemplate_fullReport(t *testing.T) {
 			Raw:    "Version: 1.0.0",
 		},
 		Findings: []Finding{
-			{Source: SourceLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized"},
+			{Producer: ProducerLogAnalysis, Lines: []int{3}, Kind: KindHTTPError, Severity: SeverityError, Message: "< response [0x2b3cd0a17cc0]: 401 Unauthorized"},
 		},
 		Result: strings.Join([]string{
 			"------------ Errors ------------",
@@ -118,11 +118,11 @@ func TestFormatTemplate_noFindings(t *testing.T) {
 	assert.Contains(t, rendered, "Symptoms")
 }
 
-func TestFormatTemplate_extraSources(t *testing.T) {
+func TestFormatTemplate_extraProducers(t *testing.T) {
 	report := &DoctorReport{
 		Findings: []Finding{
-			{Source: SourceConnectivity, Kind: "dns", Severity: SeverityWarning, Message: "DNS lookup failed"},
-			{Source: SourceAuth, Kind: "token", Severity: SeverityError, Message: "Token expired"},
+			{Producer: ProducerConnectivity, Kind: "dns", Severity: SeverityWarning, Message: "DNS lookup failed"},
+			{Producer: ProducerAuth, Kind: "token", Severity: SeverityError, Message: "Token expired"},
 		},
 	}
 
@@ -144,7 +144,7 @@ func TestFormatJSON_roundTrips(t *testing.T) {
 			Raw:    "Version: 1.0.0",
 		},
 		Findings: []Finding{
-			{Source: SourceLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "401 Unauthorized"},
+			{Producer: ProducerLogAnalysis, Subject: "L3", Kind: KindHTTPError, Severity: SeverityError, Message: "401 Unauthorized"},
 		},
 	}
 
