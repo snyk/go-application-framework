@@ -1,11 +1,8 @@
 {{- define "finding" -}}
-  {{ if .Subject }}{{ .Subject }} {{ end }}[{{ .Kind }}] {{ trimRight .Message }}{{ if .Code }} ({{ .Code }}){{ end }}
+ -  {{ if .Subject }}{{ .Subject }} {{ end }}[{{ .Kind }}] {{ trimRight .Message }}{{ if .Code }} ({{ .Code }}){{ end }}
 {{- range .Remediation }}
       → {{ . }}
 {{- end -}}
-{{- range .Details }}
-      {{ . }}
-{{- end }}
 {{- "\n" }}
 {{- end -}}
 
@@ -14,13 +11,13 @@
 {{- printf "%s" (title "Basic Information") -}}
 {{- if .Summary.Fields -}}
 {{- range .Summary.Fields -}}
-  - {{ .Key }}: {{ .Value }}{{- "\n" }}
+    - {{ .Key }}: {{ .Value }}{{- "\n" }}
 {{- end -}}
 {{- end }}
 
 {{- printf "%s" (title "Symptions") -}}
 {{- range .Findings -}}
- - {{- template "finding" . }}
+    {{ template "finding" . }}
 {{- end }}
 {{- end -}}
 
