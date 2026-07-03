@@ -2,6 +2,7 @@ package doctor_workflow
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,12 +54,21 @@ func setupMockContext(t *testing.T, config configuration.Configuration) *mocks.M
 	ri := mocks.NewMockRuntimeInfo(ctrl)
 	ri.EXPECT().GetVersion().Return("0.0.0-test").AnyTimes()
 
+	// The auth check's credential pre-check adds auth headers; inject one so it
+	// proceeds to the whoami call (no-op for non-live tests via AnyTimes).
+	netAccess := mocks.NewMockNetworkAccess(ctrl)
+	netAccess.EXPECT().AddHeaders(gomock.Any()).DoAndReturn(func(r *http.Request) error {
+		r.Header.Set("Authorization", "token test")
+		return nil
+	}).AnyTimes()
+
 	invocationContextMock := mocks.NewMockInvocationContext(ctrl)
 	invocationContextMock.EXPECT().GetConfiguration().Return(config).AnyTimes()
 	invocationContextMock.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	invocationContextMock.EXPECT().Context().Return(context.Background()).AnyTimes()
 	invocationContextMock.EXPECT().GetRuntimeInfo().Return(ri).AnyTimes()
 	invocationContextMock.EXPECT().GetUserInterface().Return(ui.DefaultUi()).AnyTimes()
+	invocationContextMock.EXPECT().GetNetworkAccess().Return(netAccess).AnyTimes()
 	return invocationContextMock
 }
 
@@ -79,7 +89,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 	rendered := string(payload)
 	assert.Contains(t, rendered, "Symptoms")
 	assert.Contains(t, rendered, "401 Unauthorized")
-	assert.Contains(t, rendered, "Exit Code:")
+	assert.Contains(t, rendered, "Exit code: 2")
 }
 
 func Test_runDoctor_readsPipedStdin(t *testing.T) {

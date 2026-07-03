@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -54,10 +55,19 @@ func TestCheckAuth(t *testing.T) {
 				Invoke(WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
 				Return(tt.invokeOut, tt.invokeErr)
 
+			// The credential pre-check adds auth headers; inject one so Check
+			// proceeds to the whoami call rather than short-circuiting.
+			netAccess := mocks.NewMockNetworkAccess(ctrl)
+			netAccess.EXPECT().AddHeaders(gomock.Any()).DoAndReturn(func(r *http.Request) error {
+				r.Header.Set("Authorization", "token test")
+				return nil
+			}).AnyTimes()
+
 			ctx := mocks.NewMockInvocationContext(ctrl)
 			ctx.EXPECT().Context().Return(context.Background()).AnyTimes()
 			ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+			ctx.EXPECT().GetNetworkAccess().Return(netAccess).AnyTimes()
 
 			assert.Equal(t, tt.want, Check(ctx))
 		})
@@ -89,7 +99,8 @@ func TestAuthStatus_finding(t *testing.T) {
 	assert.Equal(t, diagnosis.ProducerAuth, failed[0].Producer)
 	assert.Equal(t, diagnosis.KindAuthFailure, failed[0].Kind)
 	assert.Equal(t, diagnosis.SeverityError, failed[0].Severity)
-	assert.Contains(t, failed[0].Details, "Authentication error")
+	assert.Equal(t, "Failed to verify authentication", failed[0].Title)
+	assert.Equal(t, "Authentication error", failed[0].Message)
 }
 
 func whoAmIData(payload string) workflow.Data {

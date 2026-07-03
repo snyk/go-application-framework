@@ -184,6 +184,37 @@ func TestExtractSummary_cleansValues(t *testing.T) {
 	assert.Equal(t, "preview: disabled\nfips: Not available", summary.Fields[1].Value)
 }
 
+func TestParseResultFindings_cleansMessages(t *testing.T) {
+	log := strings.Join([]string{
+		"2026-06-26T13:58:20Z main - ------------ Summary ------------",
+		"2026-06-26T13:58:20Z main - ------------ Errors ------------",
+		"2026-06-26T13:58:20Z main - ERROR:                 Unspecified Error (SNYK-CLI-0000) (SNYK-CLI-0000)",
+		"2026-06-26T13:58:20Z main - Exit Code:             2",
+	}, "\n")
+
+	report, err := Analyze(context.Background(), strings.NewReader(log), DefaultLogChecks())
+	require.NoError(t, err)
+
+	var errFinding, exitFinding *Finding
+	for i := range report.Findings {
+		switch report.Findings[i].Kind {
+		case KindErrorCode:
+			errFinding = &report.Findings[i]
+		case KindExitCode:
+			exitFinding = &report.Findings[i]
+		default:
+		}
+	}
+
+	require.NotNil(t, errFinding)
+	// No column padding, no "ERROR:" prefix, and the duplicated code collapsed.
+	assert.Equal(t, "Unspecified Error (SNYK-CLI-0000)", errFinding.Message)
+	assert.Equal(t, "SNYK-CLI-0000", errFinding.Code)
+
+	require.NotNil(t, exitFinding)
+	assert.Equal(t, "Exit code: 2", exitFinding.Message)
+}
+
 func TestAnalyze_exitCodeSeverity(t *testing.T) {
 	log := strings.Join([]string{
 		"2026-06-10T13:10:38Z main - ------------ Summary ------------",

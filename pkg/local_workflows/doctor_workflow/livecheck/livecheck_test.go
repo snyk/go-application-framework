@@ -3,6 +3,7 @@ package livecheck
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -115,10 +116,19 @@ func TestRun(t *testing.T) {
 					Return(tt.connectivityOut, tt.connectivityErr),
 			)
 
+			// The auth check's credential pre-check adds auth headers; inject one
+			// so it proceeds to the whoami call rather than short-circuiting.
+			netAccess := mocks.NewMockNetworkAccess(ctrl)
+			netAccess.EXPECT().AddHeaders(gomock.Any()).DoAndReturn(func(r *http.Request) error {
+				r.Header.Set("Authorization", "token test")
+				return nil
+			}).AnyTimes()
+
 			ctx := mocks.NewMockInvocationContext(ctrl)
 			ctx.EXPECT().Context().Return(context.Background()).AnyTimes()
 			ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+			ctx.EXPECT().GetNetworkAccess().Return(netAccess).AnyTimes()
 
 			actual := Run(ctx)
 			// compare wanted findings vs actual and focus only on producer and severity

@@ -94,21 +94,22 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 				Producer: ProducerCLIResult,
 				Kind:     KindExitCode,
 				Severity: sev,
-				Message:  ln.Message,
+				Message:  "Exit code: " + codeStr,
 				Subject:  fmt.Sprintf("L%d", ln.Number),
 				Lines:    []int{ln.Number},
 				Fields:   map[string]string{"exitCode": codeStr},
 			})
 
 		case strings.HasPrefix(msg, errorPrefix):
+			code := extractSnykCode(msg)
 			findings = append(findings, Finding{
 				Producer: ProducerCLIResult,
 				Kind:     KindErrorCode,
 				Severity: SeverityError,
-				Message:  ln.Message,
+				Message:  cleanErrorMessage(msg, code),
 				Subject:  fmt.Sprintf("L%d", ln.Number),
 				Lines:    []int{ln.Number},
-				Code:     extractSnykCode(msg),
+				Code:     code,
 			})
 
 		default:
@@ -125,4 +126,16 @@ func extractSnykCode(msg string) string {
 		return m[1]
 	}
 	return ""
+}
+
+// cleanErrorMessage turns a raw "ERROR:" footer line into a concise message:
+// drops the redundant "ERROR:" label (the Kind already conveys it), collapses
+// the CLI's column padding, and removes a duplicated trailing code.
+func cleanErrorMessage(msg, code string) string {
+	text := normalizeSpace(strings.TrimPrefix(msg, errorPrefix))
+	if code != "" {
+		suffix := "(" + code + ")"
+		text = strings.Replace(text, suffix+" "+suffix, suffix, 1)
+	}
+	return text
 }
