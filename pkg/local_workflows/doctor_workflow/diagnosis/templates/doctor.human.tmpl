@@ -8,8 +8,8 @@
 {{- if ne $title $description }}
   Description: {{ $description }}
 {{- end -}}
-{{- if .Subject -}}
-  Occurrences: {{ .Subject }}
+{{- if .Lines }}
+  Occurrences: {{ range $i, $l := .Lines }}{{ if $i }}, {{ end }}L{{ $l }}{{ end }}
 {{- end -}}
 {{- range $k, $v := .Fields }}
   {{ capitalize $k }}: {{ $v }}
