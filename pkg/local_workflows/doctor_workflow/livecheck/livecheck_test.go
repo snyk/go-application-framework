@@ -12,6 +12,7 @@ import (
 	connectivitycheck "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/auth"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/connectivity"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -28,6 +29,30 @@ const sampleConnectivityJSON = `{
   ],
   "tokenPresent": true
 }`
+
+func TestRun_reusesPrestartedConnectivity(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	config := configuration.NewWithOpts()
+
+	engine := mocks.NewMockEngine(ctrl)
+	engine.EXPECT().
+		Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	engine.EXPECT().
+		InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+		Return([]workflow.Data{connectivityData(sampleConnectivityJSON)}, nil).
+		Times(1)
+
+	ctx := mocks.NewMockInvocationContext(ctrl)
+	ctx.EXPECT().Context().Return(context.Background()).AnyTimes()
+	ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
+	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
+
+	connAsync := connectivity.StartAsync(ctx)
+	findings := Run(ctx, connAsync)
+	assert.Len(t, findings, 2)
+	assert.Equal(t, "Authenticated as user@snyk.io", findings[0].Message)
+}
 
 func TestRun(t *testing.T) {
 	authOKFinding := diagnosis.Finding{
@@ -107,21 +132,19 @@ func TestRun(t *testing.T) {
 			config := configuration.NewWithOpts()
 
 			engine := mocks.NewMockEngine(ctrl)
-			gomock.InOrder(
-				engine.EXPECT().
-					Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
-					Return(tt.whoamiOut, tt.whoamiErr),
-				engine.EXPECT().
-					InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
-					Return(tt.connectivityOut, tt.connectivityErr),
-			)
+			engine.EXPECT().
+				Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+				Return(tt.whoamiOut, tt.whoamiErr)
+			engine.EXPECT().
+				InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+				Return(tt.connectivityOut, tt.connectivityErr)
 
 			ctx := mocks.NewMockInvocationContext(ctrl)
 			ctx.EXPECT().Context().Return(context.Background()).AnyTimes()
 			ctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 			ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-			assert.Equal(t, tt.want, Run(ctx))
+			assert.Equal(t, tt.want, Run(ctx, nil))
 		})
 	}
 }

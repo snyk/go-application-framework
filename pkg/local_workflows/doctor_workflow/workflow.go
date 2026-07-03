@@ -9,6 +9,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/connectivity"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -29,6 +30,12 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	hasLiveFlag := config.GetBool(liveFlag)
 	shouldDoLiveChecks := hasLiveFlag || !isAnalyzeDebugLogs
 
+	// Start connectivity in the background while log analysis and auth run.
+	var connAsync *connectivity.AsyncCheck
+	if shouldDoLiveChecks {
+		connAsync = connectivity.StartAsync(invocationCtx)
+	}
+
 	// 1. Analyze the log when there is one; otherwise start from an empty report.
 	report := &diagnosis.DoctorReport{SchemaVersion: diagnosis.SchemaVersion}
 	if isAnalyzeDebugLogs {
@@ -48,7 +55,7 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	// 2. Live checks touch the current environment. They run when requested via
 	// --live, or by default for a bare invocation (no log to analyze).
 	if shouldDoLiveChecks {
-		live := livecheck.Run(invocationCtx)
+		live := livecheck.Run(invocationCtx, connAsync)
 		report.Findings = append(report.Findings, live...)
 		logger.Debug().Msgf("doctor: gathered %d live-check finding(s)", len(live))
 	}

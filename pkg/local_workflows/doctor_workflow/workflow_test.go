@@ -94,14 +94,12 @@ func Test_runDoctor_gathersLiveContextWithLiveFlag(t *testing.T) {
 
 	ctx := setupMockContext(t, config)
 	engine := mocks.NewMockEngine(gomock.NewController(t))
-	gomock.InOrder(
-		engine.EXPECT().
-			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
-			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
-		engine.EXPECT().
-			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
-			Return([]workflow.Data{connectivityData(sampleConnectivityJSON)}, nil),
-	)
+	engine.EXPECT().
+		Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	engine.EXPECT().
+		InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+		Return([]workflow.Data{connectivityData(sampleConnectivityJSON)}, nil)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
 	output, err := runDoctor(ctx, strings.NewReader(sampleLog), false)
@@ -131,14 +129,12 @@ func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
 
 	ctx := setupMockContext(t, config)
 	engine := mocks.NewMockEngine(gomock.NewController(t))
-	gomock.InOrder(
-		engine.EXPECT().
-			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
-			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
-		engine.EXPECT().
-			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
-			Return([]workflow.Data{connectivityData(sampleConnectivityJSON)}, nil),
-	)
+	engine.EXPECT().
+		Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	engine.EXPECT().
+		InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+		Return([]workflow.Data{connectivityData(sampleConnectivityJSON)}, nil)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
 	output, err := runDoctor(ctx, strings.NewReader(""), true)
@@ -157,14 +153,12 @@ func Test_runDoctor_continuesWhenConnectivityFails(t *testing.T) {
 
 	ctx := setupMockContext(t, config)
 	engine := mocks.NewMockEngine(gomock.NewController(t))
-	gomock.InOrder(
-		engine.EXPECT().
-			Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
-			Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil),
-		engine.EXPECT().
-			InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
-			Return(nil, assert.AnError),
-	)
+	engine.EXPECT().
+		Invoke(auth.WhoAmIWorkflowID, gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{whoAmIData("user@snyk.io")}, nil)
+	engine.EXPECT().
+		InvokeWithConfig(connectivitycheck.WORKFLOWID_CONNECTIVITY_CHECK, gomock.Any()).
+		Return(nil, assert.AnError)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
 	output, err := runDoctor(ctx, strings.NewReader(""), true)
