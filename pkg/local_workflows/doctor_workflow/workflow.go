@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"slices"
+	"sort"
 
 	"golang.org/x/term"
 
@@ -97,6 +99,12 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		report.Findings = append(report.Findings, live...)
 		logger.Debug().Msgf("doctor: gathered %d live-check finding(s)", len(live))
 	}
+
+	// introduce sorting of findings based on severity
+	severityOrder := []diagnosis.Severity{diagnosis.SeverityError, diagnosis.SeverityWarning, diagnosis.SeverityInfo}
+	sort.Slice(report.Findings, func(i, j int) bool {
+		return slices.Index(severityOrder, report.Findings[i].Severity) < slices.Index(severityOrder, report.Findings[j].Severity)
+	})
 
 	if len(report.Findings) == 0 {
 		report.Findings = append(report.Findings, diagnosis.Finding{
