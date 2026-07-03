@@ -10,6 +10,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -21,6 +22,12 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	ctx := invocationCtx.Context()
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
+	userInterface := invocationCtx.GetUserInterface()
+
+	progressbar := userInterface.NewProgressBar()
+	progressbar.SetTitle("Examining ...")
+	progressbar.UpdateProgress(uitypes.InfiniteProgress)
+	defer progressbar.Clear()
 
 	inputPath := config.GetString(inputFlag)
 	// A log is available from --input or from a pipe (stdin is not a terminal).
