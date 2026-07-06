@@ -188,6 +188,37 @@ func TestParseResultFindings_cleansMessages(t *testing.T) {
 	assert.Equal(t, "Exit code: 2", exitFinding.Message)
 }
 
+func TestParseResultFindings_extractsErrorDescription(t *testing.T) {
+	log := strings.Join([]string{
+		"2026-06-26T13:58:42Z main - ------------ Summary ------------",
+		"2026-06-26T13:58:42Z main - ------------ Errors ------------",
+		"2026-06-26T13:58:42Z main - ERROR:                 Unspecified Error (SNYK-CLI-0000)",
+		"2026-06-26T13:58:42Z main -   Links:               ",
+		"2026-06-26T13:58:42Z main -                        https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-cli-0000",
+		"2026-06-26T13:58:42Z main -",
+		"2026-06-26T13:58:42Z main -   Instance 1:",
+		"2026-06-26T13:58:42Z main -                        Server returned unexpected error for the monitor request. Status code: 403",
+		"2026-06-26T13:58:42Z main - Exit Code:             2",
+	}, "\n")
+
+	report, err := Analyze(context.Background(), strings.NewReader(log), DefaultLogChecks())
+	require.NoError(t, err)
+
+	var errFinding *Finding
+	for i := range report.Findings {
+		if report.Findings[i].Kind == KindErrorCode {
+			errFinding = &report.Findings[i]
+		}
+	}
+
+	require.NotNil(t, errFinding)
+	assert.Equal(t, "Unspecified Error (SNYK-CLI-0000)", errFinding.Title)
+	// The real cause is lifted out of the Instance block into the message.
+	assert.Contains(t, errFinding.Message, "Server returned unexpected error for the monitor request. Status code: 403")
+	// The doc link is surfaced as remediation, not lost.
+	assert.Contains(t, errFinding.Remediation, "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-cli-0000")
+}
+
 func TestAnalyze_exitCodeSeverity(t *testing.T) {
 	log := strings.Join([]string{
 		"2026-06-10T13:10:38Z main - ------------ Summary ------------",
