@@ -25,8 +25,8 @@ func TestCheck_writableDir(t *testing.T) {
 	assert.Empty(t, status.ErrorMessage)
 
 	// Probe file must be cleaned up.
-	_, err := os.Stat(filepath.Join(dir, ".snyk-doctor-probe"))
-	assert.True(t, os.IsNotExist(err))
+	matches, _ := filepath.Glob(filepath.Join(dir, ".snyk-doctor-probe-*"))
+	assert.Empty(t, matches)
 }
 
 func TestCheck_emptyPath(t *testing.T) {

@@ -5,7 +5,6 @@ package cache
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
@@ -41,17 +40,19 @@ func Check(invocationCtx workflow.InvocationContext) CacheStatus {
 		}
 	}
 
-	// Probe writability by creating and removing a temp file.
-	probe := filepath.Join(cachePath, ".snyk-doctor-probe")
-	f, err := os.Create(probe)
+	// Probe writability with a temp file. os.CreateTemp is more reliable than
+	// os.Create on Windows, where directory permission bits are not enforced
+	// but ACLs are.
+	f, err := os.CreateTemp(cachePath, ".snyk-doctor-probe-*")
 	if err != nil {
 		return CacheStatus{
 			Path:         cachePath,
 			ErrorMessage: fmt.Sprintf("cache directory is not writable: %s", cachePath),
 		}
 	}
+	name := f.Name()
 	_ = f.Close()
-	_ = os.Remove(probe)
+	_ = os.Remove(name)
 
 	return CacheStatus{OK: true, Path: cachePath}
 }
