@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"text/template"
 
@@ -15,11 +14,6 @@ import (
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 )
-
-// EnvDoctorTemplate overrides the embedded template files when set to a
-// filesystem path, e.g. SNYK_DOCTOR_TEMPLATE=./diagnosis/templates/doctor.human.tmpl.
-// This lets you iterate on the template without rebuilding the binary.
-const EnvDoctorTemplate = "SNYK_DOCTOR_TEMPLATE"
 
 //go:embed templates/*
 var embeddedTemplates embed.FS
@@ -39,13 +33,8 @@ func FormatTemplate(w io.Writer, report *diagnosis.DoctorReport) error {
 		return fmt.Errorf("failed to create template: %w", err)
 	}
 
-	templateFiles := DefaultDoctorTemplateFiles
-	if override := os.Getenv(EnvDoctorTemplate); override != "" {
-		templateFiles = []string{override}
-	}
-
-	for _, filename := range templateFiles {
-		data, err := readTemplateFile(filename)
+	for _, filename := range DefaultDoctorTemplateFiles {
+		data, err := embeddedTemplates.ReadFile(filename)
 		if err != nil {
 			return fmt.Errorf("failed to read template file %s: %w", filename, err)
 		}
@@ -61,16 +50,6 @@ func FormatTemplate(w io.Writer, report *diagnosis.DoctorReport) error {
 	}
 
 	return mainTmpl.Execute(w, report)
-}
-
-// readTemplateFile reads a template from the embedded FS first; if that fails
-// (e.g. the path is a filesystem override) it falls back to os.ReadFile.
-func readTemplateFile(filename string) ([]byte, error) {
-	data, err := embeddedTemplates.ReadFile(filename)
-	if err != nil {
-		data, err = os.ReadFile(filename)
-	}
-	return data, err
 }
 
 // doctorFuncMap builds the template.FuncMap used by the doctor templates.
