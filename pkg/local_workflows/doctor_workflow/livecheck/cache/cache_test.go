@@ -3,6 +3,7 @@ package cache
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -57,6 +58,9 @@ func TestCheck_notADirectory(t *testing.T) {
 }
 
 func TestCheck_readOnlyDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Chmod cannot create a read-only directory on Windows")
+	}
 	dir := filepath.Join(t.TempDir(), "readonly")
 	require.NoError(t, os.Mkdir(dir, 0500))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
