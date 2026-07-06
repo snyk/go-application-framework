@@ -26,7 +26,8 @@ func TestCheck_writableDir(t *testing.T) {
 	assert.Empty(t, status.ErrorMessage)
 
 	// Probe file must be cleaned up.
-	matches, _ := filepath.Glob(filepath.Join(dir, ".snyk-doctor-probe-*"))
+	matches, err := filepath.Glob(filepath.Join(dir, ".snyk-doctor-probe-*"))
+	require.NoError(t, err)
 	assert.Empty(t, matches)
 }
 
@@ -63,7 +64,7 @@ func TestCheck_readOnlyDir(t *testing.T) {
 	}
 	dir := filepath.Join(t.TempDir(), "readonly")
 	require.NoError(t, os.Mkdir(dir, 0500))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+	t.Cleanup(func() { require.NoError(t, os.Chmod(dir, 0700)) })
 
 	ctx := mockCtx(t, dir)
 	status := Check(ctx)
