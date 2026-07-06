@@ -43,6 +43,15 @@ func Analyze(ctx context.Context, r io.Reader, checks []LogCheck) (*DoctorReport
 	// Suppress findings that reflect normal CLI behavior (e.g. feature-flag 403s).
 	findings = refineFindings(findings)
 
+	if len(findings) == 0 {
+		findings = append(findings, Finding{
+			Producer: ProducerLogAnalysis,
+			Title:    "Nothing found",
+			Message:  "We didn't discover known issues from the given debug logs",
+			Severity: SeverityWarning,
+		})
+	}
+
 	return &DoctorReport{
 		SchemaVersion: SchemaVersion,
 		Summary:       summary,

@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/format"
@@ -85,19 +86,9 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		return slices.Index(severityOrder, report.Findings[i].Severity) < slices.Index(severityOrder, report.Findings[j].Severity)
 	})
 
-	if len(report.Findings) == 0 {
-		report.Findings = append(report.Findings, diagnosis.Finding{
-			Producer: diagnosis.ProducerCLIResult,
-			Kind:     "healthy",
-			Title:    "Nothing found",
-			Message:  "Nothing found",
-			Severity: diagnosis.SeverityInfo,
-		})
-	}
-
 	// 3. Format — select by --json flag
 	var buf bytes.Buffer
-	contentType := "text/plain"
+	contentType := presenters.DefaultMimeType
 	render := format.FormatTemplate
 	if config.GetBool(jsonFlag) {
 		contentType = "application/json"

@@ -71,14 +71,14 @@ func TestCheck_readOnlyDir(t *testing.T) {
 func TestCacheStatus_findings(t *testing.T) {
 	ok := CacheStatus{OK: true, Path: "/tmp/cache"}.Findings()
 	require.Len(t, ok, 1)
-	assert.Equal(t, diagnosis.ProducerCache, ok[0].Producer)
+	assert.Equal(t, diagnosis.ProducerEnvironment, ok[0].Producer)
 	assert.Equal(t, diagnosis.KindCacheOK, ok[0].Kind)
 	assert.Equal(t, diagnosis.SeverityInfo, ok[0].Severity)
 	assert.Equal(t, "/tmp/cache", ok[0].Fields["path"])
 
 	failed := CacheStatus{ErrorMessage: "not writable", Path: "/tmp/cache"}.Findings()
 	require.Len(t, failed, 1)
-	assert.Equal(t, diagnosis.ProducerCache, failed[0].Producer)
+	assert.Equal(t, diagnosis.ProducerEnvironment, failed[0].Producer)
 	assert.Equal(t, diagnosis.KindCacheFailure, failed[0].Kind)
 	assert.Equal(t, diagnosis.SeverityWarning, failed[0].Severity)
 }

@@ -60,7 +60,7 @@ func Check(invocationCtx workflow.InvocationContext) CacheStatus {
 func (c CacheStatus) Findings() []diagnosis.Finding {
 	if c.OK {
 		return []diagnosis.Finding{{
-			Producer: diagnosis.ProducerCache,
+			Producer: diagnosis.ProducerEnvironment,
 			Kind:     diagnosis.KindCacheOK,
 			Severity: diagnosis.SeverityInfo,
 			Message:  "Cache directory is available and writable",
@@ -68,7 +68,7 @@ func (c CacheStatus) Findings() []diagnosis.Finding {
 		}}
 	}
 	return []diagnosis.Finding{{
-		Producer: diagnosis.ProducerCache,
+		Producer: diagnosis.ProducerEnvironment,
 		Kind:     diagnosis.KindCacheFailure,
 		Severity: diagnosis.SeverityWarning,
 		Title:    "Cache directory issue",

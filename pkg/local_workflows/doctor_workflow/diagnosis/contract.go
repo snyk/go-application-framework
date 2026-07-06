@@ -27,11 +27,11 @@ type Producer string
 
 const (
 	ProducerLogAnalysis  Producer = "log-analysis"
-	ProducerCLIResult    Producer = "cli-result"
+	ProducerCLIResult    Producer = "cli"
 	ProducerConnectivity Producer = "connectivity"
-	ProducerAuth         Producer = "auth"
-	ProducerCache        Producer = "cache"
-	ProducerConfig       Producer = "config"
+	ProducerAuth         Producer = "authentication"
+	ProducerEnvironment  Producer = "environment"
+	ProducerConfig       Producer = "configuration"
 )
 
 // Kind classifies the specific category of a finding (what it is), orthogonal to
