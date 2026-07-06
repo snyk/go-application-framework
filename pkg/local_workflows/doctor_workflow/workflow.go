@@ -11,6 +11,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/format"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
 	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -70,16 +71,6 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		}
 	}
 
-	// Record where the report came from, so findings are traceable to their origin.
-	switch {
-	case inputPath != "":
-		report.Source = &diagnosis.SourceInfo{Kind: diagnosis.SourceKindLogFile, Path: inputPath}
-	case isAnalyzeDebugLogs:
-		report.Source = &diagnosis.SourceInfo{Kind: diagnosis.SourceKindStdin}
-	default:
-		report.Source = &diagnosis.SourceInfo{Kind: diagnosis.SourceKindLive}
-	}
-
 	// 2. Live checks touch the current environment. They run when requested via
 	// --live, or by default for a bare invocation (no log to analyze).
 	if shouldDoLiveChecks {
@@ -107,10 +98,10 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	// 3. Format — select by --json flag
 	var buf bytes.Buffer
 	contentType := "text/plain"
-	render := diagnosis.FormatTemplate
+	render := format.FormatTemplate
 	if config.GetBool(jsonFlag) {
 		contentType = "application/json"
-		render = diagnosis.FormatJSON
+		render = format.FormatJSON
 	}
 	if err := render(&buf, report); err != nil {
 		return nil, err

@@ -69,12 +69,6 @@ const (
 	FieldCorrelatedBy  = "correlatedBy"  // how the request was linked: snyk-request-id | url | adjacency | none
 )
 
-// SourceInfo records what was analyzed. Kind is one of the SourceKind* constants.
-type SourceInfo struct {
-	Kind string `json:"kind"`
-	Path string `json:"path,omitempty"`
-}
-
 const (
 	SourceKindLogFile = "log-file"
 	SourceKindStdin   = "stdin"
@@ -83,14 +77,9 @@ const (
 
 // DoctorReport is the contract type between preprocessing and inference.
 type DoctorReport struct {
-	SchemaVersion string      `json:"schemaVersion"`
-	Source        *SourceInfo `json:"source,omitempty"`
-	Summary       Summary     `json:"summary"`
-	Findings      []Finding   `json:"findings"`
-	// Result is the CLI's result/errors block kept verbatim, preserving detail
-	// (Description/Links/Requests) that Findings don't capture. Mirrors
-	// Summary.Raw for the footer.
-	Result string `json:"result,omitempty"`
+	SchemaVersion string    `json:"schemaVersion"`
+	Summary       Summary   `json:"summary"`
+	Findings      []Finding `json:"findings"`
 }
 
 // Summary holds the parsed environment/header section of a debug log.

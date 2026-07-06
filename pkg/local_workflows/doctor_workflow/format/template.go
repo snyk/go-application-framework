@@ -1,4 +1,4 @@
-package diagnosis
+package format
 
 import (
 	"embed"
@@ -13,6 +13,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/snyk/go-application-framework/internal/presenters"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 )
 
 // EnvDoctorTemplate overrides the embedded template files when set to a
@@ -32,7 +33,7 @@ var DefaultDoctorTemplateFiles = []string{
 
 // FormatTemplate renders a DoctorReport through Go text/template files,
 // following the same pattern used by the output workflow / UFM presenters.
-func FormatTemplate(w io.Writer, report *DoctorReport) error {
+func FormatTemplate(w io.Writer, report *diagnosis.DoctorReport) error {
 	tmpl, err := template.New("doctor").Funcs(doctorFuncMap()).Parse("")
 	if err != nil {
 		return fmt.Errorf("failed to create template: %w", err)
@@ -95,31 +96,25 @@ func doctorFuncMap() template.FuncMap {
 		"green":  func(s string) string { return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(s) },
 		"yellow": func(s string) string { return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render(s) },
 		"bold":   func(s string) string { return lipgloss.NewStyle().Bold(true).Render(s) },
-		"severityIcon": func(sev Severity) string {
+		"severityIcon": func(sev diagnosis.Severity) string {
 			switch sev {
-			case SeverityError:
+			case diagnosis.SeverityError:
 				return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("✗")
-			case SeverityWarning:
+			case diagnosis.SeverityWarning:
 				return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("!")
 			default:
 				return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("✓")
 			}
 		},
-		"severityColor": func(sev Severity, s string) string {
+		"severityColor": func(sev diagnosis.Severity, s string) string {
 			switch sev {
-			case SeverityError:
+			case diagnosis.SeverityError:
 				return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(s)
-			case SeverityWarning:
+			case diagnosis.SeverityWarning:
 				return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render(s)
 			default:
 				return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(s)
 			}
 		},
-
-		// Domain helpers — expose existing functions so the template can
-		// filter and group findings without Go-side layout code.
-		"filterByProducer": filterByProducer,
-		"extraProducers":   extraProducers,
-		"producerTitle":    producerTitle,
 	}
 }

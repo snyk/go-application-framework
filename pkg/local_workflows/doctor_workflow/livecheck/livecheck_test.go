@@ -31,6 +31,12 @@ const sampleConnectivityJSON = `{
 }`
 
 func TestRun(t *testing.T) {
+	configOKFinding := diagnosis.Finding{
+		Producer: diagnosis.ProducerConfig,
+		Kind:     diagnosis.KindConfigOK,
+		Severity: diagnosis.SeverityInfo,
+		Message:  "No configuration issues detected",
+	}
 	authOKFinding := diagnosis.Finding{
 		Producer: diagnosis.ProducerAuth,
 		Kind:     diagnosis.KindAuthOK,
@@ -79,25 +85,25 @@ func TestRun(t *testing.T) {
 			name:            "both checks succeed",
 			whoamiOut:       []workflow.Data{whoAmIData("user@snyk.io")},
 			connectivityOut: []workflow.Data{connectivityData(sampleConnectivityJSON)},
-			want:            []diagnosis.Finding{authOKFinding, connectivityOKFinding},
+			want:            []diagnosis.Finding{configOKFinding, authOKFinding, connectivityOKFinding},
 		},
 		{
 			name:            "auth fails, connectivity succeeds",
 			whoamiErr:       errors.New("authentication error (status: 401)"),
 			connectivityOut: []workflow.Data{connectivityData(sampleConnectivityJSON)},
-			want:            []diagnosis.Finding{authFailFinding, connectivityOKFinding},
+			want:            []diagnosis.Finding{configOKFinding, authFailFinding, connectivityOKFinding},
 		},
 		{
 			name:            "auth succeeds, connectivity fails",
 			whoamiOut:       []workflow.Data{whoAmIData("user@snyk.io")},
 			connectivityErr: errors.New("connectivity check failed"),
-			want:            []diagnosis.Finding{authOKFinding, connectivityFailFinding},
+			want:            []diagnosis.Finding{configOKFinding, authOKFinding, connectivityFailFinding},
 		},
 		{
 			name:            "both checks fail",
 			whoamiErr:       errors.New("authentication error (status: 401)"),
 			connectivityErr: errors.New("connectivity check failed"),
-			want:            []diagnosis.Finding{authFailFinding, connectivityFailFinding},
+			want:            []diagnosis.Finding{configOKFinding, authFailFinding, connectivityFailFinding},
 		},
 	}
 

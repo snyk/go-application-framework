@@ -115,12 +115,6 @@ func TestAnalyze_resultPreservesFullErrorBlock(t *testing.T) {
 	report, err := Analyze(context.Background(), strings.NewReader(log), DefaultLogChecks())
 	require.NoError(t, err)
 
-	// Verbatim block preserved, including the detail the findings-only path dropped.
-	assert.Contains(t, report.Result, "Authentication error (SNYK-0005)")
-	assert.Contains(t, report.Result, "Description:")
-	assert.Contains(t, report.Result, "https://docs.snyk.io/error-catalog#snyk-0005")
-	assert.Contains(t, report.Result, "Exit Code:")
-
 	// Structured signals are still extracted from the same block.
 	var hasErrorCode, hasExit bool
 	for _, f := range report.Findings {
@@ -141,27 +135,6 @@ func TestAnalyze_stampsSchemaVersion(t *testing.T) {
 		strings.NewReader("2026-06-10T13:10:38Z main - Exit Code: 0"), DefaultLogChecks())
 	require.NoError(t, err)
 	assert.Equal(t, SchemaVersion, report.SchemaVersion)
-}
-
-func TestAnalyze_resultStopsAtExitCode(t *testing.T) {
-	// Trailing CI wrapper output (e.g. GitHub Actions post-job steps) after the
-	// exit code must not leak into the result block.
-	log := strings.Join([]string{
-		"2026-06-26T13:58:20.0Z 2026-06-26T13:58:20Z main - ------------ Errors ------------",
-		"2026-06-26T13:58:20.0Z 2026-06-26T13:58:20Z main - ERROR:                 Unspecified Error (SNYK-CLI-0000)",
-		"2026-06-26T13:58:20.0Z 2026-06-26T13:58:20Z main - Exit Code:             2",
-		"2026-06-26T13:58:42.8Z ##[error]Process completed with exit code 2.",
-		"2026-06-26T13:58:42.9Z Post job cleanup.",
-		"2026-06-26T13:58:43.0Z Cleaning up orphan processes",
-	}, "\n")
-
-	report, err := Analyze(context.Background(), strings.NewReader(log), DefaultLogChecks())
-	require.NoError(t, err)
-
-	assert.Contains(t, report.Result, "Exit Code:")
-	assert.NotContains(t, report.Result, "Post job cleanup")
-	assert.NotContains(t, report.Result, "Process completed")
-	assert.NotContains(t, report.Result, "orphan processes")
 }
 
 func TestExtractSummary_cleansValues(t *testing.T) {

@@ -47,7 +47,6 @@ func Analyze(ctx context.Context, r io.Reader, checks []LogCheck) (*DoctorReport
 		SchemaVersion: SchemaVersion,
 		Summary:       summary,
 		Findings:      findings,
-		Result:        rawResult(footer),
 	}, nil
 }
 
@@ -59,19 +58,6 @@ func truncateAtExitCode(footer []ParsedLine) []ParsedLine {
 		}
 	}
 	return footer
-}
-
-// rawResult joins the footer into the verbatim result/errors block, preserving
-// detail (Description, Links, Requests) that the findings don't capture.
-func rawResult(footer []ParsedLine) string {
-	if len(footer) == 0 {
-		return ""
-	}
-	parts := make([]string, len(footer))
-	for i, ln := range footer {
-		parts[i] = strings.TrimRight(ln.Message, " \t")
-	}
-	return strings.Join(parts, "\n")
 }
 
 // parseResultFindings extracts findings from the footer/result section.
