@@ -10,7 +10,6 @@ import (
 	"golang.org/x/term"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck"
 	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
@@ -68,17 +67,6 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 			{Key: "API", Value: config.GetString(configuration.API_URL)},
 			{Key: "Cache", Value: config.GetString(configuration.CACHE_PATH)},
 			{Key: "Organization", Value: config.GetString(configuration.ORGANIZATION)},
-		}
-
-		sanityCheckResults := config_utils.CheckSanity(config)
-		for _, res := range sanityCheckResults {
-			report.Findings = append(report.Findings, diagnosis.Finding{
-				Producer: diagnosis.ProducerCLIResult,
-				Kind:     "config-check",
-				Title:    "Possible configuration issue",
-				Message:  res.Description,
-				Severity: diagnosis.SeverityWarning,
-			})
 		}
 	}
 
