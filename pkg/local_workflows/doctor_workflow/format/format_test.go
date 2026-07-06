@@ -64,7 +64,7 @@ func TestFormatTemplate_extraProducers(t *testing.T) {
 	assert.Contains(t, rendered, "Symptoms")
 	assert.Contains(t, rendered, "[CONNECTIVITY]")
 	assert.Contains(t, rendered, "DNS lookup failed")
-	assert.Contains(t, rendered, "[AUTH]")
+	assert.Contains(t, rendered, "[AUTHENTICATION]")
 	assert.Contains(t, rendered, "Token expired")
 }
 

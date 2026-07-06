@@ -17,6 +17,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/auth"
 	"github.com/snyk/go-application-framework/pkg/ui"
 
+	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	connectivitycheck "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -83,7 +84,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 
-	assert.Equal(t, "text/plain", output[0].GetContentType())
+	assert.Equal(t, presenters.DefaultMimeType, output[0].GetContentType())
 	payload, ok := output[0].GetPayload().([]byte)
 	assert.True(t, ok)
 	rendered := string(payload)
