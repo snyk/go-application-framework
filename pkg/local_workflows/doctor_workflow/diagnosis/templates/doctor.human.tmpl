@@ -4,7 +4,7 @@
 {{- if eq $title "" -}}
 {{- $title = .Message -}}
 {{- end -}}
-{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Kind)) }} {{ trimRight $title}}
+{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Producer)) }} {{ trimRight $title}}
 {{- if ne $title $description }}
   Description: {{ $description }}
 {{- end -}}
