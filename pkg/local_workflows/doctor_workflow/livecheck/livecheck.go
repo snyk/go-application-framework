@@ -6,6 +6,7 @@ package livecheck
 import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/auth"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/cache"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/livecheck/connectivity"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
@@ -13,8 +14,9 @@ import (
 // Run executes the live checks and returns their findings for inclusion in the
 // doctor report. New checks append their findings here.
 func Run(invocationCtx workflow.InvocationContext) []diagnosis.Finding {
-	return append(
-		auth.Check(invocationCtx).Findings(),
-		connectivity.Check(invocationCtx).Findings()...,
-	)
+	var findings []diagnosis.Finding
+	findings = append(findings, auth.Check(invocationCtx).Findings()...)
+	findings = append(findings, connectivity.Check(invocationCtx).Findings()...)
+	findings = append(findings, cache.Check(invocationCtx).Findings()...)
+	return findings
 }

@@ -30,6 +30,7 @@ const (
 	ProducerCLIResult    Producer = "cli-result"
 	ProducerConnectivity Producer = "connectivity"
 	ProducerAuth         Producer = "auth"
+	ProducerCache        Producer = "cache"
 )
 
 // Kind classifies the specific category of a finding (what it is), orthogonal to
@@ -49,6 +50,8 @@ const (
 	KindAuthFailure         Kind = "auth-failure"
 	KindConnectivityOK      Kind = "connectivity-ok"
 	KindConnectivityFailure Kind = "connectivity-failure"
+	KindCacheOK             Kind = "cache-ok"
+	KindCacheFailure        Kind = "cache-failure"
 )
 
 // Well-known Finding.Fields keys. Centralized so producers and consumers
