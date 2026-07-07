@@ -110,7 +110,6 @@ type Finding struct {
 	Subject     string            `json:"subject,omitempty"`
 	Lines       []int             `json:"lines,omitempty"`
 	Code        string            `json:"code,omitempty"`
-	Remediation []string          `json:"remediation,omitempty"`
 	Details     []string          `json:"details,omitempty"`
 	Fields      map[string]string `json:"fields,omitempty"`
 }

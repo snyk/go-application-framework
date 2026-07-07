@@ -108,16 +108,20 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 			if message == "" {
 				message = title
 			}
+			linkFields := make(map[string]string, len(links))
+			for j, link := range links {
+				linkFields[fmt.Sprintf("Link %d", (j+1))] = link
+			}
 			findings = append(findings, Finding{
-				Producer:    ProducerCLIResult,
-				Kind:        KindErrorCode,
-				Severity:    SeverityError,
-				Title:       title,
-				Message:     message,
-				Subject:     fmt.Sprintf("%d", ln.Number),
-				Lines:       []int{ln.Number},
-				Code:        code,
-				Remediation: links,
+				Producer: ProducerCLIResult,
+				Kind:     KindErrorCode,
+				Severity: SeverityError,
+				Title:    title,
+				Message:  message,
+				Subject:  fmt.Sprintf("%d", ln.Number),
+				Lines:    []int{ln.Number},
+				Code:     code,
+				Fields:   linkFields,
 			})
 
 		default:

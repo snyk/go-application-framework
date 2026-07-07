@@ -215,8 +215,8 @@ func TestParseResultFindings_extractsErrorDescription(t *testing.T) {
 	assert.Equal(t, "Unspecified Error (SNYK-CLI-0000)", errFinding.Title)
 	// The real cause is lifted out of the Instance block into the message.
 	assert.Contains(t, errFinding.Message, "Server returned unexpected error for the monitor request. Status code: 403")
-	// The doc link is surfaced as remediation, not lost.
-	assert.Contains(t, errFinding.Remediation, "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-cli-0000")
+	// The doc link is surfaced in fields, not lost.
+	assert.Equal(t, "https://docs.snyk.io/scan-with-snyk/error-catalog#snyk-cli-0000", errFinding.Fields["Link 1"])
 }
 
 func TestAnalyze_exitCodeSeverity(t *testing.T) {

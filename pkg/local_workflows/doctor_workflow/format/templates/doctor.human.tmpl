@@ -14,9 +14,6 @@
 {{- range $k, $v := .Fields }}
   {{ capitalize $k }}: {{ $v }}
 {{- end -}}
-{{- range .Remediation }}
-  {{ . }}
-{{- end -}}
 {{- "\n\n" }}
 {{- end -}}
 
