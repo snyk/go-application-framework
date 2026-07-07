@@ -22,6 +22,7 @@ import (
 	"github.com/snyk/go-application-framework/internal/constants"
 	errorutils "github.com/snyk/go-application-framework/pkg/local_workflows/error_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 )
 
 type Finding struct {
@@ -69,6 +70,7 @@ func errorLevelToStyle(errLevel string) lipgloss.Style {
 	return style
 }
 
+//nolint:gocyclo // presentation logic builds the error output as a flat sequence of optional sections
 func RenderError(err snyk_errors.Error, ctx context.Context) string {
 	var body []string
 
@@ -133,11 +135,28 @@ func RenderError(err snyk_errors.Error, ctx context.Context) string {
 		))
 	}
 
+	tip, hasTip := "", false
+	if v := ctx.Value(uitypes.ErrorTipKey); v != nil {
+		if t, ok := v.(string); ok && len(t) > 0 {
+			tip, hasTip = t, true
+		}
+	}
+
 	if len(err.Links) > 0 {
-		link := err.Links[0] + "\n"
+		link := err.Links[0]
+		if !hasTip {
+			link += "\n"
+		}
 		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
 			label.Render("Docs:"),
 			value.Render(link),
+		))
+	}
+
+	if hasTip {
+		body = append(body, lipgloss.JoinHorizontal(lipgloss.Top,
+			label.Render("Tip:"),
+			value.Render(tip+"\n"),
 		))
 	}
 
