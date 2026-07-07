@@ -9,10 +9,10 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
 
-// OpenInput returns an io.Reader for the debug log. If inputPath is set, the
-// file at that path is opened. Otherwise, stdin is returned (provided it is
-// not a terminal).
-func OpenInput(inputPath string, stdin io.Reader, isTerminal bool) (io.ReadCloser, error) {
+// OpenInput returns an io.ReadCloser for the debug log. If inputPath is set,
+// the file at that path is opened. Otherwise, stdin is returned directly.
+// The caller is responsible for gating the call (e.g. via --stdin / --input).
+func OpenInput(inputPath string, stdin io.Reader) (io.ReadCloser, error) {
 	if inputPath != "" {
 		f, err := os.Open(inputPath)
 		if err != nil {
@@ -22,12 +22,6 @@ func OpenInput(inputPath string, stdin io.Reader, isTerminal bool) (io.ReadClose
 			)
 		}
 		return f, nil
-	}
-
-	if isTerminal {
-		return nil, cli.NewCommandArgsError(
-			"No debug log was provided. Pipe one in with 'snyk <command> -d 2>&1 | snyk doctor', or pass a log file with --input <path>.",
-		)
 	}
 
 	return io.NopCloser(stdin), nil

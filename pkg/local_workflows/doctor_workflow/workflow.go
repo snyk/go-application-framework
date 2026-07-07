@@ -7,8 +7,6 @@ import (
 	"slices"
 	"sort"
 
-	"golang.org/x/term"
-
 	"github.com/snyk/go-application-framework/internal/presenters"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/doctor_workflow/diagnosis"
@@ -19,10 +17,10 @@ import (
 )
 
 func doctorEntryPoint(invocationCtx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
-	return runDoctor(invocationCtx, os.Stdin, term.IsTerminal(int(os.Stdin.Fd())))
+	return runDoctor(invocationCtx, os.Stdin)
 }
 
-func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinIsTerminal bool) ([]workflow.Data, error) {
+func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader) ([]workflow.Data, error) {
 	ctx := invocationCtx.Context()
 	config := invocationCtx.GetConfiguration()
 	logger := invocationCtx.GetEnhancedLogger()
@@ -42,17 +40,18 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 	}()
 
 	inputPath := config.GetString(inputFlag)
-	// A log is available from --input or from a pipe (stdin is not a terminal).
+	readStdin := config.GetBool(stdinFlag)
+	// A log is available from --input or --stdin.
 	// A bare `snyk doctor` with neither has nothing to analyze, so it defaults to
 	// live checks rather than erroring.
-	isAnalyzeDebugLogs := inputPath != "" || !stdinIsTerminal
+	isAnalyzeDebugLogs := inputPath != "" || readStdin
 	hasLiveFlag := config.GetBool(liveFlag)
 	shouldDoLiveChecks := hasLiveFlag || !isAnalyzeDebugLogs
 
 	// 1. Analyze the log when there is one; otherwise start from an empty report.
 	report := &diagnosis.DoctorReport{SchemaVersion: diagnosis.SchemaVersion}
 	if isAnalyzeDebugLogs {
-		reader, err := diagnosis.OpenInput(inputPath, stdin, stdinIsTerminal)
+		reader, err := diagnosis.OpenInput(inputPath, stdin)
 		if err != nil {
 			return nil, err
 		}

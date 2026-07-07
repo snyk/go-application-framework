@@ -43,6 +43,7 @@ func Test_DoctorWorkflow_registration(t *testing.T) {
 	flagSet := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
 	require.NotNil(t, flagSet)
 	assert.NotNil(t, flagSet.Lookup(inputFlag))
+	assert.NotNil(t, flagSet.Lookup(stdinFlag))
 	assert.NotNil(t, flagSet.Lookup(liveFlag))
 	assert.NotNil(t, flagSet.Lookup(jsonFlag))
 }
@@ -80,7 +81,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(inputFlag, path)
 
-	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), false)
+	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(""))
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 
@@ -96,8 +97,9 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 
 func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	config := configuration.NewWithOpts()
+	config.Set(stdinFlag, true)
 
-	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog), false)
+	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog))
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 	payload, ok := output[0].GetPayload().([]byte)
@@ -123,7 +125,7 @@ func Test_runDoctor_gathersLiveContextWithLiveFlag(t *testing.T) {
 	)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-	output, err := runDoctor(ctx, strings.NewReader(sampleLog), false)
+	output, err := runDoctor(ctx, strings.NewReader(sampleLog))
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 
@@ -156,7 +158,7 @@ func Test_runDoctor_bareInvocationDefaultsToLive(t *testing.T) {
 	)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-	output, err := runDoctor(ctx, strings.NewReader(""), true)
+	output, err := runDoctor(ctx, strings.NewReader(""))
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 
@@ -181,7 +183,7 @@ func Test_runDoctor_continuesWhenConnectivityFails(t *testing.T) {
 	)
 	ctx.EXPECT().GetEngine().Return(engine).AnyTimes()
 
-	output, err := runDoctor(ctx, strings.NewReader(""), true)
+	output, err := runDoctor(ctx, strings.NewReader(""))
 	require.NoError(t, err)
 
 	payload, ok := output[0].GetPayload().([]byte)
@@ -215,7 +217,7 @@ func Test_runDoctor_missingInputFile(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(inputFlag, filepath.Join(t.TempDir(), "does-not-exist.log"))
 
-	_, err := runDoctor(setupMockContext(t, config), strings.NewReader(""), false)
+	_, err := runDoctor(setupMockContext(t, config), strings.NewReader(""))
 
 	var snykErr snyk_errors.Error
 	require.ErrorAs(t, err, &snykErr)
@@ -226,7 +228,9 @@ func Test_runDoctor_jsonOutput(t *testing.T) {
 	config := configuration.NewWithOpts()
 	config.Set(jsonFlag, true)
 
-	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog), false)
+	config.Set(stdinFlag, true)
+
+	output, err := runDoctor(setupMockContext(t, config), strings.NewReader(sampleLog))
 	require.NoError(t, err)
 	require.Len(t, output, 1)
 
