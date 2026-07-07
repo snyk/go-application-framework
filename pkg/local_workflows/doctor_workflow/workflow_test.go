@@ -91,6 +91,7 @@ func Test_runDoctor_summarizesInputFile(t *testing.T) {
 	assert.Contains(t, rendered, "Symptoms")
 	assert.Contains(t, rendered, "401 Unauthorized")
 	assert.Contains(t, rendered, "Exit code: 2")
+	assert.Contains(t, rendered, "Source: "+path, "report should show the analyzed log file path")
 }
 
 func Test_runDoctor_readsPipedStdin(t *testing.T) {
@@ -103,6 +104,7 @@ func Test_runDoctor_readsPipedStdin(t *testing.T) {
 	assert.True(t, ok)
 	rendered := string(payload)
 	assert.Contains(t, rendered, "Symptoms")
+	assert.Contains(t, rendered, "Source: stdin", "report should show stdin as source when piped")
 }
 
 func Test_runDoctor_gathersLiveContextWithLiveFlag(t *testing.T) {
@@ -232,4 +234,6 @@ func Test_runDoctor_jsonOutput(t *testing.T) {
 	payload, ok := output[0].GetPayload().([]byte)
 	assert.True(t, ok)
 	assert.Contains(t, string(payload), `"findings"`)
+	assert.Contains(t, string(payload), `"key":"Source"`, "JSON output should include Source field")
+	assert.Contains(t, string(payload), `"value":"stdin"`, "JSON output should show stdin as source")
 }

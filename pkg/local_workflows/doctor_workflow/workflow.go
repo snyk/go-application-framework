@@ -62,6 +62,17 @@ func runDoctor(invocationCtx workflow.InvocationContext, stdin io.Reader, stdinI
 		if err != nil {
 			return nil, err
 		}
+
+		// Prepend the input source so the report shows which log was analyzed.
+		sourceName := inputPath
+		if sourceName == "" {
+			sourceName = "stdin"
+		}
+		report.Summary.Fields = append(
+			[]diagnosis.KeyValue{{Key: "Source", Value: sourceName}},
+			report.Summary.Fields...,
+		)
+
 		logger.Debug().Msgf("doctor: analyzed debug log (%d findings)", len(report.Findings))
 	} else {
 		report.Summary.Fields = []diagnosis.KeyValue{
