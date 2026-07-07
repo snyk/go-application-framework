@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -329,7 +330,7 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			return backoff.Permanent(errRetryNecessary)
 		}
 
-		timeToWait := rateLimitRetryDelay(response)
+		timeToWait := rateLimitRetryDelayJittered(response)
 		if timeToWait > maxRetryAfter {
 			return backoff.Permanent(errRetryDelayMaxExceeded)
 		}
@@ -381,7 +382,9 @@ func parseRetryDelay(headerRetryAfterValue string) time.Duration {
 }
 
 // rateLimitRetryDelay extracts the longer of Retry-After and X-RateLimit-Reset
-// durations from the response headers.
+// durations from the response headers. The returned value is the raw header
+// value — suitable for error reporting ("retry after N seconds") but not for
+// the actual sleep, which should use rateLimitRetryDelayJittered.
 func rateLimitRetryDelay(res *http.Response) time.Duration {
 	var retryAfter, rateLimitReset time.Duration
 
@@ -393,4 +396,32 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 	}
 
 	return max(retryAfter, rateLimitReset)
+}
+
+// rateLimitRetryDelayJittered returns the actual duration to sleep before retrying
+// a rate-limited request.
+//
+// Retry-After is respected exactly — RFC 7231 semantics require clients to wait
+// at least the specified duration, so no jitter is applied.
+//
+// X-RateLimit-Reset (Envoy/Gloo token-bucket) carries the seconds until the
+// current window resets. All clients that hit the same rate-limit window receive
+// the same reset value, which causes a synchronized retry storm if honoured
+// literally. Full jitter — sleeping a random duration in [0, reset) — spreads
+// retries evenly across the reset window and eliminates the thundering herd.
+// If Retry-After is also present it takes precedence (exact, no jitter).
+func rateLimitRetryDelayJittered(res *http.Response) time.Duration {
+	if v := res.Header.Get("Retry-After"); len(v) > 0 {
+		if d := parseRetryDelay(v); d > 0 {
+			return d
+		}
+	}
+	if v := res.Header.Get("X-RateLimit-Reset"); len(v) > 0 {
+		if d := parseRetryDelay(v); d > 0 {
+			// Full jitter: random in [0, d). Desynchronises clients that all
+			// received the same token-bucket reset deadline.
+			return time.Duration(rand.N(int64(d)))
+		}
+	}
+	return 0
 }
