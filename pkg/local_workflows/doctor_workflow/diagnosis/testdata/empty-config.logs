@@ -1,0 +1,25 @@
+2026-06-18T13:17:15Z main - ⚠️ WARNING: Potentially Sensitive Information ⚠️
+These logs may contain sensitive data, including secrets or passwords.
+2026-06-18T13:17:15Z main - Using log level: debug
+2026-06-18T13:17:15Z main - > request [0xaaa]: GET https://api.snyk.io/rest/self?version=2024-04-22
+2026-06-18T13:17:15Z main - < response [0xbbb]: 401 Unauthorized
+2026-06-18T13:17:15Z main - < error: Authentication error
+2026-06-18T13:17:15Z main - Failed to determine default value for "ORGANIZATION": auth failed
+2026-06-18T13:17:15Z main - Version:               1.0.0-test
+2026-06-18T13:17:15Z main - Platform:              linux amd64
+2026-06-18T13:17:15Z main - API:                   https://api.snyk.io
+2026-06-18T13:17:15Z main - Region:                example-region
+2026-06-18T13:17:15Z main - Checks:
+2026-06-18T13:17:15Z main -   Configuration:       all good
+2026-06-18T13:17:17Z main -
+2026-06-18T13:17:17Z main - ------------ Summary ------------
+2026-06-18T13:17:17Z main - Version:               1.0.0-test
+2026-06-18T13:17:17Z main - Platform:              linux amd64
+2026-06-18T13:17:17Z main - API:                   https://api.snyk.io
+2026-06-18T13:17:17Z main - Checks:
+2026-06-18T13:17:17Z main -   Configuration:       all good
+2026-06-18T13:17:17Z main -
+2026-06-18T13:17:17Z main - ------------ Errors ------------
+2026-06-18T13:17:17Z main - ERROR:                 Authentication error (SNYK-0005)
+2026-06-18T13:17:17Z main -
+2026-06-18T13:17:17Z main - Exit Code:             2

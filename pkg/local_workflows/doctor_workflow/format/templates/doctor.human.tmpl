@@ -1,0 +1,35 @@
+{{- define "finding" -}}
+{{- $title := .Title -}}
+{{- $description := .Message -}}
+{{- if eq $title "" -}}
+{{- $title = .Message -}}
+{{- end -}}
+{{ severityIcon .Severity }} {{ severityColor .Severity (printf "[%s]" (toUpper .Producer)) }} {{ trimRight $title}}
+{{- if ne $title $description }}
+  Description: {{ $description }}
+{{- end -}}
+{{- if .Lines }}
+  Lines: {{ range $i, $l := .Lines }}{{ if $i }}, {{ end }}{{ $l }}{{ end }}
+{{- end -}}
+{{- range $k, $v := .Fields }}
+  {{ capitalize $k }}: {{ $v }}
+{{- end -}}
+{{- "\n\n" }}
+{{- end -}}
+
+{{- define "main" -}}
+{{- printf "%s" (title "Snyk Doctor Diagnostic Report") -}}
+{{- printf "%s" (title "Basic Information") -}}
+{{- if .Summary.Fields -}}
+{{- range .Summary.Fields -}}
+- {{ .Key }}: {{ join (splitLines .Value) ", " }}{{- "\n" }}
+{{- end -}}
+{{- end }}
+
+{{- printf "%s" (title "Symptoms") -}}
+{{- range .Findings -}}
+{{ template "finding" . }}
+{{- end }}
+{{- end -}}
+
+{{- template "main" . -}}

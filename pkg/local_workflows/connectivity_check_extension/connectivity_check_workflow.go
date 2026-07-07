@@ -22,6 +22,7 @@ const (
 	noColorFlag                   = "no-color"
 	timeoutFlag                   = "timeout"
 	maxOrgCountFlag               = "max-org-count"
+	silent                        = "silent"
 )
 
 // Define workflow identifier
@@ -46,6 +47,10 @@ func connectivityCheckEntryPoint(invocationCtx workflow.InvocationContext, input
 	logger := invocationCtx.GetEnhancedLogger()
 	networkAccess := invocationCtx.GetNetworkAccess()
 	ui := invocationCtx.GetUserInterface()
+
+	if config.GetBool(silent) {
+		ui = nil
+	}
 
 	checker := connectivity.NewChecker(networkAccess, logger, config, ui)
 
