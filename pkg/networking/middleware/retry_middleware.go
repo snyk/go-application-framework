@@ -330,10 +330,14 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			return backoff.Permanent(errRetryNecessary)
 		}
 
-		timeToWait := rateLimitRetryDelayJittered(response)
-		if timeToWait > maxRetryAfter {
+		// Cap check must use the raw header value, not the jittered one.
+		// Jitter applied before the cap could allow a huge reset (e.g. 4 years)
+		// to slip through when rand lands below maxRetryAfter.
+		if rawDelay := rateLimitRetryDelay(response); rawDelay > maxRetryAfter {
 			return backoff.Permanent(errRetryDelayMaxExceeded)
 		}
+
+		timeToWait := rateLimitRetryDelayJittered(response)
 
 		// if a retry after is defined, this is the time to wait for
 		if timeToWait > 0 {
