@@ -38,7 +38,7 @@ func (c *ErrorEventCheck) Analyze(body []ParsedLine) []Finding {
 			Kind:     kind,
 			Severity: SeverityError,
 			Message:  line.Message,
-			Subject:  fmt.Sprintf("L%d", line.Number),
+			Subject:  fmt.Sprintf("%d", line.Number),
 			Lines:    []int{line.Number},
 		})
 

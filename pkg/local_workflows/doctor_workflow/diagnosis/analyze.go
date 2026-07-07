@@ -93,7 +93,7 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 				Kind:     KindExitCode,
 				Severity: sev,
 				Message:  "Exit code: " + codeStr,
-				Subject:  fmt.Sprintf("L%d", ln.Number),
+				Subject:  fmt.Sprintf("%d", ln.Number),
 				Lines:    []int{ln.Number},
 				Fields:   map[string]string{"exitCode": codeStr},
 			})
@@ -114,7 +114,7 @@ func parseResultFindings(footer []ParsedLine) []Finding {
 				Severity:    SeverityError,
 				Title:       title,
 				Message:     message,
-				Subject:     fmt.Sprintf("L%d", ln.Number),
+				Subject:     fmt.Sprintf("%d", ln.Number),
 				Lines:       []int{ln.Number},
 				Code:        code,
 				Remediation: links,
