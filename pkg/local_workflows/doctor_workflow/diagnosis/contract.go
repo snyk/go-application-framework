@@ -102,14 +102,14 @@ type KeyValue struct {
 // supporting prose and structured key-values - not a dump of the raw log (that's
 // Summary.Raw).
 type Finding struct {
-	Producer    Producer          `json:"producer"`
-	Kind        Kind              `json:"kind"`
-	Severity    Severity          `json:"severity"`
-	Title       string            `json:"title,omitempty"`
-	Message     string            `json:"message"`
-	Subject     string            `json:"subject,omitempty"`
-	Lines       []int             `json:"lines,omitempty"`
-	Code        string            `json:"code,omitempty"`
-	Details     []string          `json:"details,omitempty"`
-	Fields      map[string]string `json:"fields,omitempty"`
+	Producer Producer          `json:"producer"`
+	Kind     Kind              `json:"kind"`
+	Severity Severity          `json:"severity"`
+	Title    string            `json:"title,omitempty"`
+	Message  string            `json:"message"`
+	Subject  string            `json:"subject,omitempty"`
+	Lines    []int             `json:"lines,omitempty"`
+	Code     string            `json:"code,omitempty"`
+	Details  []string          `json:"details,omitempty"`
+	Fields   map[string]string `json:"fields,omitempty"`
 }

@@ -22,7 +22,7 @@
 {{- printf "%s" (title "Basic Information") -}}
 {{- if .Summary.Fields -}}
 {{- range .Summary.Fields -}}
-- {{ .Key }}: {{ .Value }}{{- "\n" }}
+- {{ .Key }}: {{ join (splitLines .Value) ", " }}{{- "\n" }}
 {{- end -}}
 {{- end }}
 

@@ -67,6 +67,13 @@ func doctorFuncMap() template.FuncMap {
 		"toUpper":    func(v any) string { return strings.ToUpper(fmt.Sprint(v)) },
 		"capitalize": cases.Title(language.English).String,
 		"trimRight":  func(s string) string { return strings.TrimRight(s, " ") },
+		"indent": func(prefix, s string) string {
+			lines := strings.Split(s, "\n")
+			for i := 1; i < len(lines); i++ {
+				lines[i] = prefix + lines[i]
+			}
+			return strings.Join(lines, "\n")
+		},
 		"join":       strings.Join,
 		"splitLines": func(s string) []string { return strings.Split(s, "\n") },
 
