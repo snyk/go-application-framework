@@ -410,7 +410,7 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 //
 // X-RateLimit-Reset (Envoy/Gloo token-bucket) carries the seconds until the
 // current window resets. All clients that hit the same rate-limit window receive
-// the same reset value, which causes a synchronized retry storm if honoured
+// the same reset value, which causes a synchronized retry storm if honored
 // literally. Full jitter — sleeping a random duration in [0, reset) — spreads
 // retries evenly across the reset window and eliminates the thundering herd.
 // If Retry-After is also present it takes precedence (exact, no jitter).

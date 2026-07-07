@@ -607,7 +607,7 @@ func Test_shouldRetry_rateLimitResetJitter(t *testing.T) {
 		err := shouldRetry(resp, 0, 1)
 		require.ErrorAs(t, err, &actualRetryableErr)
 		require.Equal(t, 3*time.Second, actualRetryableErr.Duration,
-			"Retry-After must be honoured exactly with no jitter")
+			"Retry-After must be honored exactly with no jitter")
 	})
 }
 
