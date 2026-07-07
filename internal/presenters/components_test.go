@@ -10,6 +10,7 @@ import (
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/muesli/termenv"
 	"github.com/snyk/error-catalog-golang-public/snyk"
+	"github.com/snyk/go-application-framework/pkg/ui/uitypes"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -78,6 +79,37 @@ func Test_RenderError(t *testing.T) {
 		assert.Contains(t, output, "Docs:")
 		assert.Contains(t, output, "ID:")
 		snaps.MatchSnapshot(t, output)
+	})
+
+	t.Run("with error tip", func(t *testing.T) {
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		lipgloss.SetHasDarkBackground(false)
+		err := snyk.NewServerError("An error")
+		ctx := context.WithValue(defaultContext, uitypes.ErrorTipKey, "Run `snyk doctor` to diagnose this.")
+		output := RenderError(err, ctx)
+
+		assert.Contains(t, output, "Tip:")
+		assert.Contains(t, output, "Run `snyk doctor` to diagnose this.")
+		snaps.MatchSnapshot(t, output)
+	})
+
+	t.Run("without error tip", func(t *testing.T) {
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		lipgloss.SetHasDarkBackground(false)
+		err := snyk.NewServerError("An error")
+		output := RenderError(err, defaultContext)
+
+		assert.NotContains(t, output, "Tip:")
+	})
+
+	t.Run("empty error tip is not rendered", func(t *testing.T) {
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		lipgloss.SetHasDarkBackground(false)
+		err := snyk.NewServerError("An error")
+		ctx := context.WithValue(defaultContext, uitypes.ErrorTipKey, "")
+		output := RenderError(err, ctx)
+
+		assert.NotContains(t, output, "Tip:")
 	})
 
 	t.Run("detail with URL should not break URL", func(t *testing.T) {

@@ -2,6 +2,13 @@ package uitypes
 
 import "context"
 
+type keyTypeString string
+
+// ErrorTipKey is the name to be used for an error tip context key.
+// It should be used if setting an additional helpful tip into a
+// context.Context that is then rendered as part of an error's presentation.
+const ErrorTipKey = keyTypeString("errorTip")
+
 //go:generate go tool github.com/golang/mock/mockgen -source=types.go -destination ../../mocks/userinterface.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/ui/uitypes/
 
 // UserInterface defines the interface for user interaction.
