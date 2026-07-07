@@ -22,7 +22,7 @@ func TestErrorEventCheck_detectsCLIErrors(t *testing.T) {
 	assert.Equal(t, KindCLIError, findings[0].Kind)
 	assert.Equal(t, ProducerLogAnalysis, findings[0].Producer)
 	assert.Equal(t, SeverityError, findings[0].Severity)
-	assert.Equal(t, "L1", findings[0].Subject)
+	assert.Equal(t, "1", findings[0].Subject)
 	assert.Equal(t, []int{1}, findings[0].Lines)
 	assert.Equal(t, KindCLIError, findings[1].Kind)
 }
@@ -61,7 +61,7 @@ func TestErrorEventCheck_dedupesRepeatedEvents(t *testing.T) {
 	findings := check.Analyze(lines)
 
 	require.Len(t, findings, 1)
-	assert.Equal(t, "L1", findings[0].Subject)
+	assert.Equal(t, "1", findings[0].Subject)
 }
 
 func TestErrorEventCheck_highlightCap(t *testing.T) {

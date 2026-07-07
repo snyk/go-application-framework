@@ -32,7 +32,7 @@ func TestFormatTemplate_fullReport(t *testing.T) {
 	assert.Contains(t, rendered, "Version: 1.0.0")
 	assert.Contains(t, rendered, "Symptoms")
 	assert.Contains(t, rendered, "[LOG-ANALYSIS]")
-	assert.Contains(t, rendered, "Occurrences: L3")
+	assert.Contains(t, rendered, "Lines: 3")
 	assert.Contains(t, rendered, "401 Unauthorized")
 }
 
