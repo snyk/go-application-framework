@@ -69,7 +69,7 @@ func hostWithSibling(t *testing.T) (extensionpb.HostCallbackClient, *recordingAn
 	require.NoError(t, engine.Init())
 
 	rec := newRecordingAnalytics()
-	server := newHostCallbackServer(engine, rec, engine.GetConfiguration())
+	server := newHostCallbackServer(engine, rec, engine.GetConfiguration(), 0)
 
 	conn, _ := plugin.TestGRPCConn(t, func(s *grpc.Server) {
 		extensionpb.RegisterHostCallbackServer(s, server)
@@ -108,7 +108,7 @@ func TestRemoteEngine_InvokeForwardsConfigOverrides(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, engine.Init())
 
-	server := newHostCallbackServer(engine, newRecordingAnalytics(), engine.GetConfiguration())
+	server := newHostCallbackServer(engine, newRecordingAnalytics(), engine.GetConfiguration(), 0)
 	conn, _ := plugin.TestGRPCConn(t, func(s *grpc.Server) {
 		extensionpb.RegisterHostCallbackServer(s, server)
 	})
@@ -124,6 +124,27 @@ func TestRemoteEngine_InvokeForwardsConfigOverrides(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	assert.Equal(t, []byte("hello-from-extension"), out[0].GetPayload())
+}
+
+func TestHostCallbackServer_RejectsInvocationBeyondMaxDepth(t *testing.T) {
+	engine := workflow.NewDefaultWorkFlowEngine()
+	require.NoError(t, engine.Init())
+
+	server := newHostCallbackServer(engine, newRecordingAnalytics(), engine.GetConfiguration(), maxInvocationDepth)
+
+	_, err := server.Invoke(context.Background(), &extensionpb.InvokeRequest{Identifier: "flw://sibling"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invocation depth exceeded")
+}
+
+func TestRecoveryInterceptor_RecoversPanic(t *testing.T) {
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		panic("boom")
+	}
+
+	_, err := recoveryInterceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/HostCallback/Invoke"}, handler)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "boom")
 }
 
 func TestRemoteEngine_InvokeUnknownSiblingErrors(t *testing.T) {

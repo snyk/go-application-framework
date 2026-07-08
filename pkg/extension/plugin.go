@@ -114,12 +114,14 @@ func (c *grpcClient) Execute(ctx context.Context, req executeRequest) ([]*extens
 	if c.broker != nil && req.invocation != nil {
 		brokerID := c.broker.NextId()
 		invocation := req.invocation
+		depth := invocationDepth(invocation.Context())
 		go c.broker.AcceptAndServe(brokerID, func(opts []grpc.ServerOption) *grpc.Server {
-			s := grpc.NewServer(opts...)
+			s := grpc.NewServer(append(opts, grpc.UnaryInterceptor(recoveryInterceptor))...)
 			extensionpb.RegisterHostCallbackServer(s, newHostCallbackServer(
 				invocation.GetEngine(),
 				invocation.GetAnalytics(),
 				invocation.GetConfiguration(),
+				depth,
 			))
 			return s
 		})
