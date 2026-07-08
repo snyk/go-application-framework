@@ -99,6 +99,22 @@ func (h *serveHandler) Discover(_ context.Context, _ *extensionpb.DiscoverReques
 }
 
 func (h *serveHandler) Execute(ctx context.Context, req *extensionpb.ExecuteRequest) (*extensionpb.ExecuteResponse, error) {
+	// Dial the host's callback service for this invocation, if offered, before
+	// any other validation. The host starts an AcceptAndServe goroutine per
+	// invocation that only terminates once the plugin dials back, so this must
+	// happen unconditionally -- including on every error path below -- or a
+	// failed invocation (bad input, bad identifier, unknown workflow) leaks
+	// that goroutine on the host side.
+	var hostClient extensionpb.HostCallbackClient
+	if brokerID := req.GetBrokerId(); brokerID != 0 && h.broker != nil {
+		conn, dialErr := h.broker.Dial(brokerID)
+		if dialErr != nil {
+			return nil, status.Errorf(codes.Internal, "dialing host callbacks: %v", dialErr)
+		}
+		defer conn.Close()
+		hostClient = extensionpb.NewHostCallbackClient(conn)
+	}
+
 	reg, ok := h.workflows[req.GetIdentifier()]
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "workflow %q not provided by this extension", req.GetIdentifier())
@@ -114,20 +130,6 @@ func (h *serveHandler) Execute(ctx context.Context, req *extensionpb.ExecuteRequ
 	id, err := url.Parse(req.GetIdentifier())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "parsing identifier: %v", err)
-	}
-
-	// Dial the host's callback service for this invocation, if offered, so the
-	// extension can invoke sibling workflows and record analytics. We always
-	// dial when a broker id is present (even if the handler ends up not using
-	// the callbacks) so the host's AcceptAndServe goroutine terminates.
-	var hostClient extensionpb.HostCallbackClient
-	if brokerID := req.GetBrokerId(); brokerID != 0 && h.broker != nil {
-		conn, dialErr := h.broker.Dial(brokerID)
-		if dialErr != nil {
-			return nil, status.Errorf(codes.Internal, "dialing host callbacks: %v", dialErr)
-		}
-		defer conn.Close()
-		hostClient = extensionpb.NewHostCallbackClient(conn)
 	}
 
 	invocation := newPluginInvocationContext(ctx, id, config, req.GetNetworkProxyUrl(), req.GetNetworkProxyToken(), hostClient)
