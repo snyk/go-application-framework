@@ -581,7 +581,7 @@ func Test_shouldRetry_rateLimitResetHeaders(t *testing.T) {
 func Test_shouldRetry_rateLimitResetJitter(t *testing.T) {
 	t.Parallel()
 
-	t.Run("X-RateLimit-Reset produces jittered delay in [0, reset)", func(t *testing.T) {
+	t.Run("X-RateLimit-Reset produces delay in [reset, reset+maxJitterWindow)", func(t *testing.T) {
 		t.Parallel()
 		h := http.Header{}
 		h.Set("X-Ratelimit-Reset", "10")
@@ -590,10 +590,10 @@ func Test_shouldRetry_rateLimitResetJitter(t *testing.T) {
 		var actualRetryableErr *backoff.RetryAfterError
 		err := shouldRetry(resp, 0, 1)
 		require.ErrorAs(t, err, &actualRetryableErr)
-		require.GreaterOrEqual(t, actualRetryableErr.Duration, time.Duration(0),
-			"jittered delay must be >= 0")
-		require.Less(t, actualRetryableErr.Duration, 10*time.Second,
-			"jittered delay must be < X-RateLimit-Reset window")
+		require.GreaterOrEqual(t, actualRetryableErr.Duration, 10*time.Second,
+			"jittered delay must be >= reset (bucket must have refilled)")
+		require.Less(t, actualRetryableErr.Duration, 10*time.Second+maxJitterWindow,
+			"jittered delay must be < reset + maxJitterWindow")
 	})
 
 	t.Run("Retry-After exact, takes precedence over X-RateLimit-Reset", func(t *testing.T) {

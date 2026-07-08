@@ -402,6 +402,12 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 	return max(retryAfter, rateLimitReset)
 }
 
+// maxJitterWindow is the extra random delay added on top of the reset window.
+// All clients wait at least the reset duration (guaranteeing the bucket has
+// refilled), then each adds a random extra in [0, maxJitterWindow) to
+// desynchronize their retries.
+const maxJitterWindow = 2 * time.Second
+
 // rateLimitRetryDelayJittered returns the actual duration to sleep before retrying
 // a rate-limited request.
 //
@@ -409,11 +415,11 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 // at least the specified duration, so no jitter is applied.
 //
 // X-RateLimit-Reset (Envoy/Gloo token-bucket) carries the seconds until the
-// current window resets. All clients that hit the same rate-limit window receive
-// the same reset value, which causes a synchronized retry storm if honored
-// literally. Full jitter — sleeping a random duration in [0, reset) — spreads
-// retries evenly across the reset window and eliminates the thundering herd.
-// If Retry-After is also present it takes precedence (exact, no jitter).
+// current window resets. All clients that received the same 429 share the same
+// reset value, so retrying at exactly reset causes a synchronized spike.
+// The fix: every client waits the full reset (bucket guaranteed refilled) then
+// adds a random extra delay in [0, maxJitterWindow). This desynchronizes retries
+// without risking a retry before the bucket has actually recovered.
 func rateLimitRetryDelayJittered(res *http.Response) time.Duration {
 	if v := res.Header.Get("Retry-After"); len(v) > 0 {
 		if d := parseRetryDelay(v); d > 0 {
@@ -422,9 +428,9 @@ func rateLimitRetryDelayJittered(res *http.Response) time.Duration {
 	}
 	if v := res.Header.Get("X-RateLimit-Reset"); len(v) > 0 {
 		if d := parseRetryDelay(v); d > 0 {
-			// Full jitter: random in [0, d). Desynchronises clients that all
-			// received the same token-bucket reset deadline.
-			return time.Duration(rand.N(int64(d)))
+			// Wait the full reset window (bucket refills), then add jitter so
+			// concurrent clients don't all retry at the same instant.
+			return d + time.Duration(rand.N(int64(maxJitterWindow)))
 		}
 	}
 	return 0
