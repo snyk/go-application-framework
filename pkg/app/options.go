@@ -26,8 +26,18 @@ func WithLogger(logger *log.Logger) Opts {
 	}
 }
 
+// WithConfiguration replaces the engine's configuration. If an earlier option
+// (e.g. WithExtensionPaths) already recorded extension paths on the engine's
+// current configuration, they are carried forward onto the new one -- otherwise
+// they would be silently discarded when the configuration object is swapped.
 func WithConfiguration(config configuration.Configuration) Opts {
 	return func(engine workflow.Engine) {
+		if existing := engine.GetConfiguration(); existing != nil {
+			if paths := existing.GetStringSlice(extension.ConfigurationKeyPaths); len(paths) > 0 {
+				merged := append(config.GetStringSlice(extension.ConfigurationKeyPaths), paths...)
+				config.Set(extension.ConfigurationKeyPaths, merged)
+			}
+		}
 		engine.SetConfiguration(config)
 	}
 }
