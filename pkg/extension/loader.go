@@ -85,10 +85,14 @@ func WithPaths(paths ...string) LoaderOption {
 	}
 }
 
-// WithLogger sets the logger used for diagnostics.
+// WithLogger sets the logger used for diagnostics. A nil logger is ignored
+// (the default no-op logger from NewLoader is kept) rather than being stored
+// and later nil-panicking on the first log call.
 func WithLogger(logger *zerolog.Logger) LoaderOption {
 	return func(l *Loader) {
-		l.logger = logger
+		if logger != nil {
+			l.logger = logger
+		}
 	}
 }
 
