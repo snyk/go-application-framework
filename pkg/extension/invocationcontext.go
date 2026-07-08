@@ -70,13 +70,15 @@ func newPluginInvocationContext(ctx context.Context, id workflow.Identifier, con
 	if hostClient != nil {
 		c.analytics = newRemoteAnalytics(ctx, hostClient)
 		c.engine = &remoteEngine{
-			ctx:     ctx,
-			client:  hostClient,
-			config:  config,
-			network: network,
-			logger:  &zl,
-			ui:      uiface,
-			stats:   c.analytics,
+			ctx:         ctx,
+			client:      hostClient,
+			config:      config,
+			baseConfig:  configSnapshot(config),
+			network:     network,
+			logger:      &zl,
+			ui:          uiface,
+			stats:       c.analytics,
+			runtimeInfo: ri,
 		}
 	} else {
 		c.analytics = analytics.New()

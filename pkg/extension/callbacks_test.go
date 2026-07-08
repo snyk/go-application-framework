@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -124,6 +125,70 @@ func TestRemoteEngine_InvokeForwardsConfigOverrides(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	assert.Equal(t, []byte("hello-from-extension"), out[0].GetPayload())
+}
+
+func TestRemoteEngine_InvokeForwardsInPlaceConfigMutation(t *testing.T) {
+	engine := workflow.NewDefaultWorkFlowEngine()
+	siblingID := workflow.NewWorkflowIdentifier("sibling")
+	_, err := engine.Register(
+		siblingID,
+		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("sibling", pflag.ContinueOnError)),
+		func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			greeting := invocation.GetConfiguration().GetString("greeting")
+			outID := workflow.NewTypeIdentifier(siblingID, "result")
+			return []workflow.Data{workflow.NewData(outID, "text/plain", []byte(greeting))}, nil
+		},
+	)
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	server := newHostCallbackServer(engine, newRecordingAnalytics(), engine.GetConfiguration(), 0)
+	conn, _ := plugin.TestGRPCConn(t, func(s *grpc.Server) {
+		extensionpb.RegisterHostCallbackServer(s, server)
+	})
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// Mirrors an extension's own invocation.GetConfiguration(): the object a
+	// handler mutates in place, rather than a distinct clone built for
+	// WithConfig.
+	handlerConfig := configuration.New()
+	remote := &remoteEngine{
+		ctx:        context.Background(),
+		client:     extensionpb.NewHostCallbackClient(conn),
+		config:     handlerConfig,
+		baseConfig: configSnapshot(handlerConfig),
+	}
+
+	// The handler mutates its own config object in place -- the same pointer
+	// remote.config already holds -- then invokes with that same object.
+	handlerConfig.Set("greeting", "mutated-in-place")
+
+	out, err := remote.Invoke(siblingID, workflow.WithConfig(handlerConfig))
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, []byte("mutated-in-place"), out[0].GetPayload(), "an in-place mutation of the handler's own config object must still be forwarded")
+}
+
+func TestRemoteEngine_GetRuntimeInfo_ReturnsForwardedInfo(t *testing.T) {
+	ri := runtimeinfo.New(runtimeinfo.WithName("snyk-cli"), runtimeinfo.WithVersion("1.2.3"))
+	remote := &remoteEngine{runtimeInfo: ri}
+
+	got := remote.GetRuntimeInfo()
+	require.NotNil(t, got)
+	assert.Equal(t, "snyk-cli", got.GetName())
+	assert.Equal(t, "1.2.3", got.GetVersion())
+}
+
+func TestConfigOverrides_SkipsSliceTypedValues(t *testing.T) {
+	baseline := map[string]string{}
+	override := configuration.New()
+	override.Set("subdomains", []string{"a.example.com", "b.example.com"})
+	override.Set("greeting", "hi")
+
+	diffs := configOverrides(baseline, override)
+
+	assert.NotContains(t, diffs, "subdomains", "a slice-typed value must not be forwarded as a stringified scalar")
+	assert.Equal(t, "hi", diffs["greeting"])
 }
 
 func TestHostCallbackServer_RejectsInvocationBeyondMaxDepth(t *testing.T) {
