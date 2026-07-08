@@ -61,6 +61,12 @@ message ExecuteRequest {
   // invoke sibling workflows and record analytics. Zero when no callbacks are
   // available.
   uint32 broker_id = 6;
+  // runtime_info_name and runtime_info_version mirror the host's
+  // runtimeinfo.RuntimeInfo for this invocation, so workflow code that reads it
+  // behaves the same whether run in-process or as an extension. Both are empty
+  // when the host has none set.
+  string runtime_info_name = 7;
+  string runtime_info_version = 8;
 }
 
 message ExecuteResponse {

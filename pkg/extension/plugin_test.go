@@ -107,6 +107,27 @@ func TestGRPC_Execute_HandlerError(t *testing.T) {
 	assert.Contains(t, err.Error(), assert.AnError.Error())
 }
 
+func TestServeHandler_Execute_ForwardsRuntimeInfo(t *testing.T) {
+	var gotName, gotVersion string
+	handler := newServeHandler()
+	handler.Register("flw://hello", func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+		ri := invocation.GetRuntimeInfo()
+		require.NotNil(t, ri)
+		gotName = ri.GetName()
+		gotVersion = ri.GetVersion()
+		return nil, nil
+	})
+
+	_, err := handler.Execute(context.Background(), &extensionpb.ExecuteRequest{
+		Identifier:         "flw://hello",
+		RuntimeInfoName:    "snyk-cli",
+		RuntimeInfoVersion: "1.2.3",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "snyk-cli", gotName)
+	assert.Equal(t, "1.2.3", gotVersion)
+}
+
 func noopHandler(workflow.InvocationContext, []workflow.Data) ([]workflow.Data, error) {
 	return nil, nil
 }

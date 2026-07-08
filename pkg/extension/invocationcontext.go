@@ -27,15 +27,16 @@ import (
 // to the host. Analytics is local and Engine is unavailable; bridging those is
 // the next phase (see docs/dynamic-extensions-design.md).
 type pluginInvocationContext struct {
-	ctx       context.Context
-	id        workflow.Identifier
-	config    configuration.Configuration
-	network   networking.NetworkAccess
-	logger    *log.Logger
-	zlogger   *zerolog.Logger
-	ui        ui.UserInterface
-	analytics analytics.Analytics
-	engine    workflow.Engine
+	ctx         context.Context
+	id          workflow.Identifier
+	config      configuration.Configuration
+	network     networking.NetworkAccess
+	logger      *log.Logger
+	zlogger     *zerolog.Logger
+	ui          ui.UserInterface
+	analytics   analytics.Analytics
+	engine      workflow.Engine
+	runtimeInfo runtimeinfo.RuntimeInfo
 }
 
 var _ workflow.InvocationContext = (*pluginInvocationContext)(nil)
@@ -44,21 +45,26 @@ var _ workflow.InvocationContext = (*pluginInvocationContext)(nil)
 // extension's handler. When hostClient is non-nil (the host offered callbacks),
 // analytics and the engine are backed by the host: analytics flows into the
 // host's batch and GetEngine().Invoke runs sibling workflows on the host.
-func newPluginInvocationContext(ctx context.Context, id workflow.Identifier, config configuration.Configuration, proxyURL, proxyToken string, hostClient extensionpb.HostCallbackClient) *pluginInvocationContext {
+func newPluginInvocationContext(ctx context.Context, id workflow.Identifier, config configuration.Configuration, proxyURL, proxyToken string, hostClient extensionpb.HostCallbackClient, ri runtimeinfo.RuntimeInfo) *pluginInvocationContext {
 	// stdout is reserved for the go-plugin handshake/protocol, so everything
 	// human-facing on the plugin side must go to stderr.
 	zl := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	network := buildNetworkAccess(config, proxyURL, proxyToken)
 	uiface := pluginUserInterface()
 
+	if ri == nil {
+		ri = runtimeinfo.New()
+	}
+
 	c := &pluginInvocationContext{
-		ctx:     ctx,
-		id:      id,
-		config:  config,
-		network: network,
-		logger:  log.New(os.Stderr, "", 0),
-		zlogger: &zl,
-		ui:      uiface,
+		ctx:         ctx,
+		id:          id,
+		config:      config,
+		network:     network,
+		logger:      log.New(os.Stderr, "", 0),
+		zlogger:     &zl,
+		ui:          uiface,
+		runtimeInfo: ri,
 	}
 
 	if hostClient != nil {
@@ -124,5 +130,8 @@ func (c *pluginInvocationContext) GetUserInterface() ui.UserInterface         { 
 // or nil when the host did not offer callbacks for this invocation.
 func (c *pluginInvocationContext) GetEngine() workflow.Engine { return c.engine }
 
-// GetRuntimeInfo returns nil in this phase; runtime info is not yet bridged.
-func (c *pluginInvocationContext) GetRuntimeInfo() runtimeinfo.RuntimeInfo { return nil }
+// GetRuntimeInfo returns the host's runtimeinfo.RuntimeInfo, mirrored across
+// the process boundary by the caller. It is never nil, even when the host had
+// none set, so workflow code written for in-process use (which assumes a
+// non-nil result) behaves the same when run as an extension.
+func (c *pluginInvocationContext) GetRuntimeInfo() runtimeinfo.RuntimeInfo { return c.runtimeInfo }

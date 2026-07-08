@@ -304,9 +304,15 @@ type ExecuteRequest struct {
 	// HostCallback service on for this invocation. The extension dials it back to
 	// invoke sibling workflows and record analytics. Zero when no callbacks are
 	// available.
-	BrokerId      uint32 `protobuf:"varint,6,opt,name=broker_id,json=brokerId,proto3" json:"broker_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	BrokerId uint32 `protobuf:"varint,6,opt,name=broker_id,json=brokerId,proto3" json:"broker_id,omitempty"`
+	// runtime_info_name and runtime_info_version mirror the host's
+	// runtimeinfo.RuntimeInfo for this invocation, so workflow code that reads it
+	// behaves the same whether run in-process or as an extension. Both are empty
+	// when the host has none set.
+	RuntimeInfoName    string `protobuf:"bytes,7,opt,name=runtime_info_name,json=runtimeInfoName,proto3" json:"runtime_info_name,omitempty"`
+	RuntimeInfoVersion string `protobuf:"bytes,8,opt,name=runtime_info_version,json=runtimeInfoVersion,proto3" json:"runtime_info_version,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ExecuteRequest) Reset() {
@@ -379,6 +385,20 @@ func (x *ExecuteRequest) GetBrokerId() uint32 {
 		return x.BrokerId
 	}
 	return 0
+}
+
+func (x *ExecuteRequest) GetRuntimeInfoName() string {
+	if x != nil {
+		return x.RuntimeInfoName
+	}
+	return ""
+}
+
+func (x *ExecuteRequest) GetRuntimeInfoVersion() string {
+	if x != nil {
+		return x.RuntimeInfoVersion
+	}
+	return ""
 }
 
 type ExecuteResponse struct {
@@ -808,7 +828,7 @@ const file_extension_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12#\n" +
 	"\rdefault_value\x18\x03 \x01(\tR\fdefaultValue\x12\x14\n" +
-	"\x05usage\x18\x04 \x01(\tR\x05usage\"\xdd\x02\n" +
+	"\x05usage\x18\x04 \x01(\tR\x05usage\"\xbb\x03\n" +
 	"\x0eExecuteRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
@@ -817,7 +837,9 @@ const file_extension_proto_rawDesc = "" +
 	"\x05input\x18\x03 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x05input\x12*\n" +
 	"\x11network_proxy_url\x18\x04 \x01(\tR\x0fnetworkProxyUrl\x12.\n" +
 	"\x13network_proxy_token\x18\x05 \x01(\tR\x11networkProxyToken\x12\x1b\n" +
-	"\tbroker_id\x18\x06 \x01(\rR\bbrokerId\x1a9\n" +
+	"\tbroker_id\x18\x06 \x01(\rR\bbrokerId\x12*\n" +
+	"\x11runtime_info_name\x18\a \x01(\tR\x0fruntimeInfoName\x120\n" +
+	"\x14runtime_info_version\x18\b \x01(\tR\x12runtimeInfoVersion\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"E\n" +

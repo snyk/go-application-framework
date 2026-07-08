@@ -12,6 +12,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -132,7 +133,8 @@ func (h *serveHandler) Execute(ctx context.Context, req *extensionpb.ExecuteRequ
 		return nil, status.Errorf(codes.InvalidArgument, "parsing identifier: %v", err)
 	}
 
-	invocation := newPluginInvocationContext(ctx, id, config, req.GetNetworkProxyUrl(), req.GetNetworkProxyToken(), hostClient)
+	ri := runtimeinfo.New(runtimeinfo.WithName(req.GetRuntimeInfoName()), runtimeinfo.WithVersion(req.GetRuntimeInfoVersion()))
+	invocation := newPluginInvocationContext(ctx, id, config, req.GetNetworkProxyUrl(), req.GetNetworkProxyToken(), hostClient, ri)
 
 	output, err := reg.handler(invocation, input)
 	if err != nil {

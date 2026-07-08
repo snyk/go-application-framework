@@ -128,6 +128,16 @@ func (c *grpcClient) Execute(ctx context.Context, req executeRequest) ([]*extens
 		pbReq.BrokerId = brokerID
 	}
 
+	// Mirror the host's runtimeinfo.RuntimeInfo across the boundary so workflow
+	// code behaves identically whether it runs in-process or as an extension
+	// (e.g. code that reads GetRuntimeInfo().GetName()).
+	if req.invocation != nil {
+		if ri := req.invocation.GetRuntimeInfo(); ri != nil {
+			pbReq.RuntimeInfoName = ri.GetName()
+			pbReq.RuntimeInfoVersion = ri.GetVersion()
+		}
+	}
+
 	resp, err := c.client.Execute(ctx, pbReq)
 	if err != nil {
 		return nil, err
