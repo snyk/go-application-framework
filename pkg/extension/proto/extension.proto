@@ -102,6 +102,11 @@ service HostCallback {
 message InvokeRequest {
   string identifier = 1;
   repeated DataMsg input = 2;
+  // config carries per-invocation configuration overrides supplied via
+  // workflow.WithConfig on the extension side. Only keys present here override
+  // the host's configuration when the host runs the sibling workflow; unset
+  // keys fall back to the host's own values.
+  map<string, string> config = 3;
 }
 
 message InvokeResponse {

@@ -93,6 +93,39 @@ func TestRemoteEngine_InvokesSibling(t *testing.T) {
 	assert.Equal(t, []byte("sibling:ping"), out[0].GetPayload())
 }
 
+func TestRemoteEngine_InvokeForwardsConfigOverrides(t *testing.T) {
+	engine := workflow.NewDefaultWorkFlowEngine()
+	siblingID := workflow.NewWorkflowIdentifier("sibling")
+	_, err := engine.Register(
+		siblingID,
+		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("sibling", pflag.ContinueOnError)),
+		func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			greeting := invocation.GetConfiguration().GetString("greeting")
+			outID := workflow.NewTypeIdentifier(siblingID, "result")
+			return []workflow.Data{workflow.NewData(outID, "text/plain", []byte(greeting))}, nil
+		},
+	)
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	server := newHostCallbackServer(engine, newRecordingAnalytics(), engine.GetConfiguration())
+	conn, _ := plugin.TestGRPCConn(t, func(s *grpc.Server) {
+		extensionpb.RegisterHostCallbackServer(s, server)
+	})
+	t.Cleanup(func() { _ = conn.Close() })
+
+	baseConfig := configuration.New()
+	remote := &remoteEngine{ctx: context.Background(), client: extensionpb.NewHostCallbackClient(conn), config: baseConfig}
+
+	override := baseConfig.Clone()
+	override.Set("greeting", "hello-from-extension")
+
+	out, err := remote.Invoke(siblingID, workflow.WithConfig(override))
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, []byte("hello-from-extension"), out[0].GetPayload())
+}
+
 func TestRemoteEngine_InvokeUnknownSiblingErrors(t *testing.T) {
 	client, _ := hostWithSibling(t)
 	engine := &remoteEngine{ctx: context.Background(), client: client, config: configuration.New()}

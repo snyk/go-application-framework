@@ -497,9 +497,14 @@ func (x *DataMsg) GetPayloadEncoding() PayloadEncoding {
 }
 
 type InvokeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Identifier    string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
-	Input         []*DataMsg             `protobuf:"bytes,2,rep,name=input,proto3" json:"input,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Identifier string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	Input      []*DataMsg             `protobuf:"bytes,2,rep,name=input,proto3" json:"input,omitempty"`
+	// config carries per-invocation configuration overrides supplied via
+	// workflow.WithConfig on the extension side. Only keys present here override
+	// the host's configuration when the host runs the sibling workflow; unset
+	// keys fall back to the host's own values.
+	Config        map[string]string `protobuf:"bytes,3,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -544,6 +549,13 @@ func (x *InvokeRequest) GetIdentifier() string {
 func (x *InvokeRequest) GetInput() []*DataMsg {
 	if x != nil {
 		return x.Input
+	}
+	return nil
+}
+
+func (x *InvokeRequest) GetConfig() map[string]string {
+	if x != nil {
+		return x.Config
 	}
 	return nil
 }
@@ -820,12 +832,16 @@ const file_extension_proto_rawDesc = "" +
 	"\x10payload_encoding\x18\x04 \x01(\x0e2\".snyk.extension.v1.PayloadEncodingR\x0fpayloadEncoding\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe2\x01\n" +
 	"\rInvokeRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
 	"identifier\x120\n" +
-	"\x05input\x18\x02 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x05input\"D\n" +
+	"\x05input\x18\x02 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x05input\x12D\n" +
+	"\x06config\x18\x03 \x03(\v2,.snyk.extension.v1.InvokeRequest.ConfigEntryR\x06config\x1a9\n" +
+	"\vConfigEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +
 	"\x0eInvokeResponse\x122\n" +
 	"\x06output\x18\x01 \x03(\v2\x1a.snyk.extension.v1.DataMsgR\x06output\"\x90\x01\n" +
 	"\x0eExtensionValue\x12\x10\n" +
@@ -864,7 +880,7 @@ func file_extension_proto_rawDescGZIP() []byte {
 }
 
 var file_extension_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_extension_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_extension_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_extension_proto_goTypes = []any{
 	(PayloadEncoding)(0),       // 0: snyk.extension.v1.PayloadEncoding
 	(*DiscoverRequest)(nil),    // 1: snyk.extension.v1.DiscoverRequest
@@ -881,6 +897,7 @@ var file_extension_proto_goTypes = []any{
 	(*CallbackAck)(nil),        // 12: snyk.extension.v1.CallbackAck
 	nil,                        // 13: snyk.extension.v1.ExecuteRequest.ConfigEntry
 	nil,                        // 14: snyk.extension.v1.DataMsg.MetadataEntry
+	nil,                        // 15: snyk.extension.v1.InvokeRequest.ConfigEntry
 }
 var file_extension_proto_depIdxs = []int32{
 	3,  // 0: snyk.extension.v1.DiscoverResponse.workflows:type_name -> snyk.extension.v1.WorkflowSpec
@@ -891,22 +908,23 @@ var file_extension_proto_depIdxs = []int32{
 	14, // 5: snyk.extension.v1.DataMsg.metadata:type_name -> snyk.extension.v1.DataMsg.MetadataEntry
 	0,  // 6: snyk.extension.v1.DataMsg.payload_encoding:type_name -> snyk.extension.v1.PayloadEncoding
 	7,  // 7: snyk.extension.v1.InvokeRequest.input:type_name -> snyk.extension.v1.DataMsg
-	7,  // 8: snyk.extension.v1.InvokeResponse.output:type_name -> snyk.extension.v1.DataMsg
-	1,  // 9: snyk.extension.v1.Extension.Discover:input_type -> snyk.extension.v1.DiscoverRequest
-	5,  // 10: snyk.extension.v1.Extension.Execute:input_type -> snyk.extension.v1.ExecuteRequest
-	8,  // 11: snyk.extension.v1.HostCallback.Invoke:input_type -> snyk.extension.v1.InvokeRequest
-	10, // 12: snyk.extension.v1.HostCallback.AddExtensionValue:input_type -> snyk.extension.v1.ExtensionValue
-	11, // 13: snyk.extension.v1.HostCallback.ReportError:input_type -> snyk.extension.v1.ReportErrorRequest
-	2,  // 14: snyk.extension.v1.Extension.Discover:output_type -> snyk.extension.v1.DiscoverResponse
-	6,  // 15: snyk.extension.v1.Extension.Execute:output_type -> snyk.extension.v1.ExecuteResponse
-	9,  // 16: snyk.extension.v1.HostCallback.Invoke:output_type -> snyk.extension.v1.InvokeResponse
-	12, // 17: snyk.extension.v1.HostCallback.AddExtensionValue:output_type -> snyk.extension.v1.CallbackAck
-	12, // 18: snyk.extension.v1.HostCallback.ReportError:output_type -> snyk.extension.v1.CallbackAck
-	14, // [14:19] is the sub-list for method output_type
-	9,  // [9:14] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	15, // 8: snyk.extension.v1.InvokeRequest.config:type_name -> snyk.extension.v1.InvokeRequest.ConfigEntry
+	7,  // 9: snyk.extension.v1.InvokeResponse.output:type_name -> snyk.extension.v1.DataMsg
+	1,  // 10: snyk.extension.v1.Extension.Discover:input_type -> snyk.extension.v1.DiscoverRequest
+	5,  // 11: snyk.extension.v1.Extension.Execute:input_type -> snyk.extension.v1.ExecuteRequest
+	8,  // 12: snyk.extension.v1.HostCallback.Invoke:input_type -> snyk.extension.v1.InvokeRequest
+	10, // 13: snyk.extension.v1.HostCallback.AddExtensionValue:input_type -> snyk.extension.v1.ExtensionValue
+	11, // 14: snyk.extension.v1.HostCallback.ReportError:input_type -> snyk.extension.v1.ReportErrorRequest
+	2,  // 15: snyk.extension.v1.Extension.Discover:output_type -> snyk.extension.v1.DiscoverResponse
+	6,  // 16: snyk.extension.v1.Extension.Execute:output_type -> snyk.extension.v1.ExecuteResponse
+	9,  // 17: snyk.extension.v1.HostCallback.Invoke:output_type -> snyk.extension.v1.InvokeResponse
+	12, // 18: snyk.extension.v1.HostCallback.AddExtensionValue:output_type -> snyk.extension.v1.CallbackAck
+	12, // 19: snyk.extension.v1.HostCallback.ReportError:output_type -> snyk.extension.v1.CallbackAck
+	15, // [15:20] is the sub-list for method output_type
+	10, // [10:15] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_extension_proto_init() }
@@ -925,7 +943,7 @@ func file_extension_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_extension_proto_rawDesc), len(file_extension_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

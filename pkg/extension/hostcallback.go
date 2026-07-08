@@ -46,7 +46,16 @@ func (s *hostCallbackServer) Invoke(_ context.Context, req *extensionpb.InvokeRe
 		return nil, status.Errorf(codes.InvalidArgument, "decoding input: %v", err)
 	}
 
-	output, err := s.engine.Invoke(id, workflow.WithInput(input))
+	invokeOpts := []workflow.EngineInvokeOption{workflow.WithInput(input)}
+	if overrides := req.GetConfig(); len(overrides) > 0 && s.config != nil {
+		cfg := s.config.Clone()
+		for key, value := range overrides {
+			cfg.Set(key, value)
+		}
+		invokeOpts = append(invokeOpts, workflow.WithConfig(cfg))
+	}
+
+	output, err := s.engine.Invoke(id, invokeOpts...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "invoking %q: %v", req.GetIdentifier(), err)
 	}

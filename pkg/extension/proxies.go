@@ -77,7 +77,7 @@ type remoteEngine struct {
 
 var _ workflow.Engine = (*remoteEngine)(nil)
 
-func (e *remoteEngine) invoke(id workflow.Identifier, input []workflow.Data) ([]workflow.Data, error) {
+func (e *remoteEngine) invoke(id workflow.Identifier, input []workflow.Data, configOverrides map[string]string) ([]workflow.Data, error) {
 	inMsgs, err := dataSliceToMsgs(input)
 	if err != nil {
 		return nil, fmt.Errorf("serializing input: %w", err)
@@ -85,6 +85,7 @@ func (e *remoteEngine) invoke(id workflow.Identifier, input []workflow.Data) ([]
 	resp, err := e.client.Invoke(e.ctx, &extensionpb.InvokeRequest{
 		Identifier: id.String(),
 		Input:      inMsgs,
+		Config:     configOverrides,
 	})
 	if err != nil {
 		return nil, err
@@ -92,23 +93,50 @@ func (e *remoteEngine) invoke(id workflow.Identifier, input []workflow.Data) ([]
 	return msgsToDataSlice(resp.GetOutput(), e.config)
 }
 
+// configOverrides returns the keys where override differs from base, as a
+// string snapshot suitable for crossing the process boundary. Returns nil if
+// override is base itself (no WithConfig was supplied) or nil.
+func configOverrides(base, override configuration.Configuration) map[string]string {
+	if override == nil || override == base {
+		return nil
+	}
+	var diffs map[string]string
+	for _, key := range override.AllKeys() {
+		if value := override.GetString(key); value != base.GetString(key) {
+			if diffs == nil {
+				diffs = make(map[string]string)
+			}
+			diffs[key] = value
+		}
+	}
+	return diffs
+}
+
+// Invoke forwards the invocation to the host so the sibling workflow runs in
+// the host's full context. Config overrides supplied via workflow.WithConfig
+// are propagated (the host applies them on top of its own configuration).
+// workflow.WithContext and workflow.WithInstrumentationCollector are not
+// propagated: a Go context and an analytics.InstrumentationCollector cannot
+// cross the process boundary, so the sibling always runs with the host's own
+// context and reports through the host's analytics.
 func (e *remoteEngine) Invoke(id workflow.Identifier, opts ...workflow.EngineInvokeOption) ([]workflow.Data, error) {
-	_, input := workflow.ResolveInvokeOptions(e.config, opts...)
-	return e.invoke(id, input)
+	config, input := workflow.ResolveInvokeOptions(e.config, opts...)
+	return e.invoke(id, input, configOverrides(e.config, config))
 }
 
 func (e *remoteEngine) InvokeWithInput(id workflow.Identifier, input []workflow.Data) ([]workflow.Data, error) {
-	return e.invoke(id, input)
+	return e.invoke(id, input, nil)
 }
 
-// InvokeWithConfig forwards the invocation; per-invocation config overrides are
-// not propagated across the boundary (the sibling runs with the host's config).
-func (e *remoteEngine) InvokeWithConfig(id workflow.Identifier, _ configuration.Configuration) ([]workflow.Data, error) {
-	return e.invoke(id, nil)
+// Deprecated: Use Invoke() with WithConfig() instead. Config overrides are
+// propagated to the host; see Invoke for what does not cross the boundary.
+func (e *remoteEngine) InvokeWithConfig(id workflow.Identifier, config configuration.Configuration) ([]workflow.Data, error) {
+	return e.invoke(id, nil, configOverrides(e.config, config))
 }
 
-func (e *remoteEngine) InvokeWithInputAndConfig(id workflow.Identifier, input []workflow.Data, _ configuration.Configuration) ([]workflow.Data, error) {
-	return e.invoke(id, input)
+// Deprecated: Use Invoke() with WithInput() and WithConfig() instead.
+func (e *remoteEngine) InvokeWithInputAndConfig(id workflow.Identifier, input []workflow.Data, config configuration.Configuration) ([]workflow.Data, error) {
+	return e.invoke(id, input, configOverrides(e.config, config))
 }
 
 func (e *remoteEngine) GetConfiguration() configuration.Configuration { return e.config }
