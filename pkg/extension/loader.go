@@ -185,8 +185,8 @@ func (l *Loader) makeProxy(conn pluginConn, spec *extensionpb.WorkflowSpec) work
 		// Bridge the host's authenticated network access for this invocation.
 		if proxy, cleanup := l.startAuthProxy(invocation); proxy != nil {
 			defer cleanup()
-			req.networkProxyURL = proxy.BaseURL()
-			req.networkProxyToken = proxy.Secret()
+			req.networkProxyURL = proxy.baseURL
+			req.networkProxyToken = proxy.secret
 		}
 
 		var err error
@@ -206,7 +206,7 @@ func (l *Loader) makeProxy(conn pluginConn, spec *extensionpb.WorkflowSpec) work
 // startAuthProxy launches the loopback auth proxy backed by the invocation's
 // network access. It returns (nil, noop) when network access is unavailable so
 // invocation still proceeds without the network bridge.
-func (l *Loader) startAuthProxy(invocation workflow.InvocationContext) (*AuthProxy, func()) {
+func (l *Loader) startAuthProxy(invocation workflow.InvocationContext) (*authProxy, func()) {
 	noop := func() {}
 
 	network := invocation.GetNetworkAccess()
@@ -218,12 +218,12 @@ func (l *Loader) startAuthProxy(invocation workflow.InvocationContext) (*AuthPro
 		return nil, noop
 	}
 
-	proxy, err := NewAuthProxy(upstream, network.GetRoundTripper(), l.logger)
+	proxy, err := newAuthProxy(upstream, network.GetRoundTripper(), l.logger)
 	if err != nil {
 		l.logger.Warn().Err(err).Msg("extension network access disabled: failed to start auth proxy")
 		return nil, noop
 	}
-	return proxy, func() { _ = proxy.Close() }
+	return proxy, func() { _ = proxy.stop() }
 }
 
 // Close terminates every extension process the Loader launched. Call it during
@@ -242,7 +242,7 @@ func (l *Loader) Close() {
 func grpcDialer(logger *zerolog.Logger) dialer {
 	return func(_ context.Context, path string) (pluginConn, func(), error) {
 		client := plugin.NewClient(&plugin.ClientConfig{
-			HandshakeConfig:  Handshake,
+			HandshakeConfig:  handshake,
 			Plugins:          pluginMap(nil),
 			Cmd:              exec.Command(path),
 			AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},

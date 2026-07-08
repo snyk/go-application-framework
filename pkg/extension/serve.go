@@ -153,7 +153,7 @@ func Serve(register func(Registrar)) {
 	register(handler)
 
 	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: Handshake,
+		HandshakeConfig: handshake,
 		Plugins:         pluginMap(handler),
 		GRPCServer:      plugin.DefaultGRPCServer,
 	})

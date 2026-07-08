@@ -23,11 +23,11 @@ import (
 // go-plugin plugin map. Host and plugin must agree on it.
 const pluginName = "snyk_extension"
 
-// Handshake is the go-plugin handshake shared by the host and every extension.
+// handshake is the go-plugin handshake shared by the host and every extension.
 // A mismatch (wrong magic cookie or protocol version) makes go-plugin refuse
 // the connection before any extension code runs, so a stray executable cannot
 // be mistaken for a Snyk extension.
-var Handshake = plugin.HandshakeConfig{
+var handshake = plugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "SNYK_CLI_EXTENSION",
 	MagicCookieValue: "snyk-extension-v1-handshake",

@@ -19,7 +19,7 @@ import (
 // calls.
 const proxyTokenHeader = "X-Snyk-Extension-Proxy-Token" //nolint:gosec // header name, not a credential
 
-// AuthProxy is the host side of the "option C" network bridge. It is a loopback
+// authProxy is the host side of the "option C" network bridge. It is a loopback
 // HTTP reverse proxy that forwards requests to a fixed upstream (the Snyk API)
 // using the host's authenticated transport. The extension points a plain HTTP
 // client at it, so the user's credentials are injected host-side and never
@@ -28,18 +28,18 @@ const proxyTokenHeader = "X-Snyk-Extension-Proxy-Token" //nolint:gosec // header
 // The proxy is scoped to a single upstream by design: an extension can reach
 // the configured API, not arbitrary hosts. Arbitrary-host egress would require
 // a TLS-terminating forward proxy and is intentionally out of scope.
-type AuthProxy struct {
+type authProxy struct {
 	server   *http.Server
 	listener net.Listener
 	secret   string
 	baseURL  string
 }
 
-// NewAuthProxy starts a loopback auth proxy forwarding to upstream via
+// newAuthProxy starts a loopback auth proxy forwarding to upstream via
 // transport. transport is expected to be the host's authenticated
 // http.RoundTripper (networking.NetworkAccess.GetRoundTripper), which injects
 // authentication, default headers, proxy and TLS configuration.
-func NewAuthProxy(upstream string, transport http.RoundTripper, logger *zerolog.Logger) (*AuthProxy, error) {
+func newAuthProxy(upstream string, transport http.RoundTripper, logger *zerolog.Logger) (*authProxy, error) {
 	upstreamURL, err := url.Parse(upstream)
 	if err != nil {
 		return nil, fmt.Errorf("parsing upstream url %q: %w", upstream, err)
@@ -67,7 +67,7 @@ func NewAuthProxy(upstream string, transport http.RoundTripper, logger *zerolog.
 		Transport: transport,
 	}
 
-	proxy := &AuthProxy{
+	proxy := &authProxy{
 		server:   &http.Server{Handler: authGuard(secret, reverse)},
 		listener: listener,
 		secret:   secret,
@@ -97,14 +97,8 @@ func authGuard(secret string, next http.Handler) http.Handler {
 	})
 }
 
-// BaseURL is the loopback base URL the extension should use as its API endpoint.
-func (p *AuthProxy) BaseURL() string { return p.baseURL }
-
-// Secret is the per-invocation token the extension must send via proxyTokenHeader.
-func (p *AuthProxy) Secret() string { return p.secret }
-
-// Close shuts the proxy down. It is safe to call once per proxy.
-func (p *AuthProxy) Close() error {
+// stop shuts the proxy down. It is safe to call once per proxy.
+func (p *authProxy) stop() error {
 	return p.server.Close()
 }
 

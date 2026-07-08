@@ -35,13 +35,13 @@ func TestAuthProxy_InjectsAuthAndForwards(t *testing.T) {
 	defer upstream.Close()
 
 	transport := &authInjectingTransport{token: "s3cr3t", base: http.DefaultTransport}
-	proxy, err := NewAuthProxy(upstream.URL, transport, nil)
+	proxy, err := newAuthProxy(upstream.URL, transport, nil)
 	require.NoError(t, err)
-	defer proxy.Close()
+	defer proxy.stop()
 
 	// A client that knows the secret reaches the upstream.
-	req, _ := http.NewRequest(http.MethodGet, proxy.BaseURL()+"/rest/orgs", nil)
-	req.Header.Set(proxyTokenHeader, proxy.Secret())
+	req, _ := http.NewRequest(http.MethodGet, proxy.baseURL+"/rest/orgs", nil)
+	req.Header.Set(proxyTokenHeader, proxy.secret)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -59,19 +59,19 @@ func TestAuthProxy_RejectsMissingOrWrongSecret(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy, err := NewAuthProxy(upstream.URL, http.DefaultTransport, nil)
+	proxy, err := newAuthProxy(upstream.URL, http.DefaultTransport, nil)
 	require.NoError(t, err)
-	defer proxy.Close()
+	defer proxy.stop()
 
 	t.Run("missing secret", func(t *testing.T) {
-		resp, err := http.Get(proxy.BaseURL() + "/rest/orgs")
+		resp, err := http.Get(proxy.baseURL + "/rest/orgs")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	})
 
 	t.Run("wrong secret", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, proxy.BaseURL()+"/rest/orgs", nil)
+		req, _ := http.NewRequest(http.MethodGet, proxy.baseURL+"/rest/orgs", nil)
 		req.Header.Set(proxyTokenHeader, "not-the-secret")
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -83,6 +83,6 @@ func TestAuthProxy_RejectsMissingOrWrongSecret(t *testing.T) {
 }
 
 func TestNewAuthProxy_RejectsRelativeUpstream(t *testing.T) {
-	_, err := NewAuthProxy("/not/absolute", http.DefaultTransport, nil)
+	_, err := newAuthProxy("/not/absolute", http.DefaultTransport, nil)
 	assert.Error(t, err)
 }
