@@ -330,14 +330,21 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			return backoff.Permanent(errRetryNecessary)
 		}
 
-		// Cap check must use the raw header value, not the jittered one.
-		// Jitter applied before the cap could allow a huge reset (e.g. 4 years)
-		// to slip through when rand lands below maxRetryAfter.
-		if rawDelay := rateLimitRetryDelay(response); rawDelay > maxRetryAfter {
+		rawDelay := rateLimitRetryDelay(response)
+		if rawDelay > maxRetryAfter {
 			return backoff.Permanent(errRetryDelayMaxExceeded)
 		}
 
-		timeToWait := rateLimitRetryDelayJittered(response)
+		var timeToWait time.Duration
+		if retryAfter := parseRetryDelay(response.Header.Get("Retry-After")); retryAfter > 0 {
+			// Retry-After is an explicit server directive: honor exactly, no jitter.
+			timeToWait = retryAfter
+		} else if rawDelay > 0 {
+			// X-RateLimit-Reset: wait the full reset window (bucket guaranteed
+			// refilled) then add random extra in [0, maxJitterWindow) to
+			// desynchronize concurrent clients.
+			timeToWait = rawDelay + time.Duration(rand.N(int64(maxJitterWindow)))
+		}
 
 		// if a retry after is defined, this is the time to wait for
 		if timeToWait > 0 {
@@ -402,36 +409,8 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 	return max(retryAfter, rateLimitReset)
 }
 
-// maxJitterWindow is the extra random delay added on top of the reset window.
+// maxJitterWindow is the extra random delay added on top of X-RateLimit-Reset.
 // All clients wait at least the reset duration (guaranteeing the bucket has
 // refilled), then each adds a random extra in [0, maxJitterWindow) to
 // desynchronize their retries.
 const maxJitterWindow = 2 * time.Second
-
-// rateLimitRetryDelayJittered returns the actual duration to sleep before retrying
-// a rate-limited request.
-//
-// Retry-After is respected exactly — RFC 7231 semantics require clients to wait
-// at least the specified duration, so no jitter is applied.
-//
-// X-RateLimit-Reset (Envoy/Gloo token-bucket) carries the seconds until the
-// current window resets. All clients that received the same 429 share the same
-// reset value, so retrying at exactly reset causes a synchronized spike.
-// The fix: every client waits the full reset (bucket guaranteed refilled) then
-// adds a random extra delay in [0, maxJitterWindow). This desynchronizes retries
-// without risking a retry before the bucket has actually recovered.
-func rateLimitRetryDelayJittered(res *http.Response) time.Duration {
-	if v := res.Header.Get("Retry-After"); len(v) > 0 {
-		if d := parseRetryDelay(v); d > 0 {
-			return d
-		}
-	}
-	if v := res.Header.Get("X-RateLimit-Reset"); len(v) > 0 {
-		if d := parseRetryDelay(v); d > 0 {
-			// Wait the full reset window (bucket refills), then add jitter so
-			// concurrent clients don't all retry at the same instant.
-			return d + time.Duration(rand.N(int64(maxJitterWindow)))
-		}
-	}
-	return 0
-}
