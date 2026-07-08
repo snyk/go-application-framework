@@ -177,6 +177,30 @@ func TestLoader_OverridesExistingWorkflowWhenAllowed(t *testing.T) {
 	assert.Equal(t, 1, conn.executeCalls)
 }
 
+func TestLoader_DoesNotExportSensitiveConfigValue(t *testing.T) {
+	conn := &fakeConn{
+		specs: []*extensionpb.WorkflowSpec{
+			{Identifier: "flw://hello", Visible: true, Flags: []*extensionpb.FlagSpec{
+				// A flag colliding with a real host credential key, and one
+				// that doesn't, to prove only the collision is blocked.
+				{Name: "snyk_token", Type: "string"},
+				{Name: "name", Type: "string", DefaultValue: "world"},
+			}},
+		},
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)))
+	engine := newInitializedEngine(t, loader)
+	engine.GetConfiguration().Set("snyk_token", "super-secret")
+	engine.GetConfiguration().Set("name", "snyk")
+
+	helloID, _ := url.Parse("flw://hello")
+	_, err := engine.Invoke(helloID)
+	require.NoError(t, err)
+
+	assert.NotContains(t, conn.lastReq.config, "snyk_token", "a flag colliding with a reserved credential key must never be exported")
+	assert.Equal(t, "snyk", conn.lastReq.config["name"], "non-colliding flags still export normally")
+}
+
 func TestLoader_ProxyPropagatesExecuteError(t *testing.T) {
 	conn := &fakeConn{
 		specs:   []*extensionpb.WorkflowSpec{{Identifier: "flw://hello", Visible: true}},

@@ -6,16 +6,38 @@ import (
 	"io"
 	"net/url"
 	"os/exec"
+	"strings"
 	"sync"
+	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
 	plugin "github.com/hashicorp/go-plugin"
 	"github.com/rs/zerolog"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	extensionpb "github.com/snyk/go-application-framework/pkg/extension/proto"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+// sensitiveConfigKeys are host configuration keys that hold credentials. An
+// extension must never receive their values, even if it declares a flag whose
+// name collides with one of these -- doing so would defeat the auth-proxy
+// design (see startAuthProxy), which exists precisely so an extension process
+// never holds the user's real token.
+var sensitiveConfigKeys = map[string]bool{
+	strings.ToLower(configuration.AUTHENTICATION_TOKEN):        true,
+	strings.ToLower(configuration.AUTHENTICATION_BEARER_TOKEN): true,
+	strings.ToLower(auth.CONFIG_KEY_TOKEN):                     true,
+	strings.ToLower(auth.CONFIG_KEY_OAUTH_TOKEN):               true,
+	strings.ToLower(auth.PARAMETER_CLIENT_ID):                  true,
+	strings.ToLower(auth.PARAMETER_CLIENT_SECRET):              true,
+}
+
+// extensionLoadTimeout bounds how long the Loader waits for an extension
+// binary to launch, handshake, and answer Discover. A hung or misbehaving
+// extension must never block CLI startup indefinitely.
+const extensionLoadTimeout = 10 * time.Second
 
 // ConfigurationKeyPaths is the configuration key holding the list of extension
 // binary paths to load. A CLI typically binds a repeatable --plugin-path flag
@@ -130,7 +152,10 @@ func (l *Loader) Init(engine workflow.Engine) error {
 }
 
 func (l *Loader) loadOne(engine workflow.Engine, path string) error {
-	conn, cleanup, err := l.dialer(context.Background(), path)
+	ctx, cancel := context.WithTimeout(context.Background(), extensionLoadTimeout)
+	defer cancel()
+
+	conn, cleanup, err := l.dialer(ctx, path)
 	if err != nil {
 		return fmt.Errorf("launching extension: %w", err)
 	}
@@ -138,7 +163,7 @@ func (l *Loader) loadOne(engine workflow.Engine, path string) error {
 	l.cleanups = append(l.cleanups, cleanup)
 	l.mu.Unlock()
 
-	specs, err := conn.Discover(context.Background())
+	specs, err := conn.Discover(ctx)
 	if err != nil {
 		return fmt.Errorf("discovering workflows: %w", err)
 	}
@@ -194,7 +219,13 @@ func (l *Loader) makeProxy(conn pluginConn, spec *extensionpb.WorkflowSpec) work
 			invocation: invocation,
 		}
 		for _, flag := range spec.GetFlags() {
-			req.config[flag.GetName()] = config.GetString(flag.GetName())
+			name := flag.GetName()
+			if sensitiveConfigKeys[strings.ToLower(name)] {
+				l.logger.Warn().Str("identifier", spec.GetIdentifier()).Str("flag", name).
+					Msg("extension declared a flag colliding with a reserved credential key; refusing to export its value")
+				continue
+			}
+			req.config[name] = config.GetString(name)
 		}
 
 		// Bridge the host's authenticated network access for this invocation.
@@ -255,12 +286,23 @@ func (l *Loader) Close() {
 // grpcDialer is the production dialer: it launches the extension binary and
 // connects to it over gRPC via hashicorp/go-plugin.
 func grpcDialer(logger *zerolog.Logger) dialer {
-	return func(_ context.Context, path string) (pluginConn, func(), error) {
+	return func(ctx context.Context, path string) (pluginConn, func(), error) {
+		// Bound the handshake to the caller's deadline instead of go-plugin's
+		// 1-minute default, so a hung extension binary can't stall CLI startup
+		// any longer than the caller (loadOne) is willing to wait.
+		startTimeout := extensionLoadTimeout
+		if deadline, ok := ctx.Deadline(); ok {
+			if d := time.Until(deadline); d > 0 {
+				startTimeout = d
+			}
+		}
+
 		client := plugin.NewClient(&plugin.ClientConfig{
 			HandshakeConfig:  handshake,
 			Plugins:          pluginMap(nil),
 			Cmd:              exec.Command(path),
 			AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
+			StartTimeout:     startTimeout,
 			Logger: hclog.New(&hclog.LoggerOptions{
 				Name:   "extension",
 				Output: io.Discard,
