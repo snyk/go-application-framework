@@ -326,21 +326,60 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 	return ignores
 }
 
-// escapeSpecialGlobChars escapes special characters that should be treated literally in glob patterns.
-// Special Characters to escape: $
-func escapeSpecialGlobChars(rule string) string {
+// regexMetaCharsToEscape are regex metacharacters that are not glob syntax; escaped in rules
+// so they match literally (e.g. "$" in a rule).
+var regexMetaCharsToEscape = map[byte]bool{
+	'$': true,
+	'(': true,
+	')': true,
+	'+': true,
+	'^': true,
+	'|': true,
+	'{': true,
+	'}': true,
+}
+
+// pathMetaCharsToEscape extends regexMetaCharsToEscape with the glob wildcards "*", "[" and
+// "]" for escaping the literal base path (which is not a pattern), e.g. "Program Files (x86)"
+// or a folder named "a*b". "?" and "." are omitted: the ignore matcher already treats them
+// literally / escapes them itself.
+var pathMetaCharsToEscape = map[byte]bool{
+	'$': true,
+	'(': true,
+	')': true,
+	'+': true,
+	'^': true,
+	'|': true,
+	'{': true,
+	'}': true,
+	'*': true,
+	'[': true,
+	']': true,
+}
+
+func escapeChars(s string, charsToEscape map[byte]bool) string {
 	var result strings.Builder
-	for i := 0; i < len(rule); i++ {
-		ch := rule[i]
-		switch ch {
-		case '$':
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if charsToEscape[ch] {
 			result.WriteByte('\\')
-			result.WriteByte(ch)
-		default:
-			result.WriteByte(ch)
 		}
+		result.WriteByte(ch)
 	}
 	return result.String()
+}
+
+// buildGlob joins the base path with glob parts, escaping the base path literally (so path
+// characters are never interpreted as patterns) while the glob parts keep their wildcards.
+func buildGlob(prefix, baseDir string, parts ...string) string {
+	base := filepath.ToSlash(filepath.Clean(baseDir))
+	joined := filepath.ToSlash(filepath.Join(append([]string{baseDir}, parts...)...))
+	if rest, ok := strings.CutPrefix(joined, base); ok {
+		return prefix + escapeChars(base, pathMetaCharsToEscape) + escapeChars(rest, regexMetaCharsToEscape)
+	}
+	// Fallback: base is not a prefix of the joined path (e.g. a rule with "../" escaped above
+	// it). Escape conservatively as a glob so at least regex metacharacters are handled.
+	return escapeChars(prefix+joined, regexMetaCharsToEscape)
 }
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
@@ -384,28 +423,24 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule, all))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			globs = append(globs, buildGlob(prefix, baseDir, rule, all))
 		}
 		// case `/foo` => `{baseDir}/foo`
 		// case `**/foo` => `{baseDir}/**/foo`
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			globs = append(globs, buildGlob(prefix, baseDir, rule))
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule, all))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			globs = append(globs, buildGlob(prefix, baseDir, all, rule, all))
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			globs = append(globs, buildGlob(prefix, baseDir, all, rule))
 		}
 	}
 	return globs

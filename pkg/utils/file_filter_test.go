@@ -245,6 +245,48 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 	}
 }
 
+// TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars checks that ignore rules still
+// apply when the project path contains regex metacharacters (CLI-1515).
+func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
+	metaCharDirs := []string{
+		"OneDrive - Foobar (Team1)", // parentheses + spaces (customer's path shape)
+		"Program Files (x86)",       // parentheses + spaces
+		"a+b",                       // plus
+		"c{d}",                      // braces (not a valid quantifier)
+		"backup{2}",                 // braces forming a valid regex quantifier
+		"a^b",                       // caret
+		"a|b",                       // pipe / alternation
+		"a$b",                       // dollar
+		"a*b",                       // glob wildcard in the path
+		"a[b]c",                     // glob character class in the path
+		"a?b",                       // glob single-char wildcard in the path
+	}
+
+	for _, dirName := range metaCharDirs {
+		t.Run(dirName, func(t *testing.T) {
+			base := filepath.Join(t.TempDir(), dirName, "repo")
+			nodeModulesFile := filepath.Join(base, "node_modules", "lib", "index.js")
+			appFile := filepath.Join(base, "app.js")
+			gitignore := filepath.Join(base, ".gitignore")
+			createFileInPath(t, nodeModulesFile, []byte("x"))
+			createFileInPath(t, appFile, []byte("x"))
+			createFileInPath(t, gitignore, []byte("node_modules\n"))
+
+			fileFilter := NewFileFilter(base, &log.Logger)
+			globs, err := fileFilter.GetRules([]string{".gitignore"})
+			assert.NoError(t, err)
+
+			var filtered []string
+			for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+				filtered = append(filtered, f)
+			}
+
+			assert.Contains(t, filtered, appFile, "app.js should be scanned")
+			assert.NotContains(t, filtered, nodeModulesFile, "node_modules must be excluded")
+		})
+	}
+}
+
 func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 	b.Log("Creating filesystem...")
 	rootDir := b.TempDir()
