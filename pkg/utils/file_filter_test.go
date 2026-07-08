@@ -246,7 +246,7 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 }
 
 // TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars checks that ignore rules still
-// apply when the project path contains regex metacharacters (CLI-1515).
+// apply when the project path contains regex metacharacters (CLI-1648).
 func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 	metaCharDirs := []string{
 		"OneDrive - Foobar (Team1)", // parentheses + spaces (customer's path shape)
@@ -262,8 +262,15 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 		"a?b",                       // glob single-char wildcard in the path
 	}
 
+	// Characters that Windows does not allow in file/directory names, so such paths cannot
+	// exist there and don't need to be exercised on that OS.
+	const windowsIllegalChars = `<>:"/\|?*`
+
 	for _, dirName := range metaCharDirs {
 		t.Run(dirName, func(t *testing.T) {
+			if runtime.GOOS == "windows" && strings.ContainsAny(dirName, windowsIllegalChars) {
+				t.Skipf("%q contains characters not allowed in Windows paths", dirName)
+			}
 			base := filepath.Join(t.TempDir(), dirName, "repo")
 			nodeModulesFile := filepath.Join(base, "node_modules", "lib", "index.js")
 			appFile := filepath.Join(base, "app.js")
