@@ -435,6 +435,7 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 			loader := extension.NewLoader(
 				extension.WithPaths(paths...),
 				extension.WithLogger(engine.GetLogger()),
+				extension.WithAllowOverride(config.GetBool(extension.ConfigurationKeyAllowOverride)),
 			)
 			engine.AddExtensionInitializer(loader.Init)
 		}

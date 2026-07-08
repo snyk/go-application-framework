@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -115,6 +116,65 @@ func TestLoader_FailingDialerDoesNotAbortInit(t *testing.T) {
 	engine.AddExtensionInitializer(loader.Init)
 	// A broken extension must not break engine initialization.
 	assert.NoError(t, engine.Init())
+}
+
+func TestLoader_DoesNotOverrideExistingWorkflowByDefault(t *testing.T) {
+	// A workflow already registered on the engine (e.g. a bundled extension).
+	bundledID := workflow.NewWorkflowIdentifier("hello")
+	engine := workflow.NewDefaultWorkFlowEngine()
+	_, err := engine.Register(
+		bundledID,
+		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("hello", pflag.ContinueOnError)),
+		func(_ workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			id := workflow.NewTypeIdentifier(bundledID, "result")
+			return []workflow.Data{workflow.NewData(id, "text/plain", []byte("bundled"))}, nil
+		},
+	)
+	require.NoError(t, err)
+
+	// A dynamic extension that also provides flw://hello.
+	conn := &fakeConn{
+		specs:  []*extensionpb.WorkflowSpec{{Identifier: "flw://hello", Visible: true}},
+		output: []*extensionpb.DataMsg{mustMsg(t, workflow.NewData(workflow.NewTypeIdentifier(bundledID, "result"), "text/plain", []byte("extension")))},
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)))
+	engine.AddExtensionInitializer(loader.Init)
+	require.NoError(t, engine.Init())
+
+	// The bundled workflow must remain; the extension's must be skipped.
+	out, err := engine.Invoke(bundledID)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, []byte("bundled"), out[0].GetPayload())
+	assert.Equal(t, 0, conn.executeCalls, "the bundled callback should run, not the extension proxy")
+}
+
+func TestLoader_OverridesExistingWorkflowWhenAllowed(t *testing.T) {
+	bundledID := workflow.NewWorkflowIdentifier("hello")
+	engine := workflow.NewDefaultWorkFlowEngine()
+	_, err := engine.Register(
+		bundledID,
+		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("hello", pflag.ContinueOnError)),
+		func(_ workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			return nil, nil
+		},
+	)
+	require.NoError(t, err)
+
+	conn := &fakeConn{
+		specs:  []*extensionpb.WorkflowSpec{{Identifier: "flw://hello", Visible: true}},
+		output: []*extensionpb.DataMsg{mustMsg(t, workflow.NewData(workflow.NewTypeIdentifier(bundledID, "result"), "text/plain", []byte("extension")))},
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)), WithAllowOverride(true))
+	engine.AddExtensionInitializer(loader.Init)
+	require.NoError(t, engine.Init())
+
+	// With override enabled, the extension's proxy replaces the bundled callback.
+	out, err := engine.Invoke(bundledID)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, []byte("extension"), out[0].GetPayload())
+	assert.Equal(t, 1, conn.executeCalls)
 }
 
 func TestLoader_ProxyPropagatesExecuteError(t *testing.T) {

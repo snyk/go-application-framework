@@ -23,6 +23,14 @@ import (
 // extensions can be loaded for local development without rebuilding the CLI.
 const ConfigurationKeyPaths = "internal_extension_paths"
 
+// ConfigurationKeyAllowOverride is the configuration key that, when set to true,
+// permits a dynamically loaded extension to replace a workflow that is already
+// registered (a bundled extension, or one from an earlier-loaded binary). It is
+// false by default: bundled extensions take precedence and a colliding dynamic
+// workflow is skipped, so dropping a binary on the plugin path can never
+// silently shadow built-in behaviour.
+const ConfigurationKeyAllowOverride = "internal_extension_allow_override"
+
 // dialer launches (or connects to) the extension binary at path and returns a
 // connection plus a cleanup func that terminates it. It is a field on Loader so
 // tests can inject an in-memory connection instead of spawning a process.
@@ -33,9 +41,10 @@ type dialer func(ctx context.Context, path string) (conn pluginConn, cleanup fun
 // workflow.ExtensionInit, so it plugs into the engine exactly like a built-in
 // extension initializer.
 type Loader struct {
-	paths  []string
-	dialer dialer
-	logger *zerolog.Logger
+	paths         []string
+	dialer        dialer
+	logger        *zerolog.Logger
+	allowOverride bool
 
 	mu       sync.Mutex
 	cleanups []func()
@@ -57,6 +66,15 @@ func WithPaths(paths ...string) LoaderOption {
 func WithLogger(logger *zerolog.Logger) LoaderOption {
 	return func(l *Loader) {
 		l.logger = logger
+	}
+}
+
+// WithAllowOverride controls whether a dynamically loaded extension may replace
+// an already-registered workflow. Default false: colliding workflows are
+// skipped so bundled extensions win.
+func WithAllowOverride(allow bool) LoaderOption {
+	return func(l *Loader) {
+		l.allowOverride = allow
 	}
 }
 
@@ -124,6 +142,15 @@ func (l *Loader) registerWorkflow(engine workflow.Engine, conn pluginConn, spec 
 	id, err := url.Parse(spec.GetIdentifier())
 	if err != nil {
 		return fmt.Errorf("parsing identifier %q: %w", spec.GetIdentifier(), err)
+	}
+
+	// By default a dynamic extension must not shadow an already-registered
+	// workflow (a bundled extension, or one from an earlier-loaded binary).
+	if _, exists := engine.GetWorkflow(id); exists && !l.allowOverride {
+		l.logger.Warn().
+			Str("identifier", spec.GetIdentifier()).
+			Msgf("extension workflow skipped: identifier already registered (set %s=true to override)", ConfigurationKeyAllowOverride)
+		return nil
 	}
 
 	flagset := specsToFlagSet(id.Host, spec.GetFlags())
