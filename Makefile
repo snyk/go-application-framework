@@ -22,6 +22,11 @@ build:
 	@echo "Building for $(GOOS)_$(GOARCH)..."
 	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build ./...
 
+.PHONY: build-examples
+build-examples:
+	@echo "Building example extensions into $(GO_BIN)..."
+	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(GO_BIN)/ ./examples/extensions/...
+
 .PHONY: clean
 clean:
 	@echo "Cleaning up..."
@@ -81,6 +86,7 @@ help:
 	@echo "$(LOG_PREFIX) format"
 	@echo "$(LOG_PREFIX) lint"
 	@echo "$(LOG_PREFIX) build"
+	@echo "$(LOG_PREFIX) build-examples             Build example extensions into .bin/"
 	@echo "$(LOG_PREFIX) generate                   Regenerate generated files (e.g. mocks)"
 	@echo "$(LOG_PREFIX) test"
 	@echo "$(LOG_PREFIX) testv                      Test verbosely"
