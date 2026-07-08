@@ -9,9 +9,16 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 
 	"github.com/rs/zerolog"
 )
+
+// readHeaderTimeout bounds how long the loopback auth proxy waits to read a
+// request's headers. The listener is loopback-only and secret-guarded, so
+// this is defense in depth rather than a real-world exposure, but an
+// unbounded http.Server is a gosec finding (G112) worth avoiding regardless.
+const readHeaderTimeout = 5 * time.Second
 
 // proxyTokenHeader carries the per-invocation shared secret that authorizes a
 // request to the loopback auth proxy. Only the extension subprocess is told the
@@ -68,7 +75,7 @@ func newAuthProxy(upstream string, transport http.RoundTripper, logger *zerolog.
 	}
 
 	proxy := &authProxy{
-		server:   &http.Server{Handler: authGuard(secret, reverse)},
+		server:   &http.Server{Handler: authGuard(secret, reverse), ReadHeaderTimeout: readHeaderTimeout},
 		listener: listener,
 		secret:   secret,
 		baseURL:  "http://" + listener.Addr().String(),
