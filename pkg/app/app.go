@@ -414,6 +414,21 @@ func CreateAppEngine() workflow.Engine {
 }
 
 func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
+	engine, _ := createAppEngine(opts...)
+	return engine
+}
+
+// CreateAppEngineWithCloser is CreateAppEngineWithOptions plus a close function
+// that terminates any out-of-process extension subprocesses launched for this
+// engine. Callers that create engines dynamically (rather than one for the
+// lifetime of the process) should call it during shutdown; a process that
+// exits shortly after this engine is done with can rely on process exit
+// instead and use CreateAppEngineWithOptions.
+func CreateAppEngineWithCloser(opts ...Opts) (workflow.Engine, func()) {
+	return createAppEngine(opts...)
+}
+
+func createAppEngine(opts ...Opts) (workflow.Engine, func()) {
 	engine := workflow.NewDefaultWorkFlowEngine()
 
 	for _, opt := range opts {
@@ -430,18 +445,40 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 	// Load any out-of-process extension binaries configured for this engine.
 	// This replaces the previous "scan here for extension binaries" placeholder:
 	// extensions run as gRPC subprocesses and are registered like built-ins.
-	if config != nil {
-		if paths := config.GetStringSlice(extension.ConfigurationKeyPaths); len(paths) > 0 {
-			loader := extension.NewLoader(
-				extension.WithPaths(paths...),
-				extension.WithLogger(engine.GetLogger()),
-				extension.WithAllowOverride(config.GetBool(extension.ConfigurationKeyAllowOverride)),
-			)
-			engine.AddExtensionInitializer(loader.Init)
+	//
+	// The initializer is registered unconditionally and reads
+	// extension.ConfigurationKeyPaths when it runs (at engine.Init()), not now:
+	// a CLI typically creates the engine, then parses flags (which is what
+	// populates a repeatable --plugin-path flag bound to that key), then calls
+	// Init(). Reading the paths here, at construction, would see them still
+	// empty and silently never register the loader.
+	var loader *extension.Loader
+	engine.AddExtensionInitializer(func(engine workflow.Engine) error {
+		if loader != nil {
+			return loader.Init(engine)
+		}
+		cfg := engine.GetConfiguration()
+		if cfg == nil {
+			return nil
+		}
+		paths := cfg.GetStringSlice(extension.ConfigurationKeyPaths)
+		if len(paths) == 0 {
+			return nil
+		}
+		loader = extension.NewLoader(
+			extension.WithPaths(paths...),
+			extension.WithLogger(engine.GetLogger()),
+			extension.WithAllowOverride(cfg.GetBool(extension.ConfigurationKeyAllowOverride)),
+		)
+		return loader.Init(engine)
+	})
+
+	closer := func() {
+		if loader != nil {
+			loader.Close()
 		}
 	}
-
-	return engine
+	return engine, closer
 }
 
 // Deprecated: Use CreateAppEngineWithOptions instead.

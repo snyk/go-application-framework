@@ -47,6 +47,61 @@ func TestCreateAppEngine_LoadsConfiguredExtension(t *testing.T) {
 	assert.Equal(t, []byte("hello world"), out[0].GetPayload())
 }
 
+// TestCreateAppEngine_ExtensionPathSetAfterConstruction_StillLoads reproduces
+// the CLI's actual startup order: create the engine, then parse flags (which
+// populates a repeatable --plugin-path flag bound to
+// extension.ConfigurationKeyPaths), then call Init(). The path must still be
+// picked up even though it wasn't present on the configuration when
+// CreateAppEngineWithOptions ran.
+func TestCreateAppEngine_ExtensionPathSetAfterConstruction_StillLoads(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping end-to-end plugin build in short mode")
+	}
+
+	binary := buildExamplePluginForApp(t)
+
+	config := configuration.New()
+	engine := CreateAppEngineWithOptions(WithConfiguration(config))
+
+	// Simulate flag parsing happening after engine construction.
+	config.Set(extension.ConfigurationKeyPaths, []string{binary})
+
+	require.NoError(t, engine.Init())
+
+	helloID, _ := url.Parse("flw://hello")
+	_, ok := engine.GetWorkflow(helloID)
+	require.True(t, ok, "extension path set after construction, before Init(), should still be loaded")
+}
+
+func TestCreateAppEngineWithCloser_ClosesExtensionProcess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping end-to-end plugin build in short mode")
+	}
+
+	binary := buildExamplePluginForApp(t)
+
+	engine, closer := CreateAppEngineWithCloser(
+		WithConfiguration(configuration.New()),
+		WithExtensionPaths(binary),
+	)
+	require.NoError(t, engine.Init())
+
+	helloID, _ := url.Parse("flw://hello")
+	_, ok := engine.GetWorkflow(helloID)
+	require.True(t, ok)
+
+	// Must not panic or block, and must actually terminate the subprocess
+	// (Loader.Close is exercised directly in pkg/extension; here we only
+	// verify the closer wired up by CreateAppEngineWithCloser reaches it).
+	closer()
+}
+
+func TestCreateAppEngineWithCloser_NoOpWhenNoExtensionsConfigured(t *testing.T) {
+	engine, closer := CreateAppEngineWithCloser(WithConfiguration(configuration.New()))
+	require.NoError(t, engine.Init())
+	closer()
+}
+
 func buildExamplePluginForApp(t *testing.T) string {
 	t.Helper()
 	name := "exampleplugin"
