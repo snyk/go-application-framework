@@ -197,7 +197,7 @@ func (l *Loader) registerWorkflow(engine workflow.Engine, conn pluginConn, spec 
 		return nil
 	}
 
-	flagset := specsToFlagSet(id.Host, spec.GetFlags())
+	flagset := specsToFlagSet(id.Host, spec.GetFlags(), l.logger)
 	configOptions := workflow.ConfigurationOptionsFromFlagset(flagset)
 
 	entry, err := engine.Register(id, configOptions, l.makeProxy(conn, spec))

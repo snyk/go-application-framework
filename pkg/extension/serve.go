@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	plugin "github.com/hashicorp/go-plugin"
+	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -194,15 +195,20 @@ func flagsToSpecs(flags *pflag.FlagSet) []*extensionpb.FlagSpec {
 }
 
 // specsToFlagSet rebuilds a pflag.FlagSet from discovered FlagSpecs so the host
-// can register the workflow's configuration options with the engine.
-func specsToFlagSet(name string, specs []*extensionpb.FlagSpec) *pflag.FlagSet {
+// can register the workflow's configuration options with the engine. logger
+// may be nil.
+func specsToFlagSet(name string, specs []*extensionpb.FlagSpec, logger *zerolog.Logger) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(name, pflag.ContinueOnError)
 	for _, spec := range specs {
 		switch spec.GetType() {
 		case "bool":
 			fs.Bool(spec.GetName(), spec.GetDefaultValue() == "true", spec.GetUsage())
 		case "int":
-			def, _ := strconv.Atoi(spec.GetDefaultValue())
+			def, err := strconv.Atoi(spec.GetDefaultValue())
+			if err != nil && logger != nil {
+				logger.Warn().Err(err).Str("flag", spec.GetName()).Str("default", spec.GetDefaultValue()).
+					Msg("extension declared an int flag with a malformed default; using 0")
+			}
 			fs.Int(spec.GetName(), def, spec.GetUsage())
 		default:
 			fs.String(spec.GetName(), spec.GetDefaultValue(), spec.GetUsage())
