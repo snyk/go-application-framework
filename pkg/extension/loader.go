@@ -48,6 +48,7 @@ type Loader struct {
 
 	mu       sync.Mutex
 	cleanups []func()
+	loaded   bool
 }
 
 // LoaderOption configures a Loader.
@@ -105,7 +106,21 @@ func NewLoader(opts ...LoaderOption) *Loader {
 // A failing extension (cannot launch, handshake mismatch, discovery error) is
 // logged and skipped rather than aborting engine initialization: a broken or
 // incompatible third-party extension must never prevent the CLI from starting.
+//
+// Init is idempotent: a second call is a no-op. Without this, calling Init
+// more than once on the same engine (e.g. engine.Init() invoked twice) would
+// spawn a duplicate set of extension subprocesses that are never referenced
+// again -- workflow registration skips the resulting identifier collisions,
+// but the orphaned processes keep running.
 func (l *Loader) Init(engine workflow.Engine) error {
+	l.mu.Lock()
+	if l.loaded {
+		l.mu.Unlock()
+		return nil
+	}
+	l.loaded = true
+	l.mu.Unlock()
+
 	for _, path := range l.paths {
 		if err := l.loadOne(engine, path); err != nil {
 			l.logger.Warn().Err(err).Str("path", path).Msg("skipping extension that failed to load")
