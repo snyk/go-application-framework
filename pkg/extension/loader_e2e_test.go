@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -173,4 +174,91 @@ func TestEndToEnd_ExtensionCallsSiblingAndRecordsAnalytics(t *testing.T) {
 	require.NotNil(t, obj.Data.Attributes.Interaction.Extension)
 	extension := *obj.Data.Attributes.Interaction.Extension
 	assert.Equal(t, "ran", extension["hello.callsibling::ext.example"])
+}
+
+// TestEndToEnd_ConcurrentInvocations drives a single loaded extension with many
+// concurrent invocations that each exercise a per-invocation resource: the
+// option-C auth proxy (flw://hello.fetch) and the callback broker
+// (flw://hello.callsibling). It verifies those per-invocation resources are
+// isolated and race-free — run under `-race` for the strongest signal.
+func TestEndToEnd_ConcurrentInvocations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping end-to-end plugin build in short mode")
+	}
+
+	const token = "concurrent-token-abc"
+
+	// Concurrency-safe fake API: each response is self-contained (echoes the
+	// Authorization header it saw), so no shared server state is needed.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"authorization":"` + r.Header.Get("Authorization") + `"}`))
+	}))
+	defer upstream.Close()
+
+	binary := buildExamplePlugin(t)
+	loader := NewLoader(WithPaths(binary))
+	t.Cleanup(loader.Close)
+
+	engine := workflow.NewDefaultWorkFlowEngine()
+	config := engine.GetConfiguration()
+	config.Set(configuration.API_URL, upstream.URL)
+	config.Set(configuration.AUTHENTICATION_TOKEN, token)
+	engine.AddExtensionInitializer(func(e workflow.Engine) error {
+		_, err := e.Register(
+			workflow.NewWorkflowIdentifier("sibling"),
+			workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("sibling", pflag.ContinueOnError)),
+			func(_ workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+				payload := ""
+				if len(input) > 0 {
+					if b, ok := input[0].GetPayload().([]byte); ok {
+						payload = string(b)
+					}
+				}
+				outID := workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("sibling"), "result")
+				return []workflow.Data{workflow.NewData(outID, "text/plain", []byte("sibling-got:"+payload))}, nil
+			},
+		)
+		return err
+	})
+	engine.AddExtensionInitializer(loader.Init)
+	require.NoError(t, engine.Init())
+
+	fetchID, _ := url.Parse("flw://hello.fetch")
+	callID, _ := url.Parse("flw://hello.callsibling")
+
+	const n = 24
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	payloads := make([]string, n)
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			id := fetchID
+			if i%2 == 0 {
+				id = callID
+			}
+			out, err := engine.Invoke(id)
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			if len(out) == 1 {
+				if b, ok := out[0].GetPayload().([]byte); ok {
+					payloads[i] = string(b)
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	for i := 0; i < n; i++ {
+		require.NoErrorf(t, errs[i], "invocation %d failed", i)
+		if i%2 == 0 {
+			assert.Equal(t, "sibling-got:from-extension", payloads[i], "sibling invoke %d", i)
+		} else {
+			assert.Contains(t, payloads[i], token, "authenticated fetch %d", i)
+		}
+	}
 }

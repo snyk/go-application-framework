@@ -360,9 +360,14 @@ registry + the org choosing what to install) rather than sandboxing them.
   analytics forwarding, no subprocess.
 - **`loader_e2e_test.go`** and **`app/app_extension_test.go`** — the subprocess
   proofs (skipped under `-short`): load-without-rebuild; the **option-C proof**
-  (extension makes an authenticated API call, host injects the token); and the
+  (extension makes an authenticated API call, host injects the token); the
   **host-callback proof** (extension invokes a host sibling workflow and records
-  analytics over the broker).
+  analytics over the broker); and a **concurrency proof** (24 parallel
+  invocations exercising per-invocation auth-proxy and broker isolation, run
+  under `-race`).
+- **`loader_dialer_test.go`** — the real dialer's failure paths: a missing
+  binary returns an error, and a non-plugin binary (handshake never completes) is
+  logged and skipped without aborting engine init.
 
 ## 12. File map
 
