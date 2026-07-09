@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -83,7 +82,14 @@ func (fw *FileFilter) GetAllFiles() chan string {
 	return filesCh
 }
 
-// GetRules builds a list of glob patterns that can be used to filter filesToFilter
+// GetRules builds absolute glob patterns from ignore files under the scan root (fw.path).
+// The returned strings are intended to be passed to GetFilteredFiles together with
+// absolute file paths from GetAllFiles — not compiled directly into a matcher.
+//
+// GetFilteredFiles strips fw.path from each glob and matches repo-relative paths
+// (via ToRelativeUnixPath). Feeding these globs to go-gitignore against absolute
+// paths can fail when the scan root or in-repo directory names contain regex/glob
+// metacharacters (e.g. parentheses in "OneDrive - Company (Tenant)").
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	files := fw.GetAllFiles()
 
@@ -107,12 +113,41 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 	return append(fw.defaultRules, globs...), nil
 }
 
-// GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
+// toMatchGlob strips the scan root from an absolute ignore glob so matching can use
+// repo-relative paths (via ToRelativeUnixPath) instead of embedding parent-dir metacharacters.
+func (fw *FileFilter) toMatchGlob(glob string) string {
+	negated := ""
+	if strings.HasPrefix(glob, "!") {
+		negated = "!"
+		glob = glob[1:]
+	}
+
+	base := filepath.ToSlash(filepath.Clean(fw.path))
+	slashGlob := filepath.ToSlash(glob)
+	if rel, ok := strings.CutPrefix(slashGlob, base+"/"); ok {
+		return negated + escapeRelativeGlobForMatch(rel)
+	}
+	if slashGlob == base {
+		return negated + "."
+	}
+	return negated + escapeRelativeGlobForMatch(slashGlob)
+}
+
+// GetFilteredFiles returns files from filesCh that are not excluded by globs.
+// globs should come from GetRules on the same FileFilter instance: each glob is
+// rewritten for matching (scan-root prefix removed, path segments escaped) and
+// each file is compared using its path relative to fw.path. Output paths remain
+// absolute.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
+	matchGlobs := make([]string, len(globs))
+	for i, g := range globs {
+		matchGlobs[i] = fw.toMatchGlob(g)
+	}
+
 	// create pattern matcher used to match filesToFilter to glob patterns
-	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+	globPatternMatcher := gitignore.CompileIgnoreLines(matchGlobs...)
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
@@ -127,8 +162,13 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			}
 			go func(f string) {
 				defer availableThreads.Release(1)
+				rel, err := ToRelativeUnixPath(fw.path, f)
+				if err != nil {
+					fw.logger.Err(err).Str("file", f).Msg("failed to relativize path for filter matching")
+					return
+				}
 				// filesToFilter that do not match the glob pattern are filtered
-				if !globPatternMatcher.MatchesPath(f) {
+				if !globPatternMatcher.MatchesPath(rel) {
 					filteredFilesCh <- f
 				}
 			}(file)
@@ -327,36 +367,12 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 	return ignores
 }
 
-// regexMetaCharsToEscape are regex metacharacters that are not glob syntax; escaped in ignore
-// rules so they match literally (e.g. "$" in a rule). "^", "[" and "]" are deliberately not
-// included: they are valid character-class syntax in gitignore rules (e.g. "foo[^x]").
-var regexMetaCharsToEscape = map[byte]bool{
-	'$': true,
-	'(': true,
-	')': true,
-	'+': true,
-	'|': true,
-	'{': true,
-	'}': true,
-}
-
-// pathMetaCharsToEscape is used for the literal base path (which is not a pattern), so on top
-// of regexMetaCharsToEscape it also escapes the glob wildcards "*", "[", "]", the class anchor
-// "^", and "\". "?" and "." are omitted: the ignore matcher already treats them literally /
-// escapes them itself.
-var pathMetaCharsToEscape = func() map[byte]bool {
-	m := maps.Clone(regexMetaCharsToEscape)
-	for _, c := range []byte{'^', '*', '[', ']', '\\'} {
-		m[c] = true
-	}
-	return m
-}()
-
-func escapeChars(s string, charsToEscape map[byte]bool) string {
+// escapeSpecialGlobChars escapes $ in the rule portion of a glob (not literal path segments).
+func escapeSpecialGlobChars(rule string) string {
 	var result strings.Builder
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if charsToEscape[ch] {
+	for i := 0; i < len(rule); i++ {
+		ch := rule[i]
+		if ch == '$' {
 			result.WriteByte('\\')
 		}
 		result.WriteByte(ch)
@@ -364,17 +380,46 @@ func escapeChars(s string, charsToEscape map[byte]bool) string {
 	return result.String()
 }
 
-// buildGlob joins the base path with glob parts, escaping the base path literally (so path
-// characters are never interpreted as patterns) while the glob parts keep their wildcards.
+// pathMetaCharsToEscape are regex/glob metacharacters in literal directory names.
+var pathMetaCharsToEscape = map[byte]bool{
+	'$': true, '(': true, ')': true, '+': true, '|': true, '{': true, '}': true,
+	'^': true, '*': true, '[': true, ']': true, '\\': true,
+}
+
+func escapePathMetaChars(s string) string {
+	var result strings.Builder
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if pathMetaCharsToEscape[ch] {
+			result.WriteByte('\\')
+		}
+		result.WriteByte(ch)
+	}
+	return result.String()
+}
+
+func escapeRelativeGlobForMatch(rel string) string {
+	if rel == "" {
+		return rel
+	}
+	parts := strings.Split(rel, "/")
+	out := make([]string, 0, len(parts))
+	for i, p := range parts {
+		if p == "**" || strings.ContainsAny(p, "*?") {
+			return strings.Join(append(out, parts[i:]...), "/")
+		}
+		out = append(out, escapePathMetaChars(p))
+	}
+	return strings.Join(out, "/")
+}
+
 func buildGlob(prefix, baseDir string, parts ...string) string {
 	base := filepath.ToSlash(filepath.Clean(baseDir))
 	joined := filepath.ToSlash(filepath.Join(append([]string{baseDir}, parts...)...))
 	if rest, ok := strings.CutPrefix(joined, base); ok {
-		return prefix + escapeChars(base, pathMetaCharsToEscape) + escapeChars(rest, regexMetaCharsToEscape)
+		return prefix + base + escapeSpecialGlobChars(rest)
 	}
-	// Fallback: base is not a prefix of the joined path (e.g. a rule with "../" escaped above
-	// it). Escape conservatively as a glob so at least regex metacharacters are handled.
-	return escapeChars(prefix+joined, regexMetaCharsToEscape)
+	return escapeSpecialGlobChars(prefix + joined)
 }
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file

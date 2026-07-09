@@ -260,6 +260,7 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 		"a*b",                       // glob wildcard in the path
 		"a[b]c",                     // glob character class in the path
 		"a?b",                       // glob single-char wildcard in the path
+		"a.b",                       // dot in path (go-gitignore self-escapes; must not double-break)
 		"a\\b",                      // literal backslash (legal on unix, illegal on windows)
 	}
 
@@ -364,6 +365,78 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			excluded:  []string{"build/out.js", "build/nested/deep.js"},
 			kept:      []string{"src/app.js"},
 		},
+		{
+			name: "parentheses in ignore rule pattern",
+			files: map[string]string{
+				".gitignore":         "foo(bar)\n",
+				"foo(bar)/index.js":  "x",
+				"foo(bar)x/index.js": "x",
+				"app.js":             "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			// go-gitignore compiles (bar) as a regex group, not a literal directory name.
+			excluded: []string{},
+			kept:     []string{"foo(bar)/index.js", "foo(bar)x/index.js", "app.js"},
+		},
+		{
+			name: "dollar sign in rule text matches directory name",
+			files: map[string]string{
+				".gitignore":          "price$tag\n",
+				"price$tag/inside.js": "x",
+				"price.js":            "x",
+				"app.js":              "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"price$tag/inside.js"},
+			kept:      []string{"price.js", "app.js"},
+		},
+		{
+			name: "pipe in rule text is regex alternation not a literal character",
+			files: map[string]string{
+				".gitignore": "foo|bar\n",
+				"foo.js":     "x",
+				"bar.js":     "x",
+				"baz.js":     "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"foo.js"},
+			kept:      []string{"bar.js", "baz.js"},
+		},
+		{
+			name: "dot in directory name still respects exclusion",
+			files: map[string]string{
+				".gitignore":          "node_modules\n",
+				"v1.0/app.js":         "x",
+				"node_modules/lib.js": "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib.js"},
+			kept:      []string{"v1.0/app.js"},
+		},
+		{
+			name: "snyk code exclude in repo directory with metacharacters",
+			files: map[string]string{
+				".snyk": `exclude:
+  code:
+    - node_modules
+`,
+				"pkg (core)/node_modules/lib.js": "x",
+				"pkg (core)/src/app.js":          "x",
+			},
+			ruleFiles: []string{".snyk"},
+			excluded:  []string{"pkg (core)/node_modules/lib.js"},
+			kept:      []string{"pkg (core)/src/app.js"},
+		},
+		{
+			name: "default git rule excludes dot-git contents",
+			files: map[string]string{
+				".git/config": "x",
+				"src/app.js":  "x",
+			},
+			ruleFiles: []string{},
+			excluded:  []string{".git/config"},
+			kept:      []string{"src/app.js"},
+		},
 	}
 
 	for _, tc := range scenarios {
@@ -392,6 +465,61 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFileFilter_GetFilteredFiles_dotSnykUnderMetacharParentPath ensures .snyk Code exclusions
+// work when the scan root sits under a parent path with regex metacharacters (CLI-1648).
+func TestFileFilter_GetFilteredFiles_dotSnykUnderMetacharParentPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("parent path shape uses characters awkward on Windows temp paths")
+	}
+	base := filepath.Join(t.TempDir(), "OneDrive - Foobar (Team1)", "repo")
+	excluded := filepath.Join(base, "node_modules", "lib", "index.js")
+	kept := filepath.Join(base, "src", "app.js")
+	snykFile := filepath.Join(base, ".snyk")
+	createFileInPath(t, excluded, []byte("x"))
+	createFileInPath(t, kept, []byte("x"))
+	createFileInPath(t, snykFile, []byte(`exclude:
+  code:
+    - node_modules
+`))
+
+	fileFilter := NewFileFilter(base, &log.Logger)
+	globs, err := fileFilter.GetRules([]string{".snyk"})
+	assert.NoError(t, err)
+
+	var filtered []string
+	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+		filtered = append(filtered, f)
+	}
+
+	assert.Contains(t, filtered, kept)
+	assert.NotContains(t, filtered, excluded)
+}
+
+// TestFileFilter_GetFilteredFiles_dotGitExcludedUnderMetacharParentPath ensures the default
+// **/.git/** rule still applies when the scan root is under a path with regex metacharacters.
+func TestFileFilter_GetFilteredFiles_dotGitExcludedUnderMetacharParentPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("parent path shape uses characters awkward on Windows temp paths")
+	}
+	base := filepath.Join(t.TempDir(), "Program Files (x86)", "repo")
+	gitConfig := filepath.Join(base, ".git", "config")
+	appFile := filepath.Join(base, "src", "app.js")
+	createFileInPath(t, gitConfig, []byte("x"))
+	createFileInPath(t, appFile, []byte("x"))
+
+	fileFilter := NewFileFilter(base, &log.Logger)
+	globs, err := fileFilter.GetRules([]string{})
+	assert.NoError(t, err)
+
+	var filtered []string
+	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+		filtered = append(filtered, f)
+	}
+
+	assert.Contains(t, filtered, appFile)
+	assert.NotContains(t, filtered, gitConfig)
 }
 
 func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
@@ -700,6 +828,16 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/**/foo/**",
+			},
+		},
+		{
+			name:         "parentheses in rule text",
+			rule:         "foo(bar)",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				"/tmp/test/**/foo(bar)/**",
+				"/tmp/test/**/foo(bar)",
 			},
 		},
 		{
