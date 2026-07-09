@@ -260,6 +260,7 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 		"a*b",                       // glob wildcard in the path
 		"a[b]c",                     // glob character class in the path
 		"a?b",                       // glob single-char wildcard in the path
+		"a\\b",                      // literal backslash (legal on unix, illegal on windows)
 	}
 
 	// Characters that Windows does not allow in file/directory names, so such paths cannot
@@ -628,6 +629,19 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/**/foo/**",
+			},
+		},
+		{
+			// A rule with enough "../" climbs above baseDir once filepath.Join cleans it, so the
+			// base is no longer a prefix and buildGlob takes the fallback path. The base content
+			// is gone at that point, so the remaining glob wildcards must be preserved.
+			name:         "rule climbing above base uses fallback",
+			rule:         "../../../../../../foo",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				"/foo/**",
+				"/foo",
 			},
 		},
 	}
