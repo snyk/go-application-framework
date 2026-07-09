@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -326,36 +327,30 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 	return ignores
 }
 
-// regexMetaCharsToEscape are regex metacharacters that are not glob syntax; escaped in rules
-// so they match literally (e.g. "$" in a rule).
+// regexMetaCharsToEscape are regex metacharacters that are not glob syntax; escaped in ignore
+// rules so they match literally (e.g. "$" in a rule). "^", "[" and "]" are deliberately not
+// included: they are valid character-class syntax in gitignore rules (e.g. "foo[^x]").
 var regexMetaCharsToEscape = map[byte]bool{
 	'$': true,
 	'(': true,
 	')': true,
 	'+': true,
-	'^': true,
 	'|': true,
 	'{': true,
 	'}': true,
 }
 
-// pathMetaCharsToEscape extends regexMetaCharsToEscape with the glob wildcards "*", "[" and
-// "]" for escaping the literal base path (which is not a pattern), e.g. "Program Files (x86)"
-// or a folder named "a*b". "?" and "." are omitted: the ignore matcher already treats them
-// literally / escapes them itself.
-var pathMetaCharsToEscape = map[byte]bool{
-	'$': true,
-	'(': true,
-	')': true,
-	'+': true,
-	'^': true,
-	'|': true,
-	'{': true,
-	'}': true,
-	'*': true,
-	'[': true,
-	']': true,
-}
+// pathMetaCharsToEscape is used for the literal base path (which is not a pattern), so on top
+// of regexMetaCharsToEscape it also escapes the glob wildcards "*", "[", "]", the class anchor
+// "^", and "\". "?" and "." are omitted: the ignore matcher already treats them literally /
+// escapes them itself.
+var pathMetaCharsToEscape = func() map[byte]bool {
+	m := maps.Clone(regexMetaCharsToEscape)
+	for _, c := range []byte{'^', '*', '[', ']', '\\'} {
+		m[c] = true
+	}
+	return m
+}()
 
 func escapeChars(s string, charsToEscape map[byte]bool) string {
 	var result strings.Builder

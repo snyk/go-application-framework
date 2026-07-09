@@ -294,6 +294,34 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 	}
 }
 
+// TestFileFilter_GetFilteredFiles_negatedCharacterClassRule ensures gitignore rules using a
+// negated character class (e.g. "cache[^S]") keep working, i.e. that "^" is not escaped in the
+// rule portion.
+func TestFileFilter_GetFilteredFiles_negatedCharacterClassRule(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "repo")
+	excluded := filepath.Join(base, "cache1", "index.js") // matches cache[^S]
+	kept := filepath.Join(base, "cacheS", "index.js")     // excluded from the negated class
+	appFile := filepath.Join(base, "app.js")
+	gitignore := filepath.Join(base, ".gitignore")
+	createFileInPath(t, excluded, []byte("x"))
+	createFileInPath(t, kept, []byte("x"))
+	createFileInPath(t, appFile, []byte("x"))
+	createFileInPath(t, gitignore, []byte("cache[^S]\n"))
+
+	fileFilter := NewFileFilter(base, &log.Logger)
+	globs, err := fileFilter.GetRules([]string{".gitignore"})
+	assert.NoError(t, err)
+
+	var filtered []string
+	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+		filtered = append(filtered, f)
+	}
+
+	assert.Contains(t, filtered, appFile, "app.js should be scanned")
+	assert.Contains(t, filtered, kept, "cacheS should be scanned (negated class excludes S)")
+	assert.NotContains(t, filtered, excluded, "cache1 must be excluded by cache[^S]")
+}
+
 func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 	b.Log("Creating filesystem...")
 	rootDir := b.TempDir()
