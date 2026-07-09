@@ -24,6 +24,29 @@ func TestWithExtensionPaths_StoresPathsOnConfig(t *testing.T) {
 	assert.Equal(t, []string{"/path/a", "/path/b"}, paths)
 }
 
+func TestWithExtensionPaths_DeduplicatesRepeatedPath(t *testing.T) {
+	engine := CreateAppEngineWithOptions(
+		WithConfiguration(configuration.New()),
+		WithExtensionPaths("/path/a"),
+		WithExtensionPaths("/path/a", "/path/b"),
+	)
+
+	paths := engine.GetConfiguration().GetStringSlice(extension.ConfigurationKeyPaths)
+	assert.Equal(t, []string{"/path/a", "/path/b"}, paths, "a path repeated across calls must not launch a duplicate subprocess")
+}
+
+func TestWithConfiguration_MergeDeduplicatesCarriedForwardPaths(t *testing.T) {
+	config := configuration.New()
+	engine := CreateAppEngineWithOptions(
+		WithExtensionPaths("/path/a"),
+		WithConfiguration(config),
+		WithExtensionPaths("/path/a", "/path/b"),
+	)
+
+	paths := engine.GetConfiguration().GetStringSlice(extension.ConfigurationKeyPaths)
+	assert.Equal(t, []string{"/path/a", "/path/b"}, paths, "the path carried forward across the configuration swap must not duplicate one already present on the new configuration")
+}
+
 func TestCreateAppEngine_LoadsConfiguredExtension(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping end-to-end plugin build in short mode")
