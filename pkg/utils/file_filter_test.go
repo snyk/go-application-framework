@@ -295,131 +295,103 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 	}
 }
 
-// TestFileFilter_GetFilteredFiles_negatedCharacterClassRule ensures gitignore rules using a
-// negated character class (e.g. "cache[^S]") keep working, i.e. that "^" is not escaped in the
-// rule portion.
-func TestFileFilter_GetFilteredFiles_negatedCharacterClassRule(t *testing.T) {
-	base := filepath.Join(t.TempDir(), "repo")
-	excluded := filepath.Join(base, "cache1", "index.js") // matches cache[^S]
-	kept := filepath.Join(base, "cacheS", "index.js")     // excluded from the negated class
-	appFile := filepath.Join(base, "app.js")
-	gitignore := filepath.Join(base, ".gitignore")
-	createFileInPath(t, excluded, []byte("x"))
-	createFileInPath(t, kept, []byte("x"))
-	createFileInPath(t, appFile, []byte("x"))
-	createFileInPath(t, gitignore, []byte("cache[^S]\n"))
-
-	fileFilter := NewFileFilter(base, &log.Logger)
-	globs, err := fileFilter.GetRules([]string{".gitignore"})
-	assert.NoError(t, err)
-
-	var filtered []string
-	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
-		filtered = append(filtered, f)
+// TestFileFilter_GetFilteredFiles_ignoreRuleScenarios covers ignore-rule behaviors that share
+// the same shape: build a filesystem (including ignore files), filter it, then assert which
+// files survive. "files" maps a slash-separated path (relative to the scan root) to its content;
+// "excluded"/"kept" list slash-separated paths that must / must not be filtered out.
+func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
+	scenarios := []struct {
+		name      string
+		files     map[string]string
+		ruleFiles []string
+		excluded  []string
+		kept      []string
+	}{
+		{
+			name: "negated character class rule keeps working",
+			files: map[string]string{
+				".gitignore":      "cache[^S]\n",
+				"cache1/index.js": "x", // matches cache[^S]
+				"cacheS/index.js": "x", // excluded from the negated class
+				"app.js":          "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"cache1/index.js"},
+			kept:      []string{"cacheS/index.js", "app.js"},
+		},
+		{
+			name: "ignore file in dir with regex metacharacters",
+			files: map[string]string{
+				"my (dir)/.gitignore": "secret.txt\n",
+				"my (dir)/secret.txt": "x",
+				"my (dir)/keep.txt":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"my (dir)/secret.txt"},
+			kept:      []string{"my (dir)/keep.txt"},
+		},
+		{
+			name: "deeply nested ignore file with metacharacters at every level",
+			files: map[string]string{
+				"a (1)/b [2]/c +3/.gitignore": "secret.txt\n",
+				"a (1)/b [2]/c +3/secret.txt": "x",
+				"a (1)/b [2]/c +3/keep.txt":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"a (1)/b [2]/c +3/secret.txt"},
+			kept:      []string{"a (1)/b [2]/c +3/keep.txt"},
+		},
+		{
+			name: "nested rule is scoped to its own directory",
+			files: map[string]string{
+				"sub (x)/.gitignore": "only.txt\n",
+				"sub (x)/only.txt":   "x",
+				"other/only.txt":     "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"sub (x)/only.txt"},
+			kept:      []string{"other/only.txt"},
+		},
+		{
+			name: "directory rule excludes all contents at any depth",
+			files: map[string]string{
+				".gitignore":           "build/\n",
+				"build/out.js":         "x",
+				"build/nested/deep.js": "x",
+				"src/app.js":           "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"build/out.js", "build/nested/deep.js"},
+			kept:      []string{"src/app.js"},
+		},
 	}
 
-	assert.Contains(t, filtered, appFile, "app.js should be scanned")
-	assert.Contains(t, filtered, kept, "cacheS should be scanned (negated class excludes S)")
-	assert.NotContains(t, filtered, excluded, "cache1 must be excluded by cache[^S]")
-}
+	for _, tc := range scenarios {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for p, content := range tc.files {
+				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
+			}
 
-// TestFileFilter_GetFilteredFiles_ignoreFileInDirWithRegexMetaChars ensures an ignore file
-// located inside a directory whose name contains regex metacharacters (e.g. "my (dir)") is
-// still applied. The directory name becomes part of the compiled pattern, so it must be
-// escaped to be matched literally.
-func TestFileFilter_GetFilteredFiles_ignoreFileInDirWithRegexMetaChars(t *testing.T) {
-	root := t.TempDir()
-	nestedIgnore := filepath.Join(root, "my (dir)", ".gitignore")
-	excluded := filepath.Join(root, "my (dir)", "secret.txt")
-	kept := filepath.Join(root, "my (dir)", "keep.txt")
-	createFileInPath(t, nestedIgnore, []byte("secret.txt\n"))
-	createFileInPath(t, excluded, []byte("x"))
-	createFileInPath(t, kept, []byte("x"))
+			fileFilter := NewFileFilter(root, &log.Logger)
+			globs, err := fileFilter.GetRules(tc.ruleFiles)
+			assert.NoError(t, err)
 
-	fileFilter := NewFileFilter(root, &log.Logger)
-	globs, err := fileFilter.GetRules([]string{".gitignore"})
-	assert.NoError(t, err)
+			kept := make(map[string]bool)
+			for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+				rel, relErr := filepath.Rel(root, f)
+				assert.NoError(t, relErr)
+				kept[filepath.ToSlash(rel)] = true
+			}
 
-	var filtered []string
-	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
-		filtered = append(filtered, f)
+			for _, e := range tc.excluded {
+				assert.False(t, kept[e], "%q must be excluded", e)
+			}
+			for _, k := range tc.kept {
+				assert.True(t, kept[k], "%q must be kept", k)
+			}
+		})
 	}
-
-	assert.Contains(t, filtered, kept, "keep.txt should be scanned")
-	assert.NotContains(t, filtered, excluded, "secret.txt must be excluded by the nested .gitignore")
-}
-
-// TestFileFilter_GetFilteredFiles_deeplyNestedIgnoreFileWithMetaChars covers an ignore file
-// several directories deep, where every level's name contains different regex metacharacters.
-func TestFileFilter_GetFilteredFiles_deeplyNestedIgnoreFileWithMetaChars(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "a (1)", "b [2]", "c +3")
-	excluded := filepath.Join(dir, "secret.txt")
-	kept := filepath.Join(dir, "keep.txt")
-	createFileInPath(t, filepath.Join(dir, ".gitignore"), []byte("secret.txt\n"))
-	createFileInPath(t, excluded, []byte("x"))
-	createFileInPath(t, kept, []byte("x"))
-
-	fileFilter := NewFileFilter(root, &log.Logger)
-	globs, err := fileFilter.GetRules([]string{".gitignore"})
-	assert.NoError(t, err)
-
-	var filtered []string
-	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
-		filtered = append(filtered, f)
-	}
-
-	assert.Contains(t, filtered, kept, "keep.txt should be scanned")
-	assert.NotContains(t, filtered, excluded, "secret.txt must be excluded from a deeply nested dir")
-}
-
-// TestFileFilter_GetFilteredFiles_nestedRuleScoping ensures a rule from a nested ignore file
-// only applies within its own directory, not to a same-named file in a sibling directory.
-func TestFileFilter_GetFilteredFiles_nestedRuleScoping(t *testing.T) {
-	root := t.TempDir()
-	scopedExcluded := filepath.Join(root, "sub (x)", "only.txt")
-	siblingKept := filepath.Join(root, "other", "only.txt")
-	createFileInPath(t, filepath.Join(root, "sub (x)", ".gitignore"), []byte("only.txt\n"))
-	createFileInPath(t, scopedExcluded, []byte("x"))
-	createFileInPath(t, siblingKept, []byte("x"))
-
-	fileFilter := NewFileFilter(root, &log.Logger)
-	globs, err := fileFilter.GetRules([]string{".gitignore"})
-	assert.NoError(t, err)
-
-	var filtered []string
-	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
-		filtered = append(filtered, f)
-	}
-
-	assert.NotContains(t, filtered, scopedExcluded, "only.txt under sub (x) must be excluded")
-	assert.Contains(t, filtered, siblingKept, "only.txt in a sibling dir must not be excluded")
-}
-
-// TestFileFilter_GetFilteredFiles_excludesDirectoryContents ensures a directory rule ("build/")
-// excludes all files under it, at any depth.
-func TestFileFilter_GetFilteredFiles_excludesDirectoryContents(t *testing.T) {
-	root := t.TempDir()
-	shallow := filepath.Join(root, "build", "out.js")
-	deep := filepath.Join(root, "build", "nested", "deep.js")
-	kept := filepath.Join(root, "src", "app.js")
-	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("build/\n"))
-	createFileInPath(t, shallow, []byte("x"))
-	createFileInPath(t, deep, []byte("x"))
-	createFileInPath(t, kept, []byte("x"))
-
-	fileFilter := NewFileFilter(root, &log.Logger)
-	globs, err := fileFilter.GetRules([]string{".gitignore"})
-	assert.NoError(t, err)
-
-	var filtered []string
-	for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
-		filtered = append(filtered, f)
-	}
-
-	assert.Contains(t, filtered, kept, "src/app.js should be scanned")
-	assert.NotContains(t, filtered, shallow, "build/out.js must be excluded")
-	assert.NotContains(t, filtered, deep, "build/nested/deep.js must be excluded")
 }
 
 func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
