@@ -71,6 +71,7 @@ type Loader struct {
 	mu       sync.Mutex
 	cleanups []func()
 	loaded   bool
+	closed   bool
 }
 
 // LoaderOption configures a Loader.
@@ -138,8 +139,20 @@ func NewLoader(opts ...LoaderOption) *Loader {
 // spawn a duplicate set of extension subprocesses that are never referenced
 // again -- workflow registration skips the resulting identifier collisions,
 // but the orphaned processes keep running.
+//
+// Init returns an error once Close has been called. Close is terminal: it
+// kills the launched subprocesses but does not (and cannot, in general --
+// the engine may already have registered proxy workflows pointing at them
+// under identifiers a second load would collide with) relaunch them, so a
+// closed Loader must not be reused. Silently no-oping here instead of
+// erroring would leave those proxy workflows registered and pointing at dead
+// processes with no visible sign anything is wrong.
 func (l *Loader) Init(engine workflow.Engine) error {
 	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return fmt.Errorf("extension loader already closed")
+	}
 	if l.loaded {
 		l.mu.Unlock()
 		return nil
@@ -276,8 +289,9 @@ func (l *Loader) startAuthProxy(invocation workflow.InvocationContext) (*authPro
 	return proxy, func() { _ = proxy.stop() }
 }
 
-// Close terminates every extension process the Loader launched. Call it during
-// CLI shutdown.
+// Close terminates every extension process the Loader launched. Call it
+// during CLI shutdown. Close is terminal: the Loader must not be reused
+// afterward (see Init).
 func (l *Loader) Close() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -285,6 +299,7 @@ func (l *Loader) Close() {
 		cleanup()
 	}
 	l.cleanups = nil
+	l.closed = true
 }
 
 // grpcDialer is the production dialer: it launches the extension binary and

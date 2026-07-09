@@ -201,6 +201,20 @@ func TestLoader_DoesNotExportSensitiveConfigValue(t *testing.T) {
 	assert.Equal(t, "snyk", conn.lastReq.config["name"], "non-colliding flags still export normally")
 }
 
+func TestLoader_InitErrorsAfterClose(t *testing.T) {
+	conn := &fakeConn{
+		specs: []*extensionpb.WorkflowSpec{{Identifier: "flw://hello", Visible: true}},
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)))
+	engine := workflow.NewDefaultWorkFlowEngine()
+	require.NoError(t, loader.Init(engine))
+
+	loader.Close()
+
+	err := loader.Init(engine)
+	require.Error(t, err, "a closed Loader must not silently re-init: it would leave proxy workflows pointing at killed processes")
+}
+
 func TestLoader_ProxyPropagatesExecuteError(t *testing.T) {
 	conn := &fakeConn{
 		specs:   []*extensionpb.WorkflowSpec{{Identifier: "flw://hello", Visible: true}},
