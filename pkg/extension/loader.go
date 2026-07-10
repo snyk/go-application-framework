@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -242,7 +243,7 @@ func (l *Loader) makeProxy(conn pluginConn, spec *extensionpb.WorkflowSpec) work
 					Msg("extension declared a flag colliding with a reserved credential key; refusing to export its value")
 				continue
 			}
-			req.config[name] = config.GetString(name)
+			req.config[name] = flagValueAsString(config, flag)
 		}
 
 		// Bridge the host's authenticated network access for this invocation.
@@ -263,6 +264,23 @@ func (l *Loader) makeProxy(conn pluginConn, spec *extensionpb.WorkflowSpec) work
 		}
 
 		return msgsToDataSlice(outMsgs, config)
+	}
+}
+
+// flagValueAsString reads a declared flag's live value out of config as a
+// string, using the flag's own declared type rather than
+// configuration.Configuration.GetString. GetString only handles string and
+// []string underlying values and silently returns "" for anything else, so a
+// bool or int flag's real value (true, false, 0, 5, ...) would otherwise
+// always export as an empty string.
+func flagValueAsString(config configuration.Configuration, flag *extensionpb.FlagSpec) string {
+	switch flag.GetType() {
+	case "bool":
+		return strconv.FormatBool(config.GetBool(flag.GetName()))
+	case "int":
+		return strconv.Itoa(config.GetInt(flag.GetName()))
+	default:
+		return config.GetString(flag.GetName())
 	}
 }
 

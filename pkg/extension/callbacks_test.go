@@ -191,6 +191,25 @@ func TestConfigOverrides_SkipsSliceTypedValues(t *testing.T) {
 	assert.Equal(t, "hi", diffs["greeting"])
 }
 
+func TestConfigOverrides_DetectsBoolAndIntChanges(t *testing.T) {
+	base := configuration.New()
+	base.Set("verbose", false)
+	base.Set("retries", 0)
+	baseline := configSnapshot(base)
+
+	override := base.Clone()
+	override.Set("verbose", true)
+	override.Set("retries", 5)
+
+	diffs := configOverrides(baseline, override)
+
+	// GetString silently returns "" for bool/int values, which would make
+	// false-vs-true and 0-vs-5 look identical (and therefore unchanged) if the
+	// diff were computed with it.
+	assert.Equal(t, "true", diffs["verbose"])
+	assert.Equal(t, "5", diffs["retries"])
+}
+
 func TestHostCallbackServer_RejectsInvocationBeyondMaxDepth(t *testing.T) {
 	engine := workflow.NewDefaultWorkFlowEngine()
 	require.NoError(t, engine.Init())

@@ -3,6 +3,7 @@ package extension
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/rs/zerolog"
 
@@ -99,16 +100,41 @@ func (e *remoteEngine) invoke(id workflow.Identifier, input []workflow.Data, con
 	return msgsToDataSlice(resp.GetOutput(), e.config)
 }
 
-// configSnapshot captures the string representation of every key in config at
-// a point in time, so it can be diffed against later even if the config
-// object itself is mutated in place.
+// configValueAsString stringifies a raw configuration value for crossing the
+// process boundary. Returns ok=false for values that can't be represented as
+// a scalar string (notably slices): configuration.Configuration.GetString only
+// handles string and []string underlying values and silently returns "" for
+// anything else (bool, int, ...), which would make every such key look
+// identical -- and therefore unchanged -- regardless of its real value.
+func configValueAsString(v interface{}) (string, bool) {
+	switch val := v.(type) {
+	case string:
+		return val, true
+	case bool:
+		return strconv.FormatBool(val), true
+	case int:
+		return strconv.Itoa(val), true
+	case int64:
+		return strconv.FormatInt(val, 10), true
+	case float64:
+		return strconv.FormatFloat(val, 'f', -1, 64), true
+	default:
+		return "", false
+	}
+}
+
+// configSnapshot captures the string representation of every stringifiable
+// key in config at a point in time, so it can be diffed against later even if
+// the config object itself is mutated in place.
 func configSnapshot(config configuration.Configuration) map[string]string {
 	if config == nil {
 		return nil
 	}
 	snap := make(map[string]string, len(config.AllKeys()))
 	for _, key := range config.AllKeys() {
-		snap[key] = config.GetString(key)
+		if value, ok := configValueAsString(config.Get(key)); ok {
+			snap[key] = value
+		}
 	}
 	return snap
 }
@@ -133,12 +159,8 @@ func configOverrides(baseline map[string]string, override configuration.Configur
 	}
 	var diffs map[string]string
 	for _, key := range override.AllKeys() {
-		value := override.GetString(key)
-		if value == baseline[key] {
-			continue
-		}
-		switch override.Get(key).(type) {
-		case []string, []interface{}:
+		value, ok := configValueAsString(override.Get(key))
+		if !ok || value == baseline[key] {
 			continue
 		}
 		if diffs == nil {

@@ -201,6 +201,30 @@ func TestLoader_DoesNotExportSensitiveConfigValue(t *testing.T) {
 	assert.Equal(t, "snyk", conn.lastReq.config["name"], "non-colliding flags still export normally")
 }
 
+func TestLoader_ExportsBoolAndIntFlagValues(t *testing.T) {
+	conn := &fakeConn{
+		specs: []*extensionpb.WorkflowSpec{
+			{Identifier: "flw://hello", Visible: true, Flags: []*extensionpb.FlagSpec{
+				{Name: "verbose", Type: "bool", DefaultValue: "false"},
+				{Name: "retries", Type: "int", DefaultValue: "0"},
+			}},
+		},
+	}
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialer(conn)))
+	engine := newInitializedEngine(t, loader)
+
+	engine.GetConfiguration().Set("verbose", true)
+	engine.GetConfiguration().Set("retries", 5)
+
+	helloID, _ := url.Parse("flw://hello")
+	_, err := engine.Invoke(helloID)
+	require.NoError(t, err)
+
+	// GetString silently returns "" for non-string/[]string values, so this
+	// must go through the flag's declared type, not a blind GetString call.
+	assert.Equal(t, map[string]string{"verbose": "true", "retries": "5"}, conn.lastReq.config)
+}
+
 func TestLoader_InitErrorsAfterClose(t *testing.T) {
 	conn := &fakeConn{
 		specs: []*extensionpb.WorkflowSpec{{Identifier: "flw://hello", Visible: true}},
