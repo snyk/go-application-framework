@@ -19,11 +19,15 @@ type fakeConn struct {
 	specs        []*extensionpb.WorkflowSpec
 	output       []*extensionpb.DataMsg
 	execErr      error
+	discoverErr  error
 	lastReq      executeRequest
 	executeCalls int
 }
 
 func (f *fakeConn) Discover(context.Context) ([]*extensionpb.WorkflowSpec, error) {
+	if f.discoverErr != nil {
+		return nil, f.discoverErr
+	}
 	return f.specs, nil
 }
 
@@ -39,6 +43,14 @@ func (f *fakeConn) Execute(_ context.Context, req executeRequest) ([]*extensionp
 func fakeDialer(conn pluginConn) dialer {
 	return func(context.Context, string) (pluginConn, func(), error) {
 		return conn, func() {}, nil
+	}
+}
+
+// fakeDialerWithCleanup is like fakeDialer but lets the test observe whether
+// the process cleanup ran.
+func fakeDialerWithCleanup(conn pluginConn, cleanupCalled *bool) dialer {
+	return func(context.Context, string) (pluginConn, func(), error) {
+		return conn, func() { *cleanupCalled = true }, nil
 	}
 }
 
@@ -223,6 +235,18 @@ func TestLoader_ExportsBoolAndIntFlagValues(t *testing.T) {
 	// GetString silently returns "" for non-string/[]string values, so this
 	// must go through the flag's declared type, not a blind GetString call.
 	assert.Equal(t, map[string]string{"verbose": "true", "retries": "5"}, conn.lastReq.config)
+}
+
+func TestLoader_KillsProcessWhenDiscoverFails(t *testing.T) {
+	conn := &fakeConn{discoverErr: assert.AnError}
+	var cleanedUp bool
+	loader := NewLoader(WithPaths("fake"), withDialer(fakeDialerWithCleanup(conn, &cleanedUp)))
+
+	engine := workflow.NewDefaultWorkFlowEngine()
+	engine.AddExtensionInitializer(loader.Init)
+	require.NoError(t, engine.Init(), "a failing extension must not abort engine initialization")
+
+	assert.True(t, cleanedUp, "a process whose Discover call failed (so no workflows will ever reference it) must be killed immediately, not left running until Loader.Close()")
 }
 
 func TestLoader_InitErrorsAfterClose(t *testing.T) {

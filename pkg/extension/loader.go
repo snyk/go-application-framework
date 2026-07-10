@@ -183,6 +183,12 @@ func (l *Loader) loadOne(engine workflow.Engine, path string) error {
 
 	specs, err := conn.Discover(ctx)
 	if err != nil {
+		// No workflows were registered for this process, so nothing will ever
+		// call its cleanup before Loader.Close() -- terminate it now instead
+		// of leaving it running for the Loader's (potentially long)
+		// lifetime. Left in l.cleanups too; go-plugin's Kill is safe to call
+		// more than once.
+		cleanup()
 		return fmt.Errorf("discovering workflows: %w", err)
 	}
 
