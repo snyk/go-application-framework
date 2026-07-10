@@ -296,6 +296,18 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 	}
 }
 
+func TestFileFilter_toMatchGlob_preservesBackslashDollarEscape(t *testing.T) {
+	root := t.TempDir()
+	base := filepath.ToSlash(filepath.Clean(root))
+	glob := base + `/**/price\$tag/**`
+
+	fw := NewFileFilter(root, &log.Logger)
+	got := fw.toMatchGlob(glob)
+
+	assert.Equal(t, `**/price\$tag/**`, got)
+	assert.NotContains(t, got, `price/$tag`)
+}
+
 // TestFileFilter_GetFilteredFiles_ignoreRuleScenarios covers ignore-rule behaviors that share
 // the same shape: build a filesystem (including ignore files), filter it, then assert which
 // files survive. "files" maps a slash-separated path (relative to the scan root) to its content;

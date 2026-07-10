@@ -123,7 +123,9 @@ func (fw *FileFilter) toMatchGlob(glob string) string {
 	}
 
 	base := filepath.ToSlash(filepath.Clean(fw.path))
-	slashGlob := filepath.ToSlash(glob)
+	// buildGlob already normalizes path separators to '/'; backslashes only appear as
+	// rule escapes (e.g. \$). filepath.ToSlash would turn \$ into /$ on Windows.
+	slashGlob := glob
 	if rel, ok := strings.CutPrefix(slashGlob, base+"/"); ok {
 		return negated + escapeRelativeGlobForMatch(rel)
 	}
