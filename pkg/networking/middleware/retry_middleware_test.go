@@ -609,6 +609,138 @@ func Test_shouldRetry_rateLimitResetJitter(t *testing.T) {
 		require.Equal(t, 3*time.Second, actualRetryableErr.Duration,
 			"Retry-After must be honored exactly with no jitter")
 	})
+
+	t.Run("X-RateLimit-Reset with low-capacity X-RateLimit-Limit widens jitter window", func(t *testing.T) {
+		t.Parallel()
+		h := http.Header{}
+		h.Set("X-RateLimit-Reset", "10")
+		h.Set("X-RateLimit-Limit", "5;w=60") // window (60s) must cover rawDelay (10s) to actually engage widening
+		resp := newResponse(http.StatusTooManyRequests, h)
+
+		// Compute expected window from the unit under test itself, and guard
+		// that this test setup actually exercises the widened path rather
+		// than silently falling back to the flat maxJitterWindow.
+		wantWindow := rateLimitJitterWindow(resp, 10*time.Second)
+		require.Greater(t, wantWindow, maxJitterWindow, "test setup must engage widening, not the flat fallback")
+
+		var actualRetryableErr *backoff.RetryAfterError
+		err := shouldRetry(resp, 0, 1)
+		require.ErrorAs(t, err, &actualRetryableErr)
+		require.GreaterOrEqual(t, actualRetryableErr.Duration, 10*time.Second)
+		require.Less(t, actualRetryableErr.Duration, 10*time.Second+wantWindow)
+	})
+}
+
+func Test_parseRateLimitPolicies(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected []rateLimitPolicy
+	}{
+		{
+			name:   "full real sample header",
+			header: `160, 160;w=1;name="crd|generic_key^api-gateway.api-rest|generic_key^per_second|principal_id|ratelimit_bucket^high", 1620;w=60;name="x", 97200;w=3600;name="y"`,
+			expected: []rateLimitPolicy{
+				{limit: 160, windowSeconds: 1},
+				{limit: 1620, windowSeconds: 60},
+				{limit: 97200, windowSeconds: 3600},
+			},
+		},
+		{
+			name:     "bare-only header",
+			header:   "160",
+			expected: nil,
+		},
+		{
+			name:     "empty string",
+			header:   "",
+			expected: nil,
+		},
+		{
+			name:     "malformed entry skipped",
+			header:   "abc;w=1",
+			expected: nil,
+		},
+		{
+			name:     "window zero skipped",
+			header:   "160;w=0",
+			expected: nil,
+		},
+		{
+			name:     "window negative skipped",
+			header:   "160;w=-5",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := parseRateLimitPolicies(tt.header)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func Test_rateLimitJitterWindow(t *testing.T) {
+	newLimitHeader := func(value string) http.Header {
+		h := http.Header{}
+		if value != "" {
+			h.Set("X-RateLimit-Limit", value)
+		}
+		return h
+	}
+
+	tests := []struct {
+		name     string
+		headers  http.Header
+		rawDelay time.Duration
+		expected time.Duration
+	}{
+		{
+			name:     "high-capacity match keeps flat maxJitterWindow",
+			headers:  newLimitHeader("160;w=1"),
+			rawDelay: 1 * time.Second,
+			expected: maxJitterWindow,
+		},
+		{
+			name:     "low-capacity match widens window",
+			headers:  newLimitHeader("5;w=1"),
+			rawDelay: 1 * time.Second,
+			expected: 40 * time.Second,
+		},
+		{
+			name:     "minute-only bucket, no per-second entry",
+			headers:  newLimitHeader("600;w=60"),
+			rawDelay: 45 * time.Second,
+			expected: 20 * time.Second,
+		},
+		{
+			name:     "hour-only bucket clamped to ceiling",
+			headers:  newLimitHeader("20;w=3600"),
+			rawDelay: 1800 * time.Second,
+			expected: jitterCeiling,
+		},
+		{
+			name:     "no header falls back to maxJitterWindow",
+			headers:  http.Header{},
+			rawDelay: 10 * time.Second,
+			expected: maxJitterWindow,
+		},
+		{
+			name:     "no window covers rawDelay falls back to maxJitterWindow",
+			headers:  newLimitHeader("160;w=1"),
+			rawDelay: 100 * time.Second,
+			expected: maxJitterWindow,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := newResponse(http.StatusTooManyRequests, tt.headers)
+			actual := rateLimitJitterWindow(resp, tt.rawDelay)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
 }
 
 func Test_parseRetryDelay(t *testing.T) {
