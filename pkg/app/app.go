@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -452,10 +453,21 @@ func createAppEngine(opts ...Opts) (workflow.Engine, func()) {
 	// populates a repeatable --plugin-path flag bound to that key), then calls
 	// Init(). Reading the paths here, at construction, would see them still
 	// empty and silently never register the loader.
-	var loader *extension.Loader
+	//
+	// loaderMu guards loader itself: the initializer below writes it from
+	// inside engine.Init(), and the returned closer reads it -- potentially
+	// from a different goroutine (e.g. a shutdown handler racing a still-
+	// running Init()) -- so a plain closured variable isn't safe here.
+	var (
+		loaderMu sync.Mutex
+		loader   *extension.Loader
+	)
 	engine.AddExtensionInitializer(func(engine workflow.Engine) error {
-		if loader != nil {
-			return loader.Init(engine)
+		loaderMu.Lock()
+		existing := loader
+		loaderMu.Unlock()
+		if existing != nil {
+			return existing.Init(engine)
 		}
 		cfg := engine.GetConfiguration()
 		if cfg == nil {
@@ -465,17 +477,23 @@ func createAppEngine(opts ...Opts) (workflow.Engine, func()) {
 		if len(paths) == 0 {
 			return nil
 		}
-		loader = extension.NewLoader(
+		newLoader := extension.NewLoader(
 			extension.WithPaths(paths...),
 			extension.WithLogger(engine.GetLogger()),
 			extension.WithAllowOverride(cfg.GetBool(extension.ConfigurationKeyAllowOverride)),
 		)
-		return loader.Init(engine)
+		loaderMu.Lock()
+		loader = newLoader
+		loaderMu.Unlock()
+		return newLoader.Init(engine)
 	})
 
 	closer := func() {
-		if loader != nil {
-			loader.Close()
+		loaderMu.Lock()
+		l := loader
+		loaderMu.Unlock()
+		if l != nil {
+			l.Close()
 		}
 	}
 	return engine, closer

@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -117,6 +118,29 @@ func TestCreateAppEngineWithCloser_ClosesExtensionProcess(t *testing.T) {
 	// (Loader.Close is exercised directly in pkg/extension; here we only
 	// verify the closer wired up by CreateAppEngineWithCloser reaches it).
 	closer()
+}
+
+// TestCreateAppEngineWithCloser_ConcurrentInitAndCloseIsRaceFree exercises
+// Init() (which writes the loader var from inside the extension initializer)
+// and closer() (which reads it) concurrently -- the scenario a shutdown
+// handler racing a still-running Init() would hit in production. Run with
+// `go test -race` to verify; a plain run can't detect the race itself.
+func TestCreateAppEngineWithCloser_ConcurrentInitAndCloseIsRaceFree(t *testing.T) {
+	config := configuration.New()
+	config.Set(extension.ConfigurationKeyPaths, []string{"/nonexistent/extension/binary"})
+	engine, closer := CreateAppEngineWithCloser(WithConfiguration(config))
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_ = engine.Init()
+	}()
+	go func() {
+		defer wg.Done()
+		closer()
+	}()
+	wg.Wait()
 }
 
 func TestCreateAppEngineWithCloser_NoOpWhenNoExtensionsConfigured(t *testing.T) {
