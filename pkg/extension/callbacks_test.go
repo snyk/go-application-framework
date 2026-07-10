@@ -97,9 +97,11 @@ func TestRemoteEngine_InvokesSibling(t *testing.T) {
 func TestRemoteEngine_InvokeForwardsConfigOverrides(t *testing.T) {
 	engine := workflow.NewDefaultWorkFlowEngine()
 	siblingID := workflow.NewWorkflowIdentifier("sibling")
+	siblingFlags := pflag.NewFlagSet("sibling", pflag.ContinueOnError)
+	siblingFlags.String("greeting", "", "")
 	_, err := engine.Register(
 		siblingID,
-		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("sibling", pflag.ContinueOnError)),
+		workflow.ConfigurationOptionsFromFlagset(siblingFlags),
 		func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 			greeting := invocation.GetConfiguration().GetString("greeting")
 			outID := workflow.NewTypeIdentifier(siblingID, "result")
@@ -130,9 +132,11 @@ func TestRemoteEngine_InvokeForwardsConfigOverrides(t *testing.T) {
 func TestRemoteEngine_InvokeForwardsInPlaceConfigMutation(t *testing.T) {
 	engine := workflow.NewDefaultWorkFlowEngine()
 	siblingID := workflow.NewWorkflowIdentifier("sibling")
+	siblingFlags := pflag.NewFlagSet("sibling", pflag.ContinueOnError)
+	siblingFlags.String("greeting", "", "")
 	_, err := engine.Register(
 		siblingID,
-		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("sibling", pflag.ContinueOnError)),
+		workflow.ConfigurationOptionsFromFlagset(siblingFlags),
 		func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 			greeting := invocation.GetConfiguration().GetString("greeting")
 			outID := workflow.NewTypeIdentifier(siblingID, "result")
@@ -208,6 +212,45 @@ func TestConfigOverrides_DetectsBoolAndIntChanges(t *testing.T) {
 	// diff were computed with it.
 	assert.Equal(t, "true", diffs["verbose"])
 	assert.Equal(t, "5", diffs["retries"])
+}
+
+func TestHostCallbackServer_RejectsConfigOverrideForUndeclaredKey(t *testing.T) {
+	engine := workflow.NewDefaultWorkFlowEngine()
+	engine.GetConfiguration().Set(configuration.API_URL, "https://real-snyk-api.example")
+
+	siblingID := workflow.NewWorkflowIdentifier("sibling")
+	var observedAPIURL string
+	_, err := engine.Register(
+		siblingID,
+		// Declares no flags of its own -- in particular, does not declare
+		// configuration.API_URL as configurable.
+		workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("sibling", pflag.ContinueOnError)),
+		func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			observedAPIURL = invocation.GetConfiguration().GetString(configuration.API_URL)
+			return nil, nil
+		},
+	)
+	require.NoError(t, err)
+	require.NoError(t, engine.Init())
+
+	server := newHostCallbackServer(engine, newRecordingAnalytics(), engine.GetConfiguration(), 0)
+	conn, _ := plugin.TestGRPCConn(t, func(s *grpc.Server) {
+		extensionpb.RegisterHostCallbackServer(s, server)
+	})
+	t.Cleanup(func() { _ = conn.Close() })
+
+	client := extensionpb.NewHostCallbackClient(conn)
+	_, err = client.Invoke(context.Background(), &extensionpb.InvokeRequest{
+		Identifier: siblingID.String(),
+		// An extension trying to redirect where the host attaches the real
+		// credential: ShouldRequireAuthentication matches a request's URL
+		// against exactly this key.
+		Config: map[string]string{configuration.API_URL: "https://attacker.example"},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://real-snyk-api.example", observedAPIURL,
+		"a config override for a key the invoked workflow never declared must be refused, not applied to the clone of the host's real configuration")
 }
 
 func TestHostCallbackServer_RejectsInvocationBeyondMaxDepth(t *testing.T) {

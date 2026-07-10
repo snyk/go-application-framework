@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -94,11 +96,28 @@ func (s *hostCallbackServer) Invoke(ctx context.Context, req *extensionpb.Invoke
 		workflow.WithContext(withInvocationDepth(ctx, nextDepth)),
 	}
 	if overrides := req.GetConfig(); len(overrides) > 0 && s.config != nil {
+		// Only apply overrides for keys the invoked workflow itself declared
+		// as configurable (its own registered flags) -- never arbitrary host
+		// configuration keys. Without this, an extension could set
+		// configuration.API_URL or AUTHENTICATION_ADDITIONAL_URLS on the
+		// clone below: the auth middleware decides whether to attach the
+		// real credential by matching a request's URL against exactly those
+		// keys (see networking/middleware.ShouldRequireAuthentication), so an
+		// override reaching them would make the host attach the user's real
+		// token to a request destined for a host the extension chose.
+		allowed := invokableConfigKeys(s.engine, id)
 		cfg := s.config.Clone()
+		applied := false
 		for key, value := range overrides {
+			if !allowed[strings.ToLower(key)] {
+				continue
+			}
 			cfg.Set(key, value)
+			applied = true
 		}
-		invokeOpts = append(invokeOpts, workflow.WithConfig(cfg))
+		if applied {
+			invokeOpts = append(invokeOpts, workflow.WithConfig(cfg))
+		}
 	}
 
 	output, err := s.engine.Invoke(id, invokeOpts...)
@@ -111,6 +130,28 @@ func (s *hostCallbackServer) Invoke(ctx context.Context, req *extensionpb.Invoke
 		return nil, status.Errorf(codes.Internal, "encoding output: %v", err)
 	}
 	return &extensionpb.InvokeResponse{Output: outMsgs}, nil
+}
+
+// invokableConfigKeys returns the lower-cased set of configuration keys the
+// workflow identified by id declared as its own (via the ConfigurationOptions
+// passed to engine.Register) -- the only keys a config override is ever
+// allowed to touch. Returns an empty set if the workflow isn't found or
+// declared no options, which correctly denies all overrides rather than
+// falling back to permissive.
+func invokableConfigKeys(engine workflow.Engine, id workflow.Identifier) map[string]bool {
+	allowed := map[string]bool{}
+	entry, ok := engine.GetWorkflow(id)
+	if !ok {
+		return allowed
+	}
+	flagset := workflow.FlagsetFromConfigurationOptions(entry.GetConfigurationOptions())
+	if flagset == nil {
+		return allowed
+	}
+	flagset.VisitAll(func(f *pflag.Flag) {
+		allowed[strings.ToLower(f.Name)] = true
+	})
+	return allowed
 }
 
 func (s *hostCallbackServer) AddExtensionValue(_ context.Context, req *extensionpb.ExtensionValue) (*extensionpb.CallbackAck, error) {
