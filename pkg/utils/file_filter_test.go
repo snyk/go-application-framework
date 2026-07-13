@@ -13,6 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// windowsIllegalChars are characters Windows does not allow in file/directory names, so paths
+// containing them cannot exist there and the corresponding cases are skipped on Windows.
+const windowsIllegalChars = `<>:"/\|?*`
+
 type fileFilterTestCase struct {
 	// the name of the test case. Will be used as the test name in t.Run()
 	name string
@@ -266,10 +270,6 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 		"Users/first.last/OneDrive - Foobar (Team1)/docs", // combined: dot + parens + spaces
 	}
 
-	// Characters that Windows does not allow in file/directory names, so such paths cannot
-	// exist there and don't need to be exercised on that OS.
-	const windowsIllegalChars = `<>:"/\|?*`
-
 	for _, dirName := range metaCharDirs {
 		t.Run(dirName, func(t *testing.T) {
 			if runtime.GOOS == "windows" && strings.ContainsAny(dirName, windowsIllegalChars) {
@@ -298,18 +298,49 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 	}
 }
 
-// TestFileFilter_GetFilteredFiles_ignoreRuleScenarios covers ignore-rule behaviors that share
-// the same shape: build a filesystem (including ignore files), filter it, then assert which
-// files survive. "files" maps a slash-separated path (relative to the scan root) to its content;
-// "excluded"/"kept" list slash-separated paths that must / must not be filtered out.
+type ignoreRuleScenario struct {
+	name string
+	// scanRootName, when set, roots the FileFilter at t.TempDir()/scanRootName instead of
+	// t.TempDir(). This exercises metacharacters in the scan root itself, not just in
+	// intermediate directories. files/excluded/kept remain relative to that root.
+	scanRootName string
+	// files maps a slash-separated path (relative to the scan root) to its content.
+	files map[string]string
+	// ruleFiles lists the valid ignore filenames to extract rules from.
+	ruleFiles []string
+	// excluded/kept list slash-separated paths that must / must not be filtered out.
+	excluded []string
+	kept     []string
+	// windowsOnly skips the scenario on non-Windows platforms.
+	windowsOnly bool
+}
+
+// scenarioHasWindowsIllegalChars reports whether the scenario's scan root or any of its file
+// paths contain characters that are illegal in Windows paths, so it must be skipped there.
+func scenarioHasWindowsIllegalChars(tc ignoreRuleScenario) bool {
+	// "/" is the path separator in these test paths, so exclude it from the illegal set.
+	illegal := strings.ReplaceAll(windowsIllegalChars, "/", "")
+	if strings.ContainsAny(tc.scanRootName, illegal) {
+		return true
+	}
+	for p := range tc.files {
+		if strings.ContainsAny(p, illegal) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestFileFilter_GetFilteredFiles_ignoreRuleScenarios is the behavioral regression net for the
+// special-character-path fix (CLI-1648). Each scenario builds a filesystem (including ignore
+// files), filters it, then asserts which files survive.
+//
+// This is deliberately NOT a full gitignore conformance suite: go-gitignore has known gaps we
+// cannot fix here (the "?" single-char wildcard, escaped trailing spaces, full POSIX character
+// classes). We only cover behavior the library supports and that the fix must preserve.
 func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
-	scenarios := []struct {
-		name      string
-		files     map[string]string
-		ruleFiles []string
-		excluded  []string
-		kept      []string
-	}{
+	scenarios := []ignoreRuleScenario{
+		// --- Existing behaviors (kept) ---
 		{
 			name: "negated character class rule keeps working",
 			files: map[string]string{
@@ -367,11 +398,298 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			excluded:  []string{"build/out.js", "build/nested/deep.js"},
 			kept:      []string{"src/app.js"},
 		},
+
+		// --- A. Special-character scan roots (customer bug family) ---
+		{
+			name:         "scan root with parentheses and spaces",
+			scanRootName: "OneDrive - Foobar (Team1)",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name:         "scan root with dot",
+			scanRootName: "first.last",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name:         "scan root combined customer shape",
+			scanRootName: "first.last/OneDrive - Foobar (Team1)",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name:         "scan root with plus and braces",
+			scanRootName: "a+b/c{d}",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name:         "scan root with caret dollar and pipe",
+			scanRootName: "a^b/a$b/a|b",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name:         "scan root with backslash", // unix-legal, auto-skipped on Windows
+			scanRootName: "a\\b",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+
+		// --- B. gitignore rule variations (library-supported only) ---
+		{
+			name: "glob star matches extension",
+			files: map[string]string{
+				".gitignore": "*.log\n",
+				"a.log":      "x",
+				"a.txt":      "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"a.log"},
+			kept:      []string{"a.txt"},
+		},
+		{
+			name: "leading slash anchors to root",
+			files: map[string]string{
+				".gitignore":        "/root-only.txt\n",
+				"root-only.txt":     "x",
+				"sub/root-only.txt": "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"root-only.txt"},
+			kept:      []string{"sub/root-only.txt"},
+		},
+		{
+			name: "trailing slash excludes directory contents",
+			files: map[string]string{
+				".gitignore":   "logs/\n",
+				"logs/a.txt":   "x",
+				"logs/b/c.txt": "x",
+				"logsx.txt":    "x", // sibling whose name only shares the stem is kept
+				"src/app.js":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"logs/a.txt", "logs/b/c.txt"},
+			kept:      []string{"logsx.txt", "src/app.js"},
+		},
+		{
+			name: "nested path rule scoped to that path",
+			files: map[string]string{
+				".gitignore":     "src/gen/\n",
+				"src/gen/g.js":   "x",
+				"other/gen/g.js": "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"src/gen/g.js"},
+			kept:      []string{"other/gen/g.js"},
+		},
+		{
+			name: "double star matches at multiple depths",
+			files: map[string]string{
+				".gitignore":        "**/dist\n",
+				"dist/a.js":         "x",
+				"pkg/dist/b.js":     "x",
+				"pkg/sub/dist/c.js": "x",
+				"src/app.js":        "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"dist/a.js", "pkg/dist/b.js", "pkg/sub/dist/c.js"},
+			kept:      []string{"src/app.js"},
+		},
+		{
+			name: "negation re-includes a file",
+			files: map[string]string{
+				".gitignore": "*.log\n!keep.log\n",
+				"a.log":      "x",
+				"keep.log":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"a.log"},
+			kept:      []string{"keep.log"},
+		},
+		{
+			name: "comments and blank lines are ignored",
+			files: map[string]string{
+				".gitignore":                "# a comment\n\nnode_modules\n\n# trailing comment\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+
+		// --- C. Ignore-file-format variations ---
+		{
+			name: "dcignore file is honored",
+			files: map[string]string{
+				".dcignore":                 "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".dcignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name: "snyk global exclude (customer file)",
+			files: map[string]string{
+				".snyk":                     "# Snyk (https://snyk.io) policy file\nversion: v1.25.1\nexclude:\n  global:\n    - node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".snyk"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name: "snyk code exclude",
+			files: map[string]string{
+				".snyk":       "version: v1.25.1\nexclude:\n  code:\n    - dist\n",
+				"dist/out.js": "x",
+				"app.js":      "x",
+			},
+			ruleFiles: []string{".snyk"},
+			excluded:  []string{"dist/out.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name: "gitignore and snyk applied together",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				".snyk":                     "version: v1.25.1\nexclude:\n  global:\n    - dist\n",
+				"node_modules/lib/index.js": "x",
+				"dist/out.js":               "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore", ".snyk"},
+			excluded:  []string{"node_modules/lib/index.js", "dist/out.js"},
+			kept:      []string{"app.js"},
+		},
+		{
+			name: "nested gitignore files scope independently",
+			files: map[string]string{
+				".gitignore":     "root.txt\n",
+				"root.txt":       "x",
+				"pkg/.gitignore": "pkg.txt\n",
+				"pkg/pkg.txt":    "x",
+				"pkg/root.txt":   "x", // root rule also applies here (matches at any level)
+				"pkg/keep.txt":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"root.txt", "pkg/pkg.txt", "pkg/root.txt"},
+			kept:      []string{"pkg/keep.txt"},
+		},
+
+		// --- D. Path structure / real-world combinations ---
+		{
+			name: "deeply nested exclusion",
+			files: map[string]string{
+				".gitignore":          "build/\n",
+				"build/a/b/c/deep.js": "x",
+				"src/a/b/c/keep.js":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"build/a/b/c/deep.js"},
+			kept:      []string{"src/a/b/c/keep.js"},
+		},
+		{
+			name: "multiple siblings only matched one excluded",
+			files: map[string]string{
+				".gitignore": "temp\n",
+				"temp/a.js":  "x",
+				"tempx/a.js": "x",
+				"atemp/a.js": "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"temp/a.js"},
+			kept:      []string{"tempx/a.js", "atemp/a.js"},
+		},
+		{
+			name: "monorepo node_modules at multiple levels",
+			files: map[string]string{
+				".gitignore":                             "node_modules\n",
+				"node_modules/root/index.js":             "x",
+				"packages/app/.gitignore":                "dist\n",
+				"packages/app/node_modules/pkg/index.js": "x",
+				"packages/app/dist/out.js":               "x",
+				"packages/app/src/main.js":               "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded: []string{
+				"node_modules/root/index.js",
+				"packages/app/node_modules/pkg/index.js",
+				"packages/app/dist/out.js",
+			},
+			kept: []string{"packages/app/src/main.js"},
+		},
+
+		// --- E. OS-specific: drive-letter scan root (Windows-only) ---
+		{
+			name:         "windows drive-letter scan root",
+			windowsOnly:  true,
+			scanRootName: "project",
+			files: map[string]string{
+				".gitignore":                "node_modules\n",
+				"node_modules/lib/index.js": "x",
+				"app.js":                    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/lib/index.js"},
+			kept:      []string{"app.js"},
+		},
 	}
 
 	for _, tc := range scenarios {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.windowsOnly && runtime.GOOS != "windows" {
+				t.Skip("scenario only applies on Windows")
+			}
+			if runtime.GOOS == "windows" && scenarioHasWindowsIllegalChars(tc) {
+				t.Skip("path contains characters not allowed on Windows")
+			}
+
 			root := t.TempDir()
+			if tc.scanRootName != "" {
+				root = filepath.Join(root, filepath.FromSlash(tc.scanRootName))
+			}
 			for p, content := range tc.files {
 				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
 			}
@@ -395,6 +713,92 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFileFilter_GetFilteredFiles_uncPaths covers UNC-style scan roots on Windows using real
+// filesystem walks. t.TempDir() is a local path, so these derive a UNC-style root that points
+// at the same files. They are Windows-only and skip gracefully when the derived root is not
+// reachable (e.g. admin shares disabled). Unit-level UNC glob building is covered separately in
+// TestParseIgnoreRuleToGlobs.
+func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("UNC paths only exist on Windows")
+	}
+
+	// buildTree creates the standard node_modules/app.js/.gitignore tree under base and returns
+	// the FileFilter rooted at scanRoot (which may be a UNC-style alias of base).
+	assertFiltered := func(t *testing.T, scanRoot string) {
+		t.Helper()
+		fileFilter := NewFileFilter(scanRoot, &log.Logger)
+		globs, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		kept := make(map[string]bool)
+		for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+			rel, relErr := filepath.Rel(scanRoot, f)
+			assert.NoError(t, relErr)
+			kept[filepath.ToSlash(rel)] = true
+		}
+		assert.False(t, kept["node_modules/lib/index.js"], "node_modules must be excluded")
+		assert.True(t, kept["app.js"], "app.js must be kept")
+	}
+
+	makeTree := func(t *testing.T, base string) {
+		t.Helper()
+		createFileInPath(t, filepath.Join(base, ".gitignore"), []byte("node_modules\n"))
+		createFileInPath(t, filepath.Join(base, "node_modules", "lib", "index.js"), []byte("x"))
+		createFileInPath(t, filepath.Join(base, "app.js"), []byte("x"))
+	}
+
+	// driveToAdminShare converts "C:\path" to "\\localhost\C$\path" (and 127.0.0.1 variant).
+	driveToAdminShare := func(host, p string) (string, bool) {
+		if len(p) < 2 || p[1] != ':' {
+			return "", false
+		}
+		drive := string(p[0])
+		rest := strings.TrimPrefix(p[2:], `\`)
+		return `\\` + host + `\` + drive + `$\` + rest, true
+	}
+
+	t.Run("genuine UNC via admin share", func(t *testing.T) {
+		base := t.TempDir()
+		makeTree(t, base)
+		for _, host := range []string{"localhost", "127.0.0.1"} {
+			unc, ok := driveToAdminShare(host, base)
+			if !ok {
+				t.Skipf("temp dir %q is not a drive-letter path", base)
+			}
+			if _, err := os.Stat(unc); err != nil {
+				continue // admin share not reachable on this host, try the next
+			}
+			assertFiltered(t, unc)
+			return
+		}
+		t.Skip("admin share (C$) not accessible; cannot exercise genuine UNC")
+	})
+
+	t.Run("extended-length prefix", func(t *testing.T) {
+		base := t.TempDir()
+		makeTree(t, base)
+		extended := `\\?\` + base
+		if _, err := os.Stat(extended); err != nil {
+			t.Skipf("extended-length path not accessible: %v", err)
+		}
+		assertFiltered(t, extended)
+	})
+
+	t.Run("UNC with metacharacters via admin share", func(t *testing.T) {
+		base := filepath.Join(t.TempDir(), "OneDrive - Foobar (Team1)")
+		makeTree(t, base)
+		unc, ok := driveToAdminShare("localhost", base)
+		if !ok {
+			t.Skipf("temp dir %q is not a drive-letter path", base)
+		}
+		if _, err := os.Stat(unc); err != nil {
+			t.Skip("admin share (C$) not accessible; cannot exercise genuine UNC")
+		}
+		assertFiltered(t, unc)
+	})
 }
 
 func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
