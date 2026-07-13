@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -364,6 +365,7 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 	const slash = "/"
 	const all = "**"
 	baseDir := filepath.ToSlash(filePath)
+	baseDir = regexp.QuoteMeta(baseDir)
 
 	if strings.HasPrefix(rule, negation) {
 		rule = rule[1:]
@@ -384,28 +386,28 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule, all))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, escapeSpecialGlobChars(rule), all))
+			globs = append(globs, glob)
 		}
 		// case `/foo` => `{baseDir}/foo`
 		// case `**/foo` => `{baseDir}/**/foo`
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, escapeSpecialGlobChars(rule)))
+			globs = append(globs, glob)
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule, all))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, escapeSpecialGlobChars(rule), all))
+			globs = append(globs, glob)
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, escapeSpecialGlobChars(rule)))
+			globs = append(globs, glob)
 		}
 	}
 	return globs

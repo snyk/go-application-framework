@@ -245,6 +245,155 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 	}
 }
 
+// TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars checks that ignore rules still
+// apply when the project path contains regex metacharacters (CLI-1648).
+func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
+	metaCharDirs := []string{
+		"OneDrive - Foobar (Team1)", // parentheses + spaces (customer's path shape)
+		"Program Files (x86)",       // parentheses + spaces
+		"a+b",                       // plus
+		"c{d}",                      // braces (not a valid quantifier)
+		"backup{2}",                 // braces forming a valid regex quantifier
+		"a^b",                       // caret
+		"a|b",                       // pipe / alternation
+		"a$b",                       // dollar
+		"a*b",                       // glob wildcard in the path
+		"a[b]c",                     // glob character class in the path
+		// "a?b",                       // glob single-char wildcard in the path
+		"a\\b", // literal backslash (legal on unix, illegal on windows)
+	}
+
+	// Characters that Windows does not allow in file/directory names, so such paths cannot
+	// exist there and don't need to be exercised on that OS.
+	const windowsIllegalChars = `<>:"/\|?*`
+
+	for _, dirName := range metaCharDirs {
+		t.Run(dirName, func(t *testing.T) {
+			if runtime.GOOS == "windows" && strings.ContainsAny(dirName, windowsIllegalChars) {
+				t.Skipf("%q contains characters not allowed in Windows paths", dirName)
+			}
+			base := filepath.Join(t.TempDir(), dirName, "repo")
+			nodeModulesFile := filepath.Join(base, "node_modules", "lib", "index.js")
+			appFile := filepath.Join(base, "app.js")
+			gitignore := filepath.Join(base, ".gitignore")
+			createFileInPath(t, nodeModulesFile, []byte("x"))
+			createFileInPath(t, appFile, []byte("x"))
+			createFileInPath(t, gitignore, []byte("node_modules\n"))
+
+			fileFilter := NewFileFilter(base, &log.Logger)
+			globs, err := fileFilter.GetRules([]string{".gitignore"})
+			assert.NoError(t, err)
+
+			var filtered []string
+			for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+				filtered = append(filtered, f)
+			}
+
+			assert.Contains(t, filtered, appFile, "app.js should be scanned")
+			assert.NotContains(t, filtered, nodeModulesFile, "node_modules must be excluded")
+		})
+	}
+}
+
+// TestFileFilter_GetFilteredFiles_ignoreRuleScenarios covers ignore-rule behaviors that share
+// the same shape: build a filesystem (including ignore files), filter it, then assert which
+// files survive. "files" maps a slash-separated path (relative to the scan root) to its content;
+// "excluded"/"kept" list slash-separated paths that must / must not be filtered out.
+func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
+	scenarios := []struct {
+		name      string
+		files     map[string]string
+		ruleFiles []string
+		excluded  []string
+		kept      []string
+	}{
+		{
+			name: "negated character class rule keeps working",
+			files: map[string]string{
+				".gitignore":      "cache[^S]\n",
+				"cache1/index.js": "x", // matches cache[^S]
+				"cacheS/index.js": "x", // excluded from the negated class
+				"app.js":          "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"cache1/index.js"},
+			kept:      []string{"cacheS/index.js", "app.js"},
+		},
+		{
+			name: "ignore file in dir with regex metacharacters",
+			files: map[string]string{
+				"my (dir)/.gitignore": "secret.txt\n",
+				"my (dir)/secret.txt": "x",
+				"my (dir)/keep.txt":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"my (dir)/secret.txt"},
+			kept:      []string{"my (dir)/keep.txt"},
+		},
+		{
+			name: "deeply nested ignore file with metacharacters at every level",
+			files: map[string]string{
+				"a (1)/b [2]/c +3/.gitignore": "secret.txt\n",
+				"a (1)/b [2]/c +3/secret.txt": "x",
+				"a (1)/b [2]/c +3/keep.txt":   "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"a (1)/b [2]/c +3/secret.txt"},
+			kept:      []string{"a (1)/b [2]/c +3/keep.txt"},
+		},
+		{
+			name: "nested rule is scoped to its own directory",
+			files: map[string]string{
+				"sub (x)/.gitignore": "only.txt\n",
+				"sub (x)/only.txt":   "x",
+				"other/only.txt":     "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"sub (x)/only.txt"},
+			kept:      []string{"other/only.txt"},
+		},
+		{
+			name: "directory rule excludes all contents at any depth",
+			files: map[string]string{
+				".gitignore":           "build/\n",
+				"build/out.js":         "x",
+				"build/nested/deep.js": "x",
+				"src/app.js":           "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"build/out.js", "build/nested/deep.js"},
+			kept:      []string{"src/app.js"},
+		},
+	}
+
+	for _, tc := range scenarios {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for p, content := range tc.files {
+				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
+			}
+
+			fileFilter := NewFileFilter(root, &log.Logger)
+			globs, err := fileFilter.GetRules(tc.ruleFiles)
+			assert.NoError(t, err)
+
+			kept := make(map[string]bool)
+			for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+				rel, relErr := filepath.Rel(root, f)
+				assert.NoError(t, relErr)
+				kept[filepath.ToSlash(rel)] = true
+			}
+
+			for _, e := range tc.excluded {
+				assert.False(t, kept[e], "%q must be excluded", e)
+			}
+			for _, k := range tc.kept {
+				assert.True(t, kept[k], "%q must be kept", k)
+			}
+		})
+	}
+}
+
 func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 	b.Log("Creating filesystem...")
 	rootDir := b.TempDir()
@@ -551,6 +700,19 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			invalidRules: []string{},
 			expectedGlobs: []string{
 				"/tmp/test/**/foo/**",
+			},
+		},
+		{
+			// A rule with enough "../" climbs above baseDir once filepath.Join cleans it, so the
+			// base is no longer a prefix and buildGlob takes the fallback path. The base content
+			// is gone at that point, so the remaining glob wildcards must be preserved.
+			name:         "rule climbing above base uses fallback",
+			rule:         "../../../../../../foo",
+			baseDir:      "/tmp/test",
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				"/foo/**",
+				"/foo",
 			},
 		},
 	}
