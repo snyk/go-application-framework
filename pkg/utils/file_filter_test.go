@@ -262,7 +262,7 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 		"a[b]c",                     // glob character class in the path
 		"a?b",                       // glob single-char wildcard in the path
 		"a\\b",                      // literal backslash (legal on unix, illegal on windows)
-		"first.last",                                       // dot in path (e.g. C:\Users\first.last)
+		"first.last",                // dot in path (e.g. C:\Users\first.last)
 		"Users/first.last/OneDrive - Foobar (Team1)/docs", // combined: dot + parens + spaces
 	}
 
