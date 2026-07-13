@@ -345,6 +345,16 @@ func escapeSpecialGlobChars(rule string) string {
 	return result.String()
 }
 
+// joinGlob joins path parts like path.Join but preserves a leading "//" (UNC path prefix).
+// path.Clean (called by path.Join) collapses "//" to "/", which breaks UNC paths on Windows.
+func joinGlob(parts ...string) string {
+	result := path.Join(parts...)
+	if len(parts) > 0 && strings.HasPrefix(parts[0], "//") && !strings.HasPrefix(result, "//") {
+		result = "/" + result
+	}
+	return result
+}
+
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
 // we try to implement the same logic as gitignore pattern format - https://git-scm.com/docs/gitignore#_pattern_format
 func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string) (globs []string) {
@@ -387,7 +397,7 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := prefix + path.Join(baseDir, escapeSpecialGlobChars(rule), all)
+			glob := prefix + joinGlob(baseDir, escapeSpecialGlobChars(rule), all)
 			globs = append(globs, glob)
 		}
 		// case `/foo` => `{baseDir}/foo`
@@ -395,19 +405,19 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := prefix + path.Join(baseDir, escapeSpecialGlobChars(rule))
+			glob := prefix + joinGlob(baseDir, escapeSpecialGlobChars(rule))
 			globs = append(globs, glob)
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := prefix + path.Join(baseDir, all, escapeSpecialGlobChars(rule), all)
+			glob := prefix + joinGlob(baseDir, all, escapeSpecialGlobChars(rule), all)
 			globs = append(globs, glob)
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := prefix + path.Join(baseDir, all, escapeSpecialGlobChars(rule))
+			glob := prefix + joinGlob(baseDir, all, escapeSpecialGlobChars(rule))
 			globs = append(globs, glob)
 		}
 	}

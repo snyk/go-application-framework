@@ -623,11 +623,12 @@ func createFileInPath(tb testing.TB, filePath string, content []byte) {
 
 func TestParseIgnoreRuleToGlobs(t *testing.T) {
 	testCases := []struct {
-		name          string
-		rule          string
-		baseDir       string
-		invalidRules  []string
-		expectedGlobs []string
+		name           string
+		rule           string
+		baseDir        string
+		invalidRules   []string
+		expectedGlobs  []string
+		skipNonWindows bool
 	}{
 		{
 			name:          "invalid rules are ignored",
@@ -731,20 +732,56 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 				path.Join(filepath.ToSlash(os.TempDir()), "OneDrive - Foobar \\(Team1\\)", "project") + "/**/node_modules",
 			},
 		},
-		// {
-		// 	name:         "UNC path with metacharacters",
-		// 	rule:         "node_modules",
-		// 	baseDir:      "//server/share/OneDrive - Foobar (Team1)/project",
-		// 	invalidRules: []string{},
-		// 	expectedGlobs: []string{
-		// 		"//server/share/OneDrive - Foobar \\(Team1\\)/project/**/node_modules/**",
-		// 		"//server/share/OneDrive - Foobar \\(Team1\\)/project/**/node_modules",
-		// 	},
-		// },
+		{
+			// UNC paths (\\server\share) are Windows-only. filepath.Join preserves the \\
+			// prefix on Windows but treats \ as literal filename characters on Unix.
+			name:           "UNC path with metacharacters",
+			rule:           "node_modules",
+			baseDir:        filepath.Join("\\\\server", "share", "OneDrive - Foobar (Team1)", "project"),
+			invalidRules:   []string{},
+			skipNonWindows: true,
+			expectedGlobs: []string{
+				path.Join("//server", "share", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules", "**"),
+				path.Join("//server", "share", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules"),
+			},
+		},
+		{
+			name:         "Windows drive letter path",
+			rule:         "node_modules",
+			baseDir:      filepath.Join("C:", string(filepath.Separator), "Users", "someone", "project"),
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				path.Join(filepath.ToSlash(filepath.Join("C:", string(filepath.Separator), "Users", "someone", "project")), "**", "node_modules", "**"),
+				path.Join(filepath.ToSlash(filepath.Join("C:", string(filepath.Separator), "Users", "someone", "project")), "**", "node_modules"),
+			},
+		},
+		{
+			name:         "Windows drive letter path with metacharacters",
+			rule:         "node_modules",
+			baseDir:      filepath.Join("C:", string(filepath.Separator), "Users", "someone", "OneDrive - Foobar (Team1)", "project"),
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				path.Join(filepath.ToSlash(filepath.Join("C:", string(filepath.Separator), "Users")), "someone", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules", "**"),
+				path.Join(filepath.ToSlash(filepath.Join("C:", string(filepath.Separator), "Users")), "someone", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules"),
+			},
+		},
+		{
+			name:         "base path with trailing slash",
+			rule:         "node_modules",
+			baseDir:      filepath.Join(os.TempDir(), "test") + string(filepath.Separator),
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				path.Join(filepath.ToSlash(filepath.Join(os.TempDir(), "test")), "**", "node_modules", "**"),
+				path.Join(filepath.ToSlash(filepath.Join(os.TempDir(), "test")), "**", "node_modules"),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.skipNonWindows && runtime.GOOS != "windows" {
+				t.Skip("UNC paths only exist on Windows")
+			}
 			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, tc.invalidRules)
 			assert.ElementsMatch(t, tc.expectedGlobs, globs,
 				"Rule: %q, Expected: %v, Got: %v", tc.rule, tc.expectedGlobs, globs)
