@@ -741,8 +741,8 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			invalidRules:   []string{},
 			skipNonWindows: true,
 			expectedGlobs: []string{
-				path.Join("//server", "share", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules", "**"),
-				path.Join("//server", "share", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules"),
+				"//server" + path.Join("share", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules", "**"),
+				"//server" + path.Join("share", "OneDrive - Foobar \\(Team1\\)", "project", "**", "node_modules"),
 			},
 		},
 		{
@@ -784,7 +784,7 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			}
 			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, tc.invalidRules)
 			assert.ElementsMatch(t, tc.expectedGlobs, globs,
-				"Rule: %q, Expected: %v, Got: %v", tc.rule, tc.expectedGlobs, globs)
+				"Test Name: %s, Rule: %q, Expected: %v, Got: %v", tc.name, tc.rule, tc.expectedGlobs, globs)
 		})
 	}
 }
