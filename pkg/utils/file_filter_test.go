@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -713,6 +714,16 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			expectedGlobs: []string{
 				"/foo/**",
 				"/foo",
+			},
+		},
+		{
+			name:         "base path with metacharacters uses native separator",
+			rule:         "node_modules",
+			baseDir:      filepath.Join(os.TempDir(), "OneDrive - Foobar (Team1)", "project"),
+			invalidRules: []string{},
+			expectedGlobs: []string{
+				path.Join(filepath.ToSlash(os.TempDir()), "OneDrive - Foobar \\(Team1\\)", "project") + "/**/node_modules/**",
+				path.Join(filepath.ToSlash(os.TempDir()), "OneDrive - Foobar \\(Team1\\)", "project") + "/**/node_modules",
 			},
 		},
 	}

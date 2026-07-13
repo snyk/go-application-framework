@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -386,7 +387,7 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, escapeSpecialGlobChars(rule), all))
+			glob := prefix + path.Join(baseDir, escapeSpecialGlobChars(rule), all)
 			globs = append(globs, glob)
 		}
 		// case `/foo` => `{baseDir}/foo`
@@ -394,19 +395,19 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, escapeSpecialGlobChars(rule)))
+			glob := prefix + path.Join(baseDir, escapeSpecialGlobChars(rule))
 			globs = append(globs, glob)
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, escapeSpecialGlobChars(rule), all))
+			glob := prefix + path.Join(baseDir, all, escapeSpecialGlobChars(rule), all)
 			globs = append(globs, glob)
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, escapeSpecialGlobChars(rule)))
+			glob := prefix + path.Join(baseDir, all, escapeSpecialGlobChars(rule))
 			globs = append(globs, glob)
 		}
 	}
