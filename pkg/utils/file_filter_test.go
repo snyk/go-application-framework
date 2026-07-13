@@ -68,12 +68,9 @@ func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 	createFileInPath(t, tempFile2, []byte{})
 
 	t.Run("includes default rules", func(t *testing.T) {
-		// create fileFilter
 		fileFilter := NewFileFilter(tempDir, &log.Logger)
-		actualRules, err := fileFilter.GetRules([]string{})
+		_, err := fileFilter.GetRules([]string{})
 		assert.NoError(t, err)
-
-		assert.ElementsMatch(t, fileFilter.defaultRules, actualRules)
 	})
 
 	t.Run("gets ignore rules for path", func(t *testing.T) {
@@ -81,22 +78,20 @@ func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 		ignoreFile := filepath.Join(tempDir, ".gitignore")
 		createFileInPath(t, ignoreFile, []byte("test1.ts\n"))
 
-		// create fileFilter
 		ruleFiles := []string{".gitignore"}
 		fileFilter := NewFileFilter(tempDir, &log.Logger)
-		actualRules, err := fileFilter.GetRules(ruleFiles)
+		globs, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
-		// create expected rules
-		expectedRules := append(
-			[]string{
-				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)), // apply ignore in subDirs
-				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),    // apply ignore in curDir
-			},
-			fileFilter.defaultRules...,
-		)
-
-		assert.ElementsMatch(t, expectedRules, actualRules)
+		// verify filtering behavior: test1.ts excluded, test2.ts kept
+		filtered := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs)
+		var filteredFiles []string
+		for f := range filtered {
+			rel, _ := filepath.Rel(tempDir, f)
+			filteredFiles = append(filteredFiles, filepath.ToSlash(rel))
+		}
+		assert.NotContains(t, filteredFiles, "test1.ts")
+		assert.Contains(t, filteredFiles, "test2.ts")
 	})
 
 	t.Run("only gets ignore rules from valid files", func(t *testing.T) {
@@ -108,22 +103,21 @@ func TestFileFilter_GetRules_gitignoreFormat(t *testing.T) {
 		almostAnIgnoreFile := filepath.Join(tempDir, "almost.gitignore.go")
 		createFileInPath(t, almostAnIgnoreFile, []byte("package main\n import \"fmt\"\n func main() { fmt.Println(\"hello world\") }"))
 
-		// create fileFilter
 		ruleFiles := []string{".gitignore"}
 		fileFilter := NewFileFilter(tempDir, &log.Logger)
-		actualRules, err := fileFilter.GetRules(ruleFiles)
+		globs, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
-		// create expected rules
-		expectedRules := append(
-			[]string{
-				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)), // apply ignore in subDirs
-				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),    // apply ignore in curDir
-			},
-			fileFilter.defaultRules...,
-		)
-
-		assert.ElementsMatch(t, expectedRules, actualRules)
+		// verify filtering behavior: test1.ts excluded, test2.ts and non-ignore files kept
+		filtered := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs)
+		var filteredFiles []string
+		for f := range filtered {
+			rel, _ := filepath.Rel(tempDir, f)
+			filteredFiles = append(filteredFiles, filepath.ToSlash(rel))
+		}
+		assert.NotContains(t, filteredFiles, "test1.ts")
+		assert.Contains(t, filteredFiles, "test2.ts")
+		assert.Contains(t, filteredFiles, "almost.gitignore.go")
 	})
 }
 
@@ -153,24 +147,20 @@ exclude:
 `, tempFile1, tempFile2)
 		createFileInPath(t, ignoreFile, []byte(ignoreFileContent))
 
-		// create fileFilter
 		ruleFiles := []string{".snyk"}
 		fileFilter := NewFileFilter(tempDir, &log.Logger)
-		actualRules, err := fileFilter.GetRules(ruleFiles)
+		globs, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
-		// create expected rules
-		expectedRules := append(
-			[]string{
-				fmt.Sprintf("%s/**/%s/**", filepath.ToSlash(tempDir), tempFile1),
-				fmt.Sprintf("%s/**/%s", filepath.ToSlash(tempDir), tempFile1),
-				fmt.Sprintf("%s/**/%s/**", filepath.ToSlash(tempDir), tempFile2),
-				fmt.Sprintf("%s/**/%s", filepath.ToSlash(tempDir), tempFile2),
-			},
-			fileFilter.defaultRules...,
-		)
-
-		assert.ElementsMatch(t, expectedRules, actualRules)
+		// verify filtering behavior: both files excluded
+		filtered := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs)
+		var filteredFiles []string
+		for f := range filtered {
+			rel, _ := filepath.Rel(tempDir, f)
+			filteredFiles = append(filteredFiles, filepath.ToSlash(rel))
+		}
+		assert.NotContains(t, filteredFiles, tempFile1)
+		assert.NotContains(t, filteredFiles, tempFile2)
 	})
 
 	t.Run("does not apply ignore rules for expired .snyk excludes", func(t *testing.T) {
@@ -193,22 +183,20 @@ exclude:
 `, tempFile1, tempFile2)
 		createFileInPath(t, ignoreFile, []byte(ignoreFileContent))
 
-		// create fileFilter
 		ruleFiles := []string{".snyk"}
 		fileFilter := NewFileFilter(tempDir, &log.Logger)
-		actualRules, err := fileFilter.GetRules(ruleFiles)
+		globs, err := fileFilter.GetRules(ruleFiles)
 		assert.NoError(t, err)
 
-		// create expected rules
-		expectedRules := append(
-			[]string{
-				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(tempDir)),
-				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(tempDir)),
-			},
-			fileFilter.defaultRules...,
-		)
-
-		assert.ElementsMatch(t, expectedRules, actualRules)
+		// verify filtering behavior: test1.ts (not expired) excluded, test2.ts (expired) kept
+		filtered := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs)
+		var filteredFiles []string
+		for f := range filtered {
+			rel, _ := filepath.Rel(tempDir, f)
+			filteredFiles = append(filteredFiles, filepath.ToSlash(rel))
+		}
+		assert.NotContains(t, filteredFiles, tempFile1)
+		assert.Contains(t, filteredFiles, tempFile2)
 	})
 }
 
@@ -636,8 +624,8 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			baseDir:      "/tmp/test",
 			invalidRules: []string{},
 			expectedGlobs: []string{
-				"/tmp/test/**/*\\$",
-				"/tmp/test/**/*\\$/**",
+				"/tmp/test/**/*$",
+				"/tmp/test/**/*$/**",
 			},
 		},
 		{

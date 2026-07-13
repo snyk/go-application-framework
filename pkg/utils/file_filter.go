@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,12 +17,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// by default, all rules are valid
-var defaultInvalidRules = []string{}
-
 type FileFilter struct {
 	path         string
 	defaultRules []string
+	cachedRuleSets []IgnoreRuleSet // populated by GetRules, consumed by GetFilteredFiles
 	logger       *zerolog.Logger
 	max_threads  int64
 }
@@ -83,43 +81,81 @@ func (fw *FileFilter) GetAllFiles() chan string {
 	return filesCh
 }
 
-// GetRules builds a list of glob patterns that can be used to filter filesToFilter
-func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
-	files := fw.GetAllFiles()
+// IgnoreRuleSet couples a compiled ignore matcher with the path it applies to. Rules are
+// matched against paths relative to that path, so the base path is never embedded in a pattern.
+type IgnoreRuleSet struct {
+	path    string
+	matcher *gitignore.GitIgnore
+}
 
-	// iterate filesToFilter channel and find ignore filesToFilter
-	var ignoreFiles = make([]string, 0)
-	for file := range files {
-		fileName := filepath.Base(file)
-		for _, ruleFile := range ruleFiles {
-			if fileName == ruleFile {
-				ignoreFiles = append(ignoreFiles, file)
-			}
+func newIgnoreRuleSet(path string, patterns ...string) IgnoreRuleSet {
+	return IgnoreRuleSet{
+		path:    path,
+		matcher: gitignore.CompileIgnoreLines(patterns...),
+	}
+}
+
+// getRuleSets is the internal implementation that builds per-directory rule sets.
+func (fw *FileFilter) getRuleSets(ruleFiles []string) ([]IgnoreRuleSet, error) {
+	var ignoreFiles []string
+	for file := range fw.GetAllFiles() {
+		if slices.Contains(ruleFiles, filepath.Base(file)) {
+			ignoreFiles = append(ignoreFiles, file)
 		}
 	}
 
-	// iterate ignore filesToFilter and extract glob patterns
-	globs, err := fw.buildGlobs(ignoreFiles)
+	ruleSets := []IgnoreRuleSet{newIgnoreRuleSet(fw.path, fw.defaultRules...)}
+
+	for _, ignoreFile := range ignoreFiles {
+		content, err := os.ReadFile(ignoreFile)
+		if err != nil {
+			return nil, err
+		}
+
+		var rules []string
+		if filepath.Base(ignoreFile) == ".snyk" {
+			rules = fw.parseDotSnykRules(content)
+		} else {
+			rules = parseGitIgnoreRules(content)
+		}
+
+		if len(rules) > 0 {
+			ruleSets = append(ruleSets, newIgnoreRuleSet(filepath.Dir(ignoreFile), rules...))
+		}
+	}
+
+	return ruleSets, nil
+}
+
+// TODO: change callers to use getRuleSets directly and pass []IgnoreRuleSet to GetFilteredFiles,
+// then remove this backward-compatible wrapper.
+func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
+	ruleSets, err := fw.getRuleSets(ruleFiles)
 	if err != nil {
 		return nil, err
 	}
-
-	return append(fw.defaultRules, globs...), nil
+	fw.cachedRuleSets = ruleSets
+	return fw.defaultRules, nil
 }
 
-// GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
+// TODO: change signature to accept []IgnoreRuleSet from getRuleSets, then remove the globs parameter.
+// GetFilteredFiles returns a channel of the filepaths that are not excluded by the ignore rules.
+// The globs parameter is accepted for backward compatibility but ignored; rules come from the
+// cachedRuleSets populated by the preceding GetRules call.
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
 	var filteredFilesCh = make(chan string)
 
-	// create pattern matcher used to match filesToFilter to glob patterns
-	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
+	ruleSets := fw.cachedRuleSets
+	if len(ruleSets) == 0 {
+		ruleSets = []IgnoreRuleSet{newIgnoreRuleSet(fw.path, fw.defaultRules...)}
+	}
+
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
 
 		defer close(filteredFilesCh)
 
-		// iterate the filesToFilter channel
 		for file := range filesCh {
 			err := availableThreads.Acquire(ctx, 1)
 			if err != nil {
@@ -127,8 +163,7 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 			}
 			go func(f string) {
 				defer availableThreads.Release(1)
-				// filesToFilter that do not match the glob pattern are filtered
-				if !globPatternMatcher.MatchesPath(f) {
+				if !isIgnored(f, ruleSets) {
 					filteredFilesCh <- f
 				}
 			}(file)
@@ -144,30 +179,44 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	return filteredFilesCh
 }
 
-// buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
-func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
-	var globs = make([]string, 0)
-	for _, ignoreFile := range ignoreFiles {
-		var content []byte
-		content, err := os.ReadFile(ignoreFile)
+// isIgnored reports whether f is excluded by any rule set whose path contains it.
+func isIgnored(f string, ruleSets []IgnoreRuleSet) bool {
+	for _, rs := range ruleSets {
+		rel, err := filepath.Rel(rs.path, f)
 		if err != nil {
-			return nil, err
+			continue
 		}
-
-		if filepath.Base(ignoreFile) == ".snyk" { // .snyk files are yaml files and should be parsed differently
-			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile))
-			globs = append(globs, parsedRules...)
-		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
-			globs = append(globs, parsedRules...)
+		rel = filepath.ToSlash(rel)
+		if rel == ".." || strings.HasPrefix(rel, "../") {
+			continue
+		}
+		if rs.matcher.MatchesPath(rel) {
+			return true
 		}
 	}
-
-	return globs, nil
+	return false
 }
 
-// parseDotSnykFile builds a list of glob patterns from a given .snyk style file
-func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string {
+// parseGitIgnoreRules returns the usable rules from a .gitignore/.dcignore file. go-gitignore
+// handles comments, blank lines, negation and globbing itself; we only drop the bare "/" rule,
+// which the library would otherwise treat as "match everything".
+func parseGitIgnoreRules(content []byte) []string {
+	var rules []string
+	for _, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if strings.TrimPrefix(strings.TrimSpace(line), "!") == "/" {
+			continue
+		}
+		rules = append(rules, line)
+	}
+	return rules
+}
+
+// parseDotSnykRules returns the exclude rules from a .snyk file as gitignore-style lines.
+func (fw *FileFilter) parseDotSnykRules(content []byte) []string {
 	type DotSnykRule struct {
 		Exclude struct {
 			Code   []dotSnykExclude `yaml:"code"`
@@ -175,38 +224,28 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 		} `yaml:"exclude"`
 	}
 
-	var rules DotSnykRule
-	err := yaml.Unmarshal(content, &rules)
-	if err != nil {
+	var parsed DotSnykRule
+	if err := yaml.Unmarshal(content, &parsed); err != nil {
 		fw.logger.Error().Msgf("parse .snyk failed: %v", err)
 		return nil
 	}
 
-	// combine code and global rules
-	allRules := append(rules.Exclude.Code, rules.Exclude.Global...)
-
-	var globs []string
-	for _, rule := range allRules {
+	var rules []string
+	for _, rule := range append(parsed.Exclude.Code, parsed.Exclude.Global...) {
 		isExpired, err := rule.IsExpired()
-
-		// treat invalid expires as not expired
 		if err != nil {
 			fw.logger.Error().Msgf("parse .snyk expires: %v", err)
 		}
-
 		if isExpired {
 			continue
 		}
-
-		// skip absolute paths as they're only relevant for a local file system
 		if filepath.IsAbs(rule.Path) {
 			fw.logger.Warn().Msgf("Absolute paths are currently not supported when excluding files (%s)", rule.Path)
 			continue
 		}
-
-		globs = append(globs, parseIgnoreRuleToGlobs(rule.Path, filePath, defaultInvalidRules)...)
+		rules = append(rules, rule.Path)
 	}
-	return globs
+	return rules
 }
 
 type dotSnykExclude struct {
@@ -283,6 +322,58 @@ func (dse *dotSnykExclude) UnmarshalYAML(d *yaml.Node) error {
 	return fmt.Errorf("unexpected yaml node kind: %v", d.Kind)
 }
 
+// TODO: remove parseIgnoreRuleToGlobs — kept only because tests reference it directly.
+// The function is no longer used by production code; the per-directory matching in getRuleSets
+// delegates pattern handling entirely to go-gitignore.
+func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string) (globs []string) {
+	for _, invalidRule := range invalidRules {
+		if strings.TrimSpace(rule) == invalidRule {
+			return globs
+		}
+	}
+
+	prefix := ""
+	const negation = "!"
+	const slash = "/"
+	const all = "**"
+	baseDir := filepath.ToSlash(filePath)
+
+	if strings.HasPrefix(rule, negation) {
+		rule = rule[1:]
+		prefix = negation
+	}
+
+	if rule == slash {
+		return globs
+	}
+
+	startingSlash := strings.HasPrefix(rule, slash)
+	startingGlobstar := strings.HasPrefix(rule, all)
+	endingSlash := strings.HasSuffix(rule, slash)
+	endingGlobstar := strings.HasSuffix(rule, all)
+
+	buildGlob := func(prefix, baseDir string, parts ...string) string {
+		return prefix + filepath.ToSlash(filepath.Join(append([]string{baseDir}, parts...)...))
+	}
+
+	if startingSlash || startingGlobstar {
+		if !endingGlobstar {
+			globs = append(globs, buildGlob(prefix, baseDir, rule, all))
+		}
+		if !endingSlash {
+			globs = append(globs, buildGlob(prefix, baseDir, rule))
+		}
+	} else {
+		if !endingGlobstar {
+			globs = append(globs, buildGlob(prefix, baseDir, all, rule, all))
+		}
+		if !endingSlash {
+			globs = append(globs, buildGlob(prefix, baseDir, all, rule))
+		}
+	}
+	return globs
+}
+
 // parseExpireTime attempts to parse the expires string using multiple date formats
 func parseExpireTime(expiresStr string) (time.Time, error) {
 	if expiresStr == "" {
@@ -307,136 +398,4 @@ func parseExpireTime(expiresStr string) (time.Time, error) {
 
 	// Return error if all formats failed
 	return time.Time{}, fmt.Errorf("failed to parse expires time '%s': %w", expiresStr, lastErr)
-}
-
-// parseIgnoreFile builds a list of glob patterns from a given .gitignore style file
-func parseIgnoreFile(content []byte, filePath string) []string {
-	var ignores []string
-	lines := strings.Split(string(content), "\n")
-
-	// Invalid .gitignore style patterns
-	invalidRules := []string{"."}
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
-			continue
-		}
-		globs := parseIgnoreRuleToGlobs(line, filePath, invalidRules)
-		ignores = append(ignores, globs...)
-	}
-	return ignores
-}
-
-// regexMetaCharsToEscape are regex metacharacters that are not glob syntax; escaped in ignore
-// rules so they match literally (e.g. "$" in a rule). "^", "[" and "]" are deliberately not
-// included: they are valid character-class syntax in gitignore rules (e.g. "foo[^x]").
-var regexMetaCharsToEscape = map[byte]bool{
-	'$': true,
-	'(': true,
-	')': true,
-	'+': true,
-	'|': true,
-	'{': true,
-	'}': true,
-}
-
-// pathMetaCharsToEscape is used for the literal base path (which is not a pattern), so on top
-// of regexMetaCharsToEscape it also escapes the glob wildcards "*", "[", "]", the class anchor
-// "^", and "\". "?" and "." are omitted: the ignore matcher already treats them literally /
-// escapes them itself.
-var pathMetaCharsToEscape = func() map[byte]bool {
-	m := maps.Clone(regexMetaCharsToEscape)
-	for _, c := range []byte{'^', '*', '[', ']', '\\'} {
-		m[c] = true
-	}
-	return m
-}()
-
-func escapeChars(s string, charsToEscape map[byte]bool) string {
-	var result strings.Builder
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if charsToEscape[ch] {
-			result.WriteByte('\\')
-		}
-		result.WriteByte(ch)
-	}
-	return result.String()
-}
-
-// buildGlob joins the base path with glob parts, escaping the base path literally (so path
-// characters are never interpreted as patterns) while the glob parts keep their wildcards.
-func buildGlob(prefix, baseDir string, parts ...string) string {
-	base := filepath.ToSlash(filepath.Clean(baseDir))
-	joined := filepath.ToSlash(filepath.Join(append([]string{baseDir}, parts...)...))
-	if rest, ok := strings.CutPrefix(joined, base); ok {
-		return prefix + escapeChars(base, pathMetaCharsToEscape) + escapeChars(rest, regexMetaCharsToEscape)
-	}
-	// Fallback: base is not a prefix of the joined path (e.g. a rule with "../" escaped above
-	// it). Escape conservatively as a glob so at least regex metacharacters are handled.
-	return escapeChars(prefix+joined, regexMetaCharsToEscape)
-}
-
-// parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
-// we try to implement the same logic as gitignore pattern format - https://git-scm.com/docs/gitignore#_pattern_format
-func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string) (globs []string) {
-	// Mappings from .gitignore format to glob format:
-	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
-	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
-	// `foo/` => `**/foo/**` (meaning: Ignore (root/sub) foo dirs and their paths underneath.)
-	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo filesToFilter and dirs and their paths underneath.)
-
-	// If a rule is invalid, we skip it
-	for _, invalidRule := range invalidRules {
-		if strings.TrimSpace(rule) == invalidRule {
-			return globs
-		}
-	}
-
-	prefix := ""
-	const negation = "!"
-	const slash = "/"
-	const all = "**"
-	baseDir := filepath.ToSlash(filePath)
-
-	if strings.HasPrefix(rule, negation) {
-		rule = rule[1:]
-		prefix = negation
-	}
-
-	// Special case: "/" pattern has no effect in gitignore
-	if rule == slash {
-		return globs
-	}
-
-	startingSlash := strings.HasPrefix(rule, slash)
-	startingGlobstar := strings.HasPrefix(rule, all)
-	endingSlash := strings.HasSuffix(rule, slash)
-	endingGlobstar := strings.HasSuffix(rule, all)
-
-	if startingSlash || startingGlobstar {
-		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
-		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
-		if !endingGlobstar {
-			globs = append(globs, buildGlob(prefix, baseDir, rule, all))
-		}
-		// case `/foo` => `{baseDir}/foo`
-		// case `**/foo` => `{baseDir}/**/foo`
-		// case `/foo/**` => `{baseDir}/foo/**`
-		// case `**/foo/**` => `{baseDir}/**/foo/**`
-		if !endingSlash {
-			globs = append(globs, buildGlob(prefix, baseDir, rule))
-		}
-	} else {
-		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
-		if !endingGlobstar {
-			globs = append(globs, buildGlob(prefix, baseDir, all, rule, all))
-		}
-		// case `foo` => `{baseDir}/**/foo`
-		// case `foo/**` => `{baseDir}/**/foo/**`
-		if !endingSlash {
-			globs = append(globs, buildGlob(prefix, baseDir, all, rule))
-		}
-	}
-	return globs
 }
