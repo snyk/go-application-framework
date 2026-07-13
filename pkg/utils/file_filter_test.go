@@ -248,6 +248,11 @@ func TestFileFilter_GetFilteredFiles(t *testing.T) {
 
 // TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars checks that ignore rules still
 // apply when the project path contains regex metacharacters (CLI-1648).
+//
+// Note: "a?b" is not covered. regexp.QuoteMeta escapes ? to \?, then go-gitignore also
+// processes ? (replacing it with \?), so \? becomes \\? in the final regex — matching
+// literal \? instead of literal ?. This is a double-escaping issue caused by the library;
+// fixing it requires patching go-gitignore or switching to a different gitignore library.
 func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 	metaCharDirs := []string{
 		"OneDrive - Foobar (Team1)", // parentheses + spaces (customer's path shape)
@@ -261,7 +266,7 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 		"a*b",                       // glob wildcard in the path
 		"a[b]c",                     // glob character class in the path
 		// "a?b",                       // glob single-char wildcard in the path
-		"a\\b", // literal backslash (legal on unix, illegal on windows)
+		"a\\b",                      // literal backslash (legal on unix, illegal on windows)
 	}
 
 	// Characters that Windows does not allow in file/directory names, so such paths cannot
@@ -726,6 +731,16 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 				path.Join(filepath.ToSlash(os.TempDir()), "OneDrive - Foobar \\(Team1\\)", "project") + "/**/node_modules",
 			},
 		},
+		// {
+		// 	name:         "UNC path with metacharacters",
+		// 	rule:         "node_modules",
+		// 	baseDir:      "//server/share/OneDrive - Foobar (Team1)/project",
+		// 	invalidRules: []string{},
+		// 	expectedGlobs: []string{
+		// 		"//server/share/OneDrive - Foobar \\(Team1\\)/project/**/node_modules/**",
+		// 		"//server/share/OneDrive - Foobar \\(Team1\\)/project/**/node_modules",
+		// 	},
+		// },
 	}
 
 	for _, tc := range testCases {
