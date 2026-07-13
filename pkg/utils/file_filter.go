@@ -377,6 +377,10 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 	const all = "**"
 	baseDir := filepath.ToSlash(filePath)
 	baseDir = regexp.QuoteMeta(baseDir)
+	// Undo escaping for chars that go-gitignore already escapes internally,
+	// otherwise they get double-escaped and fail to match literal paths.
+	baseDir = strings.ReplaceAll(baseDir, `\.`, ".")
+	baseDir = strings.ReplaceAll(baseDir, `\?`, "?")
 
 	if strings.HasPrefix(rule, negation) {
 		rule = rule[1:]
