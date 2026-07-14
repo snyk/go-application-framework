@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -326,21 +328,42 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 	return ignores
 }
 
-// escapeSpecialGlobChars escapes special characters that should be treated literally in glob patterns.
-// Special Characters to escape: $
+// ruleRegexMetaChars are regex metacharacters that gitignore treats as literal, so they must be
+// escaped before the rule reaches the regex-based go-gitignore matcher (e.g. a folder literally
+// named "build (old)"). Glob syntax the matcher relies on is deliberately excluded: "*", "?",
+// "[", "]" (wildcards / character classes) and "^" (character-class negation, e.g. "cache[^S]").
+var ruleRegexMetaChars = map[byte]bool{
+	'$': true,
+	'(': true,
+	')': true,
+	'+': true,
+	'|': true,
+	'{': true,
+	'}': true,
+}
+
+// escapeSpecialGlobChars escapes regex metacharacters in an ignore rule that gitignore treats as
+// literal, so they match literally instead of being interpreted by go-gitignore's regex engine.
 func escapeSpecialGlobChars(rule string) string {
 	var result strings.Builder
 	for i := 0; i < len(rule); i++ {
 		ch := rule[i]
-		switch ch {
-		case '$':
+		if ruleRegexMetaChars[ch] {
 			result.WriteByte('\\')
-			result.WriteByte(ch)
-		default:
-			result.WriteByte(ch)
 		}
+		result.WriteByte(ch)
 	}
 	return result.String()
+}
+
+// joinGlob joins path parts like path.Join but preserves a leading "//" (UNC path prefix).
+// path.Clean (called by path.Join) collapses "//" to "/", which breaks UNC paths on Windows.
+func joinGlob(parts ...string) string {
+	result := path.Join(parts...)
+	if len(parts) > 0 && strings.HasPrefix(parts[0], "//") && !strings.HasPrefix(result, "//") {
+		result = "/" + result
+	}
+	return result
 }
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
@@ -364,6 +387,11 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 	const slash = "/"
 	const all = "**"
 	baseDir := filepath.ToSlash(filePath)
+	baseDir = regexp.QuoteMeta(baseDir)
+	// Undo escaping for chars that go-gitignore already escapes internally,
+	// otherwise they get double-escaped and fail to match literal paths.
+	baseDir = strings.ReplaceAll(baseDir, `\.`, ".")
+	baseDir = strings.ReplaceAll(baseDir, `\?`, "?")
 
 	if strings.HasPrefix(rule, negation) {
 		rule = rule[1:]
@@ -384,28 +412,28 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule, all))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := prefix + joinGlob(baseDir, escapeSpecialGlobChars(rule), all)
+			globs = append(globs, glob)
 		}
 		// case `/foo` => `{baseDir}/foo`
 		// case `**/foo` => `{baseDir}/**/foo`
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := prefix + joinGlob(baseDir, escapeSpecialGlobChars(rule))
+			globs = append(globs, glob)
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule, all))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := prefix + joinGlob(baseDir, all, escapeSpecialGlobChars(rule), all)
+			globs = append(globs, glob)
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule))
-			globs = append(globs, escapeSpecialGlobChars(glob))
+			glob := prefix + joinGlob(baseDir, all, escapeSpecialGlobChars(rule))
+			globs = append(globs, glob)
 		}
 	}
 	return globs
