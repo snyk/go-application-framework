@@ -336,16 +336,16 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			return backoff.Permanent(errRetryDelayMaxExceeded)
 		}
 
+		// Wait the full suggested delay (Retry-After or X-RateLimit-Reset,
+		// whichever is longer), then add random extra in [0, jitter window) to
+		// desynchronize concurrent clients. Both headers get the same
+		// treatment — there's no reason to trust one as more "exact" than the
+		// other, and a single unconditional branch keeps this simple. The
+		// jitter window scales with the bucket's actual capacity (see
+		// rateLimitJitterWindow) instead of a flat constant, so low-capacity
+		// buckets get more spread.
 		var timeToWait time.Duration
-		if retryAfter := parseRetryDelay(response.Header.Get("Retry-After")); retryAfter > 0 {
-			// Retry-After is an explicit server directive: honor exactly, no jitter.
-			timeToWait = retryAfter
-		} else if rawDelay > 0 {
-			// X-RateLimit-Reset: wait the full reset window (bucket guaranteed
-			// refilled) then add random extra in [0, jitter window) to
-			// desynchronize concurrent clients. The jitter window scales with
-			// the bucket's actual capacity (see rateLimitJitterWindow) instead
-			// of a flat constant, so low-capacity buckets get more spread.
+		if rawDelay > 0 {
 			timeToWait = rawDelay + time.Duration(rand.N(int64(rateLimitJitterWindow(response, rawDelay))))
 		}
 
@@ -412,10 +412,10 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 	return max(retryAfter, rateLimitReset)
 }
 
-// maxJitterWindow is the extra random delay added on top of X-RateLimit-Reset.
-// All clients wait at least the reset duration (guaranteeing the bucket has
-// refilled), then each adds a random extra in [0, maxJitterWindow) to
-// desynchronize their retries.
+// maxJitterWindow is the extra random delay added on top of the raw retry
+// delay (Retry-After or X-RateLimit-Reset). All clients wait at least that
+// long (guaranteeing the bucket has refilled), then each adds a random extra
+// in [0, maxJitterWindow) to desynchronize their retries.
 const maxJitterWindow = 2 * time.Second
 
 // referenceRate is a portable, round req/s threshold, not an assumed client
@@ -456,9 +456,9 @@ func parseRateLimitPolicies(header string) []rateLimitPolicy {
 	return policies
 }
 
-// rateLimitJitterWindow sizes the extra random delay added on top of an
-// X-RateLimit-Reset wait. It matches X-RateLimit-Limit's policy list against
-// rawDelay (the reset countdown already being waited on) to find the actual
+// rateLimitJitterWindow sizes the extra random delay added on top of a raw
+// retry delay wait. It matches X-RateLimit-Limit's policy list against
+// rawDelay (the countdown already being waited on) to find the actual
 // bucket capacity, then scales the jitter window inversely with that
 // capacity: low-capacity buckets get more spread, high-capacity buckets keep
 // today's flat maxJitterWindow. Falls back to maxJitterWindow whenever the
