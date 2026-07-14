@@ -13,10 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// windowsIllegalChars are characters Windows does not allow in file/directory names, so paths
-// containing them cannot exist there and the corresponding cases are skipped on Windows.
-const windowsIllegalChars = `<>:"/\|?*`
-
 type fileFilterTestCase struct {
 	// the name of the test case. Will be used as the test name in t.Run()
 	name string
@@ -270,6 +266,10 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 		"Users/first.last/OneDrive - Foobar (Team1)/docs", // combined: dot + parens + spaces
 	}
 
+	// Characters Windows does not allow in file/directory names, so such paths cannot exist
+	// there and the corresponding cases are skipped on Windows.
+	const windowsIllegalChars = `<>:"/\|?*`
+
 	for _, dirName := range metaCharDirs {
 		t.Run(dirName, func(t *testing.T) {
 			if runtime.GOOS == "windows" && strings.ContainsAny(dirName, windowsIllegalChars) {
@@ -313,22 +313,9 @@ type ignoreRuleScenario struct {
 	kept     []string
 	// windowsOnly skips the scenario on non-Windows platforms.
 	windowsOnly bool
-}
-
-// scenarioHasWindowsIllegalChars reports whether the scenario's scan root or any of its file
-// paths contain characters that are illegal in Windows paths, so it must be skipped there.
-func scenarioHasWindowsIllegalChars(tc ignoreRuleScenario) bool {
-	// "/" is the path separator in these test paths, so exclude it from the illegal set.
-	illegal := strings.ReplaceAll(windowsIllegalChars, "/", "")
-	if strings.ContainsAny(tc.scanRootName, illegal) {
-		return true
-	}
-	for p := range tc.files {
-		if strings.ContainsAny(p, illegal) {
-			return true
-		}
-	}
-	return false
+	// skipOnWindows skips the scenario on Windows, for paths that contain characters Windows
+	// does not allow in file/directory names (e.g. "|", "\\").
+	skipOnWindows bool
 }
 
 // TestFileFilter_GetFilteredFiles_ignoreRuleScenarios is the behavioral regression net for the
@@ -449,8 +436,9 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			kept:      []string{"app.js"},
 		},
 		{
-			name:         "scan root with caret dollar and pipe",
-			scanRootName: "a^b/a$b/a|b",
+			name:          "scan root with caret dollar and pipe",
+			scanRootName:  "a^b/a$b/a|b", // "|" is illegal on Windows
+			skipOnWindows: true,
 			files: map[string]string{
 				".gitignore":                "node_modules\n",
 				"node_modules/lib/index.js": "x",
@@ -461,8 +449,9 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			kept:      []string{"app.js"},
 		},
 		{
-			name:         "scan root with backslash", // unix-legal, auto-skipped on Windows
-			scanRootName: "a\\b",
+			name:          "scan root with backslash", // "\" is illegal on Windows
+			scanRootName:  "a\\b",
+			skipOnWindows: true,
 			files: map[string]string{
 				".gitignore":                "node_modules\n",
 				"node_modules/lib/index.js": "x",
@@ -618,6 +607,34 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			kept:      []string{"pkg/keep.txt"},
 		},
 
+		// --- C2. Special characters in the ignore rule pattern itself ---
+		// git treats parentheses/spaces in a gitignore pattern as literal (fnmatch), so a folder
+		// literally named "build (old)" should be excluded. These currently fail because the
+		// rule side only escapes "$"; regex metacharacters in the rule reach go-gitignore and are
+		// interpreted as regex. Documents the gap mirror of the base-path fix (CLI-1648).
+		// {
+		// 	name: "gitignore rule with parentheses and spaces",
+		// 	files: map[string]string{
+		// 		".gitignore":         "build (old)/\n",
+		// 		"build (old)/out.js": "x",
+		// 		"build/keep.js":      "x",
+		// 	},
+		// 	ruleFiles: []string{".gitignore"},
+		// 	excluded:  []string{"build (old)/out.js"},
+		// 	kept:      []string{"build/keep.js"},
+		// },
+		// {
+		// 	name: "snyk rule with parentheses and spaces",
+		// 	files: map[string]string{
+		// 		".snyk":              "version: v1.25.1\nexclude:\n  global:\n    - build (old)\n",
+		// 		"build (old)/out.js": "x",
+		// 		"build/keep.js":      "x",
+		// 	},
+		// 	ruleFiles: []string{".snyk"},
+		// 	excluded:  []string{"build (old)/out.js"},
+		// 	kept:      []string{"build/keep.js"},
+		// },
+
 		// --- D. Path structure / real-world combinations ---
 		{
 			name: "deeply nested exclusion",
@@ -682,7 +699,7 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			if tc.windowsOnly && runtime.GOOS != "windows" {
 				t.Skip("scenario only applies on Windows")
 			}
-			if runtime.GOOS == "windows" && scenarioHasWindowsIllegalChars(tc) {
+			if tc.skipOnWindows && runtime.GOOS == "windows" {
 				t.Skip("path contains characters not allowed on Windows")
 			}
 
