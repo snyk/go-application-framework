@@ -1235,6 +1235,21 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 				"/??/C:/Users/someone/project/**/node_modules",
 			},
 		},
+		{
+			// Extended-length path (\\?\C:\...). Windows-only because filepath.Join keeps the
+			// backslash prefix on Windows but treats \ as literal filename characters on Unix.
+			// On Windows filepath.ToSlash turns it into //?/C:/...; joinGlob preserves the
+			// leading "//" that path.Clean would otherwise collapse to "/".
+			name:           "extended-length path preserved",
+			rule:           "node_modules",
+			baseDir:        filepath.Join("\\\\?", "C:", string(filepath.Separator), "Users", "someone", "project"),
+			invalidRules:   []string{},
+			skipNonWindows: true,
+			expectedGlobs: []string{
+				"//?/C:/Users/someone/project/**/node_modules/**",
+				"//?/C:/Users/someone/project/**/node_modules",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
