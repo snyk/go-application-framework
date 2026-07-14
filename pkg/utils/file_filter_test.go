@@ -612,28 +612,56 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 		// literally named "build (old)" should be excluded. These currently fail because the
 		// rule side only escapes "$"; regex metacharacters in the rule reach go-gitignore and are
 		// interpreted as regex. Documents the gap mirror of the base-path fix (CLI-1648).
-		// {
-		// 	name: "gitignore rule with parentheses and spaces",
-		// 	files: map[string]string{
-		// 		".gitignore":         "build (old)/\n",
-		// 		"build (old)/out.js": "x",
-		// 		"build/keep.js":      "x",
-		// 	},
-		// 	ruleFiles: []string{".gitignore"},
-		// 	excluded:  []string{"build (old)/out.js"},
-		// 	kept:      []string{"build/keep.js"},
-		// },
-		// {
-		// 	name: "snyk rule with parentheses and spaces",
-		// 	files: map[string]string{
-		// 		".snyk":              "version: v1.25.1\nexclude:\n  global:\n    - build (old)\n",
-		// 		"build (old)/out.js": "x",
-		// 		"build/keep.js":      "x",
-		// 	},
-		// 	ruleFiles: []string{".snyk"},
-		// 	excluded:  []string{"build (old)/out.js"},
-		// 	kept:      []string{"build/keep.js"},
-		// },
+		{
+			name: "gitignore rule with parentheses and spaces",
+			files: map[string]string{
+				".gitignore":         "build (old)/\n",
+				"build (old)/out.js": "x",
+				"build/keep.js":      "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"build (old)/out.js"},
+			kept:      []string{"build/keep.js"},
+		},
+		{
+			name: "snyk rule with parentheses and spaces",
+			files: map[string]string{
+				".snyk":              "version: v1.25.1\nexclude:\n  global:\n    - build (old)\n",
+				"build (old)/out.js": "x",
+				"build/keep.js":      "x",
+			},
+			ruleFiles: []string{".snyk"},
+			excluded:  []string{"build (old)/out.js"},
+			kept:      []string{"build/keep.js"},
+		},
+		{
+			// Guards every character in ruleRegexMetaChars except "|" (Windows-illegal, covered
+			// below). Each metachar sits where leaving it unescaped would change the regex, so
+			// dropping any one from the map makes go-gitignore mismatch the literal folder and
+			// this case fails: "$" (anchor), "(c)" (group), "d+" (quantifier), "e{2}" (repetition).
+			name: "gitignore rule with all windows-legal regex metacharacters",
+			files: map[string]string{
+				".gitignore":           "a$b(c)d+e{2}f/\n",
+				"a$b(c)d+e{2}f/out.js": "x",
+				"keep.js":              "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"a$b(c)d+e{2}f/out.js"},
+			kept:      []string{"keep.js"},
+		},
+		{
+			// "|" (alternation) is the only ruleRegexMetaChars entry illegal in Windows paths.
+			name:          "gitignore rule with pipe metacharacter",
+			skipOnWindows: true,
+			files: map[string]string{
+				".gitignore": "a|b/\n",
+				"a|b/out.js": "x",
+				"keep.js":    "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"a|b/out.js"},
+			kept:      []string{"keep.js"},
+		},
 
 		// --- D. Path structure / real-world combinations ---
 		{

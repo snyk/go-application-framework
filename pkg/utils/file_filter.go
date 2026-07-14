@@ -328,19 +328,30 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 	return ignores
 }
 
-// escapeSpecialGlobChars escapes special characters that should be treated literally in glob patterns.
-// Special Characters to escape: $
+// ruleRegexMetaChars are regex metacharacters that gitignore treats as literal, so they must be
+// escaped before the rule reaches the regex-based go-gitignore matcher (e.g. a folder literally
+// named "build (old)"). Glob syntax the matcher relies on is deliberately excluded: "*", "?",
+// "[", "]" (wildcards / character classes) and "^" (character-class negation, e.g. "cache[^S]").
+var ruleRegexMetaChars = map[byte]bool{
+	'$': true,
+	'(': true,
+	')': true,
+	'+': true,
+	'|': true,
+	'{': true,
+	'}': true,
+}
+
+// escapeSpecialGlobChars escapes regex metacharacters in an ignore rule that gitignore treats as
+// literal, so they match literally instead of being interpreted by go-gitignore's regex engine.
 func escapeSpecialGlobChars(rule string) string {
 	var result strings.Builder
 	for i := 0; i < len(rule); i++ {
 		ch := rule[i]
-		switch ch {
-		case '$':
+		if ruleRegexMetaChars[ch] {
 			result.WriteByte('\\')
-			result.WriteByte(ch)
-		default:
-			result.WriteByte(ch)
 		}
+		result.WriteByte(ch)
 	}
 	return result.String()
 }
