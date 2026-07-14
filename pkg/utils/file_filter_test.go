@@ -1176,6 +1176,20 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 				path.Join(filepath.ToSlash(filepath.Join(os.TempDir(), "test")), "**", "node_modules"),
 			},
 		},
+		{
+			// Root Local Device path (NT namespace, \??\C:\...). On Windows filepath.ToSlash turns it into
+			// /??/C:/... before parseIgnoreRuleToGlobs sees it; "??" is an ordinary path
+			// segment and the single leading slash is preserved, so the base survives intact.
+			name:           "root local device path preserved",
+			rule:           "node_modules",
+			baseDir:        filepath.Join("\\??", "C:", string(filepath.Separator), "Users", "someone", "project"),
+			invalidRules:   []string{},
+			skipNonWindows: true,
+			expectedGlobs: []string{
+				"/??/C:/Users/someone/project/**/node_modules/**",
+				"/??/C:/Users/someone/project/**/node_modules",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
