@@ -617,6 +617,29 @@ func Test_initConfiguration_DEFAULT_TEMP_DIRECTORY(t *testing.T) {
 	})
 }
 
+func Test_initConfiguration_allowedHostDefaults(t *testing.T) {
+	config := configuration.NewInMemory()
+	engine := workflow.NewWorkFlowEngine(config)
+
+	ctrl := gomock.NewController(t)
+	mockApiClient := mocks.NewMockApiClient(ctrl)
+	apiClientFactory := func(url string, client *http.Client) api.ApiClient {
+		return mockApiClient
+	}
+
+	initConfiguration(engine, config, &zlog.Logger, apiClientFactory)
+
+	t.Run("deprecated regex default is still registered", func(t *testing.T) {
+		actual := config.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
+		assert.Equal(t, constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP, actual)
+	})
+
+	t.Run("new allowed host domains default is registered", func(t *testing.T) {
+		actual := config.GetStringSlice(auth.CONFIG_KEY_ALLOWED_HOSTS)
+		assert.Equal(t, constants.SNYK_DEFAULT_ALLOWED_HOST_DOMAINS, actual)
+	})
+}
+
 func createMockPAT(t *testing.T, payload string) string {
 	t.Helper()
 
