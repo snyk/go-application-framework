@@ -606,6 +606,31 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 			excluded:  []string{"root.txt", "pkg/pkg.txt", "pkg/root.txt"},
 			kept:      []string{"pkg/keep.txt"},
 		},
+		{
+			name: "ignore file below ignored parent cannot reinclude files",
+			files: map[string]string{
+				".gitignore":                  "node_modules\n",
+				"node_modules/pkg/.gitignore": "!index.js\n",
+				"node_modules/pkg/index.js":   "x",
+				"node_modules/pkg/other.js":   "x",
+				"src/index.js":                "x",
+			},
+			ruleFiles: []string{".gitignore"},
+			excluded:  []string{"node_modules/pkg/index.js", "node_modules/pkg/other.js"},
+			kept:      []string{"src/index.js"},
+		},
+		{
+			name: "gitignore below snyk-excluded parent cannot reinclude files",
+			files: map[string]string{
+				".snyk":                       "version: v1.25.1\nexclude:\n  global:\n    - node_modules\n",
+				"node_modules/pkg/.gitignore": "!index.js\n",
+				"node_modules/pkg/index.js":   "x",
+				"src/index.js":                "x",
+			},
+			ruleFiles: []string{".gitignore", ".snyk"},
+			excluded:  []string{"node_modules/pkg/index.js"},
+			kept:      []string{"src/index.js"},
+		},
 
 		// --- C2. Special characters in the ignore rule pattern itself ---
 		// git treats parentheses/spaces in a gitignore pattern as literal (fnmatch), so a folder
@@ -992,7 +1017,7 @@ func testCases(t *testing.T) []fileFilterTestCase {
 				"a/.gitignore": "!*.txt",
 			},
 			filesToFilter: []string{"a/file2.js"},
-			expectedFiles: []string{"file1.js", "a/file1.txt", ".gitignore", "a/.gitignore"},
+			expectedFiles: []string{"file1.js", ".gitignore", "a/.gitignore"},
 		},
 		{
 			name:      "Supports .dcignore rule file",
@@ -1003,7 +1028,7 @@ func testCases(t *testing.T) []fileFilterTestCase {
 				"a/.dcignore": "!*.txt",
 			},
 			filesToFilter: []string{"a/file2.js"},
-			expectedFiles: []string{"file1.js", "a/file1.txt", ".dcignore", "a/.dcignore"},
+			expectedFiles: []string{"file1.js", ".dcignore", "a/.dcignore"},
 		},
 		{
 			name:      "Supports .snyk style exclude rules",
