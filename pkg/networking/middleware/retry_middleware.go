@@ -10,7 +10,6 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
@@ -337,16 +336,13 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 		}
 
 		// Wait the full suggested delay (Retry-After or X-RateLimit-Reset,
-		// whichever is longer), then add random extra in [0, jitter window) to
-		// desynchronize concurrent clients. Both headers get the same
+		// whichever is longer), then add random extra in [0, maxJitterWindow)
+		// to desynchronize concurrent clients. Both headers get the same
 		// treatment — there's no reason to trust one as more "exact" than the
-		// other, and a single unconditional branch keeps this simple. The
-		// jitter window scales with the bucket's actual capacity (see
-		// rateLimitJitterWindow) instead of a flat constant, so low-capacity
-		// buckets get more spread.
+		// other, and a single unconditional branch keeps this simple.
 		var timeToWait time.Duration
 		if rawDelay > 0 {
-			timeToWait = rawDelay + time.Duration(rand.N(int64(rateLimitJitterWindow(response, rawDelay))))
+			timeToWait = rawDelay + time.Duration(rand.N(int64(maxJitterWindow)))
 		}
 
 		// if a retry after is defined, this is the time to wait for
@@ -398,7 +394,7 @@ func parseRetryDelay(headerRetryAfterValue string) time.Duration {
 // rateLimitRetryDelay extracts the longer of Retry-After and X-RateLimit-Reset
 // durations from the response headers. The returned value is the raw header
 // value — suitable for error reporting ("retry after N seconds") but not for
-// the actual sleep, which applies jitter separately (see rateLimitJitterWindow).
+// the actual sleep, which adds jitter separately (see maxJitterWindow).
 func rateLimitRetryDelay(res *http.Response) time.Duration {
 	var retryAfter, rateLimitReset time.Duration
 
@@ -417,72 +413,3 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 // long (guaranteeing the bucket has refilled), then each adds a random extra
 // in [0, maxJitterWindow) to desynchronize their retries.
 const maxJitterWindow = 2 * time.Second
-
-// referenceRate is a portable, round req/s threshold, not an assumed client
-// count: routes at/above it keep today's flat maxJitterWindow; below it,
-// jitter widens proportionally. This is a heuristic that reduces re-throttle
-// odds for tight-capacity routes — it cannot guarantee zero collisions,
-// since GAF has no visibility into how many other clients are retrying the
-// same route concurrently.
-const referenceRate = 100.0 // req/s
-const jitterCeiling = 60 * time.Second
-
-type rateLimitPolicy struct {
-	limit         int
-	windowSeconds int
-}
-
-// parseRateLimitPolicies parses the IETF RateLimit-Limit draft format, e.g.
-// `160, 160;w=1;name="...", 1620;w=60;name="...", 97200;w=3600;name="..."`.
-// The bare leading value (no `w=`) has no window attached and is skipped —
-// its unit can't be determined without one.
-func parseRateLimitPolicies(header string) []rateLimitPolicy {
-	var policies []rateLimitPolicy
-	for _, entry := range strings.Split(header, ",") {
-		parts := strings.Split(entry, ";")
-		limit, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-		if err != nil || limit <= 0 {
-			continue
-		}
-		for _, p := range parts[1:] {
-			p = strings.TrimSpace(p)
-			if w, ok := strings.CutPrefix(p, "w="); ok {
-				if window, err := strconv.Atoi(w); err == nil && window > 0 {
-					policies = append(policies, rateLimitPolicy{limit, window})
-				}
-			}
-		}
-	}
-	return policies
-}
-
-// rateLimitJitterWindow sizes the extra random delay added on top of a raw
-// retry delay wait. It matches X-RateLimit-Limit's policy list against
-// rawDelay (the countdown already being waited on) to find the actual
-// bucket capacity, then scales the jitter window inversely with that
-// capacity: low-capacity buckets get more spread, high-capacity buckets keep
-// today's flat maxJitterWindow. Falls back to maxJitterWindow whenever the
-// header is missing, unparseable, or no policy's window covers rawDelay.
-func rateLimitJitterWindow(res *http.Response, rawDelay time.Duration) time.Duration {
-	var matched *rateLimitPolicy
-	for _, p := range parseRateLimitPolicies(res.Header.Get("X-RateLimit-Limit")) {
-		windowDur := time.Duration(p.windowSeconds) * time.Second
-		if windowDur >= rawDelay && (matched == nil || p.windowSeconds < matched.windowSeconds) {
-			policy := p
-			matched = &policy
-		}
-	}
-	if matched == nil {
-		return maxJitterWindow
-	}
-
-	rate := float64(matched.limit) / float64(matched.windowSeconds)
-	window := time.Duration(float64(maxJitterWindow) * (referenceRate / rate))
-	if window < maxJitterWindow {
-		window = maxJitterWindow
-	}
-	if window > jitterCeiling {
-		window = jitterCeiling
-	}
-	return window
-}
