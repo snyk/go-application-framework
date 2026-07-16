@@ -433,13 +433,8 @@ func Test_shouldRetry(t *testing.T) {
 			attempts:        0,
 			maxAttempts:     1,
 		},
-		{
-			name:              "Retryable status code (429) with Retry-After header",
-			response:          newResponse(http.StatusTooManyRequests, http.Header{"Retry-After": []string{"5"}}),
-			expectedRetryable: &backoff.RetryAfterError{Duration: 5 * time.Second},
-			attempts:          0,
-			maxAttempts:       1,
-		},
+		// Retry-After alone is tested in Test_shouldRetry_rateLimitResetJitter
+		// because jitter makes the duration non-deterministic.
 		{
 			name:            "Retryable status code (429) with invalid Retry-After header",
 			response:        newResponse(http.StatusServiceUnavailable, http.Header{"Retry-After": []string{"abc"}}),
@@ -544,29 +539,8 @@ func Test_shouldRetry_rateLimitResetHeaders(t *testing.T) {
 		attempts          int
 		maxAttempts       int
 	}{
-		{
-			name: "Retryable status code (429) with only X-Ratelimit-Reset header",
-			response: func() *http.Response {
-				h := http.Header{}
-				h.Set("X-Ratelimit-Reset", "5")
-				return newResponse(http.StatusTooManyRequests, h)
-			}(),
-			expectedRetryable: &backoff.RetryAfterError{Duration: 5 * time.Second},
-			attempts:          0,
-			maxAttempts:       1,
-		},
-		{
-			name: "Retryable status code (429) Retry-After takes precedence over X-RateLimit-Reset",
-			response: func() *http.Response {
-				h := http.Header{}
-				h.Set("Retry-After", "3")
-				h.Set("X-RateLimit-Reset", "10")
-				return newResponse(http.StatusTooManyRequests, h)
-			}(),
-			expectedRetryable: &backoff.RetryAfterError{Duration: 10 * time.Second},
-			attempts:          0,
-			maxAttempts:       1,
-		},
+		// X-RateLimit-Reset and Retry-After cases are tested separately below
+		// because jitter on X-RateLimit-Reset makes the duration non-deterministic.
 		{
 			name: "Retryable status code (429) with X-RateLimit-Reset header too far in the future (4years)",
 			response: func() *http.Response {
@@ -597,6 +571,67 @@ func Test_shouldRetry_rateLimitResetHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_shouldRetry_rateLimitResetJitter(t *testing.T) {
+	t.Parallel()
+
+	t.Run("X-RateLimit-Reset produces delay in [reset, reset+maxJitterWindow)", func(t *testing.T) {
+		t.Parallel()
+		h := http.Header{}
+		h.Set("X-Ratelimit-Reset", "10")
+		resp := newResponse(http.StatusTooManyRequests, h)
+
+		var actualRetryableErr *backoff.RetryAfterError
+		err := shouldRetry(resp, 0, 1)
+		require.ErrorAs(t, err, &actualRetryableErr)
+		require.GreaterOrEqual(t, actualRetryableErr.Duration, 10*time.Second,
+			"jittered delay must be >= reset (bucket must have refilled)")
+		require.Less(t, actualRetryableErr.Duration, 10*time.Second+maxJitterWindow,
+			"jittered delay must be < reset + maxJitterWindow")
+	})
+
+	t.Run("Retry-After alone produces delay in [retryAfter, retryAfter+maxJitterWindow)", func(t *testing.T) {
+		t.Parallel()
+		h := http.Header{}
+		h.Set("Retry-After", "5")
+		resp := newResponse(http.StatusTooManyRequests, h)
+
+		var actualRetryableErr *backoff.RetryAfterError
+		err := shouldRetry(resp, 0, 1)
+		require.ErrorAs(t, err, &actualRetryableErr)
+		require.GreaterOrEqual(t, actualRetryableErr.Duration, 5*time.Second)
+		require.Less(t, actualRetryableErr.Duration, 5*time.Second+maxJitterWindow)
+	})
+
+	t.Run("Retry-After and X-RateLimit-Reset both present: longer of the two wins, jittered", func(t *testing.T) {
+		t.Parallel()
+		h := http.Header{}
+		h.Set("Retry-After", "3")
+		h.Set("X-RateLimit-Reset", "10")
+		resp := newResponse(http.StatusTooManyRequests, h)
+
+		var actualRetryableErr *backoff.RetryAfterError
+		err := shouldRetry(resp, 0, 1)
+		require.ErrorAs(t, err, &actualRetryableErr)
+		require.GreaterOrEqual(t, actualRetryableErr.Duration, 10*time.Second,
+			"rawDelay is max(Retry-After, X-RateLimit-Reset), so the 10s reset wins over the 3s Retry-After")
+		require.Less(t, actualRetryableErr.Duration, 10*time.Second+maxJitterWindow)
+	})
+
+	t.Run("X-RateLimit-Limit header present but ignored: jitter stays flat maxJitterWindow", func(t *testing.T) {
+		t.Parallel()
+		h := http.Header{}
+		h.Set("X-RateLimit-Reset", "10")
+		h.Set("X-RateLimit-Limit", "5;w=60")
+		resp := newResponse(http.StatusTooManyRequests, h)
+
+		var actualRetryableErr *backoff.RetryAfterError
+		err := shouldRetry(resp, 0, 1)
+		require.ErrorAs(t, err, &actualRetryableErr)
+		require.GreaterOrEqual(t, actualRetryableErr.Duration, 10*time.Second)
+		require.Less(t, actualRetryableErr.Duration, 10*time.Second+maxJitterWindow)
+	})
 }
 
 func Test_parseRetryDelay(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -329,9 +330,19 @@ func shouldRetry(response *http.Response, attempts int, maxAttempts int) error {
 			return backoff.Permanent(errRetryNecessary)
 		}
 
-		timeToWait := rateLimitRetryDelay(response)
-		if timeToWait > maxRetryAfter {
+		rawDelay := rateLimitRetryDelay(response)
+		if rawDelay > maxRetryAfter {
 			return backoff.Permanent(errRetryDelayMaxExceeded)
+		}
+
+		// Wait the full suggested delay (Retry-After or X-RateLimit-Reset,
+		// whichever is longer), then add random extra in [0, maxJitterWindow)
+		// to desynchronize concurrent clients. Both headers get the same
+		// treatment — there's no reason to trust one as more "exact" than the
+		// other, and a single unconditional branch keeps this simple.
+		var timeToWait time.Duration
+		if rawDelay > 0 {
+			timeToWait = rawDelay + time.Duration(rand.N(int64(maxJitterWindow)))
 		}
 
 		// if a retry after is defined, this is the time to wait for
@@ -381,7 +392,9 @@ func parseRetryDelay(headerRetryAfterValue string) time.Duration {
 }
 
 // rateLimitRetryDelay extracts the longer of Retry-After and X-RateLimit-Reset
-// durations from the response headers.
+// durations from the response headers. The returned value is the raw header
+// value — suitable for error reporting ("retry after N seconds") but not for
+// the actual sleep, which adds jitter separately (see maxJitterWindow).
 func rateLimitRetryDelay(res *http.Response) time.Duration {
 	var retryAfter, rateLimitReset time.Duration
 
@@ -394,3 +407,9 @@ func rateLimitRetryDelay(res *http.Response) time.Duration {
 
 	return max(retryAfter, rateLimitReset)
 }
+
+// maxJitterWindow is the extra random delay added on top of the raw retry
+// delay (Retry-After or X-RateLimit-Reset). All clients wait at least that
+// long (guaranteeing the bucket has refilled), then each adds a random extra
+// in [0, maxJitterWindow) to desynchronize their retries.
+const maxJitterWindow = 2 * time.Second
