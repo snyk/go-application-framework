@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -25,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/extension"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
@@ -413,6 +415,21 @@ func CreateAppEngine() workflow.Engine {
 }
 
 func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
+	engine, _ := createAppEngine(opts...)
+	return engine
+}
+
+// CreateAppEngineWithCloser is CreateAppEngineWithOptions plus a close function
+// that terminates any out-of-process extension subprocesses launched for this
+// engine. Callers that create engines dynamically (rather than one for the
+// lifetime of the process) should call it during shutdown; a process that
+// exits shortly after this engine is done with can rely on process exit
+// instead and use CreateAppEngineWithOptions.
+func CreateAppEngineWithCloser(opts ...Opts) (workflow.Engine, func()) {
+	return createAppEngine(opts...)
+}
+
+func createAppEngine(opts ...Opts) (workflow.Engine, func()) {
 	engine := workflow.NewDefaultWorkFlowEngine()
 
 	for _, opt := range opts {
@@ -425,7 +442,61 @@ func CreateAppEngineWithOptions(opts ...Opts) workflow.Engine {
 	}
 
 	engine.AddExtensionInitializer(localworkflows.Init)
-	return engine
+
+	// Load any out-of-process extension binaries configured for this engine.
+	// This replaces the previous "scan here for extension binaries" placeholder:
+	// extensions run as gRPC subprocesses and are registered like built-ins.
+	//
+	// The initializer is registered unconditionally and reads
+	// extension.ConfigurationKeyPaths when it runs (at engine.Init()), not now:
+	// a CLI typically creates the engine, then parses flags (which is what
+	// populates a repeatable --plugin-path flag bound to that key), then calls
+	// Init(). Reading the paths here, at construction, would see them still
+	// empty and silently never register the loader.
+	//
+	// loaderMu guards loader itself: the initializer below writes it from
+	// inside engine.Init(), and the returned closer reads it -- potentially
+	// from a different goroutine (e.g. a shutdown handler racing a still-
+	// running Init()) -- so a plain closured variable isn't safe here.
+	var (
+		loaderMu sync.Mutex
+		loader   *extension.Loader
+	)
+	engine.AddExtensionInitializer(func(engine workflow.Engine) error {
+		loaderMu.Lock()
+		existing := loader
+		loaderMu.Unlock()
+		if existing != nil {
+			return existing.Init(engine)
+		}
+		cfg := engine.GetConfiguration()
+		if cfg == nil {
+			return nil
+		}
+		paths := cfg.GetStringSlice(extension.ConfigurationKeyPaths)
+		if len(paths) == 0 {
+			return nil
+		}
+		newLoader := extension.NewLoader(
+			extension.WithPaths(paths...),
+			extension.WithLogger(engine.GetLogger()),
+			extension.WithAllowOverride(cfg.GetBool(extension.ConfigurationKeyAllowOverride)),
+		)
+		loaderMu.Lock()
+		loader = newLoader
+		loaderMu.Unlock()
+		return newLoader.Init(engine)
+	})
+
+	closer := func() {
+		loaderMu.Lock()
+		l := loader
+		loaderMu.Unlock()
+		if l != nil {
+			l.Close()
+		}
+	}
+	return engine, closer
 }
 
 // Deprecated: Use CreateAppEngineWithOptions instead.

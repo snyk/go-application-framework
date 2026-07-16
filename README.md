@@ -30,7 +30,8 @@ Run `make help` to see all available targets.
 ## Contributing
 
 1. See [Extension Architect Guide](docs/extension-architecture-guide.md) for more information on how to design extensions. 
-2. See [CONTRIBUTING.md](CONTRIBUTING.md) for extension authoring, UFM test fixture generation, and other contributor workflows.
+2. See [Dynamic Extensions](docs/dynamic-extensions.md) to build an extension as a standalone binary, loaded at runtime without rebuilding the CLI.
+3. See [CONTRIBUTING.md](CONTRIBUTING.md) for extension authoring, UFM test fixture generation, and other contributor workflows.
 
 ## Security
 
