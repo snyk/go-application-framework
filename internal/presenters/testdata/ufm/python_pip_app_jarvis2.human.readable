@@ -1,0 +1,178 @@
+[1mTesting  (requirements.txt) ...[0m
+
+Tested 33 dependencies for known issues, found 17 issues, 49 vulnerable paths.
+
+[1mOpen Security issues: 17[0m
+
+ ✗ [33m[MEDIUM][0m [1mCRLF Injection[0m
+   Finding ID: SNYK-PYTHON-HTTPLIB2-569758
+   Info: https://snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-569758
+   Introduced by: httplib2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-PYTHON-JINJA2-1012994
+   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994
+   Introduced by: jinja2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6
+
+ ✗ [33m[MEDIUM][0m [1mSandbox Escape[0m
+   Finding ID: SNYK-PYTHON-JINJA2-174126
+   Info: https://snyk.io/vuln/SNYK-PYTHON-JINJA2-174126
+   Introduced by: jinja2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6
+
+ ✗ [33m[MEDIUM][0m [1mAccess Restriction Bypass[0m
+   Finding ID: SNYK-PYTHON-RSA-570831
+   Info: https://snyk.io/vuln/SNYK-PYTHON-RSA-570831
+   Introduced by: rsa
+   Introduced through: python-pip-app-jarvis2@0.0.0 > rsa@3.4.2
+
+ ✗ [33m[MEDIUM][0m [1mArbitrary File Upload[0m
+   Finding ID: SNYK-PYTHON-SETUPTOOLS-12246955
+   Info: https://snyk.io/vuln/SNYK-PYTHON-SETUPTOOLS-12246955
+   Introduced by: setuptools
+   Introduced through: python-pip-app-jarvis2@0.0.0 > apscheduler@3.3.1 > setuptools@79.0.1
+
+ ✗ [33m[MEDIUM][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-1533435
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-1533435
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [33m[MEDIUM][0m [1mAuthentication Bypass[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-72681
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-72681
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [31m[HIGH][0m [1mImproper Input Validation[0m
+   Finding ID: SNYK-PYTHON-FLASK-42185
+   Info: https://snyk.io/vuln/SNYK-PYTHON-FLASK-42185
+   Introduced by: flask
+   Introduced through: python-pip-app-jarvis2@0.0.0 > flask@0.12.2
+
+ ✗ [31m[HIGH][0m [1mDenial of Service (DoS)[0m
+   Finding ID: SNYK-PYTHON-FLASK-451637
+   Info: https://snyk.io/vuln/SNYK-PYTHON-FLASK-451637
+   Introduced by: flask
+   Introduced through: python-pip-app-jarvis2@0.0.0 > flask@0.12.2
+
+ ✗ [31m[HIGH][0m [1mRegular Expression Denial of Service (ReDoS)[0m
+   Finding ID: SNYK-PYTHON-HTTPLIB2-1065795
+   Info: https://snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-1065795
+   Introduced by: httplib2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3
+
+ ✗ [31m[HIGH][0m [1mCRLF Injection[0m
+   Finding ID: SNYK-PYTHON-HTTPLIB2-570767
+   Info: https://snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-570767
+   Introduced by: httplib2
+   Introduced through: python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3
+
+ ✗ [31m[HIGH][0m [1mTiming Attack[0m
+   Finding ID: SNYK-PYTHON-RSA-1038401
+   Info: https://snyk.io/vuln/SNYK-PYTHON-RSA-1038401
+   Introduced by: rsa
+   Introduced through: python-pip-app-jarvis2@0.0.0 > rsa@3.4.2
+
+ ✗ [31m[HIGH][0m [1mHTTP Header Injection[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-1014645
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-1014645
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [31m[HIGH][0m [1mCRLF injection[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-174323
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-174323
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [31m[HIGH][0m [1mImproper Certificate Validation[0m
+   Finding ID: SNYK-PYTHON-URLLIB3-174464
+   Info: https://snyk.io/vuln/SNYK-PYTHON-URLLIB3-174464
+   Introduced by: urllib3
+   Introduced through: python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1
+
+ ✗ [35m[CRITICAL][0m [1mInformation Exposure[0m
+   Finding ID: SNYK-PYTHON-REQUESTS-72435
+   Info: https://snyk.io/vuln/SNYK-PYTHON-REQUESTS-72435
+   Introduced by: requests
+   Introduced through: python-pip-app-jarvis2@0.0.0 > requests@2.17.3
+
+ ✗ [35m[CRITICAL][0m [1mInsufficient Randomness[0m
+   Finding ID: SNYK-PYTHON-WERKZEUG-458931
+   Info: https://snyk.io/vuln/SNYK-PYTHON-WERKZEUG-458931
+   Introduced by: werkzeug
+   Introduced through: python-pip-app-jarvis2@0.0.0 > werkzeug@0.12.2
+
+[32m[1mIssues to fix by upgrading:[0m[0m
+
+  Upgrade [1mflask@0.12.2[0m to [1mflask@0.12.3[0m to fix
+  ✗ [31m[1mImproper Input Validation[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-FLASK-42185] in [1mflask@0.12.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > flask@0.12.2 and [36m1[0m other path
+  ✗ [31m[1mDenial of Service (DoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-FLASK-451637] in [1mflask@0.12.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > flask@0.12.2 and [36m1[0m other path
+
+  Upgrade [1mhttplib2@0.10.3[0m to [1mhttplib2@0.19.0[0m to fix
+  ✗ [33m[1mCRLF Injection[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-569758] in [1mhttplib2@0.10.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3 and [36m3[0m other paths
+  ✗ [31m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-1065795] in [1mhttplib2@0.10.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3 and [36m3[0m other paths
+  ✗ [31m[1mCRLF Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-HTTPLIB2-570767] in [1mhttplib2@0.10.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > httplib2@0.10.3 and [36m3[0m other paths
+
+  Upgrade [1mjinja2@2.9.6[0m to [1mjinja2@2.11.3[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-1012994] in [1mjinja2@2.9.6[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6 and [36m2[0m other paths
+  ✗ [33m[1mSandbox Escape[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-JINJA2-174126] in [1mjinja2@2.9.6[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > jinja2@2.9.6 and [36m2[0m other paths
+
+  Upgrade [1mrequests@2.17.3[0m to [1mrequests@2.20[0m to fix
+  ✗ [35m[1mInformation Exposure[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-PYTHON-REQUESTS-72435] in [1mrequests@2.17.3[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > requests@2.17.3 and [36m1[0m other path
+
+  Upgrade [1mrsa@3.4.2[0m to [1mrsa@4.7[0m to fix
+  ✗ [33m[1mAccess Restriction Bypass[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-RSA-570831] in [1mrsa@3.4.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > rsa@3.4.2 and [36m2[0m other paths
+  ✗ [31m[1mTiming Attack[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-RSA-1038401] in [1mrsa@3.4.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > rsa@3.4.2 and [36m2[0m other paths
+
+  Upgrade [1murllib3@1.21.1[0m to [1murllib3@1.26.5[0m to fix
+  ✗ [33m[1mRegular Expression Denial of Service (ReDoS)[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-1533435] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [33m[1mAuthentication Bypass[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-72681] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [31m[1mHTTP Header Injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-1014645] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [31m[1mCRLF injection[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-174323] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+  ✗ [31m[1mImproper Certificate Validation[0m[0m [31m[HIGH][0m [https://security.snyk.io/vuln/SNYK-PYTHON-URLLIB3-174464] in [1murllib3@1.21.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > urllib3@1.21.1 and [36m2[0m other paths
+
+  Upgrade [1mwerkzeug@0.12.2[0m to [1mwerkzeug@0.15.3[0m to fix
+  ✗ [35m[1mInsufficient Randomness[0m[0m [35m[CRITICAL][0m [https://security.snyk.io/vuln/SNYK-PYTHON-WERKZEUG-458931] in [1mwerkzeug@0.12.2[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > werkzeug@0.12.2 and [36m2[0m other paths
+
+[90m[1mIssues with no direct upgrade or patch:[0m[0m
+  ✗ [33m[1mArbitrary File Upload[0m[0m [33m[MEDIUM][0m [https://security.snyk.io/vuln/SNYK-PYTHON-SETUPTOOLS-12246955] in [1msetuptools@79.0.1[0m
+    introduced by python-pip-app-jarvis2@0.0.0 > apscheduler@3.3.1 > setuptools@79.0.1
+
+╭──────────────────────────────────────────────────────────╮
+│ [1mTest Summary[0m                                             │
+│                                                          │
+│   Organization:      My Org                              │
+│   Test type:         Software Composition Analysis       │
+│   Project path:      .                                   │
+│   Target file:       requirements.txt                    │
+│                                                          │
+│   Total security issues: 17                              │
+│   Ignored: [1m0[0m [[35m 0 CRITICAL [0m[31m 0 HIGH [0m[33m 0 MEDIUM [0m 0 LOW ]     │
+│   Open   : [1m17[0m [[35m 2 CRITICAL [0m[31m 8 HIGH [0m[33m 7 MEDIUM [0m 0 LOW ]    │
+╰──────────────────────────────────────────────────────────╯
+
+
+💡 Tip
+
+   To view ignored issues, use the --include-ignores option.
+                                                            

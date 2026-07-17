@@ -6,7 +6,8 @@
 //
 //	# Step 1 — dump workflow data to disk via built-in env vars:
 //	SNYK_TMP_PATH=./dump INTERNAL_IN_MEMORY_THRESHOLD_BYTES=1 INTERNAL_CLEANUP_GLOBAL_TEMP_DIR_ENABLED=false \
-//	  snyk secrets test . --report --org=my-org
+//	  INTERNAL_SNYK_CLI_USE_UNIFIED_TEST_API_FOR_OS_CLI_TEST=true \
+//	  snyk test . --org=my-org
 //
 //	# Step 2 — redact the dump into a fixture:
 //	go run ./cmd/ufm-fixture-tool --input=./dump/workflow.TestResult.12345 --output=my_fixture.testresult.json
