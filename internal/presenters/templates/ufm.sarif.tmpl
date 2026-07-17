@@ -43,7 +43,8 @@
 										{{- range $tagIndex, $tag := $tags }}
 										{{ getQuotedString (printf "%v" $tag) }}{{if lt $tagIndex $tagsSize}},{{end}}
 										{{- end }}
-									]{{if ge $cvssScore 0.0}},
+									],
+									"severity": {{ getQuotedString $issue.GetSeverity }}{{if ge $cvssScore 0.0}},
 									"cvssv3_baseScore": {{ $cvssScore }},
 									"security-severity": {{ getQuotedString (printf "%.1f" $cvssScore) }}{{end}}
 								}
@@ -203,7 +204,18 @@
 							{{- end }}
 						}
 					]
-					{{- end }}
+					{{- end }},
+					"properties": {
+						"severity": {{ getQuotedString $issue.GetEffectiveSeverity }}
+						{{- $originalSeverity := $issue.GetOriginalSeverity }}
+						{{- if $originalSeverity }},
+						"snykPolicy/v1": {
+							"originalLevel": {{ getQuotedString (severityToSarifLevel $originalSeverity) }},
+							"severity": {{ getQuotedString $issue.GetEffectiveSeverity }},
+							"originalSeverity": {{ getQuotedString $originalSeverity }}
+						}
+						{{- end }}
+					}
 				}{{if lt $index $issuesSize}},{{end}}
 				{{- end }}
 			],
