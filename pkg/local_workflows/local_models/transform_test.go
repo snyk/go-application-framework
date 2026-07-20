@@ -120,7 +120,10 @@ func Test_mapSuppressions(t *testing.T) {
 						Email: "",
 					},
 					ReviewedOn: utils.Ptr("2023-02-02T00:00:00Z"),
-					ReviewedBy: utils.Ptr("Reviewer"),
+					ReviewedBy: &TypesReviewer{
+						Name:  "Reviewer",
+						Email: "reviewer@example.com",
+					},
 				},
 				Justification: utils.Ptr("Reviewed justification"),
 				Status:        TypesSuppressionStatus(sarif.Accepted),

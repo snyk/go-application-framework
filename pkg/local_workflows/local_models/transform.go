@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -128,9 +129,16 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression.Guid != "" {
 		id = &suppression.Guid
 	}
-	var reviewedBy *string
+	var reviewedBy *TypesReviewer
 	if suppression.Properties.ReviewedBy != nil {
-		reviewedBy = &suppression.Properties.ReviewedBy.Name
+		reviewed_email := ""
+		if suppression.Properties.ReviewedBy.Email != nil {
+			reviewed_email = *suppression.Properties.ReviewedBy.Email
+		}
+		reviewedBy = &TypesReviewer{
+			Name:  suppression.Properties.ReviewedBy.Name,
+			Email: openapi_types.Email(reviewed_email),
+		}
 	}
 	return &TypesSuppression{
 		Id: id,

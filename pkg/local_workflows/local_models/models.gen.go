@@ -1068,6 +1068,12 @@ type TypesReferenceId struct {
 	Index      int    `json:"index"`
 }
 
+// TypesReviewer Reviewer definition
+type TypesReviewer struct {
+	Email openapi_types.Email `json:"email"`
+	Name  string              `json:"name"`
+}
+
 // TypesRules Based on Sarif rules
 type TypesRules struct {
 	DefaultConfiguration struct {
@@ -1179,10 +1185,12 @@ type TypesSuppressionDetails struct {
 	Expiration *string `json:"expiration,omitempty"`
 
 	// IgnoredBy User definition
-	IgnoredBy  TypesUser `json:"ignoredBy"`
-	IgnoredOn  string    `json:"ignoredOn"`
-	ReviewedBy *string   `json:"reviewedBy,omitempty"`
-	ReviewedOn *string   `json:"reviewedOn,omitempty"`
+	IgnoredBy TypesUser `json:"ignoredBy"`
+	IgnoredOn string    `json:"ignoredOn"`
+
+	// ReviewedBy Reviewer definition
+	ReviewedBy *TypesReviewer `json:"reviewedBy,omitempty"`
+	ReviewedOn *string        `json:"reviewedOn,omitempty"`
 }
 
 // TypesTestContext TestContext identifies the context in which this Test occurs.
