@@ -2008,6 +2008,10 @@ components:
           type: string
         ignoredBy:
           $ref: '#/components/schemas/types.User'
+        reviewedOn:
+          type: string
+        reviewedBy:
+          type: string
       description: Suppression meta data
     types.TestContext:
       type: object

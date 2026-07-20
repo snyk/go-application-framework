@@ -92,6 +92,41 @@ func Test_mapSuppressions(t *testing.T) {
 			},
 		},
 		{
+			name: "single suppression with reviewed details",
+			inputResult: sarif.Result{
+				Suppressions: []sarif.Suppression{
+					{
+						Guid:          validUUID2,
+						Justification: "Reviewed justification",
+						Status:        sarif.Accepted,
+						Properties: sarif.SuppressionProperties{
+							Category:   "reviewedCategory",
+							IgnoredOn:  "2023-02-01T00:00:00Z",
+							IgnoredBy:  sarif.IgnoredBy{Name: "Requester"},
+							ReviewedOn: utils.Ptr("2023-02-02T00:00:00Z"),
+							ReviewedBy: &sarif.Reviewer{Name: "Reviewer", Email: utils.Ptr("reviewer@example.com")},
+						},
+					},
+				},
+			},
+			expectedSupp: &TypesSuppression{
+				Id: &validUUID2,
+				Details: &TypesSuppressionDetails{
+					Category:   "reviewedCategory",
+					Expiration: nil,
+					IgnoredOn:  "2023-02-01T00:00:00Z",
+					IgnoredBy: TypesUser{
+						Name:  "Requester",
+						Email: "",
+					},
+					ReviewedOn: utils.Ptr("2023-02-02T00:00:00Z"),
+					ReviewedBy: utils.Ptr("Reviewer"),
+				},
+				Justification: utils.Ptr("Reviewed justification"),
+				Status:        TypesSuppressionStatus(sarif.Accepted),
+			},
+		},
+		{
 			name: "suppression with accepted status field but without id",
 			inputResult: sarif.Result{
 				Suppressions: []sarif.Suppression{

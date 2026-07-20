@@ -128,6 +128,10 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 	if suppression.Guid != "" {
 		id = &suppression.Guid
 	}
+	var reviewedBy *string
+	if suppression.Properties.ReviewedBy != nil {
+		reviewedBy = &suppression.Properties.ReviewedBy.Name
+	}
 	return &TypesSuppression{
 		Id: id,
 		Details: &TypesSuppressionDetails{
@@ -138,6 +142,8 @@ func mapSuppressions(res sarif.Result) *TypesSuppression {
 				Name:  suppression.Properties.IgnoredBy.Name,
 				Email: ignored_email,
 			},
+			ReviewedOn: suppression.Properties.ReviewedOn,
+			ReviewedBy: reviewedBy,
 		},
 		Justification: &suppression.Justification,
 		Status:        TypesSuppressionStatus(status),

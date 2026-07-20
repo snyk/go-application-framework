@@ -1179,8 +1179,10 @@ type TypesSuppressionDetails struct {
 	Expiration *string `json:"expiration,omitempty"`
 
 	// IgnoredBy User definition
-	IgnoredBy TypesUser `json:"ignoredBy"`
-	IgnoredOn string    `json:"ignoredOn"`
+	IgnoredBy  TypesUser `json:"ignoredBy"`
+	IgnoredOn  string    `json:"ignoredOn"`
+	ReviewedBy *string   `json:"reviewedBy,omitempty"`
+	ReviewedOn *string   `json:"reviewedOn,omitempty"`
 }
 
 // TypesTestContext TestContext identifies the context in which this Test occurs.
