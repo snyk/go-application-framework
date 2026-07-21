@@ -149,22 +149,226 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	var globs = make([]string, 0)
 	for _, ignoreFile := range ignoreFiles {
-		var content []byte
-		content, err := os.ReadFile(ignoreFile)
+		parsedRules, err := fw.globsForIgnoreFile(ignoreFile)
 		if err != nil {
 			return nil, err
 		}
-
-		if filepath.Base(ignoreFile) == ".snyk" { // .snyk files are yaml files and should be parsed differently
-			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile))
-			globs = append(globs, parsedRules...)
-		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
-			globs = append(globs, parsedRules...)
-		}
+		globs = append(globs, parsedRules...)
 	}
 
 	return globs, nil
+}
+
+// globsForIgnoreFile reads a single ignore file and returns the glob patterns it
+// contributes. .snyk files are YAML and parsed differently from .gitignore-style
+// files.
+func (fw *FileFilter) globsForIgnoreFile(ignoreFile string) ([]string, error) {
+	content, err := os.ReadFile(ignoreFile)
+	if err != nil {
+		return nil, err
+	}
+
+	if filepath.Base(ignoreFile) == ".snyk" {
+		return fw.parseDotSnykFile(content, filepath.Dir(ignoreFile)), nil
+	}
+	return parseIgnoreFile(content, filepath.Dir(ignoreFile)), nil
+}
+
+// GetFilteredFilesSingleWalk traverses the directory tree exactly once, reading
+// ignore files (ruleFiles, e.g. .gitignore/.dcignore/.snyk) as it descends and
+// pruning any directory that the rules exclude in its entirety.
+//
+// This replaces the GetAllFiles + GetRules + GetFilteredFiles pipeline, which
+// walked the whole tree twice and glob-matched every file — including everything
+// under ignored directories such as node_modules and .git. By pruning excluded
+// directories we never descend into them, which is where almost all of the time
+// on real projects was being spent.
+//
+// Correctness: a directory is only pruned when a rule excludes the *directory
+// itself* (e.g. `node_modules`, `/node_modules/`, `**/dist`) — never when a rule
+// only excludes its contents (e.g. `src/*`, `obj/**`), because those are exactly
+// the cases where a `!` negation may re-include files within. A directory that
+// contains its own ignore file is also never pruned, since that file may negate.
+// Per-file emission still uses the full rule set, so the output is identical to
+// the original pipeline. Rules are applied hierarchically; within a directory,
+// dotfiles such as .gitignore are visited before normal entries, so ignore rules
+// take effect before sibling directories are evaluated for pruning.
+func (fw *FileFilter) GetFilteredFilesSingleWalk(ruleFiles []string) chan string {
+	filteredFilesCh := make(chan string)
+
+	ruleFileSet := make(map[string]struct{}, len(ruleFiles))
+	for _, rf := range ruleFiles {
+		ruleFileSet[rf] = struct{}{}
+	}
+
+	go func() {
+		defer close(filteredFilesCh)
+
+		// dirGlobs/dirMatcher decide which directories are safe to prune (only
+		// whole-directory exclusions). The matcher is rebuilt only when a new
+		// directory rule is discovered, not on every file. fileGlobs accumulates
+		// every rule so the final per-file decision is compiled once, matching the
+		// original pipeline exactly.
+		dirGlobs := append([]string{}, fw.defaultRules...)
+		dirMatcher := gitignore.CompileIgnoreLines(dirGlobs...)
+		fileGlobs := append([]string{}, fw.defaultRules...)
+		var candidates []string
+
+		err := filepath.WalkDir(fw.path, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+
+			if d.IsDir() {
+				if path != fw.path &&
+					dirMatcher.MatchesPath(path) &&
+					!fw.dirContainsRuleFile(path, ruleFileSet) {
+					return fs.SkipDir
+				}
+				return nil
+			}
+
+			// Fold ignore-file rules. Directory-exclusion rules update dirMatcher
+			// immediately so sibling directories (visited after the dotfile) can be
+			// pruned; full rules are accumulated for the single final compile.
+			if _, ok := ruleFileSet[d.Name()]; ok {
+				fw.foldIgnoreFile(path, &fileGlobs, &dirGlobs, &dirMatcher)
+				// Ignore files are themselves scannable.
+			}
+
+			candidates = append(candidates, path)
+			return nil
+		})
+		if err != nil {
+			fw.logger.Error().Msgf("walk dir failed: %v", err)
+		}
+
+		fw.emitCandidates(candidates, fileGlobs, filteredFilesCh)
+	}()
+
+	return filteredFilesCh
+}
+
+// foldIgnoreFile incorporates the rules from a discovered ignore file: every rule
+// is appended to fileGlobs for the final per-file compile, while whole-directory
+// exclusions additionally update dirGlobs/dirMatcher so sibling directories
+// (visited after the dotfile) can be pruned immediately.
+func (fw *FileFilter) foldIgnoreFile(path string, fileGlobs, dirGlobs *[]string, dirMatcher **gitignore.GitIgnore) {
+	if newGlobs, gErr := fw.globsForIgnoreFile(path); gErr == nil {
+		*fileGlobs = append(*fileGlobs, newGlobs...)
+	} else {
+		fw.logger.Error().Msgf("failed to read ignore file %s: %v", path, gErr)
+	}
+	// .snyk is intentionally excluded from dir pruning (its excludes are honored
+	// per-file below); only .gitignore-style files contribute whole-directory
+	// exclusions.
+	if filepath.Base(path) == ".snyk" {
+		return
+	}
+	if dirOnly := fw.dirExclusionGlobs(path); len(dirOnly) > 0 {
+		*dirGlobs = append(*dirGlobs, dirOnly...)
+		*dirMatcher = gitignore.CompileIgnoreLines(*dirGlobs...)
+	}
+}
+
+// emitCandidates compiles the full rule set once and emits the surviving files on
+// ch. Pruning has already removed everything under wholly-excluded directories, so
+// only a small candidate set remains. Matching against the (potentially large)
+// rule set is the dominant cost, so it is parallelised across max_threads like the
+// original GetFilteredFiles. MatchesPath is read-only and safe for concurrent use.
+func (fw *FileFilter) emitCandidates(candidates, fileGlobs []string, ch chan string) {
+	fileMatcher := gitignore.CompileIgnoreLines(fileGlobs...)
+	ctx := context.Background()
+	availableThreads := semaphore.NewWeighted(fw.max_threads)
+	for _, f := range candidates {
+		if acqErr := availableThreads.Acquire(ctx, 1); acqErr != nil {
+			fw.logger.Err(acqErr).Msg("failed to limit threads")
+		}
+		go func(f string) {
+			defer availableThreads.Release(1)
+			if !fileMatcher.MatchesPath(f) {
+				ch <- f
+			}
+		}(f)
+	}
+	// Wait for all in-flight matches to finish before returning.
+	if acqErr := availableThreads.Acquire(ctx, fw.max_threads); acqErr != nil {
+		fw.logger.Err(acqErr).Msg("failed to wait for all threads")
+	}
+}
+
+// dirExclusionGlobs reads a .gitignore-style file and returns globs that match a
+// directory *as a whole* (so it is safe to prune). Content-only rules (`dir/*`,
+// `dir/**`) are deliberately excluded, because a later `!` negation can re-include
+// files beneath such a directory. Negation rules are preserved so that `!dir`
+// correctly un-prunes a directory.
+func (fw *FileFilter) dirExclusionGlobs(ignoreFile string) []string {
+	content, err := os.ReadFile(ignoreFile)
+	if err != nil {
+		return nil
+	}
+	baseDir := filepath.Dir(ignoreFile)
+	var globs []string
+	for _, line := range strings.Split(string(content), "\n") {
+		if g, ok := dirExclusionGlob(line, baseDir); ok {
+			globs = append(globs, g)
+		}
+	}
+	return globs
+}
+
+// dirExclusionGlob converts a single .gitignore rule into a glob that matches the
+// directory it excludes, or returns ok=false if the rule does not exclude a whole
+// directory (blank/comment, or a content-only rule ending in `/*` or `/**`).
+func dirExclusionGlob(rule, baseDir string) (string, bool) {
+	r := strings.TrimSpace(rule)
+	if r == "" || strings.HasPrefix(r, "#") {
+		return "", false
+	}
+
+	negation := strings.HasPrefix(r, "!")
+	if negation {
+		r = r[1:]
+	}
+
+	// Normalise trailing slashes first so directory rules like `obj/**/` are
+	// recognized as the content-only rule `obj/**` below.
+	r = strings.TrimRight(r, "/")
+	if r == "" {
+		return "", false
+	}
+	// Content-only rules exclude what's *inside* the directory, not the directory
+	// itself, so they must not trigger pruning (a `!` may re-include within).
+	if strings.HasSuffix(r, "/*") || strings.HasSuffix(r, "/**") {
+		return "", false
+	}
+
+	base := filepath.ToSlash(baseDir)
+	var glob string
+	if strings.HasPrefix(r, "/") || strings.HasPrefix(r, "**") {
+		// anchored to the ignore file's directory
+		glob = filepath.ToSlash(filepath.Join(base, r))
+	} else {
+		// applies in this directory and any subdirectory
+		glob = filepath.ToSlash(filepath.Join(base, "**", r))
+	}
+	glob = escapeSpecialGlobChars(glob)
+	if negation {
+		glob = "!" + glob
+	}
+	return glob, true
+}
+
+// dirContainsRuleFile reports whether dir directly contains any of the given
+// ignore files. Used to decide whether an ignored directory is safe to prune:
+// a directory with its own ignore file may re-include (negate) files inside it.
+func (fw *FileFilter) dirContainsRuleFile(dir string, ruleFileSet map[string]struct{}) bool {
+	for ruleFile := range ruleFileSet {
+		if _, err := os.Stat(filepath.Join(dir, ruleFile)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
