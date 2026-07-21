@@ -2271,13 +2271,13 @@ components:
       type: object
       required:
         - name
-        - email
+        
       properties:
         name:
           type: string
         email:
           type: string
-          format: email
+      
       description: Reviewer definition
     types.User:
       type: object
