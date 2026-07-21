@@ -148,7 +148,12 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter
 func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 	var globs = make([]string, 0)
+	globPatternMatcher := gitignore.CompileIgnoreLines()
 	for _, ignoreFile := range ignoreFiles {
+		if globPatternMatcher.MatchesPath(ignoreFile) {
+			continue
+		}
+
 		var content []byte
 		content, err := os.ReadFile(ignoreFile)
 		if err != nil {
@@ -162,6 +167,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
 			globs = append(globs, parsedRules...)
 		}
+		globPatternMatcher = gitignore.CompileIgnoreLines(globs...)
 	}
 
 	return globs, nil
