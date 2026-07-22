@@ -213,6 +213,105 @@ exclude:
 	})
 }
 
+func TestFileFilter_GetRules_dotSnykSections(t *testing.T) {
+	tempDir := t.TempDir()
+	codeFile := "code.ts"
+	globalFile := "global.ts"
+	secretsFile := "secrets.ts"
+	// customFile lives under a section this package defines no constant for, to
+	// exercise the map-based decode that lets callers opt into arbitrary sections.
+	customFile := "custom.ts"
+	createFileInPath(t, filepath.Join(tempDir, codeFile), []byte{})
+	createFileInPath(t, filepath.Join(tempDir, globalFile), []byte{})
+	createFileInPath(t, filepath.Join(tempDir, secretsFile), []byte{})
+	createFileInPath(t, filepath.Join(tempDir, customFile), []byte{})
+
+	snykContent := fmt.Sprintf(`exclude:
+  code:
+    - %s
+  global:
+    - %s
+  secrets:
+    - %s
+  iac:
+    - %s
+`, codeFile, globalFile, secretsFile, customFile)
+
+	// globsFor returns the expected glob patterns for a given filename.
+	globsFor := func(file string) []string {
+		return []string{
+			fmt.Sprintf("%s/**/%s/**", filepath.ToSlash(tempDir), file),
+			fmt.Sprintf("%s/**/%s", filepath.ToSlash(tempDir), file),
+		}
+	}
+
+	tests := []struct {
+		name          string
+		options       []FileFilterOption
+		expectedFiles []string
+	}{
+		{
+			name:          "defaults to code and global sections",
+			options:       nil,
+			expectedFiles: []string{codeFile, globalFile},
+		},
+		{
+			name:          "applies only the requested section",
+			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{Secrets})},
+			expectedFiles: []string{secretsFile},
+		},
+		{
+			name:          "applies all sections when requested",
+			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{Code, Global, Secrets})},
+			expectedFiles: []string{codeFile, globalFile, secretsFile},
+		},
+		{
+			name:          "empty slice disables all .snyk exclusions",
+			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{})},
+			expectedFiles: []string{},
+		},
+		{
+			// no code change in file_filter.go is needed to support a new section
+			name:          "supports sections without a predefined constant",
+			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{"iac"})},
+			expectedFiles: []string{customFile},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ignoreFile := filepath.Join(tempDir, ".snyk")
+			createFileInPath(t, ignoreFile, []byte(snykContent))
+
+			fileFilter := NewFileFilter(tempDir, &log.Logger, test.options...)
+			actualRules, err := fileFilter.GetRules([]string{".snyk"})
+			assert.NoError(t, err)
+
+			var expectedRules []string
+			for _, file := range test.expectedFiles {
+				expectedRules = append(expectedRules, globsFor(file)...)
+			}
+			expectedRules = append(expectedRules, fileFilter.defaultRules...)
+
+			assert.ElementsMatch(t, expectedRules, actualRules)
+		})
+	}
+
+	t.Run("preserves code-before-global ordering by default", func(t *testing.T) {
+		ignoreFile := filepath.Join(tempDir, ".snyk")
+		createFileInPath(t, ignoreFile, []byte(snykContent))
+
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		actualRules, err := fileFilter.GetRules([]string{".snyk"})
+		assert.NoError(t, err)
+
+		// strip default rules to compare only the .snyk-derived globs
+		snykRules := actualRules[len(fileFilter.defaultRules):]
+		expectedRules := append(globsFor(codeFile), globsFor(globalFile)...)
+		assert.Equal(t, expectedRules, snykRules)
+	})
+}
+
 func TestFileFilter_GetFilteredFiles(t *testing.T) {
 	cases := testCases(t)
 	for _, testCase := range cases {

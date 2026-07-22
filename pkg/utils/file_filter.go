@@ -30,43 +30,29 @@ type FileFilter struct {
 	dotSnykSections []DotSnykExcludeSectionName
 }
 
+// DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
+// file (e.g. "code", "global", "secrets", "iac"). It is a plain string so callers can
+// opt into sections this package doesn't define constants for without requiring
+// a code change here.
 type DotSnykExcludeSectionName string
 
 const (
 	Global  DotSnykExcludeSectionName = "global"
 	Code    DotSnykExcludeSectionName = "code"
 	Secrets DotSnykExcludeSectionName = "secrets"
+	Iac     DotSnykExcludeSectionName = "iac"
 )
-
-// dotSnykExcludeSectionNames lists every valid DotSnykExcludeSectionName value.
-var dotSnykExcludeSectionNames = []DotSnykExcludeSectionName{Global, Code, Secrets}
 
 // String implements fmt.Stringer.
 func (s DotSnykExcludeSectionName) String() string {
 	return string(s)
 }
 
-// IsValid reports whether s is one of the defined section names.
-func (s DotSnykExcludeSectionName) IsValid() bool {
-	return slices.Contains(dotSnykExcludeSectionNames, s)
-}
-
-// ParseDotSnykExcludeSectionName converts a string into a DotSnykExcludeSectionName,
-// returning an error if it does not match a defined section name.
-func ParseDotSnykExcludeSectionName(value string) (DotSnykExcludeSectionName, error) {
-	name := DotSnykExcludeSectionName(value)
-	if !name.IsValid() {
-		return "", fmt.Errorf("invalid .snyk exclude section name %q, must be one of %v", value, dotSnykExcludeSectionNames)
-	}
-	return name, nil
-}
-
+// DotSnykRule mirrors the relevant parts of a .snyk policy file. Exclude keys
+// its sections by name (e.g. "code", "global") so new sections are picked up by
+// decoding alone, without changes to this type.
 type DotSnykRule struct {
-	Exclude struct {
-		Code    []dotSnykExclude `yaml:"code"`
-		Global  []dotSnykExclude `yaml:"global"`
-		Secrets []dotSnykExclude `yaml:"secrets"`
-	} `yaml:"exclude"`
+	Exclude map[DotSnykExcludeSectionName][]dotSnykExclude `yaml:"exclude"`
 }
 
 type FileFilterOption func(*FileFilter) error
@@ -82,9 +68,9 @@ func WithThreadNumber(maxThreadCount int) FileFilterOption {
 	}
 }
 
-// WithDotSnykSections sets which .snyk exclude sections (e.g. Global, Code,
+// WithDotSnykSections sets which .snyk exclude sections (e.g. Code, Global,
 // Secrets) the FileFilter applies. It replaces the FileFilter's default
-// sections of Global and Code rather than adding to them. Passing an empty
+// sections of Code and Global rather than adding to them. Passing an empty
 // slice disables all .snyk-based exclusions.
 func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption {
 	return func(filter *FileFilter) error {
@@ -99,7 +85,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		defaultRules:    []string{"**/.git/**"},
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
-		dotSnykSections: []DotSnykExcludeSectionName{Global, Code}, // init default with Global and Code to keep it backwards compatible
+		dotSnykSections: []DotSnykExcludeSectionName{Code, Global}, // init default with Code and Global to keep it backwards compatible
 	}
 
 	for _, option := range options {
@@ -232,14 +218,7 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 	// collect rules according to fw.dotSnykSections
 	var allRules []dotSnykExclude
 	for _, section := range fw.dotSnykSections {
-		switch section {
-		case Global:
-			allRules = append(allRules, rules.Exclude.Global...)
-		case Code:
-			allRules = append(allRules, rules.Exclude.Code...)
-		case Secrets:
-			allRules = append(allRules, rules.Exclude.Secrets...)
-		}
+		allRules = append(allRules, rules.Exclude[section]...)
 	}
 
 	var globs []string
