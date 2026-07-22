@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,11 +13,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 )
+
+type SourcedRules struct {
+	Gitignore []string // globs derived only from .gitignore files
+	Other     []string // globs from .snyk, .dcignore, and FileFilter's default rules
+}
+
+// matchersBySource is SourcedRules compiled into matchers, one per source.
+type matchersBySource struct {
+	Other     *gitignore.GitIgnore
+	Gitignore *gitignore.GitIgnore
+}
 
 // by default, all rules are valid
 var defaultInvalidRules = []string{}
@@ -86,9 +99,27 @@ func (fw *FileFilter) GetAllFiles() chan string {
 
 // GetRules builds a list of glob patterns that can be used to filter filesToFilter
 func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
+	ignoreFiles := fw.findIgnoreFiles(ruleFiles)
+	globs, err := fw.buildGlobs(ignoreFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(fw.defaultRules, globs...), nil
+}
+
+// GetRulesBySource is like GetRules, but keeps .gitignore-sourced globs separate from every
+// other source instead of merging everything into one flat list.
+func (fw *FileFilter) GetRulesBySource(ruleFiles []string) (SourcedRules, error) {
+	ignoreFiles := fw.findIgnoreFiles(ruleFiles)
+	rules, err := fw.buildSourcedRules(ignoreFiles)
+	return rules, err
+}
+
+// findIgnoreFiles walks fw.path and returns every file whose name matches one of ruleFiles.
+func (fw *FileFilter) findIgnoreFiles(ruleFiles []string) []string {
 	files := fw.GetAllFiles()
 
-	// iterate filesToFilter channel and find ignore filesToFilter
 	var ignoreFiles = make([]string, 0)
 	for file := range files {
 		fileName := filepath.Base(file)
@@ -99,21 +130,91 @@ func (fw *FileFilter) GetRules(ruleFiles []string) ([]string, error) {
 		}
 	}
 
-	// iterate ignore filesToFilter and extract glob patterns
-	globs, err := fw.buildGlobs(ignoreFiles)
-	if err != nil {
-		return nil, err
+	return ignoreFiles
+}
+
+// buildSourcedRules is like buildGlobs, but keeps .gitignore-sourced globs separate from every
+// other source (see SourcedRules).
+func (fw *FileFilter) buildSourcedRules(ignoreFiles []string) (SourcedRules, error) {
+	rules := SourcedRules{Other: append([]string{}, fw.defaultRules...)}
+	for _, ignoreFile := range ignoreFiles {
+		content, err := os.ReadFile(ignoreFile)
+		if err != nil {
+			return SourcedRules{}, err
+		}
+
+		dir := filepath.Dir(ignoreFile)
+		switch filepath.Base(ignoreFile) {
+		case ".snyk":
+			rules.Other = append(rules.Other, fw.parseDotSnykFile(content, dir)...)
+		case ".gitignore":
+			rules.Gitignore = append(rules.Gitignore, parseIgnoreFile(content, dir)...)
+		default:
+			rules.Other = append(rules.Other, parseIgnoreFile(content, dir)...)
+		}
 	}
 
-	return append(fw.defaultRules, globs...), nil
+	return rules, nil
 }
 
 // GetFilteredFiles returns a filtered channel of filepaths from a given channel of filespaths and glob patterns to filter on
 func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan string {
+	matcher := gitignore.CompileIgnoreLines(globs...)
+	shouldKeepFn := func(filePath string) bool {
+		return !matcher.MatchesPath(filePath)
+	}
+	return fw.filterFiles(filesCh, shouldKeepFn)
+}
+
+// GetFilteredFilesBySource is like GetFilteredFiles, but rules.Other always excludes while
+// rules.Gitignore excludes only untracked files (CLI-1411: git only ignores untracked files).
+func (fw *FileFilter) GetFilteredFilesBySource(filesCh chan string, rules SourcedRules) chan string {
+	matchers := matchersBySource{
+		Other:     gitignore.CompileIgnoreLines(rules.Other...),
+		Gitignore: gitignore.CompileIgnoreLines(rules.Gitignore...),
+	}
+	trackedGitignoreMatches := fw.trackedFilesMatching(matchers.Gitignore)
+
+	shouldKeepFn := func(filePath string) bool {
+		return shouldKeepBySource(filePath, fw.path, matchers, trackedGitignoreMatches)
+	}
+	return fw.filterFiles(filesCh, shouldKeepFn)
+}
+
+// shouldKeepBySource: matchers.Other always excludes; matchers.Gitignore excludes unless
+// filePath is a tracked match (nil trackedGitignoreMatches means fail-open: exclude as usual).
+// filePath is a path as produced by GetAllFiles (rooted at scanRoot; not necessarily absolute).
+func shouldKeepBySource(filePath string, scanRoot string, matchers matchersBySource, trackedGitignoreMatches map[string]bool) bool {
+	if matchers.Other.MatchesPath(filePath) {
+		return false
+	}
+
+	matchesGitignore := matchers.Gitignore.MatchesPath(filePath)
+	if !matchesGitignore {
+		return true
+	}
+
+	return isTrackedMatch(filePath, scanRoot, trackedGitignoreMatches)
+}
+
+// isTrackedMatch reports whether filePath (relative to scanRoot) is a key in
+// trackedGitignoreMatches; false if trackedGitignoreMatches is nil (no git repo) or filePath
+// can't be made relative to scanRoot.
+func isTrackedMatch(filePath string, scanRoot string, trackedGitignoreMatches map[string]bool) bool {
+	if trackedGitignoreMatches == nil {
+		return false
+	}
+	rel, err := filepath.Rel(scanRoot, filePath)
+	if err != nil {
+		return false
+	}
+	return trackedGitignoreMatches[filepath.ToSlash(rel)]
+}
+
+// filterFiles reads filesCh, keeping only files for which shouldKeepFn returns true.
+func (fw *FileFilter) filterFiles(filesCh chan string, shouldKeepFn func(string) bool) chan string {
 	var filteredFilesCh = make(chan string)
 
-	// create pattern matcher used to match filesToFilter to glob patterns
-	globPatternMatcher := gitignore.CompileIgnoreLines(globs...)
 	go func() {
 		ctx := context.Background()
 		availableThreads := semaphore.NewWeighted(fw.max_threads)
@@ -121,18 +222,17 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 		defer close(filteredFilesCh)
 
 		// iterate the filesToFilter channel
-		for file := range filesCh {
+		for filePath := range filesCh {
 			err := availableThreads.Acquire(ctx, 1)
 			if err != nil {
 				fw.logger.Err(err).Msg("failed to limit threads")
 			}
-			go func(f string) {
+			go func(filePath string) {
 				defer availableThreads.Release(1)
-				// filesToFilter that do not match the glob pattern are filtered
-				if !globPatternMatcher.MatchesPath(f) {
-					filteredFilesCh <- f
+				if shouldKeepFn(filePath) {
+					filteredFilesCh <- filePath
 				}
-			}(file)
+			}(filePath)
 		}
 
 		// wait until the last thread is done
@@ -143,6 +243,96 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 	}()
 
 	return filteredFilesCh
+}
+
+// trackedFilesMatching returns tracked files (relative to fw.path) that match gitignoreMatcher,
+// bounding memory to that intersection. Returns nil if fw.path isn't a git repo (fail-open).
+func (fw *FileFilter) trackedFilesMatching(gitignoreMatcher *gitignore.GitIgnore) map[string]bool {
+	start := time.Now()
+
+	absScanRoot, err := filepath.Abs(fw.path)
+	if err != nil {
+		fw.logger.Warn().Err(err).Msg("could not resolve absolute scan path to check for tracked files; " +
+			"gitignore-matched files will be excluded as usual")
+		return nil
+	}
+
+	repo, err := git.PlainOpenWithOptions(absScanRoot, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		if errors.Is(err, git.ErrRepositoryNotExists) {
+			fw.logger.Debug().Msg("not a git repository; gitignore-matched files will be excluded as usual")
+			return nil
+		}
+		fw.logger.Warn().Err(err).Msg("could not open git repository to check for tracked files; " +
+			"gitignore-matched files will be excluded as usual")
+		return nil
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		fw.logger.Warn().Err(err).Msg("could not read git worktree to check for tracked files")
+		return nil
+	}
+
+	idx, err := repo.Storer.Index()
+	if err != nil {
+		fw.logger.Warn().Err(err).Msg("could not read git index to check for tracked files")
+		return nil
+	}
+
+	repoRoot := worktree.Filesystem.Root()
+
+	// go-git resolves symlinks in the repo root (e.g. macOS's /var -> /private/var); match that
+	// so a symlinked scan root doesn't make every entry look outside the scan root.
+	scanRootForCompare := absScanRoot
+	if resolved, err := filepath.EvalSymlinks(absScanRoot); err == nil {
+		scanRootForCompare = resolved
+	}
+
+	trackedNames := make([]string, len(idx.Entries))
+	for i, entry := range idx.Entries {
+		trackedNames[i] = entry.Name
+	}
+
+	tracked := matchTrackedEntries(trackedNames, repoRoot, scanRootForCompare, fw.path, gitignoreMatcher)
+	trackedFileNames := SortedMapKeys(tracked)
+
+	fw.logger.Debug().
+		Int("trackedGitignoreMatches", len(tracked)).
+		Strs("trackedGitignoreFiles", trackedFileNames).
+		Dur("duration", time.Since(start)).
+		Msg("checked git index for tracked files matching .gitignore rules")
+
+	if len(trackedFileNames) > 0 {
+		fw.logger.Warn().
+			Strs("trackedGitignoreFiles", trackedFileNames).
+			Msg("some git-tracked files match a .gitignore rule and will still be scanned")
+	}
+
+	return tracked
+}
+
+// matchTrackedEntries returns, out of trackedNames (repo-root-relative paths from a git index),
+// those that fall under scanRoot and match gitignoreMatcher — keyed by path relative to fwPath,
+// the same shape GetAllFiles produces.
+func matchTrackedEntries(trackedNames []string, repoRoot, scanRoot, fwPath string, gitignoreMatcher *gitignore.GitIgnore) map[string]bool {
+	tracked := make(map[string]bool)
+	for _, name := range trackedNames {
+		entryAbsPath := filepath.Join(repoRoot, filepath.FromSlash(name))
+
+		relToScanRoot, err := filepath.Rel(scanRoot, entryAbsPath)
+		if err != nil || strings.HasPrefix(relToScanRoot, "..") {
+			continue // outside the directory being scanned
+		}
+		relSlash := filepath.ToSlash(relToScanRoot)
+
+		// re-anchor to fwPath so this matches the path shape GetAllFiles produces.
+		candidatePath := filepath.Join(fwPath, filepath.FromSlash(relSlash))
+		if gitignoreMatcher.MatchesPath(candidatePath) {
+			tracked[relSlash] = true
+		}
+	}
+	return tracked
 }
 
 // buildGlobs iterates a list of ignore filesToFilter and returns a list of glob patterns that can be used to test for ignored filesToFilter

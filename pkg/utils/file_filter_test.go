@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path"
@@ -9,7 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -210,6 +214,119 @@ exclude:
 		)
 
 		assert.ElementsMatch(t, expectedRules, actualRules)
+	})
+}
+
+// TestFileFilter_GetRulesBySource asserts globs land in the right SourcedRules bucket:
+// .gitignore-sourced globs in Gitignore, everything else (.snyk, .dcignore, default rules) in Other.
+func TestFileFilter_GetRulesBySource(t *testing.T) {
+	tempDir := t.TempDir()
+	createFileInPath(t, filepath.Join(tempDir, "test1.ts"), []byte{})
+
+	t.Run("no rule files: only default rules, in Other", func(t *testing.T) {
+		fileFilter := NewFileFilter(tempDir, &log.Logger)
+		rules, err := fileFilter.GetRulesBySource([]string{})
+		assert.NoError(t, err)
+
+		assert.ElementsMatch(t, fileFilter.defaultRules, rules.Other)
+		assert.Empty(t, rules.Gitignore)
+	})
+
+	t.Run(".gitignore rules land in Gitignore, not Other", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, "test1.ts"), []byte{})
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("test1.ts\n"))
+
+		fileFilter := NewFileFilter(root, &log.Logger)
+		rules, err := fileFilter.GetRulesBySource([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		expectedGitignore := []string{
+			fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(root)),
+			fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(root)),
+		}
+		assert.ElementsMatch(t, expectedGitignore, rules.Gitignore)
+		assert.ElementsMatch(t, fileFilter.defaultRules, rules.Other)
+	})
+
+	t.Run(".dcignore rules land in Other, not Gitignore", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, "test1.ts"), []byte{})
+		createFileInPath(t, filepath.Join(root, ".dcignore"), []byte("test1.ts\n"))
+
+		fileFilter := NewFileFilter(root, &log.Logger)
+		rules, err := fileFilter.GetRulesBySource([]string{".dcignore"})
+		assert.NoError(t, err)
+
+		expectedOther := append(
+			[]string{
+				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(root)),
+				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(root)),
+			},
+			fileFilter.defaultRules...,
+		)
+		assert.ElementsMatch(t, expectedOther, rules.Other)
+		assert.Empty(t, rules.Gitignore)
+	})
+
+	t.Run(".snyk rules land in Other, not Gitignore", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, "test1.ts"), []byte{})
+		createFileInPath(t, filepath.Join(root, ".snyk"), []byte(`version: v1.25.1
+ignore: {}
+exclude:
+  code:
+    - test1.ts
+`))
+
+		fileFilter := NewFileFilter(root, &log.Logger)
+		rules, err := fileFilter.GetRulesBySource([]string{".snyk"})
+		assert.NoError(t, err)
+
+		expectedOther := append(
+			[]string{
+				fmt.Sprintf("%s/**/test1.ts/**", filepath.ToSlash(root)),
+				fmt.Sprintf("%s/**/test1.ts", filepath.ToSlash(root)),
+			},
+			fileFilter.defaultRules...,
+		)
+		assert.ElementsMatch(t, expectedOther, rules.Other)
+		assert.Empty(t, rules.Gitignore)
+	})
+
+	t.Run(".gitignore, .dcignore, and .snyk together split into the right buckets", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, "gitignored.ts"), []byte{})
+		createFileInPath(t, filepath.Join(root, "dcignored.ts"), []byte{})
+		createFileInPath(t, filepath.Join(root, "snyked.ts"), []byte{})
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("gitignored.ts\n"))
+		createFileInPath(t, filepath.Join(root, ".dcignore"), []byte("dcignored.ts\n"))
+		createFileInPath(t, filepath.Join(root, ".snyk"), []byte(`version: v1.25.1
+ignore: {}
+exclude:
+  code:
+    - snyked.ts
+`))
+
+		fileFilter := NewFileFilter(root, &log.Logger)
+		rules, err := fileFilter.GetRulesBySource([]string{".gitignore", ".dcignore", ".snyk"})
+		assert.NoError(t, err)
+
+		expectedGitignore := []string{
+			fmt.Sprintf("%s/**/gitignored.ts/**", filepath.ToSlash(root)),
+			fmt.Sprintf("%s/**/gitignored.ts", filepath.ToSlash(root)),
+		}
+		expectedOther := append(
+			[]string{
+				fmt.Sprintf("%s/**/dcignored.ts/**", filepath.ToSlash(root)),
+				fmt.Sprintf("%s/**/dcignored.ts", filepath.ToSlash(root)),
+				fmt.Sprintf("%s/**/snyked.ts/**", filepath.ToSlash(root)),
+				fmt.Sprintf("%s/**/snyked.ts", filepath.ToSlash(root)),
+			},
+			fileFilter.defaultRules...,
+		)
+		assert.ElementsMatch(t, expectedGitignore, rules.Gitignore)
+		assert.ElementsMatch(t, expectedOther, rules.Other)
 	})
 }
 
@@ -843,6 +960,234 @@ func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
 			t.Skip("admin share (C$) not accessible; cannot exercise genuine UNC")
 		}
 		assertFiltered(t, unc)
+	})
+}
+
+// initGitRepoWithTrackedFiles creates a real git repository at dir and stages (adds to the
+// index) each of trackedFiles, without committing — index membership alone is enough for
+// "tracked" purposes and mirrors a file added with `git add` but not yet committed.
+func initGitRepoWithTrackedFiles(t *testing.T, dir string, trackedFiles []string) {
+	t.Helper()
+
+	repo, err := git.PlainInit(dir, false)
+	assert.NoError(t, err)
+
+	worktree, err := repo.Worktree()
+	assert.NoError(t, err)
+
+	for _, f := range trackedFiles {
+		_, err = worktree.Add(filepath.ToSlash(f))
+		assert.NoError(t, err)
+	}
+}
+
+func TestShouldKeepBySource(t *testing.T) {
+	matchers := matchersBySource{
+		Other:     gitignore.CompileIgnoreLines("/root/**/*.snyk-excluded"),
+		Gitignore: gitignore.CompileIgnoreLines("/root/**/*.log"),
+	}
+
+	t.Run("matches neither: kept", func(t *testing.T) {
+		assert.True(t, shouldKeepBySource("/root/app.js", "/root", matchers, nil))
+	})
+
+	t.Run("matches other: excluded, even if tracked", func(t *testing.T) {
+		tracked := map[string]bool{"app.snyk-excluded": true}
+		assert.False(t, shouldKeepBySource("/root/app.snyk-excluded", "/root", matchers, tracked))
+	})
+
+	t.Run("matches gitignore, tracked: kept", func(t *testing.T) {
+		tracked := map[string]bool{"config.log": true}
+		assert.True(t, shouldKeepBySource("/root/config.log", "/root", matchers, tracked))
+	})
+
+	t.Run("matches gitignore, untracked: excluded", func(t *testing.T) {
+		tracked := map[string]bool{"other.log": true}
+		assert.False(t, shouldKeepBySource("/root/config.log", "/root", matchers, tracked))
+	})
+
+	t.Run("matches gitignore, tracked lookup is nil (fail-open): excluded", func(t *testing.T) {
+		assert.False(t, shouldKeepBySource("/root/config.log", "/root", matchers, nil))
+	})
+}
+
+func TestIsTrackedMatch(t *testing.T) {
+	tracked := map[string]bool{"config.log": true}
+
+	t.Run("tracked: true", func(t *testing.T) {
+		assert.True(t, isTrackedMatch("/root/config.log", "/root", tracked))
+	})
+
+	t.Run("untracked: false", func(t *testing.T) {
+		assert.False(t, isTrackedMatch("/root/other.log", "/root", tracked))
+	})
+
+	t.Run("nil lookup (no git repo): false", func(t *testing.T) {
+		assert.False(t, isTrackedMatch("/root/config.log", "/root", nil))
+	})
+}
+
+// TestMatchTrackedEntries exercises the path arithmetic in matchTrackedEntries directly, with no
+// git repo or filesystem involved — repoRoot/scanRoot/fwPath are plain strings. The returned map
+// is keyed relative to scanRoot; fwPath only affects the candidate path fed into gitignoreMatcher.
+func TestMatchTrackedEntries(t *testing.T) {
+	matcher := gitignore.CompileIgnoreLines("/repo/**/*.log")
+
+	t.Run("tracked entry matching gitignore is included, keyed relative to scanRoot", func(t *testing.T) {
+		tracked := matchTrackedEntries([]string{"config.log"}, "/repo", "/repo", "/repo", matcher)
+		assert.True(t, tracked["config.log"])
+	})
+
+	t.Run("tracked entry not matching gitignore is excluded", func(t *testing.T) {
+		tracked := matchTrackedEntries([]string{"app.js"}, "/repo", "/repo", "/repo", matcher)
+		assert.Empty(t, tracked)
+	})
+
+	t.Run("entry outside scanRoot is skipped", func(t *testing.T) {
+		tracked := matchTrackedEntries([]string{"other/app.log"}, "/repo", "/repo/sub", "/repo/sub", matcher)
+		assert.Empty(t, tracked)
+	})
+
+	t.Run("scanRoot nested inside repoRoot: key is relative to scanRoot, not repoRoot", func(t *testing.T) {
+		tracked := matchTrackedEntries([]string{"sub/config.log"}, "/repo", "/repo/sub", "/repo/sub", matcher)
+		assert.True(t, tracked["config.log"])
+	})
+
+	t.Run("fwPath mismatched with gitignoreMatcher's anchor: candidate path doesn't match, so nothing is tracked", func(t *testing.T) {
+		tracked := matchTrackedEntries([]string{"sub/config.log"}, "/repo", "/repo/sub", "/elsewhere", matcher)
+		assert.Empty(t, tracked, "candidatePath is built from fwPath, so fwPath must agree with the matcher's own anchor")
+	})
+}
+
+// TestFileFilter_GetFilteredFilesBySource covers CLI-1411: a file tracked in git that matches a
+// .gitignore rule must be preserved (rescued), while an untracked file matching the same rule
+// stays excluded, and .snyk/.dcignore exclusions always win regardless of tracked status.
+func TestFileFilter_GetFilteredFilesBySource(t *testing.T) {
+	filterBySource := func(t *testing.T, root string, ruleFiles []string) map[string]bool {
+		t.Helper()
+		fileFilter := NewFileFilter(root, &log.Logger)
+		rules, err := fileFilter.GetRulesBySource(ruleFiles)
+		assert.NoError(t, err)
+
+		kept := make(map[string]bool)
+		for f := range fileFilter.GetFilteredFilesBySource(fileFilter.GetAllFiles(), rules) {
+			rel, relErr := filepath.Rel(root, f)
+			assert.NoError(t, relErr)
+			kept[filepath.ToSlash(rel)] = true
+		}
+		return kept
+	}
+
+	t.Run("tracked file matching .gitignore is rescued", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, filepath.Join(root, "config.log"), []byte("x"))    // tracked, matches *.log
+		createFileInPath(t, filepath.Join(root, "untracked.log"), []byte("x")) // untracked, matches *.log
+		createFileInPath(t, filepath.Join(root, "app.js"), []byte("x"))
+		initGitRepoWithTrackedFiles(t, root, []string{"config.log", "app.js", ".gitignore"})
+
+		kept := filterBySource(t, root, []string{".gitignore"})
+
+		assert.True(t, kept["config.log"], "tracked file matching .gitignore must be rescued")
+		assert.False(t, kept["untracked.log"], "untracked file matching .gitignore must still be excluded")
+		assert.True(t, kept["app.js"])
+	})
+
+	t.Run(".snyk exclusion always wins over tracked-file rescue", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, filepath.Join(root, ".snyk"), []byte(`version: v1.25.1
+ignore: {}
+exclude:
+  code:
+    - config.log
+`))
+		createFileInPath(t, filepath.Join(root, "config.log"), []byte("x"))
+		initGitRepoWithTrackedFiles(t, root, []string{"config.log", ".gitignore", ".snyk"})
+
+		kept := filterBySource(t, root, []string{".gitignore", ".snyk"})
+
+		assert.False(t, kept["config.log"], ".snyk exclusion must win even though the file is tracked")
+	})
+
+	t.Run(".dcignore exclusion always wins over tracked-file rescue", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, filepath.Join(root, ".dcignore"), []byte("config.log\n"))
+		createFileInPath(t, filepath.Join(root, "config.log"), []byte("x"))
+		initGitRepoWithTrackedFiles(t, root, []string{"config.log", ".gitignore", ".dcignore"})
+
+		kept := filterBySource(t, root, []string{".gitignore", ".dcignore"})
+
+		assert.False(t, kept["config.log"], ".dcignore exclusion must win even though the file is tracked")
+	})
+
+	t.Run("nested .gitignore: tracked file rescue survives multiple ignore files", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, filepath.Join(root, "pkg", ".gitignore"), []byte("*.tmp\n"))
+		createFileInPath(t, filepath.Join(root, "pkg", "build.tmp"), []byte("x")) // tracked, matches pkg/.gitignore rule
+		createFileInPath(t, filepath.Join(root, "config.log"), []byte("x"))       // tracked, matches root rule
+		initGitRepoWithTrackedFiles(t, root, []string{
+			"config.log", "pkg/build.tmp", ".gitignore", "pkg/.gitignore",
+		})
+
+		kept := filterBySource(t, root, []string{".gitignore"})
+
+		assert.True(t, kept["config.log"], "tracked file matching the root .gitignore must be rescued")
+		assert.True(t, kept["pkg/build.tmp"], "tracked file matching a nested .gitignore must be rescued")
+	})
+
+	t.Run("non-git directory fails open, logged at debug (not warn): not being a git repo is expected", func(t *testing.T) {
+		root := t.TempDir() // no git init at all
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, filepath.Join(root, "config.log"), []byte("x"))
+		createFileInPath(t, filepath.Join(root, "app.js"), []byte("x"))
+
+		var logBuf bytes.Buffer
+		logger := zerolog.New(&logBuf)
+		fileFilter := NewFileFilter(root, &logger)
+		rules, err := fileFilter.GetRulesBySource([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		kept := make(map[string]bool)
+		for f := range fileFilter.GetFilteredFilesBySource(fileFilter.GetAllFiles(), rules) {
+			rel, relErr := filepath.Rel(root, f)
+			assert.NoError(t, relErr)
+			kept[filepath.ToSlash(rel)] = true
+		}
+
+		assert.False(t, kept["config.log"], "no git repo means no rescue; file must still be excluded")
+		assert.True(t, kept["app.js"])
+		assert.Contains(t, logBuf.String(), "not a git repository", "the fail-open reason must be logged")
+		assert.Contains(t, logBuf.String(), `"level":"debug"`, "not being a git repo is the common case, not a warning")
+		assert.NotContains(t, logBuf.String(), `"level":"warn"`)
+	})
+
+	t.Run("broken git repo fails open, logged at warn: a real repo that can't be read is a genuine problem", func(t *testing.T) {
+		root := t.TempDir()
+		createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+		createFileInPath(t, filepath.Join(root, "config.log"), []byte("x"))
+		// a malformed worktree-style .git file (missing the required "gitdir: " prefix) makes
+		// go-git fail with something other than ErrRepositoryNotExists.
+		createFileInPath(t, filepath.Join(root, ".git"), []byte("not a valid gitdir pointer\n"))
+
+		var logBuf bytes.Buffer
+		logger := zerolog.New(&logBuf)
+		fileFilter := NewFileFilter(root, &logger)
+		rules, err := fileFilter.GetRulesBySource([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		kept := make(map[string]bool)
+		for f := range fileFilter.GetFilteredFilesBySource(fileFilter.GetAllFiles(), rules) {
+			rel, relErr := filepath.Rel(root, f)
+			assert.NoError(t, relErr)
+			kept[filepath.ToSlash(rel)] = true
+		}
+
+		assert.False(t, kept["config.log"], "broken repo means no rescue; file must still be excluded")
+		assert.Contains(t, logBuf.String(), "could not open git repository", "the fail-open reason must be logged")
+		assert.Contains(t, logBuf.String(), `"level":"warn"`, "a real repo that fails to open is a genuine problem")
 	})
 }
 
