@@ -6,9 +6,8 @@ entitlements-service after successful in-scope commands.
 ## Purpose
 
 After a successful command (`snyk monitor`, `snyk iac test --report`, `snyk code test --report`),
-extensions call `EmitContributorBilling` with the org scope, project ID(s), and optional git
-contributor snapshot. The entitlements-service ingest endpoint resolves `target_id` server-side
-and produces Kafka billing events.
+extensions call `EmitContributorBilling` with the org scope, target ID(s), and optional git
+contributor snapshot. The entitlements-service ingest endpoint produces Kafka billing events.
 
 This package is **Part 1** of CLI delivery. Wiring into extension repos is handled in separate
 tickets.
@@ -23,7 +22,7 @@ contributorbilling.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
     Capability: contributorbilling.CapabilityOSS, // oss | code | iac
     ScopeID:    orgID,
     Items: []contributorbilling.BillingItem{
-        {ProjectID: projectID},
+        {TargetID: targetID},
     },
     RepoPath:            ".",
     CollectContributors: true,
@@ -53,7 +52,7 @@ Content-Type: application/json
   "items": [
     {
       "scope_id": "<org-uuid>",
-      "project_id": "<project-uuid>",
+      "target_id": "<target-uuid>",
       "contributors": [
         {
           "email": "dev@example.com",
@@ -66,7 +65,7 @@ Content-Type: application/json
 ```
 
 - Expected success response: **202 Accepted**
-- Callers send `scope_id`, `project_id`, and `contributors` only — not `target_id`
+- Callers send `scope_id`, `target_id`, and `contributors`
 - `DefaultIngestPath` is a draft constant; confirm against entitlements-service OpenAPI when available
 
 See `testdata/golden_ingest_payload.json` for a multi-item golden fixture (Part 2 TS alignment).
@@ -107,7 +106,7 @@ apply here.
 | Outcome | Reason | When |
 |---------|--------|------|
 | `skipped` | `empty_items` | No items provided |
-| `skipped` | `missing_project_id` | All items missing `project_id` |
+| `skipped` | `missing_target_id` | All items missing `target_id` |
 | `skipped` | `missing_capability` | `Capability` is empty |
 | `skipped` | `missing_scope_id` | `ScopeID` is empty |
 | `failed` | `marshal_error` | Ingest payload could not be marshaled |
@@ -118,15 +117,15 @@ apply here.
 | `failed` | `canceled` | Parent context canceled before POST completed |
 | `emitted` | — | HTTP 202; check `ContributorCollectionErr` if git collection failed |
 
-Items with empty `project_id` are dropped; remaining valid items are still emitted.
+Items with empty `target_id` are dropped; remaining valid items are still emitted.
 
 ## Future call sites (out of scope for this package)
 
-| Repo | When | Capability | Project ID source |
-|------|------|------------|-------------------|
-| cli-extension-os-flows | Dragonfly monitor success | `oss` | `getTestProjectID()` |
-| cli-extension-iac | ShareResultsRegistry (Path B) | `iac` | `ProjectIds` map entries |
-| code-client-go | Native `--report` success | `code` | `ResultMetaData.ProjectId` |
+| Repo | When | Capability | Target ID source |
+|------|------|------------|------------------|
+| cli-extension-os-flows | Dragonfly monitor success | `oss` | monitor response `target_id` |
+| cli-extension-iac | ShareResultsRegistry (Path B) | `iac` | share response `target_id` |
+| code-client-go | Native `--report` success | `code` | `ResultMetaData.TargetId` |
 
 Not in scope: IaC Path C (cloud upload), SCLE Code `--report`, container/docker monitor.
 

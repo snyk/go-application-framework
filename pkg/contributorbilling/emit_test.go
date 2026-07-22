@@ -65,7 +65,7 @@ func TestEmitContributorBilling_Success(t *testing.T) {
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
 			{
-				ProjectID: "project-1",
+				TargetID: "project-1",
 				Contributors: []contributorbilling.Contributor{
 					{
 						Email:            "dev@example.com",
@@ -118,8 +118,8 @@ func TestEmitContributorBilling_MultipleItems(t *testing.T) {
 		Capability: contributorbilling.CapabilityIaC,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-a"},
-			{ProjectID: "project-b"},
+			{TargetID: "project-a"},
+			{TargetID: "project-b"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -159,7 +159,7 @@ func TestEmitContributorBilling_SkipsEmptyItems(t *testing.T) {
 	assert.False(t, called)
 }
 
-func TestEmitContributorBilling_SkipsMissingProjectID(t *testing.T) {
+func TestEmitContributorBilling_SkipsMissingTargetID(t *testing.T) {
 	t.Parallel()
 
 	called := false
@@ -176,7 +176,7 @@ func TestEmitContributorBilling_SkipsMissingProjectID(t *testing.T) {
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: ""},
+			{TargetID: ""},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -185,7 +185,7 @@ func TestEmitContributorBilling_SkipsMissingProjectID(t *testing.T) {
 
 	result := waitForResult(t, resultCh)
 	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
-	assert.Equal(t, contributorbilling.SkipReasonMissingProjectID, result.SkipReason)
+	assert.Equal(t, contributorbilling.SkipReasonMissingTargetID, result.SkipReason)
 	assert.False(t, called)
 }
 
@@ -205,7 +205,7 @@ func TestEmitContributorBilling_SkipsMissingCapability(t *testing.T) {
 		IngestURL:  server.URL,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -234,7 +234,7 @@ func TestEmitContributorBilling_SkipsMissingScopeID(t *testing.T) {
 		IngestURL:  server.URL,
 		Capability: contributorbilling.CapabilityOSS,
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -247,7 +247,7 @@ func TestEmitContributorBilling_SkipsMissingScopeID(t *testing.T) {
 	assert.False(t, called)
 }
 
-func TestEmitContributorBilling_FiltersInvalidProjectIDs(t *testing.T) {
+func TestEmitContributorBilling_FiltersInvalidTargetIDs(t *testing.T) {
 	t.Parallel()
 
 	var gotBody map[string]interface{}
@@ -266,8 +266,8 @@ func TestEmitContributorBilling_FiltersInvalidProjectIDs(t *testing.T) {
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: ""},
-			{ProjectID: "project-a"},
+			{TargetID: ""},
+			{TargetID: "project-a"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -283,7 +283,7 @@ func TestEmitContributorBilling_FiltersInvalidProjectIDs(t *testing.T) {
 
 	firstItem, ok := items[0].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "project-a", firstItem["project_id"])
+	assert.Equal(t, "project-a", firstItem["target_id"])
 }
 
 func TestEmitContributorBilling_MissingIngestURL(t *testing.T) {
@@ -294,7 +294,7 @@ func TestEmitContributorBilling_MissingIngestURL(t *testing.T) {
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -320,7 +320,7 @@ func TestEmitContributorBilling_MissingIngestURLSkipsCollection(t *testing.T) {
 		RepoPath:            dir,
 		CollectContributors: true,
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -353,7 +353,7 @@ func TestEmitContributorBilling_ContextCanceledBeforeEmit(t *testing.T) {
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -384,7 +384,7 @@ func TestEmitContributorBilling_CopiesItems(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	items := []contributorbilling.BillingItem{
-		{ProjectID: "original-project"},
+		{TargetID: "original-project"},
 	}
 
 	resultCh := make(chan contributorbilling.Result, 1)
@@ -399,7 +399,7 @@ func TestEmitContributorBilling_CopiesItems(t *testing.T) {
 		},
 	})
 
-	items[0].ProjectID = "mutated-project"
+	items[0].TargetID = "mutated-project"
 	close(blockPost)
 
 	result := waitForResult(t, resultCh)
@@ -411,7 +411,7 @@ func TestEmitContributorBilling_CopiesItems(t *testing.T) {
 
 	firstItem, ok := payloadItems[0].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "original-project", firstItem["project_id"])
+	assert.Equal(t, "original-project", firstItem["target_id"])
 }
 
 func TestEmitContributorBilling_HTTPFailure(t *testing.T) {
@@ -429,7 +429,7 @@ func TestEmitContributorBilling_HTTPFailure(t *testing.T) {
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -462,7 +462,7 @@ func TestEmitContributorBilling_TimeoutDoesNotBlockCaller(t *testing.T) {
 		ScopeID:    "org-uuid",
 		Timeout:    20 * time.Millisecond,
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -496,7 +496,7 @@ func TestEmitContributorBilling_ContextCanceled(t *testing.T) {
 		Capability: contributorbilling.CapabilityOSS,
 		ScopeID:    "org-uuid",
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -539,7 +539,7 @@ func TestEmitContributorBilling_CollectContributors(t *testing.T) {
 		CollectContributors: true,
 		Logger:              &logger,
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -603,12 +603,12 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 		CollectContributors: true,
 		Items: []contributorbilling.BillingItem{
 			{
-				ProjectID: "project-prefilled",
+				TargetID: "project-prefilled",
 				Contributors: []contributorbilling.Contributor{
 					{Email: "prefilled@example.com", LatestCommitDate: prefilledWhen},
 				},
 			},
-			{ProjectID: "project-collected"},
+			{TargetID: "project-collected"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -622,19 +622,19 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 	require.True(t, ok)
 	require.Len(t, items, 2)
 
-	byProject := make(map[string][]interface{})
+	byTarget := make(map[string][]interface{})
 	for _, raw := range items {
 		item, itemOK := raw.(map[string]interface{})
 		require.True(t, itemOK)
-		projectID, projectOK := item["project_id"].(string)
-		require.True(t, projectOK)
+		targetID, targetOK := item["target_id"].(string)
+		require.True(t, targetOK)
 		itemContributors, contributorsOK := item["contributors"].([]interface{})
 		require.True(t, contributorsOK)
-		byProject[projectID] = itemContributors
+		byTarget[targetID] = itemContributors
 	}
 
-	require.Len(t, byProject["project-prefilled"], 1)
-	prefilled, ok := byProject["project-prefilled"][0].(map[string]interface{})
+	require.Len(t, byTarget["project-prefilled"], 1)
+	prefilled, ok := byTarget["project-prefilled"][0].(map[string]interface{})
 	require.True(t, ok)
 	prefilledEmail, ok := prefilled["email"].(string)
 	require.True(t, ok)
@@ -643,8 +643,8 @@ func TestEmitContributorBilling_CollectContributorsPreservesPrefilled(t *testing
 	assert.Equal(t, "prefilled@example.com", prefilledEmail)
 	assert.Equal(t, prefilledWhen.Format(time.RFC3339), prefilledDate)
 
-	require.Len(t, byProject["project-collected"], 1)
-	collected, ok := byProject["project-collected"][0].(map[string]interface{})
+	require.Len(t, byTarget["project-collected"], 1)
+	collected, ok := byTarget["project-collected"][0].(map[string]interface{})
 	require.True(t, ok)
 	collectedEmail, ok := collected["email"].(string)
 	require.True(t, ok)
@@ -679,8 +679,8 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 		RepoPath:            defaultRepo,
 		CollectContributors: true,
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-default"},
-			{ProjectID: "project-item", RepoPath: itemRepo},
+			{TargetID: "project-default"},
+			{TargetID: "project-item", RepoPath: itemRepo},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
@@ -694,7 +694,7 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 	require.True(t, ok)
 	require.Len(t, items, 2)
 
-	byProject := make(map[string]string)
+	byTarget := make(map[string]string)
 	for _, raw := range items {
 		item, itemOK := raw.(map[string]interface{})
 		require.True(t, itemOK)
@@ -703,15 +703,15 @@ func TestEmitContributorBilling_CollectContributorsUsesItemRepoPath(t *testing.T
 		require.Len(t, itemContributors, 1)
 		contributor, contributorOK := itemContributors[0].(map[string]interface{})
 		require.True(t, contributorOK)
-		projectID, projectOK := item["project_id"].(string)
-		require.True(t, projectOK)
+		targetID, targetOK := item["target_id"].(string)
+		require.True(t, targetOK)
 		email, emailOK := contributor["email"].(string)
 		require.True(t, emailOK)
-		byProject[projectID] = email
+		byTarget[targetID] = email
 	}
 
-	assert.Equal(t, "default@example.com", byProject["project-default"])
-	assert.Equal(t, "item@example.com", byProject["project-item"])
+	assert.Equal(t, "default@example.com", byTarget["project-default"])
+	assert.Equal(t, "item@example.com", byTarget["project-item"])
 }
 
 func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
@@ -736,7 +736,7 @@ func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
 		RepoPath:            dir,
 		CollectContributors: true,
 		Items: []contributorbilling.BillingItem{
-			{ProjectID: "project-1"},
+			{TargetID: "project-1"},
 		},
 		OnResult: func(result contributorbilling.Result) {
 			resultCh <- result
