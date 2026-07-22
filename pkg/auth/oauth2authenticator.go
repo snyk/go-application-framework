@@ -36,6 +36,14 @@ const (
 	// once that's verified.
 	//nolint:gosec // not a token value, but a configuration key
 	CONFIG_KEY_ALLOWED_HOST_REGEXP = "INTERNAL_OAUTH_ALLOWED_HOSTS"
+	// CONFIG_KEY_ALLOWED_HOSTS holds the allowlist of registrable domains
+	// consulted by IsValidSnykHost. When set programmatically (e.g. via
+	// Configuration.Set) it accepts a []string of multiple domains. When set
+	// via the environment variable below, it supports a single domain only:
+	// conf.GetStringSlice returns the raw env var value as a one-element
+	// slice, it does not split on commas. For multiple allowed domains,
+	// configure this key programmatically as a []string rather than via the
+	// environment variable.
 	//nolint:gosec // not a token value, but a configuration key
 	CONFIG_KEY_ALLOWED_HOSTS        = "INTERNAL_OAUTH_ALLOWED_HOST_DOMAINS"
 	CONFIG_KEY_OAUTH_TOKEN   string = "INTERNAL_OAUTH_TOKEN_STORAGE"

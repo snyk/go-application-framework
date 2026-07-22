@@ -56,6 +56,10 @@ func IsValidAuthHost(instance string, redirectAuthHostRE string) (bool, error) {
 // disagree (e.g. a parser quirk that hides a smuggled component), validation
 // fails closed rather than slipping through.
 func IsValidSnykHost(conf configuration.Configuration, input string) (bool, error) {
+	// GetStringSlice does not split a plain string value on commas: an env
+	// var override of CONFIG_KEY_ALLOWED_HOSTS yields a single-element slice
+	// containing the whole value. See the CONFIG_KEY_ALLOWED_HOSTS doc
+	// comment for the single-domain-only env var caveat.
 	allowedDomains := conf.GetStringSlice(CONFIG_KEY_ALLOWED_HOSTS)
 	if len(allowedDomains) == 0 {
 		return false, nil
