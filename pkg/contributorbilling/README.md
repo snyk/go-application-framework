@@ -35,7 +35,23 @@ contributorbilling.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
 ```
 
 `EmitContributorBilling` is fire-and-forget: it returns immediately and never surfaces an error
-that should change the caller command exit code.
+that should change the caller command exit code. The POST runs in a background goroutine detached
+from parent context cancellation (bounded by `Timeout`).
+
+## Process lifecycle
+
+Short-lived hosts such as the CLI must wait for in-flight emits before exit, or the POST may be
+terminated when the process ends:
+
+```go
+defer contributorbilling.WaitWithTimeout(contributorbilling.DefaultTimeout)
+
+contributorbilling.EmitContributorBilling(ctx, opts)
+```
+
+`Wait` blocks until all in-flight goroutines finish. `WaitWithTimeout` returns false if the deadline
+elapses first. Skipped emits (empty items, missing fields) still complete synchronously inside the
+goroutine and are included in the wait count.
 
 ## Ingest contract
 
@@ -114,7 +130,6 @@ apply here.
 | `failed` | `request_error` | HTTP request could not be constructed |
 | `failed` | `http_error` | Network error or non-202 response (`Result.Err` set for unexpected status) |
 | `failed` | `timeout` | POST exceeded `Timeout` (default 5s) |
-| `failed` | `canceled` | Parent context canceled before POST completed |
 | `emitted` | — | HTTP 202; check `ContributorCollectionErr` if git collection failed |
 
 Items with empty `target_id` are dropped; remaining valid items are still emitted.

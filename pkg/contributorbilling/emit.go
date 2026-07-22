@@ -14,12 +14,16 @@ import (
 )
 
 // EmitContributorBilling fires an async POST to entitlements-service ingest.
-// It never returns an error that should fail the caller's command.
+// It returns immediately and never surfaces an error that should fail the caller's command.
+// Short-lived hosts (e.g. the CLI) must call Wait or WaitWithTimeout before process exit.
 func EmitContributorBilling(ctx context.Context, opts EmitOptions) {
 	opts = opts.withDefaults()
 	opts.Items = cloneItems(opts.Items)
 
+	pending.Add(1)
 	go func(parent context.Context) {
+		defer pending.Done()
+
 		result := emitContributorBilling(parent, opts)
 		if opts.OnResult != nil {
 			opts.OnResult(result)
@@ -36,7 +40,7 @@ func cloneItems(items []BillingItem) []BillingItem {
 	for i, item := range items {
 		cloned[i] = BillingItem{
 			TargetID: item.TargetID,
-			RepoPath:  item.RepoPath,
+			RepoPath: item.RepoPath,
 		}
 		if len(item.Contributors) > 0 {
 			cloned[i].Contributors = append([]Contributor(nil), item.Contributors...)
@@ -60,11 +64,6 @@ func (opts EmitOptions) withDefaults() EmitOptions {
 }
 
 func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
-	if err := parent.Err(); err != nil {
-		opts.Logger.Debug().Err(err).Str("reason", string(FailReasonCanceled)).Msg("contributor billing: context canceled before emit")
-		return Result{Status: ResultStatusFailed, FailReason: FailReasonCanceled, Err: err}
-	}
-
 	items, skipReason := filterItems(opts.Items)
 	if len(items) == 0 {
 		logSkip(opts.Logger, skipReason)
@@ -187,7 +186,7 @@ func postIngest(parent context.Context, opts EmitOptions, body []byte) Result {
 		return missingIngestURLResult(opts.Logger)
 	}
 
-	ctx, cancel := context.WithTimeout(parent, opts.Timeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), opts.Timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, opts.IngestURL, bytes.NewReader(body))
@@ -209,9 +208,7 @@ func postIngest(parent context.Context, opts EmitOptions, body []byte) Result {
 	resp, err := client.Do(req)
 	if err != nil {
 		failReason := FailReasonHTTPError
-		if errors.Is(err, context.Canceled) || errors.Is(parent.Err(), context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
-			failReason = FailReasonCanceled
-		} else if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			failReason = FailReasonTimeout
 		}
 		opts.Logger.Debug().Err(err).Str("reason", string(failReason)).Msg("contributor billing: POST failed")
