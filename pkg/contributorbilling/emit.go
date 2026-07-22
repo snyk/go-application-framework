@@ -35,7 +35,7 @@ func cloneItems(items []BillingItem) []BillingItem {
 	cloned := make([]BillingItem, len(items))
 	for i, item := range items {
 		cloned[i] = BillingItem{
-			ProjectID: item.ProjectID,
+			TargetID: item.TargetID,
 			RepoPath:  item.RepoPath,
 		}
 		if len(item.Contributors) > 0 {
@@ -161,16 +161,16 @@ func filterItems(items []BillingItem) ([]BillingItem, SkipReason) {
 
 	filtered := make([]BillingItem, 0, len(items))
 	for _, item := range items {
-		projectID := strings.TrimSpace(item.ProjectID)
-		if projectID == "" {
+		targetID := strings.TrimSpace(item.TargetID)
+		if targetID == "" {
 			continue
 		}
-		item.ProjectID = projectID
+		item.TargetID = targetID
 		filtered = append(filtered, item)
 	}
 
 	if len(filtered) == 0 {
-		return nil, SkipReasonMissingProjectID
+		return nil, SkipReasonMissingTargetID
 	}
 
 	return filtered, ""

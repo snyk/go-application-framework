@@ -15,7 +15,7 @@ type ingestPayload struct {
 
 type ingestItem struct {
 	ScopeID      string              `json:"scope_id"`
-	ProjectID    string              `json:"project_id"`
+	TargetID     string              `json:"target_id"`
 	Contributors []ingestContributor `json:"contributors"`
 }
 
@@ -46,7 +46,7 @@ func buildIngestPayload(capability, scopeID string, items []BillingItem, logger 
 
 		payloadItems[i] = ingestItem{
 			ScopeID:      scopeID,
-			ProjectID:    item.ProjectID,
+			TargetID:     item.TargetID,
 			Contributors: contributors,
 		}
 	}

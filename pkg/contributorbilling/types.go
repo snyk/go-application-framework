@@ -13,9 +13,9 @@ type Contributor struct {
 	LatestCommitDate time.Time
 }
 
-// BillingItem is one project scope within a single ingest POST.
+// BillingItem is one target scope within a single ingest POST.
 type BillingItem struct {
-	ProjectID    string
+	TargetID     string
 	Contributors []Contributor
 	// RepoPath overrides EmitOptions.RepoPath for contributor collection on this item.
 	RepoPath string
@@ -53,7 +53,7 @@ type SkipReason string
 
 const (
 	SkipReasonEmptyItems        SkipReason = "empty_items"
-	SkipReasonMissingProjectID  SkipReason = "missing_project_id"
+	SkipReasonMissingTargetID   SkipReason = "missing_target_id"
 	SkipReasonMissingCapability SkipReason = "missing_capability"
 	SkipReasonMissingScopeID    SkipReason = "missing_scope_id"
 )
