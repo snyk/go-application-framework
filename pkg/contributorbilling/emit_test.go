@@ -333,7 +333,7 @@ func TestEmitContributorBilling_MissingIngestURLSkipsCollection(t *testing.T) {
 	assert.NoError(t, result.ContributorCollectionErr)
 }
 
-func TestEmitContributorBilling_ContextCanceledBeforeEmit(t *testing.T) {
+func TestEmitContributorBilling_CompletesWhenParentContextAlreadyCanceled(t *testing.T) {
 	t.Parallel()
 
 	called := false
@@ -361,9 +361,8 @@ func TestEmitContributorBilling_ContextCanceledBeforeEmit(t *testing.T) {
 	})
 
 	result := waitForResult(t, resultCh)
-	assert.Equal(t, contributorbilling.ResultStatusFailed, result.Status)
-	assert.Equal(t, contributorbilling.FailReasonCanceled, result.FailReason)
-	assert.False(t, called)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+	assert.True(t, called)
 }
 
 func TestEmitContributorBilling_CopiesItems(t *testing.T) {
@@ -477,11 +476,13 @@ func TestEmitContributorBilling_TimeoutDoesNotBlockCaller(t *testing.T) {
 	assert.Equal(t, contributorbilling.FailReasonTimeout, result.FailReason)
 }
 
-func TestEmitContributorBilling_ContextCanceled(t *testing.T) {
+func TestEmitContributorBilling_CompletesDespiteCanceledContextDuringSlowPOST(t *testing.T) {
 	t.Parallel()
 
+	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
+		called = true
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	t.Cleanup(server.Close)
@@ -504,8 +505,8 @@ func TestEmitContributorBilling_ContextCanceled(t *testing.T) {
 	})
 
 	result := waitForResult(t, resultCh)
-	assert.Equal(t, contributorbilling.ResultStatusFailed, result.Status)
-	assert.Equal(t, contributorbilling.FailReasonCanceled, result.FailReason)
+	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
+	assert.True(t, called)
 }
 
 func TestEmitContributorBilling_CollectContributors(t *testing.T) {

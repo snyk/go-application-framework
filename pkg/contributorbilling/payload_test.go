@@ -86,7 +86,7 @@ func TestCloneItems(t *testing.T) {
 	original := []BillingItem{
 		{
 			TargetID: "project-a",
-			RepoPath:  "repo-a",
+			RepoPath: "repo-a",
 			Contributors: []Contributor{
 				{Email: "dev@example.com", LatestCommitDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 			},
