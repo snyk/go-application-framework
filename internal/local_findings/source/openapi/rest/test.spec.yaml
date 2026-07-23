@@ -2008,6 +2008,10 @@ components:
           type: string
         ignoredBy:
           $ref: '#/components/schemas/types.User'
+        reviewedOn:
+          type: string
+        reviewedBy:
+          $ref: '#/components/schemas/types.Reviewer'
       description: Suppression meta data
     types.TestContext:
       type: object
@@ -2263,6 +2267,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/io.snyk.reactive.FindingSourceLocation'
+    types.Reviewer:
+      type: object
+      required:
+        - name
+        
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+      description: Reviewer definition
     types.User:
       type: object
       required:
