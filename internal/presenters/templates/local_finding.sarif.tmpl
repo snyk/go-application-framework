@@ -182,7 +182,7 @@
 										{{- if $finding.Attributes.Suppression.Details.ReviewedBy.Email }}
 										"email": {{ getQuotedString $finding.Attributes.Suppression.Details.ReviewedBy.Email }}
 										{{- end }}
-									}
+									},
 									{{- end }}
 									"ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
 									"ignoredBy": {
