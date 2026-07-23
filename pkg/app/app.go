@@ -321,6 +321,10 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.AUTHENTICATION_SUBDOMAINS, configuration.StandardDefaultValueFunction([]string{"deeproxy"}))
 	config.AddDefaultValue(configuration.MAX_THREADS, configuration.StandardDefaultValueFunction(runtime.NumCPU()))
 	config.AddDefaultValue(presenters.CONFIG_JSON_STRIP_WHITESPACES, configuration.StandardDefaultValueFunction(true))
+	// CONFIG_KEY_ALLOWED_HOST_REGEXP's default is kept registered only so
+	// any external caller still using IsValidAuthHost directly keeps
+	// working; GAF's own validation no longer reads this key (see
+	// IsValidSnykHost). Remove once that's confirmed unused downstream.
 	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_REGEXP))
 	config.AddDefaultValue(auth.CONFIG_KEY_ALLOWED_HOSTS, configuration.StandardDefaultValueFunction(constants.SNYK_DEFAULT_ALLOWED_HOST_DOMAINS))
 
