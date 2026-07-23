@@ -94,4 +94,7 @@ const (
 	FF_CODE_CONSISTENT_IGNORES string = "internal_snyk_code_ignores_enabled"
 	// Feature flag to enable native implementation for code, used in code-client-go's code workflow
 	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
+	// Feature flag to enable tracked-file-aware .gitignore filtering (CLI-1411). Consumers gate
+	// utils.FileFilter.GetRulesBySource/GetFilteredFilesBySource behind this flag.
+	FF_GITIGNORE_RESPECT_TRACKED_FILES string = "internal_snyk_gitignore_respect_tracked_files_enabled"
 )
