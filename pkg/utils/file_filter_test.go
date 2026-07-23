@@ -257,12 +257,12 @@ func TestFileFilter_GetRules_dotSnykSections(t *testing.T) {
 		},
 		{
 			name:          "applies only the requested section",
-			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{Secrets})},
+			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{DotSnykExcludeSecrets})},
 			expectedFiles: []string{secretsFile},
 		},
 		{
 			name:          "applies all sections when requested",
-			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{Code, Global, Secrets})},
+			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal, DotSnykExcludeSecrets})},
 			expectedFiles: []string{codeFile, globalFile, secretsFile},
 		},
 		{
@@ -354,7 +354,7 @@ func TestFileFilter_GetRules_dotSnykMalformedSection(t *testing.T) {
 		{
 			// only code is requested; the malformed secrets section is not parsed.
 			name:    "malformed non-requested section is ignored",
-			options: []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{Code})},
+			options: []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{DotSnykExcludeCode})},
 		},
 	}
 

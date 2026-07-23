@@ -31,16 +31,16 @@ type FileFilter struct {
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
-// file (e.g. "code", "global", "secrets", "iac"). It is a plain string so callers can
+// file (e.g. "code", "global", "secrets", "iac-drift"). It is a plain string so callers can
 // opt into sections this package doesn't define constants for without requiring
 // a code change here.
 type DotSnykExcludeSectionName string
 
 const (
-	Global  DotSnykExcludeSectionName = "global"
-	Code    DotSnykExcludeSectionName = "code"
-	Secrets DotSnykExcludeSectionName = "secrets"
-	Iac     DotSnykExcludeSectionName = "iac"
+	DotSnykExcludeGlobal   DotSnykExcludeSectionName = "global"
+	DotSnykExcludeCode     DotSnykExcludeSectionName = "code"
+	DotSnykExcludeSecrets  DotSnykExcludeSectionName = "secrets"
+	DotSnykExcludeIacDrift DotSnykExcludeSectionName = "iac-drift"
 )
 
 // String implements fmt.Stringer.
@@ -48,12 +48,12 @@ func (s DotSnykExcludeSectionName) String() string {
 	return string(s)
 }
 
-// DotSnykRule mirrors the relevant parts of a .snyk policy file. Exclude keys
-// its sections by name (e.g. "code", "global") so new sections are picked up by
-// decoding alone, without changes to this type. Section contents are kept as raw
-// yaml.Node values so each section can be decoded independently: only the
-// sections a caller opts into are decoded into rules, and a malformed section a
-// caller does not request cannot fail the decode of the whole file.
+// DotSnykRule mirrors the relevant parts of a .snyk policy file.
+// Exclude keys its sections by name (e.g. "code", "global") so new sections are picked up by
+// decoding alone, without changes to this type.
+// Only the sections a caller opts into are decoded into rules.
+// A malformed section a caller does not request is ignored.
+// A malformed section requested section is skipped.
 type DotSnykRule struct {
 	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
@@ -71,9 +71,10 @@ func WithThreadNumber(maxThreadCount int) FileFilterOption {
 	}
 }
 
-// WithDotSnykSections sets which .snyk exclude sections (e.g. Code, Global,
-// Secrets) the FileFilter applies. It replaces the FileFilter's default
-// sections of Code and Global rather than adding to them. Passing an empty
+// WithDotSnykSections sets which .snyk exclude sections
+// (e.g. DotSnykExcludeCode, DotSnykExcludeGlobal, DotSnykExcludeSecrets, DotSnykExcludeIacDrift)
+// the FileFilter applies. It replaces the FileFilter's default
+// sections of DotSnykExcludeCode and DotSnykExcludeGlobal rather than adding to them. Passing an empty
 // slice disables all .snyk-based exclusions.
 func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption {
 	return func(filter *FileFilter) error {
@@ -88,7 +89,7 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		defaultRules:    []string{"**/.git/**"},
 		logger:          logger,
 		max_threads:     int64(runtime.NumCPU()),
-		dotSnykSections: []DotSnykExcludeSectionName{Code, Global}, // init default with Code and Global to keep it backwards compatible
+		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
 	}
 
 	for _, option := range options {
