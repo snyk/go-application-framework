@@ -27,8 +27,13 @@ import (
 )
 
 const (
-	// Superseded by CONFIG_KEY_ALLOWED_HOSTS. Retained for backwards
-	// compatibility.
+	// CONFIG_KEY_ALLOWED_HOST_REGEXP is superseded by CONFIG_KEY_ALLOWED_HOSTS
+	// / IsValidSnykHost — no code within this module reads it anymore, so
+	// setting this env var no longer has any effect here. It's exported
+	// public API, though, so other repos may still reference it directly;
+	// it's kept for now so any such references keep compiling while we
+	// confirm they've migrated off it, and will be removed in a follow-up
+	// once that's verified.
 	//nolint:gosec // not a token value, but a configuration key
 	CONFIG_KEY_ALLOWED_HOST_REGEXP = "INTERNAL_OAUTH_ALLOWED_HOSTS"
 	//nolint:gosec // not a token value, but a configuration key
