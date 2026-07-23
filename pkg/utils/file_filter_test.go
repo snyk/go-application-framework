@@ -1191,6 +1191,55 @@ exclude:
 	})
 }
 
+// TestFileFilter_NewFilterBySource covers the per-path, build-once/call-many-times shape (e.g. a
+// file watcher reacting to individual events), as opposed to GetFilteredFilesBySource's
+// batch-channel shape.
+func TestFileFilter_NewFilterBySource(t *testing.T) {
+	root := t.TempDir()
+	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+	createFileInPath(t, filepath.Join(root, "config.log"), []byte("x"))    // tracked, matches *.log
+	createFileInPath(t, filepath.Join(root, "untracked.log"), []byte("x")) // untracked, matches *.log
+	createFileInPath(t, filepath.Join(root, "app.js"), []byte("x"))
+	initGitRepoWithTrackedFiles(t, root, []string{"config.log", "app.js", ".gitignore"})
+
+	fileFilter := NewFileFilter(root, &log.Logger)
+	rules, err := fileFilter.GetRulesBySource([]string{".gitignore"})
+	assert.NoError(t, err)
+
+	filter := fileFilter.NewFilterBySource(rules)
+
+	// The same FilterBySource is reused across repeated single-path calls, simulating a watcher
+	// evaluating one event at a time — no git index read happens on these calls.
+	assert.True(t, filter.ShouldKeep(filepath.Join(root, "config.log")), "tracked file matching .gitignore must be rescued")
+	assert.False(t, filter.ShouldKeep(filepath.Join(root, "untracked.log")), "untracked file matching .gitignore must still be excluded")
+	assert.True(t, filter.ShouldKeep(filepath.Join(root, "app.js")))
+	assert.True(t, filter.ShouldKeep(filepath.Join(root, "config.log")), "calling ShouldKeep again on the same filter must be stable")
+}
+
+// TestFileFilter_NewFilterBySource_NoIOAfterConstruction proves the actual point of
+// FilterBySource: the git index is read once, at construction, not on every ShouldKeep call. It
+// deletes .git after building the filter, so if ShouldKeep re-read git per call (the batch-shaped
+// cost this type exists to avoid for a long-lived, per-event caller), the rescue would break.
+func TestFileFilter_NewFilterBySource_NoIOAfterConstruction(t *testing.T) {
+	root := t.TempDir()
+	createFileInPath(t, filepath.Join(root, ".gitignore"), []byte("*.log\n"))
+	createFileInPath(t, filepath.Join(root, "config.log"), []byte("x")) // tracked, matches *.log
+	initGitRepoWithTrackedFiles(t, root, []string{"config.log", ".gitignore"})
+
+	fileFilter := NewFileFilter(root, &log.Logger)
+	rules, err := fileFilter.GetRulesBySource([]string{".gitignore"})
+	assert.NoError(t, err)
+
+	filter := fileFilter.NewFilterBySource(rules) // reads the git index once, here
+
+	assert.NoError(t, os.RemoveAll(filepath.Join(root, ".git")))
+
+	for i := range 5 {
+		assert.True(t, filter.ShouldKeep(filepath.Join(root, "config.log")),
+			"call %d: rescue must still work from the cached snapshot even though .git no longer exists", i)
+	}
+}
+
 func BenchmarkFileFilter_GetFilteredFiles(b *testing.B) {
 	b.Log("Creating filesystem...")
 	rootDir := b.TempDir()

@@ -169,16 +169,8 @@ func (fw *FileFilter) GetFilteredFiles(filesCh chan string, globs []string) chan
 // GetFilteredFilesBySource is like GetFilteredFiles, but rules.Other always excludes while
 // rules.Gitignore excludes only untracked files (CLI-1411: git only ignores untracked files).
 func (fw *FileFilter) GetFilteredFilesBySource(filesCh chan string, rules SourcedRules) chan string {
-	matchers := matchersBySource{
-		Other:     gitignore.CompileIgnoreLines(rules.Other...),
-		Gitignore: gitignore.CompileIgnoreLines(rules.Gitignore...),
-	}
-	trackedGitignoreMatches := fw.trackedFilesMatching(matchers.Gitignore)
-
-	shouldKeepFn := func(filePath string) bool {
-		return shouldKeepBySource(filePath, fw.path, matchers, trackedGitignoreMatches)
-	}
-	return fw.filterFiles(filesCh, shouldKeepFn)
+	filter := fw.NewFilterBySource(rules)
+	return fw.filterFiles(filesCh, filter.ShouldKeep)
 }
 
 // shouldKeepBySource: matchers.Other always excludes; matchers.Gitignore excludes unless
@@ -627,4 +619,35 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		}
 	}
 	return globs
+}
+
+// FilterBySource is a reusable, precompiled by-source filter: matchers and a git-tracked-files
+// snapshot are built once, so ShouldKeep can be called cheaply many times afterward (no I/O per
+// call). Use this instead of GetFilteredFilesBySource when you evaluate paths one at a time over
+// a long lifetime — e.g. a file watcher reacting to individual events — rather than draining a
+// batch channel; calling GetFilteredFilesBySource per path would re-read the git index every time.
+type FilterBySource struct {
+	scanRoot                string
+	matchers                matchersBySource
+	trackedGitignoreMatches map[string]bool
+}
+
+// NewFilterBySource builds a FilterBySource from rules, reading the git index once. Rebuild it
+// whenever rules changes (e.g. on the same cadence you'd already rebuild your own ignore matcher).
+func (fw *FileFilter) NewFilterBySource(rules SourcedRules) *FilterBySource {
+	matchers := matchersBySource{
+		Other:     gitignore.CompileIgnoreLines(rules.Other...),
+		Gitignore: gitignore.CompileIgnoreLines(rules.Gitignore...),
+	}
+	return &FilterBySource{
+		scanRoot:                fw.path,
+		matchers:                matchers,
+		trackedGitignoreMatches: fw.trackedFilesMatching(matchers.Gitignore),
+	}
+}
+
+// ShouldKeep reports whether filePath should be kept (not excluded), using this FilterBySource's
+// precompiled matchers and tracked-files snapshot. Does no I/O — safe to call per event.
+func (f *FilterBySource) ShouldKeep(filePath string) bool {
+	return shouldKeepBySource(filePath, f.scanRoot, f.matchers, f.trackedGitignoreMatches)
 }
