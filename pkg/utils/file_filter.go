@@ -50,9 +50,12 @@ func (s DotSnykExcludeSectionName) String() string {
 
 // DotSnykRule mirrors the relevant parts of a .snyk policy file. Exclude keys
 // its sections by name (e.g. "code", "global") so new sections are picked up by
-// decoding alone, without changes to this type.
+// decoding alone, without changes to this type. Section contents are kept as raw
+// yaml.Node values so each section can be decoded independently: only the
+// sections a caller opts into are decoded into rules, and a malformed section a
+// caller does not request cannot fail the decode of the whole file.
 type DotSnykRule struct {
-	Exclude map[DotSnykExcludeSectionName][]dotSnykExclude `yaml:"exclude"`
+	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
 type FileFilterOption func(*FileFilter) error
@@ -215,10 +218,23 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 		return nil
 	}
 
-	// collect rules according to fw.dotSnykSections
+	// collect rules according to fw.dotSnykSections, decoding each requested
+	// section independently so a malformed section we don't care about (or a
+	// malformed sibling of one we do) cannot drop the sections we do apply.
 	var allRules []dotSnykExclude
 	for _, section := range fw.dotSnykSections {
-		allRules = append(allRules, rules.Exclude[section]...)
+		node, ok := rules.Exclude[section]
+		if !ok {
+			continue
+		}
+
+		var sectionRules []dotSnykExclude
+		if err := node.Decode(&sectionRules); err != nil {
+			fw.logger.Error().Msgf("parse .snyk section %q failed: %v", section, err)
+			continue
+		}
+
+		allRules = append(allRules, sectionRules...)
 	}
 
 	var globs []string

@@ -233,7 +233,7 @@ func TestFileFilter_GetRules_dotSnykSections(t *testing.T) {
     - %s
   secrets:
     - %s
-  iac:
+  newsection:
     - %s
 `, codeFile, globalFile, secretsFile, customFile)
 
@@ -273,7 +273,7 @@ func TestFileFilter_GetRules_dotSnykSections(t *testing.T) {
 		{
 			// no code change in file_filter.go is needed to support a new section
 			name:          "supports sections without a predefined constant",
-			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{"iac"})},
+			options:       []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{"newsection"})},
 			expectedFiles: []string{customFile},
 		},
 	}
@@ -310,6 +310,65 @@ func TestFileFilter_GetRules_dotSnykSections(t *testing.T) {
 		expectedRules := append(globsFor(codeFile), globsFor(globalFile)...)
 		assert.Equal(t, expectedRules, snykRules)
 	})
+}
+
+// TestFileFilter_GetRules_dotSnykMalformedSection verifies that .snyk exclude
+// sections are decoded independently: a section whose value is not a sequence
+// (e.g. a stray scalar) is malformed and must be skipped without dropping the
+// valid exclusions from other sections, and a malformed section a caller never
+// opts into must be ignored entirely. In every case the valid code exclusion
+// must survive.
+func TestFileFilter_GetRules_dotSnykMalformedSection(t *testing.T) {
+	tempDir := t.TempDir()
+	codeFile := "code.ts"
+	createFileInPath(t, filepath.Join(tempDir, codeFile), []byte{})
+
+	// The code section is valid; global and secrets are malformed (scalars where a
+	// sequence is expected).
+	snykContent := fmt.Sprintf(`exclude:
+  code:
+    - %s
+  global: not-a-list
+  secrets: not-a-list
+`, codeFile)
+	createFileInPath(t, filepath.Join(tempDir, ".snyk"), []byte(snykContent))
+
+	// globsFor returns the expected glob patterns for a given filename.
+	globsFor := func(file string) []string {
+		return []string{
+			fmt.Sprintf("%s/**/%s/**", filepath.ToSlash(tempDir), file),
+			fmt.Sprintf("%s/**/%s", filepath.ToSlash(tempDir), file),
+		}
+	}
+
+	tests := []struct {
+		name    string
+		options []FileFilterOption
+	}{
+		{
+			// code and global are both requested (the default); the malformed global
+			// is skipped while the valid code exclusion still applies.
+			name:    "malformed requested section is skipped, other requested sections still apply",
+			options: nil,
+		},
+		{
+			// only code is requested; the malformed secrets section is not parsed.
+			name:    "malformed non-requested section is ignored",
+			options: []FileFilterOption{WithDotSnykSections([]DotSnykExcludeSectionName{Code})},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fileFilter := NewFileFilter(tempDir, &log.Logger, test.options...)
+			actualRules, err := fileFilter.GetRules([]string{".snyk"})
+			assert.NoError(t, err)
+
+			expectedRules := append(globsFor(codeFile), fileFilter.defaultRules...)
+			assert.ElementsMatch(t, expectedRules, actualRules,
+				"a malformed section must not drop valid exclusions from other sections")
+		})
+	}
 }
 
 func TestFileFilter_GetFilteredFiles(t *testing.T) {
