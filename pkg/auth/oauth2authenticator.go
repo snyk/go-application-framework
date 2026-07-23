@@ -27,17 +27,34 @@ import (
 )
 
 const (
+	// CONFIG_KEY_ALLOWED_HOST_REGEXP is superseded by CONFIG_KEY_ALLOWED_HOSTS
+	// / IsValidSnykHost — no code within this module reads it anymore, so
+	// setting this env var no longer has any effect here. It's exported
+	// public API, though, so other repos may still reference it directly;
+	// it's kept for now so any such references keep compiling while we
+	// confirm they've migrated off it, and will be removed in a follow-up
+	// once that's verified.
 	//nolint:gosec // not a token value, but a configuration key
-	CONFIG_KEY_ALLOWED_HOST_REGEXP        = "INTERNAL_OAUTH_ALLOWED_HOSTS"
-	CONFIG_KEY_OAUTH_TOKEN         string = "INTERNAL_OAUTH_TOKEN_STORAGE"
-	OAUTH_CLIENT_ID                string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
-	CALLBACK_HOSTNAME              string = "127.0.0.1"
-	CALLBACK_PATH                  string = "/authorization-code/callback"
-	TIMEOUT_SECONDS                       = 120 * time.Second
-	AUTHENTICATED_MESSAGE                 = "Your account has been authenticated."
-	PARAMETER_CLIENT_ID            string = "client-id"
-	PARAMETER_CLIENT_SECRET        string = "client-secret"
-	AUTH_TYPE_OAUTH                       = "oauth"
+	CONFIG_KEY_ALLOWED_HOST_REGEXP = "INTERNAL_OAUTH_ALLOWED_HOSTS"
+	// CONFIG_KEY_ALLOWED_HOSTS holds the allowlist of registrable domains
+	// consulted by IsValidSnykHost. When set programmatically (e.g. via
+	// Configuration.Set) it accepts a []string of multiple domains. When set
+	// via the environment variable below, it supports a single domain only:
+	// conf.GetStringSlice returns the raw env var value as a one-element
+	// slice, it does not split on commas. For multiple allowed domains,
+	// configure this key programmatically as a []string rather than via the
+	// environment variable.
+	//nolint:gosec // not a token value, but a configuration key
+	CONFIG_KEY_ALLOWED_HOSTS        = "INTERNAL_OAUTH_ALLOWED_HOST_DOMAINS"
+	CONFIG_KEY_OAUTH_TOKEN   string = "INTERNAL_OAUTH_TOKEN_STORAGE"
+	OAUTH_CLIENT_ID          string = "b56d4c2e-b9e1-4d27-8773-ad47eafb0956"
+	CALLBACK_HOSTNAME        string = "127.0.0.1"
+	CALLBACK_PATH            string = "/authorization-code/callback"
+	TIMEOUT_SECONDS                 = 120 * time.Second
+	AUTHENTICATED_MESSAGE           = "Your account has been authenticated."
+	PARAMETER_CLIENT_ID      string = "client-id"
+	PARAMETER_CLIENT_SECRET  string = "client-secret"
+	AUTH_TYPE_OAUTH                 = "oauth"
 )
 
 type GrantType int
@@ -473,9 +490,8 @@ func (o *oAuth2Authenticator) modifyTokenUrl(responseInstance string) error {
 		return err
 	}
 
-	redirectAuthHostRE := o.config.GetString(CONFIG_KEY_ALLOWED_HOST_REGEXP)
-	o.logger.Info().Msgf("Validating with regexp: \"%s\"", redirectAuthHostRE)
-	isValidHost, err := IsValidAuthHost(authHost, redirectAuthHostRE)
+	o.logger.Info().Msgf("Validating host: \"%s\"", authHost)
+	isValidHost, err := IsValidSnykHost(o.config, authHost)
 	if err != nil {
 		return err
 	}
