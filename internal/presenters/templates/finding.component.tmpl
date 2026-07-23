@@ -21,18 +21,18 @@
    {{- if or (eq .Attributes.Suppression.Status "accepted") (eq .Attributes.Suppression.Status "underReview")}}
 
    Expiration: {{- if .Attributes.Suppression.Details.Expiration }} {{ formatDatetime .Attributes.Suppression.Details.Expiration "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }} {{- else }} never {{- end }}
-   Category:   {{ .Attributes.Suppression.Details.Category }}
-   Ignored on: {{ formatDatetime .Attributes.Suppression.Details.IgnoredOn "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
-   Ignored by: {{ .Attributes.Suppression.Details.IgnoredBy.Name }}
    {{- if .Attributes.Suppression.Details.ReviewedOn }}
    Reviewed on: {{ .Attributes.Suppression.Details.ReviewedOn }}
    {{- end }}
    {{- if .Attributes.Suppression.Details.ReviewedBy }}
-   Reviewed by name : {{ .Attributes.Suppression.Details.ReviewedBy.Name }}
+   Reviewed by name: {{ .Attributes.Suppression.Details.ReviewedBy.Name }}
    {{- if .Attributes.Suppression.Details.ReviewedBy.Email }}
    Reviewed by email: {{ .Attributes.Suppression.Details.ReviewedBy.Email }}
    {{- end }}
    {{- end }}
+   Category:   {{ .Attributes.Suppression.Details.Category }}
+   Ignored on: {{ formatDatetime .Attributes.Suppression.Details.IgnoredOn "2006-01-02T15:04:05.999999999Z07:00" "January 02, 2006" }}
+   Ignored by: {{ .Attributes.Suppression.Details.IgnoredBy.Name }}
    Reason:     {{ .Attributes.Suppression.Justification }}
    {{- end}}
    {{- end}}

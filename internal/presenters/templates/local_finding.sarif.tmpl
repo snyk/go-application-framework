@@ -173,20 +173,23 @@
 								"properties": {
 									"category": {{ getQuotedString $finding.Attributes.Suppression.Details.Category }},
 									{{- if $finding.Attributes.Suppression.Details.Expiration }}"expiration": "{{ $finding.Attributes.Suppression.Details.Expiration }}",{{- end }}
+									{{- if and $finding.Attributes.Suppression.Details.ReviewedOn }}
+									"reviewedOn": "{{ $finding.Attributes.Suppression.Details.ReviewedOn }}",
+									{{- end }}
+									{{- if and $finding.Attributes.Suppression.Details.ReviewedBy }}
+										"reviewedBy": {
+										"name": {{ getQuotedString $finding.Attributes.Suppression.Details.ReviewedBy.Name }},
+										{{- if $finding.Attributes.Suppression.Details.ReviewedBy.Email }}
+										"email": {{ getQuotedString $finding.Attributes.Suppression.Details.ReviewedBy.Email }}
+										{{- end }}
+									}
+									{{- end }}
 									"ignoredOn": "{{ $finding.Attributes.Suppression.Details.IgnoredOn }}",
 									"ignoredBy": {
 										  "name": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Name }},
 										  "email": {{ getQuotedString $finding.Attributes.Suppression.Details.IgnoredBy.Email }}
 									}
-									{{- if and $finding.Attributes.Suppression.Details.ReviewedOn }}
-									,"reviewedOn": "{{ $finding.Attributes.Suppression.Details.ReviewedOn }}"
-									{{- end }}
-									{{- if and $finding.Attributes.Suppression.Details.ReviewedBy }}
-										,"reviewedBy": {
-										"name": {{ getQuotedString $finding.Attributes.Suppression.Details.ReviewedBy.Name }},
-										"email": {{ getQuotedString $finding.Attributes.Suppression.Details.ReviewedBy.Email }}
-									}
-									{{- end }}
+									
 								}
 								{{- end }}
 							}

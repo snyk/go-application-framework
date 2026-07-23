@@ -1070,8 +1070,8 @@ type TypesReferenceId struct {
 
 // TypesReviewer Reviewer definition
 type TypesReviewer struct {
-	Email openapi_types.Email `json:"email"`
-	Name  string              `json:"name"`
+	Email *string `json:"email,omitempty"`
+	Name  string  `json:"name"`
 }
 
 // TypesRules Based on Sarif rules

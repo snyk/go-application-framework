@@ -2277,7 +2277,6 @@ components:
           type: string
         email:
           type: string
-      
       description: Reviewer definition
     types.User:
       type: object
