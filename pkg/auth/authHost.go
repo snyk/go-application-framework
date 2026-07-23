@@ -11,7 +11,7 @@ import (
 
 func redirectAuthHost(instance string) (string, error) {
 	// handle both cases if instance is a URL or just a host
-	if !strings.HasPrefix(instance, "http") {
+	if !strings.Contains(instance, "://") {
 		instance = "https://" + instance
 	}
 
@@ -52,9 +52,10 @@ func IsValidAuthHost(instance string, redirectAuthHostRE string) (bool, error) {
 //
 // Each step is checked twice with two independent techniques — a url* helper
 // that inspects the parsed *url.URL, and a string* helper that inspects the raw
-// normalized string — and both must agree. If the parsed URL and the raw string
-// disagree (e.g. a parser quirk that hides a smuggled component), validation
-// fails closed rather than slipping through.
+// normalized string — and both must agree; this is intentional
+// parser-differential defense, so a discrepancy between the two
+// interpretations (e.g. a parser quirk that hides a smuggled component) fails
+// closed rather than trusting either one alone.
 func IsValidSnykHost(conf configuration.Configuration, input string) (bool, error) {
 	// GetStringSlice does not split a plain string value on commas: an env
 	// var override of CONFIG_KEY_ALLOWED_HOSTS yields a single-element slice

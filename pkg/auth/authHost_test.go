@@ -9,6 +9,30 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func Test_redirectAuthHost(t *testing.T) {
+	testCases := []struct {
+		name     string
+		instance string
+		expected string
+	}{
+		{"bare host gets https and api prefix", "snyk.io", "api.snyk.io"},
+		{"explicit https scheme kept", "https://api.snyk.io", "api.snyk.io"},
+		{"explicit http scheme kept", "http://api.snyk.io", "api.snyk.io"},
+		// A schemeless host that happens to start with the substring "http"
+		// must not be misclassified as already carrying a scheme (which
+		// would skip the https:// prepend and produce a malformed parse).
+		{"schemeless host starting with http", "httpfoo.example.com", "api.httpfoo.example.com"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := redirectAuthHost(tc.instance)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
 func Test_isValidAuthHost(t *testing.T) {
 	testCases := []struct {
 		authHost string
@@ -52,6 +76,12 @@ func Test_IsValidSnykHost(t *testing.T) {
 		{"http scheme prefixed host", "http://api.snyk.io", true},
 		{"non-http scheme rejected", "ftp://api.snyk.io", false},
 		{"custom scheme rejected", "gopher://api.snyk.io", false},
+		// url.Parse lowercases the parsed scheme, but the raw normalized
+		// string retains its original case, so stringIsHostOnly's
+		// reconstruction ("scheme://host" using the lowercased parsed
+		// scheme) no longer matches the original-case string. This pins
+		// the fail-closed rejection of an uppercase scheme.
+		{"uppercase scheme rejected", "HTTPS://api.snyk.io", false},
 		{"bare domain no api prefix", "snyk.io", false},
 		{"domain not in allowlist", "api.example.com", false},
 		{"suffix trick - domain as sub-suffix of evil host", "api.snyk.evil.com", false},
