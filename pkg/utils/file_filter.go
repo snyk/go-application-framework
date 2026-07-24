@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,10 +23,39 @@ import (
 var defaultInvalidRules = []string{}
 
 type FileFilter struct {
-	path         string
-	defaultRules []string
-	logger       *zerolog.Logger
-	max_threads  int64
+	path            string
+	defaultRules    []string
+	logger          *zerolog.Logger
+	max_threads     int64
+	dotSnykSections []DotSnykExcludeSectionName
+}
+
+// DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
+// file (e.g. "code", "global", "secrets", "iac-drift"). It is a plain string so callers can
+// opt into sections this package doesn't define constants for without requiring
+// a code change here.
+type DotSnykExcludeSectionName string
+
+const (
+	DotSnykExcludeGlobal   DotSnykExcludeSectionName = "global"
+	DotSnykExcludeCode     DotSnykExcludeSectionName = "code"
+	DotSnykExcludeSecrets  DotSnykExcludeSectionName = "secrets"
+	DotSnykExcludeIacDrift DotSnykExcludeSectionName = "iac-drift"
+)
+
+// String implements fmt.Stringer.
+func (s DotSnykExcludeSectionName) String() string {
+	return string(s)
+}
+
+// DotSnykRule mirrors the relevant parts of a .snyk policy file.
+// Exclude keys its sections by name (e.g. "code", "global") so new sections are picked up by
+// decoding alone, without changes to this type.
+// Only the sections a caller opts into are decoded into rules.
+// A malformed section a caller does not request is ignored.
+// A malformed section requested section is skipped.
+type DotSnykRule struct {
+	Exclude map[DotSnykExcludeSectionName]yaml.Node `yaml:"exclude"`
 }
 
 type FileFilterOption func(*FileFilter) error
@@ -41,12 +71,25 @@ func WithThreadNumber(maxThreadCount int) FileFilterOption {
 	}
 }
 
+// WithDotSnykSections sets which .snyk exclude sections
+// (e.g. DotSnykExcludeCode, DotSnykExcludeGlobal, DotSnykExcludeSecrets, DotSnykExcludeIacDrift)
+// the FileFilter applies. It replaces the FileFilter's default
+// sections of DotSnykExcludeCode and DotSnykExcludeGlobal rather than adding to them. Passing an empty
+// slice disables all .snyk-based exclusions.
+func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.dotSnykSections = sections
+		return nil
+	}
+}
+
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := &FileFilter{
-		path:         path,
-		defaultRules: []string{"**/.git/**"},
-		logger:       logger,
-		max_threads:  int64(runtime.NumCPU()),
+		path:            path,
+		defaultRules:    []string{"**/.git/**"},
+		logger:          logger,
+		max_threads:     int64(runtime.NumCPU()),
+		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
 	}
 
 	for _, option := range options {
@@ -169,13 +212,6 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 
 // parseDotSnykFile builds a list of glob patterns from a given .snyk style file
 func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string {
-	type DotSnykRule struct {
-		Exclude struct {
-			Code   []dotSnykExclude `yaml:"code"`
-			Global []dotSnykExclude `yaml:"global"`
-		} `yaml:"exclude"`
-	}
-
 	var rules DotSnykRule
 	err := yaml.Unmarshal(content, &rules)
 	if err != nil {
@@ -183,8 +219,24 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 		return nil
 	}
 
-	// combine code and global rules
-	allRules := append(rules.Exclude.Code, rules.Exclude.Global...)
+	// collect rules according to fw.dotSnykSections, decoding each requested
+	// section independently so a malformed section we don't care about (or a
+	// malformed sibling of one we do) cannot drop the sections we do apply.
+	var allRules []dotSnykExclude
+	for _, section := range fw.dotSnykSections {
+		node, ok := rules.Exclude[section]
+		if !ok {
+			continue
+		}
+
+		var sectionRules []dotSnykExclude
+		if err := node.Decode(&sectionRules); err != nil {
+			fw.logger.Error().Msgf("parse .snyk section %q failed: %v", section, err)
+			continue
+		}
+
+		allRules = append(allRules, sectionRules...)
+	}
 
 	var globs []string
 	for _, rule := range allRules {
@@ -376,10 +428,8 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 	// `foo` => `**/foo/**`, `foo` (meaning: Ignore (root/sub) foo filesToFilter and dirs and their paths underneath.)
 
 	// If a rule is invalid, we skip it
-	for _, invalidRule := range invalidRules {
-		if strings.TrimSpace(rule) == invalidRule {
-			return globs
-		}
+	if slices.Contains(invalidRules, strings.TrimSpace(rule)) {
+		return globs
 	}
 
 	prefix := ""
