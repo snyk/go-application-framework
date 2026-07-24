@@ -200,9 +200,9 @@ func TestIntersects(t *testing.T) {
 
 func makeLocalFinding(filepath string, startLine, endLine int) local_models.FindingResource {
 	sl := &local_models.IoSnykReactiveFindingSourceLocation{
-		Filepath:            filepath,
-		OriginalStartLine:   startLine,
-		OriginalEndLine:     endLine,
+		Filepath:          filepath,
+		OriginalStartLine: startLine,
+		OriginalEndLine:   endLine,
 	}
 	loc := local_models.IoSnykReactiveFindingLocation{
 		SourceLocations: sl,
