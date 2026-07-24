@@ -18,6 +18,7 @@ func Init(engine workflow.Engine) error {
 		InitConfigWorkflow,
 		InitDataTransformationWorkflow,
 		InitFilterFindingsWorkflow,
+		InitDeltaFilterFindingsWorkflow,
 		doctor_workflow.InitDoctorWorkflow,
 	}
 
