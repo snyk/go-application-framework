@@ -74,7 +74,9 @@ func TestDeltaFilterWorkflow_NoFlagPassThrough(t *testing.T) {
 
 	// verify finding count unchanged
 	var out local_models.LocalFinding
-	require.NoError(t, json.Unmarshal(output[0].GetPayload().([]byte), &out))
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok, "expected []byte payload")
+	require.NoError(t, json.Unmarshal(payload, &out))
 	assert.Equal(t, total, len(out.Findings))
 }
 
@@ -90,7 +92,9 @@ func TestDeltaFilterWorkflow_FilterByLine(t *testing.T) {
 	require.Len(t, output, 1)
 
 	var out local_models.LocalFinding
-	require.NoError(t, json.Unmarshal(output[0].GetPayload().([]byte), &out))
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok, "expected []byte payload")
+	require.NoError(t, json.Unmarshal(payload, &out))
 	assert.True(t, len(out.Findings) > 0, "expected at least one finding on line 18")
 	assert.True(t, len(out.Findings) < len(findingsModel.Findings), "expected fewer findings after delta filter")
 }
@@ -106,7 +110,9 @@ func TestDeltaFilterWorkflow_AllSentinel(t *testing.T) {
 	require.Len(t, output, 1)
 
 	var out local_models.LocalFinding
-	require.NoError(t, json.Unmarshal(output[0].GetPayload().([]byte), &out))
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok, "expected []byte payload")
+	require.NoError(t, json.Unmarshal(payload, &out))
 	assert.True(t, len(out.Findings) > 0)
 }
 
@@ -121,7 +127,9 @@ func TestDeltaFilterWorkflow_FileNotInScope(t *testing.T) {
 	require.Len(t, output, 1)
 
 	var out local_models.LocalFinding
-	require.NoError(t, json.Unmarshal(output[0].GetPayload().([]byte), &out))
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok, "expected []byte payload")
+	require.NoError(t, json.Unmarshal(payload, &out))
 	assert.Len(t, out.Findings, 0)
 }
 
@@ -167,7 +175,9 @@ func TestDeltaFilterWorkflow_SummaryUpdatedAfterFilter(t *testing.T) {
 	require.Len(t, output, 1)
 
 	var out local_models.LocalFinding
-	require.NoError(t, json.Unmarshal(output[0].GetPayload().([]byte), &out))
+	payload, ok := output[0].GetPayload().([]byte)
+	require.True(t, ok, "expected []byte payload")
+	require.NoError(t, json.Unmarshal(payload, &out))
 
 	// sum of summary counts should equal number of findings
 	var totalFromSummary uint32
