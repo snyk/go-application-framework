@@ -23,11 +23,12 @@ import (
 var defaultInvalidRules = []string{}
 
 type FileFilter struct {
-	path            string
-	defaultRules    []string
-	logger          *zerolog.Logger
-	max_threads     int64
-	dotSnykSections []DotSnykExcludeSectionName
+	path                             string
+	defaultRules                     []string
+	logger                           *zerolog.Logger
+	max_threads                      int64
+	dotSnykSections                  []DotSnykExcludeSectionName
+	enableIgnoreRuleMetacharacterFix bool
 }
 
 // DotSnykExcludeSectionName is the name of an `exclude` section in a .snyk
@@ -79,6 +80,17 @@ func WithThreadNumber(maxThreadCount int) FileFilterOption {
 func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption {
 	return func(filter *FileFilter) error {
 		filter.dotSnykSections = sections
+		return nil
+	}
+}
+
+// WithIgnoreRuleMetacharacterFix toggles the fix for ignore rules/paths containing regex
+// metacharacters (parentheses, "+", "|", "{", "}", "$", etc.).
+// Disabled (the default) reproduces the legacy behavior.
+// Callers should enable this deliberately (e.g. gated on configuration.FF_FILE_FILTER_METACHARACTER_FIX).
+func WithIgnoreRuleMetacharacterFix(enabled bool) FileFilterOption {
+	return func(filter *FileFilter) error {
+		filter.enableIgnoreRuleMetacharacterFix = enabled
 		return nil
 	}
 }
@@ -202,7 +214,7 @@ func (fw *FileFilter) buildGlobs(ignoreFiles []string) ([]string, error) {
 			parsedRules := fw.parseDotSnykFile(content, filepath.Dir(ignoreFile))
 			globs = append(globs, parsedRules...)
 		} else { // .gitignore, .dcignore, etc. are just a list of ignore rules
-			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile))
+			parsedRules := parseIgnoreFile(content, filepath.Dir(ignoreFile), fw.enableIgnoreRuleMetacharacterFix)
 			globs = append(globs, parsedRules...)
 		}
 	}
@@ -257,7 +269,7 @@ func (fw *FileFilter) parseDotSnykFile(content []byte, filePath string) []string
 			continue
 		}
 
-		globs = append(globs, parseIgnoreRuleToGlobs(rule.Path, filePath, defaultInvalidRules)...)
+		globs = append(globs, parseIgnoreRuleToGlobs(rule.Path, filePath, defaultInvalidRules, fw.enableIgnoreRuleMetacharacterFix)...)
 	}
 	return globs
 }
@@ -362,8 +374,8 @@ func parseExpireTime(expiresStr string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("failed to parse expires time '%s': %w", expiresStr, lastErr)
 }
 
-// parseIgnoreFile builds a list of glob patterns from a given .gitignore style file
-func parseIgnoreFile(content []byte, filePath string) []string {
+// parseIgnoreFile builds a list of glob patterns from a given .gitignore style file.
+func parseIgnoreFile(content []byte, filePath string, enableMetacharacterFix bool) []string {
 	var ignores []string
 	lines := strings.Split(string(content), "\n")
 
@@ -374,7 +386,7 @@ func parseIgnoreFile(content []byte, filePath string) []string {
 		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 			continue
 		}
-		globs := parseIgnoreRuleToGlobs(line, filePath, invalidRules)
+		globs := parseIgnoreRuleToGlobs(line, filePath, invalidRules, enableMetacharacterFix)
 		ignores = append(ignores, globs...)
 	}
 	return ignores
@@ -394,9 +406,10 @@ var ruleRegexMetaChars = map[byte]bool{
 	'}': true,
 }
 
-// escapeSpecialGlobChars escapes regex metacharacters in an ignore rule that gitignore treats as
-// literal, so they match literally instead of being interpreted by go-gitignore's regex engine.
-func escapeSpecialGlobChars(rule string) string {
+// escapeIgnoreRuleMetaChars escapes regex metacharacters in an ignore rule that gitignore treats
+// as literal, so they match literally instead of being interpreted by go-gitignore's regex
+// engine. This is the fixed behavior, gated behind WithIgnoreRuleMetacharacterFix.
+func escapeIgnoreRuleMetaChars(rule string) string {
 	var result strings.Builder
 	for i := 0; i < len(rule); i++ {
 		ch := rule[i]
@@ -404,6 +417,24 @@ func escapeSpecialGlobChars(rule string) string {
 			result.WriteByte('\\')
 		}
 		result.WriteByte(ch)
+	}
+	return result.String()
+}
+
+// escapeSpecialGlobCharsLegacy escapes special characters that should be treated literally in
+// glob patterns. Special Characters to escape: $
+// This is the legacy behavior, to be removed in future releases.
+func escapeSpecialGlobCharsLegacy(rule string) string {
+	var result strings.Builder
+	for i := 0; i < len(rule); i++ {
+		ch := rule[i]
+		switch ch {
+		case '$':
+			result.WriteByte('\\')
+			result.WriteByte(ch)
+		default:
+			result.WriteByte(ch)
+		}
 	}
 	return result.String()
 }
@@ -420,7 +451,7 @@ func joinGlob(parts ...string) string {
 
 // parseIgnoreRuleToGlobs contains the business logic to build glob patterns from a given ignore file
 // we try to implement the same logic as gitignore pattern format - https://git-scm.com/docs/gitignore#_pattern_format
-func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string) (globs []string) {
+func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string, enableMetacharacterFix bool) (globs []string) {
 	// Mappings from .gitignore format to glob format:
 	// `/foo/` => `/foo/**` (meaning: Ignore root (not sub) foo dir and its paths underneath.)
 	// `/foo`	=> `/foo/**`, `/foo` (meaning: Ignore root (not sub) file and dir and its paths underneath.)
@@ -430,6 +461,10 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 	// If a rule is invalid, we skip it
 	if slices.Contains(invalidRules, strings.TrimSpace(rule)) {
 		return globs
+	}
+
+	if !enableMetacharacterFix {
+		return parseIgnoreRuleToGlobsLegacy(rule, filePath)
 	}
 
 	prefix := ""
@@ -462,7 +497,7 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
 		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := prefix + joinGlob(baseDir, escapeSpecialGlobChars(rule), all)
+			glob := prefix + joinGlob(baseDir, escapeIgnoreRuleMetaChars(rule), all)
 			globs = append(globs, glob)
 		}
 		// case `/foo` => `{baseDir}/foo`
@@ -470,20 +505,74 @@ func parseIgnoreRuleToGlobs(rule string, filePath string, invalidRules []string)
 		// case `/foo/**` => `{baseDir}/foo/**`
 		// case `**/foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := prefix + joinGlob(baseDir, escapeSpecialGlobChars(rule))
+			glob := prefix + joinGlob(baseDir, escapeIgnoreRuleMetaChars(rule))
 			globs = append(globs, glob)
 		}
 	} else {
 		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
 		if !endingGlobstar {
-			glob := prefix + joinGlob(baseDir, all, escapeSpecialGlobChars(rule), all)
+			glob := prefix + joinGlob(baseDir, all, escapeIgnoreRuleMetaChars(rule), all)
 			globs = append(globs, glob)
 		}
 		// case `foo` => `{baseDir}/**/foo`
 		// case `foo/**` => `{baseDir}/**/foo/**`
 		if !endingSlash {
-			glob := prefix + joinGlob(baseDir, all, escapeSpecialGlobChars(rule))
+			glob := prefix + joinGlob(baseDir, all, escapeIgnoreRuleMetaChars(rule))
 			globs = append(globs, glob)
+		}
+	}
+	return globs
+}
+
+// parseIgnoreRuleToGlobsLegacy to be removed in future releases.
+func parseIgnoreRuleToGlobsLegacy(rule string, filePath string) (globs []string) {
+	prefix := ""
+	const negation = "!"
+	const slash = "/"
+	const all = "**"
+	baseDir := filepath.ToSlash(filePath)
+
+	if strings.HasPrefix(rule, negation) {
+		rule = rule[1:]
+		prefix = negation
+	}
+
+	// Special case: "/" pattern has no effect in gitignore
+	if rule == slash {
+		return globs
+	}
+
+	startingSlash := strings.HasPrefix(rule, slash)
+	startingGlobstar := strings.HasPrefix(rule, all)
+	endingSlash := strings.HasSuffix(rule, slash)
+	endingGlobstar := strings.HasSuffix(rule, all)
+
+	if startingSlash || startingGlobstar {
+		// case `/foo/`, `/foo` => `{baseDir}/foo/**`
+		// case `**/foo/`, `**/foo` => `{baseDir}/**/foo/**`
+		if !endingGlobstar {
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule, all))
+			globs = append(globs, escapeSpecialGlobCharsLegacy(glob))
+		}
+		// case `/foo` => `{baseDir}/foo`
+		// case `**/foo` => `{baseDir}/**/foo`
+		// case `/foo/**` => `{baseDir}/foo/**`
+		// case `**/foo/**` => `{baseDir}/**/foo/**`
+		if !endingSlash {
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, rule))
+			globs = append(globs, escapeSpecialGlobCharsLegacy(glob))
+		}
+	} else {
+		// case `foo/`, `foo` => `{baseDir}/**/foo/**`
+		if !endingGlobstar {
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule, all))
+			globs = append(globs, escapeSpecialGlobCharsLegacy(glob))
+		}
+		// case `foo` => `{baseDir}/**/foo`
+		// case `foo/**` => `{baseDir}/**/foo/**`
+		if !endingSlash {
+			glob := filepath.ToSlash(prefix + filepath.Join(baseDir, all, rule))
+			globs = append(globs, escapeSpecialGlobCharsLegacy(glob))
 		}
 	}
 	return globs

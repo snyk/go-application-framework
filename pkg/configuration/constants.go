@@ -94,4 +94,13 @@ const (
 	FF_CODE_CONSISTENT_IGNORES string = "internal_snyk_code_ignores_enabled"
 	// Feature flag to enable native implementation for code, used in code-client-go's code workflow
 	FF_CODE_NATIVE_IMPLEMENTATION string = "internal_snyk_code_native_implementation"
+	// Feature flag to enable the fix for ignore rules/paths containing regex metacharacters
+	FF_FILE_FILTER_METACHARACTER_FIX string = "internal_snyk_file_filter_metacharacter_fix_enabled"
+
+	// ---------
+	// feature flag names (platform-registered names backing the config keys above)
+	// ---------
+
+	// Feature flag name backing FF_FILE_FILTER_METACHARACTER_FIX
+	SNYK_FILE_FILTER_METACHARACTER_FIX string = "snykFileFilterMetacharacterFix"
 )
