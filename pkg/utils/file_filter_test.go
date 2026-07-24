@@ -441,7 +441,7 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 			createFileInPath(t, appFile, []byte("x"))
 			createFileInPath(t, gitignore, []byte("node_modules\n"))
 
-			fileFilter := NewFileFilter(base, &log.Logger)
+			fileFilter := NewFileFilter(base, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
 			globs, err := fileFilter.GetRules([]string{".gitignore"})
 			assert.NoError(t, err)
 
@@ -897,7 +897,7 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
 			}
 
-			fileFilter := NewFileFilter(root, &log.Logger)
+			fileFilter := NewFileFilter(root, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
 			globs, err := fileFilter.GetRules(tc.ruleFiles)
 			assert.NoError(t, err)
 
@@ -932,7 +932,7 @@ func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
 	// the FileFilter rooted at scanRoot (which may be a UNC-style alias of base).
 	assertFiltered := func(t *testing.T, scanRoot string) {
 		t.Helper()
-		fileFilter := NewFileFilter(scanRoot, &log.Logger)
+		fileFilter := NewFileFilter(scanRoot, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
 		globs, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
@@ -1225,6 +1225,9 @@ func createFileInPath(tb testing.TB, filePath string, content []byte) {
 	assert.NoError(tb, err)
 }
 
+// TestParseIgnoreRuleToGlobs exercises parseIgnoreRuleToGlobs with the metacharacter fix enabled
+// (enableMetacharacterFix=true). Legacy (flag-off) behavior is covered separately in
+// TestParseIgnoreRuleToGlobs_legacyBehavior and TestFileFilter_MetacharacterFixToggle.
 func TestParseIgnoreRuleToGlobs(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -1415,11 +1418,125 @@ func TestParseIgnoreRuleToGlobs(t *testing.T) {
 			if tc.skipNonWindows && runtime.GOOS != "windows" {
 				t.Skip("UNC paths only exist on Windows")
 			}
-			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, tc.invalidRules)
+			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, tc.invalidRules, true)
 			assert.ElementsMatch(t, tc.expectedGlobs, globs,
 				"Test Name: %s, Rule: %q, Expected: %v, Got: %v", tc.name, tc.rule, tc.expectedGlobs, globs)
 		})
 	}
+}
+
+// TestParseIgnoreRuleToGlobs_legacyBehavior locks in the pre-fix (enableMetacharacterFix=false)
+// behavior byte-for-byte, so a future change to the fixed path cannot accidentally alter what
+// callers who have not opted into WithIgnoreRuleMetacharacterFix observe.
+func TestParseIgnoreRuleToGlobs_legacyBehavior(t *testing.T) {
+	testCases := []struct {
+		name          string
+		rule          string
+		baseDir       string
+		expectedGlobs []string
+	}{
+		{
+			// Only "$" is escaped in the legacy path; other regex metacharacters are left as-is
+			// and can be misinterpreted by the regex-based matcher. This is the bug the fix
+			// addresses, preserved here on purpose.
+			name:    "only dollar sign is escaped",
+			rule:    "*$",
+			baseDir: "/tmp/test",
+			expectedGlobs: []string{
+				"/tmp/test/**/*\\$",
+				"/tmp/test/**/*\\$/**",
+			},
+		},
+		{
+			// Parentheses are regex metacharacters that the legacy path does not escape, so a
+			// path/rule containing them can silently fail to match as expected.
+			name:    "parentheses are not escaped",
+			rule:    "node_modules",
+			baseDir: "/tmp/OneDrive - Foobar (Team1)/project",
+			expectedGlobs: []string{
+				"/tmp/OneDrive - Foobar (Team1)/project/**/node_modules/**",
+				"/tmp/OneDrive - Foobar (Team1)/project/**/node_modules",
+			},
+		},
+		{
+			name:    "root directory pattern",
+			rule:    "/foo",
+			baseDir: "/tmp/test",
+			expectedGlobs: []string{
+				"/tmp/test/foo/**",
+				"/tmp/test/foo",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			globs := parseIgnoreRuleToGlobs(tc.rule, tc.baseDir, []string{}, false)
+			assert.ElementsMatch(t, tc.expectedGlobs, globs,
+				"Test Name: %s, Rule: %q, Expected: %v, Got: %v", tc.name, tc.rule, tc.expectedGlobs, globs)
+		})
+	}
+}
+
+// TestFileFilter_MetacharacterFixToggle is the end-to-end regression net for the feature-flag
+// gate around the special-character-path fix (CLI-1648): with the option left at its default
+// (false / legacy behavior) a ".gitignore" rule for a directory containing regex metacharacters
+// must reproduce the old bug (the directory is NOT excluded), while explicitly enabling
+// WithIgnoreRuleMetacharacterFix(true) must apply the fix (the directory IS excluded). This
+// proves the switch actually routes to the right implementation on both settings, so enabling
+// the fix for a customer is a deliberate, reversible choice rather than a silent default change.
+func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
+	setup := func(t *testing.T) (base, nodeModulesFile, appFile string) {
+		t.Helper()
+		base = filepath.Join(t.TempDir(), "OneDrive - Foobar (Team1)", "repo")
+		nodeModulesFile = filepath.Join(base, "node_modules", "lib", "index.js")
+		appFile = filepath.Join(base, "app.js")
+		createFileInPath(t, nodeModulesFile, []byte("x"))
+		createFileInPath(t, appFile, []byte("x"))
+		createFileInPath(t, filepath.Join(base, ".gitignore"), []byte("node_modules\n"))
+		return base, nodeModulesFile, appFile
+	}
+
+	filterFiles := func(t *testing.T, fileFilter *FileFilter) []string {
+		t.Helper()
+		globs, err := fileFilter.GetRules([]string{".gitignore"})
+		assert.NoError(t, err)
+
+		var filtered []string
+		for f := range fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), globs) {
+			filtered = append(filtered, f)
+		}
+		return filtered
+	}
+
+	t.Run("fix disabled (default) reproduces the legacy bug", func(t *testing.T) {
+		base, nodeModulesFile, appFile := setup(t)
+		fileFilter := NewFileFilter(base, &log.Logger)
+
+		filtered := filterFiles(t, fileFilter)
+		assert.Contains(t, filtered, appFile, "app.js should be scanned")
+		assert.Contains(t, filtered, nodeModulesFile,
+			"legacy bug: node_modules is NOT excluded when the base path has metacharacters")
+	})
+
+	t.Run("fix disabled explicitly behaves the same as the default", func(t *testing.T) {
+		base, nodeModulesFile, appFile := setup(t)
+		fileFilter := NewFileFilter(base, &log.Logger, WithIgnoreRuleMetacharacterFix(false))
+
+		filtered := filterFiles(t, fileFilter)
+		assert.Contains(t, filtered, appFile, "app.js should be scanned")
+		assert.Contains(t, filtered, nodeModulesFile, "legacy bug reproduced")
+	})
+
+	t.Run("fix enabled excludes node_modules correctly", func(t *testing.T) {
+		base, nodeModulesFile, appFile := setup(t)
+		fileFilter := NewFileFilter(base, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
+
+		filtered := filterFiles(t, fileFilter)
+		assert.Contains(t, filtered, appFile, "app.js should be scanned")
+		assert.NotContains(t, filtered, nodeModulesFile,
+			"fix enabled: node_modules must be excluded even though the base path has metacharacters")
+	})
 }
 
 func TestFileFilter_SlashPatternInGitIgnore(t *testing.T) {
