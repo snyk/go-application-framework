@@ -1,6 +1,8 @@
 package fileupload
 
 import (
+	"io/fs"
+
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
@@ -20,5 +22,22 @@ func WithUploadRevisionSealableClient(client uploadrevision.SealableClient) Opti
 func WithLogger(logger *zerolog.Logger) Option {
 	return func(h *HTTPClient) {
 		h.logger = logger
+	}
+}
+
+// WithPathEncoder allows transforming each file's upload path (relative to the root
+// directory) before it is sent, e.g. to URI-encode the path. It does not affect the
+// filesystem path the file is read from.
+func WithPathEncoder(encode func(path string) string) Option {
+	return func(h *HTTPClient) {
+		h.pathEncoder = encode
+	}
+}
+
+// WithContentTranscoder allows wrapping each opened file before its content is streamed,
+// e.g. to transcode the content to UTF-8. The returned file is read and closed by the client.
+func WithContentTranscoder(transcode func(file fs.File) fs.File) Option {
+	return func(h *HTTPClient) {
+		h.contentTranscoder = transcode
 	}
 }

@@ -1,6 +1,7 @@
 package fileupload
 
 import (
+	"io/fs"
 	"iter"
 	"os"
 
@@ -54,6 +55,8 @@ func batchPaths(
 	paths <-chan string,
 	limits uploadrevision.Limits,
 	logger *zerolog.Logger,
+	pathEncoder func(path string) string,
+	contentTranscoder func(file fs.File) fs.File,
 	filters ...filter,
 ) iter.Seq[*batchingResult] {
 	return func(yield func(*batchingResult) bool) {
@@ -110,9 +113,10 @@ func batchPaths(
 				skipped = []SkippedFile{}
 			}
 
+			relPath = pathEncoder(relPath)
 			batch.addFile(uploadrevision.UploadFile{
 				Path: relPath,
-				File: f,
+				File: contentTranscoder(f),
 			}, fstat.Size())
 		}
 

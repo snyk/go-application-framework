@@ -3,6 +3,7 @@ package fileupload
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -23,6 +24,8 @@ type HTTPClient struct {
 	uploadRevisionSealableClient uploadrevision2.SealableClient
 	cfg                          Config
 	logger                       *zerolog.Logger
+	pathEncoder                  func(path string) string
+	contentTranscoder            func(file fs.File) fs.File
 }
 
 // Client defines the interface for the high level file upload client.
@@ -44,6 +47,14 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 
 	if client.logger == nil {
 		client.logger = utils.Ptr(zerolog.Nop())
+	}
+
+	if client.pathEncoder == nil {
+		client.pathEncoder = func(path string) string { return path }
+	}
+
+	if client.contentTranscoder == nil {
+		client.contentTranscoder = func(file fs.File) fs.File { return file }
 	}
 
 	if client.uploadRevisionSealableClient == nil {
@@ -111,7 +122,7 @@ func (c *HTTPClient) addPathsToRevision(
 		filePathLengthFilter,
 	}
 
-	for batchResult := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), c.logger, filters...) {
+	for batchResult := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), c.logger, c.pathEncoder, c.contentTranscoder, filters...) {
 		res.SkippedFiles = append(res.SkippedFiles, batchResult.skippedFiles...)
 
 		err := c.uploadBatch(ctx, revisionID, batchResult.batch)
