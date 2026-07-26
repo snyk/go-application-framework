@@ -1,0 +1,12 @@
+version: v2
+managed:
+  enabled: false
+plugins:
+  # Invoke the protoc plugins via `go tool` so codegen uses the versions pinned
+  # in go.mod's tool block — no separate PATH install required.
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: .
+    opt: paths=source_relative
+  - local: ["go", "tool", "protoc-gen-go-grpc"]
+    out: .
+    opt: paths=source_relative
