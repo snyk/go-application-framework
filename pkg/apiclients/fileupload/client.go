@@ -98,7 +98,7 @@ func (c *HTTPClient) addPathsToRevision(
 		if ff.Stat.Size() > fileSizeLimit {
 			return &SkippedFile{
 				Path:   ff.Path,
-				Reason: uploadrevision2.NewFileSizeLimitError(ff.Stat.Name(), ff.Stat.Size(), fileSizeLimit),
+				Reason: uploadrevision2.NewFileSizeLimitError(ff.Path, ff.Stat.Size(), fileSizeLimit),
 			}
 		}
 

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -144,6 +145,9 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 	})
 
 	t.Run("uploading a file from chan whose transcoded content exceeds the file size limit", func(t *testing.T) {
+		nestedFiles := []uploadrevision2.LoadedFile{
+			{Path: filepath.Join("sub dir", "my file.go"), Content: "package main"},
+		}
 		ctx, _, client, dir := setupOptionsTest(t, uploadrevision2.FakeClientConfig{
 			Limits: uploadrevision2.Limits{
 				FileCountLimit:        10,
@@ -151,10 +155,13 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 				TotalPayloadSizeLimit: 10_000,
 				FilePathLengthLimit:   50,
 			},
-		}, files, fileupload.WithContentTranscoder(func(f fs.File) (fs.File, error) { return doubledFile{f}, nil }))
+		}, nestedFiles,
+			fileupload.WithPathEncoder(encodeSpaces),
+			fileupload.WithContentTranscoder(func(f fs.File) (fs.File, error) { return doubledFile{f}, nil }),
+		)
 
 		paths := make(chan string, 1)
-		paths <- path.Join(dir.Name(), "my file.go")
+		paths <- path.Join(dir.Name(), "sub dir", "my file.go")
 		close(paths)
 
 		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
@@ -163,8 +170,9 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 		var fileSizeErr *uploadrevision2.FileSizeLimitError
 		require.Len(t, res.SkippedFiles, 1)
 		ff := res.SkippedFiles[0]
-		assert.Equal(t, "my file.go", ff.Path)
+		assert.Equal(t, "sub%20dir/my%20file.go", ff.Path)
 		assert.ErrorAs(t, ff.Reason, &fileSizeErr)
+		assert.Equal(t, "sub%20dir/my%20file.go", fileSizeErr.FilePath)
 		assert.Equal(t, int64(24), fileSizeErr.FileSize)
 		assert.Equal(t, int64(20), fileSizeErr.Limit)
 	})
