@@ -1,6 +1,8 @@
 package fileupload
 
 import (
+	"io"
+	"io/fs"
 	"iter"
 	"os"
 
@@ -49,11 +51,27 @@ type batchingResult struct {
 	skippedFiles []SkippedFile
 }
 
+// transcodedFile pairs a transcoded file with the file it was opened from, so that closing it
+// releases the file descriptor even when the transcoder's wrapper does not delegate Close.
+type transcodedFile struct {
+	fs.File
+	source io.Closer
+}
+
+func (t transcodedFile) Close() error {
+	err := t.File.Close()
+	// Ignored: the transcoder's wrapper may already have closed the source.
+	_ = t.source.Close()
+	return err
+}
+
 func batchPaths(
 	rootPath string,
 	paths <-chan string,
 	limits uploadrevision.Limits,
 	logger *zerolog.Logger,
+	pathEncoder PathEncoder,
+	contentTranscoder ContentTranscoder,
 	filters ...filter,
 ) iter.Seq[*batchingResult] {
 	return func(yield func(*batchingResult) bool) {
@@ -73,13 +91,24 @@ func batchPaths(
 				continue
 			}
 
-			f, err := os.Open(path)
+			relPath = pathEncoder(relPath)
+
+			osFile, err := os.Open(path)
 			if err != nil {
 				logger.Debug().Msgf("failed to open file: %s", path)
-				f.Close()
 				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
 				continue
 			}
+
+			transcoded, err := contentTranscoder(osFile)
+			if err != nil {
+				logger.Debug().Msgf("failed to transcode file: %s", path)
+				osFile.Close()
+				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
+				continue
+			}
+
+			f := transcodedFile{File: transcoded, source: osFile}
 
 			fstat, err := f.Stat()
 			if err != nil {
