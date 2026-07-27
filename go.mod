@@ -33,7 +33,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6
 	github.com/subosito/gotenv v1.6.0
 	golang.org/x/mod v0.36.0
 	golang.org/x/net v0.55.0
