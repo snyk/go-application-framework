@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,48 +17,6 @@ import (
 	uploadrevision2 "github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 )
-
-type upperFile struct {
-	fs.File
-}
-
-func (u upperFile) Read(p []byte) (int, error) {
-	n, err := u.File.Read(p)
-	copy(p, bytes.ToUpper(p[:n]))
-	return n, err
-}
-
-// doubledFile reports twice the size of the underlying file, emulating a transcoder
-// whose content is larger than the content on disk.
-type doubledFile struct {
-	fs.File
-}
-
-func (d doubledFile) Stat() (fs.FileInfo, error) {
-	info, err := d.File.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	return doubledFileInfo{info}, nil
-}
-
-type doubledFileInfo struct {
-	fs.FileInfo
-}
-
-func (d doubledFileInfo) Size() int64 {
-	return d.FileInfo.Size() * 2
-}
-
-// noCloseFile emulates a transcoder wrapper that does not delegate Close.
-type noCloseFile struct {
-	fs.File
-}
-
-func (noCloseFile) Close() error {
-	return nil
-}
 
 func setupOptionsTest(
 	t *testing.T,
@@ -100,7 +57,7 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 	t.Run("uploading a file from chan with an encoded path and transcoded content", func(t *testing.T) {
 		ctx, fakeSealableClient, client, dir := setupOptionsTest(t, defaultLimits, files,
 			fileupload.WithPathEncoder(encodeSpaces),
-			fileupload.WithContentTranscoder(func(f fs.File) (fs.File, error) { return upperFile{f}, nil }),
+			fileupload.WithContentTranscoder(func(c []byte) ([]byte, error) { return bytes.ToUpper(c), nil }),
 		)
 
 		paths := make(chan string, 1)
@@ -157,7 +114,10 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 			},
 		}, nestedFiles,
 			fileupload.WithPathEncoder(encodeSpaces),
-			fileupload.WithContentTranscoder(func(f fs.File) (fs.File, error) { return doubledFile{f}, nil }),
+			// Emulates a transcoder whose content is larger than the content on disk.
+			fileupload.WithContentTranscoder(func(c []byte) ([]byte, error) {
+				return append(bytes.Clone(c), c...), nil
+			}),
 		)
 
 		paths := make(chan string, 1)
@@ -180,7 +140,7 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 	t.Run("uploading a file from chan the transcoder fails on", func(t *testing.T) {
 		transcodeErr := errors.New("cannot transcode")
 		ctx, _, client, dir := setupOptionsTest(t, defaultLimits, files,
-			fileupload.WithContentTranscoder(func(fs.File) (fs.File, error) { return nil, transcodeErr }),
+			fileupload.WithContentTranscoder(func([]byte) ([]byte, error) { return nil, transcodeErr }),
 		)
 
 		paths := make(chan string, 1)
@@ -198,23 +158,42 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 		assert.ErrorIs(t, fileAccessErr.Err, transcodeErr)
 	})
 
-	t.Run("uploading a file from chan with a transcoder not delegating close", func(t *testing.T) {
-		var transcoded []fs.File
-		ctx, _, client, dir := setupOptionsTest(t, defaultLimits, files,
-			fileupload.WithContentTranscoder(func(f fs.File) (fs.File, error) {
-				transcoded = append(transcoded, f)
-				return noCloseFile{f}, nil
-			}),
-		)
+	t.Run("skips a path that is not a regular file", func(t *testing.T) {
+		ctx, _, client, dir := setupOptionsTest(t, defaultLimits, files)
+
+		require.NoError(t, os.Mkdir(path.Join(dir.Name(), "a dir"), 0o755))
 
 		paths := make(chan string, 1)
-		paths <- path.Join(dir.Name(), "my file.go")
+		paths <- path.Join(dir.Name(), "a dir")
 		close(paths)
 
-		_, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+		require.ErrorIs(t, err, fileupload.ErrNoFilesProvided)
+
+		var specialFileErr *uploadrevision2.SpecialFileError
+		require.Len(t, res.SkippedFiles, 1)
+		require.ErrorAs(t, res.SkippedFiles[0].Reason, &specialFileErr)
+
+		var fileAccessErr *uploadrevision2.FileAccessError
+		assert.NotErrorAs(t, res.SkippedFiles[0].Reason, &fileAccessErr)
+	})
+
+	t.Run("uploads a symlink to a regular file", func(t *testing.T) {
+		ctx, fakeSealableClient, client, dir := setupOptionsTest(t, defaultLimits, files)
+
+		link := path.Join(dir.Name(), "link.go")
+		require.NoError(t, os.Symlink(path.Join(dir.Name(), "my file.go"), link))
+
+		paths := make(chan string, 1)
+		paths <- link
+		close(paths)
+
+		res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
 		require.NoError(t, err)
 
-		require.Len(t, transcoded, 1)
-		assert.ErrorIs(t, transcoded[0].Close(), os.ErrClosed)
+		uploadedFiles, err := fakeSealableClient.GetSealedRevisionFiles(res.RevisionID)
+		require.NoError(t, err)
+		require.Len(t, uploadedFiles, 1)
+		assert.Equal(t, "package main", uploadedFiles[0].Content)
 	})
 }

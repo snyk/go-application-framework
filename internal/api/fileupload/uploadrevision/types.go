@@ -1,8 +1,6 @@
 package uploadrevision
 
 import (
-	"io/fs"
-
 	"github.com/google/uuid"
 )
 
@@ -110,10 +108,10 @@ type ErrorResponseBody struct {
 	Errors []ResponseError `json:"errors"`
 }
 
-// UploadFile represents a file to be uploaded, containing both the path and file handle.
+// UploadFile represents a file to be uploaded, containing both the path and the content.
 type UploadFile struct {
-	Path string // The path of the uploaded file, relative to the root directory.
-	File fs.File
+	Path    string // The path of the uploaded file, relative to the root directory.
+	Content []byte // The content to upload, already read and transcoded.
 }
 
 const (

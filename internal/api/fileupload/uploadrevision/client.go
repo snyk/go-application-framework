@@ -105,7 +105,7 @@ func (c *HTTPSealableClient) CreateRevision(ctx context.Context, orgID OrgID) (*
 	return &respBody, nil
 }
 
-// UploadFiles uploads the provided files to the specified revision. It will not close the file descriptors.
+// UploadFiles uploads the provided files to the specified revision.
 func (c *HTTPSealableClient) UploadFiles(ctx context.Context, orgID OrgID, revisionID RevisionID, files []UploadFile) error {
 	if orgID == uuid.Nil {
 		return ErrEmptyOrgID
@@ -174,7 +174,7 @@ func streamFilesToPipe(pipeWriter *io.PipeWriter, mpartWriter *multipart.Writer,
 			return
 		}
 
-		if _, err := io.Copy(part, file.File); err != nil {
+		if _, err := part.Write(file.Content); err != nil {
 			streamError = fmt.Errorf("failed to copy file content for %s: %w", file.Path, err)
 			return
 		}
@@ -197,20 +197,12 @@ func validateFiles(files []UploadFile) error {
 			return NewFilePathLengthLimitError(file.Path, len(file.Path), filePathLengthLimit)
 		}
 
-		fileInfo, err := file.File.Stat()
-		if err != nil {
-			return NewFileAccessError(file.Path, err)
+		fileSize := int64(len(file.Content))
+		if fileSize > fileSizeLimit {
+			return NewFileSizeLimitError(file.Path, fileSize, fileSizeLimit)
 		}
 
-		if !fileInfo.Mode().IsRegular() {
-			return NewSpecialFileError(file.Path, fileInfo.Mode())
-		}
-
-		if fileInfo.Size() > fileSizeLimit {
-			return NewFileSizeLimitError(file.Path, fileInfo.Size(), fileSizeLimit)
-		}
-
-		totalPayloadSize += fileInfo.Size()
+		totalPayloadSize += fileSize
 	}
 
 	if totalPayloadSize > totalPayloadSizeLimit {

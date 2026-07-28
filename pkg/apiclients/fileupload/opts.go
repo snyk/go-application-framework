@@ -1,8 +1,6 @@
 package fileupload
 
 import (
-	"io/fs"
-
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/internal/api/fileupload/uploadrevision"
@@ -29,12 +27,9 @@ func WithLogger(logger *zerolog.Logger) Option {
 // path is the one filtered by the path length limit and reported for skipped files.
 type PathEncoder func(path string) string
 
-// ContentTranscoder wraps an opened file before its content is streamed. The client closes
-// both the returned file and the file it was opened from.
-//
-// Stat is called more than once, before any content is read. It must report the size and mode
-// of the transcoded content, always report the same size, and must not consume the content.
-type ContentTranscoder func(file fs.File) (fs.File, error)
+// ContentTranscoder transforms a file's content before it is uploaded. The returned content is
+// the one filtered by the file size limit and uploaded.
+type ContentTranscoder func(content []byte) ([]byte, error)
 
 // WithPathEncoder allows encoding each file's upload path before it is sent, e.g. to URI-encode
 // it. It does not affect the filesystem path the file is read from.
@@ -44,7 +39,7 @@ func WithPathEncoder(encode PathEncoder) Option {
 	}
 }
 
-// WithContentTranscoder allows transcoding each file's content before it is streamed, e.g. to
+// WithContentTranscoder allows transcoding each file's content before it is uploaded, e.g. to
 // UTF-8. Files the transcoder fails on are skipped.
 func WithContentTranscoder(transcode ContentTranscoder) Option {
 	return func(h *HTTPClient) {

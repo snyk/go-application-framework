@@ -6,17 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path"
-	"runtime"
 	"strings"
 	"testing"
-	"testing/fstest"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -72,17 +67,11 @@ func TestClient_UploadFiles(t *testing.T) {
 	srv, c := setupTestServer(t)
 	defer srv.Close()
 
-	mockFS := fstest.MapFS{
-		"foo/bar": {Data: []byte("asdf")},
-	}
-	fd, err := mockFS.Open("foo/bar")
-	require.NoError(t, err)
-
-	err = c.UploadFiles(context.Background(),
+	err := c.UploadFiles(context.Background(),
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "foo/bar", File: fd},
+			{Path: "foo/bar", Content: []byte("asdf")},
 		})
 
 	require.NoError(t, err)
@@ -92,22 +81,12 @@ func TestClient_UploadFiles_MultipleFiles(t *testing.T) {
 	srv, c := setupTestServer(t)
 	defer srv.Close()
 
-	mockFS := fstest.MapFS{
-		"file1.txt":  {Data: []byte("content1")},
-		"file2.json": {Data: []byte("content2")},
-	}
-
-	file1, err := mockFS.Open("file1.txt")
-	require.NoError(t, err)
-	file2, err := mockFS.Open("file2.json")
-	require.NoError(t, err)
-
-	err = c.UploadFiles(context.Background(),
+	err := c.UploadFiles(context.Background(),
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "file1.txt", File: file1},
-			{Path: "file2.json", File: file2},
+			{Path: "file1.txt", Content: []byte("content1")},
+			{Path: "file2.json", Content: []byte("content2")},
 		})
 
 	require.NoError(t, err)
@@ -116,17 +95,11 @@ func TestClient_UploadFiles_MultipleFiles(t *testing.T) {
 func TestClient_UploadFiles_EmptyOrgID(t *testing.T) {
 	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
-	mockFS := fstest.MapFS{
-		"test.txt": {Data: []byte("content")},
-	}
-	file, err := mockFS.Open("test.txt")
-	require.NoError(t, err)
-
-	err = c.UploadFiles(context.Background(),
+	err := c.UploadFiles(context.Background(),
 		uuid.Nil, // empty orgID
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "test.txt", File: file},
+			{Path: "test.txt", Content: []byte("content")},
 		})
 
 	assert.Error(t, err)
@@ -136,17 +109,11 @@ func TestClient_UploadFiles_EmptyOrgID(t *testing.T) {
 func TestClient_UploadFiles_EmptyRevisionID(t *testing.T) {
 	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
-	mockFS := fstest.MapFS{
-		"test.txt": {Data: []byte("content")},
-	}
-	file, err := mockFS.Open("test.txt")
-	require.NoError(t, err)
-
-	err = c.UploadFiles(context.Background(),
+	err := c.UploadFiles(context.Background(),
 		orgID,
 		uuid.Nil, // empty revisionID
 		[]uploadrevision2.UploadFile{
-			{Path: "test.txt", File: file},
+			{Path: "test.txt", Content: []byte("content")},
 		})
 
 	assert.Error(t, err)
@@ -157,18 +124,12 @@ func TestClient_UploadFiles_FileSizeLimit(t *testing.T) {
 	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	largeContent := make([]byte, c.GetLimits().FileSizeLimit+1)
-	mockFS := fstest.MapFS{
-		"large_file.txt": {Data: largeContent},
-	}
 
-	file, err := mockFS.Open("large_file.txt")
-	require.NoError(t, err)
-
-	err = c.UploadFiles(context.Background(),
+	err := c.UploadFiles(context.Background(),
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "large_file.txt", File: file},
+			{Path: "large_file.txt", Content: largeContent},
 		})
 
 	assert.Error(t, err)
@@ -183,18 +144,11 @@ func TestClient_UploadFiles_FileCountLimit(t *testing.T) {
 	c := uploadrevision2.NewClient(uploadrevision2.Config{})
 
 	files := make([]uploadrevision2.UploadFile, c.GetLimits().FileCountLimit+1)
-	mockFS := fstest.MapFS{}
 
 	for i := range c.GetLimits().FileCountLimit + 1 {
-		filename := fmt.Sprintf("file%d.txt", i)
-		mockFS[filename] = &fstest.MapFile{Data: []byte("content")}
-
-		file, err := mockFS.Open(filename)
-		require.NoError(t, err)
-
 		files[i] = uploadrevision2.UploadFile{
-			Path: filename,
-			File: file,
+			Path:    fmt.Sprintf("file%d.txt", i),
+			Content: []byte("content"),
 		}
 	}
 
@@ -213,18 +167,11 @@ func TestClient_UploadFiles_FilePathLengthLimit(t *testing.T) {
 	// Create a file path that exceeds the limit
 	longFilePath := strings.Repeat("a", c.GetLimits().FilePathLengthLimit+1)
 
-	mockFS := fstest.MapFS{
-		"short_file.txt": {Data: []byte("content")},
-	}
-
-	file, err := mockFS.Open("short_file.txt")
-	require.NoError(t, err)
-
-	err = c.UploadFiles(context.Background(),
+	err := c.UploadFiles(context.Background(),
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: longFilePath, File: file},
+			{Path: longFilePath, Content: []byte("content")},
 		})
 
 	assert.Error(t, err)
@@ -242,19 +189,12 @@ func TestClient_UploadFiles_FilePathLengthExactlyAtLimit(t *testing.T) {
 	// Create a file name that is exactly at the limit
 	filePathAtLimit := strings.Repeat("a", c.GetLimits().FilePathLengthLimit)
 
-	mockFS := fstest.MapFS{
-		"short_file.txt": {Data: []byte("content")},
-	}
-
-	file, err := mockFS.Open("short_file.txt")
-	require.NoError(t, err)
-
 	// This should not error since the file path is exactly at the limit
-	err = c.UploadFiles(context.Background(),
+	err := c.UploadFiles(context.Background(),
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: filePathAtLimit, File: file},
+			{Path: filePathAtLimit, Content: []byte("content")},
 		})
 
 	assert.NoError(t, err)
@@ -265,7 +205,6 @@ func TestClient_UploadFiles_TotalPayloadSizeLimit(t *testing.T) {
 
 	// Create multiple files that individually are under the size limit,
 	// but together exceed the total payload size limit
-	mockFS := fstest.MapFS{}
 	files := []uploadrevision2.UploadFile{}
 
 	// Use files that are 30MB each (under the 50MB individual limit)
@@ -274,15 +213,9 @@ func TestClient_UploadFiles_TotalPayloadSizeLimit(t *testing.T) {
 	numFiles := 8
 
 	for i := range numFiles {
-		filename := fmt.Sprintf("file%d.txt", i)
-		mockFS[filename] = &fstest.MapFile{Data: make([]byte, fileSize)}
-
-		file, err := mockFS.Open(filename)
-		require.NoError(t, err)
-
 		files = append(files, uploadrevision2.UploadFile{
-			Path: filename,
-			File: file,
+			Path:    fmt.Sprintf("file%d.txt", i),
+			Content: make([]byte, fileSize),
 		})
 	}
 
@@ -300,7 +233,6 @@ func TestClient_UploadFiles_TotalPayloadSizeExactlyAtLimit(t *testing.T) {
 	defer srv.Close()
 
 	// Test boundary: exactly 200MB (should succeed)
-	mockFS := fstest.MapFS{}
 	files := []uploadrevision2.UploadFile{}
 
 	// Create files that sum exactly to 200MB
@@ -309,15 +241,9 @@ func TestClient_UploadFiles_TotalPayloadSizeExactlyAtLimit(t *testing.T) {
 	numFiles := 5
 
 	for i := 0; i < numFiles; i++ {
-		filename := fmt.Sprintf("file%d.txt", i)
-		mockFS[filename] = &fstest.MapFile{Data: make([]byte, fileSize)}
-
-		file, err := mockFS.Open(filename)
-		require.NoError(t, err)
-
 		files = append(files, uploadrevision2.UploadFile{
-			Path: filename,
-			File: file,
+			Path:    fmt.Sprintf("file%d.txt", i),
+			Content: make([]byte, fileSize),
 		})
 	}
 
@@ -332,116 +258,11 @@ func TestClient_UploadFiles_IndividualFileSizeExactlyAtLimit(t *testing.T) {
 	defer srv.Close()
 
 	// Test boundary: individual file exactly 50MB (should succeed)
-	mockFS := fstest.MapFS{
-		"exact_limit.bin": {Data: make([]byte, c.GetLimits().FileSizeLimit)},
-	}
-
-	file, err := mockFS.Open("exact_limit.bin")
-	require.NoError(t, err)
-
-	err = c.UploadFiles(context.Background(), orgID, revID, []uploadrevision2.UploadFile{
-		{Path: "exact_limit.bin", File: file},
+	err := c.UploadFiles(context.Background(), orgID, revID, []uploadrevision2.UploadFile{
+		{Path: "exact_limit.bin", Content: make([]byte, c.GetLimits().FileSizeLimit)},
 	})
 
 	// Should succeed - exactly at limit is allowed
-	assert.NoError(t, err)
-}
-
-func TestClient_UploadFiles_SpecialFileError(t *testing.T) {
-	c := uploadrevision2.NewClient(uploadrevision2.Config{})
-
-	tests := []struct {
-		name          string
-		setupFS       func() (fstest.MapFS, string)
-		setupRealFile func() string
-	}{
-		{
-			name: "directory file",
-			setupFS: func() (fstest.MapFS, string) {
-				return fstest.MapFS{
-					"test-directory": &fstest.MapFile{
-						Mode: fs.ModeDir,
-					},
-				}, "test-directory"
-			},
-		},
-	}
-
-	// on non windows os test this case
-	if runtime.GOOS != "windows" {
-		tests = append(tests, struct {
-			name          string
-			setupFS       func() (fstest.MapFS, string)
-			setupRealFile func() string
-		}{
-			name: "device file",
-			setupRealFile: func() string {
-				return "/dev/null"
-			},
-		})
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var file fs.File
-			var filePath string
-			var err error
-
-			if tt.setupFS != nil {
-				mockFS, path := tt.setupFS()
-				filePath = path
-				file, err = mockFS.Open(path)
-				require.NoError(t, err)
-			} else if tt.setupRealFile != nil {
-				filePath = tt.setupRealFile()
-
-				realFile, openErr := os.Open(filePath)
-				require.NoError(t, openErr)
-				defer realFile.Close()
-				file = realFile
-			}
-
-			err = c.UploadFiles(context.Background(),
-				orgID,
-				revID,
-				[]uploadrevision2.UploadFile{
-					{Path: filePath, File: file},
-				})
-
-			assert.Error(t, err)
-
-			var sfe *uploadrevision2.SpecialFileError
-			assert.ErrorAs(t, err, &sfe)
-			assert.Equal(t, filePath, sfe.FilePath)
-		})
-	}
-}
-
-func TestClient_UploadFiles_Symlink(t *testing.T) {
-	srv, c := setupTestServer(t)
-	defer srv.Close()
-
-	tmpDir := t.TempDir()
-	tmpFile := path.Join(tmpDir, "temp-regular-file")
-
-	err := os.WriteFile(tmpFile, []byte("foo bar"), 0o600)
-	require.NoError(t, err)
-
-	tmpSlnPth := path.Join(tmpDir, "temp-symlink")
-	err = os.Symlink(tmpFile, tmpSlnPth)
-	require.NoError(t, err)
-
-	tmpSln, err := os.Open(tmpSlnPth)
-	require.NoError(t, err)
-	defer tmpSln.Close()
-
-	err = c.UploadFiles(context.Background(),
-		orgID,
-		revID,
-		[]uploadrevision2.UploadFile{
-			{Path: tmpSlnPth, File: tmpSln},
-		})
-
 	assert.NoError(t, err)
 }
 

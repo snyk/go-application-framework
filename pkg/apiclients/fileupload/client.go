@@ -3,7 +3,6 @@ package fileupload
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -54,7 +53,7 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 	}
 
 	if client.contentTranscoder == nil {
-		client.contentTranscoder = func(file fs.File) (fs.File, error) { return file, nil }
+		client.contentTranscoder = func(content []byte) ([]byte, error) { return content, nil }
 	}
 
 	if client.uploadRevisionSealableClient == nil {
@@ -67,8 +66,6 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 }
 
 func (c *HTTPClient) uploadBatch(ctx context.Context, revID RevisionID, batch *uploadBatch) error {
-	defer batch.closeRemainingFiles()
-
 	if batch.isEmpty() {
 		return nil
 	}
@@ -95,10 +92,10 @@ func (c *HTTPClient) addPathsToRevision(
 
 	fileSizeFilter := func(ff fileToFilter) *SkippedFile {
 		fileSizeLimit := c.uploadRevisionSealableClient.GetLimits().FileSizeLimit
-		if ff.Stat.Size() > fileSizeLimit {
+		if ff.Size > fileSizeLimit {
 			return &SkippedFile{
 				Path:   ff.Path,
-				Reason: uploadrevision2.NewFileSizeLimitError(ff.Path, ff.Stat.Size(), fileSizeLimit),
+				Reason: uploadrevision2.NewFileSizeLimitError(ff.Path, ff.Size, fileSizeLimit),
 			}
 		}
 

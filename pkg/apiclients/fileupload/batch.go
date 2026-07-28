@@ -1,8 +1,6 @@
 package fileupload
 
 import (
-	"io"
-	"io/fs"
 	"iter"
 	"os"
 
@@ -40,29 +38,9 @@ func (b *uploadBatch) isEmpty() bool {
 	return len(b.files) == 0
 }
 
-func (b *uploadBatch) closeRemainingFiles() {
-	for _, file := range b.files {
-		file.File.Close()
-	}
-}
-
 type batchingResult struct {
 	batch        *uploadBatch
 	skippedFiles []SkippedFile
-}
-
-// transcodedFile pairs a transcoded file with the file it was opened from, so that closing it
-// releases the file descriptor even when the transcoder's wrapper does not delegate Close.
-type transcodedFile struct {
-	fs.File
-	source io.Closer
-}
-
-func (t transcodedFile) Close() error {
-	err := t.File.Close()
-	// Ignored: the transcoder's wrapper may already have closed the source.
-	_ = t.source.Close()
-	return err
 }
 
 func batchPaths(
@@ -93,39 +71,43 @@ func batchPaths(
 
 			relPath = pathEncoder(relPath)
 
-			osFile, err := os.Open(path)
-			if err != nil {
-				logger.Debug().Msgf("failed to open file: %s", path)
-				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
-				continue
-			}
-
-			transcoded, err := contentTranscoder(osFile)
-			if err != nil {
-				logger.Debug().Msgf("failed to transcode file: %s", path)
-				osFile.Close()
-				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
-				continue
-			}
-
-			f := transcodedFile{File: transcoded, source: osFile}
-
-			fstat, err := f.Stat()
+			info, err := os.Stat(path)
 			if err != nil {
 				logger.Debug().Msgf("failed to stat file: %s", path)
-				f.Close()
 				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
 				continue
 			}
 
-			ff := applyFilters(fileToFilter{Path: relPath, Stat: fstat}, filters...)
+			// Reading a device file would never return, so this has to be decided before the read.
+			if !info.Mode().IsRegular() {
+				logger.Debug().Msgf("skipping special file: %s", path)
+				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewSpecialFileError(path, info.Mode())})
+				continue
+			}
+
+			content, err := os.ReadFile(path)
+			if err != nil {
+				logger.Debug().Msgf("failed to read file: %s", path)
+				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
+				continue
+			}
+
+			content, err = contentTranscoder(content)
+			if err != nil {
+				logger.Debug().Msgf("failed to transcode file: %s", path)
+				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
+				continue
+			}
+
+			fileSize := int64(len(content))
+
+			ff := applyFilters(fileToFilter{Path: relPath, Size: fileSize}, filters...)
 			if ff != nil {
-				f.Close()
 				skipped = append(skipped, *ff)
 				continue
 			}
 
-			if batch.wouldExceedLimits(fstat.Size()) {
+			if batch.wouldExceedLimits(fileSize) {
 				batchNumber++
 				logger.Debug().
 					Int("batch_number", batchNumber).
@@ -140,9 +122,9 @@ func batchPaths(
 			}
 
 			batch.addFile(uploadrevision.UploadFile{
-				Path: relPath,
-				File: f,
-			}, fstat.Size())
+				Path:    relPath,
+				Content: content,
+			}, fileSize)
 		}
 
 		if !batch.isEmpty() || len(skipped) > 0 {
