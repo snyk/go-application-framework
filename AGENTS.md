@@ -250,3 +250,29 @@ Local development against a consumer (e.g. the CLI) — add to the consumer's `g
 ```
 replace github.com/snyk/go-application-framework => ../../go-application-framework
 ```
+
+---
+
+## Cursor Cloud specific instructions
+
+Environment notes for Cursor Cloud agents (dependencies are pre-installed by the
+startup update script; the caveats below are the non-obvious bits).
+
+- **Go toolchain is pinned to `go1.26.5`** via `go env -w GOTOOLCHAIN=go1.26.5`.
+  This is required: the bare `go 1.26` directive in `go.mod` otherwise makes Go
+  try to fetch a non-existent `go1.26` toolchain from `go.dev`, which is
+  unreachable in this network. The pin routes the toolchain download through
+  `proxy.golang.org` (which serves `golang.org/toolchain@...go1.26.5`).
+- **golangci-lint** (`v2.10.1`, pinned in the Makefile) is installed into
+  `.bin/` via `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`
+  because the `golangci-lint.run` install script host is blocked.
+- Standard commands are unchanged — see [Quick reference](#quick-reference):
+  `make build`, `make lint`, `make test`.
+- **Known network-gated test failure:** `make test` fails only in
+  `pkg/networking` `Test_GetHTTPClient`, which does a live `GET https://www.snyk.io`
+  (blocked egress). Everything else passes; treat that single failure as an
+  environment limitation, not a regression.
+- **Reachable hosts:** `proxy.golang.org`, `github.com`,
+  `raw.githubusercontent.com`, `registry.npmjs.org`, `repo.maven.apache.org`,
+  `nodejs.org`. **Blocked:** `go.dev`, `www.snyk.io`, `services.gradle.org`,
+  `*.jetbrains.com`, `download.eclipse.org`.
