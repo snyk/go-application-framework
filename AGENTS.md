@@ -250,3 +250,28 @@ Local development against a consumer (e.g. the CLI) — add to the consumer's `g
 ```
 replace github.com/snyk/go-application-framework => ../../go-application-framework
 ```
+
+---
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for agents running in the Cursor Cloud Linux VM. The
+update script already runs `go mod download`; the items below are one-off/setup
+context and gotchas, not install steps to repeat.
+
+- **Go toolchain — pin the exact patch.** `go.mod` declares bare `go 1.26`. With
+  `GOTOOLCHAIN=auto` Go tries to fetch a non-existent `go1.26` toolchain from the
+  **blocked** `go.dev` and fails. The environment pins `GOTOOLCHAIN=go1.26.5`
+  (served by `proxy.golang.org`); keep it set (`go env -w GOTOOLCHAIN=go1.26.5`).
+- **golangci-lint host is blocked.** `make tools` installs golangci-lint via a
+  `curl … golangci-lint.run` script whose host is blocked. Instead install the
+  pinned version straight from the module proxy into `.bin/` (where the Makefile
+  expects it): `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`.
+- **Standard commands** are in [Quick reference](#quick-reference): `make build`,
+  `make lint`, `make test`. Build and lint pass cleanly; `make test` is green
+  **except** `pkg/networking.Test_GetHTTPClient`, which does a live
+  `GET https://www.snyk.io` that 301-redirects to bare `snyk.io`. `snyk.io` is
+  **blocked** in this VM, so that one test panics/fails — it is an environment
+  limitation, not a code defect, and passes once `snyk.io` egress is allowed.
+- **Reachable hosts:** `proxy.golang.org`, `github.com`, `raw.githubusercontent.com`.
+  **Blocked:** `go.dev`, bare `snyk.io`, `golangci-lint.run`.
