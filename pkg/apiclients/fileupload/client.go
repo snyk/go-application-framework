@@ -52,10 +52,6 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 		client.pathEncoder = func(path string) string { return path }
 	}
 
-	if client.contentTranscoder == nil {
-		client.contentTranscoder = func(content []byte) ([]byte, error) { return content, nil }
-	}
-
 	if client.uploadRevisionSealableClient == nil {
 		client.uploadRevisionSealableClient = uploadrevision2.NewClient(uploadrevision2.Config{
 			BaseURL: cfg.BaseURL,

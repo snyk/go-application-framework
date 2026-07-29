@@ -50,7 +50,22 @@ func readAndTranscode(path string, transcode ContentTranscoder) ([]byte, error) 
 		return nil, err
 	}
 
+	if transcode == nil {
+		return content, nil
+	}
+
 	return transcode(content)
+}
+
+// checkReadable confirms the file can be opened, so that an unreadable file is skipped during
+// batching rather than failing the whole batch when it is streamed.
+func checkReadable(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+
+	return file.Close()
 }
 
 // transcodedFileReader reads and transcodes a file the first time it is read, so that a batched
@@ -119,15 +134,24 @@ func batchPaths(
 				continue
 			}
 
-			// Only the size is kept; the content is read again when the file is streamed.
-			content, err := readAndTranscode(path, contentTranscoder)
-			if err != nil {
-				logger.Debug().Msgf("failed to read file: %s", path)
+			if err := checkReadable(path); err != nil {
+				logger.Debug().Msgf("failed to open file: %s", path)
 				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
 				continue
 			}
 
-			fileSize := int64(len(content))
+			// Without a transcoder the uploaded content is the file as it is on disk, so the
+			// stat above already gives its size and the file does not need reading here.
+			fileSize := info.Size()
+			if contentTranscoder != nil {
+				content, err := readAndTranscode(path, contentTranscoder)
+				if err != nil {
+					logger.Debug().Msgf("failed to read file: %s", path)
+					skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
+					continue
+				}
+				fileSize = int64(len(content))
+			}
 
 			ff := applyFilters(fileToFilter{Path: relPath, Size: fileSize}, filters...)
 			if ff != nil {
