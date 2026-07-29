@@ -1,1 +1,5 @@
 * @snyk/developer-experience_cli @snyk/developer-experience_ide
+
+# LLM provider package — owned by the Agentic Code Security team.
+/pkg/llm/ @snyk/agentic-code-security
+/pkg/mocks/llm.go @snyk/agentic-code-security
