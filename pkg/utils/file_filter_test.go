@@ -441,7 +441,8 @@ func TestFileFilter_GetFilteredFiles_pathWithRegexMetaChars(t *testing.T) {
 			createFileInPath(t, appFile, []byte("x"))
 			createFileInPath(t, gitignore, []byte("node_modules\n"))
 
-			fileFilter := NewFileFilter(base, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
+			fileFilter := NewFileFilter(base, &log.Logger)
+			fileFilter.enableIgnoreRuleMetacharacterFix = true
 			globs, err := fileFilter.GetRules([]string{".gitignore"})
 			assert.NoError(t, err)
 
@@ -897,7 +898,8 @@ func TestFileFilter_GetFilteredFiles_ignoreRuleScenarios(t *testing.T) {
 				createFileInPath(t, filepath.Join(root, filepath.FromSlash(p)), []byte(content))
 			}
 
-			fileFilter := NewFileFilter(root, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
+			fileFilter := NewFileFilter(root, &log.Logger)
+			fileFilter.enableIgnoreRuleMetacharacterFix = true
 			globs, err := fileFilter.GetRules(tc.ruleFiles)
 			assert.NoError(t, err)
 
@@ -932,7 +934,8 @@ func TestFileFilter_GetFilteredFiles_uncPaths(t *testing.T) {
 	// the FileFilter rooted at scanRoot (which may be a UNC-style alias of base).
 	assertFiltered := func(t *testing.T, scanRoot string) {
 		t.Helper()
-		fileFilter := NewFileFilter(scanRoot, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
+		fileFilter := NewFileFilter(scanRoot, &log.Logger)
+		fileFilter.enableIgnoreRuleMetacharacterFix = true
 		globs, err := fileFilter.GetRules([]string{".gitignore"})
 		assert.NoError(t, err)
 
@@ -1477,7 +1480,7 @@ func TestParseIgnoreRuleToGlobs_legacyBehavior(t *testing.T) {
 // gate around the special-character-path fix (CLI-1648): with the option left at its default
 // (false / legacy behavior) a ".gitignore" rule for a directory containing regex metacharacters
 // must reproduce the old behavior (the directory is NOT excluded), while explicitly enabling
-// WithIgnoreRuleMetacharacterFix(true) must apply the fix (the directory IS excluded).
+// enableIgnoreRuleMetacharacterFix must apply the fix (the directory IS excluded).
 func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 	setup := func(t *testing.T) (base, nodeModulesFile, appFile string) {
 		t.Helper()
@@ -1514,7 +1517,8 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 
 	t.Run("fix disabled explicitly behaves the same as the default", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		fileFilter := NewFileFilter(base, &log.Logger, WithIgnoreRuleMetacharacterFix(false))
+		fileFilter := NewFileFilter(base, &log.Logger)
+		fileFilter.enableIgnoreRuleMetacharacterFix = false
 
 		filtered := filterFiles(t, fileFilter)
 		assert.Contains(t, filtered, appFile, "app.js should be scanned")
@@ -1523,7 +1527,8 @@ func TestFileFilter_MetacharacterFixToggle(t *testing.T) {
 
 	t.Run("fix enabled excludes node_modules correctly", func(t *testing.T) {
 		base, nodeModulesFile, appFile := setup(t)
-		fileFilter := NewFileFilter(base, &log.Logger, WithIgnoreRuleMetacharacterFix(true))
+		fileFilter := NewFileFilter(base, &log.Logger)
+		fileFilter.enableIgnoreRuleMetacharacterFix = true
 
 		filtered := filterFiles(t, fileFilter)
 		assert.Contains(t, filtered, appFile, "app.js should be scanned")

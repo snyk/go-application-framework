@@ -17,6 +17,8 @@ import (
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
+
+	"github.com/snyk/go-application-framework/pkg/featureflags"
 )
 
 // by default, all rules are valid
@@ -84,17 +86,6 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 	}
 }
 
-// WithIgnoreRuleMetacharacterFix toggles the fix for ignore rules/paths containing regex
-// metacharacters (parentheses, "+", "|", "{", "}", "$", etc.).
-// Disabled (the default) reproduces the legacy behavior.
-// Callers should enable this deliberately (e.g. gated on configuration.FF_FILE_FILTER_METACHARACTER_FIX).
-func WithIgnoreRuleMetacharacterFix(enabled bool) FileFilterOption {
-	return func(filter *FileFilter) error {
-		filter.enableIgnoreRuleMetacharacterFix = enabled
-		return nil
-	}
-}
-
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := &FileFilter{
 		path:            path,
@@ -111,6 +102,15 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 		}
 	}
 
+	return filter
+}
+
+// NewFileFilterFromConfig is like NewFileFilter, but resolves feature-flag-gated behavior (like
+// the ignore-rule metacharacter fix) from config directly, so callers don't need a code change
+// here when a future flag of this kind is added.
+func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config featureflags.FeatureFlagReader, options ...FileFilterOption) *FileFilter {
+	filter := NewFileFilter(path, logger, options...)
+	filter.enableIgnoreRuleMetacharacterFix = config.GetBool(featureflags.FileFilterMetacharacterFix)
 	return filter
 }
 
