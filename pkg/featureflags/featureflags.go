@@ -9,10 +9,13 @@ type FeatureFlagReader interface {
 	GetBool(key string) bool
 }
 
+// These fields back pkg/configuration/constants.go
 const (
-	// FileFilterMetacharacterFix backs configuration.FF_FILE_FILTER_METACHARACTER_FIX.
-	FileFilterMetacharacterFix string = "internal_snyk_file_filter_metacharacter_fix_enabled"
+	FileFilterMetacharacterFix          string = "internal_snyk_file_filter_metacharacter_fix_enabled"
+	GitIgnoreRespectTrackedFiles        string = "internal_snyk_gitignore_respect_tracked_files_enabled"
+	FileFilterRespectParentExclusionFix string = "internal_snyk_file_filter_respect_parent_exclusion_enabled"
 
-	// FileFilterMetacharacterFixBackendName backs configuration.SNYK_FILE_FILTER_METACHARACTER_FIX.
-	FileFilterMetacharacterFixBackendName string = "snykFileFilterMetacharacterFix"
+	FileFilterMetacharacterFixBackendName          string = "snykFileFilterMetacharacterFix"
+	GitIgnoreRespectTrackedFilesBackendName        string = "snykGitIgnoreTrackedFiles"
+	FileFilterRespectParentExclusionFixBackendName string = "snykFileFilterRespectParentExclusion"
 )
