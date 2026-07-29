@@ -24,9 +24,9 @@ func newUploadBatch(limits uploadrevision.Limits) *uploadBatch {
 	}
 }
 
-func (b *uploadBatch) addFile(file uploadrevision.UploadFile, fileSize int64) {
+func (b *uploadBatch) addFile(file uploadrevision.UploadFile) {
 	b.files = append(b.files, file)
-	b.currentSize += fileSize
+	b.currentSize += file.Size
 }
 
 func (b *uploadBatch) wouldExceedLimits(fileSize int64) bool {
@@ -92,6 +92,55 @@ func (r *transcodedFileReader) Read(p []byte) (int, error) {
 	return r.content.Read(p)
 }
 
+// createUploadFile turns a filesystem path into the file to upload, or reports why it cannot be
+// uploaded. The returned file holds no content and no descriptor; both are produced when it is
+// streamed.
+func createUploadFile(
+	rootPath string,
+	path string,
+	encodePath PathEncoder,
+	transcode ContentTranscoder,
+) (uploadrevision.UploadFile, *SkippedFile) {
+	relPath, err := utils.ToRelativeUnixPath(rootPath, path)
+	if err != nil {
+		// relPath is not known yet, so the raw path is the best identifier available.
+		return uploadrevision.UploadFile{}, &SkippedFile{Path: path, Reason: uploadrevision.NewFileAccessError(path, err)}
+	}
+
+	relPath = encodePath(relPath)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)}
+	}
+
+	// Reading a device file would never return, so this has to be decided before the read.
+	if !info.Mode().IsRegular() {
+		return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewSpecialFileError(relPath, info.Mode())}
+	}
+
+	if err := checkReadable(path); err != nil {
+		return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)}
+	}
+
+	// Without a transcoder the uploaded content is the file as it is on disk, so the stat above
+	// already gives its size and the file does not need reading here.
+	fileSize := info.Size()
+	if transcode != nil {
+		content, err := readAndTranscode(path, transcode)
+		if err != nil {
+			return uploadrevision.UploadFile{}, &SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)}
+		}
+		fileSize = int64(len(content))
+	}
+
+	return uploadrevision.UploadFile{
+		Path:   relPath,
+		Size:   fileSize,
+		Reader: &transcodedFileReader{path: path, transcode: transcode},
+	}, nil
+}
+
 func batchPaths(
 	rootPath string,
 	paths <-chan string,
@@ -111,55 +160,20 @@ func batchPaths(
 			Int64("total_payload_limit_bytes", limits.TotalPayloadSizeLimit).
 			Msg("Starting file batching")
 		for path := range paths {
-			relPath, err := utils.ToRelativeUnixPath(rootPath, path)
-			if err != nil {
-				logger.Debug().Msgf("failed to get relative unix path for file: %s", path)
-				skipped = append(skipped, SkippedFile{Path: path, Reason: uploadrevision.NewFileAccessError(path, err)})
+			file, skippedFile := createUploadFile(rootPath, path, pathEncoder, contentTranscoder)
+			if skippedFile != nil {
+				logger.Debug().Err(skippedFile.Reason).Msgf("skipping file: %s", path)
+				skipped = append(skipped, *skippedFile)
 				continue
 			}
 
-			relPath = pathEncoder(relPath)
-
-			info, err := os.Stat(path)
-			if err != nil {
-				logger.Debug().Msgf("failed to stat file: %s", path)
-				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
-				continue
-			}
-
-			// Reading a device file would never return, so this has to be decided before the read.
-			if !info.Mode().IsRegular() {
-				logger.Debug().Msgf("skipping special file: %s", path)
-				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewSpecialFileError(path, info.Mode())})
-				continue
-			}
-
-			if err := checkReadable(path); err != nil {
-				logger.Debug().Msgf("failed to open file: %s", path)
-				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
-				continue
-			}
-
-			// Without a transcoder the uploaded content is the file as it is on disk, so the
-			// stat above already gives its size and the file does not need reading here.
-			fileSize := info.Size()
-			if contentTranscoder != nil {
-				content, err := readAndTranscode(path, contentTranscoder)
-				if err != nil {
-					logger.Debug().Msgf("failed to read file: %s", path)
-					skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
-					continue
-				}
-				fileSize = int64(len(content))
-			}
-
-			ff := applyFilters(fileToFilter{Path: relPath, Size: fileSize}, filters...)
+			ff := applyFilters(fileToFilter{Path: file.Path, Size: file.Size}, filters...)
 			if ff != nil {
 				skipped = append(skipped, *ff)
 				continue
 			}
 
-			if batch.wouldExceedLimits(fileSize) {
+			if batch.wouldExceedLimits(file.Size) {
 				batchNumber++
 				logger.Debug().
 					Int("batch_number", batchNumber).
@@ -173,11 +187,7 @@ func batchPaths(
 				skipped = []SkippedFile{}
 			}
 
-			batch.addFile(uploadrevision.UploadFile{
-				Path:   relPath,
-				Size:   fileSize,
-				Reader: &transcodedFileReader{path: path, transcode: contentTranscoder},
-			}, fileSize)
+			batch.addFile(file)
 		}
 
 		if !batch.isEmpty() || len(skipped) > 0 {

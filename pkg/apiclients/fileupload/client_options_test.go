@@ -173,7 +173,10 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 
 		var specialFileErr *uploadrevision2.SpecialFileError
 		require.Len(t, res.SkippedFiles, 1)
+		assert.Equal(t, "a dir", res.SkippedFiles[0].Path)
 		require.ErrorAs(t, res.SkippedFiles[0].Reason, &specialFileErr)
+		// The reason must report the same path as the skipped file, not the absolute one.
+		assert.Equal(t, "a dir", specialFileErr.FilePath)
 
 		var fileAccessErr *uploadrevision2.FileAccessError
 		assert.NotErrorAs(t, res.SkippedFiles[0].Reason, &fileAccessErr)
