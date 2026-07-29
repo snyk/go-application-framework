@@ -3,6 +3,7 @@ package uploadrevision
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/google/uuid"
 )
@@ -78,12 +79,11 @@ func (f *FakeSealableClient) UploadFiles(_ context.Context, orgID OrgID, revisio
 
 	var totalPayloadSize int64
 	for _, file := range files {
-		fileSize := int64(len(file.Content))
-		if fileSize > f.cfg.FileSizeLimit {
-			return NewFileSizeLimitError(file.Path, fileSize, f.cfg.FileSizeLimit)
+		if file.Size > f.cfg.FileSizeLimit {
+			return NewFileSizeLimitError(file.Path, file.Size, f.cfg.FileSizeLimit)
 		}
 
-		totalPayloadSize += fileSize
+		totalPayloadSize += file.Size
 	}
 
 	if totalPayloadSize > f.cfg.TotalPayloadSizeLimit {
@@ -91,9 +91,14 @@ func (f *FakeSealableClient) UploadFiles(_ context.Context, orgID OrgID, revisio
 	}
 
 	for _, file := range files {
+		content, err := io.ReadAll(file.Reader)
+		if err != nil {
+			return NewFileAccessError(file.Path, err)
+		}
+
 		rev.files = append(rev.files, LoadedFile{
 			Path:    file.Path,
-			Content: string(file.Content),
+			Content: string(content),
 		})
 	}
 	return nil

@@ -1,6 +1,7 @@
 package fileupload
 
 import (
+	"bytes"
 	"iter"
 	"os"
 
@@ -41,6 +42,39 @@ func (b *uploadBatch) isEmpty() bool {
 type batchingResult struct {
 	batch        *uploadBatch
 	skippedFiles []SkippedFile
+}
+
+func readAndTranscode(path string, transcode ContentTranscoder) ([]byte, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return transcode(content)
+}
+
+// transcodedFileReader reads and transcodes a file the first time it is read, so that a batched
+// file holds neither its content nor a file descriptor until it is streamed.
+//
+// content is the read cursor, not a cache: ContentTranscoder transforms a whole []byte at once,
+// so the transcoded bytes cannot be produced incrementally and have to outlive the individual
+// Read calls io.Copy makes. They are released with the batch.
+type transcodedFileReader struct {
+	path      string
+	transcode ContentTranscoder
+	content   *bytes.Reader
+}
+
+func (r *transcodedFileReader) Read(p []byte) (int, error) {
+	if r.content == nil {
+		content, err := readAndTranscode(r.path, r.transcode)
+		if err != nil {
+			return 0, err
+		}
+		r.content = bytes.NewReader(content)
+	}
+
+	return r.content.Read(p)
 }
 
 func batchPaths(
@@ -85,16 +119,10 @@ func batchPaths(
 				continue
 			}
 
-			content, err := os.ReadFile(path)
+			// Only the size is kept; the content is read again when the file is streamed.
+			content, err := readAndTranscode(path, contentTranscoder)
 			if err != nil {
 				logger.Debug().Msgf("failed to read file: %s", path)
-				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
-				continue
-			}
-
-			content, err = contentTranscoder(content)
-			if err != nil {
-				logger.Debug().Msgf("failed to transcode file: %s", path)
 				skipped = append(skipped, SkippedFile{Path: relPath, Reason: uploadrevision.NewFileAccessError(path, err)})
 				continue
 			}
@@ -122,8 +150,9 @@ func batchPaths(
 			}
 
 			batch.addFile(uploadrevision.UploadFile{
-				Path:    relPath,
-				Content: content,
+				Path:   relPath,
+				Size:   fileSize,
+				Reader: &transcodedFileReader{path: path, transcode: contentTranscoder},
 			}, fileSize)
 		}
 

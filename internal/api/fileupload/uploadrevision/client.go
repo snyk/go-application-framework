@@ -174,7 +174,7 @@ func streamFilesToPipe(pipeWriter *io.PipeWriter, mpartWriter *multipart.Writer,
 			return
 		}
 
-		if _, err := part.Write(file.Content); err != nil {
+		if _, err := io.Copy(part, file.Reader); err != nil {
 			streamError = fmt.Errorf("failed to copy file content for %s: %w", file.Path, err)
 			return
 		}
@@ -197,12 +197,11 @@ func validateFiles(files []UploadFile) error {
 			return NewFilePathLengthLimitError(file.Path, len(file.Path), filePathLengthLimit)
 		}
 
-		fileSize := int64(len(file.Content))
-		if fileSize > fileSizeLimit {
-			return NewFileSizeLimitError(file.Path, fileSize, fileSizeLimit)
+		if file.Size > fileSizeLimit {
+			return NewFileSizeLimitError(file.Path, file.Size, fileSizeLimit)
 		}
 
-		totalPayloadSize += fileSize
+		totalPayloadSize += file.Size
 	}
 
 	if totalPayloadSize > totalPayloadSizeLimit {

@@ -1,6 +1,7 @@
 package uploadrevision_test
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -24,6 +25,15 @@ var (
 	orgID = uuid.MustParse("9102b78b-c28d-4392-a39f-08dd26fd9622")
 	revID = uuid.MustParse("ff1bd2c6-7a5f-48fb-9a5b-52d711c8b47f")
 )
+
+// uploadFile builds an UploadFile whose Size matches the content its Reader produces.
+func uploadFile(path string, content []byte) uploadrevision2.UploadFile {
+	return uploadrevision2.UploadFile{
+		Path:   path,
+		Size:   int64(len(content)),
+		Reader: bytes.NewReader(content),
+	}
+}
 
 func TestClient_CreateRevision(t *testing.T) {
 	srv, c := setupTestServer(t)
@@ -71,7 +81,7 @@ func TestClient_UploadFiles(t *testing.T) {
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "foo/bar", Content: []byte("asdf")},
+			uploadFile("foo/bar", []byte("asdf")),
 		})
 
 	require.NoError(t, err)
@@ -85,8 +95,8 @@ func TestClient_UploadFiles_MultipleFiles(t *testing.T) {
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "file1.txt", Content: []byte("content1")},
-			{Path: "file2.json", Content: []byte("content2")},
+			uploadFile("file1.txt", []byte("content1")),
+			uploadFile("file2.json", []byte("content2")),
 		})
 
 	require.NoError(t, err)
@@ -99,7 +109,7 @@ func TestClient_UploadFiles_EmptyOrgID(t *testing.T) {
 		uuid.Nil, // empty orgID
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "test.txt", Content: []byte("content")},
+			uploadFile("test.txt", []byte("content")),
 		})
 
 	assert.Error(t, err)
@@ -113,7 +123,7 @@ func TestClient_UploadFiles_EmptyRevisionID(t *testing.T) {
 		orgID,
 		uuid.Nil, // empty revisionID
 		[]uploadrevision2.UploadFile{
-			{Path: "test.txt", Content: []byte("content")},
+			uploadFile("test.txt", []byte("content")),
 		})
 
 	assert.Error(t, err)
@@ -129,7 +139,7 @@ func TestClient_UploadFiles_FileSizeLimit(t *testing.T) {
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: "large_file.txt", Content: largeContent},
+			uploadFile("large_file.txt", largeContent),
 		})
 
 	assert.Error(t, err)
@@ -146,10 +156,7 @@ func TestClient_UploadFiles_FileCountLimit(t *testing.T) {
 	files := make([]uploadrevision2.UploadFile, c.GetLimits().FileCountLimit+1)
 
 	for i := range c.GetLimits().FileCountLimit + 1 {
-		files[i] = uploadrevision2.UploadFile{
-			Path:    fmt.Sprintf("file%d.txt", i),
-			Content: []byte("content"),
-		}
+		files[i] = uploadFile(fmt.Sprintf("file%d.txt", i), []byte("content"))
 	}
 
 	err := c.UploadFiles(context.Background(), orgID, revID, files)
@@ -171,7 +178,7 @@ func TestClient_UploadFiles_FilePathLengthLimit(t *testing.T) {
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: longFilePath, Content: []byte("content")},
+			uploadFile(longFilePath, []byte("content")),
 		})
 
 	assert.Error(t, err)
@@ -194,7 +201,7 @@ func TestClient_UploadFiles_FilePathLengthExactlyAtLimit(t *testing.T) {
 		orgID,
 		revID,
 		[]uploadrevision2.UploadFile{
-			{Path: filePathAtLimit, Content: []byte("content")},
+			uploadFile(filePathAtLimit, []byte("content")),
 		})
 
 	assert.NoError(t, err)
@@ -213,10 +220,7 @@ func TestClient_UploadFiles_TotalPayloadSizeLimit(t *testing.T) {
 	numFiles := 8
 
 	for i := range numFiles {
-		files = append(files, uploadrevision2.UploadFile{
-			Path:    fmt.Sprintf("file%d.txt", i),
-			Content: make([]byte, fileSize),
-		})
+		files = append(files, uploadFile(fmt.Sprintf("file%d.txt", i), make([]byte, fileSize)))
 	}
 
 	err := c.UploadFiles(context.Background(), orgID, revID, files)
@@ -241,10 +245,7 @@ func TestClient_UploadFiles_TotalPayloadSizeExactlyAtLimit(t *testing.T) {
 	numFiles := 5
 
 	for i := 0; i < numFiles; i++ {
-		files = append(files, uploadrevision2.UploadFile{
-			Path:    fmt.Sprintf("file%d.txt", i),
-			Content: make([]byte, fileSize),
-		})
+		files = append(files, uploadFile(fmt.Sprintf("file%d.txt", i), make([]byte, fileSize)))
 	}
 
 	err := c.UploadFiles(context.Background(), orgID, revID, files)
@@ -259,7 +260,7 @@ func TestClient_UploadFiles_IndividualFileSizeExactlyAtLimit(t *testing.T) {
 
 	// Test boundary: individual file exactly 50MB (should succeed)
 	err := c.UploadFiles(context.Background(), orgID, revID, []uploadrevision2.UploadFile{
-		{Path: "exact_limit.bin", Content: make([]byte, c.GetLimits().FileSizeLimit)},
+		uploadFile("exact_limit.bin", make([]byte, c.GetLimits().FileSizeLimit)),
 	})
 
 	// Should succeed - exactly at limit is allowed

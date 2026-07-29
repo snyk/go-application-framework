@@ -197,3 +197,41 @@ func Test_CreateRevisionFromChan_Options(t *testing.T) {
 		assert.Equal(t, "package main", uploadedFiles[0].Content)
 	})
 }
+
+func Test_CreateRevisionFromChan_UnreadableFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file permissions do not prevent reading on windows")
+	}
+
+	files := []uploadrevision2.LoadedFile{
+		{Path: "my file.go", Content: "package main"},
+	}
+
+	// Batching reads the file only when a transcoder is configured, so both paths have to reach
+	// the same outcome for an unreadable file.
+	for name, opts := range map[string][]fileupload.Option{
+		"without a transcoder": nil,
+		"with a transcoder": {
+			fileupload.WithContentTranscoder(func(c []byte) ([]byte, error) { return bytes.ToUpper(c), nil }),
+		},
+	} {
+		t.Run("skips an unreadable file "+name, func(t *testing.T) {
+			ctx, _, client, dir := setupOptionsTest(t, defaultLimits, files, opts...)
+
+			filePath := path.Join(dir.Name(), "my file.go")
+			require.NoError(t, os.Chmod(filePath, 0o000))
+
+			paths := make(chan string, 1)
+			paths <- filePath
+			close(paths)
+
+			res, err := client.CreateRevisionFromChan(ctx, paths, dir.Name())
+			require.ErrorIs(t, err, fileupload.ErrNoFilesProvided)
+
+			var fileAccessErr *uploadrevision2.FileAccessError
+			require.Len(t, res.SkippedFiles, 1)
+			assert.Equal(t, "my file.go", res.SkippedFiles[0].Path)
+			assert.ErrorAs(t, res.SkippedFiles[0].Reason, &fileAccessErr)
+		})
+	}
+}
