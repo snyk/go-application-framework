@@ -31,7 +31,7 @@ func TestMarshalIngestPayload_MatchesGoldenFixture(t *testing.T) {
 		{TargetID: "33333333-3333-3333-3333-333333333333", Contributors: contributors},
 	}
 
-	body, err := marshalIngestPayload(CapabilityOSS, scopeID, items, nil)
+	body, err := marshalIngestRequest(CapabilityOSS, scopeID, items, nil)
 	require.NoError(t, err)
 
 	goldenPath := filepath.Join("testdata", "golden_ingest_payload.json")
@@ -58,7 +58,7 @@ func TestMarshalIngestPayload_SkipsZeroLatestCommitDate(t *testing.T) {
 		},
 	}
 
-	body, err := marshalIngestPayload(CapabilityOSS, "org-uuid", items, nil)
+	body, err := marshalIngestRequest(CapabilityOSS, "org-uuid", items, nil)
 	require.NoError(t, err)
 
 	var got map[string]interface{}

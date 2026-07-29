@@ -2,32 +2,15 @@ package contributorbilling
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/rs/zerolog"
+	v20260729 "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service/2026-07-29"
 )
 
-type ingestPayload struct {
-	Source     string       `json:"source"`
-	Capability string       `json:"capability"`
-	Items      []ingestItem `json:"items"`
-}
-
-type ingestItem struct {
-	ScopeID      string              `json:"scope_id"`
-	TargetID     string              `json:"target_id"`
-	Contributors []ingestContributor `json:"contributors"`
-}
-
-type ingestContributor struct {
-	Email            string `json:"email"`
-	LatestCommitDate string `json:"latest_commit_date"`
-}
-
-func buildIngestPayload(capability, scopeID string, items []BillingItem, logger *zerolog.Logger) ingestPayload {
-	payloadItems := make([]ingestItem, len(items))
+func buildIngestRequest(capability, scopeID string, items []BillingItem, logger *zerolog.Logger) v20260729.ContributorIngestRequest {
+	payloadItems := make([]v20260729.ContributorIngestItem, len(items))
 	for i, item := range items {
-		contributors := make([]ingestContributor, 0, len(item.Contributors))
+		contributors := make([]v20260729.ContributorIngestContributor, 0, len(item.Contributors))
 		for _, contributor := range item.Contributors {
 			if contributor.LatestCommitDate.IsZero() {
 				if logger != nil {
@@ -38,27 +21,27 @@ func buildIngestPayload(capability, scopeID string, items []BillingItem, logger 
 				continue
 			}
 
-			contributors = append(contributors, ingestContributor{
+			contributors = append(contributors, v20260729.ContributorIngestContributor{
 				Email:            contributor.Email,
-				LatestCommitDate: contributor.LatestCommitDate.UTC().Format(time.RFC3339),
+				LatestCommitDate: contributor.LatestCommitDate.UTC(),
 			})
 		}
 
-		payloadItems[i] = ingestItem{
-			ScopeID:      scopeID,
-			TargetID:     item.TargetID,
+		payloadItems[i] = v20260729.ContributorIngestItem{
+			ScopeId:      scopeID,
+			TargetId:     item.TargetID,
 			Contributors: contributors,
 		}
 	}
 
-	return ingestPayload{
+	return v20260729.ContributorIngestRequest{
 		Source:     SourceCLI,
 		Capability: capability,
 		Items:      payloadItems,
 	}
 }
 
-func marshalIngestPayload(capability, scopeID string, items []BillingItem, logger *zerolog.Logger) ([]byte, error) {
-	payload := buildIngestPayload(capability, scopeID, items, logger)
-	return json.Marshal(payload)
+func marshalIngestRequest(capability, scopeID string, items []BillingItem, logger *zerolog.Logger) ([]byte, error) {
+	request := buildIngestRequest(capability, scopeID, items, logger)
+	return json.Marshal(request)
 }

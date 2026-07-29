@@ -94,7 +94,7 @@ Content-Type: application/json
 
 - Expected success response: **202 Accepted**
 - Callers send `scope_id`, `target_id`, and `contributors`
-- `DefaultIngestPath` is a draft constant; confirm against entitlements-service OpenAPI when available
+- `DefaultIngestPath` matches the draft OpenAPI in `pkg/apiclients/entitlements_service`; replace when the official spec is vendored
 
 See `testdata/golden_ingest_payload.json` for a multi-item golden fixture (Part 2 TS alignment).
 

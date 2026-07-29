@@ -1,16 +1,15 @@
 package contributorbilling
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
+	entitlements_service "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service"
 )
 
 // EmitContributorBilling fires an async POST to entitlements-service ingest on the package default Emitter.
@@ -73,13 +72,9 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 		collectionErr = fillContributors(items, opts.RepoPath, time.Now(), opts.Logger)
 	}
 
-	body, err := marshalIngestPayload(opts.Capability, opts.ScopeID, items, opts.Logger)
-	if err != nil {
-		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to marshal ingest payload")
-		return Result{Status: ResultStatusFailed, FailReason: FailReasonMarshalError, Err: err}
-	}
+	request := buildIngestRequest(opts.Capability, opts.ScopeID, items, opts.Logger)
 
-	result := postIngest(parent, opts, body)
+	result := postIngest(parent, opts, request)
 	if collectionErr != nil {
 		result.ContributorCollectionErr = collectionErr
 	}
@@ -183,7 +178,7 @@ func missingIngestURLResult(logger *zerolog.Logger) Result {
 	return Result{Status: ResultStatusFailed, FailReason: FailReasonMissingIngestURL, Err: err}
 }
 
-func postIngest(parent context.Context, opts EmitOptions, body []byte) Result {
+func postIngest(parent context.Context, opts EmitOptions, request entitlements_service.IngestRequest) Result {
 	if strings.TrimSpace(opts.IngestURL) == "" {
 		return missingIngestURLResult(opts.Logger)
 	}
@@ -191,23 +186,13 @@ func postIngest(parent context.Context, opts EmitOptions, body []byte) Result {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), opts.Timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, opts.IngestURL, bytes.NewReader(body))
+	client, err := entitlements_service.NewIngestClient(opts.HTTPClient, opts.IngestURL)
 	if err != nil {
-		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to create request")
+		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to create ingest client")
 		return Result{Status: ResultStatusFailed, FailReason: FailReasonRequestError, Err: err}
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	if opts.AuthHeader != "" {
-		req.Header.Set("Authorization", opts.AuthHeader)
-	}
-
-	client := opts.HTTPClient
-	if client == nil {
-		client = http.DefaultClient
-	}
-
-	resp, err := client.Do(req)
+	resp, err := client.IngestContributors(ctx, opts.AuthHeader, request)
 	if err != nil {
 		failReason := FailReasonHTTPError
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -216,23 +201,18 @@ func postIngest(parent context.Context, opts EmitOptions, body []byte) Result {
 		opts.Logger.Debug().Err(err).Str("reason", string(failReason)).Msg("contributor billing: POST failed")
 		return Result{Status: ResultStatusFailed, FailReason: failReason, Err: err}
 	}
-	defer resp.Body.Close()
 
-	if _, copyErr := io.Copy(io.Discard, resp.Body); copyErr != nil {
-		opts.Logger.Debug().Err(copyErr).Msg("contributor billing: failed to drain response body")
+	if resp.StatusCode() == http.StatusAccepted {
+		opts.Logger.Debug().Int("status", resp.StatusCode()).Msg("contributor billing: emitted")
+		return Result{Status: ResultStatusEmitted, HTTPStatus: resp.StatusCode()}
 	}
 
-	if resp.StatusCode == http.StatusAccepted {
-		opts.Logger.Debug().Int("status", resp.StatusCode).Msg("contributor billing: emitted")
-		return Result{Status: ResultStatusEmitted, HTTPStatus: resp.StatusCode}
-	}
-
-	err = fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
-	opts.Logger.Debug().Int("status", resp.StatusCode).Msg("contributor billing: unexpected HTTP status")
+	err = fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode())
+	opts.Logger.Debug().Int("status", resp.StatusCode()).Msg("contributor billing: unexpected HTTP status")
 	return Result{
 		Status:     ResultStatusFailed,
 		FailReason: FailReasonHTTPError,
-		HTTPStatus: resp.StatusCode,
+		HTTPStatus: resp.StatusCode(),
 		Err:        err,
 	}
 }

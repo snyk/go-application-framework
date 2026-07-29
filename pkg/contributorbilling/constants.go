@@ -1,6 +1,9 @@
 package contributorbilling
 
-import "time"
+import (
+	entitlements_service "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service"
+	"time"
+)
 
 const (
 	// SourceCLI is the ingest payload source value for CLI-originated billing events.
@@ -13,9 +16,8 @@ const (
 	// CapabilityIaC is the ingest capability for IaC registry share flows.
 	CapabilityIaC = "iac"
 
-	// DefaultIngestPath is the proposed entitlements-service ingest path.
-	// TODO: confirm against entitlements-service OpenAPI once Part 1 lands.
-	DefaultIngestPath = "/rest/api/hidden/contributors/ingest"
+	// DefaultIngestPath is the draft entitlements-service ingest path from the OpenAPI spec.
+	DefaultIngestPath = entitlements_service.IngestPath
 
 	// DefaultTimeout bounds the fire-and-forget HTTP POST so callers are never blocked.
 	DefaultTimeout = 5 * time.Second
