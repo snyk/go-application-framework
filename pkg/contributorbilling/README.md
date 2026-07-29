@@ -114,8 +114,9 @@ Semantics align with:
 
 - `snyk/cli` → `src/lib/monitor/dev-count-analysis.ts` (`getContributors`)
 - `cli-extension-iac` → `internal/git/contributors.go` (`ListContributors`)
+- Git log collection uses `pkg/utils/git.ListContributors`
 
-`ListContributors` is exported for callers that need contributor data without emitting.
+Callers that need contributor data without emitting should use `pkg/utils/git` directly.
 
 ## Analytics policy
 

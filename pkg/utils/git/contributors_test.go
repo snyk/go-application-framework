@@ -1,4 +1,4 @@
-package contributorbilling_test
+package git
 
 import (
 	"os"
@@ -10,8 +10,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/snyk/go-application-framework/pkg/contributorbilling"
 )
 
 type commitSpec struct {
@@ -71,36 +69,36 @@ func TestListContributors_KeepsMostRecentCommitPerEmail(t *testing.T) {
 	since := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
 	until := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 
-	contributors, err := contributorbilling.ListContributors(repoPath, since, until, contributorbilling.MaxCommitsInGitLog)
+	authors, err := ListContributors(repoPath, since, until, 500)
 	require.NoError(t, err)
-	require.Len(t, contributors, 2)
+	require.Len(t, authors, 2)
 
-	assert.Equal(t, "alice@example.com", contributors[0].Email)
-	assert.Equal(t, time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC), contributors[0].LatestCommitDate.UTC())
-	assert.Equal(t, "bob@example.com", contributors[1].Email)
+	assert.Equal(t, "alice@example.com", authors[0].Email)
+	assert.Equal(t, time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC), authors[0].LatestCommitDate.UTC())
+	assert.Equal(t, "bob@example.com", authors[1].Email)
 }
 
 func TestListContributors_NonGitRepoReturnsEmpty(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	contributors, err := contributorbilling.ListContributors(dir, time.Now().AddDate(0, 0, -90), time.Now(), 500)
+	authors, err := ListContributors(dir, time.Now().AddDate(0, 0, -90), time.Now(), 500)
 	require.NoError(t, err)
-	assert.Empty(t, contributors)
+	assert.Empty(t, authors)
 }
 
 func TestListContributors_EmptyRepoReturnsEmpty(t *testing.T) {
 	t.Parallel()
 
 	repoPath := initEmptyGitRepo(t)
-	contributors, err := contributorbilling.ListContributors(
+	authors, err := ListContributors(
 		repoPath,
 		time.Now().AddDate(0, 0, -90),
 		time.Now(),
-		contributorbilling.MaxCommitsInGitLog,
+		500,
 	)
 	require.NoError(t, err)
-	assert.Empty(t, contributors)
+	assert.Empty(t, authors)
 }
 
 func TestListContributors_MaxCommitsZeroReturnsEmpty(t *testing.T) {
@@ -110,14 +108,14 @@ func TestListContributors_MaxCommitsZeroReturnsEmpty(t *testing.T) {
 		commitSpec{email: "dev@example.com", when: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)},
 	)
 
-	contributors, err := contributorbilling.ListContributors(
+	authors, err := ListContributors(
 		repoPath,
 		time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
 		0,
 	)
 	require.NoError(t, err)
-	assert.Empty(t, contributors)
+	assert.Empty(t, authors)
 }
 
 func TestListContributors_SortedByEmail(t *testing.T) {
@@ -128,16 +126,16 @@ func TestListContributors_SortedByEmail(t *testing.T) {
 		commitSpec{email: "amy@example.com", when: time.Date(2026, 1, 11, 10, 0, 0, 0, time.UTC)},
 	)
 
-	contributors, err := contributorbilling.ListContributors(
+	authors, err := ListContributors(
 		repoPath,
 		time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
-		contributorbilling.MaxCommitsInGitLog,
+		500,
 	)
 	require.NoError(t, err)
-	require.Len(t, contributors, 2)
-	assert.Equal(t, "amy@example.com", contributors[0].Email)
-	assert.Equal(t, "zed@example.com", contributors[1].Email)
+	require.Len(t, authors, 2)
+	assert.Equal(t, "amy@example.com", authors[0].Email)
+	assert.Equal(t, "zed@example.com", authors[1].Email)
 }
 
 func TestListContributors_RespectsMaxCommits(t *testing.T) {
@@ -153,13 +151,13 @@ func TestListContributors_RespectsMaxCommits(t *testing.T) {
 
 	repoPath := initGitRepo(t, commits...)
 
-	contributors, err := contributorbilling.ListContributors(
+	authors, err := ListContributors(
 		repoPath,
 		time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
 		3,
 	)
 	require.NoError(t, err)
-	require.Len(t, contributors, 1)
-	assert.Equal(t, time.Date(2026, 1, 1, 0, 0, 9, 0, time.UTC), contributors[0].LatestCommitDate.UTC())
+	require.Len(t, authors, 1)
+	assert.Equal(t, time.Date(2026, 1, 1, 0, 0, 9, 0, time.UTC), authors[0].LatestCommitDate.UTC())
 }
