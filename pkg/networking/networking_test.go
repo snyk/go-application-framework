@@ -21,6 +21,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configtest"
 	"github.com/snyk/go-httpauth/pkg/httpauth"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/internal/constants"
@@ -203,10 +204,17 @@ func Test_GetHTTPClient(t *testing.T) {
 	config := getConfig()
 	net := NewNetworkAccess(config)
 
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
 	client := net.GetHttpClient()
-	response, err := client.Get("https://www.snyk.io")
-	assert.Nil(t, err)
-	assert.Equal(t, 200, response.StatusCode)
+	response, err := client.Get(server.URL)
+	require.NoError(t, err)
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
 }
 
 func Test_GetHTTPClient_EmptyCAs(t *testing.T) {
