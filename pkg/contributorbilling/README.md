@@ -14,8 +14,14 @@ tickets.
 
 ## Entry point
 
+Use the package default for single-host CLI wiring, or create an `Emitter` when a host needs
+isolated in-flight tracking (tests, multiple billing scopes in one process):
+
 ```go
-contributorbilling.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
+emitter := contributorbilling.NewEmitter()
+defer emitter.WaitWithTimeout(contributorbilling.DefaultTimeout)
+
+emitter.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
     HTTPClient: client,
     IngestURL:  apiURL + contributorbilling.DefaultIngestPath,
     AuthHeader: "token " + token,
@@ -32,6 +38,12 @@ contributorbilling.EmitContributorBilling(ctx, contributorbilling.EmitOptions{
         // emitted | skipped | failed telemetry
     },
 })
+```
+
+Package-level helpers delegate to a shared default `Emitter`:
+
+```go
+contributorbilling.EmitContributorBilling(ctx, opts)
 ```
 
 `EmitContributorBilling` is fire-and-forget: it returns immediately and never surfaces an error
@@ -124,6 +136,7 @@ apply here.
 | `skipped` | `empty_items` | No items provided |
 | `skipped` | `missing_target_id` | All items missing `target_id` |
 | `skipped` | `missing_capability` | `Capability` is empty |
+| `skipped` | `invalid_capability` | `Capability` is not one of `oss`, `code`, or `iac` |
 | `skipped` | `missing_scope_id` | `ScopeID` is empty |
 | `failed` | `marshal_error` | Ingest payload could not be marshaled |
 | `failed` | `missing_ingest_url` | `IngestURL` is empty |

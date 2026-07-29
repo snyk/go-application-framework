@@ -55,6 +55,7 @@ const (
 	SkipReasonEmptyItems        SkipReason = "empty_items"
 	SkipReasonMissingTargetID   SkipReason = "missing_target_id"
 	SkipReasonMissingCapability SkipReason = "missing_capability"
+	SkipReasonInvalidCapability SkipReason = "invalid_capability"
 	SkipReasonMissingScopeID    SkipReason = "missing_scope_id"
 )
 
@@ -64,7 +65,6 @@ type FailReason string
 const (
 	FailReasonHTTPError        FailReason = "http_error"
 	FailReasonTimeout          FailReason = "timeout"
-	FailReasonCanceled         FailReason = "canceled"
 	FailReasonMarshalError     FailReason = "marshal_error"
 	FailReasonMissingIngestURL FailReason = "missing_ingest_url"
 	FailReasonRequestError     FailReason = "request_error"

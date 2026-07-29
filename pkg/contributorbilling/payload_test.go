@@ -153,6 +153,15 @@ func TestValidateRequiredFields(t *testing.T) {
 		assert.Equal(t, SkipReasonMissingCapability, reason)
 	})
 
+	t.Run("invalid capability", func(t *testing.T) {
+		t.Parallel()
+		reason := validateRequiredFields(EmitOptions{
+			Capability: "osss",
+			ScopeID:    "org",
+		})
+		assert.Equal(t, SkipReasonInvalidCapability, reason)
+	})
+
 	t.Run("missing scope id", func(t *testing.T) {
 		t.Parallel()
 		reason := validateRequiredFields(EmitOptions{Capability: CapabilityOSS})

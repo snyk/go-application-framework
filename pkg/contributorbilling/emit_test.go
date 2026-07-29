@@ -218,6 +218,36 @@ func TestEmitContributorBilling_SkipsMissingCapability(t *testing.T) {
 	assert.False(t, called)
 }
 
+func TestEmitContributorBilling_SkipsInvalidCapability(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: "osss",
+		ScopeID:    "org-uuid",
+		Items: []contributorbilling.BillingItem{
+			{TargetID: "project-1"},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusSkipped, result.Status)
+	assert.Equal(t, contributorbilling.SkipReasonInvalidCapability, result.SkipReason)
+	assert.False(t, called)
+}
+
 func TestEmitContributorBilling_SkipsMissingScopeID(t *testing.T) {
 	t.Parallel()
 

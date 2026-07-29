@@ -13,22 +13,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// EmitContributorBilling fires an async POST to entitlements-service ingest.
+// EmitContributorBilling fires an async POST to entitlements-service ingest on the package default Emitter.
 // It returns immediately and never surfaces an error that should fail the caller's command.
 // Short-lived hosts (e.g. the CLI) must call Wait or WaitWithTimeout before process exit.
 func EmitContributorBilling(ctx context.Context, opts EmitOptions) {
-	opts = opts.withDefaults()
-	opts.Items = cloneItems(opts.Items)
-
-	pending.Add(1)
-	go func(parent context.Context) {
-		defer pending.Done()
-
-		result := emitContributorBilling(parent, opts)
-		if opts.OnResult != nil {
-			opts.OnResult(result)
-		}
-	}(ctx)
+	defaultEmitter.EmitContributorBilling(ctx, opts)
 }
 
 func cloneItems(items []BillingItem) []BillingItem {
@@ -98,13 +87,26 @@ func emitContributorBilling(parent context.Context, opts EmitOptions) Result {
 }
 
 func validateRequiredFields(opts EmitOptions) SkipReason {
-	if strings.TrimSpace(opts.Capability) == "" {
+	capability := strings.TrimSpace(opts.Capability)
+	if capability == "" {
 		return SkipReasonMissingCapability
+	}
+	if !isKnownCapability(capability) {
+		return SkipReasonInvalidCapability
 	}
 	if strings.TrimSpace(opts.ScopeID) == "" {
 		return SkipReasonMissingScopeID
 	}
 	return ""
+}
+
+func isKnownCapability(capability string) bool {
+	switch capability {
+	case CapabilityOSS, CapabilityCode, CapabilityIaC:
+		return true
+	default:
+		return false
+	}
 }
 
 func fillContributors(items []BillingItem, defaultRepoPath string, now time.Time, logger *zerolog.Logger) error {
