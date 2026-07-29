@@ -86,9 +86,17 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 	}
 }
 
-// Deprecated: Use NewFileFilterFromConfig instead
+// Deprecated: Use NewFileFilterFromConfig instead.
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
-	return newFileFilterInternal(path, logger, options...)
+	filter := newFileFilterInternal(path, logger, options...)
+
+	// TODO: Temporary - this keeps the metacharacter
+	// fix enabled for callers of this deprecated constructor (e.g. Preview CLI) that haven't migrated
+	// to NewFileFilterFromConfig yet, so they keep the behavior they already rely on today. Remove
+	// once all such callers have migrated.
+	filter.enableIgnoreRuleMetacharacterFix = true
+
+	return filter
 }
 
 func newFileFilterInternal(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
