@@ -34,7 +34,7 @@ func setupOptionsTest(
 		append([]fileupload.Option{fileupload.WithUploadRevisionSealableClient(fakeSealableClient)}, opts...)...,
 	)
 
-	return context.Background(), fakeSealableClient, client, createTmpFiles(t, files)
+	return t.Context(), fakeSealableClient, client, createTmpFiles(t, files)
 }
 
 var defaultLimits = uploadrevision2.FakeClientConfig{
