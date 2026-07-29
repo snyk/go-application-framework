@@ -86,7 +86,12 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 	}
 }
 
+// Deprecated: Use NewFileFilterFromConfig instead
 func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
+	return newFileFilterInternal(path, logger, options...)
+}
+
+func newFileFilterInternal(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := &FileFilter{
 		path:            path,
 		defaultRules:    []string{"**/.git/**"},
@@ -105,11 +110,15 @@ func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOpt
 	return filter
 }
 
-// NewFileFilterFromConfig is like NewFileFilter, but resolves feature-flag-gated behavior (like
-// the ignore-rule metacharacter fix) from config directly, so callers don't need a code change
-// here when a future flag of this kind is added.
+// NewFileFilterFromConfig resolves feature-flag-gated behavior (like the ignore-rule
+// metacharacter fix) from config, so future flags of this kind need no caller changes. config
+// may be nil, in which case such behavior stays at its default.
 func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config featureflags.FeatureFlagReader, options ...FileFilterOption) *FileFilter {
-	filter := NewFileFilter(path, logger, options...)
+	filter := newFileFilterInternal(path, logger, options...)
+	if config == nil {
+		logger.Debug().Msg("File Filter called without a config (nil)")
+		return filter
+	}
 	filter.enableIgnoreRuleMetacharacterFix = config.GetBool(featureflags.FileFilterMetacharacterFix)
 	return filter
 }
