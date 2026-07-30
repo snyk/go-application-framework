@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	v20260729 "github.com/snyk/go-application-framework/pkg/apiclients/entitlements_service/2026-07-29"
 )
@@ -75,7 +74,7 @@ func (c *IngestClient) CreateContributingDevs(
 
 	return c.api.CreateContributingDevsWithApplicationVndAPIPlusJSONBodyWithResponse(
 		ctx,
-		openapi_types.UUID(parsedOrgID),
+		parsedOrgID,
 		params,
 		body,
 		editors...,
