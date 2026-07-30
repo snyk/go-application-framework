@@ -398,8 +398,9 @@ const (
 
 // Defines values for UploadResourceContentType.
 const (
-	UploadResourceContentTypeSbom   UploadResourceContentType = "sbom"
-	UploadResourceContentTypeSource UploadResourceContentType = "source"
+	UploadResourceContentTypeContainerAnalysis UploadResourceContentType = "container_analysis"
+	UploadResourceContentTypeSbom              UploadResourceContentType = "sbom"
+	UploadResourceContentTypeSource            UploadResourceContentType = "source"
 )
 
 // Defines values for UploadResourceType.
@@ -1435,15 +1436,29 @@ type PolicyRefSet struct {
 // Only a subset of fields are included, for more details see the API documentation
 // https://apidocs.snyk.io/?version=2024-10-15#get-/orgs/-org_id-/policies/-policy_id-
 type PolicyRule struct {
-	Created  time.Time          `json:"created"`
-	Id       openapi_types.UUID `json:"id"`
-	Modified time.Time          `json:"modified"`
-	Name     string             `json:"name"`
-	Review   PolicyRuleReview   `json:"review"`
+	Created    time.Time           `json:"created"`
+	Id         openapi_types.UUID  `json:"id"`
+	Modified   time.Time           `json:"modified"`
+	Name       string              `json:"name"`
+	Review     PolicyRuleReview    `json:"review"`
+	ReviewedAt *time.Time          `json:"reviewed_at,omitempty"`
+	ReviewedBy *PolicyRuleReviewer `json:"reviewed_by,omitempty"`
 }
 
 // PolicyRuleReview defines model for PolicyRule.Review.
 type PolicyRuleReview string
+
+// PolicyRuleReviewer defines model for PolicyRuleReviewer.
+type PolicyRuleReviewer struct {
+	// Email Email of the reviewer
+	Email *string `json:"email,omitempty"`
+
+	// Id User ID of the reviewer
+	Id openapi_types.UUID `json:"id"`
+
+	// Name Name of the reviewer
+	Name string `json:"name"`
+}
 
 // Problem Problems are representative of the finding in other security domains and
 // systems with a well-known identifier.
@@ -2469,8 +2484,7 @@ type UpgradePath struct {
 type UploadResource struct {
 	// ContentType Content present in the Upload Revision.
 	//
-	// Currently only SBOMs and Source files are accepted
-	// content types.
+	// Accepted content types are SBOMs, Source files, and container analysis.
 	ContentType UploadResourceContentType `json:"content_type"`
 
 	// FilePatterns File Patterns to include in the scan. Elements must be less than 256 characters.
@@ -2504,8 +2518,7 @@ type UploadResource struct {
 
 // UploadResourceContentType Content present in the Upload Revision.
 //
-// Currently only SBOMs and Source files are accepted
-// content types.
+// Accepted content types are SBOMs, Source files, and container analysis.
 type UploadResourceContentType string
 
 // UploadResourceType defines model for UploadResource.Type.

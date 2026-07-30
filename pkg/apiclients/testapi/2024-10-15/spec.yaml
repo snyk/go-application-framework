@@ -1978,12 +1978,33 @@ components:
           - not-required
           - unknown
           type: string
+        reviewed_at:
+          format: date-time
+          type: string
+        reviewed_by:
+          $ref: '#/components/schemas/PolicyRuleReviewer'
       required:
       - id
       - name
       - modified
       - created
       - review
+      type: object
+    PolicyRuleReviewer:
+      properties:
+        email:
+          description: Email of the reviewer
+          type: string
+        id:
+          description: User ID of the reviewer
+          format: uuid
+          type: string
+        name:
+          description: Name of the reviewer
+          type: string
+      required:
+      - id
+      - name
       type: object
     Problem:
       description: |-
@@ -3599,11 +3620,11 @@ components:
           description: |-
             Content present in the Upload Revision.
 
-            Currently only SBOMs and Source files are accepted
-            content types.
+            Accepted content types are SBOMs, Source files, and container analysis.
           enum:
           - sbom
           - source
+          - container_analysis
           type: string
         file_patterns:
           description: |-
@@ -4427,9 +4448,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -4570,9 +4593,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -4692,9 +4717,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
@@ -4811,9 +4838,11 @@ paths:
           skip: false
       x-snyk-api-lifecycle: released
       x-snyk-api-owners:
-      - '@snyk/productinfra_devsec-governance-platform'
+      - '@snyk/product-unification_test-orchestration'
+      - '@snyk/product-unification_nexus'
       - '@snyk/product-unification_devsec-governance-platform'
-      - '@jbowes'
+      - '@dbroudy'
+      - '@kfiles-snyk'
       x-snyk-api-releases:
       - 2024-10-15~beta
       x-snyk-api-resource: tests
