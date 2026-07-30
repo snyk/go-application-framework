@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -771,9 +772,9 @@ func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
 func TestEmitContributorBilling_MultiItemContinuesAfterFailure(t *testing.T) {
 	t.Parallel()
 
-	var requestCount int
+	var requestCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
+		requestCount.Add(1)
 
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
@@ -815,15 +816,15 @@ func TestEmitContributorBilling_MultiItemContinuesAfterFailure(t *testing.T) {
 	assert.Equal(t, contributorbilling.FailReasonHTTPError, result.FailReason)
 	assert.Equal(t, 2, result.ItemsEmitted)
 	assert.Equal(t, 1, result.ItemsFailed)
-	assert.Equal(t, 3, requestCount)
+	assert.Equal(t, 3, int(requestCount.Load()))
 }
 
 func TestEmitContributorBilling_MultiItemPerItemTimeout(t *testing.T) {
 	t.Parallel()
 
-	var requestCount int
+	var requestCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
+		requestCount.Add(1)
 
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
@@ -864,5 +865,5 @@ func TestEmitContributorBilling_MultiItemPerItemTimeout(t *testing.T) {
 	assert.Equal(t, contributorbilling.FailReasonTimeout, result.FailReason)
 	assert.Equal(t, 1, result.ItemsEmitted)
 	assert.Equal(t, 1, result.ItemsFailed)
-	assert.Equal(t, 2, requestCount)
+	assert.Equal(t, 2, int(requestCount.Load()))
 }
