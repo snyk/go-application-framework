@@ -10,7 +10,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	configuration "github.com/snyk/go-application-framework/pkg/configuration"
+	configtypes "github.com/snyk/go-application-framework/pkg/configuration/configtypes"
 )
 
 // MockStorage is a mock of Storage interface.
@@ -51,7 +51,7 @@ func (mr *MockStorageMockRecorder) Lock(ctx, retryDelay interface{}) *gomock.Cal
 }
 
 // Refresh mocks base method.
-func (m *MockStorage) Refresh(config configuration.Configuration, key string) error {
+func (m *MockStorage) Refresh(config configtypes.Configuration, key string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Refresh", config, key)
 	ret0, _ := ret[0].(error)

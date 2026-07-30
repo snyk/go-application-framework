@@ -11,16 +11,11 @@ import (
 	"github.com/gofrs/flock"
 
 	"github.com/snyk/go-application-framework/internal/utils"
+	"github.com/snyk/go-application-framework/pkg/configuration/configtypes"
 )
 
-//go:generate go tool github.com/golang/mock/mockgen -source=storage.go -destination ../mocks/config_storage.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
-
-type Storage interface {
-	Set(key string, value any) error
-	Refresh(config Configuration, key string) error
-	Lock(ctx context.Context, retryDelay time.Duration) error
-	Unlock() error
-}
+// Storage is an alias of configtypes.Storage, to avoid an import cycle.
+type Storage = configtypes.Storage
 
 type EmptyStorage struct{}
 

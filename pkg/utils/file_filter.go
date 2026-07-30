@@ -18,7 +18,14 @@ import (
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 
-	"github.com/snyk/go-application-framework/pkg/featureflags"
+	"github.com/snyk/go-application-framework/pkg/configuration/configtypes"
+)
+
+// Feature flags gating FileFilter behavior. They live here, next to the behavior they gate.
+const (
+	FF_FILE_FILTER_METACHARACTER_FIX            string = "internal_snyk_file_filter_metacharacter_fix_enabled"            // FF_FILE_FILTER_METACHARACTER_FIX (boolean) enables the fix for ignore rules and paths containing regex metacharacters
+	FF_GITIGNORE_RESPECT_TRACKED_FILES          string = "internal_snyk_gitignore_respect_tracked_files_enabled"          // FF_GITIGNORE_RESPECT_TRACKED_FILES (boolean) enables tracked-file-aware .gitignore filtering (CLI-1411)
+	FF_FILE_FILTER_RESPECT_PARENT_EXCLUSION_FIX string = "internal_snyk_file_filter_respect_parent_exclusion_fix_enabled" // FF_FILE_FILTER_RESPECT_PARENT_EXCLUSION_FIX (boolean) enables the fix for nested ignore files re-including files from excluded parent directories (CLI-1685)
 )
 
 // by default, all rules are valid
@@ -86,20 +93,24 @@ func WithDotSnykSections(sections []DotSnykExcludeSectionName) FileFilterOption 
 	}
 }
 
-// Deprecated: Use NewFileFilterFromConfig instead.
-func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
-	filter := newFileFilterInternal(path, logger, options...)
+// WithConfig supplies the loaded configuration that the FileFilter resolves its
+// feature-flag-gated behavior from. The flag values are read when the option is applied, so
+// config must already be loaded.
+func WithConfig(config configtypes.Configuration) FileFilterOption {
+	return func(filter *FileFilter) error {
+		if config == nil {
+			return fmt.Errorf("config must not be nil")
+		}
 
-	// TODO: Temporary - this keeps the metacharacter
-	// fix enabled for callers of this deprecated constructor (e.g. Preview CLI) that haven't migrated
-	// to NewFileFilterFromConfig yet, so they keep the behavior they already rely on today. Remove
-	// once all such callers have migrated.
-	filter.enableIgnoreRuleMetacharacterFix = true
-
-	return filter
+		filter.enableIgnoreRuleMetacharacterFix = config.GetBool(FF_FILE_FILTER_METACHARACTER_FIX)
+		return nil
+	}
 }
 
-func newFileFilterInternal(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
+// NewFileFilter creates a FileFilter rooted at path. Feature-flag-gated behavior defaults to
+// enabled, preserving the behavior of callers that predate the flags; pass WithConfig to let the
+// configuration decide instead.
+func NewFileFilter(path string, logger *zerolog.Logger, options ...FileFilterOption) *FileFilter {
 	filter := &FileFilter{
 		path:            path,
 		defaultRules:    []string{"**/.git/**"},
@@ -108,6 +119,11 @@ func newFileFilterInternal(path string, logger *zerolog.Logger, options ...FileF
 		dotSnykSections: []DotSnykExcludeSectionName{DotSnykExcludeCode, DotSnykExcludeGlobal}, // init default with DotSnykExcludeCode and DotSnykExcludeGlobal to keep it backwards compatible
 	}
 
+	// TODO: Temporary. This keeps the metacharacter fix enabled for callers
+	// of this constructor (e.g. Preview CLI), so they keep the behavior they already rely on today.
+	// Remove once all such callers have migrated to the preconfigured file_filter
+	filter.enableIgnoreRuleMetacharacterFix = true
+
 	for _, option := range options {
 		err := option(filter)
 		if err != nil {
@@ -115,19 +131,6 @@ func newFileFilterInternal(path string, logger *zerolog.Logger, options ...FileF
 		}
 	}
 
-	return filter
-}
-
-// NewFileFilterFromConfig resolves feature-flag-gated behavior (like the ignore-rule
-// metacharacter fix) from config, so future flags of this kind need no caller changes. config
-// may be nil, in which case such behavior stays at its default.
-func NewFileFilterFromConfig(path string, logger *zerolog.Logger, config featureflags.FeatureFlagReader, options ...FileFilterOption) *FileFilter {
-	filter := newFileFilterInternal(path, logger, options...)
-	if config == nil {
-		logger.Debug().Msg("File Filter called without a config (nil)")
-		return filter
-	}
-	filter.enableIgnoreRuleMetacharacterFix = config.GetBool(featureflags.FileFilterMetacharacterFix)
 	return filter
 }
 
@@ -425,7 +428,7 @@ var ruleRegexMetaChars = map[byte]bool{
 
 // escapeIgnoreRuleMetaChars escapes regex metacharacters in an ignore rule that gitignore treats
 // as literal, so they match literally instead of being interpreted by go-gitignore's regex
-// engine. This is the fixed behavior, gated behind WithIgnoreRuleMetacharacterFix.
+// engine. This is the fixed behavior, gated behind FF_FILE_FILTER_METACHARACTER_FIX.
 func escapeIgnoreRuleMetaChars(rule string) string {
 	var result strings.Builder
 	for i := 0; i < len(rule); i++ {

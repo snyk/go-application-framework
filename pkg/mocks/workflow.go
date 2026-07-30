@@ -17,6 +17,7 @@ import (
 	networking "github.com/snyk/go-application-framework/pkg/networking"
 	runtimeinfo "github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	ui "github.com/snyk/go-application-framework/pkg/ui"
+	utils "github.com/snyk/go-application-framework/pkg/utils"
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 )
 
@@ -267,6 +268,25 @@ func (m *MockInvocationContext) GetEnhancedLogger() *zerolog.Logger {
 func (mr *MockInvocationContextMockRecorder) GetEnhancedLogger() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEnhancedLogger", reflect.TypeOf((*MockInvocationContext)(nil).GetEnhancedLogger))
+}
+
+// GetFileFilter mocks base method.
+func (m *MockInvocationContext) GetFileFilter(path string, options ...utils.FileFilterOption) *utils.FileFilter {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{path}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetFileFilter", varargs...)
+	ret0, _ := ret[0].(*utils.FileFilter)
+	return ret0
+}
+
+// GetFileFilter indicates an expected call of GetFileFilter.
+func (mr *MockInvocationContextMockRecorder) GetFileFilter(path interface{}, options ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{path}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileFilter", reflect.TypeOf((*MockInvocationContext)(nil).GetFileFilter), varargs...)
 }
 
 // GetLogger mocks base method.

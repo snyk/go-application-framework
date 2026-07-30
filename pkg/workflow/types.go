@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/ui"
+	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -source=types.go -destination ../mocks/workflow.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/workflow/
@@ -50,6 +51,7 @@ type InvocationContext interface {
 	GetEnhancedLogger() *zerolog.Logger
 	GetUserInterface() ui.UserInterface
 	GetRuntimeInfo() runtimeinfo.RuntimeInfo
+	GetFileFilter(path string, options ...utils.FileFilterOption) *utils.FileFilter
 }
 
 // ConfigurationOptionsMetaData provides read access to Annotations on registered Configuration Options.

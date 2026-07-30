@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/networking/middleware"
 	pkg_utils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/conversion"
@@ -374,6 +375,10 @@ func initConfiguration(engine workflow.Engine, config configuration.Configuratio
 	config.AddDefaultValue(configuration.CUSTOM_CONFIG_FILES, customConfigFiles(config))
 	config.AddDefaultValue(middleware.ConfigurationKeyRequestAttempts, defaultMaxNetworkRequestAttempts())
 	config.AddDefaultValue(configuration.FIPS_ENABLED, configuration.StandardDefaultValueFunction(fips140.Enabled()))
+
+	config_utils.AddFeatureFlagToConfig(engine, pkg_utils.FF_FILE_FILTER_METACHARACTER_FIX, "snykFileFilterMetacharacterFix")
+	config_utils.AddFeatureFlagToConfig(engine, pkg_utils.FF_GITIGNORE_RESPECT_TRACKED_FILES, "snykGitIgnoreTrackedFiles")
+	config_utils.AddFeatureFlagToConfig(engine, pkg_utils.FF_FILE_FILTER_RESPECT_PARENT_EXCLUSION_FIX, "snykFileFilterRespectParentExclusionFix")
 }
 
 func customConfigFiles(config configuration.Configuration) configuration.DefaultValueFunction {

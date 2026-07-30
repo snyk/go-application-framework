@@ -16,72 +16,28 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	"github.com/snyk/go-application-framework/pkg/configuration/configtypes"
 )
 
-//go:generate go tool github.com/golang/mock/mockgen -source=configuration.go -destination ../mocks/configuration.go -package mocks -self_package github.com/snyk/go-application-framework/pkg/configuration/
+// Type aliases pointing to the configtypes package, to avoid an import cycle.
+type (
+	Configuration        = configtypes.Configuration
+	DefaultValueFunction = configtypes.DefaultValueFunction
+	KeyType              = configtypes.KeyType
+)
 
-type DefaultValueFunction func(config Configuration, existingValue interface{}) (interface{}, error)
+const (
+	EnvVarKeyType      = configtypes.EnvVarKeyType
+	UnspecifiedKeyType = configtypes.UnspecifiedKeyType
+)
 
 type configType string
-type KeyType int
 
 const NoCacheExpiration time.Duration = -1
 const defaultCacheCleanupInterval = 1 * time.Minute
 const inMemory configType = "in-memory"
 const jsonFile configType = "json"
-const (
-	EnvVarKeyType      KeyType = iota
-	UnspecifiedKeyType KeyType = iota
-)
-
-// Configuration is an interface for managing configuration values.
-type Configuration interface {
-	Clone() Configuration
-
-	Set(key string, value interface{})
-	Get(key string) interface{}
-	Unset(key string)
-	IsSet(key string) bool
-	GetString(key string) string
-	GetStringWithError(key string) (string, error)
-	GetStringSlice(key string) []string
-	GetBool(key string) bool
-	GetBoolWithError(key string) (bool, error)
-	GetDuration(key string) time.Duration
-	GetDurationWithError(key string) (time.Duration, error)
-	GetInt(key string) int
-	GetFloat64(key string) float64
-	GetUrl(key string) *url.URL
-	GetWithError(key string) (interface{}, error)
-
-	AddFlagSet(flagset *pflag.FlagSet) error
-	AllKeys() []string
-	AddDefaultValue(key string, defaultValue DefaultValueFunction)
-	AddAlternativeKeys(key string, altKeys []string)
-	GetAlternativeKeys(key string) []string
-	GetAllKeysThatContainValues(key string) []string
-	GetKeyType(key string) KeyType
-
-	// AddKeyDependency can be used to describe that a certain key and its values actually depend on another value, this can then be used to clear the cache of a key when a depending key changes.
-	// In words: key depends on dependencyKey.
-	AddKeyDependency(key string, dependencyKey string) error
-
-	// PersistInStorage ensures that when Set is called with the given key, it will be persisted in the config file.
-	PersistInStorage(key string)
-	SetStorage(storage Storage)
-	GetStorage() Storage
-
-	AutomaticEnv()
-	GetAutomaticEnv() bool
-	SetSupportedEnvVars(envVars ...string)
-	GetSupportedEnvVars() []string
-	SetSupportedEnvVarPrefixes(prefixes ...string)
-	GetSupportedEnvVarPrefixes() []string
-	SetFiles(files ...string)
-	GetFiles() []string
-	ReloadConfig() error
-	ClearCache()
-}
 
 // extendedViper is a wrapper around the viper library.
 // It adds support for default values and alternative keys.
