@@ -207,6 +207,82 @@ follow the links for the worked examples.
 
 ---
 
+## Design review guidance
+
+Use these lenses when evaluating a design proposal, implementation plan, or PR.
+
+### Architecture
+
+- **Not everything in GAF is the same.** While the GAF repo is a common home for source code, there are different layers/aspects implemented:
+  - `internal/` is for internal implementation details
+  - `pkg/` is the public API
+    - `pkg/workflow/` implements the workflow engine, which is the extensibility/orchestration layer for local clients. To extensions authors it provides an opinionated usage of the basic library functions like configuration, logging, network, ... This way authors can use functions consistently and don't have to deal with the complexity of the basic library functions but can focus on the actual business logic. 
+    - `pkg/app` is the application integration layer, it provides a pre-configured workflow.Engine, whose configuration can be extended with application specific aspects by the final applications like the CLI ...
+    - `pkg/local_workflows/` hosts extension workflows available for all applications and are based on the `workflow` package
+    - `pkg/apiclients` contains auto-generated API clients from Open API Specs, in addition it might also contain a higher level API abstraction if reasonable
+    - `pkg/*` are raw/basic library functions that might depend on other gaf library functions but basically have no assumptions on how they are used and should not know about products etc 
+  - `docs/` is for documentation.
+
+### API surface tradeoffs
+
+- **Default to `internal/`.** A type, function, or constant goes in `pkg/` only
+  when a consumer outside this repo genuinely needs it today. Moving from
+  `internal/` → `pkg/` is easy; the reverse is a breaking change.
+- **Prefer functional options pattern.** For internal wiring between framework components,
+  functional options (`With…`) keep the surface narrow and typed.
+- **Keep related code close to each other.** Don't spread related code across different packages.
+  For example, keep configuration key constants close to the code that uses them.
+
+### Scope & complexity pushback
+
+Red flags that a design needs simplification:
+
+- **Exporting "just in case."** If no consumer uses it today, keep it internal.
+  Exported API is a forever-commitment in a library.
+- **Many code changes for a seemingly simple functionality.** Keep changes and code impact to a minimum.
+  Boy Scout Rule and refactorings are good but need to balance advantages with disadvantages. Always question if a change is necessary to achieve the goal;
+  if you keep answering multiple times with no, consider doing these changes in a later increment. This helps to improve the review and reduces risk,
+  overall getting things merged faster.
+
+### Multi-consumer fitness
+
+Every design decision must pass the **"works for CLI, IDE, and MCP"** test:
+
+- **No terminal assumptions.** Don't assume stdout, stderr, or an interactive
+  prompt exists. Use `InvocationContext`'s UI abstraction for user-facing output
+  and `Data` content types for structured results.
+- **No single-invocation assumptions.** An MCP or IDE host may invoke many
+  workflows in the same process. Avoid package-level mutable state; prefer
+  per-invocation state threaded via `InvocationContext` or `context.Context`.
+- **Configuration, not hard-coding.** Behavior that might differ by consumer
+  belongs in `Configuration` with a sensible default — not in a constant. If a
+  CLI needs a flag and an IDE needs a settings key, both read the same config
+  entry.
+- **Use Configuration, not Environment Variables.** Configuration abstracts the source of data and the usage of data.
+  This enables writing workflows that use data without knowing where it comes from. The applications can
+  wire up the configuration to different sources like environment variables, command line flags,
+  configuration files, etc.
+- **Use Configuration, not API calls directly.** For example when accessing remote feature flags in code, access them through the configuration
+  rather than an API client directly. The Configuration package brings lazy loading and caching and there are helpers for feature flags in `pkg/local_workflows/config_utils/` feature flag names should live close to the business logic. 
+- **One Configuration value can come from multiple sources.** use configuration.AlternativeKeys() to register a precedence of different sources to look up a value from
+  for example in a CLI application from cmd arguments, environment variables, config files, remote configuration ...
+- **Configuration DefaultFunctions are multi purpose helper.** even if called default function, they can be used to provide a default value for a configuration key but also perform validation and translation logic 
+
+
+### Error Handling
+
+- **Errors in Data vs. returned errors.** Use `data.AddError()` for
+  non-fatal issues alongside valid output (e.g. partial scan results). Return
+  an `error` when the workflow cannot produce any meaningful output.
+
+### Testing
+
+- **Test public API.** Test need to cover the public API.
+- **Test coverage.** test internal APIs, unexported functions and dependency injection to increase test coverage for edge cases.
+
+
+---
+
 ## Setup
 
 Requires **Go 1.26+**. Install dev tools:
