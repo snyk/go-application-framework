@@ -1,7 +1,7 @@
 package uploadrevision
 
 import (
-	"io/fs"
+	"io"
 
 	"github.com/google/uuid"
 )
@@ -110,10 +110,18 @@ type ErrorResponseBody struct {
 	Errors []ResponseError `json:"errors"`
 }
 
-// UploadFile represents a file to be uploaded, containing both the path and file handle.
+// UploadFile represents a file to be uploaded: where it goes, how large its content is, and a
+// reader producing that content.
 type UploadFile struct {
 	Path string // The path of the uploaded file, relative to the root directory.
-	File fs.File
+
+	// Size is the size in bytes of the content Reader produces. It is measured before the
+	// upload, so a file changing in between makes it disagree with what is streamed.
+	Size int64
+
+	// Reader produces the content to upload. It is read while the file is streamed, so the
+	// content is only held in memory for as long as that file is being uploaded.
+	Reader io.Reader
 }
 
 const (

@@ -23,6 +23,8 @@ type HTTPClient struct {
 	uploadRevisionSealableClient uploadrevision2.SealableClient
 	cfg                          Config
 	logger                       *zerolog.Logger
+	pathEncoder                  PathEncoder
+	contentTranscoder            ContentTranscoder
 }
 
 // Client defines the interface for the high level file upload client.
@@ -46,6 +48,10 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 		client.logger = utils.Ptr(zerolog.Nop())
 	}
 
+	if client.pathEncoder == nil {
+		client.pathEncoder = func(path string) string { return path }
+	}
+
 	if client.uploadRevisionSealableClient == nil {
 		client.uploadRevisionSealableClient = uploadrevision2.NewClient(uploadrevision2.Config{
 			BaseURL: cfg.BaseURL,
@@ -56,8 +62,6 @@ func NewClient(httpClient *http.Client, cfg Config, opts ...Option) Client {
 }
 
 func (c *HTTPClient) uploadBatch(ctx context.Context, revID RevisionID, batch *uploadBatch) error {
-	defer batch.closeRemainingFiles()
-
 	if batch.isEmpty() {
 		return nil
 	}
@@ -84,10 +88,10 @@ func (c *HTTPClient) addPathsToRevision(
 
 	fileSizeFilter := func(ff fileToFilter) *SkippedFile {
 		fileSizeLimit := c.uploadRevisionSealableClient.GetLimits().FileSizeLimit
-		if ff.Stat.Size() > fileSizeLimit {
+		if ff.Size > fileSizeLimit {
 			return &SkippedFile{
 				Path:   ff.Path,
-				Reason: uploadrevision2.NewFileSizeLimitError(ff.Stat.Name(), ff.Stat.Size(), fileSizeLimit),
+				Reason: uploadrevision2.NewFileSizeLimitError(ff.Path, ff.Size, fileSizeLimit),
 			}
 		}
 
@@ -111,7 +115,7 @@ func (c *HTTPClient) addPathsToRevision(
 		filePathLengthFilter,
 	}
 
-	for batchResult := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), c.logger, filters...) {
+	for batchResult := range batchPaths(rootPath, pathsChan, c.uploadRevisionSealableClient.GetLimits(), c.logger, c.pathEncoder, c.contentTranscoder, filters...) {
 		res.SkippedFiles = append(res.SkippedFiles, batchResult.skippedFiles...)
 
 		err := c.uploadBatch(ctx, revisionID, batchResult.batch)
