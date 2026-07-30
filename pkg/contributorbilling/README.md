@@ -142,14 +142,15 @@ apply here.
 | `skipped` | `missing_capability` | `Capability` is empty |
 | `skipped` | `invalid_capability` | `Capability` is not one of `oss`, `code`, or `iac` |
 | `skipped` | `missing_scope_id` | `ScopeID` is empty |
-| `failed` | `marshal_error` | Ingest payload could not be marshaled |
 | `failed` | `missing_ingest_url` | `IngestURL` is empty |
 | `failed` | `request_error` | HTTP request could not be constructed |
 | `failed` | `http_error` | Network error or non-201 response (`Result.Err` set for unexpected status) |
 | `failed` | `timeout` | POST exceeded `Timeout` (default 5s) |
-| `emitted` | — | HTTP 201; check `ContributorCollectionErr` if git collection failed |
+| `emitted` | — | All ingest POSTs returned HTTP 201; check `ContributorCollectionErr` if git collection failed |
+| `failed` | (see above) | One or more ingest POSTs failed; `ItemsEmitted` / `ItemsFailed` report partial multi-item outcomes |
 
 Items with empty `EntityID` are dropped; remaining valid items are still emitted (one POST each).
+Each item gets its own ingest POST and its own `Timeout` budget.
 
 ## Future call sites (out of scope for this package)
 

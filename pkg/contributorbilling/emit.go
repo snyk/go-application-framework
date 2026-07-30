@@ -182,27 +182,64 @@ func postIngest(parent context.Context, opts EmitOptions, items []BillingItem) R
 		return missingIngestURLResult(opts.Logger)
 	}
 
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), opts.Timeout)
-	defer cancel()
-
 	client, err := entitlements_service.NewIngestClient(opts.HTTPClient, opts.IngestURL)
 	if err != nil {
 		opts.Logger.Debug().Err(err).Msg("contributor billing: failed to create ingest client")
 		return Result{Status: ResultStatusFailed, FailReason: FailReasonRequestError, Err: err}
 	}
 
-	var lastStatus int
+	baseCtx := context.WithoutCancel(parent)
+	var (
+		lastStatus    int
+		emitted       int
+		failed        int
+		failureResult *Result
+	)
+
 	for _, item := range items {
+		itemCtx, cancel := context.WithTimeout(baseCtx, opts.Timeout)
 		request := buildIngestRequest(item, opts.Logger)
-		result := postSingleIngest(ctx, client, opts, request)
-		if result.Status != ResultStatusEmitted {
-			return result
+		result := postSingleIngest(itemCtx, client, opts, request)
+		cancel()
+
+		if result.Status == ResultStatusEmitted {
+			emitted++
+			lastStatus = result.HTTPStatus
+			continue
 		}
-		lastStatus = result.HTTPStatus
+
+		failed++
+		if failureResult == nil {
+			copied := result
+			failureResult = &copied
+		}
 	}
 
-	opts.Logger.Debug().Int("status", lastStatus).Int("items", len(items)).Msg("contributor billing: emitted")
-	return Result{Status: ResultStatusEmitted, HTTPStatus: lastStatus}
+	if failed == 0 {
+		opts.Logger.Debug().Int("status", lastStatus).Int("items", len(items)).Msg("contributor billing: emitted")
+		return Result{
+			Status:       ResultStatusEmitted,
+			HTTPStatus:   lastStatus,
+			ItemsEmitted: emitted,
+		}
+	}
+
+	opts.Logger.Debug().
+		Int("items_emitted", emitted).
+		Int("items_failed", failed).
+		Msg("contributor billing: ingest completed with failures")
+
+	aggregated := Result{
+		Status:       ResultStatusFailed,
+		ItemsEmitted: emitted,
+		ItemsFailed:  failed,
+	}
+	if failureResult != nil {
+		aggregated.FailReason = failureResult.FailReason
+		aggregated.HTTPStatus = failureResult.HTTPStatus
+		aggregated.Err = failureResult.Err
+	}
+	return aggregated
 }
 
 func postSingleIngest(

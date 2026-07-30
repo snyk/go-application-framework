@@ -68,7 +68,6 @@ type FailReason string
 const (
 	FailReasonHTTPError        FailReason = "http_error"
 	FailReasonTimeout          FailReason = "timeout"
-	FailReasonMarshalError     FailReason = "marshal_error"
 	FailReasonMissingIngestURL FailReason = "missing_ingest_url"
 	FailReasonRequestError     FailReason = "request_error"
 )
@@ -80,6 +79,10 @@ type Result struct {
 	FailReason FailReason
 	HTTPStatus int
 	Err        error
+	// ItemsEmitted counts ingest POSTs that returned HTTP 201 in this emit call.
+	ItemsEmitted int
+	// ItemsFailed counts ingest POSTs that failed after earlier items were still attempted.
+	ItemsFailed int
 	// ContributorCollectionErr is set when git collection failed but the POST still ran.
 	ContributorCollectionErr error
 }

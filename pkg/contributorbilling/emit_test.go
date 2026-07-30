@@ -767,3 +767,102 @@ func TestEmitContributorBilling_CollectionFailureStillEmits(t *testing.T) {
 	assert.Equal(t, contributorbilling.ResultStatusEmitted, result.Status)
 	require.Error(t, result.ContributorCollectionErr)
 }
+
+func TestEmitContributorBilling_MultiItemContinuesAfterFailure(t *testing.T) {
+	t.Parallel()
+
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var parsed map[string]interface{}
+		require.NoError(t, json.Unmarshal(body, &parsed))
+		attributes := ingestAttributes(parsed)
+		require.NotNil(t, attributes)
+
+		entityID, ok := attributes["contributors_entity_id"].(string)
+		require.True(t, ok)
+		if entityID == "project:project-fail" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityIaC,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Items: []contributorbilling.BillingItem{
+			{EntityID: "project-ok"},
+			{EntityID: "project-fail"},
+			{EntityID: "project-also-ok"},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusFailed, result.Status)
+	assert.Equal(t, contributorbilling.FailReasonHTTPError, result.FailReason)
+	assert.Equal(t, 2, result.ItemsEmitted)
+	assert.Equal(t, 1, result.ItemsFailed)
+	assert.Equal(t, 3, requestCount)
+}
+
+func TestEmitContributorBilling_MultiItemPerItemTimeout(t *testing.T) {
+	t.Parallel()
+
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var parsed map[string]interface{}
+		require.NoError(t, json.Unmarshal(body, &parsed))
+		attributes := ingestAttributes(parsed)
+		require.NotNil(t, attributes)
+
+		entityID, ok := attributes["contributors_entity_id"].(string)
+		require.True(t, ok)
+		if entityID == "project:slow" {
+			time.Sleep(200 * time.Millisecond)
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	resultCh := make(chan contributorbilling.Result, 1)
+	contributorbilling.EmitContributorBilling(context.Background(), contributorbilling.EmitOptions{
+		HTTPClient: server.Client(),
+		IngestURL:  server.URL,
+		Capability: contributorbilling.CapabilityIaC,
+		ScopeID:    "11111111-1111-1111-1111-111111111111",
+		Timeout:    50 * time.Millisecond,
+		Items: []contributorbilling.BillingItem{
+			{EntityID: "slow"},
+			{EntityID: "fast"},
+		},
+		OnResult: func(result contributorbilling.Result) {
+			resultCh <- result
+		},
+	})
+
+	result := waitForResult(t, resultCh)
+	assert.Equal(t, contributorbilling.ResultStatusFailed, result.Status)
+	assert.Equal(t, contributorbilling.FailReasonTimeout, result.FailReason)
+	assert.Equal(t, 1, result.ItemsEmitted)
+	assert.Equal(t, 1, result.ItemsFailed)
+	assert.Equal(t, 2, requestCount)
+}
